@@ -20,10 +20,11 @@
 
 ;; function u0:0(i64 vmctx, i64, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
@@ -34,7 +35,7 @@
 ;; @0040                               v7 = iadd v6, v2
 ;; @0040                               v8 = iconst.i64 0xffff_0000
 ;; @0040                               v9 = iadd v7, v8  ; v8 = 0xffff_0000
-;; @0040                               store little region1 v3, v9
+;; @0040                               store little region2 v3, v9
 ;; @0047                               jump block1
 ;;
 ;;                                 block1:
@@ -43,10 +44,11 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
@@ -57,7 +59,7 @@
 ;; @004c                               v7 = iadd v6, v2
 ;; @004c                               v8 = iconst.i64 0xffff_0000
 ;; @004c                               v9 = iadd v7, v8  ; v8 = 0xffff_0000
-;; @004c                               v10 = load.i32 little region1 v9
+;; @004c                               v10 = load.i32 little region2 v9
 ;; @0053                               jump block1
 ;;
 ;;                                 block1:

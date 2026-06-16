@@ -66,17 +66,18 @@
 
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 72 "VMContext+0x48"
-;;     region2 = 56 "VMContext+0x38"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 72 "VMContext+0x48"
+;;     region3 = 56 "VMContext+0x38"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @00ee                               v5 = load.i64 notrap aligned readonly can_move region2 v0+56
-;; @00ee                               v4 = load.i64 notrap aligned readonly can_move region1 v0+72
+;; @00ee                               v5 = load.i64 notrap aligned readonly can_move region3 v0+56
+;; @00ee                               v4 = load.i64 notrap aligned readonly can_move region2 v0+72
 ;; @00eb                               v3 = iconst.i32 1234
 ;; @00ee                               v6 = call_indirect sig0, v5(v4, v0, v3)  ; v3 = 1234
 ;; @00f0                               jump block1

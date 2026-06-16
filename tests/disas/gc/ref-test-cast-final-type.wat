@@ -16,11 +16,14 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 40 "VMContext+0x28"
-;;     region2 = 2147483648 "GcHeap"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 40 "VMContext+0x28"
+;;     region3 = 268435488 "VMStoreContext+0x20"
+;;     region4 = 268435496 "VMStoreContext+0x28"
+;;     region5 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -36,13 +39,13 @@
 ;;
 ;;                                 block3:
 ;; @0024                               v14 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0024                               v15 = load.i64 notrap aligned readonly can_move v14+32
+;; @0024                               v15 = load.i64 notrap aligned readonly can_move region3 v14+32
 ;; @0024                               v13 = uextend.i64 v2
 ;; @0024                               v16 = iadd v15, v13
 ;; @0024                               v17 = iconst.i64 4
 ;; @0024                               v18 = iadd v16, v17  ; v17 = 4
-;; @0024                               v19 = load.i32 user2 readonly region2 v18
-;; @0024                               v11 = load.i64 notrap aligned readonly can_move region1 v0+40
+;; @0024                               v19 = load.i32 user2 readonly region5 v18
+;; @0024                               v11 = load.i64 notrap aligned readonly can_move region2 v0+40
 ;; @0024                               v12 = load.i32 notrap aligned readonly can_move v11
 ;; @0024                               v20 = icmp eq v19, v12
 ;; @0024                               v21 = uextend.i32 v20
@@ -57,11 +60,14 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 40 "VMContext+0x28"
-;;     region2 = 2147483648 "GcHeap"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 40 "VMContext+0x28"
+;;     region3 = 268435488 "VMStoreContext+0x20"
+;;     region4 = 268435496 "VMStoreContext+0x28"
+;;     region5 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -77,13 +83,13 @@
 ;;
 ;;                                 block3:
 ;; @002c                               v14 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @002c                               v15 = load.i64 notrap aligned readonly can_move v14+32
+;; @002c                               v15 = load.i64 notrap aligned readonly can_move region3 v14+32
 ;; @002c                               v13 = uextend.i64 v2
 ;; @002c                               v16 = iadd v15, v13
 ;; @002c                               v17 = iconst.i64 4
 ;; @002c                               v18 = iadd v16, v17  ; v17 = 4
-;; @002c                               v19 = load.i32 user2 readonly region2 v18
-;; @002c                               v11 = load.i64 notrap aligned readonly can_move region1 v0+40
+;; @002c                               v19 = load.i32 user2 readonly region5 v18
+;; @002c                               v11 = load.i64 notrap aligned readonly can_move region2 v0+40
 ;; @002c                               v12 = load.i32 notrap aligned readonly can_move v11
 ;; @002c                               v20 = icmp eq v19, v12
 ;; @002c                               v21 = uextend.i32 v20

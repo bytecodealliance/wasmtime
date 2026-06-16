@@ -20,9 +20,10 @@
 
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -34,11 +35,12 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region2 = 40 "VMContext+0x28"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region3 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig1
@@ -54,7 +56,7 @@
 ;; @0031                               v8 = ishl v5, v7  ; v7 = 3
 ;; @0031                               v9 = iadd v6, v8
 ;; @0031                               v11 = select_spectre_guard v4, v10, v9  ; v10 = 0
-;; @0031                               v12 = load.i64 user6 aligned region1 v11
+;; @0031                               v12 = load.i64 user6 aligned region2 v11
 ;; @0031                               v13 = iconst.i64 -2
 ;; @0031                               v14 = band v12, v13  ; v13 = -2
 ;; @0031                               brif v12, block3(v14), block2
@@ -66,7 +68,7 @@
 ;;
 ;;                                 block3(v15: i64):
 ;; @0031                               v21 = load.i32 user7 aligned readonly v15+16
-;; @0031                               v19 = load.i64 notrap aligned readonly can_move region2 v0+40
+;; @0031                               v19 = load.i64 notrap aligned readonly can_move region3 v0+40
 ;; @0031                               v20 = load.i32 notrap aligned readonly can_move v19
 ;; @0031                               v22 = icmp eq v21, v20
 ;; @0031                               trapz v22, user8

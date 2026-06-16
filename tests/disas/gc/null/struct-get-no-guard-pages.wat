@@ -25,10 +25,13 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> f32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 2147483648 "GcHeap"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 268435488 "VMStoreContext+0x20"
+;;     region3 = 268435496 "VMStoreContext+0x28"
+;;     region4 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -37,15 +40,15 @@
 ;; @0033                               v5 = iconst.i64 24
 ;; @0033                               v6 = uadd_overflow_trap v4, v5, user2  ; v5 = 24
 ;; @0033                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0033                               v8 = load.i64 notrap aligned v7+40
-;; @0033                               v11 = load.i64 notrap aligned v7+32
+;; @0033                               v8 = load.i64 notrap aligned region3 v7+40
+;; @0033                               v11 = load.i64 notrap aligned region2 v7+32
 ;; @0033                               v9 = icmp ugt v6, v8
 ;; @0033                               v13 = iconst.i64 0
 ;; @0033                               v12 = iadd v11, v4
 ;; @0033                               v14 = select_spectre_guard v9, v13, v12  ; v13 = 0
 ;; @0033                               v15 = iconst.i64 8
 ;; @0033                               v16 = iadd v14, v15  ; v15 = 8
-;; @0033                               v17 = load.f32 user2 little region1 v16
+;; @0033                               v17 = load.f32 user2 little region4 v16
 ;; @0037                               jump block1
 ;;
 ;;                                 block1:
@@ -54,10 +57,13 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 2147483648 "GcHeap"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 268435488 "VMStoreContext+0x20"
+;;     region3 = 268435496 "VMStoreContext+0x28"
+;;     region4 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -66,15 +72,15 @@
 ;; @003c                               v5 = iconst.i64 24
 ;; @003c                               v6 = uadd_overflow_trap v4, v5, user2  ; v5 = 24
 ;; @003c                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @003c                               v8 = load.i64 notrap aligned v7+40
-;; @003c                               v11 = load.i64 notrap aligned v7+32
+;; @003c                               v8 = load.i64 notrap aligned region3 v7+40
+;; @003c                               v11 = load.i64 notrap aligned region2 v7+32
 ;; @003c                               v9 = icmp ugt v6, v8
 ;; @003c                               v13 = iconst.i64 0
 ;; @003c                               v12 = iadd v11, v4
 ;; @003c                               v14 = select_spectre_guard v9, v13, v12  ; v13 = 0
 ;; @003c                               v15 = iconst.i64 12
 ;; @003c                               v16 = iadd v14, v15  ; v15 = 12
-;; @003c                               v17 = load.i8 user2 little region1 v16
+;; @003c                               v17 = load.i8 user2 little region4 v16
 ;; @0040                               jump block1
 ;;
 ;;                                 block1:
@@ -84,10 +90,13 @@
 ;;
 ;; function u0:2(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 2147483648 "GcHeap"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 268435488 "VMStoreContext+0x20"
+;;     region3 = 268435496 "VMStoreContext+0x28"
+;;     region4 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -96,15 +105,15 @@
 ;; @0045                               v5 = iconst.i64 24
 ;; @0045                               v6 = uadd_overflow_trap v4, v5, user2  ; v5 = 24
 ;; @0045                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0045                               v8 = load.i64 notrap aligned v7+40
-;; @0045                               v11 = load.i64 notrap aligned v7+32
+;; @0045                               v8 = load.i64 notrap aligned region3 v7+40
+;; @0045                               v11 = load.i64 notrap aligned region2 v7+32
 ;; @0045                               v9 = icmp ugt v6, v8
 ;; @0045                               v13 = iconst.i64 0
 ;; @0045                               v12 = iadd v11, v4
 ;; @0045                               v14 = select_spectre_guard v9, v13, v12  ; v13 = 0
 ;; @0045                               v15 = iconst.i64 12
 ;; @0045                               v16 = iadd v14, v15  ; v15 = 12
-;; @0045                               v17 = load.i8 user2 little region1 v16
+;; @0045                               v17 = load.i8 user2 little region4 v16
 ;; @0049                               jump block1
 ;;
 ;;                                 block1:
@@ -114,10 +123,13 @@
 ;;
 ;; function u0:3(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 2147483648 "GcHeap"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 268435488 "VMStoreContext+0x20"
+;;     region3 = 268435496 "VMStoreContext+0x28"
+;;     region4 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -126,15 +138,15 @@
 ;; @004e                               v5 = iconst.i64 24
 ;; @004e                               v6 = uadd_overflow_trap v4, v5, user2  ; v5 = 24
 ;; @004e                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @004e                               v8 = load.i64 notrap aligned v7+40
-;; @004e                               v11 = load.i64 notrap aligned v7+32
+;; @004e                               v8 = load.i64 notrap aligned region3 v7+40
+;; @004e                               v11 = load.i64 notrap aligned region2 v7+32
 ;; @004e                               v9 = icmp ugt v6, v8
 ;; @004e                               v13 = iconst.i64 0
 ;; @004e                               v12 = iadd v11, v4
 ;; @004e                               v14 = select_spectre_guard v9, v13, v12  ; v13 = 0
 ;; @004e                               v15 = iconst.i64 16
 ;; @004e                               v16 = iadd v14, v15  ; v15 = 16
-;; @004e                               v17 = load.i32 user2 little region1 v16
+;; @004e                               v17 = load.i32 user2 little region4 v16
 ;; @0052                               jump block1
 ;;
 ;;                                 block1:

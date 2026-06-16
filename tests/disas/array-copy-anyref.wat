@@ -11,21 +11,24 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 2147483648 "GcHeap"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 268435488 "VMStoreContext+0x20"
+;;     region3 = 268435496 "VMStoreContext+0x28"
+;;     region4 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
 ;; @002b                               trapz v2, user16
 ;; @002b                               v8 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @002b                               v9 = load.i64 notrap aligned readonly can_move v8+32
+;; @002b                               v9 = load.i64 notrap aligned readonly can_move region2 v8+32
 ;; @002b                               v7 = uextend.i64 v2
 ;; @002b                               v10 = iadd v9, v7
 ;; @002b                               v11 = iconst.i64 16
 ;; @002b                               v12 = iadd v10, v11  ; v11 = 16
-;; @002b                               v13 = load.i32 user2 readonly region1 v12
+;; @002b                               v13 = load.i32 user2 readonly region4 v12
 ;; @002b                               v15 = uextend.i64 v3
 ;; @002b                               v16 = uextend.i64 v6
 ;; @002b                               v19 = iadd v15, v16
@@ -36,13 +39,13 @@
 ;; @002b                               v31 = uextend.i64 v4
 ;; @002b                               v34 = iadd v9, v31
 ;; @002b                               v36 = iadd v34, v11  ; v11 = 16
-;; @002b                               v37 = load.i32 user2 readonly region1 v36
+;; @002b                               v37 = load.i32 user2 readonly region4 v36
 ;; @002b                               v39 = uextend.i64 v5
 ;; @002b                               v43 = iadd v39, v16
 ;; @002b                               v38 = uextend.i64 v37
 ;; @002b                               v44 = icmp ugt v43, v38
 ;; @002b                               trapnz v44, user17
-;; @002b                               v63 = load.i64 notrap aligned v8+40
+;; @002b                               v63 = load.i64 notrap aligned region3 v8+40
 ;; @002b                               v25 = iconst.i64 20
 ;; @002b                               v26 = iadd v10, v25  ; v25 = 20
 ;;                                     v111 = iconst.i64 2
@@ -71,8 +74,8 @@
 ;; @002b                               brif v74, block3(v30, v54, v5), block4(v79, v80, v82)
 ;;
 ;;                                 block3(v83: i64, v84: i64, v85: i32):
-;; @002b                               v88 = load.i32 user2 little region1 v84
-;; @002b                               store user2 little region1 v88, v83
+;; @002b                               v88 = load.i32 user2 little region4 v84
+;; @002b                               store user2 little region4 v88, v83
 ;;                                     v123 = iconst.i64 4
 ;;                                     v124 = iadd v84, v123  ; v123 = 4
 ;; @002b                               v95 = icmp eq v124, v80
@@ -84,9 +87,9 @@
 ;;                                 block4(v96: i64, v97: i64, v98: i32):
 ;;                                     v118 = iconst.i64 4
 ;;                                     v119 = isub v97, v118  ; v118 = 4
-;; @002b                               v107 = load.i32 user2 little region1 v119
+;; @002b                               v107 = load.i32 user2 little region4 v119
 ;;                                     v120 = isub v96, v118  ; v118 = 4
-;; @002b                               store user2 little region1 v107, v120
+;; @002b                               store user2 little region4 v107, v120
 ;; @002b                               v108 = icmp eq v119, v54
 ;;                                     v121 = iconst.i32 1
 ;;                                     v122 = isub v98, v121  ; v121 = 1

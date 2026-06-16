@@ -10,10 +10,12 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 24 "VMContext+0x18"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 24 "VMContext+0x18"
+;;     region3 = 268435464 "VMStoreContext+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i64, i64) tail
 ;;     fn0 = colocated u805306368:13 sig0
@@ -21,10 +23,10 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
-;; @001e                               v5 = load.i64 notrap aligned region1 v0+24
+;; @001e                               v5 = load.i64 notrap aligned region2 v0+24
 ;; @001e                               v6 = load.i64 notrap aligned v5
 ;; @001e                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @001e                               v8 = load.i64 notrap aligned v7+8
+;; @001e                               v8 = load.i64 notrap aligned region3 v7+8
 ;; @001e                               v9 = icmp uge v6, v8
 ;; @001e                               brif v9, block3, block2(v8)
 ;;
@@ -65,7 +67,7 @@
 ;; @0025                               brif v109, block4(v25, v37, v16, v59), block5(v25, v37, v16, v59)
 ;;
 ;;                                 block9 cold:
-;; @0025                               v50 = load.i64 notrap aligned v7+8
+;; @0025                               v50 = load.i64 notrap aligned region3 v7+8
 ;; @0025                               v51 = icmp.i64 uge v46, v50
 ;; @0025                               brif v51, block10, block8(v50)
 ;;
@@ -94,7 +96,7 @@
 ;; @0025                               brif v72, block14, block13(v71)
 ;;
 ;;                                 block14 cold:
-;; @0025                               v74 = load.i64 notrap aligned v7+8
+;; @0025                               v74 = load.i64 notrap aligned region3 v7+8
 ;; @0025                               v75 = icmp.i64 uge v70, v74
 ;; @0025                               brif v75, block15, block13(v74)
 ;;
@@ -117,7 +119,7 @@
 ;; @0025                               jump block5(v84, v85, v83, v93)
 ;;
 ;;                                 block17 cold:
-;; @0025                               v96 = load.i64 notrap aligned v7+8
+;; @0025                               v96 = load.i64 notrap aligned region3 v7+8
 ;; @0025                               v97 = icmp.i64 uge v91, v96
 ;; @0025                               brif v97, block18, block16
 ;;

@@ -18,10 +18,11 @@
     table.set 0))
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 1073741824 "PublicTable"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 1073741824 "PublicTable"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -35,7 +36,7 @@
 ;; @0056                               v10 = iadd v7, v9
 ;; @0056                               v11 = iconst.i64 0
 ;; @0056                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
-;; @0056                               store user6 aligned region1 v2, v12
+;; @0056                               store user6 aligned region2 v2, v12
 ;; @0058                               jump block1
 ;;
 ;;                                 block1:
@@ -44,10 +45,11 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 1073741824 "PublicTable"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 1073741824 "PublicTable"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
@@ -60,7 +62,7 @@
 ;; @005f                               v10 = iadd v7, v9
 ;; @005f                               v11 = iconst.i64 0
 ;; @005f                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
-;; @005f                               store user6 aligned region1 v3, v12
+;; @005f                               store user6 aligned region2 v3, v12
 ;; @0061                               jump block1
 ;;
 ;;                                 block1:

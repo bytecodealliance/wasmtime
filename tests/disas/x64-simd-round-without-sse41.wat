@@ -13,9 +13,10 @@
 )
 ;; function u0:0(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
 ;;     fn0 = colocated u805306368:28 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -45,9 +46,10 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
 ;;     fn0 = colocated u805306368:30 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -77,9 +79,10 @@
 ;;
 ;; function u0:2(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
 ;;     fn0 = colocated u805306368:32 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -109,9 +112,10 @@
 ;;
 ;; function u0:3(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
 ;;     fn0 = colocated u805306368:34 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -141,9 +145,10 @@
 ;;
 ;; function u0:4(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
 ;;     fn0 = colocated u805306368:29 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -167,9 +172,10 @@
 ;;
 ;; function u0:5(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
 ;;     fn0 = colocated u805306368:31 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -193,9 +199,10 @@
 ;;
 ;; function u0:6(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
 ;;     fn0 = colocated u805306368:33 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -219,9 +226,10 @@
 ;;
 ;; function u0:7(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
 ;;     fn0 = colocated u805306368:35 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -245,9 +253,10 @@
 ;;
 ;; function u0:8(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;

@@ -9,11 +9,12 @@
 
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 1073741824 "PublicTable"
-;;     region2 = 40 "VMContext+0x28"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 1073741824 "PublicTable"
+;;     region3 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig1
@@ -30,7 +31,7 @@
 ;; @0035                               v12 = iadd v9, v11
 ;; @0035                               v13 = iconst.i64 0
 ;; @0035                               v14 = select_spectre_guard v7, v13, v12  ; v13 = 0
-;; @0035                               v15 = load.i64 user6 aligned region1 v14
+;; @0035                               v15 = load.i64 user6 aligned region2 v14
 ;; @0035                               v16 = iconst.i64 -2
 ;; @0035                               v17 = band v15, v16  ; v16 = -2
 ;; @0035                               brif v15, block3(v17), block2
@@ -42,7 +43,7 @@
 ;; @0035                               jump block3(v21)
 ;;
 ;;                                 block3(v18: i64):
-;; @0035                               v22 = load.i64 notrap aligned readonly can_move region2 v0+40
+;; @0035                               v22 = load.i64 notrap aligned readonly can_move region3 v0+40
 ;; @0035                               v23 = load.i32 notrap aligned readonly can_move v22+4
 ;; @0035                               v24 = load.i32 user7 aligned readonly v18+16
 ;; @0035                               v25 = icmp eq v24, v23
