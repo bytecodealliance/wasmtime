@@ -25,8 +25,15 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     let block_order = BlockLoweringOrder::new(f, domtree, ctrl_plane);
 
     // Build the lowering context.
-    let lower =
+    let mut lower =
         crate::machinst::Lower::new(f, abi, emit_info, block_order, sigs, b.flags().clone())?;
+
+    // Backend-specific pre-lowering analysis. Default impl on LowerBackend
+    // is a no-op; Pulley overrides it to mark continuation-block loads as
+    // absorbed_pure when the call_indirect lazy-init brif pattern is
+    // present, so they can be fused into a single Pulley dispatch op
+    // emitted at the brif's lowering time.
+    b.pre_lower(&mut lower);
 
     // Lower the IR.
     let vcode = {

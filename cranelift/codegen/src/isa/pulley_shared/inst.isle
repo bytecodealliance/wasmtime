@@ -67,6 +67,48 @@
     ;; Jump to `then` if `c` is true, otherwise to `else`.
     (BrIf (cond Cond) (taken MachLabel) (not_taken MachLabel))
 
+    ;; Fused `band src, mask` + `brif src` emitted at the call_indirect
+    ;; lazy-init brif site. `dst = src & sign_extend(mask)` is
+    ;; unconditional; the branch test is on `src`'s low-32 or full-64 bits
+    ;; per `size`. Pulley-side: `xband*_s8_br_if_*`.
+    (BandBrIf
+      (dst WritableXReg)
+      (src XReg)
+      (mask i8)
+      (size OperandSize)
+      (taken MachLabel)
+      (not_taken MachLabel))
+
+    ;; Funcref-dispatch fusion: `brif (band v -2) + load code + load vmctx`
+    ;; across the brif and its continuation block. Emitted at the
+    ;; call_indirect lazy-init site under
+    ;; `is_eagerly_initialized_funcref_table`. Pulley-side:
+    ;; `xfuncref_dispatch_{x64,not_x64,x32,not_x32}`.
+    (FuncrefDispatch
+      (dst_code WritableXReg)
+      (dst_vmctx WritableXReg)
+      (src XReg)
+      (offset_code i8)
+      (offset_vmctx i8)
+      (size OperandSize)
+      (taken MachLabel)
+      (not_taken MachLabel))
+
+    ;; FuncrefDispatch + the preceding `xband_s8 -2` absorbed. `src` is
+    ;; the unmasked funcref; the fused op writes `dst_masked = src & -2`
+    ;; so the brif's block-call-arg copy still has a producer.
+    ;; Pulley-side: `xband_funcref_dispatch_{x64,not_x64,x32,not_x32}`.
+    (BandFuncrefDispatch
+      (dst_masked WritableXReg)
+      (dst_code WritableXReg)
+      (dst_vmctx WritableXReg)
+      (src XReg)
+      (offset_code i8)
+      (offset_vmctx i8)
+      (size OperandSize)
+      (taken MachLabel)
+      (not_taken MachLabel))
+
     ;; Load the memory address referenced by `mem` into `dst`.
     (LoadAddr (dst WritableXReg) (mem Amode))
 

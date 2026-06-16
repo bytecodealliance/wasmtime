@@ -1425,6 +1425,83 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn call_indirect1(&mut self, dst: XReg, arg1: XReg) -> ControlFlow<Done> {
+        // Read arg1 before writing x0 so this is safe when `arg1 == x0`.
+        let arg1_val = self.state[arg1];
+        let target = self.state[dst].get_ptr();
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        self.state[XReg::x0] = arg1_val;
+        // SAFETY: same as `call_indirect`.
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(target));
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn call_indirect2(&mut self, dst: XReg, arg1: XReg, arg2: XReg) -> ControlFlow<Done> {
+        let (a1, a2) = (self.state[arg1], self.state[arg2]);
+        let target = self.state[dst].get_ptr();
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        self.state[XReg::x0] = a1;
+        self.state[XReg::x1] = a2;
+        // SAFETY: same as `call_indirect`.
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(target));
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn call_indirect3(
+        &mut self,
+        dst: XReg,
+        arg1: XReg,
+        arg2: XReg,
+        arg3: XReg,
+    ) -> ControlFlow<Done> {
+        let (a1, a2, a3) = (self.state[arg1], self.state[arg2], self.state[arg3]);
+        let target = self.state[dst].get_ptr();
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        self.state[XReg::x0] = a1;
+        self.state[XReg::x1] = a2;
+        self.state[XReg::x2] = a3;
+        // SAFETY: same as `call_indirect`.
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(target));
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn call_indirect4(
+        &mut self,
+        dst: XReg,
+        arg1: XReg,
+        arg2: XReg,
+        arg3: XReg,
+        arg4: XReg,
+    ) -> ControlFlow<Done> {
+        let (a1, a2, a3, a4) = (
+            self.state[arg1],
+            self.state[arg2],
+            self.state[arg3],
+            self.state[arg4],
+        );
+        let target = self.state[dst].get_ptr();
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        self.state[XReg::x0] = a1;
+        self.state[XReg::x1] = a2;
+        self.state[XReg::x2] = a3;
+        self.state[XReg::x3] = a4;
+        // SAFETY: same as `call_indirect`.
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(target));
+        }
+        ControlFlow::Continue(())
+    }
+
     fn jump(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
         self.pc_rel_jump::<crate::Jump>(offset)
     }
@@ -2294,6 +2371,340 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[src1].get_i64();
         self.state[dst].set_i64(a & i64::from(src2));
         ControlFlow::Continue(())
+    }
+
+    fn xband32_s8_br_if_x32(
+        &mut self,
+        dst: XReg,
+        src: XReg,
+        mask: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_i32();
+        self.state[dst].set_i32(s & i32::from(mask));
+        if s != 0 {
+            self.pc_rel_jump::<crate::Xband32S8BrIfX32>(offset)
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xband32_s8_br_if_not_x32(
+        &mut self,
+        dst: XReg,
+        src: XReg,
+        mask: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_i32();
+        self.state[dst].set_i32(s & i32::from(mask));
+        if s == 0 {
+            self.pc_rel_jump::<crate::Xband32S8BrIfNotX32>(offset)
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xband64_s8_br_if_x64(
+        &mut self,
+        dst: XReg,
+        src: XReg,
+        mask: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_i64();
+        self.state[dst].set_i64(s & i64::from(mask));
+        if s != 0 {
+            self.pc_rel_jump::<crate::Xband64S8BrIfX64>(offset)
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xband64_s8_br_if_not_x64(
+        &mut self,
+        dst: XReg,
+        src: XReg,
+        mask: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_i64();
+        self.state[dst].set_i64(s & i64::from(mask));
+        if s == 0 {
+            self.pc_rel_jump::<crate::Xband64S8BrIfNotX64>(offset)
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xfuncref_dispatch_x64(
+        &mut self,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        // `src` is the already-masked funcref. The null side traps: the
+        // fusion absorbed the continuation-block loads, so the lazy-init
+        // slow path's rejoin would see uninitialized dst_code/dst_vmctx.
+        // Gated on `is_eagerly_initialized_funcref_table`, so trapping
+        // here is unreachable in correct code.
+        let s = self.state[src].get_u64();
+        if s == 0 {
+            self.done_trap::<crate::XfuncrefDispatchX64>()
+        } else {
+            // SAFETY: predicate guarantees `src` points to a real VMFuncRef.
+            let base = s as *const u8;
+            unsafe {
+                let code = base
+                    .byte_offset(offset_code as isize)
+                    .cast::<i64>()
+                    .read_unaligned();
+                let vmctx = base
+                    .byte_offset(offset_vmctx as isize)
+                    .cast::<i64>()
+                    .read_unaligned();
+                self.state[dst_code].set_i64(code);
+                self.state[dst_vmctx].set_i64(vmctx);
+            }
+            self.pc_rel_jump::<crate::XfuncrefDispatchX64>(offset)
+        }
+    }
+
+    fn xfuncref_dispatch_not_x64(
+        &mut self,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        // Inverted form: fast path falls through; null side traps.
+        // `offset` is unused (kept for encoding shape parity).
+        let _ = offset;
+        let s = self.state[src].get_u64();
+        if s == 0 {
+            self.done_trap::<crate::XfuncrefDispatchNotX64>()
+        } else {
+            let base = s as *const u8;
+            unsafe {
+                let code = base
+                    .byte_offset(offset_code as isize)
+                    .cast::<i64>()
+                    .read_unaligned();
+                let vmctx = base
+                    .byte_offset(offset_vmctx as isize)
+                    .cast::<i64>()
+                    .read_unaligned();
+                self.state[dst_code].set_i64(code);
+                self.state[dst_vmctx].set_i64(vmctx);
+            }
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xfuncref_dispatch_x32(
+        &mut self,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_u32();
+        if s == 0 {
+            self.done_trap::<crate::XfuncrefDispatchX32>()
+        } else {
+            let base = s as usize as *const u8;
+            unsafe {
+                let code = base
+                    .byte_offset(offset_code as isize)
+                    .cast::<i32>()
+                    .read_unaligned();
+                let vmctx = base
+                    .byte_offset(offset_vmctx as isize)
+                    .cast::<i32>()
+                    .read_unaligned();
+                self.state[dst_code].set_i32(code);
+                self.state[dst_vmctx].set_i32(vmctx);
+            }
+            self.pc_rel_jump::<crate::XfuncrefDispatchX32>(offset)
+        }
+    }
+
+    fn xfuncref_dispatch_not_x32(
+        &mut self,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let _ = offset;
+        let s = self.state[src].get_u32();
+        if s == 0 {
+            self.done_trap::<crate::XfuncrefDispatchNotX32>()
+        } else {
+            let base = s as usize as *const u8;
+            unsafe {
+                let code = base
+                    .byte_offset(offset_code as isize)
+                    .cast::<i32>()
+                    .read_unaligned();
+                let vmctx = base
+                    .byte_offset(offset_vmctx as isize)
+                    .cast::<i32>()
+                    .read_unaligned();
+                self.state[dst_code].set_i32(code);
+                self.state[dst_vmctx].set_i32(vmctx);
+            }
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xband_funcref_dispatch_x64(
+        &mut self,
+        dst_masked: XReg,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        // Combines the standalone xband64_s8 with the xfuncref dispatch.
+        // `src` is unmasked. `dst_masked = src & -2` is written
+        // unconditionally so the brif's block-call-arg copy still finds a
+        // producer; the loads + branch fire on `src != 0`. Null traps
+        // (same rationale as `xfuncref_dispatch_x64`).
+        let s = self.state[src].get_u64();
+        let masked = s & !1u64;
+        self.state[dst_masked].set_u64(masked);
+        if s != 0 {
+            let base = masked as *const u8;
+            unsafe {
+                let code = base
+                    .byte_offset(offset_code as isize)
+                    .cast::<i64>()
+                    .read_unaligned();
+                let vmctx = base
+                    .byte_offset(offset_vmctx as isize)
+                    .cast::<i64>()
+                    .read_unaligned();
+                self.state[dst_code].set_i64(code);
+                self.state[dst_vmctx].set_i64(vmctx);
+            }
+            self.pc_rel_jump::<crate::XbandFuncrefDispatchX64>(offset)
+        } else {
+            self.done_trap::<crate::XbandFuncrefDispatchX64>()
+        }
+    }
+
+    fn xband_funcref_dispatch_not_x64(
+        &mut self,
+        dst_masked: XReg,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        // Inverted form; `offset` is vestigial after the trap-on-null fix.
+        let _ = offset;
+        let s = self.state[src].get_u64();
+        let masked = s & !1u64;
+        self.state[dst_masked].set_u64(masked);
+        if s == 0 {
+            self.done_trap::<crate::XbandFuncrefDispatchNotX64>()
+        } else {
+            let base = masked as *const u8;
+            unsafe {
+                let code = base
+                    .byte_offset(offset_code as isize)
+                    .cast::<i64>()
+                    .read_unaligned();
+                let vmctx = base
+                    .byte_offset(offset_vmctx as isize)
+                    .cast::<i64>()
+                    .read_unaligned();
+                self.state[dst_code].set_i64(code);
+                self.state[dst_vmctx].set_i64(vmctx);
+            }
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xband_funcref_dispatch_x32(
+        &mut self,
+        dst_masked: XReg,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_u32();
+        let masked = s & !1u32;
+        self.state[dst_masked].set_u32(masked);
+        if s != 0 {
+            let base = masked as usize as *const u8;
+            unsafe {
+                let code = base
+                    .byte_offset(offset_code as isize)
+                    .cast::<i32>()
+                    .read_unaligned();
+                let vmctx = base
+                    .byte_offset(offset_vmctx as isize)
+                    .cast::<i32>()
+                    .read_unaligned();
+                self.state[dst_code].set_i32(code);
+                self.state[dst_vmctx].set_i32(vmctx);
+            }
+            self.pc_rel_jump::<crate::XbandFuncrefDispatchX32>(offset)
+        } else {
+            self.done_trap::<crate::XbandFuncrefDispatchX32>()
+        }
+    }
+
+    fn xband_funcref_dispatch_not_x32(
+        &mut self,
+        dst_masked: XReg,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let _ = offset;
+        let s = self.state[src].get_u32();
+        let masked = s & !1u32;
+        self.state[dst_masked].set_u32(masked);
+        if s == 0 {
+            self.done_trap::<crate::XbandFuncrefDispatchNotX32>()
+        } else {
+            let base = masked as usize as *const u8;
+            unsafe {
+                let code = base
+                    .byte_offset(offset_code as isize)
+                    .cast::<i32>()
+                    .read_unaligned();
+                let vmctx = base
+                    .byte_offset(offset_vmctx as isize)
+                    .cast::<i32>()
+                    .read_unaligned();
+                self.state[dst_code].set_i32(code);
+                self.state[dst_vmctx].set_i32(vmctx);
+            }
+            ControlFlow::Continue(())
+        }
     }
 
     fn xbor32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {

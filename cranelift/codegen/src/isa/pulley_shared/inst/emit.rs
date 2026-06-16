@@ -233,7 +233,22 @@ fn pulley_emit<P>(
         }
 
         Inst::IndirectCall { info } => {
-            enc::call_indirect(sink, info.dest);
+            // Drop args already in their ABI register so we can pick a
+            // narrower `call_indirectN` — mirrors the direct-call shrink
+            // above.
+            let target = info.dest.target;
+            let mut args = &info.dest.args[..];
+            while !args.is_empty() && args.last().copied() == XReg::new(x_reg(args.len() - 1)) {
+                args = &args[..args.len() - 1];
+            }
+            match args {
+                [] => enc::call_indirect(sink, target),
+                [x0] => enc::call_indirect1(sink, target, *x0),
+                [x0, x1] => enc::call_indirect2(sink, target, *x0, *x1),
+                [x0, x1, x2] => enc::call_indirect3(sink, target, *x0, *x1, *x2),
+                [x0, x1, x2, x3] => enc::call_indirect4(sink, target, *x0, *x1, *x2, *x3),
+                _ => unreachable!(),
+            }
 
             if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset();
@@ -359,6 +374,297 @@ fn pulley_emit<P>(
             // For the not-taken branch use an unconditional jump to the
             // relevant label, and we know that the jump instruction is 5 bytes
             // long where the final 4 bytes are the offset to jump by.
+            let not_taken_start = taken_end + 1;
+            let not_taken_end = not_taken_start + 4;
+            sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::PcRel);
+            sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
+            patch_pc_rel_offset(sink, |sink| enc::jump(sink, 0));
+            assert_eq!(sink.cur_offset(), not_taken_end);
+        }
+
+        Inst::BandBrIf {
+            dst,
+            src,
+            mask,
+            size,
+            taken,
+            not_taken,
+        } => {
+            // The forward form branches to `taken` if `src` is non-zero
+            // (after computing `dst = src & sext(mask)`). The inverted form
+            // branches if `src` is zero — used by MachBuffer's fallthrough-
+            // flip optimization. Both must encode to equal-length bytes; the
+            // `_x*` and `_not_x*` ops share the same operand shape, so they
+            // do.
+            let dst_writable = *dst;
+            let src_reg = *src;
+            let mask_imm = *mask;
+
+            // Compute the inverted-form encoding (branch on src == 0) into a
+            // SmallVec so MachBuffer can use it for branch-direction flipping.
+            let mut inverted = SmallVec::<[u8; 16]>::new();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xband32_s8_br_if_not_x32(
+                        &mut inverted,
+                        dst_writable,
+                        src_reg,
+                        mask_imm,
+                        0,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xband64_s8_br_if_not_x64(
+                        &mut inverted,
+                        dst_writable,
+                        src_reg,
+                        mask_imm,
+                        0,
+                    );
+                }
+            }
+            let len = inverted.len() as u32;
+            inverted.clear();
+            let inv_rel = i32::try_from(len - 4).unwrap();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xband32_s8_br_if_not_x32(
+                        &mut inverted,
+                        dst_writable,
+                        src_reg,
+                        mask_imm,
+                        inv_rel,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xband64_s8_br_if_not_x64(
+                        &mut inverted,
+                        dst_writable,
+                        src_reg,
+                        mask_imm,
+                        inv_rel,
+                    );
+                }
+            }
+            assert!(len > 4);
+
+            // Emit the forward form (branch on src != 0).
+            let taken_end = *start_offset + len;
+            sink.use_label_at_offset(taken_end - 4, *taken, LabelUse::PcRel);
+            sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
+            patch_pc_rel_offset(sink, |sink| match size {
+                OperandSize::Size32 => {
+                    enc::xband32_s8_br_if_x32(sink, dst_writable, src_reg, mask_imm, 0)
+                }
+                OperandSize::Size64 => {
+                    enc::xband64_s8_br_if_x64(sink, dst_writable, src_reg, mask_imm, 0)
+                }
+            });
+            debug_assert_eq!(sink.cur_offset(), taken_end);
+
+            // Unconditional jump to `not_taken` for the fall-through path.
+            let not_taken_start = taken_end + 1;
+            let not_taken_end = not_taken_start + 4;
+            sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::PcRel);
+            sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
+            patch_pc_rel_offset(sink, |sink| enc::jump(sink, 0));
+            assert_eq!(sink.cur_offset(), not_taken_end);
+        }
+
+        Inst::FuncrefDispatch {
+            dst_code,
+            dst_vmctx,
+            src,
+            offset_code,
+            offset_vmctx,
+            size,
+            taken,
+            not_taken,
+        } => {
+            // Same scaffolding as Inst::BrIf / Inst::BandBrIf. Forward
+            // form's branch fires on `src != 0` (after loads); inverted
+            // form branches on `src == 0` (loads on fall-through). Both
+            // encodings have the same length because they share the
+            // 5-operand shape.
+            let dst_code_w = *dst_code;
+            let dst_vmctx_w = *dst_vmctx;
+            let src_reg = *src;
+            let oc = *offset_code;
+            let ov = *offset_vmctx;
+
+            // Inverted encoding into a scratch SmallVec for MachBuffer.
+            let mut inverted = SmallVec::<[u8; 16]>::new();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xfuncref_dispatch_not_x32(
+                        &mut inverted,
+                        dst_code_w,
+                        dst_vmctx_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        0,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xfuncref_dispatch_not_x64(
+                        &mut inverted,
+                        dst_code_w,
+                        dst_vmctx_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        0,
+                    );
+                }
+            }
+            let len = inverted.len() as u32;
+            inverted.clear();
+            let inv_rel = i32::try_from(len - 4).unwrap();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xfuncref_dispatch_not_x32(
+                        &mut inverted,
+                        dst_code_w,
+                        dst_vmctx_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        inv_rel,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xfuncref_dispatch_not_x64(
+                        &mut inverted,
+                        dst_code_w,
+                        dst_vmctx_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        inv_rel,
+                    );
+                }
+            }
+            assert!(len > 4);
+
+            // Emit the forward form (branch on src != 0).
+            let taken_end = *start_offset + len;
+            sink.use_label_at_offset(taken_end - 4, *taken, LabelUse::PcRel);
+            sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
+            patch_pc_rel_offset(sink, |sink| match size {
+                OperandSize::Size32 => {
+                    enc::xfuncref_dispatch_x32(sink, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0)
+                }
+                OperandSize::Size64 => {
+                    enc::xfuncref_dispatch_x64(sink, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0)
+                }
+            });
+            debug_assert_eq!(sink.cur_offset(), taken_end);
+
+            // Unconditional jump to `not_taken` for the fall-through path.
+            let not_taken_start = taken_end + 1;
+            let not_taken_end = not_taken_start + 4;
+            sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::PcRel);
+            sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
+            patch_pc_rel_offset(sink, |sink| enc::jump(sink, 0));
+            assert_eq!(sink.cur_offset(), not_taken_end);
+        }
+
+        Inst::BandFuncrefDispatch {
+            dst_masked,
+            dst_code,
+            dst_vmctx,
+            src,
+            offset_code,
+            offset_vmctx,
+            size,
+            taken,
+            not_taken,
+        } => {
+            // Same scaffolding as Inst::FuncrefDispatch, but with an
+            // extra `dst_masked` operand. The forward form branches on
+            // `src != 0` (after computing dst_masked AND the two loads);
+            // the inverted form branches on `src == 0` (only dst_masked
+            // is written on that side). MachBuffer flips between them
+            // for the fall-through optimisation.
+            let dm_w = *dst_masked;
+            let dc_w = *dst_code;
+            let dv_w = *dst_vmctx;
+            let src_reg = *src;
+            let oc = *offset_code;
+            let ov = *offset_vmctx;
+
+            let mut inverted = SmallVec::<[u8; 16]>::new();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xband_funcref_dispatch_not_x32(
+                        &mut inverted,
+                        dm_w,
+                        dc_w,
+                        dv_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        0,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xband_funcref_dispatch_not_x64(
+                        &mut inverted,
+                        dm_w,
+                        dc_w,
+                        dv_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        0,
+                    );
+                }
+            }
+            let len = inverted.len() as u32;
+            inverted.clear();
+            let inv_rel = i32::try_from(len - 4).unwrap();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xband_funcref_dispatch_not_x32(
+                        &mut inverted,
+                        dm_w,
+                        dc_w,
+                        dv_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        inv_rel,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xband_funcref_dispatch_not_x64(
+                        &mut inverted,
+                        dm_w,
+                        dc_w,
+                        dv_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        inv_rel,
+                    );
+                }
+            }
+            assert!(len > 4);
+
+            let taken_end = *start_offset + len;
+            sink.use_label_at_offset(taken_end - 4, *taken, LabelUse::PcRel);
+            sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
+            patch_pc_rel_offset(sink, |sink| match size {
+                OperandSize::Size32 => {
+                    enc::xband_funcref_dispatch_x32(sink, dm_w, dc_w, dv_w, src_reg, oc, ov, 0)
+                }
+                OperandSize::Size64 => {
+                    enc::xband_funcref_dispatch_x64(sink, dm_w, dc_w, dv_w, src_reg, oc, ov, 0)
+                }
+            });
+            debug_assert_eq!(sink.cur_offset(), taken_end);
+
             let not_taken_start = taken_end + 1;
             let not_taken_end = not_taken_start + 4;
             sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::PcRel);

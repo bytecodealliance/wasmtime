@@ -148,6 +148,18 @@ pub trait LowerBackend {
     fn maybe_pinned_reg(&self) -> Option<Reg> {
         None
     }
+
+    /// Backend-specific analysis hook, run once after `Lower::new` but
+    /// before the main reverse-block lowering loop. Default: no-op.
+    ///
+    /// Use this to mark instructions as `sink_pure_inst` when they will be
+    /// absorbed by a fused MachInst emitted in a different (earlier-in-CFG,
+    /// later-in-reverse-order) block. The block-by-block lowering loop
+    /// processes blocks in reverse, so cross-block absorption can't be
+    /// arranged at the absorbing instruction's lowering time — it has to be
+    /// arranged here, before any block is lowered. Within a single block,
+    /// `sink_pure_inst` called during normal lowering is still sufficient.
+    fn pre_lower(&self, _ctx: &mut Lower<Self::MInst>) {}
 }
 
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
@@ -203,6 +215,14 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Effectful instructions that have been sunk; they are not codegen'd at
     /// their original locations.
     inst_sunk: FxHashSet<Inst>,
+
+    /// Pure (non-side-effecting) instructions whose value-production has been
+    /// absorbed by a later-emitted MachInst (typically a terminator that
+    /// fuses an ALU op with a branch). The absorbing MachInst writes to the
+    /// absorbed inst's result vreg, so subsequent `put_value_in_regs` of that
+    /// vreg observes the value normally — but the absorbed inst itself is
+    /// skipped in `lower_clif_block`, avoiding a redundant double-write.
+    inst_absorbed_pure: FxHashSet<Inst>,
 
     /// Instructions collected for the CLIF inst in progress, in forward order.
     ir_insts: Vec<I>,
@@ -504,6 +524,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
             inst_sunk: FxHashSet::default(),
+            inst_absorbed_pure: FxHashSet::default(),
             cur_scan_entry_color: None,
             cur_inst: None,
             ir_insts: vec![],
@@ -708,6 +729,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.inst_sunk.contains(&inst)
     }
 
+    /// Has the value-production of this pure instruction been absorbed by a
+    /// later-emitted MachInst? See [`Lower::inst_absorbed_pure`].
+    fn is_inst_absorbed_pure(&self, inst: Inst) -> bool {
+        self.inst_absorbed_pure.contains(&inst)
+    }
+
     // Is any result of this instruction needed?
     fn is_any_inst_result_needed(&self, inst: Inst) -> bool {
         self.f
@@ -748,6 +775,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let has_side_effect = has_lowering_side_effect(self.f, inst);
             // If  inst has been sunk to another location, skip it.
             if self.is_inst_sunk(inst) {
+                continue;
+            }
+            // Same for pure-instruction absorption: a terminator earlier in
+            // the reverse-scan emitted a MachInst that writes to this inst's
+            // result vreg directly, so emitting it again here would be a
+            // redundant double-write.
+            if self.is_inst_absorbed_pure(inst) {
                 continue;
             }
             // Are any outputs used at least once?
@@ -1664,6 +1698,46 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn emit(&mut self, mach_inst: I) {
         trace!("emit: {:?}", mach_inst);
         self.ir_insts.push(mach_inst);
+    }
+
+    /// Indicate that the value-production of a pure (non-side-effecting)
+    /// instruction has been absorbed by a later-emitted MachInst — typically a
+    /// terminator that fuses an ALU op with a branch (e.g. Pulley's
+    /// `xband_brif` fused dispatch op).
+    ///
+    /// The absorbing MachInst must write to the absorbed inst's result vreg
+    /// (`value_regs[result]`) directly, so subsequent `put_value_in_regs` of
+    /// that vreg observes the correct value. The absorbed inst itself is
+    /// skipped in `lower_clif_block`, preventing a redundant second write to
+    /// the same vreg (which would violate SSA single-def).
+    ///
+    /// Unlike [`Lower::sink_inst`], this does not require the inst to have a
+    /// lowering side effect: it is specifically for pure ALU ops whose value
+    /// flows into the fused MachInst's output operand. Color tracking is
+    /// likewise unnecessary because pure insts have no color anchor.
+    ///
+    /// We additionally allow absorbing trusted readonly loads — CLIF
+    /// considers them side-effecting (via `can_load()`), but the
+    /// `notrap + readonly` flags assert they're safe to skip from the
+    /// codegen's perspective. The absorbing MachInst takes responsibility
+    /// for performing the load itself. Color tracking is still
+    /// unnecessary because we're not moving a side-effecting op — we're
+    /// telling the lowerer it has been handled elsewhere.
+    pub fn sink_pure_inst(&mut self, ir_inst: Inst) {
+        let is_pure = !has_lowering_side_effect(self.f, ir_inst);
+        let is_safe_load = match &self.f.dfg.insts[ir_inst] {
+            InstructionData::Load {
+                opcode: crate::ir::Opcode::Load,
+                flags,
+                ..
+            } => {
+                let flags = self.f.dfg.mem_flags[*flags];
+                flags.readonly() && flags.notrap()
+            }
+            _ => false,
+        };
+        assert!(is_pure || is_safe_load);
+        self.inst_absorbed_pure.insert(ir_inst);
     }
 
     /// Indicate that the side-effect of an instruction has been sunk to the

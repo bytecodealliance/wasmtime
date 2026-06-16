@@ -515,3 +515,282 @@ fn decode_unaligned() -> Result<()> {
 
     Ok(())
 }
+
+// Runtime-semantics tests for the call_indirect fusion stack
+// (`tests/disas/pulley-fusion-*.wat` covers the static disasm side).
+// Each test runs the same wasm under Pulley and native Cranelift and
+// asserts the results agree.
+
+/// Pulley config for tests that exercise traps. The interpreter can't
+/// catch signals, so trap emission must be explicit.
+fn pulley_trap_safe_config() -> Config {
+    let mut config = pulley_config();
+    config.signals_based_traps(false);
+    config
+}
+
+fn pulley_and_native_agree<Params, Results>(
+    wat: &str,
+    func_name: &str,
+    params: Params,
+) -> Result<Results>
+where
+    Params: wasmtime::WasmParams + Copy,
+    Results: wasmtime::WasmResults + std::fmt::Debug + PartialEq,
+{
+    let bytes = wat::parse_str(wat)?;
+    let pulley = {
+        let engine = Engine::new(&pulley_trap_safe_config())?;
+        let module = Module::new(&engine, &bytes)?;
+        let mut store = Store::new(&engine, ());
+        let inst = Instance::new(&mut store, &module, &[])?;
+        let f = inst.get_typed_func::<Params, Results>(&mut store, func_name)?;
+        f.call(&mut store, params)?
+    };
+    let native = {
+        let engine = Engine::new(&Config::new())?;
+        let module = Module::new(&engine, &bytes)?;
+        let mut store = Store::new(&engine, ());
+        let inst = Instance::new(&mut store, &module, &[])?;
+        let f = inst.get_typed_func::<Params, Results>(&mut store, func_name)?;
+        f.call(&mut store, params)?
+    };
+    assert_eq!(
+        pulley, native,
+        "Pulley and native diverged for `{func_name}` — fusion lowering bug?"
+    );
+    Ok(pulley)
+}
+
+/// Fusion returns the right callee for every in-bounds index and traps
+/// on OOB.
+#[test]
+fn fusion_call_indirect_every_index() -> Result<()> {
+    let wat = r#"
+    (module
+      (table 3 3 funcref)
+      (func $f0 (result i32) i32.const 100)
+      (func $f1 (result i32) i32.const 101)
+      (func $f2 (result i32) i32.const 102)
+      (func (export "call") (param i32) (result i32)
+        local.get 0
+        call_indirect (result i32))
+      (elem (i32.const 0) func $f0 $f1 $f2))
+    "#;
+    for (idx, expected) in [(0_i32, 100_i32), (1, 101), (2, 102)] {
+        let got: i32 = pulley_and_native_agree(wat, "call", idx)?;
+        assert_eq!(got, expected, "idx {idx}");
+    }
+    // Pulley only — native signal-based traps interact badly with
+    // `cargo test`'s debug-mode signal handlers.
+    let bytes = wat::parse_str(wat)?;
+    let engine = Engine::new(&pulley_trap_safe_config())?;
+    let module = Module::new(&engine, &bytes)?;
+    let mut store = Store::new(&engine, ());
+    let inst = Instance::new(&mut store, &module, &[])?;
+    let f = inst.get_typed_func::<i32, i32>(&mut store, "call")?;
+    let err = f.call(&mut store, 3).unwrap_err();
+    let trap = err.downcast_ref::<Trap>().expect("Trap");
+    assert_eq!(*trap, Trap::TableOutOfBounds);
+    Ok(())
+}
+
+/// Two call_indirect sites in the same function; each must fuse
+/// independently.
+#[test]
+fn fusion_call_indirect_multi_site() -> Result<()> {
+    let wat = r#"
+    (module
+      (table 3 3 funcref)
+      (func $f0 (result i32) i32.const 10)
+      (func $f1 (result i32) i32.const 20)
+      (func $f2 (result i32) i32.const 30)
+      (func (export "sum") (param i32 i32) (result i32)
+        local.get 0 call_indirect (result i32)
+        local.get 1 call_indirect (result i32)
+        i32.add)
+      (elem (i32.const 0) func $f0 $f1 $f2))
+    "#;
+    for (a, b, expected) in [(0_i32, 1_i32, 30_i32), (1, 2, 50), (2, 0, 40), (1, 1, 40)] {
+        let got: i32 = pulley_and_native_agree(wat, "sum", (a, b))?;
+        assert_eq!(got, expected, "a={a} b={b}");
+    }
+    Ok(())
+}
+
+/// `return_call_indirect` correctness with fusion applied.
+#[test]
+fn fusion_return_call_indirect() -> Result<()> {
+    let wat = r#"
+    (module
+      (table 2 2 funcref)
+      (type $sig (func (result i32)))
+      (func $f0 (result i32) i32.const 7)
+      (func $f1 (result i32) i32.const 11)
+      (func (export "tail") (param i32) (result i32)
+        local.get 0
+        return_call_indirect (type $sig))
+      (elem (i32.const 0) func $f0 $f1))
+    "#;
+    for (idx, expected) in [(0_i32, 7_i32), (1, 11)] {
+        let got: i32 = pulley_and_native_agree(wat, "tail", idx)?;
+        assert_eq!(got, expected, "idx {idx}");
+    }
+    Ok(())
+}
+
+/// Host mutates a slot to `ref.null func`; call_indirect must trap
+/// `IndirectCallToNull`.
+#[test]
+fn fusion_call_indirect_with_host_null_set() -> Result<()> {
+    let wat = r#"
+    (module
+      (table (export "t") 2 2 funcref)
+      (func $f0 (result i32) i32.const 100)
+      (func (export "call") (param i32) (result i32)
+        local.get 0
+        call_indirect (result i32))
+      (elem (i32.const 0) func $f0 $f0))
+    "#;
+    let bytes = wat::parse_str(wat)?;
+
+    // Pulley only (see note on `fusion_call_indirect_null_slot`).
+    let engine = Engine::new(&pulley_trap_safe_config())?;
+    let module = Module::new(&engine, &bytes)?;
+    let mut store = Store::new(&engine, ());
+    let inst = Instance::new(&mut store, &module, &[])?;
+    let call = inst.get_typed_func::<i32, i32>(&mut store, "call")?;
+    assert_eq!(call.call(&mut store, 0)?, 100);
+    assert_eq!(call.call(&mut store, 1)?, 100);
+
+    let table = inst.get_table(&mut store, "t").expect("table export");
+    table.set(&mut store, 1, wasmtime::Ref::Func(None))?;
+
+    assert_eq!(call.call(&mut store, 0)?, 100);
+    let err = call.call(&mut store, 1).unwrap_err();
+    let trap = err.downcast_ref::<Trap>().expect("Trap");
+    assert_eq!(*trap, Trap::IndirectCallToNull);
+    Ok(())
+}
+
+/// Host `Table::set` swaps to a different funcref between calls; the
+/// second call must observe the new target.
+#[test]
+fn fusion_call_indirect_with_host_swap() -> Result<()> {
+    let wat = r#"
+    (module
+      (table (export "t") 1 1 funcref)
+      (func $f0 (result i32) i32.const 100)
+      (func $f1 (result i32) i32.const 200)
+      (func (export "f1_ref") (result funcref) ref.func $f1)
+      (func (export "call") (param i32) (result i32)
+        local.get 0
+        call_indirect (result i32))
+      (elem declare func $f1)
+      (elem (i32.const 0) func $f0))
+    "#;
+    let bytes = wat::parse_str(wat)?;
+
+    for use_pulley in [true, false] {
+        let cfg = if use_pulley {
+            pulley_trap_safe_config()
+        } else {
+            Config::new()
+        };
+        let engine = Engine::new(&cfg)?;
+        let module = Module::new(&engine, &bytes)?;
+        let mut store = Store::new(&engine, ());
+        let inst = Instance::new(&mut store, &module, &[])?;
+        let call = inst.get_typed_func::<i32, i32>(&mut store, "call")?;
+        assert_eq!(call.call(&mut store, 0)?, 100);
+
+        let f1_ref = inst
+            .get_typed_func::<(), Option<wasmtime::Func>>(&mut store, "f1_ref")?
+            .call(&mut store, ())?
+            .expect("f1_ref returned None");
+        let table = inst.get_table(&mut store, "t").expect("table export");
+        table.set(&mut store, 0, wasmtime::Ref::Func(Some(f1_ref)))?;
+
+        assert_eq!(call.call(&mut store, 0)?, 200, "use_pulley={use_pulley}");
+    }
+    Ok(())
+}
+
+/// Module B imports module A's table and calls into it. Tables are
+/// imported, so the importer's `tables_mutated` is `true` and no
+/// fusion fires on B's side; the call must still produce the right
+/// result.
+#[test]
+fn fusion_call_indirect_imported_table() -> Result<()> {
+    let wat_a = r#"
+    (module
+      (table (export "t") 2 2 funcref)
+      (func $f0 (result i32) i32.const 42)
+      (func $f1 (result i32) i32.const 84)
+      (elem (i32.const 0) func $f0 $f1))
+    "#;
+    let wat_b = r#"
+    (module
+      (import "a" "t" (table 2 2 funcref))
+      (func (export "call") (param i32) (result i32)
+        local.get 0
+        call_indirect (result i32)))
+    "#;
+    let bytes_a = wat::parse_str(wat_a)?;
+    let bytes_b = wat::parse_str(wat_b)?;
+
+    for use_pulley in [true, false] {
+        let cfg = if use_pulley {
+            pulley_trap_safe_config()
+        } else {
+            Config::new()
+        };
+        let engine = Engine::new(&cfg)?;
+        let module_a = Module::new(&engine, &bytes_a)?;
+        let module_b = Module::new(&engine, &bytes_b)?;
+        let mut store = Store::new(&engine, ());
+        let inst_a = Instance::new(&mut store, &module_a, &[])?;
+        let table_export = inst_a.get_export(&mut store, "t").expect("a.t");
+
+        let mut linker = wasmtime::Linker::new(&engine);
+        linker.define(&store, "a", "t", table_export)?;
+        let inst_b = linker.instantiate(&mut store, &module_b)?;
+
+        let call = inst_b.get_typed_func::<i32, i32>(&mut store, "call")?;
+        for (idx, expected) in [(0_i32, 42_i32), (1, 84)] {
+            assert_eq!(
+                call.call(&mut store, idx)?,
+                expected,
+                "use_pulley={use_pulley} idx={idx}"
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Single call_indirect to an uninitialised slot — the phase-2 fused
+/// op's runtime null check must trap cleanly with the right trap kind,
+/// not crash on the field deref.
+///
+/// Call into an uninitialised table slot must trap.
+#[test]
+fn fusion_call_indirect_null_slot() -> Result<()> {
+    let wat = r#"
+    (module
+      (table (export "t") 1 1 funcref)
+      (func (export "call") (param i32) (result i32)
+        local.get 0
+        call_indirect (result i32)))
+    "#;
+    let bytes = wat::parse_str(wat)?;
+    // Pulley only — see note on `fusion_call_indirect_every_index`.
+    let engine = Engine::new(&pulley_trap_safe_config())?;
+    let module = Module::new(&engine, &bytes)?;
+    let mut store = Store::new(&engine, ());
+    let inst = Instance::new(&mut store, &module, &[])?;
+    let call = inst.get_typed_func::<i32, i32>(&mut store, "call")?;
+    let err = call.call(&mut store, 0).unwrap_err();
+    let trap = err.downcast_ref::<Trap>().expect("Trap");
+    assert_eq!(*trap, Trap::IndirectCallToNull);
+    Ok(())
+}

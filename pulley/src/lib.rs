@@ -115,6 +115,14 @@ macro_rules! for_each_op {
             /// Transfer control to the PC in `reg` and set `lr` to the PC just
             /// after this instruction.
             call_indirect = CallIndirect { reg: XReg };
+            /// Like `call_indirect`, but also `x0 = arg1`.
+            call_indirect1 = CallIndirect1 { reg: XReg, arg1: XReg };
+            /// Like `call_indirect`, but also `x0, x1 = arg1, arg2`.
+            call_indirect2 = CallIndirect2 { reg: XReg, arg1: XReg, arg2: XReg };
+            /// Like `call_indirect`, but also `x0, x1, x2 = arg1, arg2, arg3`.
+            call_indirect3 = CallIndirect3 { reg: XReg, arg1: XReg, arg2: XReg, arg3: XReg };
+            /// Like `call_indirect`, but also `x0, x1, x2, x3 = arg1, arg2, arg3, arg4`.
+            call_indirect4 = CallIndirect4 { reg: XReg, arg1: XReg, arg2: XReg, arg3: XReg, arg4: XReg };
 
             /// Unconditionally transfer control to the PC at the given offset.
             jump = Jump { offset: PcRelOffset };
@@ -562,6 +570,58 @@ macro_rules! for_each_op {
             xband64_s8 = Xband64S8 { dst: XReg, src1: XReg, src2: i8 };
             /// Same as `xband64` but `src2` is a sign-extended 32-bit immediate.
             xband64_s32 = Xband64S32 { dst: XReg, src1: XReg, src2: i32 };
+
+            /// `low32(dst) = low32(src) & sign_extend(mask)`, then branch by
+            /// `offset` if `low32(src)` is non-zero. Fused `xband32_s8 +
+            /// br_if32` for the call_indirect lazy-init brif site.
+            xband32_s8_br_if_x32 = Xband32S8BrIfX32 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
+            /// Inverted form of `xband32_s8_br_if_x32`: branch if `low32(src)`
+            /// is zero. Mask + dst write are unconditional.
+            xband32_s8_br_if_not_x32 = Xband32S8BrIfNotX32 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
+            /// 64-bit form of `xband32_s8_br_if_x32`.
+            xband64_s8_br_if_x64 = Xband64S8BrIfX64 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
+            /// Inverted form of `xband64_s8_br_if_x64`: branch if `src` is zero.
+            xband64_s8_br_if_not_x64 = Xband64S8BrIfNotX64 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
+
+            /// Funcref-dispatch fusion (64-bit). If `src != 0`, load
+            /// `dst_code = [src + offset_code]`, `dst_vmctx = [src +
+            /// offset_vmctx]`, and branch by `offset`. `src` is the
+            /// already-masked funcref pointer.
+            ///
+            /// The null side traps. The fusion absorbs the two field loads
+            /// from the brif's continuation block; if execution reached the
+            /// original lazy-init slow path, it would rejoin that
+            /// continuation with `dst_code`/`dst_vmctx` uninitialized, so
+            /// the null path can no longer fall through safely. Gated on
+            /// `is_eagerly_initialized_funcref_table`, which guarantees the
+            /// null path is unreachable at runtime.
+            xfuncref_dispatch_x64 = XfuncrefDispatchX64 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// Inverted form of `xfuncref_dispatch_x64`: fast path falls
+            /// through; null path traps. `offset` is vestigial (kept for
+            /// shape parity with the forward variant).
+            xfuncref_dispatch_not_x64 = XfuncrefDispatchNotX64 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// 32-bit pointer-width form of `xfuncref_dispatch_x64`.
+            xfuncref_dispatch_x32 = XfuncrefDispatchX32 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// Inverted form of `xfuncref_dispatch_x32`.
+            xfuncref_dispatch_not_x32 = XfuncrefDispatchNotX32 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+
+            /// Combines `xband64_s8 dst_masked, src, -2` with
+            /// `xfuncref_dispatch_*_x64` into one op. `src` is the unmasked
+            /// funcref; the init-bit strip is internal.
+            ///
+            /// `dst_masked = src & -2` unconditionally. If `src != 0`, do
+            /// the two loads and branch by `offset`. Null side traps (same
+            /// rationale as `xfuncref_dispatch_*`).
+            xband_funcref_dispatch_x64 = XbandFuncrefDispatchX64 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// Inverted form of `xband_funcref_dispatch_x64`: fast path
+            /// falls through; null path traps. `dst_masked` is still
+            /// written unconditionally. `offset` is vestigial.
+            xband_funcref_dispatch_not_x64 = XbandFuncrefDispatchNotX64 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// 32-bit pointer-width form of `xband_funcref_dispatch_x64`.
+            xband_funcref_dispatch_x32 = XbandFuncrefDispatchX32 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// Inverted form of `xband_funcref_dispatch_x32`.
+            xband_funcref_dispatch_not_x32 = XbandFuncrefDispatchNotX32 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+
             /// `low32(dst) = low32(src1) | low32(src2)`
             xbor32 = XBor32 { operands: BinaryOperands<XReg> };
             /// Same as `xbor64` but `src2` is a sign-extended 8-bit immediate.
