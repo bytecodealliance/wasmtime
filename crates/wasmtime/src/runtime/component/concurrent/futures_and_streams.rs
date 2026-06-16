@@ -2437,6 +2437,7 @@ impl StoreOpaque {
     /// Drop the read end of a stream or future read from the host.
     fn host_drop_reader(&mut self, id: TableId<TransmitHandle>, kind: TransmitKind) -> Result<()> {
         let state = self.concurrent_state_mut();
+        Waitable::Transmit(id).join(state, None)?;
         let transmit_id = state.get_mut(id)?.state;
         let transmit = state
             .get_mut(transmit_id)
@@ -2513,6 +2514,7 @@ impl StoreOpaque {
         on_drop_open: Option<fn() -> Result<()>>,
     ) -> Result<()> {
         let state = self.concurrent_state_mut();
+        Waitable::Transmit(id).join(state, None)?;
         let transmit_id = state.get_mut(id)?.state;
         let transmit = state
             .get_mut(transmit_id)
