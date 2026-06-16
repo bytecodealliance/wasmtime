@@ -48,22 +48,21 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64, i32, i64) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @003c                               v6 = load.i64 notrap aligned v0+96
-;; @003c                               v7 = uextend.i64 v2
-;; @003c                               v8 = uextend.i64 v3
-;; @003c                               v11 = iadd v7, v8
-;; @003c                               v12 = icmp ugt v11, v6
-;; @003c                               trapnz v12, heap_oob
-;; @003c                               v13 = load.i64 notrap aligned readonly can_move v0+88
-;; @003c                               v17 = iadd v13, v7
+;; @003c                               v5 = load.i64 notrap aligned v0+96
+;; @003c                               v6 = uextend.i64 v2
+;; @003c                               v7 = uextend.i64 v3
+;; @003c                               v10 = iadd v6, v7
+;; @003c                               v11 = icmp ugt v10, v5
+;; @003c                               trapnz v11, heap_oob
+;; @003c                               v12 = load.i64 notrap aligned readonly can_move v0+88
+;; @003c                               v16 = iadd v12, v6
 ;; @0038                               v4 = iconst.i32 0
-;; @003c                               call fn0(v0, v17, v4, v8)  ; v4 = 0
+;; @003c                               call fn0(v0, v16, v4, v7)  ; v4 = 0
 ;; @003f                               jump block1
 ;;
 ;;                                 block1:
@@ -75,20 +74,19 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64, i32, i64) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i64):
-;; @0048                               v6 = load.i64 notrap aligned v0+112
-;; @0048                               v7 = uadd_overflow_trap v2, v3, heap_oob
-;; @0048                               v8 = icmp ugt v7, v6
-;; @0048                               trapnz v8, heap_oob
-;; @0048                               v9 = load.i64 notrap aligned can_move v0+104
-;; @0048                               v12 = iadd v9, v2
+;; @0048                               v5 = load.i64 notrap aligned v0+112
+;; @0048                               v6 = uadd_overflow_trap v2, v3, heap_oob
+;; @0048                               v7 = icmp ugt v6, v5
+;; @0048                               trapnz v7, heap_oob
+;; @0048                               v8 = load.i64 notrap aligned can_move v0+104
+;; @0048                               v11 = iadd v8, v2
 ;; @0044                               v4 = iconst.i32 0
-;; @0048                               call fn0(v0, v12, v4, v3)  ; v4 = 0
+;; @0048                               call fn0(v0, v11, v4, v3)  ; v4 = 0
 ;; @004b                               jump block1
 ;;
 ;;                                 block1:
@@ -100,22 +98,21 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64, i32, i64) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @0054                               v6 = load.i64 notrap aligned v0+128
-;; @0054                               v7 = uextend.i64 v2
-;; @0054                               v8 = uextend.i64 v3
-;; @0054                               v11 = iadd v7, v8
-;; @0054                               v12 = icmp ugt v11, v6
-;; @0054                               trapnz v12, heap_oob
-;; @0054                               v13 = load.i64 notrap aligned readonly can_move v0+120
-;; @0054                               v17 = iadd v13, v7
+;; @0054                               v5 = load.i64 notrap aligned v0+128
+;; @0054                               v6 = uextend.i64 v2
+;; @0054                               v7 = uextend.i64 v3
+;; @0054                               v10 = iadd v6, v7
+;; @0054                               v11 = icmp ugt v10, v5
+;; @0054                               trapnz v11, heap_oob
+;; @0054                               v12 = load.i64 notrap aligned readonly can_move v0+120
+;; @0054                               v16 = iadd v12, v6
 ;; @0050                               v4 = iconst.i32 0
-;; @0054                               call fn0(v0, v17, v4, v8)  ; v4 = 0
+;; @0054                               call fn0(v0, v16, v4, v7)  ; v4 = 0
 ;; @0057                               jump block1
 ;;
 ;;                                 block1:
@@ -127,20 +124,19 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64, i32, i64) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i64):
-;; @0060                               v6 = load.i64 notrap aligned v0+144
-;; @0060                               v7 = uadd_overflow_trap v2, v3, heap_oob
-;; @0060                               v8 = icmp ugt v7, v6
-;; @0060                               trapnz v8, heap_oob
-;; @0060                               v9 = load.i64 notrap aligned can_move v0+136
-;; @0060                               v12 = iadd v9, v2
+;; @0060                               v5 = load.i64 notrap aligned v0+144
+;; @0060                               v6 = uadd_overflow_trap v2, v3, heap_oob
+;; @0060                               v7 = icmp ugt v6, v5
+;; @0060                               trapnz v7, heap_oob
+;; @0060                               v8 = load.i64 notrap aligned can_move v0+136
+;; @0060                               v11 = iadd v8, v2
 ;; @005c                               v4 = iconst.i32 0
-;; @0060                               call fn0(v0, v12, v4, v3)  ; v4 = 0
+;; @0060                               call fn0(v0, v11, v4, v3)  ; v4 = 0
 ;; @0063                               jump block1
 ;;
 ;;                                 block1:
@@ -152,22 +148,21 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64, i32, i64) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @006c                               v6 = load.i64 notrap aligned v0+160
-;; @006c                               v7 = uextend.i64 v2
-;; @006c                               v8 = uextend.i64 v3
-;; @006c                               v11 = iadd v7, v8
-;; @006c                               v12 = icmp ugt v11, v6
-;; @006c                               trapnz v12, heap_oob
-;; @006c                               v13 = load.i64 notrap aligned readonly can_move v0+152
-;; @006c                               v17 = iadd v13, v7
+;; @006c                               v5 = load.i64 notrap aligned v0+160
+;; @006c                               v6 = uextend.i64 v2
+;; @006c                               v7 = uextend.i64 v3
+;; @006c                               v10 = iadd v6, v7
+;; @006c                               v11 = icmp ugt v10, v5
+;; @006c                               trapnz v11, heap_oob
+;; @006c                               v12 = load.i64 notrap aligned readonly can_move v0+152
+;; @006c                               v16 = iadd v12, v6
 ;; @0068                               v4 = iconst.i32 0
-;; @006c                               call fn0(v0, v17, v4, v8)  ; v4 = 0
+;; @006c                               call fn0(v0, v16, v4, v7)  ; v4 = 0
 ;; @006f                               jump block1
 ;;
 ;;                                 block1:

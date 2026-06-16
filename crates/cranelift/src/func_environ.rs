@@ -166,9 +166,6 @@ pub struct FuncEnvironment<'module_environment> {
     /// Heaps implementing WebAssembly linear memories.
     heaps: PrimaryMap<Heap, HeapData>,
 
-    /// The Cranelift global holding the vmctx address.
-    vmctx: Option<ir::GlobalValue>,
-
     /// Caches of signatures for builtin functions.
     builtin_functions: BuiltinFunctions,
 
@@ -279,7 +276,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             gc_heap: None,
 
             heaps: PrimaryMap::default(),
-            vmctx: None,
             builtin_functions,
             offsets,
             tunables,
@@ -336,14 +332,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     pub(crate) fn pointer_type(&self) -> ir::Type {
         self.isa.pointer_type()
-    }
-
-    pub(crate) fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
-        self.vmctx.unwrap_or_else(|| {
-            let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
-            self.vmctx = Some(vmctx);
-            vmctx
-        })
     }
 
     pub(crate) fn memory_alias_region(
@@ -3345,15 +3333,14 @@ impl FuncEnvironment<'_> {
     /// size in bytes.
     fn memory_size_in_bytes(&mut self, pos: &mut FuncCursor<'_>, index: MemoryIndex) -> ir::Value {
         let pointer_type = self.pointer_type();
-        let vmctx = self.vmctx(&mut pos.func);
+        let vmctx = self.vmctx_val(pos);
         let is_shared = self.module.memories[index].shared;
-        let base = pos.ins().global_value(pointer_type, vmctx);
         match self.module.defined_memory_index(index) {
             Some(def_index) => {
                 if is_shared {
                     let vmmemory_ptr = self
                         .alias_regions
-                        .vmctx_vmmemory_pointer(pos, base, def_index);
+                        .vmctx_vmmemory_pointer(pos, vmctx, def_index);
                     let vmmemory_definition_offset =
                         i64::from(self.offsets.ptr.vmmemory_definition_current_length());
                     let vmmemory_definition_ptr = pos
@@ -3378,13 +3365,13 @@ impl FuncEnvironment<'_> {
                     )
                     .unwrap();
                     pos.ins()
-                        .load(pointer_type, ir::MemFlagsData::trusted(), base, offset)
+                        .load(pointer_type, ir::MemFlagsData::trusted(), vmctx, offset)
                 }
             }
             None => {
                 let vmmemory_ptr = self
                     .alias_regions
-                    .vmctx_vmmemory_import_from(pos, base, index);
+                    .vmctx_vmmemory_import_from(pos, vmctx, index);
                 if is_shared {
                     let vmmemory_definition_offset =
                         i64::from(self.offsets.ptr.vmmemory_definition_current_length());
