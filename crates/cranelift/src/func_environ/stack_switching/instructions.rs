@@ -772,8 +772,9 @@ pub(crate) mod stack_switching_helpers {
         }
 
         /// Overwrites the `last_wasm_entry_fp` field of the `VMStackLimits`
-        /// object in the `VMStackLimits` of this object by loading the corresponding
-        /// field from the `VMRuntimeLimits`.
+        /// object in the `VMStackLimits` of this object by loading the
+        /// corresponding field from the `VMStoreContext`.
+        ///
         /// If `load_stack_limit` is true, we do the same for the `stack_limit`
         /// field.
         pub fn load_limits_from_vmcontext<'a>(
@@ -785,28 +786,28 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
-            // The load side reads the `VMStoreContext`; the store side writes
-            // this continuation's inline `VMStackLimits`.
-            let our_memflags = ir::MemFlagsData::trusted();
-            let last_wasm_entry_fp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_fp();
-
+            // The load side reads the `VMStoreContext`...
             let last_wasm_entry_fp = env
                 .alias_regions
                 .vmstore_context_last_wasm_entry_fp(&mut builder.cursor(), vmruntime_limits_ptr);
+            // ...and store to this continuation's inline `VMStackLimits`.
+            let last_wasm_entry_fp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_fp();
             builder.ins().store(
-                our_memflags,
+                ir::MemFlagsData::trusted(),
                 last_wasm_entry_fp,
                 stack_limits_ptr,
                 i32::from(last_wasm_entry_fp_offset),
             );
 
             if load_stack_limit {
-                let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
+                // Load from the `VMStoreContext`...
                 let stack_limit = env
                     .alias_regions
                     .vmstore_context_stack_limit(&mut builder.cursor(), vmruntime_limits_ptr);
+                // ...and store to this continuation's inline `VMStackLimits`.
+                let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
                 builder.ins().store(
-                    our_memflags,
+                    ir::MemFlagsData::trusted(),
                     stack_limit,
                     stack_limits_ptr,
                     i32::from(stack_limit_offset),
