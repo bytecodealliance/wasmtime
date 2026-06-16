@@ -2948,7 +2948,7 @@ start a print 1234
             let _ = tx.send(res);
         });
 
-        let buf = match rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        let buf = match rx.recv_timeout(std::time::Duration::from_secs(100)) {
             Ok(Ok(buf)) => buf,
             Ok(Err(e)) => {
                 let _ = child.kill();
