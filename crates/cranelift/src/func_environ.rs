@@ -1634,14 +1634,11 @@ impl FuncEnvironment<'_> {
                 let owned_index = self.module.owned_memory_index(def_index);
                 (
                     VmctxLoadChain::new(smallvec![base_load(
-                        self.offsets
-                            .vmctx_vmmemory_definition_base(owned_index)
-                            .into(),
+                        self.offsets.vmctx_vmmemory_definition_base(owned_index)
                     )]),
                     VmctxLoadChain::new(smallvec![bound_load(
                         self.offsets
                             .vmctx_vmmemory_definition_current_length(owned_index)
-                            .into(),
                     )]),
                 )
             }
