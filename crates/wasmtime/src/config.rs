@@ -4899,7 +4899,6 @@ impl Engine {
 
     /// Returns the runtime pooling allocator configuration, if the pooling
     /// allocator is in use.
-    #[cfg(feature = "runtime")]
     pub fn get_pooling_config(&self) -> Option<&PoolingAllocationConfig> {
         #[cfg(feature = "pooling-allocator")]
         {
