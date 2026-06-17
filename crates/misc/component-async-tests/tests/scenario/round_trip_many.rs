@@ -306,21 +306,35 @@ async fn test_round_trip_many(
                 .await?;
 
             for (input, expected) in inputs_and_outputs {
-                assert_eq!(
-                    (
-                        (*expected).to_owned(),
-                        b,
-                        c.clone(),
-                        d,
-                        e.clone(),
-                        f.clone(),
-                        g.clone()
-                    ),
-                    round_trip_many
-                        .local_local_many()
-                        .call_foo(&mut store, input, b, &c, d, &e, f.as_ref(), Err(()))
-                        .await?
-                );
+                store
+                    .run_concurrent(async |store| -> wasmtime::Result<_> {
+                        assert_eq!(
+                            (
+                                (*expected).to_owned(),
+                                b,
+                                c.clone(),
+                                d,
+                                e.clone(),
+                                f.clone(),
+                                g.clone()
+                            ),
+                            round_trip_many
+                                .local_local_many()
+                                .call_foo(
+                                    store,
+                                    input.to_string(),
+                                    b,
+                                    c.clone(),
+                                    d,
+                                    e.clone(),
+                                    f.clone(),
+                                    Err(())
+                                )
+                                .await?
+                        );
+                        Ok(())
+                    })
+                    .await??;
             }
 
             store.assert_concurrent_state_empty();

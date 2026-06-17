@@ -14,7 +14,7 @@ pub mod non_concurrent_export_bindings {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "round-trip",
-        exports: { default: ignore_wit | async },
+        exports: { default: async },
     });
 }
 
