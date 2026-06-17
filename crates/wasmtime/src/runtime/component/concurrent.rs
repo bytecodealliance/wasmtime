@@ -1983,6 +1983,9 @@ impl StoreOpaque {
     /// Iterate over `InstanceState::pending`, moving any ready items into the
     /// "high priority" work item queue.
     ///
+    /// Also, wake any wakers interested in the transition from not ready to
+    /// ready.
+    ///
     /// See `GuestCall::is_ready` for details.
     fn partition_pending(&mut self, instance: RuntimeInstance) -> Result<()> {
         for (thread, kind) in
@@ -1997,6 +2000,20 @@ impl StoreOpaque {
                     .concurrent_state()
                     .pending
                     .insert(call.thread, call.kind);
+            }
+        }
+
+        for waker in self
+            .instance_state(instance)
+            .concurrent_state()
+            .wakers
+            .get_mut()
+            .iter_mut()
+        {
+            if let Some(waker) = waker.downcast_ref::<Waker>() {
+                waker.wake_by_ref();
+            } else {
+                bail_bug!("`ConcurrentInstanceState::wakers` should contain only `Waker`s");
             }
         }
 
@@ -5149,6 +5166,7 @@ pub struct ConcurrentInstanceState {
     /// Pending calls for this instance which require `Self::backpressure` to be
     /// `true` and/or `Self::do_not_enter` to be false before they can proceed.
     pending: BTreeMap<QualifiedThreadId, GuestCallKind>,
+    wakers: AlwaysMut<ResourceTable>,
 }
 
 impl ConcurrentInstanceState {
@@ -5893,5 +5911,71 @@ fn queue_call0<T: 'static>(
             callback,
             post_return.map(SendSyncPtr::new),
         )
+    }
+}
+
+pub(crate) struct ReadyToCall<'a, T: 'static, D: HasData + ?Sized> {
+    accessor: &'a Accessor<T, D>,
+    func: Func,
+    waker_key: Option<Resource<Waker>>,
+}
+
+impl<T, D: HasData + ?Sized> Future for ReadyToCall<'_, T, D> {
+    type Output = Result<()>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.accessor.with(|mut store| {
+            let store = store.as_context_mut();
+            let (_, _, _, raw_options) = self.func.abi_info(store.0);
+            let instance = self.func.instance().runtime_instance(raw_options.instance);
+            let state = store.0.instance_state(instance).concurrent_state();
+            if state.backpressure == 0 {
+                Poll::Ready(Ok(()))
+            } else {
+                let waker = cx.waker().clone();
+                if let Some(key) = &self.waker_key {
+                    *state.wakers.get_mut().get_mut(key).unwrap() = waker;
+                } else {
+                    self.waker_key = Some(
+                        state
+                            .wakers
+                            .get_mut()
+                            .push(waker)
+                            .map_err(crate::Error::from)?,
+                    );
+                }
+                Poll::Pending
+            }
+        })
+    }
+}
+
+impl<T, D: HasData + ?Sized> Drop for ReadyToCall<'_, T, D> {
+    fn drop(&mut self) {
+        if let Some(key) = self.waker_key.take() {
+            self.accessor.with(|mut store| {
+                let store = store.as_context_mut();
+                let (_, _, _, raw_options) = self.func.abi_info(store.0);
+                let instance = self.func.instance().runtime_instance(raw_options.instance);
+                _ = store
+                    .0
+                    .instance_state(instance)
+                    .concurrent_state()
+                    .wakers
+                    .get_mut()
+                    .delete(key);
+            });
+        }
+    }
+}
+
+pub(crate) fn ready_to_call<'a, T, D: HasData + ?Sized>(
+    accessor: &'a Accessor<T, D>,
+    func: Func,
+) -> ReadyToCall<'a, T, D> {
+    ReadyToCall {
+        accessor,
+        func,
+        waker_key: None,
     }
 }
