@@ -24,19 +24,6 @@ use std::process;
 use std::time::Instant;
 
 fn main() {
-    // The ISLE parser is recursive and on deeply nested sources, such as
-    // machine-generated specs, can overflow small default main-thread stack
-    // sizes. Run the whole build script on a dedicated thread with a larger
-    // stack size to avoid that.
-    std::thread::Builder::new()
-        .stack_size(64 << 20)
-        .spawn(run)
-        .expect("failed to spawn build thread")
-        .join()
-        .expect("build thread panicked");
-}
-
-fn run() {
     let start_time = Instant::now();
 
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");

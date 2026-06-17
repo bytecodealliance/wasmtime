@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 cranelift-isle = { version = "*", path = "../../isle/", features = ["fancy-errors", "logging"] }
-cranelift-codegen-meta = { version = "*", path = "../../../codegen/meta" }
+cranelift-codegen-meta = { version = "*", path = "../../../codegen/meta", features = ["spec"] }
 log = { workspace = true }
 env_logger = { workspace = true }
 anyhow = { workspace = true, features = ['std', 'backtrace'] }
