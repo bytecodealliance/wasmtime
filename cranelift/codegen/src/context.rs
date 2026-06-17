@@ -302,7 +302,7 @@ impl Context {
         self.cfg.clear();
 
         // Run some specific legalizations only.
-        simple_legalize(&mut self.func, isa);
+        simple_legalize(&mut self.func);
         self.verify_if(isa)
     }
 

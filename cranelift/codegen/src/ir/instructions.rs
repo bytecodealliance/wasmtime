@@ -1402,11 +1402,11 @@ mod tests {
         // Mapping `GlobalValue`s.
         assert_eq!(
             map(InstructionData::UnaryGlobalValue {
-                opcode: Opcode::GlobalValue,
+                opcode: Opcode::SymbolValue,
                 global_value: GlobalValue::from_u32(4),
             }),
             InstructionData::UnaryGlobalValue {
-                opcode: Opcode::GlobalValue,
+                opcode: Opcode::SymbolValue,
                 global_value: GlobalValue::from_u32(5),
             }
         );

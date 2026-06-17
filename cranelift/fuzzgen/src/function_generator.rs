@@ -839,7 +839,6 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 (Opcode::Sload32x2),
                 (Opcode::StackAddr),
                 (Opcode::DynamicStackAddr),
-                (Opcode::GlobalValue),
                 (Opcode::SymbolValue),
                 (Opcode::TlsValue),
                 (Opcode::GetPinnedReg),
