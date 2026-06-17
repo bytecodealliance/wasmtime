@@ -18,46 +18,9 @@ use wasmtime::error::Context;
 use wasmtime::{Result, format_err};
 
 const KNOWN_FAILURES: &[&str] = &[
-    // Waiting for the upstream tests to update to use the 0.3.0 official WITs.
-    "multi-clock-wait",
-    "filesystem-unlink-errors",
-    "monotonic-clock",
-    "filesystem-open-errors",
-    "cli-terminal",
-    "sockets-udp-bind",
-    "wall-clock",
-    "sockets-tcp-bind",
-    "cli-env",
-    "cli-stdio-roundtrip",
-    "cli-stdio",
-    "filesystem-flags-and-type",
-    "sockets-tcp-send",
-    "filesystem-set-size",
-    "sockets-udp-connect",
-    "sockets-echo",
-    "random",
-    "sockets-udp-properties",
-    "filesystem-metadata-hash",
-    "sockets-tcp-listen",
-    "sockets-udp-send",
-    "filesystem-read-directory",
-    "sockets-tcp-receive",
-    "sockets-tcp-properties",
-    "filesystem-dotdot",
-    "filesystem-io",
-    "sockets-tcp-connect",
-    "sockets-udp-receive",
-    "run-with-err",
-    "filesystem-advise",
-    "http-fields",
-    "http-response",
-    "filesystem-is-same-object",
-    "filesystem-rename",
-    "filesystem-hard-links",
-    "filesystem-stat",
-    "http-request",
-    "filesystem-mkdir-rmdir",
-    "http-service",
+    // No currently known failures, but if necessary they can be listed here
+    // with the file stem, like so:
+    // "multi-clock-wait",
 ];
 
 fn main() -> Result<()> {
