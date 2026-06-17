@@ -305,9 +305,10 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // `HostWithStore` trait. Functions without a `store` are generated
 ///         // in a `Host` trait.
 ///         //
-///         // > Note: this is not yet implemented for non-async functions. This
-///         // > will result in bindgen errors right now and is intended to be
-///         // > implemented in the near future.
+///         // If the WIT function itself is `async`, then the function will
+///         // already have this flag and will take an `&Accessor<T, Self>`. If
+///         // the WIT function is not `async`, however, then the function will
+///         // take `Access<T, Self>`.
 ///         "wasi:clocks/monotonic-clock.now": store,
 ///
 ///         // This is an example of combining flags where the `async` and
@@ -348,11 +349,6 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // host function return `wasmtime::Result<Result<WitOk, WitErr>>`
 ///         // for example and instead return `Result<WitOk, RustErrorType>`.
 ///         "my:local/api.fallible": trappable,
-///
-///         // The `ignore_wit` flag discards the WIT-level defaults of a
-///         // function. For example this `async` WIT function will be ignored
-///         // and a synchronous function will be generated on the host.
-///         "my:local/api.wait": ignore_wit,
 ///
 ///         // The `exact` flag ensures that the filter, here "f", only matches
 ///         // functions exactly. For example "f" here would only refer to

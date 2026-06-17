@@ -476,13 +476,18 @@ pub async fn test_round_trip(
                 )?;
 
             for (input, expected) in inputs_and_outputs {
-                assert_eq!(
-                    *expected,
-                    &round_trip
-                        .local_local_baz()
-                        .call_foo(&mut store, input)
-                        .await?
-                );
+                store
+                    .run_concurrent(async |store| -> wasmtime::Result<_> {
+                        assert_eq!(
+                            *expected,
+                            &round_trip
+                                .local_local_baz()
+                                .call_foo(store, input.to_string())
+                                .await?
+                        );
+                        Ok(())
+                    })
+                    .await??;
             }
 
             store.assert_concurrent_state_empty();

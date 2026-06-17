@@ -177,10 +177,12 @@ impl UdpSocket {
             Send(Arc<tokio::net::UdpSocket>),
             SendTo(Arc<tokio::net::UdpSocket>, SocketAddr),
         }
-        let mut socket = match (&self.udp_state, addr) {
-            (UdpState::BindStarted, _) => Err(ErrorCode::InvalidState),
-            (UdpState::Default | UdpState::Bound, None) => Err(ErrorCode::InvalidArgument),
-            (UdpState::Default | UdpState::Bound, Some(addr)) => {
+        let socket = match (&self.udp_state, addr) {
+            (UdpState::BindStarted, _) | (UdpState::Default, Some(_)) => {
+                Err(ErrorCode::InvalidState)
+            }
+            (UdpState::Bound | UdpState::Default, None) => Err(ErrorCode::InvalidArgument),
+            (UdpState::Bound, Some(addr)) => {
                 if is_valid_remote_address(addr) && is_valid_address_family(addr.ip(), self.family)
                 {
                     Ok(Mode::SendTo(Arc::clone(&self.socket), addr))
@@ -197,28 +199,6 @@ impl UdpSocket {
                 }
             }
         };
-
-        // Send may be called without a prior bind or connect. In that case, the
-        // first send will automatically assign a free local port. This is
-        // normally performed by the OS itself. However, if the `send` syscall
-        // failed, we can't reliably know which state the socket is in at the
-        // kernel level and our own `udp_state` bookkeeping may have become
-        // out-of-sync.
-        // To avoid that, we perform the implicit bind ourselves here. This way,
-        // we always leave the socket in a consistent state: Bound.
-        if socket.is_ok()
-            && let UdpState::Default = self.udp_state
-        {
-            let implicit_addr = crate::sockets::util::implicit_bind_addr(self.family);
-            match udp_bind(&self.socket, implicit_addr) {
-                Ok(()) => {
-                    self.udp_state = UdpState::Bound;
-                }
-                Err(e) => {
-                    socket = Err(e);
-                }
-            }
-        }
 
         async move {
             match socket? {

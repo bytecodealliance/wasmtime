@@ -2687,7 +2687,7 @@ pub fn add_to_linker<T, D>(
         uwrite!(
             self.src,
             "{linker}.{}(\"{}\", ",
-            if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
+            if func.kind.is_async() {
                 "func_wrap_concurrent"
             } else if flags.contains(FunctionFlags::ASYNC) {
                 "func_wrap_async"
@@ -2717,7 +2717,7 @@ pub fn add_to_linker<T, D>(
         // codegen here.
 
         let wt = self.generator.wasmtime_path();
-        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
+        if func.kind.is_async() {
             uwrite!(self.src, "move |caller: &{wt}::component::Accessor::<T>, (");
         } else {
             uwrite!(
@@ -2769,11 +2769,7 @@ pub fn add_to_linker<T, D>(
         }
 
         if flags.contains(FunctionFlags::ASYNC) {
-            let ctor = if flags.contains(FunctionFlags::STORE) {
-                "pin"
-            } else {
-                "new"
-            };
+            let ctor = if func.kind.is_async() { "pin" } else { "new" };
             uwriteln!(
                 self.src,
                 "{wt}::component::__internal::Box::{ctor}(async move {{"
@@ -2805,19 +2801,17 @@ pub fn add_to_linker<T, D>(
             );
         }
 
-        if flags.contains(FunctionFlags::STORE) {
-            if flags.contains(FunctionFlags::ASYNC) {
-                uwriteln!(self.src, "let host = &caller.with_getter(host_getter);");
-            } else {
-                uwriteln!(
-                    self.src,
-                    "let access_cx = {wt}::AsContextMut::as_context_mut(&mut caller);"
-                );
-                uwriteln!(
-                    self.src,
-                    "let host = {wt}::component::Access::new(access_cx, host_getter);"
-                );
-            }
+        if func.kind.is_async() {
+            uwriteln!(self.src, "let host = &caller.with_getter(host_getter);");
+        } else if flags.contains(FunctionFlags::STORE) {
+            uwriteln!(
+                self.src,
+                "let access_cx = {wt}::AsContextMut::as_context_mut(&mut caller);"
+            );
+            uwriteln!(
+                self.src,
+                "let host = {wt}::component::Access::new(access_cx, host_getter);"
+            );
         } else {
             self.src
                 .push_str("let host = &mut host_getter(caller.data_mut());\n");
@@ -2890,12 +2884,10 @@ pub fn add_to_linker<T, D>(
                 None => format!("Host"),
             };
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
-            let convert = if flags.contains(FunctionFlags::STORE) {
-                if flags.contains(FunctionFlags::ASYNC) {
-                    format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))")
-                } else {
-                    format!("{convert}(&mut host_getter(caller.data_mut()), e)")
-                }
+            let convert = if func.kind.is_async() {
+                format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))")
+            } else if flags.contains(FunctionFlags::STORE) {
+                format!("{convert}(&mut host_getter(caller.data_mut()), e)")
             } else {
                 format!("{convert}(host, e)")
             };
@@ -2932,7 +2924,7 @@ pub fn add_to_linker<T, D>(
 
         self.push_str("fn ");
         self.push_str(&rust_function_name(func));
-        if flags.contains(FunctionFlags::STORE | FunctionFlags::ASYNC) {
+        if func.kind.is_async() {
             uwrite!(self.src, "(accessor: &{wt}::component::Accessor<T, Self>, ");
         } else if flags.contains(FunctionFlags::STORE) {
             uwrite!(self.src, "(host: {wt}::component::Access<T, Self>, ");

@@ -87,7 +87,7 @@ pub trait HostBazWithStore<T>: wasmtime::component::HasData + Send {
     where
         Self: Sized;
     fn foo(
-        accessor: &wasmtime::component::Accessor<T, Self>,
+        host: wasmtime::component::Access<T, Self>,
         self_: wasmtime::component::Resource<Baz>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -197,7 +197,7 @@ pub trait TheWorldImportsWithStore<
     T,
 >: wasmtime::component::HasData + HostBazWithStore<T> + Send {
     fn foo(
-        accessor: &wasmtime::component::Accessor<T, Self>,
+        host: wasmtime::component::Access<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
 pub trait TheWorldImports: HostBaz + Send {}
@@ -299,11 +299,17 @@ const _: () = {
                 }
                 if options.experimental_world_function_import {
                     linker
-                        .func_wrap_concurrent(
+                        .func_wrap_async(
                             "foo",
-                            move |caller: &wasmtime::component::Accessor<T>, (): ()| {
-                                wasmtime::component::__internal::Box::pin(async move {
-                                    let host = &caller.with_getter(host_getter);
+                            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                                wasmtime::component::__internal::Box::new(async move {
+                                    let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                        &mut caller,
+                                    );
+                                    let host = wasmtime::component::Access::new(
+                                        access_cx,
+                                        host_getter,
+                                    );
                                     let r = <D as TheWorldImportsWithStore<T>>::foo(host).await;
                                     Ok(r)
                                 })
@@ -312,14 +318,20 @@ const _: () = {
                 }
                 if options.experimental_world_resource_method {
                     linker
-                        .func_wrap_concurrent(
+                        .func_wrap_async(
                             "[method]baz.foo",
                             move |
-                                caller: &wasmtime::component::Accessor<T>,
+                                mut caller: wasmtime::StoreContextMut<'_, T>,
                                 (arg0,): (wasmtime::component::Resource<Baz>,)|
                             {
-                                wasmtime::component::__internal::Box::pin(async move {
-                                    let host = &caller.with_getter(host_getter);
+                                wasmtime::component::__internal::Box::new(async move {
+                                    let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                        &mut caller,
+                                    );
+                                    let host = wasmtime::component::Access::new(
+                                        access_cx,
+                                        host_getter,
+                                    );
                                     let r = <D as HostBazWithStore<T>>::foo(host, arg0).await;
                                     Ok(r)
                                 })
@@ -407,7 +419,7 @@ pub mod foo {
                 where
                     Self: Sized;
                 fn foo(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                     self_: wasmtime::component::Resource<Bar>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -417,7 +429,7 @@ pub mod foo {
                 T,
             >: wasmtime::component::HasData + HostBarWithStore<T> + Send {
                 fn foo(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }
             pub trait Host: HostBar + Send {}
@@ -454,11 +466,17 @@ pub mod foo {
                         )?;
                     }
                     if options.experimental_interface_function {
-                        inst.func_wrap_concurrent(
+                        inst.func_wrap_async(
                             "foo",
-                            move |caller: &wasmtime::component::Accessor<T>, (): ()| {
-                                wasmtime::component::__internal::Box::pin(async move {
-                                    let host = &caller.with_getter(host_getter);
+                            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                                wasmtime::component::__internal::Box::new(async move {
+                                    let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                        &mut caller,
+                                    );
+                                    let host = wasmtime::component::Access::new(
+                                        access_cx,
+                                        host_getter,
+                                    );
                                     let r = <D as HostWithStore<T>>::foo(host).await;
                                     Ok(r)
                                 })
@@ -466,14 +484,20 @@ pub mod foo {
                         )?;
                     }
                     if options.experimental_interface_resource_method {
-                        inst.func_wrap_concurrent(
+                        inst.func_wrap_async(
                             "[method]bar.foo",
                             move |
-                                caller: &wasmtime::component::Accessor<T>,
+                                mut caller: wasmtime::StoreContextMut<'_, T>,
                                 (arg0,): (wasmtime::component::Resource<Bar>,)|
                             {
-                                wasmtime::component::__internal::Box::pin(async move {
-                                    let host = &caller.with_getter(host_getter);
+                                wasmtime::component::__internal::Box::new(async move {
+                                    let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                        &mut caller,
+                                    );
+                                    let host = wasmtime::component::Access::new(
+                                        access_cx,
+                                        host_getter,
+                                    );
                                     let r = <D as HostBarWithStore<T>>::foo(host, arg0).await;
                                     Ok(r)
                                 })
