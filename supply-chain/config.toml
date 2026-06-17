@@ -64,6 +64,12 @@ audit-as-crates-io = true
 [policy.cranelift-isle]
 audit-as-crates-io = true
 
+[policy.cranelift-isle-veri]
+criteria = []
+
+[policy.cranelift-isle-veri-aslp]
+criteria = []
+
 [policy.cranelift-jit]
 audit-as-crates-io = true
 
