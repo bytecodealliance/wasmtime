@@ -178,8 +178,10 @@ impl UdpSocket {
             SendTo(Arc<tokio::net::UdpSocket>, SocketAddr),
         }
         let socket = match (&self.udp_state, addr) {
-            (UdpState::BindStarted | UdpState::Default, _) => Err(ErrorCode::InvalidState),
-            (UdpState::Bound, None) => Err(ErrorCode::InvalidArgument),
+            (UdpState::BindStarted, _) | (UdpState::Default, Some(_)) => {
+                Err(ErrorCode::InvalidState)
+            }
+            (UdpState::Bound | UdpState::Default, None) => Err(ErrorCode::InvalidArgument),
             (UdpState::Bound, Some(addr)) => {
                 if is_valid_remote_address(addr) && is_valid_address_family(addr.ip(), self.family)
                 {

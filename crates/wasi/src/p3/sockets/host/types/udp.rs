@@ -61,11 +61,17 @@ impl<T> HostUdpSocketWithStore<T> for WasiSockets {
         //
         // To avoid that, we perform the implicit bind ourselves here. This way,
         // we always leave the socket in a consistent state: Bound.
-        let (is_bound, family) = store.with(|mut view| -> SocketResult<_> {
+        //
+        // Note that implicit binding only happens when the socket isn't bound
+        // and the remote address is `Some`. If the remote address is `None` and
+        // we're unbound then that's an invalid state that `send_p3` below will
+        // reject.
+        let (needs_implicit_bind, family) = store.with(|mut view| -> SocketResult<_> {
             let socket = get_socket_mut(view.get().table, &socket)?;
-            Ok((socket.is_bound(), socket.address_family()))
+            let needs_implicit_bind = !socket.is_bound() && remote_address.is_some();
+            Ok((needs_implicit_bind, socket.address_family()))
         })?;
-        if !is_bound {
+        if needs_implicit_bind {
             let implicit_addr = crate::sockets::util::implicit_bind_addr(family);
             if !is_addr_allowed(store, implicit_addr, SocketAddrUse::UdpBind).await {
                 return Err(ErrorCode::AccessDenied.into());
