@@ -47,6 +47,37 @@ impl<T> HostUdpSocketWithStore<T> for WasiSockets {
             }
         }
 
+        // If this socket is not yet explicitly bound then part of this
+        // operation is performing an implicit bind. This is done for a few
+        // reasons:
+        //
+        // * The host's `socket_addr_check` callback, if any, gets an
+        //   opportunity to have an opinion about the implicit use of this
+        //   address.
+        // * On the first send the OS will automatically assign a free local
+        //   port. However, if the `send` syscall failed, we can't reliably know
+        //   which state the socket is in at the kernel level and our own
+        //   state bookkeeping may have become out-of-sync.
+        //
+        // To avoid that, we perform the implicit bind ourselves here. This way,
+        // we always leave the socket in a consistent state: Bound.
+        let (is_bound, family) = store.with(|mut view| -> SocketResult<_> {
+            let socket = get_socket_mut(view.get().table, &socket)?;
+            Ok((socket.is_bound(), socket.address_family()))
+        })?;
+        if !is_bound {
+            let implicit_addr = crate::sockets::util::implicit_bind_addr(family);
+            if !is_addr_allowed(store, implicit_addr, SocketAddrUse::UdpBind).await {
+                return Err(ErrorCode::AccessDenied.into());
+            }
+            store.with(|mut view| -> SocketResult<_> {
+                let socket = get_socket_mut(view.get().table, &socket)?;
+                socket.bind(implicit_addr)?;
+                socket.finish_bind()?;
+                Ok(())
+            })?;
+        }
+
         let fut = store.with(|mut view| {
             get_socket_mut(view.get().table, &socket).map(|sock| sock.send_p3(data, remote_address))
         })?;

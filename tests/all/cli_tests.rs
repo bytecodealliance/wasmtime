@@ -3005,6 +3005,12 @@ start a print 1234
         run_wasmtime(&["run", "-Smax-resources=100", P3_CLI_MANY_STREAM_COMPONENT])?;
         Ok(())
     }
+
+    #[test]
+    fn p3_cli_deny_listen() -> Result<()> {
+        run_wasmtime(&["run", P3_CLI_DENY_LISTEN_COMPONENT])?;
+        Ok(())
+    }
 }
 
 #[test]

@@ -241,7 +241,7 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
     }
 }
 
-impl<T> HostTcpSocketWithStore<T> for WasiSockets {
+impl<T: Send> HostTcpSocketWithStore<T> for WasiSockets {
     async fn connect(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
@@ -267,13 +267,58 @@ impl<T> HostTcpSocketWithStore<T> for WasiSockets {
         })
     }
 
-    fn listen(
+    async fn listen(
         mut store: Access<'_, T, Self>,
-        socket: Resource<TcpSocket>,
+        socket_resource: Resource<TcpSocket>,
     ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
         let getter = store.getter();
-        let socket = get_socket_mut(store.get().table, &socket)?;
-        socket.listen_p3()?;
+        let socket = get_socket_mut(store.get().table, &socket_resource)?;
+
+        // If this socket has not yet been explicitly bound then it's never hit
+        // the `socket_addr_check` callback/function. An unbound socket here
+        // implicitly performs a bind, so to ensure the address is checked this
+        // function explicitly performs a bind against the implicit bind
+        // address.
+        //
+        // In addition to this some platforms automatically perform an implicit
+        // bind as part of the `listen` syscall. However this is not ubiquitous
+        // behavior:
+        // - Linux mentions it in their docs [0] that they perform an
+        //   implicit bind. This behavior has been experimentally verified.
+        // - Windows requires a `bind` before `listen`. This is both
+        //   documented [1] and experimentally verified.
+        // - Other platforms (e.g. macOS, FreeBSD) do not explicitly
+        //   document it either way and instead leave it up to the
+        //   individual protocol to decide [2]. However, experiments
+        //   show that MacOS in fact _does_ perform an implicit bind.
+        //
+        // Thus to ensure the socket address check is used and to additionally
+        // ensure consistent behavior across all platforms, we perform the
+        // implicit bind ourselves here for unbound sockets.
+        //
+        // [0]: https://man7.org/linux/man-pages/man7/ip.7.html
+        // > An ephemeral port is allocated to a socket in the following
+        // > circumstances: (...) listen(2) is called on a stream socket
+        // > that was not previously bound;
+        //
+        // [1]: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen
+        // > WSAEINVAL: The socket has not been bound with bind.
+        //
+        // [2]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/listen.html
+        // > EDESTADDRREQ: The socket is not bound to a local address,
+        // > and the protocol does not support listening on an unbound
+        // > socket.
+        if !socket.is_bound() {
+            let implicit_addr = crate::sockets::util::implicit_bind_addr(socket.address_family());
+            store
+                .get()
+                .bind_addr(&socket_resource, implicit_addr)
+                .await?;
+        }
+
+        let socket = get_socket_mut(store.get().table, &socket_resource)?;
+        socket.start_listen()?;
+        socket.finish_listen()?;
         let listener = socket.tcp_listener_arc().unwrap().clone();
         let family = socket.address_family();
         let options = socket.non_inherited_options().clone();
@@ -342,6 +387,22 @@ impl<T> HostTcpSocketWithStore<T> for WasiSockets {
     }
 }
 
+impl WasiSocketsCtxView<'_> {
+    async fn bind_addr(
+        &mut self,
+        socket: &Resource<TcpSocket>,
+        local_address: SocketAddr,
+    ) -> SocketResult<()> {
+        if !(self.ctx.socket_addr_check)(local_address, SocketAddrUse::TcpBind).await {
+            return Err(ErrorCode::AccessDenied.into());
+        }
+        let socket = get_socket_mut(self.table, socket)?;
+        socket.start_bind(local_address)?;
+        socket.finish_bind()?;
+        Ok(())
+    }
+}
+
 impl HostTcpSocket for WasiSocketsCtxView<'_> {
     async fn bind(
         &mut self,
@@ -349,13 +410,7 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
         let local_address = SocketAddr::from(local_address);
-        if !(self.ctx.socket_addr_check)(local_address, SocketAddrUse::TcpBind).await {
-            return Err(ErrorCode::AccessDenied.into());
-        }
-        let socket = get_socket_mut(self.table, &socket)?;
-        socket.start_bind(local_address)?;
-        socket.finish_bind()?;
-        Ok(())
+        self.bind_addr(&socket, local_address).await
     }
 
     fn create(&mut self, address_family: IpAddressFamily) -> SocketResult<Resource<TcpSocket>> {
