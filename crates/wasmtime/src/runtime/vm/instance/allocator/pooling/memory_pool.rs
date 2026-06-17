@@ -54,10 +54,12 @@ use super::{
     MemoryAllocationIndex,
     index_allocator::{MemoryInModule, ModuleAffinityIndexAllocator, SlotId},
 };
+use crate::config::InstanceLimits;
+use crate::config::PoolingAllocationConfig;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory, MemoryBase,
-    MemoryImageSlot, Mmap, MmapOffset, PoolingInstanceAllocatorConfig, mmap::AlignedLength,
+    CompiledModuleId, InstanceAllocationRequest, Memory, MemoryBase, MemoryImageSlot, Mmap,
+    MmapOffset, mmap::AlignedLength,
 };
 use crate::{
     Enabled,
@@ -173,7 +175,7 @@ enum ImageSlot {
 
 impl MemoryPool {
     /// Create a new `MemoryPool`.
-    pub fn new(config: &PoolingInstanceAllocatorConfig, tunables: &Tunables) -> Result<Self> {
+    pub fn new(config: &PoolingAllocationConfig, tunables: &Tunables) -> Result<Self> {
         if u64::try_from(config.limits.max_memory_size).unwrap() > tunables.memory_reservation {
             bail!(
                 "maximum memory size of {:#x} bytes exceeds the configured \
@@ -894,7 +896,7 @@ mod tests {
     #[test]
     fn test_memory_pool() -> Result<()> {
         let pool = MemoryPool::new(
-            &PoolingInstanceAllocatorConfig {
+            &PoolingAllocationConfig {
                 limits: InstanceLimits {
                     total_memories: 5,
                     max_tables_per_module: 0,
@@ -939,9 +941,9 @@ mod tests {
         }
 
         // Force the use of MPK.
-        let config = PoolingInstanceAllocatorConfig {
+        let config = PoolingAllocationConfig {
             memory_protection_keys: Enabled::Yes,
-            ..PoolingInstanceAllocatorConfig::default()
+            ..PoolingAllocationConfig::default()
         };
         let pool = MemoryPool::new(&config, &Tunables::default_host()).unwrap();
         assert!(pool.stripes.len() >= 2);

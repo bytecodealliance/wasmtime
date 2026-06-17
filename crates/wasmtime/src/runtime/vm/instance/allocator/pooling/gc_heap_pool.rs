@@ -1,6 +1,7 @@
 use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use super::{GcHeapAllocationIndex, PoolConcurrencyLimitError};
-use crate::runtime::vm::{GcHeap, GcRuntime, PoolingInstanceAllocatorConfig, Result};
+use crate::config::PoolingAllocationConfig;
+use crate::runtime::vm::{GcHeap, GcRuntime, Result};
 use crate::vm::MemoryAllocationIndex;
 use crate::{Engine, prelude::*};
 use std::sync::Mutex;
@@ -58,7 +59,7 @@ impl std::fmt::Debug for GcHeapPool {
 
 impl GcHeapPool {
     /// Create a new `GcHeapPool` with the given configuration.
-    pub fn new(config: &PoolingInstanceAllocatorConfig, tunables: &Tunables) -> Result<Self> {
+    pub fn new(config: &PoolingAllocationConfig, tunables: &Tunables) -> Result<Self> {
         // When using the pooling allocator, GC heaps and linear memories share
         // the same underlying memory pool, so they must be configured the same.
         debug_assert_eq!(

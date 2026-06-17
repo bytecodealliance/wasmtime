@@ -1,10 +1,9 @@
 #![cfg_attr(asan, allow(dead_code))]
 
 use super::index_allocator::{SimpleIndexAllocator, SlotId};
+use crate::config::PoolingAllocationConfig;
 use crate::prelude::*;
-use crate::runtime::vm::{
-    HostAlignedByteCount, Mmap, PoolingInstanceAllocatorConfig, mmap::AlignedLength,
-};
+use crate::runtime::vm::{HostAlignedByteCount, Mmap, mmap::AlignedLength};
 
 /// Represents a pool of execution stacks (used for the async fiber implementation).
 ///
@@ -33,7 +32,7 @@ impl StackPool {
         true
     }
 
-    pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
+    pub fn new(config: &PoolingAllocationConfig) -> Result<Self> {
         use rustix::mm::{MprotectFlags, mprotect};
 
         let page_size = HostAlignedByteCount::host_page_size();
@@ -262,18 +261,18 @@ impl StackPool {
 #[cfg(all(test, unix, feature = "async", not(miri), not(asan)))]
 mod tests {
     use super::*;
-    use crate::runtime::vm::InstanceLimits;
+    use crate::config::InstanceLimits;
 
     #[test]
     fn test_stack_pool() -> Result<()> {
-        let config = PoolingInstanceAllocatorConfig {
+        let config = PoolingAllocationConfig {
             limits: InstanceLimits {
                 total_stacks: 10,
                 ..Default::default()
             },
             stack_size: 1,
             async_stack_zeroing: true,
-            ..PoolingInstanceAllocatorConfig::default()
+            ..PoolingAllocationConfig::default()
         };
         let pool = StackPool::new(&config)?;
 
