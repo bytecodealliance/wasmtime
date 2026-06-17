@@ -296,19 +296,6 @@ where
         )
     }
 
-    /// Get the region for loading from a `*mut VMContext` at the given offset.
-    ///
-    /// XXX: This is ONLY for use with `ir::GlobalValue`s, all other uses should
-    /// instead use a helper method that actually emits the full load
-    /// instruction instead (e.g. `AliasRegions::vmctx_store_context`).
-    pub fn vmctx_region_for_use_in_ir_global(
-        &mut self,
-        func: &mut ir::Function,
-        offset: u32,
-    ) -> ir::AliasRegion {
-        self.vmctx_region(func, offset)
-    }
-
     fn vmctx_load(
         &mut self,
         cursor: &mut FuncCursor<'_>,
@@ -854,20 +841,6 @@ where
         )
     }
 
-    /// Get the alias region for the `VMStoreContext` field at `offset`, for use
-    /// in an `ir::GlobalValue`'s memory flags.
-    ///
-    /// XXX: This is ONLY for use with `ir::GlobalValue`s; all other uses should
-    /// instead use a helper method that actually emits the full load/store
-    /// instruction.
-    pub fn vmstore_context_region_for_use_in_ir_global(
-        &mut self,
-        func: &mut ir::Function,
-        offset: u32,
-    ) -> ir::AliasRegion {
-        self.vmstore_context_region(func, offset)
-    }
-
     /// Load the `VMStoreContext::fuel_consumed` field.
     pub fn vmstore_context_fuel_consumed(
         &mut self,
@@ -967,6 +940,28 @@ where
         )
     }
 
+    /// Get a `Load` of the GC heap base pointer (`VMStoreContext::gc_heap.base`).
+    ///
+    /// The caller supplies the base flags because whether the base pointer is
+    /// `readonly`/`can_move` depends on the GC heap's tunables.
+    pub fn vmstore_context_gc_heap_base_load(
+        &mut self,
+        func: &mut ir::Function,
+        base_flags: ir::MemFlagsData,
+    ) -> Load {
+        let offset = self
+            .offsets
+            .get_ptr_size()
+            .vmstore_context_gc_heap_base()
+            .into();
+        let region = self.vmstore_context_region(func, offset);
+        Load {
+            offset,
+            flags: base_flags.with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
+    }
+
     /// Load the GC heap base pointer (`VMStoreContext::gc_heap.base`).
     ///
     /// The caller supplies the base flags because whether the base pointer is
@@ -977,16 +972,23 @@ where
         base_flags: ir::MemFlagsData,
         vmstore_ctx: ir::Value,
     ) -> ir::Value {
-        self.vmstore_context_load(
-            cursor,
-            self.pointer_type,
-            base_flags,
-            vmstore_ctx,
-            self.offsets
-                .get_ptr_size()
-                .vmstore_context_gc_heap_base()
-                .into(),
-        )
+        self.vmstore_context_gc_heap_base_load(cursor.func, base_flags)
+            .emit(cursor, vmstore_ctx)
+    }
+
+    /// Get a `Load` of the GC heap bound (`VMStoreContext::gc_heap.current_length`).
+    pub fn vmstore_context_gc_heap_current_length_load(&mut self, func: &mut ir::Function) -> Load {
+        let offset = self
+            .offsets
+            .get_ptr_size()
+            .vmstore_context_gc_heap_current_length()
+            .into();
+        let region = self.vmstore_context_region(func, offset);
+        Load {
+            offset,
+            flags: ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
     }
 
     /// Load the GC heap bound (`VMStoreContext::gc_heap.current_length`).
@@ -995,16 +997,8 @@ where
         cursor: &mut FuncCursor<'_>,
         vmstore_ctx: ir::Value,
     ) -> ir::Value {
-        self.vmstore_context_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted(),
-            vmstore_ctx,
-            self.offsets
-                .get_ptr_size()
-                .vmstore_context_gc_heap_current_length()
-                .into(),
-        )
+        self.vmstore_context_gc_heap_current_length_load(cursor.func)
+            .emit(cursor, vmstore_ctx)
     }
 
     /// Load the `VMStoreContext::last_wasm_entry_fp` field.
