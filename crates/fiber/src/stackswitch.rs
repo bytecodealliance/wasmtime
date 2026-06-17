@@ -33,6 +33,10 @@ cfg_if::cfg_if! {
         mod riscv32imac;
         pub(crate) use supported::*;
         pub(crate) use riscv32imac::*;
+    } else if #[cfg(target_arch = "loongarch64")]  {
+        mod loongarch64;
+        pub(crate) use supported::*;
+        pub(crate) use loongarch64::*;
     } else if #[cfg(feature = "custom")] {
         mod custom;
         pub(crate) use supported::*;
