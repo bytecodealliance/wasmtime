@@ -5,7 +5,7 @@ function %f0(i64 vmctx) -> i64 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+16
 block0(v0: i64):
-    v1 = global_value.i64 gv1
+    v1 = load.i64 notrap aligned v0+16
     return v1
 }
 

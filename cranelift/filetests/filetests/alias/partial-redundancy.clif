@@ -14,17 +14,17 @@ block0(v0: i64, v1: i32):
     brif v1, block2, block1
 
 block1:
-    v2 = global_value.i64 gv1
+    v2 = load.i64 notrap readonly aligned v0+8
     v3 = load.i32 v2+64
     jump block3(v3)
 
 block2:
-    v4 = global_value.i64 gv1
+    v4 = load.i64 notrap readonly aligned v0+8
     v5 = load.i32 v4+128
     jump block3(v5)
 
 block3(v6: i32):
-    v7 = global_value.i64 gv1
+    v7 = load.i64 notrap readonly aligned v0+8
     v8 = load.i32 v7+64
     ;; load should survive:
     ; check: v8 = load.i32 v7+64

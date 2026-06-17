@@ -9,7 +9,7 @@ function %f0(i64 vmctx, i32) -> i32 {
     gv1 = load.i64 notrap readonly aligned gv0+8
 
 block0(v0: i64, v1: i32):
-    v2 = global_value.i64 gv1
+    v2 = load.i64 notrap readonly aligned v0+8
     v3 = load.i32 v2+8
     brif v2, block2, block1
 

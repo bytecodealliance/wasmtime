@@ -10,10 +10,10 @@ block0(v0: i64):
     return
 }
 
-function %global_value_wrong_type(i64 vmctx) {
-    gv0 = vmctx
+function %symbol_value_wrong_type() {
+    gv0 = symbol %sym
 
-block0(v0: i64):
-    v1 = global_value.i32 gv0 ; error: global_value instruction with type i32 references global value with type i64
+block0:
+    v1 = symbol_value.i32 gv0 ; error: global_value instruction with type i32 references global value with type i64
     return
 }

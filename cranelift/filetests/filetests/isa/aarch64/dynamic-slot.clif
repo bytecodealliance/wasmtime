@@ -6,7 +6,7 @@ function %store_scale() {
   ss0 = explicit_slot 8
 
 block0:
-  v0 = global_value.i64 gv0
+  v0 = iconst.i64 1
   v1 = stack_addr.i64 ss0
   store.i64 notrap v0, v1
   return
@@ -40,7 +40,7 @@ function %store_scale_lt_128() {
   ss0 = explicit_slot 8
 
 block0:
-  v0 = global_value.i64 gv0
+  v0 = iconst.i64 1
   v1 = stack_addr.i64 ss0
   store.i64 notrap v0, v1
   return

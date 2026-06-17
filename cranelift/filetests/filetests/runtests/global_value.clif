@@ -12,8 +12,7 @@ function %simple(i64 vmctx) -> i64 {
     gv0 = vmctx
 
 block0(v0: i64):
-    v1 = global_value.i64 gv0
-    return v1
+    return v0
 }
 ; run: %simple(0) == 0
 ; run: %simple(10) == 10
@@ -50,7 +49,7 @@ function %load_at_0_and_add(i64 vmctx) -> i64 {
     gv1 = load.i64 notrap aligned gv0+0
 
 block0(v0: i64):
-    v1 = global_value.i64 gv1
+    v1 = load.i64 notrap aligned v0
     v3 = iconst.i64 1
     v2 = iadd v1, v3
     return v2

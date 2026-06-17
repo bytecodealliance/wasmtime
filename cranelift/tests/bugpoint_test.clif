@@ -425,8 +425,8 @@ block1:
     brif v121, block2, block3
 
 block2:
-    v122 = global_value.i64 gv0
-    v123 = global_value.i64 gv1
+    v122 = symbol_value.i64 gv0
+    v123 = symbol_value.i64 gv1
     trap user1
 
 block3:
@@ -442,8 +442,8 @@ block3:
     brif v133, block4, block5
 
 block4:
-    v134 = global_value.i64 gv2
-    v135 = global_value.i64 gv3
+    v134 = symbol_value.i64 gv2
+    v135 = symbol_value.i64 gv3
     trap user1
 
 block5:
@@ -459,8 +459,8 @@ block5:
     brif v145, block6, block7
 
 block6:
-    v146 = global_value.i64 gv4
-    v147 = global_value.i64 gv5
+    v146 = symbol_value.i64 gv4
+    v147 = symbol_value.i64 gv5
     trap user1
 
 block7:
@@ -484,8 +484,8 @@ block9:
     brif v157, block10, block11
 
 block10:
-    v158 = global_value.i64 gv6
-    v159 = global_value.i64 gv7
+    v158 = symbol_value.i64 gv6
+    v159 = symbol_value.i64 gv7
     trap user1
 
 block11:
@@ -509,8 +509,8 @@ block13:
     brif v169, block14, block15
 
 block14:
-    v170 = global_value.i64 gv8
-    v171 = global_value.i64 gv9
+    v170 = symbol_value.i64 gv8
+    v171 = symbol_value.i64 gv9
     trap user1
 
 block15:
@@ -530,8 +530,8 @@ block16:
     brif v182, block17, block18
 
 block17:
-    v183 = global_value.i64 gv10
-    v184 = global_value.i64 gv11
+    v183 = symbol_value.i64 gv10
+    v184 = symbol_value.i64 gv11
     trap user1
 
 block18:
@@ -552,7 +552,7 @@ block18:
     brif v197, block164, block19
 
 block164:
-    v198 = global_value.i64 gv12
+    v198 = symbol_value.i64 gv12
     trap user2
 
 block19:
@@ -573,7 +573,7 @@ block19:
     brif v210, block163, block20
 
 block163:
-    v211 = global_value.i64 gv13
+    v211 = symbol_value.i64 gv13
     trap user2
 
 block20:
@@ -586,8 +586,8 @@ block20:
     brif v219, block21, block22
 
 block21:
-    v220 = global_value.i64 gv14
-    v221 = global_value.i64 gv15
+    v220 = symbol_value.i64 gv14
+    v221 = symbol_value.i64 gv15
     trap user1
 
 block22:
@@ -608,7 +608,7 @@ block22:
     brif v234, block162, block23
 
 block162:
-    v235 = global_value.i64 gv16
+    v235 = symbol_value.i64 gv16
     trap user2
 
 block23:
@@ -639,7 +639,7 @@ block24:
     brif v253, block161, block25
 
 block161:
-    v254 = global_value.i64 gv17
+    v254 = symbol_value.i64 gv17
     trap user2
 
 block25:
@@ -685,7 +685,7 @@ block27:
     brif v279, block160, block28
 
 block160:
-    v280 = global_value.i64 gv18
+    v280 = symbol_value.i64 gv18
     trap user2
 
 block28:
@@ -703,7 +703,7 @@ block28:
     brif v290, block159, block29
 
 block159:
-    v291 = global_value.i64 gv19
+    v291 = symbol_value.i64 gv19
     trap user2
 
 block29:
@@ -725,7 +725,7 @@ block29:
     brif v303, block158, block30
 
 block158:
-    v304 = global_value.i64 gv20
+    v304 = symbol_value.i64 gv20
     trap user2
 
 block30:
@@ -743,7 +743,7 @@ block30:
     brif v314, block157, block31
 
 block157:
-    v315 = global_value.i64 gv21
+    v315 = symbol_value.i64 gv21
     trap user2
 
 block31:
@@ -797,7 +797,7 @@ block36:
     brif v337, block37, block38
 
 block37:
-    v338 = global_value.i64 gv22
+    v338 = symbol_value.i64 gv22
     v339 = iconst.i64 3
     v1105 = iconst.i64 8
     v342 = iadd v36, v1105
@@ -836,9 +836,9 @@ block40:
     jump block41
 
 block41:
-    v360 = global_value.i64 gv23
+    v360 = symbol_value.i64 gv23
     call fn39(v32, v360)
-    v361 = global_value.i64 gv24
+    v361 = symbol_value.i64 gv24
     trap user1
 
 block42:
@@ -869,7 +869,7 @@ block43:
     brif v377, block44, block45
 
 block44:
-    v378 = global_value.i64 gv25
+    v378 = symbol_value.i64 gv25
     v379 = iconst.i64 3
     v1111 = iconst.i64 8
     v382 = iadd v46, v1111
@@ -908,9 +908,9 @@ block47:
     jump block48
 
 block48:
-    v400 = global_value.i64 gv26
+    v400 = symbol_value.i64 gv26
     call fn46(v42, v400)
-    v401 = global_value.i64 gv27
+    v401 = symbol_value.i64 gv27
     trap user1
 
 block49(v1006: i16):
@@ -930,7 +930,7 @@ block49(v1006: i16):
     brif v412, block156, block50
 
 block156:
-    v413 = global_value.i64 gv28
+    v413 = symbol_value.i64 gv28
     trap user2
 
 block50:
@@ -954,7 +954,7 @@ block50:
     brif v425, block155, block51
 
 block155:
-    v426 = global_value.i64 gv29
+    v426 = symbol_value.i64 gv29
     trap user2
 
 block51:
@@ -970,7 +970,7 @@ block51:
     brif v433, block154, block52
 
 block154:
-    v434 = global_value.i64 gv30
+    v434 = symbol_value.i64 gv30
     trap user2
 
 block52:
@@ -992,7 +992,7 @@ block52:
     brif v448, block153, block53
 
 block153:
-    v449 = global_value.i64 gv31
+    v449 = symbol_value.i64 gv31
     trap user2
 
 block53:
@@ -1014,7 +1014,7 @@ block53:
     brif v463, block152, block54
 
 block152:
-    v464 = global_value.i64 gv32
+    v464 = symbol_value.i64 gv32
     trap user2
 
 block54:
@@ -1033,7 +1033,7 @@ block54:
     brif v475, block151, block55
 
 block151:
-    v476 = global_value.i64 gv33
+    v476 = symbol_value.i64 gv33
     trap user2
 
 block55:
@@ -1063,7 +1063,7 @@ block56:
     brif v494, block150, block57
 
 block150:
-    v495 = global_value.i64 gv34
+    v495 = symbol_value.i64 gv34
     trap user2
 
 block57:
@@ -1081,7 +1081,7 @@ block57:
     brif v505, block149, block58
 
 block149:
-    v506 = global_value.i64 gv35
+    v506 = symbol_value.i64 gv35
     trap user2
 
 block58:
@@ -1099,7 +1099,7 @@ block58:
     brif v518, block148, block59
 
 block148:
-    v519 = global_value.i64 gv36
+    v519 = symbol_value.i64 gv36
     trap user2
 
 block59:
@@ -1119,7 +1119,7 @@ block59:
     brif v531, block147, block60
 
 block147:
-    v532 = global_value.i64 gv37
+    v532 = symbol_value.i64 gv37
     trap user2
 
 block60:
@@ -1138,7 +1138,7 @@ block60:
     brif v543, block146, block61
 
 block146:
-    v544 = global_value.i64 gv38
+    v544 = symbol_value.i64 gv38
     trap user2
 
 block61:
@@ -1192,7 +1192,7 @@ block62(v552: i32, v1009: i64, v1013: i64, v1016: i64, v1019: i64, v1022: i16, v
     brif v557, block145, block63
 
 block145:
-    v558 = global_value.i64 gv39
+    v558 = symbol_value.i64 gv39
     trap user2
 
 block63:
@@ -1206,7 +1206,7 @@ block63:
     brif v567, block144, block64
 
 block144:
-    v568 = global_value.i64 gv40
+    v568 = symbol_value.i64 gv40
     trap user2
 
 block64:
@@ -1228,8 +1228,8 @@ block65:
     brif v581, block66, block67
 
 block66:
-    v582 = global_value.i64 gv41
-    v583 = global_value.i64 gv42
+    v582 = symbol_value.i64 gv41
+    v583 = symbol_value.i64 gv42
     trap user1
 
 block67:
@@ -1250,7 +1250,7 @@ block68(v584: i32):
     brif v594, block143, block69
 
 block143:
-    v595 = global_value.i64 gv43
+    v595 = symbol_value.i64 gv43
     trap user2
 
 block69:
@@ -1261,7 +1261,7 @@ block69:
     brif v601, block70, block142
 
 block142:
-    v602 = global_value.i64 gv44
+    v602 = symbol_value.i64 gv44
     trap user2
 
 block70:
@@ -1285,7 +1285,7 @@ block70:
     brif v619, block141, block71
 
 block141:
-    v620 = global_value.i64 gv45
+    v620 = symbol_value.i64 gv45
     trap user2
 
 block71:
@@ -1308,7 +1308,7 @@ block71:
     brif v633, block140, block72
 
 block140:
-    v634 = global_value.i64 gv46
+    v634 = symbol_value.i64 gv46
     trap user2
 
 block72:
@@ -1326,7 +1326,7 @@ block72:
     brif v645, block139, block73
 
 block139:
-    v646 = global_value.i64 gv47
+    v646 = symbol_value.i64 gv47
     trap user2
 
 block73:
@@ -1353,7 +1353,7 @@ block74:
     brif v663, block138, block75
 
 block138:
-    v664 = global_value.i64 gv48
+    v664 = symbol_value.i64 gv48
     trap user2
 
 block75:
@@ -1384,7 +1384,7 @@ block76:
     brif v687, block137, block77
 
 block137:
-    v688 = global_value.i64 gv49
+    v688 = symbol_value.i64 gv49
     trap user2
 
 block77:
@@ -1411,7 +1411,7 @@ block81:
     brif v702, block82, block88
 
 block82:
-    v703 = global_value.i64 gv50
+    v703 = symbol_value.i64 gv50
     v1131 = iconst.i64 8
     v704 = iadd v75, v1131
     v705 = load.i64 v75
@@ -1430,7 +1430,7 @@ block82:
     brif v715, block83, block84
 
 block83:
-    v716 = global_value.i64 gv51
+    v716 = symbol_value.i64 gv51
     v717 = iconst.i64 3
     v1133 = iconst.i64 8
     v720 = iadd v80, v1133
@@ -1469,9 +1469,9 @@ block86:
     jump block87
 
 block87:
-    v738 = global_value.i64 gv52
+    v738 = symbol_value.i64 gv52
     call fn78(v76, v738)
-    v739 = global_value.i64 gv53
+    v739 = symbol_value.i64 gv53
     trap user1
 
 block88:
@@ -1480,7 +1480,7 @@ block88:
     brif v741, block89, block95(v1030, v1031, v1041, v1046, v1054, v1059)
 
 block89:
-    v742 = global_value.i64 gv54
+    v742 = symbol_value.i64 gv54
     v1135 = iconst.i64 8
     v743 = iadd v85, v1135
     v744 = load.i64 v85
@@ -1499,7 +1499,7 @@ block89:
     brif v754, block90, block91
 
 block90:
-    v755 = global_value.i64 gv55
+    v755 = symbol_value.i64 gv55
     v756 = iconst.i64 3
     v1137 = iconst.i64 8
     v759 = iadd v90, v1137
@@ -1538,9 +1538,9 @@ block93:
     jump block94
 
 block94:
-    v777 = global_value.i64 gv56
+    v777 = symbol_value.i64 gv56
     call fn85(v86, v777)
-    v778 = global_value.i64 gv57
+    v778 = symbol_value.i64 gv57
     trap user1
 
 block95(v779: i64, v780: i64, v1040: i64, v1045: i64, v1053: i16, v1058: i64):
@@ -1562,7 +1562,7 @@ block96:
     brif v791, block136, block97
 
 block136:
-    v792 = global_value.i64 gv58
+    v792 = symbol_value.i64 gv58
     trap user2
 
 block97:
@@ -1574,7 +1574,7 @@ block97:
     brif v798, block135, block98
 
 block135:
-    v799 = global_value.i64 gv59
+    v799 = symbol_value.i64 gv59
     trap user2
 
 block98:
@@ -1616,7 +1616,7 @@ block99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v
     brif v814, block134, block100
 
 block134:
-    v815 = global_value.i64 gv60
+    v815 = symbol_value.i64 gv60
     trap user2
 
 block100:
@@ -1638,7 +1638,7 @@ block100:
     brif v827, block133, block101
 
 block133:
-    v828 = global_value.i64 gv61
+    v828 = symbol_value.i64 gv61
     trap user2
 
 block101:
@@ -1662,7 +1662,7 @@ block101:
     brif v840, block132, block102
 
 block132:
-    v841 = global_value.i64 gv62
+    v841 = symbol_value.i64 gv62
     trap user2
 
 block102:
@@ -1684,7 +1684,7 @@ block102:
     brif v853, block131, block103
 
 block131:
-    v854 = global_value.i64 gv63
+    v854 = symbol_value.i64 gv63
     trap user2
 
 block103:
@@ -1704,7 +1704,7 @@ block103:
     brif v867, block130, block104
 
 block130:
-    v868 = global_value.i64 gv64
+    v868 = symbol_value.i64 gv64
     trap user2
 
 block104:
@@ -1723,7 +1723,7 @@ block104:
     brif v879, block129, block105
 
 block129:
-    v880 = global_value.i64 gv65
+    v880 = symbol_value.i64 gv65
     trap user2
 
 block105:
@@ -1748,8 +1748,8 @@ block106:
     brif v893, block107, block108
 
 block107:
-    v894 = global_value.i64 gv66
-    v895 = global_value.i64 gv67
+    v894 = symbol_value.i64 gv66
+    v895 = symbol_value.i64 gv67
     trap user1
 
 block108:
@@ -1770,7 +1770,7 @@ block109(v896: i64):
     brif v906, block128, block110
 
 block128:
-    v907 = global_value.i64 gv68
+    v907 = symbol_value.i64 gv68
     trap user2
 
 block110:
@@ -1781,7 +1781,7 @@ block110:
     brif v913, block111, block127
 
 block127:
-    v914 = global_value.i64 gv69
+    v914 = symbol_value.i64 gv69
     trap user2
 
 block111:
@@ -1805,7 +1805,7 @@ block111:
     brif v931, block126, block112
 
 block126:
-    v932 = global_value.i64 gv70
+    v932 = symbol_value.i64 gv70
     trap user2
 
 block112:
@@ -1831,7 +1831,7 @@ block113:
     brif v949, block125, block114
 
 block125:
-    v950 = global_value.i64 gv71
+    v950 = symbol_value.i64 gv71
     trap user2
 
 block114:
@@ -1862,7 +1862,7 @@ block115:
     brif v973, block123, block116
 
 block123:
-    v974 = global_value.i64 gv72
+    v974 = symbol_value.i64 gv72
     trap user2
 
 block116:
@@ -1880,7 +1880,7 @@ block116:
     brif v985, block122, block117
 
 block122:
-    v986 = global_value.i64 gv73
+    v986 = symbol_value.i64 gv73
     trap user2
 
 block117:
@@ -1906,7 +1906,7 @@ block119:
     brif v1002, block121, block120
 
 block121:
-    v1003 = global_value.i64 gv74
+    v1003 = symbol_value.i64 gv74
     trap user2
 
 block120:
