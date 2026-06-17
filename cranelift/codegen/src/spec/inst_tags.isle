@@ -1,0 +1,249 @@
+;;;; Verification Tags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(attr select
+    (tag wasm_category_stack)
+    (tag wasm_proposal_mvp))
+
+(attr icmp
+    (tag wasm_category_comparison)
+    (tag wasm_category_loads)
+    (tag wasm_category_stores)
+    (tag wasm_proposal_mvp))
+
+(attr iconst
+    (tag wasm_category_const)
+    (tag wasm_category_loads)
+    (tag wasm_category_stores)
+    (tag wasm_proposal_mvp))
+
+(attr isub
+    (tag wasm_category_binary)
+    (tag wasm_category_loads)
+    (tag wasm_category_stores)
+    (tag wasm_proposal_mvp))
+
+(attr uadd_overflow_trap
+    (tag wasm_category_loads)
+    (tag wasm_category_stores)
+    (tag wasm_proposal_mvp))
+
+(attr uload8
+    (tag wasm_category_loads)
+    (tag wasm_proposal_mvp))
+
+(attr uload16
+    (tag wasm_category_loads)
+    (tag wasm_proposal_mvp))
+
+(attr sload8
+    (tag wasm_category_loads)
+    (tag wasm_proposal_mvp))
+
+(attr sload16
+    (tag wasm_category_loads)
+    (tag wasm_proposal_mvp))
+
+(attr sload32
+    (tag wasm_category_loads)
+    (tag wasm_proposal_mvp))
+
+(attr uload32
+    (tag wasm_category_loads)
+    (tag wasm_proposal_mvp))
+
+(attr load
+    (tag wasm_category_loads)
+    (tag wasm_proposal_mvp))
+
+(attr store
+    (tag wasm_category_stores)
+    (tag wasm_proposal_mvp))
+
+(attr istore8
+    (tag wasm_category_stores)
+    (tag wasm_proposal_mvp))
+
+(attr istore16
+    (tag wasm_category_stores)
+    (tag wasm_proposal_mvp))
+
+(attr istore32
+    (tag wasm_category_stores)
+    (tag wasm_proposal_mvp))
+
+(attr f32const
+    (tag wasm_category_const)
+    (tag wasm_proposal_mvp))
+
+(attr f64const
+    (tag wasm_category_const)
+    (tag wasm_proposal_mvp))
+
+(attr clz
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr ctz
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr popcnt
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr sextend
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr uextend
+    (tag wasm_category_comparison)
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr ireduce
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr sqrt
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr ceil
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr floor
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr trunc
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr nearest
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr fabs
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr fneg
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr fcvt_from_uint
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr fcvt_from_sint
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr fpromote
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr fdemote
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr fcvt_to_sint
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr fcvt_to_uint
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr bitcast
+    (tag wasm_category_unary)
+    (tag wasm_proposal_mvp))
+
+(attr iadd
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr band
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr bor
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr bxor
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr ishl
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr sshr
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr ushr
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr rotl
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr rotr
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr fadd
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr fsub
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr imul
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr fmul
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr fdiv
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr sdiv
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr udiv
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr srem
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr urem
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr fmin
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr fmax
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr fcopysign
+    (tag wasm_category_binary)
+    (tag wasm_proposal_mvp))
+
+(attr fcmp
+    (tag wasm_category_comparison)
+    (tag wasm_proposal_mvp))

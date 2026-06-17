@@ -1,0 +1,7 @@
+# Default AArch64 verification run.
+#
+# Verifies the AArch64 backend while skipping the default set of tags that are
+# not yet well supported (vector, atomics, spectre, narrowfloat, amode_const, i128,
+# wasm_category_stack) or are slow to verify (slow).
+--name aarch64
+--default-excludes

@@ -1,6 +1,7 @@
 //! Parser for ISLE language.
 
 use crate::ast::*;
+
 use crate::error::{Error, Span};
 use crate::lexer::{Lexer, Pos, Token};
 
@@ -8,14 +9,15 @@ type Result<T> = std::result::Result<T, Error>;
 
 /// Parse the top-level ISLE definitions and return their AST.
 pub fn parse(lexer: Lexer) -> Result<Vec<Def>> {
-    let parser = Parser::new(lexer);
-    parser.parse_defs()
+    let mut parser = Parser::new(lexer);
+    let result = parser.parse_defs()?;
+    Ok(result)
 }
 
 /// Parse without positional information. Provided mainly to support testing, to
 /// enable equality testing on structure alone.
 pub fn parse_without_pos(lexer: Lexer) -> Result<Vec<Def>> {
-    let parser = Parser::new_without_pos_tracking(lexer);
+    let mut parser = Parser::new_without_pos_tracking(lexer);
     parser.parse_defs()
 }
 
@@ -23,7 +25,7 @@ pub fn parse_without_pos(lexer: Lexer) -> Result<Vec<Def>> {
 ///
 /// Takes in a lexer and creates an AST.
 #[derive(Clone, Debug)]
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: Lexer<'a>,
     disable_pos: bool,
 }
@@ -168,7 +170,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_defs(mut self) -> Result<Vec<Def>> {
+    fn parse_defs(&mut self) -> Result<Vec<Def>> {
         let mut defs = vec![];
         while !self.lexer.eof() {
             defs.push(self.parse_def()?);
@@ -183,7 +185,10 @@ impl<'a> Parser<'a> {
             "pragma" => Def::Pragma(self.parse_pragma()?),
             "type" => Def::Type(self.parse_type()?),
             "decl" => Def::Decl(self.parse_decl()?),
+            "attr" => Def::Attr(self.parse_attr()?),
             "spec" => Def::Spec(self.parse_spec()?),
+            "macro" => Def::SpecMacro(self.parse_spec_macro()?),
+            "state" => Def::State(self.parse_state()?),
             "model" => Def::Model(self.parse_model()?),
             "form" => Def::Form(self.parse_form()?),
             "instantiate" => Def::Instantiation(self.parse_instantiation()?),
@@ -396,6 +401,43 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_attr(&mut self) -> Result<Attr> {
+        let pos = self.pos();
+        let rule = self.eat_sym_str("rule")?;
+        let name = self.parse_ident()?;
+        let target = if rule {
+            AttrTarget::Rule(name)
+        } else {
+            AttrTarget::Term(name)
+        };
+        let mut kinds = Vec::new();
+        while !self.is_rparen() {
+            kinds.push(self.parse_attr_kind()?);
+        }
+        Ok(Attr { target, kinds, pos })
+    }
+
+    fn parse_attr_kind(&mut self) -> Result<AttrKind> {
+        self.expect_lparen()?;
+        let pos = self.pos();
+        let kind = match &self.expect_symbol()?[..] {
+            "veri" => self.parse_attr_kind_veri()?,
+            "tag" => AttrKind::Tag(self.parse_ident()?),
+            x => return Err(self.error(pos, format!("Not a valid attribute: {x}"))),
+        };
+        self.expect_rparen()?;
+        Ok(kind)
+    }
+
+    fn parse_attr_kind_veri(&mut self) -> Result<AttrKind> {
+        let pos = self.pos();
+        match &self.expect_symbol()?[..] {
+            "chain" => Ok(AttrKind::Chain),
+            "priority" => Ok(AttrKind::Priority),
+            x => Err(self.error(pos, format!("Not a valid verification attribute: {x}"))),
+        }
+    }
+
     fn parse_spec(&mut self) -> Result<Spec> {
         let pos = self.pos();
         self.expect_lparen()?; // term with args: (spec (<term> <args>) (provide ...) ...)
@@ -406,43 +448,80 @@ impl<'a> Parser<'a> {
         }
         self.expect_rparen()?; // end term with args
 
-        self.expect_lparen()?; // provide
-        if !self.eat_sym_str("provide")? {
-            return Err(self.error(
-                pos,
-                "Invalid spec: expected (spec (<term> <args>) (provide ...) ...)".to_string(),
-            ));
-        };
-        let mut provides = vec![];
-        while !self.is_rparen() {
-            provides.push(self.parse_spec_expr()?);
-        }
-        self.expect_rparen()?; // end provide
-
-        let requires = if self.is_lparen() {
+        let mut provides = Vec::new();
+        let mut requires = Vec::new();
+        let mut matches = Vec::new();
+        let mut modifies = Vec::new();
+        while self.is_lparen() {
             self.expect_lparen()?;
-            if !self.eat_sym_str("require")? {
-                return Err(self.error(
-                    pos,
-                    "Invalid spec: expected (spec (<term> <args>) (provide ...) (require ...))"
-                        .to_string(),
-                ));
+            match &self.expect_symbol()?[..] {
+                "provide" => {
+                    while !self.is_rparen() {
+                        provides.push(self.parse_spec_expr()?);
+                    }
+                }
+                "require" => {
+                    while !self.is_rparen() {
+                        requires.push(self.parse_spec_expr()?);
+                    }
+                }
+                "match" => {
+                    while !self.is_rparen() {
+                        matches.push(self.parse_spec_expr()?);
+                    }
+                }
+                "modifies" => {
+                    let state = self.parse_ident()?;
+                    let cond = if self.is_sym() {
+                        Some(self.parse_ident().map_err(|err| {
+                            self.error(pos, format!("Invalid modifies condition: {err:?}"))
+                        })?)
+                    } else {
+                        None
+                    };
+                    modifies.push(Modifies { state, cond });
+                }
+                field => {
+                    return Err(self.error(
+                        pos,
+                        format!("Invalid spec: unexpected field {field}. Expect (provide ...), (require ...) or (match ...)"),
+                    ));
+                }
             }
-            let mut require = vec![];
-            while !self.is_rparen() {
-                require.push(self.parse_spec_expr()?);
-            }
-            self.expect_rparen()?; // end provide
-            require
-        } else {
-            vec![]
-        };
+            self.expect_rparen()?;
+        }
 
         Ok(Spec {
             term,
             args,
             provides,
             requires,
+            matches,
+            modifies,
+            pos,
+        })
+    }
+
+    fn parse_spec_macro(&mut self) -> Result<SpecMacro> {
+        let pos = self.pos();
+
+        // Signature.
+        self.expect_lparen()?;
+        let name = self.parse_ident()?;
+        let mut params = vec![];
+        while !self.is_rparen() {
+            params.push(self.parse_ident()?);
+        }
+        self.expect_rparen()?;
+
+        // Body.
+        let body = self.parse_spec_expr()?;
+
+        Ok(SpecMacro {
+            name,
+            params,
+            body,
+            pos,
         })
     }
 
@@ -450,18 +529,18 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         if self.is_spec_bit_vector() {
             let (val, width) = self.parse_spec_bit_vector()?;
-            return Ok(SpecExpr::ConstBitVec { val, width, pos });
+            Ok(SpecExpr::ConstBitVec { val, width, pos })
         } else if self.is_int() {
-            return Ok(SpecExpr::ConstInt {
+            Ok(SpecExpr::ConstInt {
                 val: self.expect_int()?,
                 pos,
-            });
+            })
         } else if self.is_spec_bool() {
             let val = self.parse_spec_bool()?;
-            return Ok(SpecExpr::ConstBool { val, pos });
+            Ok(SpecExpr::ConstBool { val, pos })
         } else if self.is_sym() {
             let var = self.parse_ident()?;
-            return Ok(SpecExpr::Var { var, pos });
+            Ok(SpecExpr::Var { var, pos })
         } else if self.is_lparen() {
             self.expect_lparen()?;
             if self.eat_sym_str("switch")? {
@@ -469,41 +548,126 @@ impl<'a> Parser<'a> {
                 args.push(self.parse_spec_expr()?);
                 while !(self.is_rparen()) {
                     self.expect_lparen()?;
+                    let pos = self.pos();
                     let l = Box::new(self.parse_spec_expr()?);
                     let r = Box::new(self.parse_spec_expr()?);
                     self.expect_rparen()?;
-                    args.push(SpecExpr::Pair { l, r });
+                    args.push(SpecExpr::Pair { l, r, pos });
                 }
                 self.expect_rparen()?;
-                return Ok(SpecExpr::Op {
+                Ok(SpecExpr::Op {
                     op: SpecOp::Switch,
                     args,
                     pos,
-                });
-            }
-            if self.is_sym() && !self.is_spec_bit_vector() {
+                })
+            } else if self.eat_sym_str("let")? {
+                let mut defs = Vec::new();
+                self.expect_lparen()?;
+                while !(self.is_rparen()) {
+                    self.expect_lparen()?;
+                    let ident = self.parse_ident()?;
+                    let x = self.parse_spec_expr()?;
+                    self.expect_rparen()?;
+                    defs.push((ident, x));
+                }
+                self.expect_rparen()?;
+                let body = Box::new(self.parse_spec_expr()?);
+                self.expect_rparen()?;
+                Ok(SpecExpr::Let { defs, body, pos })
+            } else if self.eat_sym_str("with")? {
+                let mut decls = Vec::new();
+                self.expect_lparen()?;
+                while !(self.is_rparen()) {
+                    let ident = self.parse_ident()?;
+                    decls.push(ident);
+                }
+                self.expect_rparen()?;
+                let body = Box::new(self.parse_spec_expr()?);
+                self.expect_rparen()?;
+                Ok(SpecExpr::With { decls, body, pos })
+            } else if self.eat_sym_str("match")? {
+                let x = Box::new(self.parse_spec_expr()?);
+                let mut arms = Vec::new();
+                while !(self.is_rparen()) {
+                    let arm = self.parse_arm()?;
+                    arms.push(arm);
+                }
+                self.expect_rparen()?;
+                Ok(SpecExpr::Match { x, arms, pos })
+            } else if self.eat_sym_str("struct")? {
+                let mut fields = Vec::new();
+                while !(self.is_rparen()) {
+                    let field = self.parse_field_init()?;
+                    fields.push(field);
+                }
+                self.expect_rparen()?;
+                Ok(SpecExpr::Struct { fields, pos })
+            } else if self.eat_sym_str("macro")? {
+                self.expect_lparen()?;
+                let mut params = vec![];
+                while !self.is_rparen() {
+                    params.push(self.parse_ident()?);
+                }
+                self.expect_rparen()?;
+                let body = Box::new(self.parse_spec_expr()?);
+                self.expect_rparen()?;
+                Ok(SpecExpr::Macro { params, body, pos })
+            } else if self.eat_sym_str("as")? {
+                let x = Box::new(self.parse_spec_expr()?);
+                let ty = self.parse_model_type()?;
+                self.expect_rparen()?;
+                Ok(SpecExpr::As { x, ty, pos })
+            } else if self.is_sym() && !self.is_spec_bit_vector() {
+                let sym_pos = self.pos();
                 let sym = self.expect_symbol()?;
-                if let Ok(op) = self.parse_spec_op(sym.as_str()) {
+                if let Some(variant) = sym.strip_suffix('?') {
+                    let variant = self.str_to_ident(sym_pos, variant)?;
+                    let x = Box::new(self.parse_spec_expr()?);
+                    self.expect_rparen()?;
+                    Ok(SpecExpr::Discriminator { variant, x, pos })
+                } else if let Some(name) = sym.strip_suffix('!') {
+                    let name = self.str_to_ident(sym_pos, name)?;
                     let mut args: Vec<SpecExpr> = vec![];
                     while !self.is_rparen() {
                         args.push(self.parse_spec_expr()?);
                     }
                     self.expect_rparen()?;
-                    return Ok(SpecExpr::Op { op, args, pos });
-                };
-                let ident = self.str_to_ident(pos, &sym)?;
-                if self.is_rparen() {
+                    Ok(SpecExpr::Expand { name, args, pos })
+                } else if let Ok(op) = self.parse_spec_op(sym.as_str()) {
+                    let mut args: Vec<SpecExpr> = vec![];
+                    while !self.is_rparen() {
+                        args.push(self.parse_spec_expr()?);
+                    }
                     self.expect_rparen()?;
-                    return Ok(SpecExpr::Enum { name: ident });
-                };
+                    Ok(SpecExpr::Op { op, args, pos })
+                } else if let Some(field) = sym.strip_prefix(':') {
+                    let field = self.str_to_ident(sym_pos, field)?;
+                    let x = Box::new(self.parse_spec_expr()?);
+                    self.expect_rparen()?;
+                    Ok(SpecExpr::Field { field, x, pos })
+                } else if let Some((name, variant)) = sym.split_once('.') {
+                    let name = self.str_to_ident(pos, &name)?;
+                    let variant = self.str_to_ident(pos, &variant)?;
+                    let mut args: Vec<SpecExpr> = vec![];
+                    while !self.is_rparen() {
+                        args.push(self.parse_spec_expr()?);
+                    }
+                    self.expect_rparen()?;
+                    Ok(SpecExpr::Enum {
+                        name,
+                        variant,
+                        args,
+                        pos,
+                    })
+                } else {
+                    Err(self.error(pos, "Unexpected spec expression".into()))
+                }
+            } else {
+                Err(self.error(pos, "Unexpected spec expression".into()))
             }
-            // Unit
-            if self.is_rparen() {
-                self.expect_rparen()?;
-                return Ok(SpecExpr::ConstUnit { pos });
-            }
+        } else {
+            Err(self.error(pos, "Unexpected spec expression".into()))
         }
-        Err(self.error(pos, "Unexpected spec expression".into()))
     }
 
     fn parse_spec_op(&mut self, s: &str) -> Result<SpecOp> {
@@ -514,6 +678,9 @@ impl<'a> Parser<'a> {
             "not" => Ok(SpecOp::Not),
             "=>" => Ok(SpecOp::Imp),
             "or" => Ok(SpecOp::Or),
+            "+" => Ok(SpecOp::Add),
+            "-" => Ok(SpecOp::Sub),
+            "*" => Ok(SpecOp::Mul),
             "<=" => Ok(SpecOp::Lte),
             "<" => Ok(SpecOp::Lt),
             ">=" => Ok(SpecOp::Gte),
@@ -548,34 +715,94 @@ impl<'a> Parser<'a> {
             "zero_ext" => Ok(SpecOp::ZeroExt),
             "sign_ext" => Ok(SpecOp::SignExt),
             "concat" => Ok(SpecOp::Concat),
+            "replicate" => Ok(SpecOp::Replicate),
             "conv_to" => Ok(SpecOp::ConvTo),
             "int2bv" => Ok(SpecOp::Int2BV),
-            "bv2int" => Ok(SpecOp::BV2Int),
+            "bv2nat" => Ok(SpecOp::BV2Nat),
             "widthof" => Ok(SpecOp::WidthOf),
             "if" => Ok(SpecOp::If),
             "switch" => Ok(SpecOp::Switch),
-            "subs" => Ok(SpecOp::Subs),
             "popcnt" => Ok(SpecOp::Popcnt),
             "rev" => Ok(SpecOp::Rev),
             "cls" => Ok(SpecOp::Cls),
             "clz" => Ok(SpecOp::Clz),
-            "load_effect" => Ok(SpecOp::LoadEffect),
-            "store_effect" => Ok(SpecOp::StoreEffect),
+            "to_fp" => Ok(SpecOp::ToFP),
+            "fp.to_ubv" => Ok(SpecOp::FPToUBV),
+            "fp.to_sbv" => Ok(SpecOp::FPToSBV),
+            "to_fp_unsigned" => Ok(SpecOp::ToFPUnsigned),
+            "to_fp_from_fp" => Ok(SpecOp::ToFPFromFP),
+            "fp.+oo" => Ok(SpecOp::FPPositiveInfinity),
+            "fp.-oo" => Ok(SpecOp::FPNegativeInfinity),
+            "fp.+zero" => Ok(SpecOp::FPPositiveZero),
+            "fp.-zero" => Ok(SpecOp::FPNegativeZero),
+            "fp.NaN" => Ok(SpecOp::FPNaN),
+            "fp.eq" => Ok(SpecOp::FPEq),
+            "fp.ne" => Ok(SpecOp::FPNe),
+            "fp.lt" => Ok(SpecOp::FPLt),
+            "fp.gt" => Ok(SpecOp::FPGt),
+            "fp.le" => Ok(SpecOp::FPLe),
+            "fp.ge" => Ok(SpecOp::FPGe),
+            "fp.add" => Ok(SpecOp::FPAdd),
+            "fp.sub" => Ok(SpecOp::FPSub),
+            "fp.mul" => Ok(SpecOp::FPMul),
+            "fp.div" => Ok(SpecOp::FPDiv),
+            "fp.min" => Ok(SpecOp::FPMin),
+            "fp.max" => Ok(SpecOp::FPMax),
+            "fp.neg" => Ok(SpecOp::FPNeg),
+            "fp.ceil" => Ok(SpecOp::FPCeil),
+            "fp.floor" => Ok(SpecOp::FPFloor),
+            "fp.sqrt" => Ok(SpecOp::FPSqrt),
+            "fp.trunc" => Ok(SpecOp::FPTrunc),
+            "fp.nearest" => Ok(SpecOp::FPNearest),
+            "fp.isZero" => Ok(SpecOp::FPIsZero),
+            "fp.isInfinite" => Ok(SpecOp::FPIsInfinite),
+            "fp.isNaN" => Ok(SpecOp::FPIsNaN),
+            "fp.isNegative" => Ok(SpecOp::FPIsNegative),
+            "fp.isPositive" => Ok(SpecOp::FPIsPositive),
             x => Err(self.error(pos, format!("Not a valid spec operator: {x}"))),
         }
     }
 
-    fn parse_spec_bit_vector(&mut self) -> Result<(i128, i8)> {
+    fn parse_arm(&mut self) -> Result<Arm> {
+        self.expect_lparen()?;
+        let pos = self.pos();
+        self.expect_lparen()?;
+        let variant = self.parse_ident()?;
+        let mut args = Vec::new();
+        while !self.is_rparen() {
+            args.push(self.parse_ident()?);
+        }
+        self.expect_rparen()?;
+        let body = self.parse_spec_expr()?;
+        self.expect_rparen()?;
+        Ok(Arm {
+            variant,
+            args,
+            body,
+            pos,
+        })
+    }
+
+    fn parse_field_init(&mut self) -> Result<FieldInit> {
+        self.expect_lparen()?;
+        let pos = self.pos();
+        let name = self.parse_ident()?;
+        let value = Box::new(self.parse_spec_expr()?);
+        self.expect_rparen()?;
+        Ok(FieldInit { name, value, pos })
+    }
+
+    fn parse_spec_bit_vector(&mut self) -> Result<(u128, usize)> {
         let pos = self.pos();
         let s = self.expect_symbol()?;
         if let Some(s) = s.strip_prefix("#b") {
-            match i128::from_str_radix(s, 2) {
-                Ok(i) => Ok((i, s.len() as i8)),
+            match u128::from_str_radix(s, 2) {
+                Ok(i) => Ok((i, s.len())),
                 Err(_) => Err(self.error(pos, "Not a constant binary bit vector".to_string())),
             }
         } else if let Some(s) = s.strip_prefix("#x") {
-            match i128::from_str_radix(s, 16) {
-                Ok(i) => Ok((i, (s.len() as i8) * 4)),
+            match u128::from_str_radix(s, 16) {
+                Ok(i) => Ok((i, s.len() * 4)),
                 Err(_) => Err(self.error(pos, "Not a constant hex bit vector".to_string())),
             }
         } else {
@@ -602,53 +829,13 @@ impl<'a> Parser<'a> {
         let name = self.parse_ident()?;
         self.expect_lparen()?; // body
         let val = if self.eat_sym_str("type")? {
-            let ty = self.parse_model_type();
-            ModelValue::TypeValue(ty?)
-        } else if self.eat_sym_str("enum")? {
-            let mut variants = vec![];
-            let mut has_explicit_value = false;
-            let mut implicit_idx = None;
-
-            while !self.is_rparen() {
-                self.expect_lparen()?; // enum value
-                let name = self.parse_ident()?;
-                let val = if self.is_rparen() {
-                    // has implicit enum value
-                    if has_explicit_value {
-                        return Err(self.error(
-                            pos,
-                            format!(
-                                "Spec enum has unexpected implicit value after implicit value."
-                            ),
-                        ));
-                    }
-                    implicit_idx = Some(if let Some(idx) = implicit_idx {
-                        idx + 1
-                    } else {
-                        0
-                    });
-                    SpecExpr::ConstInt {
-                        val: implicit_idx.unwrap(),
-                        pos,
-                    }
-                } else {
-                    if implicit_idx.is_some() {
-                        return Err(self.error(
-                            pos,
-                            format!(
-                                "Spec enum has unexpected explicit value after implicit value."
-                            ),
-                        ));
-                    }
-                    has_explicit_value = true;
-                    self.parse_spec_expr()?
-                };
-                self.expect_rparen()?;
-                variants.push((name, val));
-            }
-            ModelValue::EnumValues(variants)
+            let ty = self.parse_model_type()?;
+            ModelValue::TypeValue(ty)
+        } else if self.eat_sym_str("const")? {
+            let val = self.parse_spec_expr()?;
+            ModelValue::ConstValue(val)
         } else {
-            return Err(self.error(pos, "Model must be a type or enum".to_string()));
+            return Err(self.error(pos, "Model must be a type or const".to_string()));
         };
 
         self.expect_rparen()?; // end body
@@ -657,7 +844,11 @@ impl<'a> Parser<'a> {
 
     fn parse_model_type(&mut self) -> Result<ModelType> {
         let pos = self.pos();
-        if self.eat_sym_str("Bool")? {
+        if self.eat_sym_str("!")? {
+            Ok(ModelType::Unspecified)
+        } else if self.eat_sym_str("_")? {
+            Ok(ModelType::Auto)
+        } else if self.eat_sym_str("Bool")? {
             Ok(ModelType::Bool)
         } else if self.eat_sym_str("Int")? {
             Ok(ModelType::Int)
@@ -665,8 +856,8 @@ impl<'a> Parser<'a> {
             Ok(ModelType::Unit)
         } else if self.is_lparen() {
             self.expect_lparen()?;
-            let width = if self.eat_sym_str("bv")? {
-                if self.is_rparen() {
+            if self.eat_sym_str("bv")? {
+                let width = if self.is_rparen() {
                     None
                 } else if self.is_int() {
                     Some(usize::try_from(self.expect_int()?).map_err(|err| {
@@ -674,18 +865,60 @@ impl<'a> Parser<'a> {
                     })?)
                 } else {
                     return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()));
+                };
+                self.expect_rparen()?;
+                Ok(ModelType::BitVec(width))
+            } else if self.eat_sym_str("struct")? {
+                let mut fields = Vec::new();
+                while !self.is_rparen() {
+                    self.expect_lparen()?;
+                    let name = self.parse_ident()?;
+                    let ty = self.parse_model_type()?;
+                    self.expect_rparen()?;
+                    fields.push(ModelField { name, ty });
                 }
+                self.expect_rparen()?;
+                Ok(ModelType::Struct(fields))
+            } else if self.eat_sym_str("named")? {
+                let name = self.parse_ident()?;
+                self.expect_rparen()?;
+                Ok(ModelType::Named(name))
             } else {
-                return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()));
-            };
-            self.expect_rparen()?;
-            Ok(ModelType::BitVec(width))
+                Err(self.error(
+                    pos,
+                    "Badly formed model: should be BitVector (bv ...) or Struct (struct ...)"
+                        .to_string(),
+                ))
+            }
         } else {
             Err(self.error(
                 pos,
-                "Model type be a Bool, Int, or BitVector (bv ...)".to_string(),
+                "Model type be a Bool, Int, BitVector (bv ...) or Struct (struct ...)".to_string(),
             ))
         }
+    }
+
+    fn parse_state(&mut self) -> Result<State> {
+        let pos = self.pos();
+        let name = self.parse_ident()?;
+        let ty = self.parse_tagged_type("type")?;
+
+        self.expect_lparen()?;
+        if !self.eat_sym_str("default")? {
+            return Err(self.error(
+                self.pos(),
+                format!("Invalid default: expected (default <expr>)"),
+            ));
+        };
+        let default = self.parse_spec_expr()?;
+        self.expect_rparen()?;
+
+        Ok(State {
+            name,
+            ty,
+            default,
+            pos,
+        })
     }
 
     fn parse_form(&mut self) -> Result<Form> {
@@ -712,14 +945,8 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         let args = self.parse_tagged_types("args")?;
         let ret = self.parse_tagged_type("ret")?;
-        let canonical = self.parse_tagged_type("canon")?;
         self.expect_rparen()?;
-        Ok(Signature {
-            args,
-            ret,
-            canonical,
-            pos,
-        })
+        Ok(Signature { args, ret, pos })
     }
 
     fn parse_tagged_types(&mut self, tag: &str) -> Result<Vec<ModelType>> {

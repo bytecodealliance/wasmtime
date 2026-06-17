@@ -1,0 +1,13 @@
+[package]
+name = "cranelift-isle-veri-test-macros"
+version = "0.1.0"
+publish = false
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = { workspace = true }
+syn = { workspace = true, features = ["full"]}
+proc-macro2 = { workspace = true }

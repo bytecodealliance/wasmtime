@@ -1,0 +1,44 @@
+; Parameters of a load operation.
+(state isa_load
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+        )
+    )
+    (default
+        (not (:active isa_load))
+    )
+)
+
+; Parameters of a store operation.
+(state isa_store
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+            (value (bv 64))
+        )
+    )
+    (default
+        (and
+            ; Store is not active.
+            (not (:active isa_store))
+
+            ; Must provide a fixed size in the default case, otherwise type
+            ; inference is underconstrained.
+            (= (:size_bits isa_store) 1)
+        )
+    )
+)
+
+; Floating point control register.
+(state fpcr
+    ; FPCR is a 64-bit register.
+    (type (bv 64))
+
+    ; Unconstrained. We currently do not model the FPCR configuration bits.
+    (default true)
+)

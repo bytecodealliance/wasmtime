@@ -1,287 +1,191 @@
-# Crocus: An SMT-based ISLE verification tool
+# VeriISLE
 
-This directory contains Crocus, a tool for verifying instruction lowering and transformation rules written in ISLE. Crocus uses an underlying SMT solver to model values in ISLE rules in as logical bitvectors, searching over all possible inputs to find potential soundness counterexamples. The motivation and context project are described in detail in our ASPLOS 2024 paper: [Lightweight, Modular Verification for WebAssembly-to-Native Instruction Selection](https://dl.acm.org/doi/10.1145/3617232.3624862). 
+VeriISLE is an in-development [SMT](https://smt-lib.org)-based verifier for the
+[ISLE language](../docs/language-reference.md).
 
-Currently[^1], Crocus requires every ISLE term uses within a rule to have a user-provided specification, or `spec`, that provides the logical preconditions and effects of the term (`require` and `provide` blocks).
-The syntax for these specs is embedded as an optional extension to ISLE itself: specs are written in the ISLE source files. 
+It analyzes chains of ISLE rules, using a combination of hand-written `spec`s and
+specifications derived from authoritative ISA semantics, such as [ASL](https://developer.arm.com/architectures/architecture%20specification%20language) for the `aarch64` backend.
 
-[^1]: We have work in progress to lower this annotation burden.
+The verification work is detailed in two academic papers:
+- The most recent OOPSLA 2025 paper described the automatic rule chaining, authoritative ISA specification derivations, and our current state modeling approach: [Scaling Instruction-Selection Verification against Authoritative ISA Semantics](https://doi.org/10.1145/3764383).
+  Michael McLoughlin, Ashley Sheng, Chris Fallin, Bryan Parno, Fraser Brown, and
+  Alexa VanHattum. OOPSLA 2025.
+- The earlier ASPLOS 2024 paper described the overall verification strategy and more bugs this work prevented and/or reproduced: [Lightweight, Modular Verification for WebAssembly-to-Native Instruction Selection](https://doi.org/10.1145/3617232.3624862).
+  Alexa VanHattum, Monica Pardeshi, Chris Fallin, Adrian Sampson, and Fraser
+  Brown. ASPLOS 2024.
 
-## Running on an individual rule
+## Dependencies
 
-The easiest way to run Crocus on an individual ISLE rule is to give that rule a name. 
+To run the verifier you will need a backend SMT solver installed. The default
+configuration uses both [cvc5](https://cvc5.github.io/) and
+[z3](https://github.com/Z3Prover/z3): most expansions are checked with `cvc5`,
+while expansions tagged `solver_z3` (for example floating-point operations) are
+checked with `z3`.
 
-For example, to verify the following `aarch64` rule:
-
-```
-(rule -1 (lower (has_type (fits_in_64 ty) (band x y)))
-    (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
-```
-
-We can add a name (before the priority):
-```
-(rule band_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (band x y)))
-      (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
-```
-
-We also require that the relevant (outermost) CLIF term on the left hand side has a "type instantiation" to specify the types, e.g. bitwidths, we are interested in verifying. In this case, this is provided with:
+On MacOS, you can install both via homebrew:
 
 ```
-(form
-  bv_binary_8_to_64
-  ((args (bv  8) (bv  8)) (ret (bv  8)) (canon (bv  8)))
-  ((args (bv 16) (bv 16)) (ret (bv 16)) (canon (bv 16)))
-  ((args (bv 32) (bv 32)) (ret (bv 32)) (canon (bv 32)))
-  ((args (bv 64) (bv 64)) (ret (bv 64)) (canon (bv 64)))
-)
-
-(instantiate band bv_binary_8_to_64)
+brew install cvc5/homebrew-cvc5/cvc5
+brew install z3
 ```
 
-
-We can then invoke the rule with the following, using `-t` or `--term` to specify the relevant CLIF instruction and `--names` to specify the name of the rule:
-
-```
-cargo run --  --codegen ../../../codegen --aarch64 -t band --names band_fits_in_64
-```
-
-With the expected output:
+Alternatively, on Linux or MacOS you can install from Github release with:
 
 ```
-Writing generated file: /Users/avh/research/wasmtime/cranelift/isle/veri/veri_engine/output/clif_opt.isle
-Writing generated file: /Users/avh/research/wasmtime/cranelift/isle/veri/veri_engine/output/clif_lower.isle
-Verification succeeded for band_fits_in_64, width 8
-Verification succeeded for band_fits_in_64, width 16
-Verification succeeded for band_fits_in_64, width 32
-Verification succeeded for band_fits_in_64, width 64
+./setup/install-cvc5.sh -i <install_path>
+./setup/install-z3.sh -b <install_path>/bin
 ```
 
-If the rule was unsound, this will report counterexamples. For instance, if we change the rule to the following:
+If you use this method, ensure that `<install_path>/bin` is on your `$PATH`.
+
+## Configuration files
+
+Rather than configuring arguments on the command line, you can store
+them in a configuration file and point the verifier at it with `--config`:
 
 ```
-(rule band_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (band x y)))
-      (alu_rs_imm_logic_commutative (ALUOp.Or) ty x y))
+cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-fast.args
 ```
 
-Then the output would include counterexamples, like so:
+A configuration file lists one or more per line command-line arguments per line.
+Blank lines and anything following a `#` (whole-line or trailing comments) are ignored.
+The arguments from the file are applied *before* any passed on the command line, so the command line always takes precedence (for example, you can reuse a config but override its `--timeout`).
+Multi-valued arguments such as `--filter` accumulate, while single-valued arguments (like `--name`) take their last value.
+
+Three example configurations live in [`configs/`](configs):
+
+| File                              | Equivalent to                                                       |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `aarch64-fast.args`               | `--default-excludes` (the default AArch64 run, see below)           |
+| `aarch64.args`                    | the default AArch64 excludes but with `slow` expansions included    |
+| `x64-iadd-base-case.args`         | `--name x64 --rule iadd_base_case_32_or_64_lea` (the x64 example below) |
+
+## Running for `aarch64`
+
+To run the verifier, run:
 
 ```
-Verification failed for band_fits_in_64, width 8
-Counterexample summary
-(lower (has_type (fits_in_64 [ty|8]) (band [x|#x01|0b00000001] [y|#x00|0b00000000])))
-=>
-(output_reg (alu_rs_imm_logic_commutative (ALUOp.Orr) [ty|8] [x|#x01|0b00000001] [y|#x00|0b00000000]))
-
-#x00|0b00000000 =>
-#x01|0b00000001
-
-Failed condition:
-(= ((_ extract 7 0) lower__13) ((_ extract 7 0) output_reg__16))
+cargo run -p cranelift-isle-veri --bin veri -- --default-excludes
 ```
 
-## The annotation language
+This will run verification on the default AArch64 backend. `--default-excludes` will skip ISLE terms
+that are either currently not well-supported or slow to verify, such as vector operations
+and expensive division operations.
 
-The annotation maps closely to [SMT-LIB](https://smt-lib.org) theories of bitvectors and booleans, with a several added conveniences. 
+The verification bin will default to running on a number of threads
+based on the number of logical CPUs on your current machine, pass `--num-threads=n` to
+override this. On a 12-core M2 MacBook, the command above takes about 6 minutes.
 
-### Top-level constructs
+By default the verifier attempts every expansion it can reach. It seeds an
+expansion at every term that has rules and a constructor, and verifies all rule
+chains reachable from those roots.
 
-We extend the ISLE parser with the following top-level constructs:
+A term that is seeded but turns out to have no usable spec (its own or a term it
+reaches) is reported as an *expansion error* rather than silently dropped, so
+these coverage gaps stay visible; see the `errors.out` summary in the log
+directory. The exception is a term that is only reachable *from* (conceptually, later
+in a rule chain from)  an excluded starting rule (for example an `i128`- or
+`narrowfloat`-tagged lowering rule when `--default-excludes` is set).
 
-- `model` specifies how an ISLE type maps to an SMT type. For example, the follow ISLE type definitions along with their models specify how booleans and `u8`s are modeled:
-```
-(model u8 (type (bv 8)))
-(type u8 (primitive u8))
-(model bool (type Bool))
-(type bool (primitive bool))
-```
+Expansions tagged `TODO` are skipped by default (pass`--no-skip-todo` to include them).
 
-Models can be `Bool`, `Int`, or `(bv)` with or without a specific bitwidth. If the bitwidth is not provided, Crocus type inference will verify the rule with all possible inferred widths 
+### Filtering expansions
 
-- As in the example above, `instantiate` and `form` specify what type instantiations should be considered for a verification. 
+During development you may want to focus on a subset of expansions. Pass one or
+more `--filter` arguments, each of the form `[include:|exclude:]<predicate>`. The
+supported predicates are:
 
-- `spec` terms provide specifications for ISLE declarations, which can correspond to ISLE instructions, ISA instructions, external constructors/extractors defined in Rust, or transient, ISLE-only terms. Specs take the form `(spec (term arg1 ... argN) (provide p1 ... pM) (require r1 ... rO))`, providing the `term` termname (must be a defined ISLE decl), fresh variables `arg1 ... argN` to refer to the arguments, and zero or more provide and require expressions `p1, ..., pN, r1, ..., RN` that take the form of expressions with operations as described below. `spec` terms use the keyword `result` to constrain the return value of the term. 
+| Predicate         | Matches an expansion where...                              |
+| ----------------- | ---------------------------------------------------------- |
+| `tag:<tag>`       | the root term, a rule, or any chained term carries `<tag>` |
+| `root:<term>`     | the root term is `<term>`                                  |
+| `rule:<rule>`     | the expansion contains the named `<rule>`                  |
+| `not:<predicate>` | `<predicate>` does not match                               |
+| `<p>,<q>`         | both `<p>` and `<q>` match (logical and)                   |
 
-### General SMT-LIB operations
+Filters are evaluated in order and the **last** matching filter wins. Every
+expansion is **included by default**, so a filter list behaves like a denylist:
+`exclude:` filters narrow the set, while `include:` filters carve exceptions back
+out of a preceding `exclude:`. A bare predicate with no prefix is treated as
+`include:`.
 
-The following terms exactly match their general SMT-LIB meaning:
+Because the default is to include everything, an `include:` filter only has an
+effect when it follows an `exclude:` that would otherwise drop the expansion. To
+*restrict* verification to expansions matching a predicate, exclude its negation.
+For example, `--filter exclude:not:root:<term>` limits to a single root term.
+Alternatively, `--only-root <term>` scopes expansion itself to one root rather
+than filtering after the fact.
 
-- `=`: equality
-- `and`: boolean and
-- `or`: boolean or
-- `not`: boolean negation
-- `=>`: boolean implication
+### Focusing on a single rule
 
-We additionally support variadic uses of the `and` and `or` operations (these desugar to the binary SMT-LIB versions as expected). 
-
-### Integer operations
-
-The following terms exactly match the  [SMT-LIB theories `Int`](https://smt-lib.org/theories-Ints.shtml).
-
-- `<`
-- `<=`
-- `>`
-- `>=`
-
-In specs, integer operations are primarily used for comparing the number of bits in an ISLE type.
-
-### Bitvector operations
-
-The following terms exactly match [SMT-LIB theory `FixedSizeBitVectors`](https://smt-lib.org/theories-FixedSizeBitVectors.shtml). 
-
-There operations are typically used in specs for any operations on ISLE `Value`s.
-
-- `bvnot`
-- `bvand`
-- `bvor`
-- `bvxor`
-- `bvneg`
-- `bvadd`
-- `bvsub`
-- `bvmul`
-- `bvudiv`
-- `bvurem`
-- `bvsdiv`
-- `bvsrem`
-- `bvshl`
-- `bvlshr`
-- `bvashr`
-- `bvsaddo`
-- `bvule`
-- `bvult`
-- `bvugt`
-- `bvuge`
-- `bvslt`
-- `bvsle`
-- `bvsgt`
-- `bvsge`
-
-### Custom bitvector operations
-
-- `int2bv`: equivalent to SMT-LIB `nat2bv`.
-- `bv2int`: equivalent to SMT-LIB `bv2nat`.
-- `extract`: `(extract h l e)` where `h` and `l` are integer literals and `e` is a bitvector is equivalent to SMT-LIB `((_ extract h l) e)`.
-- `zero_ext`: `(zero_ext w e)` where `w : Int` and `e : (bv N)` is equivalent to SMT-LIB `((_ zero_extend M) e))` where `M = w - N`. 
-- `sign_ext`: `(sign_ext w e)` where `w : Int` and `e : (bv N)` is equivalent to SMT-LIB `((_ sign_extend M) e))` where `M = w - N`. 
-- `rotr`: `(rotr e1 e2)` where `e1, e2: (bv N)` resolves to `(bvor (bvlshr e1 e3) (bvshl e1 (bvsub (nat2bv N N) e3)))`, where `e3 = (bvurem e2 (nat2bv N N))`. Bitvector rotate right.
-- `rotl`: `(rotl e1 e2)` where `e1, e2: (bv N)` resolves to `(bvor (bvshl e1 e3) (bvlshr e1 (bvsub (nat2bv N N) e3)))`, where `e3 = (bvurem e2 (nat2bv N N))`. Bitvector rotate left.
-- `concat`: `(concat e_1... e_N)` resolves to `(concat e_1 (concat e_2 (concat ... e_N)))`. That is, this is a variadic version of the SMT-LIB `concat` operation. 
-- `widthof`: `(widthof e)` where `e : (bv N)` resolves to `N`. That is, returns the bitwidth of a supplied bitvector as an integer. 
-- `subs`: `(subs e1 e2)` returns the results of a subtraction with flags. 
-- `popcnt`: `(popcnt e)` where `e : (bv N)` returns the count of non-zero bits in `e`.
-- `rev`: `(rev e)` where `e : (bv N)` reverses the order of bits in `e`.
-- `cls`: `(cls e)` where `e : (bv N)` returns the count of leading sign bits in `e`. 
-- `clz`: `(clz e)` where `e : (bv N)` returns the count of leading zero bits in `e`.
-- `convto`: `(convto w e)` where `w : Int` and `e : (bv N)` converts the bitvector `e` to the width `w`, leaving the upper bits unspecified in the case of a extension. That is, there are 3 cases:
-    1. `w = N`: resolves to `e`.
-    2. `w < N`: resolves to `((_ extract M 0) e)` where `M = N - 1`.
-    3. `w > N`: resolves to `(concat e2 e)` where `e2` is a fresh bitvector with `w - N` unspecified bits. 
-
-### Custom memory operations
-
-- `load_effect`: `(load_effect flags size address)` where `flags : (bv 16)`, `size: Int`, and `address : (bv 64)` models a load of `size` bits from address `address` with flags `flags`. Only 1 `load_effect` may be used per left hand and right hand side of a rule. 
-- `store_effect`: `(store_effect flags size val address)` where `flags : (bv 16)`, `size: Int`, and `val : (bv size)`, `address : (bv 64)` models a store of `val` (with `size` bits) to address `address` with flags `flags`. Only 1 `store_effect` may be used per left hand and right hand side of a rule. 
-
-### Custom control operation
-
-- `if`: equivalent to SMT-LIB `ite`. 
-- `switch`: `(switch c (m1 e1) ... (mN eN))` resolves to a series of nested `ite` expressions, 
-`(ite(= c m1) e1 (ite (= c m2) e2 (ite ...eN)))`. It additionally adds a verification condition that some case must match, that is, `(or (= c m1) (or (= c m2)...(= c mN)))`.
-
-## Example
-
-Continuing the `band_fits_in_64` example from before, the full required specifications are places in the relevant ISLE files.
+To verify just the expansions containing one rule (first add a name to the rule
+if it does not have one), pass `--rule <rule>`:
 
 ```
-(rule band_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (band x y)))
-      (alu_rs_imm_logic_commutative (ALUOp.And) ty x y))
+cargo run -p cranelift-isle-veri --bin veri -- --rule <rule>
 ```
 
-In `inst_specs.isle`:
+This seeds expansion from the rule's root term and then narrows to the
+expansions that actually contain the rule, so it reaches the rule even when that
+root term has no standalone spec (for example, the x64 `lower` term).
+
+## Running for `x64`
+
+The x86-64 backend does not currently have the same coverage, but you can still run the
+verifier on specific rules.
+
+For example, the following should succeed in verifying 46 possible expansions (rule chains with monomorphized types) for the base case of an `x64` `iadd` of 32 or 64 bit values.
 
 ```
-;; The band spec uses the bitvector `bvand` on its arguments.
-(spec (band x y)
-    (provide (= result (bvand x y))))
-(instantiate band bv_binary_8_to_64)
+cargo run -p cranelift-isle-veri --bin veri -- --name x64 --rule iadd_base_case_32_or_64_lea
 ```
 
-In `prelude_lower.isle`:
+Here, `--name` specifies the ISLE compilation unit name, and `iadd_base_case_32_or_64_lea` scopes to a single
+`lower` rule.
+
+## ISA Specifications
+
+Where possible, we derive ISA specifications in VeriISLE format from
+authoritative specifications distributed by vendors. Currently this is only
+in place for the AArch64 backend, with specifications derived from ARM's Machine
+Readable Specification in Architecture Specification Language (ASL). We rely on
+the [ASLp](https://github.com/UQ-PAC/aslp) tool to assist with distilling down
+the original verbose specifications to usable semantics for verification.
+
+The resulting ISA specifications are
+[checked in to the repository](../../codegen/src/isa/aarch64/spec), so there is
+no requirement to install ASLp unless you want to alter existing or derive more
+specifications with it.
+
+### Generating ISA Specifications
+
+To run ISA specification generation, you will first need to install ASLp:
+
+1.  [Install `opam`](https://opam.ocaml.org/doc/Install.html), the OCaml Package
+    Manager. The "Binary distribution" method is recommended. Ensure it is
+    initialized with `opam init`; the install script assumes a working opam.
+2.  Install ASLp with `./setup/install-aslp.sh`. This creates a dedicated
+    OCaml 5.x opam switch named `aslp` and installs the upstream
+    [ASLp](https://github.com/UQ-PAC/aslp) and
+    [aslp-rpc](https://github.com/UQ-PAC/aslp-rpc) packages into it. This
+    provides both the `aslp_server_http` server (used by generation) and the
+    `asli` CLI (used by the `aslp` crate's test-data scripts). Set the
+    `ASLP_SWITCH` environment variable to use a different switch name (the same
+    variable is read by those scripts). Remove it later with
+    `opam switch remove aslp`.
+
+To run ISA specification generation, from the `isaspec` directory run:
 
 ```
-;; has_type checks that the integer modeling the type in matches the Inst bitwidth.
-(spec (has_type ty arg)
-      (provide (= result arg))
-      (require (= ty (widthof arg))))
-(decl has_type (Type Inst) Inst)
-
-;; fits_in_64 checks that the integer modeling the width is less than or equal to 64.
-(spec (fits_in_64 arg)
-      (provide (= result arg))
-      (require (<= arg 64)))
-(decl fits_in_64 (Type) Type)
+./script/generate.sh -l
 ```
 
-In `aarch64/lower.isle`: 
+This will:
 
-```
-;; lower is just modeled as an identity function
-(spec (lower arg) (provide (= result arg)))
-(decl partial lower (Inst) InstOutput)
-```
+1.  Launch an instance of the `aslp_server_http` server (via `opam exec` in the
+    `aslp` switch). Communicating with ASLp over a server connection allows us
+    to pay the initialization cost of reading the large ASL specification once.
+2.  Build and execute the `isaspec` tool.
+3.  Write outputs to the `cranelift/codegen/src/isa/aarch64/spec/` directory.
 
-In `aarch64/inst.isle`:
-
-```
-;; Enum models ALUOp as an 8-bit bitvector.
-(model ALUOp (enum
-      (Add #x00) ;; 0
-      (Sub #x01)
-      (Orr #x02)
-      (OrrNot #x03)
-      (And #x04)
-      (AndNot #x05)
-      (Eor #x06)
-      (EorNot #x07)
-      (SubS #x08)
-      (SDiv #x09)
-      (UDiv #x0a)
-      (RotR #x0b)
-      (Lsr #x0c)
-      (Asr #x0d)
-      (Lsl #x0e)))
-
-;; alu_rs_imm_logic_commutative uses a conv_to and switch. 
-(spec (alu_rs_imm_logic_commutative op t a b)
-    (provide
-      (= result
-         (conv_to 64
-           (switch op
-             ((ALUOp.Orr) (bvor a b))
-             ((ALUOp.And) (bvand a b))
-             ((ALUOp.Eor) (bvxor a b)))))))
-(decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
-```
-
-## Testing
-
-To see an all of our current output, run tests without capturing standard out:
-```bash
-cargo test -- --nocapture
-```
-
-To run a specific test, you can provide the test name (most rules are tested in `cranelift/isle/veri/veri_engine/tests/veri.rs`). Set `RUST_LOG=DEBUG` to see more detailed output on test cases that expect success.
-
-```bash
-RUST_LOG=DEBUG cargo test test_named_band_fits_in_64 -- --nocapture  
-```
-
-To see the x86-64 CVE repro, run:
-
-```bash
-RUST_LOG=debug cargo run -- --codegen ../../../codegen --noprelude -t amode_add -i examples/x86/amode_add_uextend_shl.isle
-```
-
-To see the x86-64 CVE variant with a 32-bit address, run:
-```bash
-RUST_LOG=debug cargo run --  --codegen ../../../codegen --noprelude -t amode_add -i examples/x86/amode_add_shl.isle
-```
+On a clean checkout this should be a no-op.

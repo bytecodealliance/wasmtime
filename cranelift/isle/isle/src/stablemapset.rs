@@ -28,6 +28,11 @@ impl<T: Hash + Eq> StableSet<T> {
     pub fn contains(&self, val: &T) -> bool {
         self.0.contains(val)
     }
+
+    /// Returns the number of elements in the set.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 /// A wrapper around a [HashMap] which prevents accidentally observing the non-deterministic

@@ -24,3 +24,7 @@ heck = "0.5.0"
 
 [features]
 pulley = ['dep:pulley-interpreter']
+# Include the ISLE verification specs in the ISLE compilation
+# inputs. Only the ISLE verifier tooling needs these; normal codegen
+# builds leave them out.
+spec = []

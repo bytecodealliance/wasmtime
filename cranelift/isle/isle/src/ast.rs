@@ -13,8 +13,11 @@ pub enum Def {
     Rule(Rule),
     Extractor(Extractor),
     Decl(Decl),
+    Attr(Attr),
     Spec(Spec),
+    SpecMacro(SpecMacro),
     Model(Model),
+    State(State),
     Form(Form),
     Instantiation(Instantiation),
     Extern(Extern),
@@ -55,6 +58,15 @@ pub struct Variant {
     pub name: Ident,
     pub fields: Fields,
     pub pos: Pos,
+}
+
+impl Variant {
+    pub fn full_name(enum_name: &Ident, variant_name: &Ident) -> Ident {
+        Ident(
+            format!("{}.{}", enum_name.0, variant_name.0),
+            variant_name.1,
+        )
+    }
 }
 
 /// The fields of a struct or enum variant, formatted as a struct or tuple.
@@ -114,6 +126,58 @@ pub struct Decl {
     pub pos: Pos,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Instantiation {
+    pub term: Ident,
+    pub form: Option<Ident>,
+    pub signatures: Vec<Signature>,
+    pub pos: Pos,
+}
+
+/// An attribute applied to a declaration.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Attr {
+    pub target: AttrTarget,
+    pub kinds: Vec<AttrKind>,
+    pub pos: Pos,
+}
+
+/// Object an attribute applies to.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum AttrTarget {
+    Term(Ident),
+    Rule(Ident),
+}
+
+/// A kind of attribute that can be applied to a term declaration or rule.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum AttrKind {
+    /// In verification, apply rule chaining to this term.
+    ///
+    /// A term marked for chaining may omit a specification. Instead, all
+    /// possible applications of rules to this term will be generated and
+    /// verified.
+    Chain,
+
+    /// In verification, declare that the correctness of lower priority rules
+    /// depends on this rule not matching.
+    ///
+    /// During rule expansion, any higher-priority overlapping rules that have
+    /// the priority tag will have their match conditions negated and added to
+    /// the verification conditions.
+    ///
+    /// Note that care must be taken when using this tag: if the specification
+    /// for the match conditions of the higher priority rule are an
+    /// over-approximation of reality, then the assumptions made by lower
+    /// priority rules will be an under-approximation. In an extreme case this
+    /// may cause the verifier to determine the lower priority rule never
+    /// applies. In a more subtle case, it could cause bugs to be missed.
+    Priority,
+
+    /// Tag allows for categorizing terms and rules.
+    Tag(Ident),
+}
+
 /// An expression used to specify term semantics, similar to SMT-LIB syntax.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SpecExpr {
@@ -124,8 +188,8 @@ pub enum SpecExpr {
     },
     /// An operator that matches a constant bitvector value.
     ConstBitVec {
-        val: i128,
-        width: i8,
+        val: u128,
+        width: usize,
         pos: Pos,
     },
     /// An operator that matches a constant boolean value.
@@ -133,13 +197,28 @@ pub enum SpecExpr {
         val: bool,
         pos: Pos,
     },
-    /// The Unit constant value.
-    ConstUnit {
-        pos: Pos,
-    },
     // A variable
     Var {
         var: Ident,
+        pos: Pos,
+    },
+    // As expression specifies the intended type of the expression. Functionally
+    // it is the identity. Analogous to qualified identifiers in SMT-LIB.
+    As {
+        x: Box<SpecExpr>,
+        ty: ModelType,
+        pos: Pos,
+    },
+    /// Struct field access.
+    Field {
+        field: Ident,
+        x: Box<SpecExpr>,
+        pos: Pos,
+    },
+    /// Discriminator is a predicate that tests the variant of an enum value.
+    Discriminator {
+        variant: Ident,
+        x: Box<SpecExpr>,
         pos: Pos,
     },
     /// An application of a type variant or term.
@@ -148,15 +227,79 @@ pub enum SpecExpr {
         args: Vec<SpecExpr>,
         pos: Pos,
     },
+    /// Enum pattern matching.
+    Match {
+        x: Box<SpecExpr>,
+        arms: Vec<Arm>,
+        pos: Pos,
+    },
+    /// Let bindings.
+    Let {
+        defs: Vec<(Ident, SpecExpr)>,
+        body: Box<SpecExpr>,
+        pos: Pos,
+    },
+    /// Introduce new uninitialized variables.
+    With {
+        decls: Vec<Ident>,
+        body: Box<SpecExpr>,
+        pos: Pos,
+    },
+    /// Inline macro definition, or lambda.
+    Macro {
+        /// Parameter names.
+        params: Vec<Ident>,
+        /// Macro expansion.
+        body: Box<SpecExpr>,
+        pos: Pos,
+    },
+    /// Macro expansion.
+    Expand {
+        name: Ident,
+        args: Vec<SpecExpr>,
+        pos: Pos,
+    },
     /// Pairs, currently used for switch statements.
     Pair {
         l: Box<SpecExpr>,
         r: Box<SpecExpr>,
+        pos: Pos,
     },
-    /// Enums variant values (enums defined by model)
+    /// Construct enum variant.
     Enum {
         name: Ident,
+        variant: Ident,
+        args: Vec<SpecExpr>,
+        pos: Pos,
     },
+    /// Construct struct value.
+    Struct {
+        fields: Vec<FieldInit>,
+        pos: Pos,
+    },
+}
+
+impl SpecExpr {
+    pub fn pos(&self) -> Pos {
+        match self {
+            &Self::ConstInt { pos, .. }
+            | &Self::ConstBitVec { pos, .. }
+            | &Self::ConstBool { pos, .. }
+            | &Self::Var { pos, .. }
+            | &Self::As { pos, .. }
+            | &Self::Field { pos, .. }
+            | &Self::Discriminator { pos, .. }
+            | &Self::Op { pos, .. }
+            | &Self::Match { pos, .. }
+            | &Self::Let { pos, .. }
+            | &Self::With { pos, .. }
+            | &Self::Macro { pos, .. }
+            | &Self::Expand { pos, .. }
+            | &Self::Pair { pos, .. }
+            | &Self::Enum { pos, .. }
+            | &Self::Struct { pos, .. } => pos,
+        }
+    }
 }
 
 /// An operation used to specify term semantics, similar to SMT-LIB syntax.
@@ -168,6 +311,11 @@ pub enum SpecOp {
     Or,
     Not,
     Imp,
+
+    // Integer arithmetic operations
+    Add,
+    Sub,
+    Mul,
 
     // Integer comparisons
     Lt,
@@ -214,9 +362,39 @@ pub enum SpecOp {
     ZeroExt,
     SignExt,
     Concat,
+    Replicate,
+
+    // Floating point (IEEE 754-2008)
+    FPEq,
+    FPNe,
+    FPLt,
+    FPGt,
+    FPLe,
+    FPGe,
+    FPPositiveInfinity,
+    FPNegativeInfinity,
+    FPPositiveZero,
+    FPNegativeZero,
+    FPNaN,
+    FPAdd,
+    FPSub,
+    FPMul,
+    FPDiv,
+    FPMin,
+    FPMax,
+    FPNeg,
+    FPCeil,
+    FPFloor,
+    FPSqrt,
+    FPTrunc,
+    FPNearest,
+    FPIsZero,
+    FPIsInfinite,
+    FPIsNaN,
+    FPIsNegative,
+    FPIsPositive,
 
     // Custom encodings
-    Subs,
     Popcnt,
     Clz,
     Cls,
@@ -225,15 +403,52 @@ pub enum SpecOp {
     // Conversion operations
     ConvTo,
     Int2BV,
-    BV2Int,
+    BV2Nat,
+    ToFP,
+    ToFPUnsigned,
+    ToFPFromFP,
+    FPToUBV,
+    FPToSBV,
     WidthOf,
 
     // Control operations
     If,
     Switch,
+}
 
-    LoadEffect,
-    StoreEffect,
+/// Arm of a spec match expression.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Arm {
+    pub variant: Ident,
+    pub args: Vec<Ident>,
+    pub body: SpecExpr,
+    pub pos: Pos,
+}
+
+/// Field initializer in a struct constructor.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct FieldInit {
+    pub name: Ident,
+    pub value: Box<SpecExpr>,
+    pub pos: Pos,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SpecMacro {
+    /// Macro name.
+    pub name: Ident,
+    /// Parameter names.
+    pub params: Vec<Ident>,
+    /// Macro expansion.
+    pub body: SpecExpr,
+    pub pos: Pos,
+}
+
+/// State modification clause.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Modifies {
+    pub state: Ident,
+    pub cond: Option<Ident>,
 }
 
 /// A specification of the semantics of a term.
@@ -247,19 +462,43 @@ pub struct Spec {
     pub provides: Vec<SpecExpr>,
     /// Require statements, which express preconditions on the term
     pub requires: Vec<SpecExpr>,
+    /// Match conditions, which specify when a partial term returns a value.
+    pub matches: Vec<SpecExpr>,
+    /// State variables modified by the term.
+    pub modifies: Vec<Modifies>,
+    pub pos: Pos,
 }
 
 /// A model of an SMT-LIB type.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ModelType {
+    /// Unspecified type.
+    ///
+    /// Unlike an auto-derived type, unspecified is a concrete type. However,
+    /// values of this type cannot be used for anything non-trivial. It is
+    /// intended to be used as a placeholder for a type that is not yet known,
+    /// but only appears in rules that are not yet covered by verification.
+    Unspecified,
+    /// Automatically deduced primitive type, left to type-inference to determine.
+    Auto,
     /// SMT-LIB Int
     Int,
     /// SMT-LIB Bool
     Bool,
+    /// Unit type.
+    Unit,
     /// SMT-LIB bitvector, but with a potentially-polymorphic width
     BitVec(Option<usize>),
-    /// Unit (removed before conversion to SMT-LIB)
-    Unit,
+    /// Structured type.
+    Struct(Vec<ModelField>),
+    /// Same model as the named type.
+    Named(Ident),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ModelField {
+    pub name: Ident,
+    pub ty: ModelType,
 }
 
 /// A construct's value in SMT-LIB
@@ -267,8 +506,8 @@ pub enum ModelType {
 pub enum ModelValue {
     /// Correspond to ISLE types
     TypeValue(ModelType),
-    /// Correspond to ISLE enums, identifier is the enum variant name
-    EnumValues(Vec<(Ident, SpecExpr)>),
+    /// Corresponds to ISLE external constants.
+    ConstValue(SpecExpr),
 }
 
 /// A model of a construct into SMT-LIB (currently, types or enums)
@@ -280,25 +519,28 @@ pub struct Model {
     pub val: ModelValue,
 }
 
+/// Declare an element of global state accessible by verification specs.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct State {
+    /// Name of the state element.
+    pub name: Ident,
+    /// Type of the state element.
+    pub ty: ModelType,
+    /// Default specification, applied if the state is not modified.
+    pub default: SpecExpr,
+    pub pos: Pos,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Signature {
     pub args: Vec<ModelType>,
     pub ret: ModelType,
-    pub canonical: ModelType,
     pub pos: Pos,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Form {
     pub name: Ident,
-    pub signatures: Vec<Signature>,
-    pub pos: Pos,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Instantiation {
-    pub term: Ident,
-    pub form: Option<Ident>,
     pub signatures: Vec<Signature>,
     pub pos: Pos,
 }

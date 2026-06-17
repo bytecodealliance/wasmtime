@@ -1,0 +1,4 @@
+Stmt_VarDeclsNoInit(Type_Bits(4),["FPDecodeRounding5__5"])
+Stmt_Assign(LExpr_Var("FPDecodeRounding5__5"),Expr_TApply("ZeroExtend.0",[2;4],[Expr_Slices(Expr_Var("FPCR"),[Slice_LoWd(22,2)]);4]))
+Stmt_ConstDecl(Type_Bits(64),"Exp9__5",Expr_TApply("FixedToFP.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),2),[Slice_LoWd(0,32)]);0;Expr_Var("TRUE");Expr_Var("FPCR");Expr_TApply("cvt_bits_uint.0",[4],[Expr_Var("FPDecodeRounding5__5")])]))
+Stmt_Assign(LExpr_Array(LExpr_Var("_Z"),0),Expr_TApply("ZeroExtend.0",[64;128],[Expr_Var("Exp9__5");128]))

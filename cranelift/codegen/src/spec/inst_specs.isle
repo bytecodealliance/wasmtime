@@ -1,0 +1,1318 @@
+;;;; Verification Type Models ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(model Imm64 (type (bv 64)))
+
+(model Ieee32 (type (bv 32)))
+(model Ieee64 (type (bv 64)))
+
+(model MemFlags (type
+    (struct
+        (aligned Bool)
+        (trapcode (bv 4)))))
+
+(model MemFlagsData (type
+    (struct
+        (aligned Bool)
+        (trapcode (bv 4)))))
+
+(model Offset32 (type (bv 32)))
+
+;;;; State Definitions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Value loaded from memory.
+;
+; We deliberately do not attempt to model the entire state of memory. Modeling a
+; loaded value this way allows us to express the fact that loaded values on CLIF
+; and ISA side will be equivalent (combined with an assertion on address
+; equality).
+(state loaded_value
+    (type (bv 64))
+    (default true))
+
+; Parameters of a CLIF load operation.
+(state clif_load
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))))
+    (default
+        (not (:active clif_load))))
+
+; Parameters of a CLIF store operation.
+(state clif_store
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+            (value (bv 64))))
+    (default
+        (and
+            ; Store is not active.
+            (not (:active clif_store))
+
+            ; Must provide a fixed size in the default case, otherwise type
+            ; inference is underconstrained.
+            (= (:size_bits clif_store) 1))))
+
+; Whether a trap is expected according to CLIF semantics.
+(state clif_trap
+    (type Bool)
+    (default (not clif_trap)))
+
+;;;; Common Term Forms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(form
+    bv_unary_8_to_64
+    ((args (named Type) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+(form
+    bv_binary_8_to_64
+    ((args (named Type) (bv  8) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+(form
+    bv_ternary_8_to_64
+    ((args (named Type) (bv  8) (bv  8) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv 16) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 32) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64) (bv 64)) (ret (bv 64))))
+
+;;;; CLIF Instruction Specifications ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Integer Instructions
+
+(spec (iadd ty x y)
+    (provide (= result (bvadd x y))
+             (= (:bits ty) (widthof result))))
+(instantiate iadd
+    ((args (named Type) (bv 8) (bv 8)) (ret (bv 8)))
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 128) (bv 128)) (ret (bv 128))))
+
+(spec (isub ty x y)
+    (provide (= result (bvsub x y))
+             (= (:bits ty) (widthof result))))
+(instantiate isub bv_binary_8_to_64)
+
+(spec (ineg ty x)
+    (provide (= result (bvneg x))
+             (= (:bits ty) (widthof result))))
+(instantiate ineg bv_unary_8_to_64)
+
+(spec (iabs ty x)
+    (provide (= result (if (bvsge x (zero_ext (widthof x) #b0)) x (bvneg x)))
+             (= (:bits ty) (widthof result))))
+(instantiate iabs bv_unary_8_to_64)
+
+(spec (imul ty x y)
+    (provide (= result (bvmul x y))
+             (= (:bits ty) (widthof result))))
+(instantiate imul bv_binary_8_to_64)
+
+(spec (smulhi ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (let
+            (
+                (double (concat x x))
+                (double_width (widthof double))
+                (xwide (sign_ext double_width x))
+                (ywide (sign_ext double_width y)))
+            (with (low)
+                (= (concat result low) (bvmul xwide ywide))))))
+(instantiate smulhi bv_binary_8_to_64)
+
+(spec (umulhi ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (let
+            (
+                (double (concat x x))
+                (double_width (widthof double))
+                (xwide (zero_ext double_width x))
+                (ywide (zero_ext double_width y)))
+            (with (low)
+                (= (concat result low) (bvmul xwide ywide))))))
+(instantiate umulhi bv_binary_8_to_64)
+
+(spec (udiv ty x y)
+    (modifies clif_trap)
+    (provide
+        (= result (bvudiv x y))
+        (= clif_trap (bv_is_zero! y))
+        (= (:bits ty) (widthof result))))
+(instantiate udiv bv_binary_8_to_64)
+
+(spec (sdiv ty x y)
+    (modifies clif_trap)
+    (provide
+        ; Constrain the result width in all cases
+        (= (widthof result) (:bits ty))
+        ; If j2 is 0, then the result is undefined.
+        (if (bv_is_zero! y)
+            clif_trap
+        ; Else if j1 divided by j2 is 2^{N−1}, then the result is undefined.
+        ;
+        ; Note: the only way this can happen is the case (−2^{N−1})/(−1).
+        (if (and
+                ; x is -2^{N-1}
+                (= x (bv_top_bit_set! (widthof x)))
+                ; y is -1
+                (bv_is_zero! (bvnot y)))
+            clif_trap
+        ; Else, return the result of dividing j1 by j2, truncated toward zero.
+            (and
+                (not clif_trap)
+                (= result (bvsdiv x y)))))))
+
+(instantiate sdiv bv_binary_8_to_64)
+(spec (urem ty x y)
+    (modifies clif_trap)
+    (provide
+        (= (:bits ty) (widthof result))
+        ; If i2 is 0, then the result is undefined.
+        (if (bv_is_zero! y)
+            clif_trap
+        ; Else, return the remainder of dividing i1 by i2.
+            (and
+                (not clif_trap)
+                (= result (bvurem x y))))))
+(instantiate urem bv_binary_8_to_64)
+
+(spec (srem ty x y)
+    (modifies clif_trap)
+    (provide
+        (= (:bits ty) (widthof result))
+        ; Let j1 be the signed interpretation of i1.
+        ; Let j2 be the signed interpretation of i2.
+        ; If i2 is 0, then the result is undefined.
+        (if (bv_is_zero! y)
+            clif_trap
+        ; Else, return the remainder of dividing j1 by j2, with the sign of the dividend j1.
+            (and
+                (not clif_trap)
+                (= result (bvsrem x y))))))
+(instantiate srem bv_binary_8_to_64)
+
+
+;; multiplication, division, and remainder are slow for bitvector reasoning
+(attr imul_base_case (tag slow))
+(attr iadd_imul_right (tag slow))
+(attr iadd_imul_left (tag slow))
+(attr isub_imul (tag slow))
+(attr umulhi_64 (tag slow))
+(attr umulhi_fits_in_32 (tag slow))
+(attr udiv_64 (tag slow))
+(attr udiv_fits_in_32 (tag slow))
+(attr sdiv_safe_divisor_i64 (tag slow))
+(attr sdiv_safe_divisor_fits_in_32 (tag slow))
+(attr urem_64 (tag slow))
+(attr urem_fits_in_32 (tag slow))
+(attr srem_64 (tag slow))
+(attr srem_fits_in_32 (tag slow))
+
+;; "Unsigned addition of x and y, trapping if the result overflows."
+;; "Accepts 32 or 64-bit integers, and does not support vector types."
+(spec (uadd_overflow_trap ty x y trap_code)
+    (modifies clif_trap)
+    (provide
+        (= (:bits ty) (widthof result))
+        (let
+            (
+                (N (widthof x))
+                ;; Use at least 1 extra bit for unsigned overflow
+                (sum (bvadd (zero_ext 65 x) (zero_ext 65 y)))
+                ;; Unsigned overflow if some carry out.
+                (carry
+                    (switch N
+                        (32 (extract 32 32 sum))
+                        (64 (extract 64 64 sum)))))
+            (if (= carry #b1)
+                clif_trap
+                (and
+                    (not clif_trap)
+                    (= result (conv_to N sum)))))))
+
+(instantiate uadd_overflow_trap
+    ((args (named Type) (bv 32) (bv 32) (named TrapCode)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64) (named TrapCode)) (ret (bv 64))))
+
+(spec (trap trap_code)
+    (modifies clif_trap)
+    (provide clif_trap))
+
+(spec (trapz val trap_code)
+    (modifies clif_trap)
+    (provide (= clif_trap (bv_is_zero! val))))
+
+(spec (iconst ty arg)
+    (provide (= arg (zero_ext 64 result))
+             (= (:bits ty) (widthof result))))
+(instantiate iconst
+    ((args (named Type) (bv 64)) (ret (bv 8)))
+    ((args (named Type) (bv 64)) (ret (bv 16)))
+    ((args (named Type) (bv 64)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+(spec (ishl ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            (bvshl
+                x
+                (bvand y (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) #x0000000000000001)))))))
+(instantiate ishl bv_binary_8_to_64)
+
+(spec (ushr ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            (bvlshr
+                x
+                (bvand y (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) #x0000000000000001)))))))
+(instantiate ushr bv_binary_8_to_64)
+
+(spec (sshr ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            (bvashr
+                x
+                (bvand y (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) #x0000000000000001)))))))
+(instantiate sshr bv_binary_8_to_64)
+
+(spec (band ty x y)
+    (provide (= result (bvand x y))
+             (= (:bits ty) (widthof result))))
+(instantiate band bv_binary_8_to_64)
+
+(spec (bxor ty x y)
+    (provide (= result (bvxor x y))
+             (= (:bits ty) (widthof result))))
+(instantiate bxor bv_binary_8_to_64)
+
+(spec (bor ty x y)
+    (provide (= result (bvor x y))
+             (= (:bits ty) (widthof result))))
+(instantiate bor bv_binary_8_to_64)
+
+(spec (bnot ty x)
+    (provide (= result (bvnot x))
+             (= (:bits ty) (widthof result))))
+(instantiate bnot bv_unary_8_to_64)
+
+(spec (rotl ty x y)
+    (provide (= result (rotl x y))
+             (= (:bits ty) (widthof result))))
+(instantiate rotl bv_binary_8_to_64)
+
+(spec (rotr ty x y)
+    (provide (= result (rotr x y))
+             (= (:bits ty) (widthof result))))
+(instantiate rotr bv_binary_8_to_64)
+
+(spec (bitselect ty c x y)
+    (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))
+             (= (:bits ty) (widthof result))))
+(instantiate bitselect bv_ternary_8_to_64)
+
+(spec (cls ty x)
+    (provide (= result (cls x))
+             (= (:bits ty) (widthof result))))
+(instantiate cls bv_unary_8_to_64)
+
+(spec (clz ty x)
+    (provide (= result (clz x))
+             (= (:bits ty) (widthof result))))
+(instantiate clz bv_unary_8_to_64)
+
+(spec (ctz ty x)
+    (provide (= result (clz (rev x)))
+             (= (:bits ty) (widthof result))))
+(instantiate ctz bv_unary_8_to_64)
+
+(spec (popcnt ty x)
+    (provide (= result (popcnt x))
+             (= (:bits ty) (widthof result))))
+(instantiate popcnt bv_unary_8_to_64)
+
+;; Reverse the byte order of `x`. There is no byte-swap primitive, so we build
+;; the result by concatenating the bytes of `x` in reverse order (`concat`'s
+;; first argument is the high-order part). `bswap` is defined for i16/i32/i64/
+;; i128; we verify the 16/32/64-bit widths, matching the rest of this file.
+(spec (bswap ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            (switch (widthof x)
+                (16 (concat (extract  7 0 x) (extract 15  8 x)))
+                (32 (concat (extract  7 0 x)
+                    (concat (extract 15  8 x)
+                    (concat (extract 23 16 x)
+                            (extract 31 24 x)))))
+                (64 (concat (extract  7 0 x)
+                    (concat (extract 15  8 x)
+                    (concat (extract 23 16 x)
+                    (concat (extract 31 24 x)
+                    (concat (extract 39 32 x)
+                    (concat (extract 47 40 x)
+                    (concat (extract 55 48 x)
+                            (extract 63 56 x)))))))))))))
+(instantiate bswap
+    ((args (named Type) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+(spec (ireduce ty x)
+    (provide (= result (conv_to (widthof result) x))
+             (= (:bits ty) (widthof result))))
+(instantiate ireduce
+    ((args (named Type) (bv 16)) (ret (bv  8)))
+    ((args (named Type) (bv 32)) (ret (bv  8)))
+    ((args (named Type) (bv 64)) (ret (bv  8)))
+    ((args (named Type) (bv 32)) (ret (bv 16)))
+    ((args (named Type) (bv 64)) (ret (bv 16)))
+    ((args (named Type) (bv 64)) (ret (bv 32))))
+
+(form extend
+    ((args (named Type) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv  8)) (ret (bv 16)))
+    ((args (named Type) (bv  8)) (ret (bv 32)))
+    ((args (named Type) (bv  8)) (ret (bv 64)))
+    ((args (named Type) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 16)) (ret (bv 32)))
+    ((args (named Type) (bv 16)) (ret (bv 64)))
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 32)) (ret (bv 64))))
+    ;; Note: (bv 64) -> (bv 64) not accepted in clif
+
+(spec (uextend ty x)
+    (provide (= result (zero_ext (widthof result) x))
+             (= (:bits ty) (widthof result))))
+(instantiate uextend extend)
+
+(spec (sextend ty x)
+    (provide (= result (sign_ext (widthof result) x))
+             (= (:bits ty) (widthof result))))
+(instantiate sextend extend)
+
+;; `maybe_uextend` "sees through" a `uextend`: given the outer value `result`,
+;; it yields the inner value `value`. When `result` is defined by a `uextend`,
+;; `value` is that uextend's argument; otherwise `value` is `result` itself. In
+;; both cases the inner value is the low bits of the outer value, i.e. the outer
+;; value is the zero-extension of the inner one to the outer width (in the
+;; fall-through case the two widths are equal, so this is the identity). The
+;; extractor is total (it always matches), so no `match` clause is needed.
+(spec (maybe_uextend value)
+    (provide (= result (zero_ext (widthof result) value))))
+
+(spec (smin ty x y)
+    (provide (= result (if (bvsle x y) x y))
+             (= (:bits ty) (widthof result))))
+(instantiate smin bv_binary_8_to_64)
+
+(spec (umin ty x y)
+    (provide (= result (if (bvule x y) x y))
+             (= (:bits ty) (widthof result))))
+(instantiate umin bv_binary_8_to_64)
+
+(spec (smax ty x y)
+    (provide (= result (if (bvsge x y) x y))
+             (= (:bits ty) (widthof result))))
+(instantiate smax bv_binary_8_to_64)
+
+(spec (umax ty x y)
+    (provide (= result (if (bvuge x y) x y))
+             (= (:bits ty) (widthof result))))
+(instantiate umax bv_binary_8_to_64)
+
+(spec (icmp ty cc x y)
+    (provide
+        (= result
+            (if
+                (match cc
+                    ((Equal) (= x y))
+                    ((NotEqual) (not (= x y)))
+                    ((SignedGreaterThan) (bvsgt x y))
+                    ((SignedGreaterThanOrEqual) (bvsge x y))
+                    ((SignedLessThan) (bvslt x y))
+                    ((SignedLessThanOrEqual) (bvsle x y))
+                    ((UnsignedGreaterThan) (bvugt x y))
+                    ((UnsignedGreaterThanOrEqual) (bvuge x y))
+                    ((UnsignedLessThan) (bvult x y))
+                    ((UnsignedLessThanOrEqual) (bvule x y)))
+                #x01
+                #x00))))
+(instantiate icmp
+    ((args (named Type) (named IntCC) (bv  8) (bv  8)) (ret (bv 8)))
+    ((args (named Type) (named IntCC) (bv 16) (bv 16)) (ret (bv 8)))
+    ((args (named Type) (named IntCC) (bv 32) (bv 32)) (ret (bv 8)))
+    ((args (named Type) (named IntCC) (bv 64) (bv 64)) (ret (bv 8))))
+
+;; Load Instructions
+
+; Compute the effective address of a base pointer p and fixed offset.
+(macro (effective_address p offset)
+    (bvadd p (sign_ext 64 offset)))
+
+; Activate and set parameters of a CLIF load effect.
+(macro (clif_load_activate clif_load size_bits p offset)
+    (and
+        (:active clif_load)
+        (= (:size_bits clif_load) size_bits)
+        (= (:addr clif_load) (effective_address! p offset))))
+
+; Load from memory
+(spec (load ty flags p offset)
+    (modifies clif_load)
+    (modifies loaded_value)
+    (provide
+        (= (:bits ty) (widthof result))
+
+        ; Activate the CLIF load effect.
+        (clif_load_activate! clif_load (widthof result) p offset)
+
+        ; Result of the load is represented by low bits of the loaded value state register.
+        (= result (conv_to (widthof result) loaded_value))))
+(instantiate load
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv  8)))
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 16)))
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
+
+; Unsigned N-bit load
+(macro (uloadN clif_load size_bits p offset loaded_value result)
+    (and
+        ; Activate the CLIF load effect.
+        (clif_load_activate! clif_load size_bits p offset)
+
+        ; Loaded value is zero-extended.
+        (= result (zero_ext (widthof result) (conv_to size_bits loaded_value)))))
+
+; Unsigned 8-bit load
+(spec (uload8 ty flags p offset)
+    (modifies clif_load)
+    (modifies loaded_value)
+    (provide (uloadN! clif_load 8 p offset loaded_value result)
+             (= (:bits ty) (widthof result))))
+(instantiate uload8
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 16)))
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
+
+; Unsigned 16-bit load
+(spec (uload16 ty flags p offset)
+    (modifies clif_load)
+    (modifies loaded_value)
+    (provide (uloadN! clif_load 16 p offset loaded_value result)
+             (= (:bits ty) (widthof result))))
+(instantiate uload16
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
+
+; Unsigned 32-bit load
+(spec (uload32 ty flags p offset)
+    (modifies clif_load)
+    (modifies loaded_value)
+    (provide (uloadN! clif_load 32 p offset loaded_value result)
+             (= (:bits ty) (widthof result))))
+(instantiate uload32
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
+
+; Signed N-bit load
+(macro (sloadN clif_load size_bits p offset loaded_value result)
+    (and
+        ; Activate the CLIF load effect.
+        (clif_load_activate! clif_load size_bits p offset)
+
+        ; Loaded value is sign-extended.
+        (= result (sign_ext (widthof result) (conv_to size_bits loaded_value)))))
+
+; Signed 8-bit load
+(spec (sload8 ty flags p offset)
+    (modifies clif_load)
+    (modifies loaded_value)
+    (provide (sloadN! clif_load 8 p offset loaded_value result)
+             (= (:bits ty) (widthof result))))
+(instantiate sload8
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 16)))
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
+
+; Signed 16-bit load
+(spec (sload16 ty flags p offset)
+    (modifies clif_load)
+    (modifies loaded_value)
+    (provide (sloadN! clif_load 16 p offset loaded_value result)
+             (= (:bits ty) (widthof result))))
+(instantiate sload16
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
+
+; Signed 32-bit load
+(spec (sload32 ty flags p offset)
+    (modifies clif_load)
+    (modifies loaded_value)
+    (provide (sloadN! clif_load 32 p offset loaded_value result)
+             (= (:bits ty) (widthof result))))
+(instantiate sload32
+    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
+
+; Loads have a large number of expansions and instantiations.
+(attr load (tag slow))
+(attr uload8 (tag slow))
+(attr uload16 (tag slow))
+(attr uload32 (tag slow))
+(attr sload8 (tag slow))
+(attr sload16 (tag slow))
+(attr sload32 (tag slow))
+
+;; Store Instructions
+
+; Activate and set parameters of a CLIF store effect.
+(macro (clif_store_activate clif_store value p offset)
+    (and
+        ; Activate the CLIF store effect
+        (:active clif_store)
+
+        ; Store size is the width of the stored value.
+        (= (:size_bits clif_store) (widthof value))
+
+        ; Address calculation.
+        (= (:addr clif_store) (effective_address! p offset))
+
+        ; Stored value is set to the low bits of the CLIF store value.
+        (= (conv_to (widthof value) (:value clif_store)) value)))
+
+; Store instruction specification.
+(macro (store clif_store flags value p offset result)
+    (and
+        ; Activate the CLIF store effect
+        (clif_store_activate! clif_store value p offset)
+
+        ; HACK: Result of the store is a 1-bit vector.
+        (= result #b1)))
+
+; Store to memory
+(spec (store flags value p offset)
+    (modifies clif_store)
+    (provide (store! clif_store flags value p offset result)))
+(instantiate store
+    ((args (named MemFlagsData) (bv  8) (named Value) (named Offset32)) (ret (bv 1)))
+    ((args (named MemFlagsData) (bv 16) (named Value) (named Offset32)) (ret (bv 1)))
+    ((args (named MemFlagsData) (bv 32) (named Value) (named Offset32)) (ret (bv 1)))
+    ((args (named MemFlagsData) (bv 64) (named Value) (named Offset32)) (ret (bv 1))))
+
+; 8-bit store
+(spec (istore8 flags value p offset)
+    (modifies clif_store)
+    (provide (store! clif_store flags (extract 7 0 value) p offset result)))
+(instantiate istore8
+    ((args (named MemFlagsData) (bv 16) (named Value) (named Offset32)) (ret (bv 1)))
+    ((args (named MemFlagsData) (bv 32) (named Value) (named Offset32)) (ret (bv 1)))
+    ((args (named MemFlagsData) (bv 64) (named Value) (named Offset32)) (ret (bv 1))))
+
+; 16-bit store
+(spec (istore16 flags value p offset)
+    (modifies clif_store)
+    (provide (store! clif_store flags (extract 15 0 value) p offset result)))
+(instantiate istore16
+    ((args (named MemFlagsData) (bv 32) (named Value) (named Offset32)) (ret (bv 1)))
+    ((args (named MemFlagsData) (bv 64) (named Value) (named Offset32)) (ret (bv 1))))
+
+; 32-bit store
+(spec (istore32 flags value p offset)
+    (modifies clif_store)
+    (provide (store! clif_store flags (extract 31 0 value) p offset result)))
+(instantiate istore32
+    ((args (named MemFlagsData) (bv 64) (named Value) (named Offset32)) (ret (bv 1))))
+
+; Stores have a large number of expansions and instantiations.
+(attr store (tag slow))
+(attr istore8 (tag slow))
+(attr istore16 (tag slow))
+(attr istore32 (tag slow))
+
+;; Floating Point Instructions
+
+; NaN Propagation: see WebAssembly Specification 2.0, section 4.3.3
+
+; Evaluates the positive WebAssembly canonical NaN of the given width.
+(macro (nan_canon w)
+    (conv_to w
+        (switch w
+            (32 #x000000007fc00000)
+            (64 #x7ff8000000000000))))
+
+; NaN propagation with zero inputs.
+;
+; The CLIF semantics (inherited from WebAssembly) only requires a NaN payload
+; with the top bit set. Our specification is a refinement, selecting the
+; positive canonical NaN.
+(macro (nans0 w) (nan_canon! w))
+
+; NaN propagation with one input.
+;
+; The CLIF semantics (inherited from WebAssembly) requires that a canonical NaN
+; input is preserved, while any other NaN is mapped to any arithmetic NaN (which
+; has the top fraction bit set).  Our chosen refinement is to return the NaN
+; input with the top fraction bit or-ed in: this both preserves the canonical
+; NaN and turns any other NaN into an arithmetic NaN.
+(macro (nans1 x) (if (fp.isNaN x) (bvor x (fp_topfrac_bit_set! (widthof x))) (nans0! (widthof x))))
+
+; NaN propagation with two inputs.
+;
+; The CLIF semantics (inherited from WebAssembly) requires that if both inputs
+; are canonical then the output must be. Otherwise the output must be an
+; arithmetic NaN. Our chosen refinement is to apply single-input NaN propagation
+; to the first input if it's a NaN, otherwise to the second input if it's a NaN,
+; and fallback to returning the canonical NaN.
+(macro (nans2 x y) (if (fp.isNaN x) (nans1! x) (if (fp.isNaN y) (nans1! y) (nans0! (widthof x)))))
+
+; NaN negation.
+;
+; The CLIF semantics (inherited from WebAssembly) requires that negating a NaN
+; flips the sign bit (rather than returning a nondeterministic NaN).
+(macro (nan_neg x)
+    (conv_to (widthof x)
+        (bvxor x (fp_sign_bit_set! (widthof x)))))
+
+; f32const: single-precision floating-point constant.
+(spec (f32const ty x)
+    (provide (= result x)
+             (= (:bits ty) (widthof result))))
+(instantiate f32const ((args (named Type) (bv 32)) (ret (bv 32))))
+
+; f64const: double-precision floating-point constant.
+(spec (f64const ty x)
+    (provide (= result x)
+             (= (:bits ty) (widthof result))))
+(instantiate f64const ((args (named Type) (bv 64)) (ret (bv 64))))
+
+; fcmp: floating-point compare.
+(spec (fcmp ty c x y)
+    (provide
+        ;; Restrict to operations used from Wasm for now
+        (or (= c (FloatCC.Equal))
+            (= c (FloatCC.NotEqual))
+            (= c (FloatCC.LessThan))
+            (= c (FloatCC.GreaterThan))
+            (= c (FloatCC.LessThanOrEqual))
+            (= c (FloatCC.GreaterThanOrEqual)))
+        (= result
+            (if
+                (match c
+                    ((Equal) (fp.eq x y))
+                    ((NotEqual) (fp.ne x y))
+                    ((LessThan) (fp.lt x y))
+                    ((GreaterThan) (fp.gt x y))
+                    ((LessThanOrEqual) (fp.le x y))
+                    ((GreaterThanOrEqual) (fp.ge x y)))
+                #x01
+                #x00))))
+(instantiate fcmp
+    ((args (named Type) (named FloatCC) (bv 32) (bv 32)) (ret (bv 8)))
+    ((args (named Type) (named FloatCC) (bv 64) (bv 64)) (ret (bv 8))))
+
+; fadd: floating-point addition.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (fadd ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
+            (if (or (fp.isNaN x) (fp.isNaN y))
+                (nans2! x y)
+            ; Else if both z1 and z2 are infinities of opposite signs, then return an element of nans{}.
+            (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_opposite_sign! x y))
+                (nans0! (widthof x))
+            ; Else if both z1 and z2 are infinities of equal sign, then return that infinity.
+            (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_equal_sign! x y))
+                x
+            ; Else if either z1 or z2 is an infinity, then return that infinity.
+            (if (fp.isInfinite x)
+                x
+            (if (fp.isInfinite y)
+                y
+            ; Else if both z1 and z2 are zeroes of opposite sign, then return positive zero.
+            (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+                (fp.+zero (widthof x))
+            ; Else if both z1 and z2 are zeroes of equal sign, then return that zero.
+            (if (and (fp.isZero x) (fp.isZero y) (fp_equal_sign! x y))
+                x
+            ; Else if either z1 or z2 is a zero, then return the other operand.
+            (if (fp.isZero x)
+                y
+            (if (fp.isZero y)
+                x
+            ; Else if both z1 and z2 are values with the same magnitude but opposite signs, then return positive zero.
+            (if (and (= (fp_magnitude! x) (fp_magnitude! y)) (fp_opposite_sign! x y))
+                (fp.+zero (widthof x))
+            ; Else return the result of adding z1 and z2, rounded to the nearest representable value.
+                (fp.add x y))))))))))))))
+(instantiate fadd
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+; fsub: floating-point subtraction.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (fsub ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
+            (if (or (fp.isNaN x) (fp.isNaN y))
+                (nans2! x y)
+            ; Else if both z1 and z2 are infinities of equal sign, then return an element of nans{}.
+            (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_equal_sign! x y))
+                (nans0! (widthof x))
+            ; Else if both z1 and z2 are infinities of opposite signs, then return z1.
+            (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_opposite_sign! x y))
+                x
+            ; Else if z1 is an infinity, then return that infinity.
+            (if (fp.isInfinite x)
+                x
+            ; Else if z2 is an infinity, then return that infinity negated.
+            (if (fp.isInfinite y)
+                (fp.neg y)
+            ; Else if both z1 and z2 are zeroes of equal sign, then return positive zero.
+            (if (and (fp.isZero x) (fp.isZero y) (fp_equal_sign! x y))
+                (fp.+zero (widthof x))
+            ; Else if both z1 and z2 are zeroes of opposite sign, then return z1.
+            (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+                x
+            ; Else if z2 is a zero, then return z1.
+            (if (fp.isZero y)
+                x
+            ; Else if z1 is a zero, then return z2 negated.
+            (if (fp.isZero x)
+                (fp.neg y)
+            ; Else if both z1 and z2 are the same value, then return positive zero.
+            (if (and (= (fp_magnitude! x) (fp_magnitude! y)) (fp_equal_sign! x y))
+                (fp.+zero (widthof x))
+            ; Else return the result of subtracting z2 from z1, rounded to the nearest representable value.
+                (fp.sub x y))))))))))))))
+(instantiate fsub
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+; fmul: floating-point multiplication.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (fmul ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
+            (if (or (fp.isNaN x) (fp.isNaN y))
+                (nans2! x y)
+            ; Else if one of z1 and z2 is a zero and the other an infinity, then return an element of nans{}.
+            (if (and (fp.isZero x) (fp.isInfinite y))
+                (nans0! (widthof x))
+            (if (and (fp.isInfinite x) (fp.isZero y))
+                (nans0! (widthof x))
+            ; Else if both z1 and z2 are infinities of equal sign, then return an element of nans{}.
+            (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_equal_sign! x y))
+                (fp.+oo (widthof x))
+            ; Else if both z1 and z2 are infinities of opposite signs, then return z1.
+            (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_opposite_sign! x y))
+                (fp.-oo (widthof x))
+            ; Else if either z1 or z2 is an infinity and the other a value with equal sign, then return positive infinity.
+            (if (and (fp.isInfinite x) (fp_equal_sign! x y))
+                (fp.+oo (widthof x))
+            (if (and (fp.isInfinite y) (fp_equal_sign! x y))
+                (fp.+oo (widthof x))
+            ; Else if either z1 or z2 is an infinity and the other a value with opposite sign, then return negative infinity.
+            (if (and (fp.isInfinite x) (fp_opposite_sign! x y))
+                (fp.-oo (widthof x))
+            (if (and (fp.isInfinite y) (fp_opposite_sign! x y))
+                (fp.-oo (widthof x))
+            ; Else if both z1 and z2 are zeroes of equal sign, then return positive zero.
+            (if (and (fp.isZero x) (fp.isZero y) (fp_equal_sign! x y))
+                (fp.+zero (widthof x))
+            ; Else if both z1 and z2 are zeroes of opposite sign, then return negative zero.
+            (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+                (fp.-zero (widthof x))
+            ; Else return the result of multiplying z1 and z2, rounded to the nearest representable value.
+                (fp.mul x y)))))))))))))))
+(instantiate fmul
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+; fdiv: floating-point division.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (fdiv ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
+            (if (or (fp.isNaN x) (fp.isNaN y))
+                (nans2! x y)
+            ; Else if both z1 and z2 are infinities, then return an element of nans{}.
+            (if (and (fp.isInfinite x) (fp.isInfinite y))
+                (nans0! (widthof x))
+            ; Else if both z1 and z2 are zeroes, then return an element of nans{z1,z2}.
+            (if (and (fp.isZero x) (fp.isZero y))
+                (nans2! x y)
+            ; Else if z1 is an infinity and z2 a value with equal sign, then return positive infinity.
+            (if (and (fp.isInfinite x) (fp_equal_sign! x y))
+                (fp.+oo (widthof x))
+            ; Else if z1 is an infinity and z2 a value with opposite sign, then return negative infinity.
+            (if (and (fp.isInfinite x) (fp_opposite_sign! x y))
+                (fp.-oo (widthof x))
+            ; Else if z2 is an infinity and z1 a value with equal sign, then return positive zero.
+            (if (and (fp.isInfinite y) (fp_equal_sign! x y))
+                (fp.+zero (widthof x))
+            ; Else if z2 is an infinity and z1 a value with opposite sign, then return negative zero.
+            (if (and (fp.isInfinite y) (fp_opposite_sign! x y))
+                (fp.-zero (widthof x))
+            ; Else if z1 is a zero and z2 a value with equal sign, then return positive zero.
+            (if (and (fp.isZero x) (fp_equal_sign! x y))
+                (fp.+zero (widthof x))
+            ; Else if z1 is a zero and z2 a value with opposite sign, then return negative zero.
+            (if (and (fp.isZero x) (fp_opposite_sign! x y))
+                (fp.-zero (widthof x))
+            ; Else if z2 is a zero and z1 a value with equal sign, then return positive infinity.
+            (if (and (fp.isZero y) (fp_equal_sign! x y))
+                (fp.+oo (widthof x))
+            ; Else if z2 is a zero and z1 a value with opposite sign, then return negative infinity.
+            (if (and (fp.isZero y) (fp_opposite_sign! x y))
+                (fp.-oo (widthof x))
+            ; Else return the result of dividing z1 by z2, rounded to the nearest representable value.
+                (fp.div x y)))))))))))))))
+(instantiate fdiv
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+
+; fmin: floating-point minimum.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (fmin ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
+            (if (or (fp.isNaN x) (fp.isNaN y))
+                (nans2! x y)
+            ; Else if either z1 or z2 is a negative infinity, then return negative infinity.
+            (if (or (and (fp.isInfinite x) (fp.isNegative x)) (and (fp.isInfinite y) (fp.isNegative y)))
+                (fp.-oo (widthof x))
+            ; Else if either z1 or z2 is a positive infinity, then return the other value.
+            (if (and (fp.isInfinite x) (fp.isPositive x))
+                y
+            (if (and (fp.isInfinite y) (fp.isPositive y))
+                x
+            ; Else if both z1 and z2 are zeroes of opposite signs, then return negative zero.
+            (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+                (fp.-zero (widthof x))
+            ; Else return the smaller value of z1 and z2.
+                (fp.min x y)))))))))
+(instantiate fmin
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+; fmax: floating-point minimum.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (fmax ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
+            (if (or (fp.isNaN x) (fp.isNaN y))
+                (nans2! x y)
+            ; Else if either z1 or z2 is a positive infinity, then return positive infinity.
+            (if (or (and (fp.isInfinite x) (fp.isPositive x)) (and (fp.isInfinite y) (fp.isPositive y)))
+                (fp.+oo (widthof x))
+            ; Else if either z1 or z2 is a negative infinity, then return the other value.
+            (if (and (fp.isInfinite x) (fp.isNegative x))
+                y
+            (if (and (fp.isInfinite y) (fp.isNegative y))
+                x
+            ; Else if both z1 and z2 are zeroes of opposite signs, then return positive zero.
+            (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+                (fp.+zero (widthof x))
+            ; Else return the smaller value of z1 and z2.
+                (fp.max x y)))))))))
+(instantiate fmax
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+
+; fabs: floating-point absolute value.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (fabs ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z is a NaN, then return z with positive sign.
+            (if (fp.isNaN x)
+                (bvand x (bvnot (fp_sign_bit_set! (widthof x))))
+            ; Else if z is an infinity, then return positive infinity.
+            (if (fp.isInfinite x)
+                (fp.+oo (widthof x))
+            ; Else if z is a zero, then return positive zero.
+            (if (fp.isZero x)
+                (fp.+zero (widthof x))
+            ; Else if z is a positive value, then return z.
+            (if (fp.isPositive x)
+                x
+            ; Else return z negated.
+                (fp.neg x))))))))
+(instantiate fabs
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+
+; fneg: floating-point negation.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (fneg ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z is a NaN, then return z with negated sign.
+            (if (fp.isNaN x)
+                (nan_neg! x)
+            ; Else if z is an infinity, then return that infinity negated.
+            ; Else if z is a zero, then return that zero negated.
+            ; Else return z negated.
+                (fp.neg x))))) ; Remaining cases of the spec handled by SMT fp.neg
+(instantiate fneg
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+
+; sqrt: floating-point square root.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (sqrt ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z is a NaN, then return an element of nans{z}.
+            (if (fp.isNaN x)
+                (nans1! x)
+            ; Else if z is negative infinity, then return an element of nans{}.
+            (if (and (fp.isInfinite x) (fp.isNegative x))
+                (nans0! (widthof x))
+            ; Else if z is positive infinity, then return positive infinity.
+            (if (and (fp.isInfinite x) (fp.isPositive x))
+                (fp.+oo (widthof x))
+            ; Else if z is a zero, then return that zero.
+            (if (fp.isZero x)
+                x
+            ; Else if z has a negative sign, then return an element of nans{}.
+            (if (fp.isNegative x)
+                (nans0! (widthof x))
+            ; Else return the square root of z.
+                (fp.sqrt x)))))))))
+(instantiate sqrt
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+; ceil: floating-point ceiling.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (ceil ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z is a NaN, then return an element of nans{z}.
+            (if (fp.isNaN x)
+                (nans1! x)
+            ; Else if z is infinity, then return z.
+            (if (fp.isInfinite x)
+                x
+            ; Else if z is zero, then return z.
+            (if (fp.isZero x)
+                x
+            ; Else if z is smaller than 0 but greater than −1, then return negative zero.
+            (if (and (fp.lt x (fp.-zero (widthof x))) (fp.gt x (fp_minus_one! (widthof x))))
+                (fp.-zero (widthof x))
+            ; Else return the smallest integral value that is not smaller than z.
+                (fp.ceil x))))))))
+(instantiate ceil
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+; floor: floating-point floor.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (floor ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z is a NaN, then return an element of nans{z}.
+            (if (fp.isNaN x)
+                (nans1! x)
+            ; Else if z is infinity, then return z.
+            (if (fp.isInfinite x)
+                x
+            ; Else if z is zero, then return z.
+            (if (fp.isZero x)
+                x
+            ; Else if z is greater than 0 but smaller than 1, then return positive zero.
+            (if (and (fp.gt x (fp.-zero (widthof x))) (fp.lt x (fp_one! (widthof x))))
+                (fp.+zero (widthof x))
+            ; Else return the smallest integral value that is not smaller than z.
+                (fp.floor x))))))))
+(instantiate floor
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+; trunc: floating-point truncate.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (trunc ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z is a NaN, then return an element of nans{z}.
+            (if (fp.isNaN x)
+                (nans1! x)
+            ; Else if z is infinity, then return z.
+            (if (fp.isInfinite x)
+                x
+            ; Else if z is a zero, then return z.
+            (if (fp.isZero x)
+                x
+            ; Else if z is greater than 0 but smaller than 1, then return positive zero.
+            (if (and (fp.gt x (fp.+zero (widthof x))) (fp.lt x (fp_one! (widthof x))))
+                (fp.+zero (widthof x))
+            ; Else if z is smaller than 0 but greater than −1, then return negative zero.
+            (if (and (fp.lt x (fp.-zero (widthof x))) (fp.gt x (fp_minus_one! (widthof x))))
+                (fp.-zero (widthof x))
+            ; Else return the integral value with the same sign as z and the largest magnitude that is not larger than the magnitude of z.
+                (fp.trunc x)))))))))
+(instantiate trunc
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+; nearest: floating-point nearest.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (nearest ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z is a NaN, then return an element of nans{z}.
+            (if (fp.isNaN x)
+                (nans1! x)
+            ; Else if z is infinity, then return z.
+            (if (fp.isInfinite x)
+                x
+            ; Else if z is zero, then return z.
+            (if (fp.isZero x)
+                x
+            ; Else if z is greater than 0 but smaller than or equal to 0.5, then return positive zero.
+            (if (and (fp.gt x (fp.+zero (widthof x))) (fp.le x (fp_half! (widthof x))))
+                (fp.+zero (widthof x))
+            ; Else if z is smaller than 0 but greater than or equal to −0.5, then return negative zero.
+            (if (and (fp.lt x (fp.-zero (widthof x))) (fp.ge x (fp_minus_half! (widthof x))))
+                (fp.-zero (widthof x))
+            ; Else return the integral value that is nearest to z; if two values are equally near, return the even one.
+                (fp.nearest x)))))))))
+(instantiate nearest
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+; fcopysign: floating-point copysign.
+;
+; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
+(spec (fcopysign ty x y)
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z1 and z2 have the same sign, then return z1.
+            (if (fp_equal_sign_inc_nan! x y)
+                x
+            ; Else return z1 with negated sign.
+            (if (fp.isNaN x)
+                (nan_neg! x)
+                (fp.neg x))))))
+(instantiate fcopysign
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+(spec (bitcast ty flags x)
+    (provide (= result x)
+             (= (:bits ty) (widthof result))))
+; I32ReinterpretF32
+; I64ReinterpretF64
+; F32ReinterpretI32
+; F64ReinterpretI64
+(instantiate bitcast
+    ((args (named Type) (named MemFlagsData) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (named MemFlagsData) (bv 64)) (ret (bv 64))))
+
+(form fcvt
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 32)) (ret (bv 64)))
+    ((args (named Type) (bv 64)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+(spec (fcvt_from_uint ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (let ((N (widthof result)))
+            (= result (to_fp_unsigned N (conv_to N (zero_ext 64 x)))))))
+(instantiate fcvt_from_uint fcvt)
+
+(spec (fcvt_from_sint ty x)
+    (provide
+        (= (:bits ty) (widthof result))
+        (let ((N (widthof result)))
+            (= result (to_fp N (conv_to N (sign_ext 64 x)))))))
+(instantiate fcvt_from_sint fcvt)
+
+;; Can trap if invalid conversion
+;; Derived from Wasm reference interpreter
+;; https://github.com/WebAssembly/spec/blob/5d12bd74c49932deb7ab4bae3d29bf106f19d10b/interpreter/exec/i32_convert.ml#L5
+(macro (neg_min_int_times_two_as_fp w)
+    (switch w
+        (32 #x000000004f800000)
+        (64 #x43f0000000000000)))
+(spec (fcvt_to_uint ty x)
+    (modifies clif_trap)
+    (provide
+        (= (:bits ty) (widthof result))
+        (let (
+            (s (widthof x))
+            (d (widthof result)))
+        (and
+            (=> (not clif_trap) (= result (fp.to_ubv d (to_fp_from_fp d x))))
+
+            ;; Trap if input is NaN or does not fit in the integer type
+            ;; if xf >= -.Int32.(to_float min_int) *. 2.0 || xf <= -1.0 then
+            (= clif_trap (or
+                (fp.isNaN x)
+                (fp.ge x (to_fp_from_fp s (conv_to d (neg_min_int_times_two_as_fp! d))))
+                (fp.le x (to_fp_from_fp s (conv_to d (fp_minus_one! d))))))))))
+(instantiate fcvt_to_uint fcvt)
+
+(macro (min_int_as_fp w n)
+    (switch n
+        (32 (fp_i32_min! w))
+        (64 (fp_i64_min! w))))
+(macro (neg_min_int_as_fp w n)
+    (switch n
+        (32 (fp_minus_i32_min! w))
+        (64 (fp_minus_i64_min! w))))
+(spec (fcvt_to_sint ty x)
+    (modifies clif_trap)
+    (provide
+        (= (:bits ty) (widthof result))
+        (let (
+            (s (widthof x))
+            (d (widthof result)))
+        (and
+            (=> (not clif_trap) (= result (fp.to_sbv d (to_fp_from_fp d x))))
+
+            ;; Trap if input is NaN or does not fit in the integer type
+            ;;
+            ;; Note f64 to i32 case takes a different form according to the reference interpreter.
+            ;;
+            ;; Reference interpreter i32_convert `trunc_f32_s`:
+            ;;      if xf >= -.Int32.(to_float min_int) || xf < Int32.(to_float min_int) then
+            ;; Reference interpreter i32_convert `trunc_f64_s`:
+            ;;      if xf >= -.Int32.(to_float min_int) || xf <= Int32.(to_float min_int) -. 1.0 then
+            ;; Reference interpreter i64_convert `trunc_f32_s`:
+            ;;      if xf >= -.Int64.(to_float min_int) || xf < Int64.(to_float min_int) then
+            ;; Reference interpreter i64_convert `trunc_f64_s`:
+            ;;      if xf >= -.Int64.(to_float min_int) || xf < Int64.(to_float min_int) then
+            (= clif_trap (or
+                (fp.isNaN x)
+                (fp.ge x (neg_min_int_as_fp! s d))
+                (if (and (= s 64) (= d 32))
+                    (fp.le x (fp.sub (min_int_as_fp! s d) (fp_one! s)))
+                    (fp.lt x (min_int_as_fp! s d)))))))))
+(instantiate fcvt_to_sint fcvt)
+
+
+; Specification derived from WebAssembly Specification prose (Conversions, section 4.3.4).
+(spec (fdemote ty z)
+    (match
+        ;; Demote only can return bv-32 as written
+        (= (widthof result) 32))
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z is a canonical NaN, then return an element of nans{} (i.e., a canonical NaN of size N).
+            ; Else if z is a NaN, then return an element of nans{±nan(1)} (i.e., any NaN of size N).
+            (if (fp.isNaN z)
+                ;; Note: derived from Wasm reference interpreter:
+                ;; https://github.com/WebAssembly/spec/blob/268a03da8576cc491d708777e69676724938aec9/interpreter/exec/f32_convert.ml#L4
+                (bvor #x7fc00000
+                     (extract 31 0
+                         (bvor
+                             (bvshl_int! (bvlshr_int! z 63) 31)
+                             (bvlshr_int! (bvshl_int! z 12) 41))))
+            ; Else if z is an infinity, then return that infinity.
+            (if (fp.isInfinite z)
+                (if (fp.isNegative z) (fp.-oo 32) (fp.+oo 32))
+            ; Else if z is a zero, then return that zero.
+            (if (fp.isZero z)
+                (if (fp.isNegative z) (fp.-zero 32) (fp.+zero 32))
+            ; Else,return float(z)
+                (to_fp_from_fp 32 z)))))))
+(instantiate fdemote
+    ((args (named Type) (bv 64)) (ret (bv 32))))
+
+; Specification derived from WebAssembly Specification prose (Conversions, section 4.3.4).
+(spec (fpromote ty z)
+    (match
+        ;; Promote only can return bv-32 as written
+        (= (widthof result) 64))
+    (provide
+        (= (:bits ty) (widthof result))
+        (= result
+            ; If z is a canonical NaN, then return an element of nans{} (i.e., a canonical NaN of size N).
+            ; Else if z is a NaN, then return an element of nans{±nan(1)} (i.e., any arithmetic NaN of size N).
+            (if (fp.isNaN z)
+                ;; Note: derived from Wasm reference interpreter:
+                ;; https://github.com/WebAssembly/spec/blob/5d12bd74c49932deb7ab4bae3d29bf106f19d10b/interpreter/exec/f64_convert.ml#L4
+                (bvor #x7ff8000000000000
+                    (bvor
+                        (bvshl_int! (bvlshr_int! (zero_ext 64 z) 31) 63)
+                        (bvlshr_int! (bvshl_int! (zero_ext 64 z) 41) 12)))
+            ; Else, return z.
+                (to_fp_from_fp 64 z)))))
+(instantiate fpromote
+    ((args (named Type) (bv 32)) (ret (bv 64))))
+
+;;;; CLIF Instruction Tags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(attr select_spectre_guard (tag spectre))
+(attr fence (tag TODO))
+
+; Use Z3 solver for the following instructions/rules.
+(attr fadd (tag solver_z3))
+(attr fmul (tag solver_z3))
+(attr fdiv (tag solver_z3))
+(attr sqrt (tag solver_z3))
+
+(attr cls (tag solver_z3))
+(attr clz (tag solver_z3))
+(attr ctz (tag solver_z3))
+(attr popcnt (tag solver_z3))
+(attr iadd_imul_left (tag solver_z3))
+(attr iadd_imul_right (tag solver_z3))
+(attr isub_imul (tag solver_z3))
+(attr imul_base_case (tag solver_z3))
+(attr sdiv_safe_divisor_fits_in_32 (tag solver_z3))
+(attr sdiv_safe_divisor_i64 (tag solver_z3))
+(attr fsub (tag solver_z3))

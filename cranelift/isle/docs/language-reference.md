@@ -1554,20 +1554,38 @@ The grammar accepted by the parser is as follows:
        | "(" "model" <model> ")"
        | "(" "form" <form> ")"
        | "(" "instantiate" <instantiation> ")"
+       | "(" "attr" <attr> ")"
+       | "(" "macro" <spec-macro> ")"
+       | "(" "state" <state> ")"
 
-<spec> ::= "(" <ident> <ident>* ")" <provide> [ <require> ]
-<provide> ::= "(" "provide" <spec-expr>* ")"
-<require> ::= "(" "require" <spec-expr>* ")"
+<spec> ::= "(" <ident> <ident>* ")" <spec-clause>*
+<spec-clause> ::= <provide> | <require> | <match> | <modifies>
+<provide>  ::= "(" "provide" <spec-expr>* ")"
+<require>  ::= "(" "require" <spec-expr>* ")"
+<match>    ::= "(" "match" <spec-expr>* ")"
+<modifies> ::= "(" "modifies" <ident> [ <ident> ] ")"
 
 <model> ::= <ty> "(" "type" <model-ty> ")"
-          | <ty> "(" "enum" <model-variant>* ")"
+          | <ty> "(" "const" <spec-expr> ")"
 
 <model-ty> ::= "Bool"
              | "Int"
              | "Unit"
+             | "!"   ;; unspecified
+             | "_"   ;; inferred
              | "(" "bv" [ <int> ] ")"
+             | "(" "struct" <model-field>* ")"
+             | "(" "named" <ident> ")"
 
-<model-variant> ::= "(" <ident> [ <spec-expr> ] ")"
+<model-field> ::= "(" <ident> <model-ty> ")"
+
+<attr> ::= [ "rule" ] <ident> <attr-kind>*
+<attr-kind> ::= "(" "veri" ( "chain" | "priority" ) ")"
+              | "(" "tag" <ident> ")"
+
+<spec-macro> ::= "(" <ident> <ident>* ")" <spec-expr>
+
+<state> ::= <ident> "(" "type" <model-ty> ")" "(" "default" <spec-expr> ")"
 
 <form> ::= <ident> <signature>*
 
@@ -1579,35 +1597,640 @@ The grammar accepted by the parser is as follows:
               | "true" | "false"
               | <ident>
               | "(" "switch" <spec-expr> <spec-pair>* ")"
+              | "(" "let" "(" <spec-binding>* ")" <spec-expr> ")"
+              | "(" "with" "(" <ident>* ")" <spec-expr> ")"
+              | "(" "match" <spec-expr> <spec-arm>* ")"
+              | "(" "struct" <spec-field>* ")"
+              | "(" "macro" "(" <ident>* ")" <spec-expr> ")"
+              | "(" "as" <spec-expr> <model-ty> ")"
+              | "(" <ident>"?" <spec-expr> ")"          ;; enum discriminator test, token "Variant?"
+              | "(" <ident>"!" <spec-expr>* ")"         ;; macro expansion, token "name!"
+              | "(" ":"<ident> <spec-expr> ")"          ;; field access, token ":field"
+              | "(" <ident>"."<ident> <spec-expr>* ")"  ;; enum constructor, token "Enum.Variant"
               | "(" <spec-op> <spec-expr>* ")"
               | "(" <ident> ")"
               | "(" ")"
 
-<spec-bv> ::= "#b" [ "+" | "-" ] ("0".."1")+
-            | "#x" [ "+" | "-" ] ("0".."9" | "A".."F" | "a".."f")+
+<spec-binding> ::= "(" <ident> <spec-expr> ")"
+<spec-arm>     ::= "(" "(" <ident> <ident>* ")" <spec-expr> ")"
+<spec-field>   ::= "(" <ident> <spec-expr> ")"
+
+<spec-bv> ::= "#b" ("0".."1")+
+            | "#x" ("0".."9" | "A".."F" | "a".."f")+
 
 <spec-pair> ::= "(" <spec-expr> <spec-expr> ")"
 
 <spec-op> ::= "and" | "not" | "or" | "=>"
             | "=" | "<=" | "<" | ">=" | ">"
+            | "+" | "-" | "*"
             | "bvnot" | "bvand" | "bvor" | "bvxor"
             | "bvneg" | "bvadd" | "bvsub" | "bvmul"
             | "bvudiv" | "bvurem" | "bvsdiv" | "bvsrem"
             | "bvshl" | "bvlshr" | "bvashr"
-            | "bvsaddo" | "subs"
+            | "bvsaddo"
             | "bvule" | "bvult" | "bvugt" | "bvuge"
             | "bvsle" | "bvslt" | "bvsgt" | "bvsge"
             | "rotr" | "rotl"
-            | "extract" | "concat" | "conv_to"
+            | "extract" | "concat" | "replicate" | "conv_to"
             | "zero_ext" | "sign_ext"
-            | "int2bv" | "bv2int"
+            | "int2bv" | "bv2nat"
             | "widthof"
             | "if" | "switch"
             | "popcnt" | "rev" | "cls" | "clz"
-            | "load_effect" | "store_effect"
+            | "to_fp" | "to_fp_unsigned" | "to_fp_from_fp"
+            | "fp.to_ubv" | "fp.to_sbv"
+            | "fp.+oo" | "fp.-oo" | "fp.+zero" | "fp.-zero" | "fp.NaN"
+            | "fp.eq" | "fp.ne" | "fp.lt" | "fp.gt" | "fp.le" | "fp.ge"
+            | "fp.add" | "fp.sub" | "fp.mul" | "fp.div"
+            | "fp.min" | "fp.max" | "fp.neg"
+            | "fp.ceil" | "fp.floor" | "fp.sqrt" | "fp.trunc" | "fp.nearest"
+            | "fp.isZero" | "fp.isInfinite" | "fp.isNaN"
+            | "fp.isNegative" | "fp.isPositive"
 
-<signature>  ::= "(" <sig-args> <sig-ret> <sig-canon> ")"
-<sig-args>   ::= "(" "args" <model-ty>* ")"
-<sig-ret>    ::= "(" "ret" <model-ty>* ")"
-<sig-canon>  ::= "(" "canon" <model-ty>* ")"
+<signature> ::= "(" <sig-args> <sig-ret> ")"
+<sig-args>  ::= "(" "args" <model-ty>* ")"
+<sig-ret>   ::= "(" "ret" <model-ty> ")"
 ```
+
+
+## ISLE Verification Extensions — Structured Reference
+
+This section documents the verification-specific extensions to ISLE.
+
+These extensions allow ISLE definitions to be translated into logical formulas and verified using an SMT solver.
+
+At the top level of an ISLE file, the following definition forms are supported:
+
+1. `(model ...)` — specifies which SMT construct is used to model an ISLE type
+2. `(form ...)` — defines a reusable, named collection of instantiations  (e.g. monomorphizations to specific bit-widths)
+3. `(instantiate ...)` — specifies which concrete type instantiations are verified for a term
+4. `(spec ...)` — provides a specification of a term using logical expressions, including `provide` and `require` blocks
+5. `(state ...)` — declares a program-state variable (e.g. modeling memory or traps) with a type and default value
+6. `(attr ...)` — annotates a term or rule with a verification attribute (`(veri chain)`, `(veri priority)`, or `(tag ...)`)
+7. `(macro ...)` — defines a reusable spec-expression macro, primarily for complex numeric logic such as floating-point reasoning
+
+Additionally, the verification language introduces a specification expression language `(spec-expr)` used within specifications.
+
+
+### 1. Model: `(model ...)`
+
+#### 1.1 Formal Grammar
+
+```bnf
+<model> ::= <ty> "(" "type" <model-ty> ")"
+          | <ty> "(" "const" <spec-expr> ")"
+
+<model-ty> ::= "Bool"
+             | "Int"
+             | "Unit"
+             | "!"   ;; unspecified
+             | "_"   ;; inferred
+             | "(" "bv" [ <int> ] ")"
+             | "(" "struct" <model-field>* ")"
+             | "(" "named" <ident> ")"
+
+<model-field> ::= "(" <ident> <model-ty> ")"
+```
+
+#### 1.2 Semantics
+
+A `model` definition assigns an **SMT interpretation** to an ISLE type.
+
+This defines
+```code
+ISLE Type  →  SMT Sort
+```
+
+Without a `model` a type has no formal meaning in verification.
+
+The `model` therefore acts as the bridge between
+- the ISLE type system
+- the SMT solver's logical sorts
+
+A `model` body is either a `(type <model-ty>)` form, which maps the type to an
+SMT sort, or a `(const <spec-expr>)` form, which gives an external constant a
+fixed symbolic value. The `(type ...)` form supports the following modelling
+strategies:
+
+1. Primitive Type Model
+
+```lisp
+(type T (primitive ...))
+(model T (type <model-ty>))
+```
+
+This maps an ISLE type directly to an SMT sort (e.g. a bitvector).
+
+2. Struct (composite) model
+
+```lisp
+(model T (type (struct
+                 (field₁ <model-ty₁>)
+                 (field₂ <model-ty₂>)
+                 ...)))
+```
+
+This encodes an ISLE type as a composite SMT structure with fixed fields. Unlike
+enums, structs do not have variants—every instance has all the specified
+fields. Note that the `struct` is nested inside `(type ...)`.
+
+3. Enumeration Model
+
+Enumerations are not written with an explicit `model`. Instead, the verifier
+derives an SMT datatype directly from an ISLE `enum` type declaration:
+
+```lisp
+(type T (enum (Variant₁ ...) (Variant₂ ...) ...))
+```
+
+Each variant becomes a constructor of a finite SMT datatype.
+
+#### 1.3 Examples
+
+**Example 1**: fixed bitvector width
+
+```lisp
+(type UImm5 (primitive UImm5))
+(model UImm5 (type (bv 5)))
+```
+
+**Explanation**: This example models the ISLE type `UImm5` as a 5-bit SMT bitvector, in this case to represent small immediates in instruction encodings.
+The `model` declaration ensures that the SMT solver interprets values of this type as bitvectors of width 5.
+
+**Example 2**: composite (struct) type
+
+```lisp
+(type Imm12 (primitive Imm12))
+(model Imm12
+  (type
+    (struct
+      (bits (bv 12))
+      (shift12 Bool))))
+```
+
+**Explanation**: This example models `Imm12` as a composite SMT structure.
+
+The model contains two fields:
+
+- `bits` — a 12-bit bitvector representing the immediate value
+- `shift12` — a Boolean flag indicating whether the value is shifted
+
+Composite models allow ISLE types to map to structured datatypes rather than primitive values.
+
+**Example 3**: Enumeration Type
+
+```lisp
+(type BitOp
+  (enum
+    (RBit)
+    (Clz)
+    (Cls)
+    (Rev16)
+    (Rev32)
+    (Rev64)
+))
+```
+
+**Explanation**: Enumeration types are modeled as SMT datatypes with multiple variants.
+
+Each variant corresponds to a possible value of the ISLE type.
+This allows the SMT solver to reason about which variant of the enum is active during verification.
+
+For many ISLE enums, the verifier derives types for that enum without an explicit `model`.
+
+**Example 4**: Parametric enum (variants that carry fields)
+```lisp
+(type CondBrKind extern
+  (enum
+    (Zero (r Reg))
+    (NotZero (r Reg))
+    (Cond (cc Cond))))
+```
+
+**Explanation**: Variants of an enum may also carry additional data.
+
+In this example, the `CondBrKind` type represents different conditional branch kinds.
+Some variants carry additional information, such as a register or condition code.
+These fields are modeled as part of the SMT datatype.
+
+### 2. Instantiation: `(instantiate ...)`
+
+#### 2.1 Formal Grammar
+
+```bnf
+<instantiation> ::= <ident> <signature>*
+                  | <ident> <ident>
+
+<signature>  ::= "(" <sig-args> <sig-ret> ")"
+<sig-args>   ::= "(" "args" <model-ty>* ")"
+<sig-ret>    ::= "(" "ret" <model-ty> ")"
+```
+
+#### 2.2 Semantics
+
+`instantiate` declares concrete verification instances of a term.
+
+Verification signature may contain abstract types (for example, bitvectors with unspecified width). Instantiation specializes these generic signatures into concrete types that the SMT solver can reason about.
+
+This process is similar to monomorphization in compilers:
+```lisp
+generic specification
+        ↓
+instantiate
+        ↓
+concrete verification instance
+```
+
+For example,
+```lisp
+(bv)
+```
+may be instantiated as
+
+```lisp
+(bv 8)
+(bv 16)
+(bv 32)
+(bv 64)
+```
+
+Each instantiation produces a separate SMT verification obligation.
+
+Two forms of instantiation exists:
+
+1. Direct Signature Instantiation: concrete signatures written explicitly
+2. Form-based Instantiation: a previously defined `form` is used
+
+#### 2.3 Signature Definitions
+
+##### 2.3.1 Formal Grammar
+```bnf
+<signature>  ::= "(" <sig-args> <sig-ret> ")"
+<sig-args>   ::= "(" "args" <model-ty>* ")"
+<sig-ret>    ::= "(" "ret" <model-ty> ")"
+```
+
+##### 2.3.2 Semantic Meaning
+
+A signature defines
+- argument SMT sorts (`args`)
+- the return SMT sort (`ret`)
+
+It represents a function type:
+```code
+(args₁ × args₂ × …) → ret
+```
+
+#### 2.4 Form: `(form ...)`
+
+##### 2.4.1 Formal Grammar
+
+```bnf
+<form> ::= <ident> <signature>*
+```
+
+#### 2.4.2 Semantics
+
+A `form` defines a reusable collection of verification signatures for a term.
+
+It does not define behavior; rather, it constrains which combinations of types are considered valid during verification. Forms provide a way to declare a family of related type instantiations once and reuse them across multiple terms.
+
+For example, many binary operations on integers can be expressed as taking two bit-vector arguments and producing a bit-vector result of the same size, where the size ranges over powers of two (e.g., 8, 16, 32, 64, up to 128 bits). A form captures this pattern abstractly, allowing all such instances to be represented uniformly without redefining each case individually.
+
+#### 2.5.3 Example (form)
+```lisp
+(form
+    bv_binary_8_to_64
+    ((args (named Type) (bv  8) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+```
+
+**Explanation:**
+This declares that `bv_binary_8_to_64` supports four types of monomorphizations:
+    - 8 x 8 -> 8
+    - 16 x 16 -> 16
+    - 32 x 32 -> 32
+    - 64 x 64 -> 64
+
+
+#### 2.6 Example (instantiation)
+
+```lisp
+(spec (iadd ty x y)
+  (provide (= result (bvadd x y))))
+
+(instantiate iadd
+  ((args (named Type) (bv 8) (bv 8)) (ret (bv 8)))
+  ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+  ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+  ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+  ((args (named Type) (bv 128) (bv 128)) (ret (bv 128))))
+```
+
+**Explanation:**
+- The `spec` defines integer addition abstractly using bitvector addition
+- `instantiate` block then provides concrete verification instances for 8, 16, 32, 64, 128 bit
+- Each instantiation generates a separate SMT verification obligation for that bit-width
+
+### 3. Specification: `(spec ...)`
+
+A `spec` defines a specification over an ISLE term.
+
+#### 3.1. Formal Grammar
+```bnf
+<spec> ::= "(" "spec" "(" <ident> <ident>* ")" <spec-clause>* ")"
+
+<spec-clause> ::= <provide> | <require> | <match> | <modifies>
+<provide>  ::= "(" "provide" <spec-expr>* ")"
+<require>  ::= "(" "require" <spec-expr>* ")"
+<match>    ::= "(" "match" <spec-expr>* ")"
+<modifies> ::= "(" "modifies" <ident> [ <ident> ] ")"
+```
+
+The clauses may appear in any order, and each may be repeated.
+
+#### 3.2 Semantics
+A `spec` definition declares a **specification** for an ISLE term.
+
+A specification
+
+```lisp
+(spec (f x₁ … xₙ)
+  (require R₁ … Rₖ)
+  (provide P₁ … Pₘ))
+```
+
+states a specification for the term `f`. Let `r = f(x₁ … xₙ)` be the result of applying `f` to its arguments. The specification asserts that whenever all required conditions hold,
+
+```lisp
+R₁ ∧ … ∧ Rₖ
+```
+
+the provided guarantees must hold for the result:
+```lisp
+P₁ ∧ … ∧ Pₘ
+```
+
+In other words,
+```lisp
+(R₁ ∧ … ∧ Rₖ) ⇒ (P₁ ∧ … ∧ Pₘ).
+```
+
+**Semantic Roles:**
+
+- The `spec` identifies the term and its formal parameters.
+- A `(provide ...)` clause encodes postconditions.
+- A `(require ...)` clause encodes preconditions.
+- If `require` is omitted, it defaults to `true`.
+- `(match ...)` supports pattern-related constraints
+- `(modifies ...)` describes state mutation effects
+
+#### 3.3 Example
+
+```lisp
+(decl value_regs (Reg Reg) ValueRegs)
+
+(spec (value_regs arg1 arg2)
+  (provide
+    (= (:lo result) arg1)
+    (= (:hi result) arg2)))
+```
+
+**Explanation:**
+- `value_regs` is declared as a term
+- The specification states that the resulting value has:
+    - low half equal to `arg1`
+    - high half equal to `arg2`
+- There is no `require` block, so the specification is unconditional.
+
+#### 3.4 Specific Expression Language (`spec-expr`)
+
+`spec-expr` is not a top-level feature, but is the expression language used within `require`, `provide`, and `match`.
+
+##### 3.4.1 Formal Grammar
+
+```bnf
+
+<spec-expr> ::= <int>
+              | <spec-bv>
+              | "true" | "false"
+              | <ident>
+              | "(" "switch" <spec-expr> <spec-pair>* ")"
+              | "(" "let" "(" <spec-binding>* ")" <spec-expr> ")"
+              | "(" "with" "(" <ident>* ")" <spec-expr> ")"
+              | "(" "match" <spec-expr> <spec-arm>* ")"
+              | "(" "struct" <spec-field>* ")"
+              | "(" "macro" "(" <ident>* ")" <spec-expr> ")"
+              | "(" "as" <spec-expr> <model-ty> ")"
+              | "(" <ident>"?" <spec-expr> ")"          ;; enum discriminator test, token "Variant?"
+              | "(" <ident>"!" <spec-expr>* ")"         ;; macro expansion, token "name!"
+              | "(" ":"<ident> <spec-expr> ")"          ;; field access, token ":field"
+              | "(" <ident>"."<ident> <spec-expr>* ")"  ;; enum constructor, token "Enum.Variant"
+              | "(" <spec-op> <spec-expr>* ")"
+              | "(" <ident> ")"
+              | "(" ")"
+
+<spec-binding> ::= "(" <ident> <spec-expr> ")"
+<spec-arm>     ::= "(" "(" <ident> <ident>* ")" <spec-expr> ")"
+<spec-field>   ::= "(" <ident> <spec-expr> ")"
+
+<spec-bv> ::= "#b" ("0".."1")+
+            | "#x" ("0".."9" | "A".."F" | "a".."f")+
+
+<spec-pair> ::= "(" <spec-expr> <spec-expr> ")"
+
+<spec-op> ::= "and" | "not" | "or" | "=>"
+            | "=" | "<=" | "<" | ">=" | ">"
+            | "+" | "-" | "*"
+            | "bvnot" | "bvand" | "bvor" | "bvxor"
+            | "bvneg" | "bvadd" | "bvsub" | "bvmul"
+            | "bvudiv" | "bvurem" | "bvsdiv" | "bvsrem"
+            | "bvshl" | "bvlshr" | "bvashr"
+            | "bvsaddo"
+            | "bvule" | "bvult" | "bvugt" | "bvuge"
+            | "bvsle" | "bvslt" | "bvsgt" | "bvsge"
+            | "rotr" | "rotl"
+            | "extract" | "concat" | "replicate" | "conv_to"
+            | "zero_ext" | "sign_ext"
+            | "int2bv" | "bv2nat"
+            | "widthof"
+            | "if" | "switch"
+            | "popcnt" | "rev" | "cls" | "clz"
+            | "to_fp" | "to_fp_unsigned" | "to_fp_from_fp"
+            | "fp.to_ubv" | "fp.to_sbv"
+            | "fp.+oo" | "fp.-oo" | "fp.+zero" | "fp.-zero" | "fp.NaN"
+            | "fp.eq" | "fp.ne" | "fp.lt" | "fp.gt" | "fp.le" | "fp.ge"
+            | "fp.add" | "fp.sub" | "fp.mul" | "fp.div"
+            | "fp.min" | "fp.max" | "fp.neg"
+            | "fp.ceil" | "fp.floor" | "fp.sqrt" | "fp.trunc" | "fp.nearest"
+            | "fp.isZero" | "fp.isInfinite" | "fp.isNaN"
+            | "fp.isNegative" | "fp.isPositive"
+
+```
+
+##### 3.4.2 Operators (`spec-op`)
+Operators include:
+- Boolean logic: `and`, `or`, `not`, `=>`
+- Integer arithmetic (`+`, `-`, `*`)
+- Equality & comparisons
+- Bitvector arithmetic (`bvadd`, `bvmul`, etc.)
+- Bitwise ops (`bvand`, `bvor`, etc.)
+- Extraction/concatenation/replication
+- Conversions (`int2bv`, `bv2nat`, `conv_to`, `zero_ext`, `sign_ext`)
+- Control (`if`, `switch`)
+- Floating point (`fp.add`, `fp.sqrt`, `to_fp`, `fp.isNaN`, etc.)
+
+In most cases, these map directly to SMT operators.
+
+##### 3.4.3 Semantics
+`spec-expr` defines a first-order term language over:
+- integers
+- bitvectors
+- booleans
+- state effects
+
+Every expression is lowered to an SMT term.
+
+For example:
+```lisp
+(= result (bvadd x y))
+```
+becomes an SMT equality constraint.
+
+### 4. State, Attributes, and Macros
+
+#### 4.1 State: `(state ...)`
+
+```bnf
+<state> ::= <ident> "(" "type" <model-ty> ")" "(" "default" <spec-expr> ")"
+```
+
+A `state` declaration introduces a named program-state variable (for example, a
+memory model) that specs may read and write. It carries a type (a `<model-ty>`)
+and a default value (a `<spec-expr>`). A spec mutates state via its `(modifies
+<state> [<cond>])` clause.
+
+```lisp
+; Parameters of a CLIF load operation.
+(state clif_load
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))))
+    (default
+        (not (:active clif_load))))
+```
+
+#### 4.2 Attributes: `(attr ...)`
+
+```bnf
+<attr> ::= [ "rule" ] <ident> <attr-kind>*
+<attr-kind> ::= "(" "veri" ( "chain" | "priority" ) ")"
+              | "(" "tag" <ident> ")"
+```
+
+An `attr` annotates a term (or, with the `rule` keyword, a named rule) with
+verification metadata. The `(veri chain)` and `(veri priority)` attributes
+control how the verifier treats the target, and `(tag <ident>)` attaches a
+free-form tag.
+
+```lisp
+(attr rule my_rule (veri chain))
+```
+
+#### 4.3 Macros: `(macro ...)`
+
+```bnf
+<spec-macro> ::= "(" <ident> <ident>* ")" <spec-expr>
+```
+
+A `macro` defines a named, parameterized `spec-expr` template that can be
+expanded inside other spec expressions using the `name!` invocation form (see
+the `<spec-expr>` grammar). We use macros primarily to factor out complex
+numeric logic such as floating-point reasoning.
+
+### Summary
+
+The ISLE verification subset includes:
+- Logical specification (`spec`)
+- SMT type interpretation (`model`)
+- Reusable verification signatures (`form`)
+- Concrete instantiation (`instantiate`)
+- Program state (`state`), verification attributes (`attr`), and spec macros (`macro`)
+
+Together these form a layered architecture:
+1. **Type Modelling Layer** - via `model`
+2. **Signature Layer** - via `form`
+3. **Instantiation Layer** - via `instantiate`
+4. **Specification Layer** - via `spec`
+
+This design cleanly separates typing, instantiation, and logical reasoning within ISLE's verification framework.
+
+## Running the ISLE Verifier
+
+The ISLE verifier can be run on individual rules or rule chains using the `veri` tool included in the Cranelift repository.
+
+### Location of the Verifier
+
+Navigate to the verifier directory
+
+```bash
+cd cranelift/isle/veri/veri
+```
+
+The main entry point for verification is the helper script:
+
+```bash
+script/veri.sh
+```
+
+### Verifying an individual rule
+
+The verifier can check a specific ISLE rule using `--filter` option.
+
+```bash
+./script/veri.sh -a x64 -- --filter include:rule:<rule_name> --solver z3
+```
+
+The verifier will translate the rule and its specification into SMT constraints and check them using the selected SMT solver.
+
+### Verifying Rule Chains
+
+Rules in ISLE may form chains, where the result of one rule becomes the input to another.
+
+The verifier can analyze these chains automatically. When a rule is selected using the filter mechanism, the verifier will also include any dependent rules required to construct the full rule chain.
+
+This allows verification to ensure that the entire rewrite sequence preserves the specification.
+
+### Expected Output
+
+A successful verification run produces output similar to:
+
+```c
+type solution status = solved
+// The solver successfully resolved the type constraints
+applicability = applicable
+// The rule's preconditions are satisfiable
+verification = success
+// The SMT solver proved the specification holds
+```
+
+### Debugging Verification
+
+Additional debugging information can be enabled using environment variables:
+
+```bash
+RUST_BACKTRACE=1 RUST_LOG=DEBUG \
+./script/veri.sh -a x64 -- \
+--filter include:rule:load_narrow \
+--solver z3 \
+--debug
+```
+
+This enables:
+- Rust stack traces
+- detailed logging from the verifier
+- debugging output for SMT generation

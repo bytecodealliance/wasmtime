@@ -48,10 +48,10 @@
   (rv_add x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 1 (lower (iadd (ty_int_ref_scalar_64 ty) x (imm12_from_value y)))
+(rule 1 (lower (iadd (ty_int_ref_scalar_64_extract ty) x (imm12_from_value y)))
   (alu_rr_imm12 (select_addi ty) x y))
 
-(rule 2 (lower (iadd (ty_int_ref_scalar_64 ty) (imm12_from_value x) y))
+(rule 2 (lower (iadd (ty_int_ref_scalar_64_extract ty) (imm12_from_value x) y))
   (alu_rr_imm12 (select_addi ty) y x))
 
 ;; Special case when one of the operands is uextended
@@ -365,7 +365,7 @@
   (sub_i128 x y))
 
 ;; Switch to an `addi` by a negative if we can fit the value in an `imm12`.
-(rule 3 (lower (isub (ty_int_ref_scalar_64 ty) x y))
+(rule 3 (lower (isub (ty_int_ref_scalar_64_extract ty) x y))
   (if-let imm12_neg (imm12_from_negated_value y))
   (alu_rr_imm12 (select_addi ty) x imm12_neg))
 
@@ -488,7 +488,7 @@
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (imul (ty_int_ref_scalar_64 ty) x y))
+(rule 0 (lower (imul (ty_int_ref_scalar_64_extract ty) x y))
   (rv_mul x y))
 
 (rule 1 (lower (imul (fits_in_32 (ty_int ty)) x y))
@@ -545,7 +545,7 @@
   (rv_vmul_vx x y (unmasked) ty))
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (smulhi (ty_int_ref_scalar_64 ty) x y))
+(rule 0 (lower (smulhi (ty_int_ref_scalar_64_extract ty) x y))
   (lower_smlhi ty (sext x) (sext y)))
 
 (rule 1 (lower (smulhi (ty_supported_vec ty) x y))
@@ -1013,7 +1013,7 @@
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (bnot (ty_int_ref_scalar_64 _) x))
+(rule 0 (lower (bnot (ty_int_ref_scalar_64_extract _) x))
   (rv_not x))
 
 (rule 1 (lower (bnot (ty_supported_float_size ty) x))
@@ -1027,13 +1027,13 @@
 (rule 3 (lower (bnot (ty_supported_vec ty) x))
   (rv_vnot_v x (unmasked) ty))
 
-(rule 4 (lower (bnot (ty_int_ref_scalar_64 _) (bxor _ x y)))
+(rule 4 (lower (bnot (ty_int_ref_scalar_64_extract _) (bxor _ x y)))
   (if-let true (has_zbb))
   (rv_xnor x y))
 
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (bitrev (ty_int_ref_scalar_64 ty) x))
+(rule 0 (lower (bitrev (ty_int_ref_scalar_64_extract ty) x))
   (gen_bitrev ty x))
 
 (rule 1 (lower (bitrev $I128 x))
@@ -1926,13 +1926,13 @@
 ;; of the iconst rule because that runs into regalloc issues. gen_select_xreg
 ;; has some optimizations based on the use of the zero register so we have to
 ;; manually match it here.
-(rule 5 (lower (select (ty_int_ref_scalar_64 _) c (i64_from_iconst 0) y))
+(rule 5 (lower (select (ty_int_ref_scalar_64_extract _) c (i64_from_iconst 0) y))
   (gen_select_xreg (is_nonzero_cmp c) (zero_reg) y))
 
-(rule 4 (lower (select (ty_int_ref_scalar_64 _) c x (i64_from_iconst 0)))
+(rule 4 (lower (select (ty_int_ref_scalar_64_extract _) c x (i64_from_iconst 0)))
   (gen_select_xreg (is_nonzero_cmp c) x (zero_reg)))
 
-(rule 3 (lower (select (ty_int_ref_scalar_64 _) c x y))
+(rule 3 (lower (select (ty_int_ref_scalar_64_extract _) c x y))
   (gen_select_xreg (is_nonzero_cmp c) x y))
 
 (rule 2 (lower (select (ty_reg_pair _) c x y))
@@ -1947,7 +1947,7 @@
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
 ;; Do a (c & x) | (~c & y) operation.
-(rule 0 (lower (bitselect (ty_int_ref_scalar_64 ty) c x y))
+(rule 0 (lower (bitselect (ty_int_ref_scalar_64_extract ty) c x y))
   (let ((tmp_x XReg (rv_and c x))
         (c_inverse XReg (rv_not c))
         (tmp_y XReg (rv_and c_inverse y)))
@@ -2673,7 +2673,7 @@
 ;;   sext.{b,h,w} a0, a0
 ;;   neg a1, a0
 ;;   max a0, a0, a1
-(rule 0 (lower (iabs (ty_int_ref_scalar_64 ty) x))
+(rule 0 (lower (iabs (ty_int_ref_scalar_64_extract ty) x))
   (let ((extended XReg (sext x))
         (negated XReg (rv_neg extended)))
     (gen_select_xreg (cmp_gt extended negated) extended negated)))
@@ -2812,7 +2812,7 @@
 (rule 0 (lower (splat ty n @ (value_type (ty_supported_float_full _))))
   (rv_vfmv_vf n ty))
 
-(rule 1 (lower (splat ty n @ (value_type (ty_int_ref_scalar_64 _))))
+(rule 1 (lower (splat ty n @ (value_type (ty_int_ref_scalar_64_extract _))))
   (rv_vmv_vx n ty))
 
 (rule 2 (lower (splat ty (iconst _ (u64_from_imm64 (imm5_from_u64 imm)))))
@@ -3123,7 +3123,7 @@
 
 ;; Rules for `get_exception_handler_address` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (get_exception_handler_address _ (u64_from_imm64 idx) block))
+(rule (lower (get_exception_handler_address _ block (u64_from_imm64 idx)))
       (let ((succ_label MachLabel (block_exn_successor_label block idx)))
         (rv64_label_address succ_label)))
 

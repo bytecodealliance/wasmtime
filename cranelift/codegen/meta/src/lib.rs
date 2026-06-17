@@ -77,7 +77,11 @@ fn generate_rust_for_shared_defs(
 /// Generates all the ISLE source files used in Cranelift from the meta-language.
 pub fn generate_isle(isle_dir: &std::path::Path) -> Result<(), error::Error> {
     let shared_defs = shared::define();
-    generate_isle_for_shared_defs(&shared_defs, isle_dir)
+    generate_isle_for_shared_defs(&shared_defs, isle_dir)?;
+    let insts = cranelift_assembler_x64_meta::instructions::list();
+    generate_isle_for_assembler(&insts, isle_dir)?;
+
+    Ok(())
 }
 
 fn generate_isle_for_shared_defs(

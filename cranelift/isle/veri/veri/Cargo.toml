@@ -1,0 +1,23 @@
+[package]
+name = "cranelift-isle-veri"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+cranelift-isle = { version = "*", path = "../../isle/", features = ["fancy-errors", "logging"] }
+cranelift-codegen-meta = { version = "*", path = "../../../codegen/meta", features = ["spec"] }
+log = { workspace = true }
+env_logger = { workspace = true }
+anyhow = { workspace = true, features = ['std', 'backtrace'] }
+clap = { workspace = true, features = ['default', 'env'] }
+serde = { workspace = true, features = ['derive'] }
+serde_json = { workspace = true }
+num-bigint = "0.4.6"
+num-traits = "0.2.19"
+easy-smt = "0.3.2"
+rayon = { workspace = true }
+tempfile = { workspace = true }
+
+[dev-dependencies]
+cranelift-isle-veri-test-macros = { path = "../test-macros" }

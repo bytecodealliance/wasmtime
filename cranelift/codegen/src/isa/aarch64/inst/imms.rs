@@ -1,5 +1,7 @@
 //! AArch64 ISA definitions: immediate constants.
 
+#![expect(missing_docs, reason = "fields mostly self-describing")]
+
 use crate::ir::types::*;
 use crate::isa::aarch64::inst::{OperandSize, ScalarSize};
 use crate::machinst::PrettyPrint;
@@ -624,10 +626,10 @@ impl MoveWideConst {
 /// Advanced SIMD modified immediate as used by MOVI/MVNI.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ASIMDMovModImm {
-    imm: u8,
-    shift: u8,
-    is_64bit: bool,
-    shift_ones: bool,
+    pub imm: u8,
+    pub shift: u8,
+    pub is_64bit: bool,
+    pub shift_ones: bool,
 }
 
 impl ASIMDMovModImm {
@@ -747,8 +749,8 @@ impl ASIMDMovModImm {
 /// Advanced SIMD modified immediate as used by the vector variant of FMOV.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ASIMDFPModImm {
-    imm: u8,
-    size: ScalarSize,
+    pub imm: u8,
+    pub size: ScalarSize,
 }
 
 impl ASIMDFPModImm {

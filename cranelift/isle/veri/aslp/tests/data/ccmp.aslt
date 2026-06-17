@@ -1,0 +1,13 @@
+Stmt_ConstDecl(Type_Bits(64),"Cse2__5",Expr_TApply("not_bits.0",[64],[Expr_Array(Expr_Var("_R"),1)]))
+Stmt_ConstDecl(Type_Bits(64),"Cse0__5",Expr_TApply("add_bits.0",[64],[Expr_Array(Expr_Var("_R"),22);Expr_TApply("not_bits.0",[64],[Expr_Array(Expr_Var("_R"),1)])]))
+Stmt_If(Expr_TApply("eq_bits.0",[1],[Expr_Field(Expr_Var("PSTATE"),"Z");'1']),[
+Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"V"),Expr_TApply("not_bits.0",[1],[Expr_TApply("cvt_bool_bv.0",[],[Expr_TApply("eq_bits.0",[128],[Expr_TApply("SignExtend.0",[64;128],[Expr_TApply("add_bits.0",[64],[Expr_Var("Cse0__5");'0000000000000000000000000000000000000000000000000000000000000001']);128]);Expr_TApply("add_bits.0",[128],[Expr_TApply("add_bits.0",[128],[Expr_TApply("SignExtend.0",[64;128],[Expr_Array(Expr_Var("_R"),22);128]);Expr_TApply("SignExtend.0",[64;128],[Expr_Var("Cse2__5");128])]);'00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001'])])])]));
+Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"C"),Expr_TApply("not_bits.0",[1],[Expr_TApply("cvt_bool_bv.0",[],[Expr_TApply("eq_bits.0",[128],[Expr_TApply("ZeroExtend.0",[64;128],[Expr_TApply("add_bits.0",[64],[Expr_Var("Cse0__5");'0000000000000000000000000000000000000000000000000000000000000001']);128]);Expr_TApply("add_bits.0",[128],[Expr_TApply("add_bits.0",[128],[Expr_TApply("ZeroExtend.0",[64;128],[Expr_Array(Expr_Var("_R"),22);128]);Expr_TApply("ZeroExtend.0",[64;128],[Expr_Var("Cse2__5");128])]);'00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001'])])])]));
+Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"Z"),Expr_TApply("cvt_bool_bv.0",[],[Expr_TApply("eq_bits.0",[64],[Expr_TApply("add_bits.0",[64],[Expr_Var("Cse0__5");'0000000000000000000000000000000000000000000000000000000000000001']);'0000000000000000000000000000000000000000000000000000000000000000'])]));
+Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"N"),Expr_Slices(Expr_TApply("add_bits.0",[64],[Expr_Var("Cse0__5");'0000000000000000000000000000000000000000000000000000000000000001']),[Slice_LoWd(63,1)]))
+],[],[
+Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"V"),'1');
+Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"C"),'0');
+Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"Z"),'1');
+Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"N"),'1')
+])

@@ -18,7 +18,7 @@
 #
 # - calculator (under examples/wasip2-plugins): an example that's tested separately.
 #
-# - veri_engine: requires an SMT solver (z3)
+# - cranelift-isle-veri. requires an SMT solver (z3 or cvc5)
 
 import subprocess
 import sys
@@ -29,8 +29,8 @@ args.append('--exclude=wasmtime-wasi-nn')
 args.append('--exclude=wasmtime-wasi-tls')
 args.append('--exclude=wasmtime-fuzzing')
 args.append('--exclude=wasm-spec-interpreter')
-args.append('--exclude=veri_engine')
 args.append('--exclude=calculator')
+args.append('--exclude=cranelift-isle-veri')
 args.extend(sys.argv[1:])
 
 result = subprocess.run(args)

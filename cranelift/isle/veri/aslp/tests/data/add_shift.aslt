@@ -1,0 +1,1 @@
+Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),Expr_TApply("add_bits.0",[64],[Expr_Array(Expr_Var("_R"),2);Expr_TApply("append_bits.0",[60;4],[Expr_Slices(Expr_Array(Expr_Var("_R"),3),[Slice_LoWd(0,60)]);'0000'])]))

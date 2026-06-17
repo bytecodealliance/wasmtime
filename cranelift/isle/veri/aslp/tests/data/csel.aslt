@@ -1,0 +1,5 @@
+Stmt_If(Expr_TApply("eq_bits.0",[1],[Expr_Field(Expr_Var("PSTATE"),"C");'1']),[
+Stmt_Assign(LExpr_Array(LExpr_Var("_R"),10),Expr_Array(Expr_Var("_R"),12))
+],[],[
+Stmt_Assign(LExpr_Array(LExpr_Var("_R"),10),Expr_Array(Expr_Var("_R"),14))
+])

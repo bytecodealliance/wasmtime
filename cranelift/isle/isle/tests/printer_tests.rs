@@ -1,0 +1,30 @@
+//! Auto-generated ISLE printer tests.
+
+use cranelift_isle::lexer;
+use cranelift_isle::parser;
+use cranelift_isle::printer;
+use std::io::BufWriter;
+use std::iter::zip;
+
+pub fn run_print(isle_filename: &str) {
+    // Parse.
+    let original_src = std::fs::read_to_string(isle_filename).unwrap();
+    let lexer = lexer::Lexer::new(0, &original_src).unwrap();
+    let original = parser::parse_without_pos(lexer).unwrap();
+
+    // Print.
+    let mut buf = BufWriter::new(Vec::new());
+    printer::print(&original, 78, &mut buf).unwrap();
+    let bytes = buf.into_inner().unwrap();
+    let printed_src = String::from_utf8(bytes).unwrap();
+
+    // Round trip.
+    let lexer = lexer::Lexer::new(0, &printed_src).unwrap();
+    let round_trip = parser::parse_without_pos(lexer).unwrap();
+
+    // Ensure equal.
+    assert_eq!(original.len(), round_trip.len());
+    for (orig, rt) in zip(original, round_trip) {
+        assert_eq!(orig, rt);
+    }
+}

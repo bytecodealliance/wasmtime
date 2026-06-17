@@ -1,0 +1,20 @@
+; 8-bit value type
+(type Value (primitive Value))
+(model Value (type (bv 8)))
+
+; Top-level test term asserts equality
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+
+; Add x + y
+(decl add_xy (Value Value) Value)
+(extern extractor add_xy add_xy)
+(spec (add_xy x y) (provide (= result (bvadd x y))))
+
+; Add y + x
+(decl add_yx (Value Value) Value)
+(extern constructor add_yx add_yx)
+(spec (add_yx x y) (provide (= result (bvadd y x))))
+
+; Test rule commutes addition operands
+(rule test (test (add_xy x y)) (add_yx x y))

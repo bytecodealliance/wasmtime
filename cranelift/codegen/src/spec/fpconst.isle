@@ -1,0 +1,55 @@
+; Build one as a floating-point of the given width.
+(macro (fp_one w)
+    (conv_to w
+        (switch w
+            (32 #x000000003f800000)
+            (64 #x3ff0000000000000))))
+
+; Build negative one as a floating-point of the given width.
+(macro (fp_minus_one w)
+    (conv_to w
+        (switch w
+            (32 #x00000000bf800000)
+            (64 #xbff0000000000000))))
+
+; Build half as a floating-point of the given width.
+(macro (fp_half w)
+    (conv_to w
+        (switch w
+            (32 #x000000003f000000)
+            (64 #x3fe0000000000000))))
+
+; Build negative half as a floating-point of the given width.
+(macro (fp_minus_half w)
+    (conv_to w
+        (switch w
+            (32 #x00000000bf000000)
+            (64 #xbfe0000000000000))))
+
+; Build 32-bit integer minimum as a floating-point of the given width.
+(macro (fp_i32_min w)
+    (conv_to w
+        (switch w
+            (32 #x00000000cf000000)
+            (64 #xc1e0000000000000))))
+
+; Build negative 32-bit integer minimum as a floating-point of the given width.
+(macro (fp_minus_i32_min w)
+    (conv_to w
+        (switch w
+            (32 #x000000004f000000)
+            (64 #x41e0000000000000))))
+
+; Build 64-bit integer minimum as a floating-point of the given width.
+(macro (fp_i64_min w)
+    (conv_to w
+        (switch w
+            (32 #x00000000df000000)
+            (64 #xc3e0000000000000))))
+
+; Build negative 64-bit integer minimum as a floating-point of the given width.
+(macro (fp_minus_i64_min w)
+    (conv_to w
+        (switch w
+            (32 #x000000005f000000)
+            (64 #x43e0000000000000))))

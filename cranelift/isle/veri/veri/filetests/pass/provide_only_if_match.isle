@@ -1,0 +1,38 @@
+; Test case that the provides of a partial function are assumed only on match.
+;
+; Contrived regression test for incorrect extractor semantics.
+
+; 8-bit value type
+(type Value (primitive Value))
+(model Value (type (bv 8)))
+
+; Coin flip result.
+(type Coin (enum Heads Tails))
+
+; Top-level test term selects a result based on parity.
+(decl test (Value) Coin)
+(spec (test v) (provide
+        (= result
+            (if (= (extract 0 0 v) #b1)
+                (Coin.Heads)
+                (Coin.Tails)
+            )
+        )
+    )
+)
+
+; Contrived extractor matches on odd and provides it must be 73.
+(decl odd73 () Value)
+(extern extractor odd73 odd73)
+(spec (odd73)
+    (match (= (extract 0 0 result) #b1))
+    (provide (= result #x41))
+)
+
+; Lowering to heads when odd73 matches should still be correct.
+(rule test_odd73_heads 1 (test (odd73)) (Coin.Heads))
+
+; Accounting for priority should negate the matches of odd73, but not the
+; provides.
+(rule test_tails (test v) (Coin.Tails))
+(attr rule test_odd73_heads (veri priority))

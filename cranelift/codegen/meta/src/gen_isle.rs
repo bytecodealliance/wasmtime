@@ -341,19 +341,6 @@ fn gen_common_isle(
                 .unwrap();
             }
 
-            // Immediates.
-            let imm_operands: Vec<_> = inst
-                .operands_in
-                .iter()
-                .filter(|o| {
-                    !o.is_value() && !o.is_varargs() && !o.kind.is_block() && !o.kind.is_raw_block()
-                })
-                .collect();
-            assert_eq!(imm_operands.len(), inst.format.imm_fields.len(),);
-            for op in imm_operands {
-                write!(&mut s, " {}", op.name).unwrap();
-            }
-
             // Blocks.
             let block_operands: Vec<_> = inst
                 .operands_in
@@ -385,6 +372,19 @@ fn gen_common_isle(
                     write!(&mut s, " block").unwrap();
                 }
                 _ => panic!("Too many raw block arguments"),
+            }
+
+            // Immediates.
+            let imm_operands: Vec<_> = inst
+                .operands_in
+                .iter()
+                .filter(|o| {
+                    !o.is_value() && !o.is_varargs() && !o.kind.is_block() && !o.kind.is_raw_block()
+                })
+                .collect();
+            assert_eq!(imm_operands.len(), inst.format.imm_fields.len(),);
+            for op in imm_operands {
+                write!(&mut s, " {}", op.name).unwrap();
             }
 
             s.push_str("))");

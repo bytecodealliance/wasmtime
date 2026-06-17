@@ -15,6 +15,7 @@
 
 use crate::ast;
 use crate::error::*;
+use crate::files::Files;
 use crate::lexer::Pos;
 use crate::log;
 use crate::stablemapset::{StableMap, StableSet};
@@ -191,7 +192,8 @@ impl BuiltinType {
         }
     }
 
-    const fn to_usize(&self) -> usize {
+    /// Get the built-in type's size.
+    pub const fn to_usize(&self) -> usize {
         match self {
             Self::Bool => 0,
             Self::Int(ty) => *ty as usize + 1,
@@ -200,7 +202,8 @@ impl BuiltinType {
 }
 
 impl TypeId {
-    const fn builtin(builtin: BuiltinType) -> Self {
+    /// TypeId for builtin type.
+    pub const fn builtin(builtin: BuiltinType) -> Self {
         Self(builtin.to_usize())
     }
 
@@ -295,6 +298,14 @@ pub enum Type {
 }
 
 impl Type {
+    /// Get the ID of this `Type`.
+    pub fn id(&self) -> TypeId {
+        match self {
+            Self::Primitive(id, _, _) | Self::Enum { id, .. } | Self::Struct { id, .. } => *id,
+            Self::Builtin(b) => TypeId::builtin(*b),
+        }
+    }
+
     /// Get the name of this `Type`.
     pub fn name<'a>(&self, tyenv: &'a TypeEnv) -> &'a str {
         match self {
@@ -344,6 +355,9 @@ pub struct Variant {
 
     /// The data fields of this enum variant.
     pub fields: Fields,
+
+    /// The ISLE source position where this variant is defined.
+    pub pos: Pos,
 }
 
 /// The fields of a struct or enum variant, formatted as a struct or tuple.
@@ -421,6 +435,9 @@ pub struct TermEnv {
     ///
     /// This is indexed by `RuleId`.
     pub rules: Vec<Rule>,
+
+    /// A map from an interned `Rule`'s name to its `RuleId`.
+    pub rule_map: StableMap<Sym, RuleId>,
 
     /// Map from (inner_ty, outer_ty) pairs to term IDs, giving the
     /// defined implicit type-converter terms we can try to use to fit
@@ -657,27 +674,48 @@ impl Term {
         )
     }
 
+    /// Is this term's constructor internal?
+    pub fn has_internal_constructor(&self) -> bool {
+        matches!(
+            self.kind,
+            TermKind::Decl {
+                constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
+                ..
+            }
+        )
+    }
+
     /// Get this term's extractor's external function signature, if any.
     pub fn extractor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
             TermKind::Decl {
                 flags,
-                extractor_kind:
-                    Some(ExtractorKind::ExternalExtractor {
-                        name, infallible, ..
-                    }),
+                extractor_kind: Some(kind),
                 ..
             } => {
+                let (func_name, full_name, infallible) = match kind {
+                    ExtractorKind::InternalExtractor { .. } => {
+                        let name = format!("extractor_{}", tyenv.syms[self.name.index()]);
+                        (name.clone(), name, false)
+                    }
+                    ExtractorKind::ExternalExtractor {
+                        name, infallible, ..
+                    } => (
+                        tyenv.syms[name.index()].clone(),
+                        format!("C::{}", tyenv.syms[name.index()]),
+                        *infallible,
+                    ),
+                };
                 let ret_kind = if flags.multi {
                     ReturnKind::Iterator
-                } else if *infallible {
+                } else if infallible {
                     ReturnKind::Plain
                 } else {
                     ReturnKind::Option
                 };
                 Some(ExternalSig {
-                    func_name: tyenv.syms[name.index()].clone(),
-                    full_name: format!("C::{}", tyenv.syms[name.index()]),
+                    func_name,
+                    full_name,
                     param_tys: vec![self.ret_ty],
                     ret_tys: self.arg_tys.clone(),
                     ret_kind,
@@ -938,18 +976,19 @@ impl Pattern {
                         panic!("Pattern invocation of undefined term body")
                     }
                     TermKind::Decl {
-                        extractor_kind: Some(ExtractorKind::InternalExtractor { .. }),
-                        ..
-                    } => {
-                        panic!("Should have been expanded away")
-                    }
-                    TermKind::Decl {
                         flags,
-                        extractor_kind: Some(ExtractorKind::ExternalExtractor { infallible, .. }),
+                        extractor_kind,
                         ..
                     } => {
                         // Evaluate all `input` args.
                         let output_tys = args.iter().map(|arg| arg.ty()).collect();
+
+                        let infallible = match extractor_kind {
+                            Some(ExtractorKind::ExternalExtractor { infallible, .. }) => {
+                                *infallible
+                            }
+                            _ => false,
+                        };
 
                         // Invoke the extractor.
                         visitor.add_extract(
@@ -957,7 +996,7 @@ impl Pattern {
                             termdata.ret_ty,
                             output_tys,
                             term,
-                            *infallible && !flags.multi,
+                            infallible && !flags.multi,
                             flags.multi,
                         )
                     }
@@ -1188,6 +1227,14 @@ impl Rule {
         // Visit the rule's right-hand side, making use of the bound variables from the pattern.
         self.rhs.visit_in_rule(visitor, termenv, &vars)
     }
+
+    /// Identifier is a name or position for referring to the rule.
+    pub fn identifier(&self, tyenv: &TypeEnv, files: &Files) -> String {
+        match self.name {
+            Some(sym) => tyenv.syms[sym.index()].clone(),
+            None => self.pos.pretty_print_line(files),
+        }
+    }
 }
 
 /// Given an `Option<T>`, unwrap the inner `T` value, or `continue` if it is
@@ -1341,8 +1388,7 @@ impl TypeEnv {
 
                 let mut variants = vec![];
                 for variant in ty_variants {
-                    let combined_ident =
-                        ast::Ident(format!("{}.{}", ty.name.0, variant.name.0), variant.name.1);
+                    let combined_ident = ast::Variant::full_name(&ty.name, &variant.name);
                     let fullname = self.intern_mut(&combined_ident);
                     let name = self.intern_mut(&variant.name);
                     let id = VariantId(variants.len());
@@ -1359,6 +1405,7 @@ impl TypeEnv {
                         fullname,
                         id,
                         fields,
+                        pos: variant.pos,
                     });
                 }
                 Some(Type::Enum {
@@ -1503,7 +1550,8 @@ impl TypeEnv {
         }
     }
 
-    fn intern(&self, ident: &ast::Ident) -> Option<Sym> {
+    /// Lookup symbol ID for the given identifier.
+    pub fn intern(&self, ident: &ast::Ident) -> Option<Sym> {
         self.sym_map.get(&ident.0).copied()
     }
 
@@ -1512,6 +1560,15 @@ impl TypeEnv {
         self.intern(sym)
             .and_then(|sym| self.type_map.get(&sym))
             .copied()
+    }
+
+    /// Lookup the term corresponding to the given enum variant.
+    pub fn get_variant(&self, ty: TypeId, variant: VariantId) -> &Variant {
+        let ty = &self.types[ty.index()];
+        let Type::Enum { variants, .. } = ty else {
+            unreachable!("provided type must be an enum")
+        };
+        &variants[variant.index()]
     }
 }
 
@@ -1571,6 +1628,7 @@ impl TermEnv {
             terms: vec![],
             term_map: StableMap::new(),
             rules: vec![],
+            rule_map: StableMap::new(),
             converters: StableMap::new(),
             expand_internal_extractors,
         };
@@ -1698,7 +1756,7 @@ impl TermEnv {
                         let ret_ty = id;
                         self.terms.push(Term {
                             id: tid,
-                            decl_pos: pos,
+                            decl_pos: variant.pos,
                             name: variant.fullname,
                             arg_tys,
                             ret_ty,
@@ -2228,11 +2286,49 @@ impl TermEnv {
                         rhs,
                         vars: bindings.seen,
                         prio,
-                        pos,
                         name: rule.name.as_ref().map(|i| tyenv.intern_mut(i)),
+                        pos,
                     });
                 }
                 _ => {}
+            }
+        }
+
+        // Populate default rule names.
+        //
+        // Unnamed rules that are the only rule for their root term adopt the
+        // name of the root term.
+        let mut term_rule_count: HashMap<TermId, usize> = HashMap::new();
+        for rule in &self.rules {
+            *term_rule_count.entry(rule.root_term).or_default() += 1;
+        }
+
+        for rule in &mut self.rules {
+            if rule.name.is_none()
+                && term_rule_count
+                    .get(&rule.root_term)
+                    .copied()
+                    .unwrap_or_default()
+                    == 1
+            {
+                let term = &self.terms[rule.root_term.index()];
+                rule.name = Some(term.name);
+            }
+        }
+
+        // Populate rule name map.
+        for rule in &self.rules {
+            let Some(name) = rule.name else { continue };
+            match self.rule_map.entry(name) {
+                Entry::Vacant(e) => {
+                    e.insert(rule.id);
+                }
+                Entry::Occupied(_) => {
+                    tyenv.report_error(
+                        rule.pos,
+                        format!("Duplicate rule name: '{}'", tyenv.syms[name.index()]),
+                    );
+                }
             }
         }
     }
@@ -2870,6 +2966,20 @@ impl TermEnv {
             .and_then(|sym| self.term_map.get(&sym))
             .copied()
     }
+
+    /// Lookup rule by name.
+    pub fn get_rule_by_name(&self, tyenv: &TypeEnv, sym: &ast::Ident) -> Option<RuleId> {
+        tyenv
+            .intern(sym)
+            .and_then(|sym| self.rule_map.get(&sym))
+            .copied()
+    }
+
+    /// Lookup the term corresponding to the given enum variant.
+    pub fn get_variant_term(&self, tyenv: &TypeEnv, ty: TypeId, variant: VariantId) -> TermId {
+        let variant = tyenv.get_variant(ty, variant);
+        self.term_map[&variant.fullname]
+    }
 }
 
 #[cfg(test)]
@@ -2949,6 +3059,10 @@ mod test {
                                 },
                             ],
                         }),
+                        pos: Pos {
+                            file: 0,
+                            offset: 77,
+                        },
                     },
                     Variant {
                         name: sym_c,
@@ -2961,6 +3075,10 @@ mod test {
                                 ty: TypeId::U32,
                             }],
                         }),
+                        pos: Pos {
+                            file: 0,
+                            offset: 99,
+                        },
                     },
                 ],
                 pos: Pos {

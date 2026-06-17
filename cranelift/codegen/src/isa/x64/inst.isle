@@ -4,7 +4,7 @@
 
 ;; Don't build `MInst` variants directly, in general. Instead, use the
 ;; instruction-emitting helpers defined further down.
-
+(model MInst (type (bv 1)))
 (type MInst nodebug
       (enum
        ;; =========================================
@@ -335,10 +335,21 @@
 (type BoxAtomic128XchgSeqArgs extern (enum))
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
+(spec (operand_size_of_type_32_64 ty)
+      (provide
+            (= result (if (= (:bits ty) 64) (OperandSize.Size64) (OperandSize.Size32)))))
 (decl operand_size_of_type_32_64 (Type) OperandSize)
 (extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
 
 ;; Get the true `OperandSize` for a given `Type`, with no rounding.
+(spec (raw_operand_size_of_type ty)
+  (provide
+    (= result
+       (switch (:bits ty)
+         (8  (OperandSize.Size8))
+         (16 (OperandSize.Size16))
+         (32 (OperandSize.Size32))
+         (64 (OperandSize.Size64))))))
 (decl raw_operand_size_of_type (Type) OperandSize)
 (extern constructor raw_operand_size_of_type raw_operand_size_of_type)
 
@@ -359,11 +370,21 @@
 (rule (operand_size_bits (OperandSize.Size32)) 32)
 (rule (operand_size_bits (OperandSize.Size64)) 64)
 
+(model RegMemImm (type (bv)))
 (type RegMemImm extern
       (enum
        (Reg (reg Reg))
        (Mem (addr SyntheticAmode))
        (Imm (simm32 u32))))
+
+(spec (RegMemImm.Imm simm32) (provide
+      (= result
+            (bvor (bvshl #b10 62)(zero_ext 64 simm32)))))
+
+(spec (RegMemImm.Mem addr) (provide
+      (= result
+            (bvor
+                  #x4000000000000000 addr))))
 
 ;; Put the given clif value into a `RegMemImm` operand.
 ;;
@@ -371,9 +392,12 @@
 ;; multiple registers for its representation (like `i128` for example).
 ;;
 ;; As a side effect, this marks the value as used.
+(spec (put_in_reg_mem_imm arg)
+      (provide (= result (conv_to (widthof result) arg))))
 (decl put_in_reg_mem_imm (Value) RegMemImm)
 (extern constructor put_in_reg_mem_imm put_in_reg_mem_imm)
 
+(model RegMem (type (bv)))
 (type RegMem extern
       (enum
        (Reg (reg Reg))
@@ -396,13 +420,14 @@
 (extern constructor put_in_reg_mem put_in_reg_mem)
 
 ;; Addressing modes.
-
+(model SyntheticAmode (type (bv 64)))
 (type SyntheticAmode extern (enum))
 
+(spec (synthetic_amode_to_reg_mem am) (provide(= result am)))
 (decl synthetic_amode_to_reg_mem (SyntheticAmode) RegMem)
 (extern constructor synthetic_amode_to_reg_mem synthetic_amode_to_reg_mem)
 
-(spec (amode_to_synthetic_amode amode) (provide (= result amode)))
+(spec (amode_to_synthetic_amode amode) (provide (= result (:addr amode))))
 (decl amode_to_synthetic_amode (Amode) SyntheticAmode)
 (extern constructor amode_to_synthetic_amode amode_to_synthetic_amode)
 
@@ -417,6 +442,10 @@
 
 ;; An `Amode` represents a possible addressing mode that can be used
 ;; in instructions. These denote a 64-bit value only.
+(model Amode (type
+      (struct
+            (addr  (bv 64))
+            (flags (named MemFlagsData)))))
 (type Amode (enum
              ;; Immediate sign-extended and a register
              (ImmReg (simm32 i32)
@@ -436,31 +465,29 @@
              ;; the given MachLabel.
              (RipRelative (target MachLabel))))
 
+(spec (Amode.ImmReg simm32 base flags)
+      (provide
+            ; Address calculation.
+            (= (:addr result) (bvadd base (sign_ext 64 simm32)))
+
+            ; Flags passthrough.
+            (= (:flags result) flags)))
+
+(spec (Amode.ImmRegRegShift simm32 base index shift flags)
+      (provide
+            ; Address calculation.
+            (=
+                  (:addr result)
+                  (bvadd
+                        (bvadd base (sign_ext 64 simm32))
+                        (bvshl index (zero_ext 64 shift))))
+
+            ; Flags passthrough.
+            (= (:flags result) flags)))
+
 ;; Model an Amode as a combination of flags and the calculated 64-bit address.
 ;;   16 bits     64 bits
 ;; [ flags  |    address    ]
-(model Amode (type (bv 80)))
-
-(spec (Amode.ImmReg simm base flags)
-      (provide (= result (concat flags (bvadd base (sign_ext 64 simm)))))
-      (require
-        (= (widthof simm) 32)
-        (= (widthof base) 64)
-        (= (widthof flags) 16)))
-
-(spec (Amode.ImmRegRegShift simm base index shift flags)
-  (provide
-    (= result
-      (concat flags
-      (bvadd
-        (bvadd base (sign_ext 64 simm))
-        (bvshl index (zero_ext 64 shift))))))
-  (require
-       (= (widthof simm) 32)
-       (= (widthof base) 64)
-       (= (widthof index) 64)
-       (= (widthof shift) 8)
-       (= (widthof flags) 16)))
 
 ;; A helper to both check that the `Imm64` and `Offset32` values sum to less
 ;; than 32-bits AND return this summed `u32` value. Also, the `Imm64` will be
@@ -502,10 +529,7 @@
 ;; In the future if mid-end optimizations fold constants into `Offset32` then
 ;; this in theory can "simply" delegate to the `amode_imm_reg` helper, and
 ;; below can delegate to `amode_imm_reg_reg_shift`, or something like that.
-(spec (to_amode flags val offset)
-      (provide (= result (concat flags (bvadd val (sign_ext 64 offset)))))
-      (require
-            (= (widthof val) 64)))
+(attr to_amode (veri chain))
 (decl to_amode (MemFlagsData Value Offset32) SyntheticAmode)
 (rule 0 (to_amode flags base offset)
         (amode_imm_reg flags base offset))
@@ -528,10 +552,7 @@
 ;; In other words this function's job is to find constants and then defer to
 ;; `amode_imm_reg*`.
 ;;
-(spec (to_amode_add flags x y offset)
-      (provide (= result (concat flags (bvadd (bvadd (sign_ext 64 x) (sign_ext 64 y)) (sign_ext 64 offset))))))
-(instantiate to_amode_add
-    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
+(attr to_amode_add (veri chain))
 (decl to_amode_add (MemFlagsData Value Value Offset32) Amode)
 
 (rule to_amode_add_base_case 0 (to_amode_add flags x y offset)
@@ -558,24 +579,14 @@
 ;; Final cases of amode lowering. Does not hunt for constants and only attempts
 ;; to pattern match add-of-shifts to generate fancier `ImmRegRegShift` modes,
 ;; otherwise falls back on `ImmReg`.
-(spec (amode_imm_reg flags x offset)
-      (provide (= result (concat flags (bvadd (sign_ext 64 x) (sign_ext 64 offset))))))
-(instantiate amode_imm_reg
-    ((args (bv 16) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
+(attr amode_imm_reg (veri chain))
 (decl amode_imm_reg (MemFlagsData Value Offset32) Amode)
 (rule amode_imm_reg_base 0 (amode_imm_reg flags base offset)
         (Amode.ImmReg offset base flags))
 (rule amode_imm_reg_iadd 1 (amode_imm_reg flags (iadd _ x y) offset)
         (amode_imm_reg_reg_shift flags x y offset))
 
-(spec (amode_imm_reg_reg_shift flags x y offset)
-      (provide (= result (concat flags (bvadd (sign_ext 64 (bvadd x y)) (sign_ext 64 offset)))))
-      (require
-            (= (widthof flags) 16)
-            (= (widthof x) (widthof y))
-            (= (widthof offset) 32)))
-(instantiate amode_imm_reg_reg_shift
-    ((args (bv 16) (bv 64) (bv 64) (bv 32)) (ret (bv 80)) (canon (bv 64))))
+(attr amode_imm_reg_reg_shift (veri chain))
 (decl amode_imm_reg_reg_shift (MemFlagsData Value Value Offset32) Amode)
 (rule amode_imm_reg_reg_shift_no_shift 0 (amode_imm_reg_reg_shift flags x y offset)
         (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
@@ -599,6 +610,8 @@
 (rule 0 (amode_offset base flags offset)
   (Amode.ImmReg offset (x64_lea $I64 base) flags))
 
+(attr x64_lea (veri chain))
+
 (decl pure partial amode_try_offset (SyntheticAmode i32) SyntheticAmode)
 (extern constructor amode_try_offset amode_try_offset)
 
@@ -616,6 +629,10 @@
             RotateLeft
             RotateRight))
 
+(model Imm8Gpr (type
+      (struct (Imm8 (bv 8))
+              (isReg Bool)
+              (reg (bv 64)))))
 (type Imm8Gpr
       (enum (Imm8 (imm u8))
             (Gpr (reg Gpr))))
@@ -629,6 +646,17 @@
 ;; As a side effect, this marks the value as used.
 ;;
 ;; This is used when lowering various shifts and rotates.
+(spec (put_masked_in_imm8_gpr amt ty) (provide
+            (= (:Imm8 result)
+                  (bvand
+                        (conv_to 8 amt)
+                        (switch (:bits ty)
+                              (8 #x07)
+                              (16 #x0f)
+                              (32 #x1f)
+                              (64 #x3f))))
+            (= (:isReg result) false)
+            (= (:reg result) #x0000000000000000)))
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
 (rule 2 (put_masked_in_imm8_gpr (u64_from_iconst amt) ty)
       (Imm8Gpr.Imm8 (u64_truncate_into_u8 (u64_and amt (shift_mask ty)))))
@@ -689,21 +717,30 @@
 (extern constructor encode_round_imm encode_round_imm)
 
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
+(model Gpr (type (bv 64)))
 (type Gpr (primitive Gpr))
+
+(model WritableGpr (type (bv)))
 (type WritableGpr (primitive WritableGpr))
 (type OptionWritableGpr (primitive OptionWritableGpr))
+
+(model GprMem (type
+  (struct (data (bv 64))
+          (isMem Bool))))
 (type GprMem extern (enum))
 (type GprMem8 extern (enum))
 (type GprMem16 extern (enum))
 (type GprMem32 extern (enum))
 (type GprMem64 extern (enum))
+
+(model GprMemImm (type (bv)))
 (type GprMemImm extern (enum))
 (type GprMemImm8 extern (enum))
 (type GprMemImm16 extern (enum))
 (type GprMemImm32 extern (enum))
 (type GprMemImm64 extern (enum))
 
+(model Xmm (type (bv 128)))
 (type Xmm (primitive Xmm))
 (type WritableXmm (primitive WritableXmm))
 (type OptionWritableXmm (primitive OptionWritableXmm))
@@ -749,10 +786,12 @@
 (extern constructor writable_xmm_to_xmm writable_xmm_to_xmm)
 
 ;; Convert a `WritableGpr` to an `Gpr`.
+(spec (writable_gpr_to_gpr arg) (provide (= result arg)))
 (decl writable_gpr_to_gpr (WritableGpr) Gpr)
 (extern constructor writable_gpr_to_gpr writable_gpr_to_gpr)
 
 ;; Convert an `Gpr` to a `Reg`.
+(spec (gpr_to_reg arg) (provide (= result arg)))
 (decl gpr_to_reg (Gpr) Reg)
 (extern constructor gpr_to_reg gpr_to_reg)
 
@@ -796,6 +835,7 @@
 (extern constructor xmm_mem_imm_to_xmm_mem_aligned_imm xmm_mem_imm_to_xmm_mem_aligned_imm)
 
 ;; Allocate a new temporary GPR register.
+(spec (temp_writable_gpr) (provide true))
 (decl temp_writable_gpr () WritableGpr)
 (extern constructor temp_writable_gpr temp_writable_gpr)
 
@@ -816,6 +856,7 @@
 ;; Construct a new `GprMemImm` from the given `RegMemImm`.
 ;;
 ;; Asserts that the `RegMemImm`'s register, if any, is an GPR register.
+(spec (gpr_mem_imm_new arg) (provide (= result arg)))
 (decl gpr_mem_imm_new (RegMemImm) GprMemImm)
 (extern constructor gpr_mem_imm_new gpr_mem_imm_new)
 
@@ -846,12 +887,17 @@
 ;; Construct a new `Gpr` from a `Reg`.
 ;;
 ;; Asserts that the register is a GPR.
+(spec (gpr_new arg) (provide (= result arg)))
 (decl gpr_new (Reg) Gpr)
 (extern constructor gpr_new gpr_new)
 
 ;; Construct a new `GprMem` from a `RegMem`.
 ;;
 ;; Asserts that the `RegMem`'s register, if any, is a GPR.
+(spec (reg_mem_to_gpr_mem rm)
+  (provide
+    (= (:data result) rm)
+    (= (:isMem result) true)))
 (decl reg_mem_to_gpr_mem (RegMem) GprMem)
 (extern constructor reg_mem_to_gpr_mem reg_mem_to_gpr_mem)
 
@@ -1127,8 +1173,7 @@
 (extern constructor put_in_xmm_mem_imm put_in_xmm_mem_imm)
 
 ;; Construct an `InstOutput` out of a single GPR register.
-(spec (output_gpr x)
-      (provide (= result (conv_to (widthof result) x))))
+
 (decl output_gpr (Gpr) InstOutput)
 (rule (output_gpr x)
       (output_reg (gpr_to_reg x)))
@@ -1151,6 +1196,10 @@
       (gpr_new (value_regs_get regs n)))
 
 ;; Convert a `Gpr` to an `Imm8Gpr`.
+(spec (gpr_to_imm8_gpr gpr) (provide
+      (= (:reg result) gpr)
+      (= (:isReg result) true)
+      (= (:Imm8 result) #x00)))
 (decl gpr_to_imm8_gpr (Gpr) Imm8Gpr)
 (rule (gpr_to_imm8_gpr gpr) (Imm8Gpr.Gpr gpr))
 
@@ -1175,9 +1224,7 @@
 (decl is_xmm_type (Type) Type)
 (extractor (is_xmm_type ty) (and (type_register_class (RegisterClass.Xmm)) ty))
 
-(spec (is_gpr_type arg)
-      (provide (= result arg))
-      (require (<= arg 64)))
+(spec (is_gpr_type arg) (provide (= result arg)))
 (decl is_gpr_type (Type) Type)
 (extractor (is_gpr_type ty) (and (type_register_class (RegisterClass.Gpr _)) ty))
 
@@ -1288,6 +1335,14 @@
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Generate a mask for the bit-width of the given type
+(spec (shift_mask ty)
+  (provide
+    (= result
+       (switch (:bits ty)
+         (8  #x07)   ;; 3‑bit mask for 8‑bit shifts
+         (16 #x0f)   ;; 4‑bit mask for 16‑bit shifts
+         (32 #x1f)   ;; 5‑bit mask for 32‑bit shifts
+         (64 #x3f)))))
 (decl shift_mask (Type) u8)
 (extern constructor shift_mask shift_mask)
 
@@ -1300,6 +1355,7 @@
 (extern extractor simm32_from_value simm32_from_value)
 
 ;; A load that can be sunk into another operation.
+(model SinkableLoad (type (bv)))
 (type SinkableLoad extern (enum))
 
 ;; Extract a `SinkableLoad` that works with `RegMemImm.Mem` from a value
@@ -1309,9 +1365,9 @@
 ;; pervasively used with operations that load a minimum of 32-bits. For
 ;; instructions which load exactly the type width necessary use
 ;; `sinkable_load_exact`.
+(spec (sinkable_load sl) (provide (= result sl)))
 (decl sinkable_load (SinkableLoad) Value)
-(spec (sinkable_load inst)
-      (provide (= result inst)))
+
 (extern extractor sinkable_load sinkable_load)
 
 ;; Same as `sinkable_load` except that all type widths of loads are supported.
@@ -1326,6 +1382,7 @@
 ;; This is a side-effectful operation that notifies the context that the
 ;; instruction that produced the `SinkableImm` has been sunk into another
 ;; instruction, and no longer needs to be lowered.
+(spec (sink_load sl) (provide (= result sl)))
 (decl sink_load (SinkableLoad) SyntheticAmode)
 (extern constructor sink_load sink_load)
 
@@ -1403,8 +1460,7 @@
 (rule (sink_load_to_gpr_mem load) (RegMem.Mem load))
 
 (decl sink_load_to_reg_mem_imm (SinkableLoad) RegMemImm)
-(spec (sink_load_to_reg_mem_imm load)
-      (provide (= result load)))
+
 (rule (sink_load_to_reg_mem_imm load) (RegMemImm.Mem load))
 
 ;;;; Helpers for constructing and emitting an `MInst` ;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1492,33 +1548,24 @@
 
 (type ExtendKind (enum Sign Zero))
 
-(model ExtMode (enum
-      (BL #b000)
-      (BQ #b001)
-      (WL #b010)
-      (WQ #b011)
-      (LQ #b100)
-))
 (type ExtMode extern (enum BL BQ WL WQ LQ))
 
 ;; `ExtMode::new`
-
-(spec (ext_mode x y)
-      (provide (= result (switch x
-            (#x0008 (switch y
-                  (#x0020 (ExtMode.BL))
-                  (#x0040 (ExtMode.BQ))
-                  ))
-            (#x0010 (switch y
-                  (#x0020 (ExtMode.WL))
-                  (#x0040 (ExtMode.WQ))
-                  ))
-            (#x0020 (switch y
-                  (#x0040 (ExtMode.LQ))
-                  ))
-            ))
-      )
-)
+(spec (ext_mode src_bits dst_bits)
+  ;; only extend from shorter to longer bits
+  (require (bvule src_bits dst_bits))
+  (provide
+    ;; mirror Rust’s ExtMode::new match:
+    (= result
+       (if (= src_bits #x0008)
+           (if (= dst_bits #x0020)
+               (ExtMode.BL)
+               (ExtMode.BQ))
+         (if (= src_bits #x0010)
+             (if (= dst_bits #x0020)
+                 (ExtMode.WL)
+                 (ExtMode.WQ))
+             (ExtMode.LQ))))))
 (decl ext_mode (u16 u16) ExtMode)
 (extern constructor ext_mode ext_mode)
 
@@ -1558,7 +1605,6 @@
                 to_ty
                 (ext_mode from_bits to_bits)
                 val)))
-
 
 ;; Do a sign or zero extension of the given `GprMem`.
 (decl extend (ExtendKind Type ExtMode GprMem) Gpr)
@@ -1682,33 +1728,10 @@
 (rule 0 (x64_load_xmm (multi_lane _bits _lanes) addr) (x64_movdqu_load (synthetic_amode_to_xmm_mem_128 addr)))
 
 (decl x64_mov (SyntheticAmode) Reg)
-(spec (x64_mov addr)
-      (provide (= result (conv_to 64 (load_effect (extract 79 64 addr) 64 (extract 63 0 addr))))))
+
 (rule (x64_mov addr) (x64_movq_rm addr))
 
 (decl x64_movzx (ExtMode GprMem) Gpr)
-(spec (x64_movzx mode src)
-      (provide
-            (= result
-                  (conv_to
-                        64
-                        (zero_ext
-                              32
-                              (load_effect
-                                    (extract 79 64 src)
-                                    (switch mode
-                                          ((ExtMode.BL) 8)
-                                          ((ExtMode.BQ) 8)
-                                          ((ExtMode.WL) 16)
-                                          ((ExtMode.WQ) 16)
-                                          ((ExtMode.LQ) 32))
-                                    (extract 63 0 src))))))
-      (require (or (= mode (ExtMode.BL))
-                  (= mode (ExtMode.BQ))
-                  (= mode (ExtMode.WL))
-                  (= mode (ExtMode.WQ))
-                  (= mode (ExtMode.LQ)))))
-
 (rule (x64_movzx (ExtMode.BL) src) (x64_movzbl_rm (gpr_mem_as_gpr_mem_8  src)))
 (rule (x64_movzx (ExtMode.BQ) src) (x64_movzbq_rm (gpr_mem_as_gpr_mem_8  src)))
 (rule (x64_movzx (ExtMode.WL) src) (x64_movzwl_rm (gpr_mem_as_gpr_mem_16 src)))
@@ -1806,8 +1829,7 @@
 (rule (x64_pmovzxdq from) (x64_pmovzxdq_a_or_avx from))
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
-(spec (x64_movrm ty addr data)
-       (provide (= result (store_effect (extract 79 64 addr) ty (conv_to ty data) (extract 63 0 addr)))))
+
 (rule (x64_movrm $I8 addr data) (x64_movb_mr_mem addr data))
 (rule (x64_movrm $I16 addr data) (x64_movw_mr_mem addr data))
 (rule (x64_movrm $I32 addr data) (x64_movl_mr_mem addr data))
@@ -1823,7 +1845,6 @@
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
 (rule (x64_xmm_load_const ty const)
       (x64_load_xmm ty (const_to_synthetic_amode const)))
-
 
 ;;;; Flag Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1887,8 +1908,6 @@
 (rule (asm_consumes_flags_returns_gpr (AssemblerOutputs.RetGpr inst gpr))
       (ConsumesFlags.ConsumesFlagsReturnsReg inst gpr))
 
-
-
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; These constructors create SSA-style `MInst`s. It is their responsibility to
@@ -1934,8 +1953,6 @@
 (rule (x64_add_with_flags_paired ty src1 src2)
       (asm_produce_flags (x64_add_raw ty src1 src2)))
 
-
-
 ;; Helper for creating raw `adc` instructions; Cranelift only uses the 64-bit
 ;; variant of this instruction. As with `add`, we match 8-bit immediates first;
 ;; this allows a smaller instruction encoding.
@@ -1953,8 +1970,6 @@
 (decl x64_adc_chained (Type Gpr GprMemImm) ConsumesAndProducesFlags)
 (rule (x64_adc_chained ty src1 src2)
       (asm_chain_flags (x64_adc_raw ty src1 src2)))
-
-
 
 ;; Helper for emitting raw `sub` instructions.
 (decl x64_sub_raw (Type Gpr GprMemImm) AssemblerOutputs)
@@ -1993,8 +2008,6 @@
 (decl x64_sub_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
 (rule (x64_sub_with_flags_paired ty src1 src2)
       (asm_produce_flags (x64_sub_raw ty src1 src2)))
-
-
 
 ;; Helper for creating raw `sbb` instructions; Cranelift only uses the 64-bit
 ;; variant of this instruction.
@@ -2039,8 +2052,6 @@
 (decl x64_sbb_paired_side_effect (Type Gpr GprMemImm) ProducesFlags)
 (rule (x64_sbb_paired_side_effect  ty src1 src2)
       (asm_produce_flags_side_effect (x64_sbb_raw ty src1 src2)))
-
-
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
 ;; on `signed`). For the 8-bit rules, see `x64_mul8`.
@@ -2118,8 +2129,6 @@
 (rule (x64_mul8_with_flags_paired signed src1 src2)
       (asm_produce_flags (x64_mul8_raw signed src1 src2)))
 
-
-
 ;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
 
@@ -2143,8 +2152,6 @@
 (rule 0 (x64_and ty @ $I16 src1 (is_gpr_mem src2)) (x64_andw_rm src1 (gpr_mem_16_for_ty ty src2)))
 (rule 0 (x64_and ty @ $I32 src1 (is_gpr_mem src2)) (x64_andl_rm src1 (gpr_mem_32_for_ty ty src2)))
 (rule 0 (x64_and ty @ $I64 src1 (is_gpr_mem src2)) (x64_andq_rm src1 (gpr_mem_64_for_ty ty src2)))
-
-
 
 ;; Helper for emitting raw `or` instructions.
 (decl x64_or_raw (Type Gpr GprMemImm) AssemblerOutputs)
@@ -2182,8 +2189,6 @@
 (decl x64_or_with_flags_paired_side_effect (Type Gpr GprMemImm) ProducesFlags)
 (rule (x64_or_with_flags_paired_side_effect ty src1 src2)
       (asm_produce_flags_side_effect (x64_or_raw ty src1 src2)))
-
-
 
 ;; Helper for emitting `xor` instructions.
 (decl x64_xor (Type Gpr GprMemImm) Gpr)
@@ -2318,6 +2323,33 @@
         (x64_rorx ty src imm))
 
 ;; Helper for creating `shl` instructions.
+(spec (x64_shl ty src amt)
+      (require
+            (= (:isReg amt) false))
+      (provide
+            (= result
+                  (switch (:bits ty)
+                        (8
+                              ;; for 8‑bit ops, extract the low‑8, shift, then zero‐extend back to 64
+                              (zero_ext 64
+                              (bvshl
+                                    (conv_to 8 src)
+                                    (:Imm8 amt))))
+                        (16
+                              (zero_ext 64
+                              (bvshl
+                                    (conv_to 16 src)
+                                    (zero_ext 16 (:Imm8 amt)))))
+                        (32
+                              (zero_ext 64
+                              (bvshl
+                                    (conv_to 32 src)
+                                    (zero_ext 32 (:Imm8 amt)))))
+                        (64
+                              ;; for 64‑bit ops we just shift the full 64
+                              (bvshl
+                                    src
+                                    (zero_ext 64 (:Imm8 amt))))))))
 (decl x64_shl (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_shl $I8 src1 (Imm8Gpr.Gpr src2)) (x64_shlb_mc src1 src2))
 (rule (x64_shl $I8 src1 (Imm8Gpr.Imm8 src2)) (x64_shlb_mi src1 src2))
@@ -2529,7 +2561,6 @@
 (decl consumes_flags_with_producer (ConsumesFlags) ConsumesFlags)
 (rule (consumes_flags_with_producer (ConsumesFlags.ConsumesFlagsReturnsReg flags reg))
   (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer flags reg))
-
 
 ;; Helpers for creating vector `add` instructions.
 (decl x64_addss (Xmm XmmMem32) Xmm)
@@ -2951,8 +2982,6 @@
       (if-let true (has_avx))
       (x64_vpshufhw_a src imm))
 
-
-
 ;; Helper for creating `vcvtudq2ps` instructions.
 (decl x64_vcvtudq2ps (XmmMem128) Xmm)
 (rule (x64_vcvtudq2ps src) (x64_vcvtudq2ps_a src))
@@ -3082,9 +3111,23 @@
 (rule (x64_neg_paired ty src)
       (asm_produce_flags (x64_neg_raw ty src)))
 
-(spec (x64_lea ty amode)
-      (provide (= result amode))
-      (require (or (= ty 32) (= ty 64))))
+(spec (x64_leaw_rm_raw synth_amode)
+      (provide
+            (with (inst)
+                  (= result
+                     (AssemblerOutputs.RetGpr inst (zero_ext 64 (extract 15 0 synth_amode)))))))
+(spec (x64_leal_rm_raw synth_amode)
+      (provide
+            (with (inst)
+                  (= result
+                     (AssemblerOutputs.RetGpr inst (zero_ext 64 (extract 31 0 synth_amode)))))))
+(spec (x64_leaq_rm_raw synth_amode)
+      (provide
+            (with (inst)
+                  (= result
+                     (AssemblerOutputs.RetGpr inst synth_amode)))))
+(attr emit_ret_gpr (veri chain))
+
 (decl x64_lea (Type SyntheticAmode) Gpr)
 (rule (x64_lea $I16 addr) (x64_leaw_rm addr))
 (rule (x64_lea $I32 addr) (x64_leal_rm addr))
@@ -3402,7 +3445,6 @@
 (decl x64_vrsqrtss (Xmm XmmMem32) Xmm)
 (rule (x64_vrsqrtss x y) (x64_vrsqrtss_rvm x y))
 
-
 ;; Helper for creating `cvtss2sd` instructions.
 ;;
 ;; NB: see `x64_sqrtss` for why this has two args (same reasoning, different op)
@@ -3576,16 +3618,6 @@
           (x64_por low_gt_and_high_eq high_halves_gt)))
 
 (decl x64_add_mem (Type SyntheticAmode Value) SideEffectNoResult)
-(spec (x64_add_mem ty addr val)
-      (provide (= result (store_effect
-                        (extract 79 64 addr)
-                        ty
-                        (conv_to ty (bvadd (load_effect (extract 79 64 addr) ty (extract 63 0 addr)) (conv_to ty val)))
-                        (extract 63 0 addr))
-            )
-      )
-       (require (or (= ty 32) (= ty 64)))
-)
 
 ;; `add mem, reg`
 (rule 0 (x64_add_mem $I8 addr val) (x64_addb_mr_mem addr val))
@@ -3825,7 +3857,6 @@
 (rule 2 (is_nonzero (uextend _ (vany_true _ vec))) (is_vany_true vec))
 (rule 2 (is_nonzero (band _ a @ (value_type (ty_int (fits_in_64 ty))) b))
       (is_nonzero_band ty a b))
-
 
 ;; Like `is_nonzero` but with additional specializations for compare
 ;; operators. We break this out from `is_nonzero` because we want to
@@ -4121,7 +4152,6 @@
               (mem_high SyntheticAmode (amode_offset mem_low flags 8))
               (args BoxAtomic128XchgSeqArgs (atomic128_xchg_seq_args mem_low mem_high input_low input_high dst_low dst_high)))
           (SideEffectNoResult.Inst (MInst.Atomic128XchgSeq args))))
-
 
 (type AtomicRmwSeqOp
       (enum And
@@ -4561,7 +4591,6 @@
 (convert Amode XmmMem128         amode_to_xmm_mem_128)
 (convert Amode XmmMemAligned128  amode_to_xmm_mem_aligned_128)
 
-
 (convert Reg GprMem8  reg_to_gpr_mem_8)
 (convert Reg GprMem16 reg_to_gpr_mem_16)
 (convert Reg GprMem32 reg_to_gpr_mem_32)
@@ -4651,8 +4680,6 @@
 
 (decl synthetic_amode_to_gpr_mem (SyntheticAmode) GprMem)
 
-(spec (amode_to_gpr_mem amode)
-      (provide (= result amode)))
 (decl amode_to_gpr_mem (Amode) GprMem)
 (rule (amode_to_gpr_mem amode)
       (amode_to_synthetic_amode amode))
@@ -4859,3 +4886,37 @@
 (decl x64_sequence_point () SideEffectNoResult)
 (rule (x64_sequence_point)
       (SideEffectNoResult.Inst (MInst.SequencePoint)))
+
+(state isa_load
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+        )
+    )
+    (default
+        (not (:active isa_load))
+    ))
+
+(state isa_store
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))
+            (value (bv 64))
+        )
+    )
+    (default
+        (and
+            ; Store is not active.
+            (not (:active isa_store))
+
+            ; Must provide a fixed size in the default case, otherwise type
+            ; inference is underconstrained.
+            (= (:size_bits isa_store) 1)
+        )
+    ))
+
+(model Reg (type (bv 64)))

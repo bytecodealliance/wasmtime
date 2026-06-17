@@ -1,0 +1,29 @@
+;; Type of a value, modeled as its bit-width.
+(type Type (primitive Type))
+(model Type (type Int))
+
+;; Operand size of an instruction.
+(type OperandSize (enum Size32 Size64))
+
+;; An extractor that only matches types that can fit in 64 bits.
+(decl fits_in_32 (Type) Type)
+(extern extractor fits_in_32 fits_in_32)
+(spec (fits_in_32 ty) (provide (= result ty)) (match (<= result 32)))
+
+;; An extractor that only matches types that can fit in 64 bits.
+(decl fits_in_64 (Type) Type)
+(extern extractor fits_in_64 fits_in_64)
+(spec (fits_in_64 ty) (provide (= result ty)) (match (<= result 64)))
+
+;; Helper for calculating the `OperandSize` corresponding to a type.
+(decl test (Type) OperandSize)
+(spec (test ty)
+      (provide
+            (= result (if (<= ty 32) (OperandSize.Size32) (OperandSize.Size64))))
+      (require
+            (or (= ty 8) (= ty 16) (= ty 32) (= ty 64))))
+
+;; Helper rules depend upon priority.
+(rule operand_size_32 1 (test (fits_in_32 ty)) (OperandSize.Size32))
+(rule operand_size_64 (test (fits_in_64 ty)) (OperandSize.Size64))
+(attr rule operand_size_32 (veri priority))

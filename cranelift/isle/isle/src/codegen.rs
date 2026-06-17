@@ -602,7 +602,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
             };
 
             let scope = ctx.enter_scope();
-            self.emit_block(&mut ctx, &root, sig.ret_kind, &last_expr, scope)?;
+            self.emit_block(&mut ctx, &root, sig.ret_kind, &last_expr, scope, options)?;
         }
         Ok(())
     }
@@ -663,6 +663,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         ret_kind: ReturnKind,
         last_expr: &str,
         scope: StableSet<BindingId>,
+        _options: &CodegenOptions,
     ) -> std::fmt::Result {
         ctx.begin_block()?;
         self.emit_block_contents(ctx, block, ret_kind, last_expr, scope)
