@@ -193,16 +193,16 @@ pub mod foo {
             use wasmtime::component::__internal::Box;
             pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
                 fn simple_list1(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                     l: wasmtime::component::__internal::Vec<u32>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn simple_list2(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::Vec<u32>,
                 > + Send;
                 fn simple_list3(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                     a: wasmtime::component::__internal::Vec<u32>,
                     b: wasmtime::component::__internal::Vec<u32>,
                 ) -> impl ::core::future::Future<
@@ -212,7 +212,7 @@ pub mod foo {
                     ),
                 > + Send;
                 fn simple_list4(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                     l: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::Vec<u32>,
                     >,
@@ -233,34 +233,46 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "simple-list1",
                     move |
-                        caller: &wasmtime::component::Accessor<T>,
+                        mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (wasmtime::component::__internal::Vec<u32>,)|
                     {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::simple_list1(host, arg0)
                                 .await;
                             Ok(r)
                         })
                     },
                 )?;
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "simple-list2",
-                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::simple_list2(host).await;
                             Ok((r,))
                         })
                     },
                 )?;
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "simple-list3",
                     move |
-                        caller: &wasmtime::component::Accessor<T>,
+                        mut caller: wasmtime::StoreContextMut<'_, T>,
                         (
                             arg0,
                             arg1,
@@ -269,8 +281,14 @@ pub mod foo {
                             wasmtime::component::__internal::Vec<u32>,
                         )|
                     {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<
                                 T,
                             >>::simple_list3(host, arg0, arg1)
@@ -279,10 +297,10 @@ pub mod foo {
                         })
                     },
                 )?;
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "simple-list4",
                     move |
-                        caller: &wasmtime::component::Accessor<T>,
+                        mut caller: wasmtime::StoreContextMut<'_, T>,
                         (
                             arg0,
                         ): (
@@ -291,8 +309,14 @@ pub mod foo {
                             >,
                         )|
                     {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::simple_list4(host, arg0)
                                 .await;
                             Ok((r,))

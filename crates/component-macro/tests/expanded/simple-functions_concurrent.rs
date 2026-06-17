@@ -193,25 +193,25 @@ pub mod foo {
             use wasmtime::component::__internal::Box;
             pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
                 fn f1(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn f2(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                     a: u32,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn f3(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                     a: u32,
                     b: u32,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn f4(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                 ) -> impl ::core::future::Future<Output = u32> + Send;
                 fn f5(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                 ) -> impl ::core::future::Future<Output = (u32, u32)> + Send;
                 fn f6(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                     a: u32,
                     b: u32,
                     c: u32,
@@ -228,67 +228,103 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "f1",
-                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::f1(host).await;
                             Ok(r)
                         })
                     },
                 )?;
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "f2",
-                    move |caller: &wasmtime::component::Accessor<T>, (arg0,): (u32,)| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (u32,)| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::f2(host, arg0).await;
                             Ok(r)
                         })
                     },
                 )?;
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "f3",
                     move |
-                        caller: &wasmtime::component::Accessor<T>,
+                        mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0, arg1): (u32, u32)|
                     {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::f3(host, arg0, arg1).await;
                             Ok(r)
                         })
                     },
                 )?;
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "f4",
-                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::f4(host).await;
                             Ok((r,))
                         })
                     },
                 )?;
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "f5",
-                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::f5(host).await;
                             Ok((r,))
                         })
                     },
                 )?;
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "f6",
                     move |
-                        caller: &wasmtime::component::Accessor<T>,
+                        mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0, arg1, arg2): (u32, u32, u32)|
                     {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::f6(host, arg0, arg1, arg2)
                                 .await;
                             Ok((r,))

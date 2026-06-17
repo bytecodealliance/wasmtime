@@ -210,7 +210,7 @@ pub mod foo {
             };
             pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
                 fn g(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), Error>> + Send;
             }
             pub trait Host: Send {}
@@ -224,11 +224,17 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "g",
-                    move |caller: &wasmtime::component::Accessor<T>, (): ()| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::g(host).await;
                             Ok((r,))
                         })

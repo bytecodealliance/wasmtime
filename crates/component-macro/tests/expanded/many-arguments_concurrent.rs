@@ -274,7 +274,7 @@ pub mod foo {
             };
             pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
                 fn many_args(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                     a1: u64,
                     a2: u64,
                     a3: u64,
@@ -293,7 +293,7 @@ pub mod foo {
                     a16: u64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
                 fn big_argument(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    host: wasmtime::component::Access<T, Self>,
                     x: BigStruct,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -308,10 +308,10 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "many-args",
                     move |
-                        caller: &wasmtime::component::Accessor<T>,
+                        mut caller: wasmtime::StoreContextMut<'_, T>,
                         (
                             arg0,
                             arg1,
@@ -348,8 +348,14 @@ pub mod foo {
                             u64,
                         )|
                     {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<
                                 T,
                             >>::many_args(
@@ -376,14 +382,20 @@ pub mod foo {
                         })
                     },
                 )?;
-                inst.func_wrap_concurrent(
+                inst.func_wrap_async(
                     "big-argument",
                     move |
-                        caller: &wasmtime::component::Accessor<T>,
+                        mut caller: wasmtime::StoreContextMut<'_, T>,
                         (arg0,): (BigStruct,)|
                     {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let host = &caller.with_getter(host_getter);
+                        wasmtime::component::__internal::Box::new(async move {
+                            let access_cx = wasmtime::AsContextMut::as_context_mut(
+                                &mut caller,
+                            );
+                            let host = wasmtime::component::Access::new(
+                                access_cx,
+                                host_getter,
+                            );
                             let r = <D as HostWithStore<T>>::big_argument(host, arg0)
                                 .await;
                             Ok(r)

@@ -10,8 +10,7 @@ bitflags::bitflags! {
         const STORE = 1 << 2;
         const TRACING = 1 << 3;
         const VERBOSE_TRACING = 1 << 4;
-        const IGNORE_WIT = 1 << 5;
-        const EXACT = 1 << 6;
+        const EXACT = 1 << 5;
     }
 }
 
@@ -89,9 +88,7 @@ impl FunctionConfig {
 
         let mut ret = FunctionFlags::empty();
         self.add_function_flags(resolve, ns, &func.name, &mut ret);
-        if !ret.contains(FunctionFlags::IGNORE_WIT) {
-            ret |= wit_flags;
-        }
+        ret |= wit_flags;
         ret
     }
 

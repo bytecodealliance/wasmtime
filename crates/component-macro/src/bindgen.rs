@@ -268,7 +268,6 @@ mod kw {
     syn::custom_keyword!(exports);
     syn::custom_keyword!(store);
     syn::custom_keyword!(trappable);
-    syn::custom_keyword!(ignore_wit);
     syn::custom_keyword!(exact);
 }
 
@@ -547,9 +546,6 @@ fn parse_function_config(input: ParseStream<'_>) -> Result<FunctionConfig> {
                 } else if l.peek(kw::trappable) {
                     input.parse::<kw::trappable>()?;
                     flags |= FunctionFlags::TRAPPABLE;
-                } else if l.peek(kw::ignore_wit) {
-                    input.parse::<kw::ignore_wit>()?;
-                    flags |= FunctionFlags::IGNORE_WIT;
                 } else if l.peek(kw::exact) {
                     input.parse::<kw::exact>()?;
                     flags |= FunctionFlags::EXACT;
