@@ -74,7 +74,7 @@ struct Opts {
     ignore_solver_tags: bool,
 
     /// Per-query timeout, in seconds.
-    #[arg(long, default_value = "30", env = "ISLE_VERI_TIMEOUT")]
+    #[arg(long, default_value = "300", env = "ISLE_VERI_TIMEOUT")]
     timeout: u64,
 
     /// Number of threads to use (0 defaults to # of logical cores)

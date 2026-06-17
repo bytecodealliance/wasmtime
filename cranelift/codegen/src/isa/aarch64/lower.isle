@@ -468,7 +468,7 @@
 (rule -1 (lower (fsub ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fsub) rn rm (vector_size ty)))
 
-(rule (lower (fsub (ty_scalar_float ty) rn rm))
+(rule fsub (lower (fsub (ty_scalar_float ty) rn rm))
       (fpu_rrr (FPUOp2.Sub) rn rm (scalar_size ty)))
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

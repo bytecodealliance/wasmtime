@@ -441,6 +441,7 @@ pub struct RunSummary {
     pub applicable: usize,
     pub success: usize,
     pub failure: usize,
+    pub unknown: usize,
 }
 
 impl RunSummary {
@@ -452,6 +453,7 @@ impl RunSummary {
         println!("Applicable:          {}", self.applicable);
         println!("Verification passed: {}", self.success);
         println!("Verification failed: {}", self.failure);
+        println!("Verification unknown: {}", self.unknown);
         println!("===============================================================================");
     }
 }
@@ -853,6 +855,7 @@ impl Runner {
                     // unknown: still applicable, but neither success nor failure.
                     Verdict::Unknown => {
                         summary.applicable += 1;
+                        summary.unknown += 1;
                     }
                     Verdict::Inapplicable | Verdict::ApplicabilityUnknown => {}
                 }
