@@ -1317,6 +1317,7 @@ impl CommonOptions {
     /// configuration options.
     pub fn from_engine(engine: &Engine) -> Self {
         let features = engine.get_wasm_features();
+        let pooling = engine.get_pooling_config();
         CommonOptions {
             target: engine.get_target(),
             opts: OptimizeOptions {
@@ -1338,32 +1339,36 @@ impl CommonOptions {
                 gc_zeal_alloc_counter: engine.get_gc_zeal_alloc_counter(),
                 opt_level: engine.get_cranelift_opt_level(),
                 regalloc_algorithm: engine.get_cranelift_regalloc_algorithm(),
-                pooling_allocator: Some(engine.get_pooling_allocator_enabled()),
-                pooling_decommit_batch_size: engine.get_pooling_decommit_batch_size(),
-                pooling_memory_keep_resident: engine.get_pooling_memory_keep_resident(),
-                pooling_table_keep_resident: engine.get_pooling_table_keep_resident(),
-                pooling_max_unused_warm_slots: engine.get_pooling_max_unused_warm_slots(),
-                pooling_pagemap_scan: engine.get_pooling_pagemap_scan(),
-                pooling_total_core_instances: engine.get_pooling_total_core_instances(),
-                pooling_total_component_instances: engine.get_pooling_total_component_instances(),
-                pooling_total_memories: engine.get_pooling_total_memories(),
-                pooling_total_tables: engine.get_pooling_total_tables(),
-                pooling_max_memory_size: engine.get_pooling_max_memory_size(),
-                pooling_table_elements: engine.get_pooling_table_elements(),
-                pooling_max_core_instance_size: engine.get_pooling_max_core_instance_size(),
-                pooling_max_component_instance_size: engine
-                    .get_pooling_max_component_instance_size(),
-                pooling_max_core_instances_per_component: engine
-                    .get_pooling_max_core_instances_per_component(),
-                pooling_max_memories_per_component: engine.get_pooling_max_memories_per_component(),
-                pooling_max_tables_per_component: engine.get_pooling_max_tables_per_component(),
-                pooling_max_tables_per_module: engine.get_pooling_max_tables_per_module(),
-                pooling_max_memories_per_module: engine.get_pooling_max_memories_per_module(),
-                pooling_async_stack_keep_resident: engine.get_pooling_async_stack_keep_resident(),
-                pooling_total_stacks: engine.get_pooling_total_stacks(),
-                pooling_total_gc_heaps: engine.get_pooling_total_gc_heaps(),
-                pooling_memory_protection_keys: engine.get_pooling_memory_protection_keys(),
-                pooling_max_memory_protection_keys: engine.get_pooling_max_memory_protection_keys(),
+                pooling_allocator: Some(pooling.is_some()),
+                pooling_decommit_batch_size: pooling.map(|c| c.get_decommit_batch_size()),
+                pooling_memory_keep_resident: pooling.map(|c| c.get_memory_keep_resident()),
+                pooling_table_keep_resident: pooling.map(|c| c.get_table_keep_resident()),
+                pooling_max_unused_warm_slots: pooling.map(|c| c.get_max_unused_warm_slots()),
+                pooling_pagemap_scan: pooling.map(|c| c.get_pagemap_scan()),
+                pooling_total_core_instances: pooling.map(|c| c.get_total_core_instances()),
+                pooling_total_component_instances: pooling
+                    .map(|c| c.get_total_component_instances()),
+                pooling_total_memories: pooling.map(|c| c.get_total_memories()),
+                pooling_total_tables: pooling.map(|c| c.get_total_tables()),
+                pooling_max_memory_size: pooling.map(|c| c.get_max_memory_size()),
+                pooling_table_elements: pooling.map(|c| c.get_table_elements()),
+                pooling_max_core_instance_size: pooling.map(|c| c.get_max_core_instance_size()),
+                pooling_max_component_instance_size: pooling
+                    .map(|c| c.get_max_component_instance_size()),
+                pooling_max_core_instances_per_component: pooling
+                    .map(|c| c.get_max_core_instances_per_component()),
+                pooling_max_memories_per_component: pooling
+                    .map(|c| c.get_max_memories_per_component()),
+                pooling_max_tables_per_component: pooling.map(|c| c.get_max_tables_per_component()),
+                pooling_max_tables_per_module: pooling.map(|c| c.get_max_tables_per_module()),
+                pooling_max_memories_per_module: pooling.map(|c| c.get_max_memories_per_module()),
+                pooling_async_stack_keep_resident: pooling
+                    .map(|c| c.get_async_stack_keep_resident()),
+                pooling_total_stacks: pooling.map(|c| c.get_total_stacks()),
+                pooling_total_gc_heaps: pooling.map(|c| c.get_total_gc_heaps()),
+                pooling_memory_protection_keys: pooling.map(|c| c.get_memory_protection_keys()),
+                pooling_max_memory_protection_keys: pooling
+                    .map(|c| c.get_max_memory_protection_keys()),
                 // Deprecated aliases for the above options; intentionally left
                 // unset in favor of their replacements.
                 dynamic_memory_guard_size: None,

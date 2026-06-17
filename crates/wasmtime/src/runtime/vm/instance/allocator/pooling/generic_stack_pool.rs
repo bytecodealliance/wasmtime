@@ -4,8 +4,8 @@
 )]
 
 use crate::PoolConcurrencyLimitError;
+use crate::config::PoolingAllocationConfig;
 use crate::prelude::*;
-use crate::runtime::vm::PoolingInstanceAllocatorConfig;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// A generic implementation of a stack pool.
@@ -33,7 +33,7 @@ impl StackPool {
         false
     }
 
-    pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
+    pub fn new(config: &PoolingAllocationConfig) -> Result<Self> {
         Ok(StackPool {
             stack_size: config.stack_size,
             stack_zeroing: config.async_stack_zeroing,

@@ -46,10 +46,10 @@ use self::memory_pool::MemoryPool;
 pub use self::metrics::PoolingAllocatorMetrics;
 use self::table_pool::TablePool;
 use super::{
-    InstanceAllocationRequest, InstanceAllocator, MemoryAllocationIndex,
-    PoolingInstanceAllocatorConfig, TableAllocationIndex,
+    InstanceAllocationRequest, InstanceAllocator, MemoryAllocationIndex, TableAllocationIndex,
 };
 use crate::Enabled;
+use crate::config::PoolingAllocationConfig;
 use crate::prelude::*;
 use crate::runtime::vm::{
     CompiledModuleId, Memory, Table,
@@ -93,7 +93,9 @@ fn round_up_to_pow2(n: usize, to: usize) -> usize {
     (n + to - 1) & !(to - 1)
 }
 
-impl PoolingInstanceAllocatorConfig {
+impl PoolingAllocationConfig {
+    /// Tests whether [`Self::pagemap_scan`] is available or not on the host
+    /// system.
     pub fn is_pagemap_scan_available() -> bool {
         PageMap::new().is_some()
     }
@@ -165,7 +167,7 @@ pub struct PoolingInstanceAllocator {
     live_stacks: AtomicUsize,
 
     pagemap: Option<PageMap>,
-    config: PoolingInstanceAllocatorConfig,
+    config: PoolingAllocationConfig,
 }
 
 impl Drop for PoolingInstanceAllocator {
@@ -208,7 +210,7 @@ impl Drop for PoolingInstanceAllocator {
 
 impl PoolingInstanceAllocator {
     /// Creates a new pooling instance allocator with the given strategy and limits.
-    pub fn new(config: &PoolingInstanceAllocatorConfig, tunables: &Tunables) -> Result<Self> {
+    pub fn new(config: &PoolingAllocationConfig, tunables: &Tunables) -> Result<Self> {
         Ok(Self {
             live_component_instances: AtomicU64::new(0),
             live_core_instances: AtomicU64::new(0),
@@ -239,7 +241,7 @@ impl PoolingInstanceAllocator {
                 })?),
                 Enabled::No => None,
             },
-            config: *config,
+            config: config.clone(),
         })
     }
 
@@ -397,7 +399,7 @@ impl PoolingInstanceAllocator {
         }
     }
 
-    pub fn config(&self) -> &PoolingInstanceAllocatorConfig {
+    pub fn config(&self) -> &PoolingAllocationConfig {
         &self.config
     }
 }
@@ -758,17 +760,17 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 #[cfg(target_pointer_width = "64")]
 mod test {
     use super::*;
-    use crate::vm::instance::allocator::pooling_config::InstanceLimits;
+    use crate::config::InstanceLimits;
 
     #[test]
     fn test_pooling_allocator_with_memory_pages_exceeded() {
-        let config = PoolingInstanceAllocatorConfig {
+        let config = PoolingAllocationConfig {
             limits: InstanceLimits {
                 total_memories: 1,
                 max_memory_size: 0x100010000,
                 ..Default::default()
             },
-            ..PoolingInstanceAllocatorConfig::default()
+            ..PoolingAllocationConfig::default()
         };
         assert_eq!(
             PoolingInstanceAllocator::new(
@@ -794,7 +796,7 @@ mod test {
     ))]
     #[test]
     fn test_stack_zeroed() -> Result<()> {
-        let config = PoolingInstanceAllocatorConfig {
+        let config = PoolingAllocationConfig {
             max_unused_warm_slots: 0,
             limits: InstanceLimits {
                 total_stacks: 1,
@@ -804,7 +806,7 @@ mod test {
             },
             stack_size: 128,
             async_stack_zeroing: true,
-            ..PoolingInstanceAllocatorConfig::default()
+            ..PoolingAllocationConfig::default()
         };
         let allocator = PoolingInstanceAllocator::new(&config, &Tunables::default_host())?;
 
@@ -834,7 +836,7 @@ mod test {
     ))]
     #[test]
     fn test_stack_unzeroed() -> Result<()> {
-        let config = PoolingInstanceAllocatorConfig {
+        let config = PoolingAllocationConfig {
             max_unused_warm_slots: 0,
             limits: InstanceLimits {
                 total_stacks: 1,
@@ -844,7 +846,7 @@ mod test {
             },
             stack_size: 128,
             async_stack_zeroing: false,
-            ..PoolingInstanceAllocatorConfig::default()
+            ..PoolingAllocationConfig::default()
         };
         let allocator = PoolingInstanceAllocator::new(&config, &Tunables::default_host())?;
 

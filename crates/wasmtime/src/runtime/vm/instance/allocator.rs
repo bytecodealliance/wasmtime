@@ -31,8 +31,6 @@ mod pooling;
 pub use self::pooling::{
     PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
 };
-mod pooling_config;
-pub use pooling_config::PoolingInstanceAllocatorConfig;
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a, 'b> {

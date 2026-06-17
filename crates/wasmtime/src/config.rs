@@ -2788,7 +2788,7 @@ impl Config {
             }
             #[cfg(feature = "pooling-allocator")]
             InstanceAllocationStrategy::Pooling(config) => {
-                let mut config = config.config;
+                let mut config = config.clone();
                 let _ = &mut config;
                 #[cfg(feature = "async")]
                 {
@@ -3791,13 +3791,167 @@ pub enum Enabled {
 /// [`mprotect`]: https://man7.org/linux/man-pages/man2/mprotect.2.html
 /// [`mmap`]: https://man7.org/linux/man-pages/man2/mmap.2.html
 /// [`munmap`]: https://man7.org/linux/man-pages/man2/munmap.2.html
-#[cfg(feature = "pooling-allocator")]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PoolingAllocationConfig {
-    config: crate::runtime::vm::PoolingInstanceAllocatorConfig,
+    /// See `PoolingAllocatorConfig::max_unused_warm_slots` in `wasmtime`
+    pub(crate) max_unused_warm_slots: u32,
+    /// The target number of decommits to do per batch. This is not precise, as
+    /// we can queue up decommits at times when we aren't prepared to
+    /// immediately flush them, and so we may go over this target size
+    /// occasionally.
+    pub(crate) decommit_batch_size: usize,
+    /// The size, in bytes, of async stacks to allocate (not including the guard
+    /// page).
+    #[cfg_attr(
+        not(all(feature = "async", feature = "pooling-allocator")),
+        expect(dead_code, reason = "easier to cfg")
+    )]
+    pub(crate) stack_size: usize,
+    /// The limits to apply to instances allocated within this allocator.
+    pub(crate) limits: InstanceLimits,
+    /// Whether or not async stacks are zeroed after use.
+    #[cfg_attr(
+        not(all(feature = "async", feature = "pooling-allocator")),
+        expect(dead_code, reason = "easier to cfg")
+    )]
+    pub(crate) async_stack_zeroing: bool,
+    /// If async stack zeroing is enabled and the host platform is Linux this is
+    /// how much memory to zero out with `memset`.
+    ///
+    /// The rest of memory will be zeroed out with `madvise`.
+    pub(crate) async_stack_keep_resident: usize,
+    /// How much linear memory, in bytes, to keep resident after resetting for
+    /// use with the next instance. This much memory will be `memset` to zero
+    /// when a linear memory is deallocated.
+    ///
+    /// Memory exceeding this amount in the wasm linear memory will be released
+    /// with `madvise` back to the kernel.
+    ///
+    /// Only applicable on Linux.
+    pub(crate) linear_memory_keep_resident: usize,
+    /// Same as `linear_memory_keep_resident` but for tables.
+    pub(crate) table_keep_resident: usize,
+    /// Whether to enable memory protection keys.
+    pub(crate) memory_protection_keys: Enabled,
+    /// How many memory protection keys to allocate.
+    pub(crate) max_memory_protection_keys: usize,
+    /// Whether to enable PAGEMAP_SCAN on Linux.
+    pub(crate) pagemap_scan: Enabled,
 }
 
-#[cfg(feature = "pooling-allocator")]
+impl Default for PoolingAllocationConfig {
+    fn default() -> Self {
+        Self {
+            max_unused_warm_slots: 100,
+            decommit_batch_size: 1,
+            stack_size: 2 << 20,
+            limits: InstanceLimits::default(),
+            async_stack_zeroing: false,
+            async_stack_keep_resident: 0,
+            linear_memory_keep_resident: 0,
+            table_keep_resident: 0,
+            memory_protection_keys: Enabled::No,
+            max_memory_protection_keys: 16,
+            pagemap_scan: Enabled::No,
+        }
+    }
+}
+
+/// Instance-related limit configuration for pooling.
+///
+/// More docs on this can be found at `wasmtime::PoolingAllocationConfig`.
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct InstanceLimits {
+    /// The maximum number of component instances that may be allocated
+    /// concurrently.
+    pub(crate) total_component_instances: u32,
+
+    /// The maximum size of a component's `VMComponentContext`, including
+    /// the aggregate size of all its inner core modules' `VMContext` sizes.
+    pub(crate) component_instance_size: usize,
+
+    /// The maximum number of core module instances that may be allocated
+    /// concurrently.
+    pub(crate) total_core_instances: u32,
+
+    /// The maximum number of core module instances that a single component may
+    /// transitively contain.
+    pub(crate) max_core_instances_per_component: u32,
+
+    /// The maximum number of Wasm linear memories that a component may
+    /// transitively contain.
+    pub(crate) max_memories_per_component: u32,
+
+    /// The maximum number of tables that a component may transitively contain.
+    pub(crate) max_tables_per_component: u32,
+
+    /// The total number of linear memories in the pool, across all instances.
+    pub(crate) total_memories: u32,
+
+    /// The total number of tables in the pool, across all instances.
+    pub(crate) total_tables: u32,
+
+    /// The total number of async stacks in the pool, across all instances.
+    pub(crate) total_stacks: u32,
+
+    /// Maximum size of a core instance's `VMContext`.
+    pub(crate) core_instance_size: usize,
+
+    /// Maximum number of tables per instance.
+    pub(crate) max_tables_per_module: u32,
+
+    /// Maximum number of word-size elements per table.
+    ///
+    /// Note that tables for element types such as continuations
+    /// that use more than one word of storage may store fewer
+    /// elements.
+    pub(crate) table_elements: usize,
+
+    /// Maximum number of linear memories per instance.
+    pub(crate) max_memories_per_module: u32,
+
+    /// Maximum byte size of a linear memory, must be smaller than
+    /// `memory_reservation` in `Tunables`.
+    pub(crate) max_memory_size: usize,
+
+    /// The total number of GC heaps in the pool, across all instances.
+    pub(crate) total_gc_heaps: u32,
+}
+
+impl Default for InstanceLimits {
+    fn default() -> Self {
+        let total = if cfg!(target_pointer_width = "32") {
+            100
+        } else {
+            1000
+        };
+        // See doc comments for `wasmtime::PoolingAllocationConfig` for these
+        // default values
+        Self {
+            total_component_instances: total,
+            component_instance_size: 1 << 20, // 1 MiB
+            total_core_instances: total,
+            max_core_instances_per_component: u32::MAX,
+            max_memories_per_component: u32::MAX,
+            max_tables_per_component: u32::MAX,
+            total_memories: total,
+            total_tables: total,
+            total_stacks: total,
+            core_instance_size: 1 << 20, // 1 MiB
+            max_tables_per_module: 1,
+            // NB: in #8504 it was seen that a C# module in debug module can
+            // have 10k+ elements.
+            table_elements: 20_000,
+            max_memories_per_module: 1,
+            #[cfg(target_pointer_width = "64")]
+            max_memory_size: 1 << 32, // 4G,
+            #[cfg(target_pointer_width = "32")]
+            max_memory_size: 10 << 20, // 10 MiB
+            total_gc_heaps: total,
+        }
+    }
+}
+
 impl PoolingAllocationConfig {
     /// Returns a new configuration builder with all default settings
     /// configured.
@@ -3857,7 +4011,7 @@ impl PoolingAllocationConfig {
     ///
     /// The default value for this option is `100`.
     pub fn max_unused_warm_slots(&mut self, max: u32) -> &mut Self {
-        self.config.max_unused_warm_slots = max;
+        self.max_unused_warm_slots = max;
         self
     }
 
@@ -3871,7 +4025,7 @@ impl PoolingAllocationConfig {
     ///
     /// Defaults to `1`.
     pub fn decommit_batch_size(&mut self, batch_size: usize) -> &mut Self {
-        self.config.decommit_batch_size = batch_size;
+        self.decommit_batch_size = batch_size;
         self
     }
 
@@ -3887,7 +4041,7 @@ impl PoolingAllocationConfig {
     /// Note that when using this option the memory with async stacks will
     /// never be decommitted.
     pub fn async_stack_keep_resident(&mut self, size: usize) -> &mut Self {
-        self.config.async_stack_keep_resident = size;
+        self.async_stack_keep_resident = size;
         self
     }
 
@@ -3903,7 +4057,7 @@ impl PoolingAllocationConfig {
     /// which can, in some configurations, reduce the number of page faults
     /// taken when a slot is reused.
     pub fn linear_memory_keep_resident(&mut self, size: usize) -> &mut Self {
-        self.config.linear_memory_keep_resident = size;
+        self.linear_memory_keep_resident = size;
         self
     }
 
@@ -3917,7 +4071,7 @@ impl PoolingAllocationConfig {
     /// [`PoolingAllocationConfig::linear_memory_keep_resident`] except that it
     /// is applicable to tables instead.
     pub fn table_keep_resident(&mut self, size: usize) -> &mut Self {
-        self.config.table_keep_resident = size;
+        self.table_keep_resident = size;
         self
     }
 
@@ -3935,7 +4089,7 @@ impl PoolingAllocationConfig {
     /// where `max_component_instance_size` is rounded up to the size and alignment
     /// of the internal representation of the metadata.
     pub fn total_component_instances(&mut self, count: u32) -> &mut Self {
-        self.config.limits.total_component_instances = count;
+        self.limits.total_component_instances = count;
         self
     }
 
@@ -3978,7 +4132,7 @@ impl PoolingAllocationConfig {
     /// where `max_component_instance_size` is rounded up to the size and alignment
     /// of the internal representation of the metadata.
     pub fn max_component_instance_size(&mut self, size: usize) -> &mut Self {
-        self.config.limits.component_instance_size = size;
+        self.limits.component_instance_size = size;
         self
     }
 
@@ -3994,7 +4148,7 @@ impl PoolingAllocationConfig {
     /// If a component will instantiate more core instances than `count`, then
     /// the component will fail to instantiate.
     pub fn max_core_instances_per_component(&mut self, count: u32) -> &mut Self {
-        self.config.limits.max_core_instances_per_component = count;
+        self.limits.max_core_instances_per_component = count;
         self
     }
 
@@ -4010,7 +4164,7 @@ impl PoolingAllocationConfig {
     /// If a component transitively contains more linear memories than `count`,
     /// then the component will fail to instantiate.
     pub fn max_memories_per_component(&mut self, count: u32) -> &mut Self {
-        self.config.limits.max_memories_per_component = count;
+        self.limits.max_memories_per_component = count;
         self
     }
 
@@ -4026,7 +4180,7 @@ impl PoolingAllocationConfig {
     /// If a component will transitively contains more tables than `count`, then
     /// the component will fail to instantiate.
     pub fn max_tables_per_component(&mut self, count: u32) -> &mut Self {
-        self.config.limits.max_tables_per_component = count;
+        self.limits.max_tables_per_component = count;
         self
     }
 
@@ -4049,7 +4203,7 @@ impl PoolingAllocationConfig {
     /// TiB. That might seem like a lot, but each linear memory will *reserve* 6
     /// GiB of space by default.
     pub fn total_memories(&mut self, count: u32) -> &mut Self {
-        self.config.limits.total_memories = count;
+        self.limits.total_memories = count;
         self
     }
 
@@ -4063,7 +4217,7 @@ impl PoolingAllocationConfig {
     /// supported by an instance (see `table_elements` to control the size of
     /// each table).
     pub fn total_tables(&mut self, count: u32) -> &mut Self {
-        self.config.limits.total_tables = count;
+        self.limits.total_tables = count;
         self
     }
 
@@ -4074,7 +4228,7 @@ impl PoolingAllocationConfig {
     /// pooling instance allocator.
     #[cfg(feature = "async")]
     pub fn total_stacks(&mut self, count: u32) -> &mut Self {
-        self.config.limits.total_stacks = count;
+        self.limits.total_stacks = count;
         self
     }
 
@@ -4092,7 +4246,7 @@ impl PoolingAllocationConfig {
     /// where `max_core_instance_size` is rounded up to the size and alignment of
     /// the internal representation of the metadata.
     pub fn total_core_instances(&mut self, count: u32) -> &mut Self {
-        self.config.limits.total_core_instances = count;
+        self.limits.total_core_instances = count;
         self
     }
 
@@ -4127,7 +4281,7 @@ impl PoolingAllocationConfig {
     /// where `max_core_instance_size` is rounded up to the size and alignment of
     /// the internal representation of the metadata.
     pub fn max_core_instance_size(&mut self, size: usize) -> &mut Self {
-        self.config.limits.core_instance_size = size;
+        self.limits.core_instance_size = size;
         self
     }
 
@@ -4140,7 +4294,7 @@ impl PoolingAllocationConfig {
     /// sizeof(VMTableDefinition)` for each instance regardless of how many
     /// tables are defined by an instance's module.
     pub fn max_tables_per_module(&mut self, tables: u32) -> &mut Self {
-        self.config.limits.max_tables_per_module = tables;
+        self.limits.max_tables_per_module = tables;
         self
     }
 
@@ -4159,7 +4313,7 @@ impl PoolingAllocationConfig {
     /// Therefore, the space reserved for each instance is `tables *
     /// table_elements * sizeof::<*const ()>`.
     pub fn table_elements(&mut self, elements: usize) -> &mut Self {
-        self.config.limits.table_elements = elements;
+        self.limits.table_elements = elements;
         self
     }
 
@@ -4173,7 +4327,7 @@ impl PoolingAllocationConfig {
     /// sizeof(VMMemoryDefinition)` for each core instance regardless of how
     /// many memories are defined by the core instance's module.
     pub fn max_memories_per_module(&mut self, memories: u32) -> &mut Self {
-        self.config.limits.max_memories_per_module = memories;
+        self.limits.max_memories_per_module = memories;
         self
     }
 
@@ -4201,7 +4355,7 @@ impl PoolingAllocationConfig {
     /// by the [`Config::memory_reservation`] setting and this method's
     /// configuration cannot exceed [`Config::memory_reservation`].
     pub fn max_memory_size(&mut self, bytes: usize) -> &mut Self {
-        self.config.limits.max_memory_size = bytes;
+        self.limits.max_memory_size = bytes;
         self
     }
 
@@ -4240,7 +4394,7 @@ impl PoolingAllocationConfig {
     /// misconfigured.
     #[cfg(feature = "memory-protection-keys")]
     pub fn memory_protection_keys(&mut self, enable: Enabled) -> &mut Self {
-        self.config.memory_protection_keys = enable;
+        self.memory_protection_keys = enable;
         self
     }
 
@@ -4258,7 +4412,7 @@ impl PoolingAllocationConfig {
     /// other engines.
     #[cfg(feature = "memory-protection-keys")]
     pub fn max_memory_protection_keys(&mut self, max: usize) -> &mut Self {
-        self.config.max_memory_protection_keys = max;
+        self.max_memory_protection_keys = max;
         self
     }
 
@@ -4283,7 +4437,7 @@ impl PoolingAllocationConfig {
     /// store.
     #[cfg(feature = "gc")]
     pub fn total_gc_heaps(&mut self, count: u32) -> &mut Self {
-        self.config.limits.total_gc_heaps = count;
+        self.limits.total_gc_heaps = count;
         self
     }
 
@@ -4316,14 +4470,153 @@ impl PoolingAllocationConfig {
     ///
     /// [ioctl]: https://www.man7.org/linux/man-pages/man2/PAGEMAP_SCAN.2const.html
     pub fn pagemap_scan(&mut self, enable: Enabled) -> &mut Self {
-        self.config.pagemap_scan = enable;
+        self.pagemap_scan = enable;
         self
     }
 
-    /// Tests whether [`Self::pagemap_scan`] is available or not on the host
-    /// system.
-    pub fn is_pagemap_scan_available() -> bool {
-        crate::runtime::vm::PoolingInstanceAllocatorConfig::is_pagemap_scan_available()
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::decommit_batch_size`], if enabled.
+    pub fn get_decommit_batch_size(&self) -> usize {
+        self.decommit_batch_size
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_unused_warm_slots`], if enabled.
+    pub fn get_max_unused_warm_slots(&self) -> u32 {
+        self.max_unused_warm_slots
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::linear_memory_keep_resident`], if
+    /// enabled.
+    pub fn get_memory_keep_resident(&self) -> usize {
+        self.linear_memory_keep_resident
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::table_keep_resident`], if enabled.
+    pub fn get_table_keep_resident(&self) -> usize {
+        self.table_keep_resident
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::async_stack_keep_resident`], if
+    /// enabled.
+    pub fn get_async_stack_keep_resident(&self) -> usize {
+        self.async_stack_keep_resident
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::memory_protection_keys`], if enabled.
+    pub fn get_memory_protection_keys(&self) -> Enabled {
+        self.memory_protection_keys
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_memory_protection_keys`], if
+    /// enabled.
+    pub fn get_max_memory_protection_keys(&self) -> usize {
+        self.max_memory_protection_keys
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::pagemap_scan`], if enabled.
+    pub fn get_pagemap_scan(&self) -> Enabled {
+        self.pagemap_scan
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::total_core_instances`], if enabled.
+    pub fn get_total_core_instances(&self) -> u32 {
+        self.limits.total_core_instances
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::total_component_instances`], if
+    /// enabled.
+    pub fn get_total_component_instances(&self) -> u32 {
+        self.limits.total_component_instances
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::total_memories`], if enabled.
+    pub fn get_total_memories(&self) -> u32 {
+        self.limits.total_memories
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::total_tables`], if enabled.
+    pub fn get_total_tables(&self) -> u32 {
+        self.limits.total_tables
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::total_stacks`], if enabled.
+    pub fn get_total_stacks(&self) -> u32 {
+        self.limits.total_stacks
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::total_gc_heaps`], if enabled.
+    pub fn get_total_gc_heaps(&self) -> u32 {
+        self.limits.total_gc_heaps
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_memory_size`], if enabled.
+    pub fn get_max_memory_size(&self) -> usize {
+        self.limits.max_memory_size
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::table_elements`], if enabled.
+    pub fn get_table_elements(&self) -> usize {
+        self.limits.table_elements
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_core_instance_size`], if enabled.
+    pub fn get_max_core_instance_size(&self) -> usize {
+        self.limits.core_instance_size
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_component_instance_size`], if
+    /// enabled.
+    pub fn get_max_component_instance_size(&self) -> usize {
+        self.limits.component_instance_size
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_core_instances_per_component`], if
+    /// enabled.
+    pub fn get_max_core_instances_per_component(&self) -> u32 {
+        self.limits.max_core_instances_per_component
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_memories_per_component`], if
+    /// enabled.
+    pub fn get_max_memories_per_component(&self) -> u32 {
+        self.limits.max_memories_per_component
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_tables_per_component`], if enabled.
+    pub fn get_max_tables_per_component(&self) -> u32 {
+        self.limits.max_tables_per_component
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_tables_per_module`], if enabled.
+    pub fn get_max_tables_per_module(&self) -> u32 {
+        self.limits.max_tables_per_module
+    }
+
+    /// Returns the configured
+    /// [`PoolingAllocationConfig::max_memories_per_module`], if enabled.
+    pub fn get_max_memories_per_module(&self) -> u32 {
+        self.limits.max_memories_per_module
     }
 }
 
@@ -4504,7 +4797,7 @@ impl Engine {
         self.tunables().gc_zeal_alloc_counter
     }
 
-    /// Returns the configured [`Config::opt_level`] value.
+    /// Returns the configured [`Config::cranelift_opt_level`] value.
     pub fn get_cranelift_opt_level(&self) -> Option<OptLevel> {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         if let Some(compiler) = self.compiler() {
@@ -4522,7 +4815,7 @@ impl Engine {
         None
     }
 
-    /// Returns the configured [`Config::regalloc_algorithm`] value.
+    /// Returns the configured [`Config::cranelift_regalloc_algorithm`] value.
     pub fn get_cranelift_regalloc_algorithm(&self) -> Option<RegallocAlgorithm> {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         if let Some(compiler) = self.compiler() {
@@ -4604,16 +4897,10 @@ impl Engine {
         self.tunables().metadata_for_gc_heap_corruption
     }
 
-    /// Returns if the pooling allocator is enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_allocator_enabled(&self) -> bool {
-        self.pooling_config().is_some()
-    }
-
     /// Returns the runtime pooling allocator configuration, if the pooling
     /// allocator is in use.
     #[cfg(feature = "runtime")]
-    fn pooling_config(&self) -> Option<&crate::runtime::vm::PoolingInstanceAllocatorConfig> {
+    pub fn get_pooling_config(&self) -> Option<&PoolingAllocationConfig> {
         #[cfg(feature = "pooling-allocator")]
         {
             Some(self.allocator().as_pooling()?.config())
@@ -4622,178 +4909,6 @@ impl Engine {
         {
             None
         }
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::decommit_batch_size`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_decommit_batch_size(&self) -> Option<usize> {
-        Some(self.pooling_config()?.decommit_batch_size)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_unused_warm_slots`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_unused_warm_slots(&self) -> Option<u32> {
-        Some(self.pooling_config()?.max_unused_warm_slots)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::linear_memory_keep_resident`], if
-    /// enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_memory_keep_resident(&self) -> Option<usize> {
-        Some(self.pooling_config()?.linear_memory_keep_resident)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::table_keep_resident`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_table_keep_resident(&self) -> Option<usize> {
-        Some(self.pooling_config()?.table_keep_resident)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::async_stack_keep_resident`], if
-    /// enabled.
-    #[cfg(all(feature = "runtime"))]
-    pub fn get_pooling_async_stack_keep_resident(&self) -> Option<usize> {
-        Some(self.pooling_config()?.async_stack_keep_resident)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::memory_protection_keys`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_memory_protection_keys(&self) -> Option<crate::Enabled> {
-        Some(self.pooling_config()?.memory_protection_keys)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_memory_protection_keys`], if
-    /// enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_memory_protection_keys(&self) -> Option<usize> {
-        Some(self.pooling_config()?.max_memory_protection_keys)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::pagemap_scan`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_pagemap_scan(&self) -> Option<crate::Enabled> {
-        Some(self.pooling_config()?.pagemap_scan)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::total_core_instances`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_total_core_instances(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.total_core_instances)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::total_component_instances`], if
-    /// enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_total_component_instances(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.total_component_instances)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::total_memories`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_total_memories(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.total_memories)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::total_tables`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_total_tables(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.total_tables)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::total_stacks`], if enabled.
-    #[cfg(all(feature = "runtime"))]
-    pub fn get_pooling_total_stacks(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.total_stacks)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::total_gc_heaps`], if enabled.
-    #[cfg(all(feature = "runtime"))]
-    pub fn get_pooling_total_gc_heaps(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.total_gc_heaps)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_memory_size`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_memory_size(&self) -> Option<usize> {
-        Some(self.pooling_config()?.limits.max_memory_size)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::table_elements`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_table_elements(&self) -> Option<usize> {
-        Some(self.pooling_config()?.limits.table_elements)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_core_instance_size`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_core_instance_size(&self) -> Option<usize> {
-        Some(self.pooling_config()?.limits.core_instance_size)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_component_instance_size`], if
-    /// enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_component_instance_size(&self) -> Option<usize> {
-        Some(self.pooling_config()?.limits.component_instance_size)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_core_instances_per_component`], if
-    /// enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_core_instances_per_component(&self) -> Option<u32> {
-        Some(
-            self.pooling_config()?
-                .limits
-                .max_core_instances_per_component,
-        )
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_memories_per_component`], if
-    /// enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_memories_per_component(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.max_memories_per_component)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_tables_per_component`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_tables_per_component(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.max_tables_per_component)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_tables_per_module`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_tables_per_module(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.max_tables_per_module)
-    }
-
-    /// Returns the configured
-    /// [`crate::PoolingAllocationConfig::max_memories_per_module`], if enabled.
-    #[cfg(feature = "runtime")]
-    pub fn get_pooling_max_memories_per_module(&self) -> Option<u32> {
-        Some(self.pooling_config()?.limits.max_memories_per_module)
     }
 
     /// Returns the configured wasm proposals enabled in this engine.
@@ -4872,7 +4987,7 @@ impl Engine {
         self.tunables().debug_native
     }
 
-    /// Returns the configured [`Config::debug_guest`] value.
+    /// Returns the configured [`Config::guest_debug`] value.
     pub fn get_guest_debug(&self) -> bool {
         self.tunables().debug_guest
     }
