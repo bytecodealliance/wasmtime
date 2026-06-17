@@ -6,10 +6,8 @@ target x86_64 skylake
 function %check_issue_3951(i64 vmctx) -> i8x16 fast {
     gv0 = vmctx
   block0(v0: i64):
-    v2 = global_value.i64 gv0
-    v3 = load.i8x16 notrap aligned v2+8
-    v4 = global_value.i64 gv0
-    v5 = load.i8x16 notrap aligned v4+8
+    v3 = load.i8x16 notrap aligned v0+8
+    v5 = load.i8x16 notrap aligned v0+8
     v6 = icmp ugt v3, v5
     v7 = bitcast.i8x16 v6
     jump block1(v7)

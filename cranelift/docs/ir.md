@@ -492,11 +492,10 @@ stack overflow checks in the prologue.
 ### Global values
 
 A *global value* is an object whose value is not known at compile time. The
-value is computed at runtime by `global_value`, possibly using
-information provided by the linker via relocations. There are multiple
-kinds of global values using different methods for determining their value.
-Cranelift does not track the type of a global value, for they are just
-values stored in non-stack memory.
+value is computed at runtime, possibly using information provided by the linker
+via relocations. There are multiple kinds of global values using different
+methods for determining their value. Cranelift does not track the type of a
+global value, for they are just values stored in non-stack memory.
 
 When Cranelift is generating code for a virtual machine environment, globals can
 be used to access data structures in the VM's runtime. This requires functions

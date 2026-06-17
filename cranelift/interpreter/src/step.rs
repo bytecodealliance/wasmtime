@@ -544,7 +544,7 @@ where
             })
         }
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackSlot"),
-        Opcode::GlobalValue | Opcode::SymbolValue | Opcode::TlsValue => {
+        Opcode::SymbolValue | Opcode::TlsValue => {
             if let InstructionData::UnaryGlobalValue { global_value, .. } = inst {
                 assign_or_memtrap(state.resolve_global_value(global_value))
             } else {

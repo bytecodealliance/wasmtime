@@ -1222,18 +1222,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "global_value",
-            r#"
-        Compute the value of global GV.
-        "#,
-            &formats.unary_global_value,
-        )
-        .operands_in(vec![Operand::new("GV", &entities.global_value)])
-        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")]),
-    );
-
-    ig.push(
-        Inst::new(
             "symbol_value",
             r#"
         Compute the value of global GV, which is a symbolic value.

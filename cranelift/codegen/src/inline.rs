@@ -399,14 +399,6 @@ fn inline_one(
                 callee.dfg.display_inst(callee_inst)
             );
 
-            assert_ne!(
-                callee.dfg.insts[callee_inst].opcode(),
-                ir::Opcode::GlobalValue,
-                "callee must already be legalized, we shouldn't see any `global_value` \
-                 instructions when inlining; found {callee_inst:?}: {}",
-                callee.dfg.display_inst(callee_inst)
-            );
-
             // Remap the callee instruction's entities and insert it into the
             // caller's DFG.
             let mut inst_remapper = InliningInstRemapper {

@@ -12,7 +12,7 @@ function %f0(i64 vmctx, i32) -> i32, i32, i32, i32 {
     fn0 = %g(i64 vmctx)
 
 block0(v0: i64, v1: i32):
-    v2 = global_value.i64 gv1
+    v2 = load.i64 notrap readonly aligned v0+8
     v3 = load.i32 v2+8
     ;; This should reuse the load above.
     v5 = load.i32 v2+8
@@ -39,7 +39,7 @@ function %f1(i64 vmctx, i32) -> i32 {
     fn0 = %g(i64 vmctx)
 
 block0(v0: i64, v1: i32):
-    v2 = global_value.i64 gv1
+    v2 = load.i64 notrap readonly aligned v0+8
     store.i32 v1, v2+8
 
     ;; This load should pick up the store above.

@@ -12,7 +12,7 @@ function %f0(i64 vmctx, i32) -> i32, i32, i32, i32, i32, i32, i32, i32, i32, i32
     region0 = 0 "vmctx"
 
 block0(v0: i64, v1: i32):
-    v2 = global_value.i64 gv1
+    v2 = load.i64 notrap readonly aligned v0+8
 
     v3 = load.i32 v2+8
     v4 = load.i32 region0 v0+16
