@@ -2,7 +2,7 @@ use crate::TRAP_INTERNAL_ASSERT;
 use crate::alias_region::AliasRegions;
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
-use crate::translate::FuncTranslator;
+use crate::translate::{FuncTranslator, VmctxLoadChain};
 use crate::{BuiltinFunctionSignatures, builder::LinkOptions, wasm_call_signature};
 use crate::{CompiledFunction, ModuleTextBuilder, array_call_signature};
 use cranelift_codegen::binemit::CodeOffset;
@@ -538,55 +538,15 @@ impl wasmtime_environ::Compiler for Compiler {
         // the embedder should cause wasm to trap before it reaches that
         // (ensuring the host has enough space as well for its functionality).
         if !isa.triple().is_pulley() {
-            let vmctx = context
-                .func
-                .create_global_value(ir::GlobalValueData::VMContext);
-
-            let vmctx_store_context_region =
-                func_env.alias_regions.vmctx_region_for_use_in_ir_global(
-                    &mut context.func,
-                    func_env.offsets.ptr.vmctx_store_context().into(),
-                );
-
-            let flags = context
-                .func
-                .dfg
-                .mem_flags
-                .insert(
-                    MemFlagsData::trusted()
-                        .with_readonly()
-                        .with_can_move()
-                        .with_alias_region(Some(vmctx_store_context_region)),
-                )
-                .unwrap();
-
-            let vmstore_ctx_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
-                base: vmctx,
-                offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
-                global_type: isa.pointer_type(),
-                flags,
-            });
-
-            let stack_limit_region = func_env
+            let store_ctx = func_env
                 .alias_regions
-                .vmstore_context_region_for_use_in_ir_global(
-                    &mut context.func,
-                    func_env.offsets.ptr.vmstore_context_stack_limit().into(),
-                );
-            let flags = context
-                .func
-                .dfg
-                .mem_flags
-                .insert(MemFlagsData::trusted().with_alias_region(Some(stack_limit_region)))
-                .unwrap();
-
-            let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
-                base: vmstore_ctx_ptr,
-                offset: i32::from(func_env.offsets.ptr.vmstore_context_stack_limit()).into(),
-                global_type: isa.pointer_type(),
-                flags,
-            });
+                .vmctx_store_context_load(&mut context.func);
+            let stack_limit = func_env
+                .alias_regions
+                .vmstore_context_stack_limit_load(&mut context.func);
+            let stack_limit = VmctxLoadChain::new([store_ctx, stack_limit].into());
             if self.tunables.signals_based_traps {
+                let stack_limit = stack_limit.emit_global(&mut context.func);
                 context.func.stack_limit = Some(stack_limit);
             } else {
                 func_env.stack_limit_at_function_entry = Some(stack_limit);

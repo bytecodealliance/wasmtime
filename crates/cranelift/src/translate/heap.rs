@@ -29,6 +29,21 @@ impl Load {
             i32::try_from(self.offset).unwrap(),
         )
     }
+
+    /// Emit this load, relative to the given `base`, as an `ir::GlobalValue`.
+    ///
+    /// Prefer plain `emit`; this is only for cases where a global value is
+    /// required (like the stack limit checks that Cranelift emits inline in the
+    /// compiled function's prologue).
+    pub fn emit_global(&self, func: &mut ir::Function, base: ir::GlobalValue) -> ir::GlobalValue {
+        let flags = func.dfg.mem_flags.insert(self.flags).unwrap();
+        func.global_values.push(ir::GlobalValueData::Load {
+            base,
+            offset: i32::try_from(self.offset).unwrap().into(),
+            global_type: self.ty,
+            flags,
+        })
+    }
 }
 
 /// A chain of loads, rooted at the `vmctx`.
@@ -52,6 +67,20 @@ impl VmctxLoadChain {
         let mut val = vmctx;
         for load in &self.0 {
             val = load.emit(cursor, val);
+        }
+        val
+    }
+
+    /// Emit the load chain, starting from `vmctx`, as a sequence of CLIF global
+    /// values.
+    ///
+    /// Prefer plain `emit`; this is only for cases where a global value is
+    /// required (like the stack limit checks that Cranelift emits inline in the
+    /// compiled function's prologue).
+    pub fn emit_global(&self, func: &mut ir::Function) -> ir::GlobalValue {
+        let mut val = func.global_values.push(ir::GlobalValueData::VMContext);
+        for load in &self.0 {
+            val = load.emit_global(func, val);
         }
         val
     }
