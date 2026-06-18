@@ -37,6 +37,38 @@ pub struct ModuleEnvironment<'a, 'data> {
     tunables: &'a Tunables,
 }
 
+/// Identifies a FACT adapter-module import that the compiler lowers inline when
+/// translating the adapter function.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FactInlineIntrinsic {
+    /// `enter-sync-call`: push a deferred component-model thread inline.
+    EnterSyncCall,
+    /// `exit-sync-call`: pop the deferred thread inline on the fast path, or
+    /// fall back to the out-of-line `exit-sync-call` libcall when the thread
+    /// was promoted.
+    ExitSyncCall,
+}
+
+impl FactInlineIntrinsic {
+    /// Get this intrinsic's raw `u32` representation (for `FuncKey` packing).
+    pub fn into_raw(self) -> u32 {
+        self as u32
+    }
+
+    /// Reconstruct from a raw representation produced by [`Self::into_raw`].
+    ///
+    /// Panics on invalid input.
+    pub fn from_raw(raw: u32) -> Self {
+        match raw {
+            x if x == Self::EnterSyncCall.into_raw() => Self::EnterSyncCall,
+            x if x == Self::ExitSyncCall.into_raw() => Self::ExitSyncCall,
+            _ => panic!(
+                "invalid raw representation passed to `FactInlineIntrinsic::from_raw`: {raw}"
+            ),
+        }
+    }
+}
+
 /// The result of translating via `ModuleEnvironment`.
 ///
 /// Function bodies are not yet translated, and data initializers have not yet
@@ -68,7 +100,8 @@ pub struct ModuleTranslation<'data> {
     /// imports table into direct calls, when possible.
     ///
     /// When filled in, this only ever contains
-    /// `FuncKey::DefinedWasmFunction(..)`s and `FuncKey::Intrinsic(..)`s.
+    /// `FuncKey::DefinedWasmFunction(..)`s, `FuncKey::Intrinsic(..)`s, and
+    /// `FuncKey::FactInlineIntrinsic`s.
     pub known_imported_functions: SecondaryMap<FuncIndex, Option<FuncKey>>,
 
     /// A list of type signatures which are considered exported from this

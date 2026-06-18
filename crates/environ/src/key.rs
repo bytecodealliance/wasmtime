@@ -50,6 +50,15 @@ pub enum FuncKeyKind {
     /// Initialization function for a module, such as initializing "complicated"
     /// globals and passive element segments.
     ModuleStartup = FuncKey::new_kind(0b1001),
+
+    /// A FACT adapter intrinsic that the compiler lowers inline rather than
+    /// calling (the guest-to-guest sync fast path; see [`FuncKey`]).
+    ///
+    /// This never names a compiled function; it only ever appears as a value in
+    /// `ModuleTranslation::known_imported_functions` to mark an adapter import
+    /// for inline lowering.
+    #[cfg(feature = "component-model")]
+    FactInlineIntrinsic = FuncKey::new_kind(0b1010),
 }
 
 impl From<FuncKeyKind> for u32 {
@@ -85,6 +94,8 @@ impl FuncKeyKind {
             x if x == Self::ResourceDropTrampoline.into() => Self::ResourceDropTrampoline,
             #[cfg(feature = "component-model")]
             x if x == Self::UnsafeIntrinsic.into() => Self::UnsafeIntrinsic,
+            #[cfg(feature = "component-model")]
+            x if x == Self::FactInlineIntrinsic.into() => Self::FactInlineIntrinsic,
 
             _ => panic!("invalid raw value passed to `FuncKind::from_raw`: {raw}"),
         }
@@ -156,6 +167,12 @@ impl FuncKeyNamespace {
             #[cfg(feature = "component-model")]
             FuncKeyKind::UnsafeIntrinsic => {
                 let _ = Abi::from_raw(raw & FuncKey::MODULE_MASK);
+                Self(raw)
+            }
+
+            #[cfg(feature = "component-model")]
+            FuncKeyKind::FactInlineIntrinsic => {
+                assert_eq!(raw & FuncKey::MODULE_MASK, 0);
                 Self(raw)
             }
         }
@@ -267,6 +284,15 @@ pub enum FuncKey {
     /// This function has the `Abi` specified and will initialize the module
     /// specified.
     ModuleStartup(Abi, StaticModuleIndex),
+
+    /// A FACT adapter intrinsic that the compiler lowers inline rather than
+    /// calling.
+    ///
+    /// This never names a compiled function. It only ever appears as a value in
+    /// `ModuleTranslation::known_imported_functions`, where it tells
+    /// `FuncEnvironment` to lower the corresponding adapter import inline.
+    #[cfg(feature = "component-model")]
+    FactInlineIntrinsic(crate::FactInlineIntrinsic),
 }
 
 impl Ord for FuncKey {
@@ -362,6 +388,13 @@ impl FuncKey {
                 let index = abi.into_raw();
                 (namespace, index)
             }
+
+            #[cfg(feature = "component-model")]
+            FuncKey::FactInlineIntrinsic(intrinsic) => {
+                let namespace = FuncKeyKind::FactInlineIntrinsic.into_raw();
+                let index = intrinsic.into_raw();
+                (namespace, index)
+            }
         };
         (FuncKeyNamespace(namespace), FuncKeyIndex(index))
     }
@@ -397,6 +430,8 @@ impl FuncKey {
             #[cfg(feature = "component-model")]
             FuncKey::UnsafeIntrinsic(abi, _) => abi,
             FuncKey::ModuleStartup(abi, _) => abi,
+            #[cfg(feature = "component-model")]
+            FuncKey::FactInlineIntrinsic(_) => Abi::Wasm,
         }
     }
 
@@ -488,6 +523,12 @@ impl FuncKey {
                 let module = StaticModuleIndex::from_u32(a & Self::MODULE_MASK);
                 let abi = Abi::from_raw(b);
                 Self::ModuleStartup(abi, module)
+            }
+
+            #[cfg(feature = "component-model")]
+            FuncKeyKind::FactInlineIntrinsic => {
+                assert_eq!(a & Self::MODULE_MASK, 0);
+                Self::FactInlineIntrinsic(crate::FactInlineIntrinsic::from_raw(b))
             }
         }
     }
@@ -593,7 +634,8 @@ impl FuncKey {
             #[cfg(feature = "component-model")]
             Self::ComponentTrampoline(..)
             | Self::ResourceDropTrampoline
-            | Self::UnsafeIntrinsic(..) => true,
+            | Self::UnsafeIntrinsic(..)
+            | Self::FactInlineIntrinsic(..) => true,
         }
     }
 }

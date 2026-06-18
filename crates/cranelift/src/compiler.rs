@@ -627,6 +627,10 @@ impl wasmtime_environ::Compiler for Compiler {
                 unreachable!()
             }
 
+            // Never names a compiled function; only marks an adapter import for
+            // inline lowering in `known_imported_functions`.
+            FuncKey::FactInlineIntrinsic(..) => unreachable!(),
+
             FuncKey::ModuleStartup(abi, module) => {
                 let translation = translation.unwrap();
                 let ty = match translation.module.startup {

@@ -555,10 +555,13 @@ impl CompiledFunctionsTable {
             | FuncKeyKind::PatchableToBuiltinTrampoline
             | FuncKeyKind::ModuleStartup => false,
 
+            // `FactInlineIntrinsic` never names a compiled function, so it is
+            // never classified here; group it with the other intrinsics.
             #[cfg(feature = "component-model")]
             FuncKeyKind::ComponentTrampoline
             | FuncKeyKind::ResourceDropTrampoline
-            | FuncKeyKind::UnsafeIntrinsic => true,
+            | FuncKeyKind::UnsafeIntrinsic
+            | FuncKeyKind::FactInlineIntrinsic => true,
         }
     }
 
@@ -575,7 +578,8 @@ impl CompiledFunctionsTable {
             #[cfg(feature = "component-model")]
             FuncKeyKind::ComponentTrampoline
             | FuncKeyKind::ResourceDropTrampoline
-            | FuncKeyKind::UnsafeIntrinsic => false,
+            | FuncKeyKind::UnsafeIntrinsic
+            | FuncKeyKind::FactInlineIntrinsic => false,
         }
     }
 }
