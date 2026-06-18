@@ -30,8 +30,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @0049                               v5 = f64const 0x1.0000000000000p0
-;; @005d                               trapz v3, user12
-;; @0056                               jump block2
+;; @0056                               brif v3, block2, block4
 ;;
 ;;                                 block2:
 ;; @0058                               v7 = uextend.i64 v2
@@ -39,6 +38,9 @@
 ;; @0058                               v9 = iadd v8, v7
 ;; @0058                               v10 = sload16.i64 little region2 v9
 ;; @005c                               jump block3
+;;
+;;                                 block4:
+;; @005d                               trap user12
 ;;
 ;;                                 block3:
 ;; @005f                               jump block1

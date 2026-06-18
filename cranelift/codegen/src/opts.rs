@@ -9,7 +9,7 @@ pub use crate::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128, Imm64, Offset32
 use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{
-    AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue, Immediate,
+    AtomicRmwOp, Block, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue, Immediate,
     InstructionData, JumpTable, MemFlagsData, Opcode, StackSlot, TrapCode, Type, Value,
 };
 use crate::isle_common_prelude_methods;
@@ -261,6 +261,16 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         } else {
             jt_data.default_block()
         }
+    }
+
+    fn block_call_block(&mut self, block_call: BlockCall) -> Block {
+        block_call.block(&self.ctx.func.dfg.value_lists)
+    }
+
+    fn just_trap_block(&mut self, block: &Block) -> Option<TrapCode> {
+        self.ctx
+            .branch_to_trap_analysis
+            .analyze_block(self.ctx.func, *block)
     }
 
     fn iconst_sextend_etor(

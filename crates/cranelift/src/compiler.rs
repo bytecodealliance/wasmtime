@@ -561,14 +561,6 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut func_env,
         )?;
 
-        if self.tunables.inlining != Inlining::No {
-            compiler
-                .cx
-                .codegen_context
-                .legalize(isa)
-                .map_err(|e| CompileError::Codegen(e.to_string()))?;
-        }
-
         let needs_gc_heap = func_env.needs_gc_heap();
 
         if let Some((_, slot_builder)) = func_env.state_slot {

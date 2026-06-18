@@ -42,6 +42,16 @@
 (decl pure resolve_jump_table_entry (JumpTable u64) BlockCall)
 (extern constructor resolve_jump_table_entry resolve_jump_table_entry)
 
+;; Get the destination block of a block call.
+(decl pure block_call_block (BlockCall) Block)
+(extern constructor block_call_block block_call_block)
+
+;; If `block` is a "just trap" block (its terminator is an unconditional `trap`
+;; and all of its other instructions are pure) return the trap code of that
+;; terminating `trap`.
+(decl pure partial just_trap_block (Block) TrapCode)
+(extern constructor just_trap_block just_trap_block)
+
 (rule (eq ty x y) (icmp ty (IntCC.Equal) x y))
 (rule (ne ty x y) (icmp ty (IntCC.NotEqual) x y))
 (rule (ult ty x y) (icmp ty (IntCC.UnsignedLessThan) x y))
@@ -103,7 +113,15 @@
         ;;
         ;; Use this to rewrite conditions which simplify within a boolean-test
         ;; context (e.g. `(brif (ctz x))` can be simplified to `(brif x)`).
-        (ReplaceBranchCond (cond Value))))
+        (ReplaceBranchCond (cond Value))
+
+        ;; Replace the instruction being simplified with two instructions,
+        ;; spliced into the layout in order: `first` then `second`.
+        ;;
+        ;; Neither instruction may define any results, and if the instruction
+        ;; being replaced is a block terminator then `second` must also be a
+        ;; block terminator.
+        (ReplaceWithTwo (first Inst) (second Inst))))
 
 (decl pure inst_to_skeleton_inst_simplification (Inst) SkeletonInstSimplification)
 (rule (inst_to_skeleton_inst_simplification inst)
@@ -122,6 +140,10 @@
 (decl pure replace_branch_cond (Value) SkeletonInstSimplification)
 (rule (replace_branch_cond new_cond)
       (SkeletonInstSimplification.ReplaceBranchCond new_cond))
+
+(decl pure replace_with_two (Inst Inst) SkeletonInstSimplification)
+(rule (replace_with_two first second)
+      (SkeletonInstSimplification.ReplaceWithTwo first second))
 
 (convert Inst SkeletonInstSimplification inst_to_skeleton_inst_simplification)
 (convert Value SkeletonInstSimplification value_to_skeleton_inst_simplification)

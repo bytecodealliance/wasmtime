@@ -67,13 +67,8 @@ impl SubTest for TestInline {
     }
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> Result<()> {
-        // Legalize this function.
         let isa = context.isa.unwrap();
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
-        comp_ctx
-            .legalize(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))
-            .context("error while legalizing")?;
 
         // Insert this function in our map for inlining into subsequent
         // functions.

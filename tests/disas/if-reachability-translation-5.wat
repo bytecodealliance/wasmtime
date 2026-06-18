@@ -24,12 +24,16 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @0024                               trapz v2, user12
-;; @001c                               jump block2
+;; @001c                               brif v2, block2, block5
 ;;
 ;;                                 block2:
-;; @0022                               trapz.i32 v3, user12
-;; @0020                               jump block3
+;; @0020                               brif.i32 v3, block3, block4
+;;
+;;                                 block4:
+;; @0022                               trap user12
+;;
+;;                                 block5:
+;; @0024                               trap user12
 ;;
 ;;                                 block3:
 ;; @0026                               v5 = iconst.i32 0

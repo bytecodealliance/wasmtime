@@ -44,7 +44,7 @@
 ;; @0021                               v18 = iconst.i64 28
 ;; @0021                               v19 = iadd v15, v18  ; v18 = 28
 ;; @0021                               istore8 user2 little region4 v4, v19  ; v4 = 0
-;;                                     jump block3
+;; @0021                               jump block3
 ;;
 ;;                                 block3:
 ;;                                     v60 = iconst.i32 0
