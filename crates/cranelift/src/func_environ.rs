@@ -35,13 +35,14 @@ use wasmparser::{
 use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
     BuiltinFunctionIndex, ComponentPC, ConstExpr, ConstOp, DataIndex, DefinedFuncIndex,
-    DefinedGlobalIndex, DefinedTableIndex, ElemIndex, EngineOrModuleTypeIndex,
+    DefinedGlobalIndex, DefinedTableIndex, ElemIndex, EngineOrModuleTypeIndex, FactInlineIntrinsic,
     FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
     IndexType, Memory, MemoryIndex, MemoryInit, MemorySegmentOffset, MemoryTunables, Module,
-    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PassiveElemIndex, PtrSize,
-    RuntimeDataIndex, Table, TableIndex, TableInitialValue, TableSegment, TableSegmentElements,
-    TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType,
-    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
+    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, NUM_COMPONENT_CONTEXT_SLOTS,
+    PassiveElemIndex, PtrSize, RuntimeDataIndex, Table, TableIndex, TableInitialValue,
+    TableSegment, TableSegmentElements, TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets,
+    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -166,6 +167,12 @@ pub struct FuncEnvironment<'module_environment> {
     /// Heaps implementing WebAssembly linear memories.
     heaps: PrimaryMap<Heap, HeapData>,
 
+    /// When translating a fused sync-to-sync adapter, the explicit stack slot
+    /// holding the `VMDeferredThread` pushed by the inline `enter-sync-call`
+    /// lowering, shared with the matching inline `exit-sync-call`. `None`
+    /// outside that window.
+    fact_sync_call_slot: Option<ir::StackSlot>,
+
     /// Caches of signatures for builtin functions.
     builtin_functions: BuiltinFunctions,
 
@@ -276,6 +283,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             gc_heap: None,
 
             heaps: PrimaryMap::default(),
+            fact_sync_call_slot: None,
             builtin_functions,
             offsets,
             tunables,
@@ -1905,6 +1913,36 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 Ok(self.direct_call_inst(callee, &real_call_args))
             }
 
+            // The guest-to-guest sync fast path: these adapter intrinsics are
+            // lowered inline rather than called, but only when concurrency
+            // support is enabled (the deferred thread state only exists then)
+            // and this isn't a tail call (the deferred frame must outlive the
+            // call). Otherwise fall back to the indirect call, which is also
+            // the out-of-line slow path the inline `exit` branches to.
+            Some(FuncKey::FactInlineIntrinsic(intrinsic)) => {
+                if self.env.tunables.concurrency_support {
+                    debug_assert!(!self.tail);
+                    match intrinsic {
+                        FactInlineIntrinsic::EnterSyncCall => {
+                            return Ok(self.lower_fact_enter_sync_call(&real_call_args));
+                        }
+                        FactInlineIntrinsic::ExitSyncCall => {
+                            return Ok(self.lower_fact_exit_sync_call(
+                                callee_index,
+                                sig_ref,
+                                &real_call_args,
+                            ));
+                        }
+                    }
+                }
+                let func_addr = self.env.alias_regions.vmctx_vmfunction_import_wasm_call(
+                    &mut self.builder.cursor(),
+                    vmctx,
+                    callee_index,
+                );
+                Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+            }
+
             Some(key) => panic!("unexpected kind of known-import function: {key:?}"),
 
             // Unknown import function or this module is instantiated many times
@@ -1933,6 +1971,174 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// have extra context.
     fn can_directly_inline_unsafe_intrinsic(&self, abi: wasmtime_environ::Abi) -> bool {
         abi == wasmtime_environ::Abi::Wasm && !self.tail && !self.env.tunables.debug_guest
+    }
+
+    /// Inline lowering of a FACT adapter's `enter-sync-call` intrinsic: push a
+    /// `VMDeferredThread` onto an explicit stack slot and publish it as the
+    /// store's current thread, deferring the heavyweight task bookkeeping the
+    /// `enter_sync_call` libcall would otherwise do eagerly.
+    ///
+    /// `real_call_args` is `[callee_vmctx, caller_vmctx, caller_instance,
+    /// callee_async, callee_instance]`.
+    fn lower_fact_enter_sync_call(&mut self, real_call_args: &[ir::Value]) -> CallRets {
+        let ptr_ty = self.env.pointer_type();
+        let ptr = self.env.offsets.ptr;
+        let flags = ir::MemFlagsData::trusted();
+
+        // Allocate the on-stack `VMDeferredThread`.
+        let size = u32::from(ptr.size_of_vmdeferred_thread());
+        let align_shift = u8::try_from(ptr.size().trailing_zeros()).unwrap();
+        let slot = self
+            .builder
+            .func
+            .create_sized_stack_slot(ir::StackSlotData::new(
+                ir::StackSlotKind::ExplicitSlot,
+                size,
+                align_shift,
+            ));
+        let slot_addr = self.builder.ins().stack_addr(ptr_ty, slot, 0);
+
+        let vmstore = self.env.get_vmstore_context_ptr(self.builder);
+
+        // Link the previous current thread in as this frame's parent.
+        let parent = self
+            .env
+            .alias_regions
+            .vmstore_context_current_thread(&mut self.builder.cursor(), vmstore);
+        self.env.alias_regions.store_vmdeferred_thread_parent(
+            &mut self.builder.cursor(),
+            slot_addr,
+            parent,
+        );
+
+        // Record the deferred `enter_sync_call` arguments.
+        self.env
+            .alias_regions
+            .store_vmdeferred_thread_caller_instance(
+                &mut self.builder.cursor(),
+                slot_addr,
+                real_call_args[2],
+            );
+        self.env.alias_regions.store_vmdeferred_thread_callee_async(
+            &mut self.builder.cursor(),
+            slot_addr,
+            real_call_args[3],
+        );
+        self.env
+            .alias_regions
+            .store_vmdeferred_thread_callee_instance(
+                &mut self.builder.cursor(),
+                slot_addr,
+                real_call_args[4],
+            );
+
+        // Save the caller's context slots into the frame and reset the live
+        // values to 0 for the freshly-entered (deferred) thread.
+        for i in 0..u8::try_from(NUM_COMPONENT_CONTEXT_SLOTS).unwrap() {
+            let off = i32::from(ptr.vmstore_context_component_context_slot(i));
+            let saved = self.builder.ins().load(ir::types::I32, flags, vmstore, off);
+            self.env
+                .alias_regions
+                .store_vmdeferred_thread_saved_context(
+                    &mut self.builder.cursor(),
+                    slot_addr,
+                    i,
+                    saved,
+                );
+            let zero = self.builder.ins().iconst(ir::types::I32, 0);
+            self.builder.ins().store(flags, zero, vmstore, off);
+        }
+
+        // Publish the deferred thread as the store's current thread.
+        self.env.alias_regions.store_vmstore_context_current_thread(
+            &mut self.builder.cursor(),
+            vmstore,
+            slot_addr,
+        );
+
+        debug_assert!(self.env.fact_sync_call_slot.is_none());
+        self.env.fact_sync_call_slot = Some(slot);
+        CallRets::new()
+    }
+
+    /// Inline lowering of a FACT adapter's `exit-sync-call` intrinsic, the
+    /// counterpart to `lower_fact_enter_sync_call`. If our deferred thread is
+    /// still current (nothing forced it) we pop it and restore the caller's
+    /// context inline; otherwise we fall back to the out-of-line
+    /// `exit_sync_call` libcall.
+    fn lower_fact_exit_sync_call(
+        &mut self,
+        callee_index: FuncIndex,
+        sig_ref: ir::SigRef,
+        real_call_args: &[ir::Value],
+    ) -> CallRets {
+        let ptr_ty = self.env.pointer_type();
+        let ptr = self.env.offsets.ptr;
+        let flags = ir::MemFlagsData::trusted();
+
+        let slot = self
+            .env
+            .fact_sync_call_slot
+            .take()
+            .expect("inline exit-sync-call without a matching enter-sync-call");
+        let slot_addr = self.builder.ins().stack_addr(ptr_ty, slot, 0);
+        let vmstore = self.env.get_vmstore_context_ptr(self.builder);
+        let cur = self
+            .env
+            .alias_regions
+            .vmstore_context_current_thread(&mut self.builder.cursor(), vmstore);
+        let is_fast = self.builder.ins().icmp(IntCC::Equal, cur, slot_addr);
+
+        let fast_block = self.builder.create_block();
+        let slow_block = self.builder.create_block();
+        let cont_block = self.builder.create_block();
+        self.builder
+            .ins()
+            .brif(is_fast, fast_block, &[], slow_block, &[]);
+        self.builder.seal_block(fast_block);
+        self.builder.seal_block(slow_block);
+
+        // Fast path: pop the deferred thread and restore the caller's context.
+        self.builder.switch_to_block(fast_block);
+        let parent = self
+            .env
+            .alias_regions
+            .vmdeferred_thread_parent(&mut self.builder.cursor(), slot_addr);
+        self.env.alias_regions.store_vmstore_context_current_thread(
+            &mut self.builder.cursor(),
+            vmstore,
+            parent,
+        );
+        for i in 0..u8::try_from(NUM_COMPONENT_CONTEXT_SLOTS).unwrap() {
+            let saved = self.env.alias_regions.vmdeferred_thread_saved_context(
+                &mut self.builder.cursor(),
+                slot_addr,
+                i,
+            );
+            self.builder.ins().store(
+                flags,
+                saved,
+                vmstore,
+                i32::from(ptr.vmstore_context_component_context_slot(i)),
+            );
+        }
+        self.builder.ins().jump(cont_block, &[]);
+
+        // Slow path: the thread was promoted to a real one, so do the
+        // equivalent out-of-line teardown via the `exit_sync_call` libcall.
+        self.builder.switch_to_block(slow_block);
+        let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
+        let func_addr = self.env.alias_regions.vmctx_vmfunction_import_wasm_call(
+            &mut self.builder.cursor(),
+            vmctx,
+            callee_index,
+        );
+        self.indirect_call_inst(sig_ref, func_addr, real_call_args);
+        self.builder.ins().jump(cont_block, &[]);
+
+        self.builder.seal_block(cont_block);
+        self.builder.switch_to_block(cont_block);
+        CallRets::new()
     }
 
     /// Do a Wasm-level indirect call through the given funcref table.

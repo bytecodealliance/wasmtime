@@ -789,9 +789,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             };
 
             // Push a task onto the current task stack.
-            //
-            // FIXME: Apply the optimizations described in #12311.
-
             self.instruction(I32Const(
                 i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
             ));
@@ -892,8 +889,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // "you forgot to drop borrows" trap shows up and additionally the
         // lowering below may call realloc which is in the context of the
         // caller's task, not the callee.
-        //
-        // FIXME: Apply the optimizations described in #12311.
         if self.emit_resource_call || self.module.tunables.concurrency_support {
             let exit_sync_call = self.module.import_exit_sync_call();
             self.instruction(Call(exit_sync_call.as_u32()));
