@@ -18,8 +18,10 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     region2 = 48 "VMContext+0x30"
-;;     region3 = 536870912 "PublicMemory"
-;;     region4 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region3 = 2415919104 "VMMemoryDefinition+0x0"
+;;     region4 = 2415919112 "VMMemoryDefinition+0x8"
+;;     region5 = 536870912 "PublicMemory"
+;;     region6 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -27,13 +29,13 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @003b                               v6 = load.i64 notrap aligned readonly can_move region2 v0+48
-;; @003b                               v7 = load.i64 notrap aligned readonly can_move v6
+;; @003b                               v7 = load.i64 notrap aligned readonly can_move region3 v6
 ;; @003b                               v5 = uextend.i64 v2
 ;; @003b                               v8 = iadd v7, v5
-;; @003b                               store little region3 v3, v8
-;; @0042                               v10 = load.i64 notrap aligned readonly can_move v0+80
+;; @003b                               store little region5 v3, v8
+;; @0042                               v10 = load.i64 notrap aligned readonly can_move region3 v0+80
 ;; @0042                               v11 = iadd v10, v5
-;; @0042                               store little region4 v3, v11
+;; @0042                               store little region6 v3, v11
 ;; @004b                               jump block1
 ;;
 ;;                                 block1:

@@ -13,6 +13,8 @@
 ;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     region2 = 24 "VMContext+0x18"
 ;;     region3 = 268435464 "VMStoreContext+0x8"
+;;     region4 = 2415919104 "VMMemoryDefinition+0x0"
+;;     region5 = 2415919112 "VMMemoryDefinition+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -35,7 +37,7 @@
 ;; @001e                               jump block2(v10)
 ;;
 ;;                                 block2(v59: i64):
-;; @0025                               v14 = load.i64 notrap aligned v0+64
+;; @0025                               v14 = load.i64 notrap aligned region5 v0+64
 ;; @0025                               v15 = uextend.i64 v2
 ;; @0025                               v16 = uextend.i64 v4
 ;; @0025                               v19 = iadd v15, v16
@@ -45,7 +47,7 @@
 ;; @0025                               v31 = iadd v27, v16
 ;; @0025                               v32 = icmp ugt v31, v14
 ;; @0025                               trapnz v32, heap_oob
-;; @0025                               v21 = load.i64 notrap aligned readonly can_move v0+56
+;; @0025                               v21 = load.i64 notrap aligned readonly can_move region4 v0+56
 ;; @0025                               v37 = iadd v21, v27
 ;; @0025                               v25 = iadd v21, v15
 ;; @0025                               v40 = icmp ugt v37, v25

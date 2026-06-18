@@ -21,7 +21,9 @@
 ;; function u0:0(i64 vmctx, i64, i32, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region2 = 2415919104 "VMMemoryDefinition+0x0"
+;;     region3 = 2415919112 "VMMemoryDefinition+0x8"
+;;     region4 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -31,14 +33,14 @@
 ;; @0040                               v4 = uextend.i64 v2
 ;; @0040                               v5 = iconst.i64 0xffff_0004
 ;; @0040                               v6 = uadd_overflow_trap v4, v5, heap_oob  ; v5 = 0xffff_0004
-;; @0040                               v7 = load.i64 notrap aligned v0+64
+;; @0040                               v7 = load.i64 notrap aligned region3 v0+64
 ;; @0040                               v8 = icmp ugt v6, v7
 ;; @0040                               trapnz v8, heap_oob
-;; @0040                               v9 = load.i64 notrap aligned can_move v0+56
+;; @0040                               v9 = load.i64 notrap aligned can_move region2 v0+56
 ;; @0040                               v10 = iadd v9, v4
 ;; @0040                               v11 = iconst.i64 0xffff_0000
 ;; @0040                               v12 = iadd v10, v11  ; v11 = 0xffff_0000
-;; @0040                               store little region2 v3, v12
+;; @0040                               store little region4 v3, v12
 ;; @0047                               jump block1
 ;;
 ;;                                 block1:
@@ -48,7 +50,9 @@
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region2 = 2415919104 "VMMemoryDefinition+0x0"
+;;     region3 = 2415919112 "VMMemoryDefinition+0x8"
+;;     region4 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -58,14 +62,14 @@
 ;; @004c                               v4 = uextend.i64 v2
 ;; @004c                               v5 = iconst.i64 0xffff_0004
 ;; @004c                               v6 = uadd_overflow_trap v4, v5, heap_oob  ; v5 = 0xffff_0004
-;; @004c                               v7 = load.i64 notrap aligned v0+64
+;; @004c                               v7 = load.i64 notrap aligned region3 v0+64
 ;; @004c                               v8 = icmp ugt v6, v7
 ;; @004c                               trapnz v8, heap_oob
-;; @004c                               v9 = load.i64 notrap aligned can_move v0+56
+;; @004c                               v9 = load.i64 notrap aligned can_move region2 v0+56
 ;; @004c                               v10 = iadd v9, v4
 ;; @004c                               v11 = iconst.i64 0xffff_0000
 ;; @004c                               v12 = iadd v10, v11  ; v11 = 0xffff_0000
-;; @004c                               v13 = load.i32 little region2 v12
+;; @004c                               v13 = load.i32 little region4 v12
 ;; @0053                               jump block1
 ;;
 ;;                                 block1:

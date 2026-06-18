@@ -6,19 +6,14 @@ use cranelift_codegen::{
 };
 use wasmtime_environ::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GetPtrSize, GlobalIndex,
-    MemoryIndex, PtrSize as _, RuntimeDataIndex, StaticModuleIndex, TableIndex, TagIndex,
-    VMOffsets,
+    MemoryIndex, OwnedMemoryIndex, PtrSize as _, RuntimeDataIndex, StaticModuleIndex, TableIndex,
+    TagIndex, VMOffsets,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum VmType {
     VMContext,
     VMStoreContext,
-
-    #[allow(
-        dead_code,
-        reason = "used when tagging `VMMemoryDefinition` fields in upcoming commits"
-    )]
     VMMemoryDefinition,
 }
 
@@ -735,6 +730,64 @@ impl AliasRegions<VMOffsets<u8>> {
             new_length,
         )
     }
+
+    /// Get a `Load` for an inlined-in-the-`vmctx` `VMMemoryDefinition`'s `base`
+    /// field.
+    pub fn vmctx_vmmemory_definition_base_load(
+        &mut self,
+        func: &mut ir::Function,
+        memory: OwnedMemoryIndex,
+        base_flags: ir::MemFlagsData,
+    ) -> Load {
+        let field = self.offsets.ptr.vmmemory_definition_base();
+        let region = self.vmmemory_definition_region(func, field.into());
+        Load {
+            offset: self.offsets.vmctx_vmmemory_definition_base(memory),
+            flags: base_flags.with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
+    }
+
+    /// Load an inlined-in-the-`vmctx` `VMMemoryDefinition`'s `base` field.
+    pub fn vmctx_vmmemory_definition_base(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        memory: OwnedMemoryIndex,
+        base_flags: ir::MemFlagsData,
+        vmctx: ir::Value,
+    ) -> ir::Value {
+        self.vmctx_vmmemory_definition_base_load(cursor.func, memory, base_flags)
+            .emit(cursor, vmctx)
+    }
+
+    /// Get a `Load` for an inlined-in-the-`vmctx` `VMMemoryDefinition`'s `current_length`
+    /// field.
+    pub fn vmctx_vmmemory_definition_current_length_load(
+        &mut self,
+        func: &mut ir::Function,
+        memory: OwnedMemoryIndex,
+    ) -> Load {
+        let field = self.offsets.ptr.vmmemory_definition_current_length();
+        let region = self.vmmemory_definition_region(func, field.into());
+        Load {
+            offset: self
+                .offsets
+                .vmctx_vmmemory_definition_current_length(memory),
+            flags: ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
+    }
+
+    /// Load an inlined-in-the-`vmctx` `VMMemoryDefinition`'s `current_length` field.
+    pub fn vmctx_vmmemory_definition_current_length(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        memory: OwnedMemoryIndex,
+        vmctx: ir::Value,
+    ) -> ir::Value {
+        self.vmctx_vmmemory_definition_current_length_load(cursor.func, memory)
+            .emit(cursor, vmctx)
+    }
 }
 
 /// `VMStoreContext`-related methods.
@@ -1170,6 +1223,111 @@ where
                 .vmstore_context_component_context_slot(slot)
                 .into(),
             val,
+        )
+    }
+}
+
+/// `VMMemoryDefinition`-related methods.
+///
+/// The `base` and `current_length` fields are reached either directly through
+/// the `vmctx` (for an owned, inline memory) or through a `*mut
+/// VMMemoryDefinition` (for a shared/imported memory). Both cases must share
+/// one region per field, so the region is keyed on the field's offset *within*
+/// the `VMMemoryDefinition` regardless of how the field is addressed; this is
+/// required for soundness under inlining (cf. `memory_alias_region`).
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    fn vmmemory_definition_region(
+        &mut self,
+        func: &mut ir::Function,
+        offset: u32,
+    ) -> ir::AliasRegion {
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMMemoryDefinition,
+                offset,
+            },
+        )
+    }
+
+    /// Create a `Load` for the `VMMemoryDefinition::base` field, for use in a
+    /// `VmctxLoadChain`.
+    pub fn vmmemory_definition_base_load(
+        &mut self,
+        func: &mut ir::Function,
+        base_flags: ir::MemFlagsData,
+    ) -> Load {
+        let offset = self
+            .offsets
+            .get_ptr_size()
+            .vmmemory_definition_base()
+            .into();
+        let region = self.vmmemory_definition_region(func, offset);
+        Load {
+            offset,
+            flags: base_flags.with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
+    }
+
+    /// Create a `Load` for the `VMMemoryDefinition::current_length` field, for
+    /// use in a `VmctxLoadChain`.
+    pub fn vmmemory_definition_current_length_load(&mut self, func: &mut ir::Function) -> Load {
+        let offset = self
+            .offsets
+            .get_ptr_size()
+            .vmmemory_definition_current_length()
+            .into();
+        let region = self.vmmemory_definition_region(func, offset);
+        Load {
+            offset,
+            flags: ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
+    }
+
+    /// Emit a load of the `VMMemoryDefinition::base` field from the given `vmmemory_definition`.
+    pub fn vmmemory_definition_base(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmmemory_definition: ir::Value,
+    ) -> ir::Value {
+        self.vmmemory_definition_base_load(cursor.func, ir::MemFlagsData::trusted())
+            .emit(cursor, vmmemory_definition)
+    }
+
+    /// Emit a (non-atomic) load of the `VMMemoryDefinition::current_length`
+    /// field from the given `vmmemory_definition`.
+    pub fn vmmemory_definition_current_length(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmmemory_definition: ir::Value,
+    ) -> ir::Value {
+        self.vmmemory_definition_current_length_load(cursor.func)
+            .emit(cursor, vmmemory_definition)
+    }
+
+    /// Emit an atomic load of the `VMMemoryDefinition::current_length` field out
+    /// of a `*mut VMMemoryDefinition`.
+    pub fn vmmemory_definition_current_length_atomic(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmmemory_definition: ir::Value,
+    ) -> ir::Value {
+        let offset = self
+            .offsets
+            .get_ptr_size()
+            .vmmemory_definition_current_length();
+        let region = self.vmmemory_definition_region(cursor.func, offset.into());
+        let offset = cursor.ins().iconst(self.pointer_type, i64::from(offset));
+        let ptr = cursor.ins().iadd(vmmemory_definition, offset);
+        cursor.ins().atomic_load(
+            self.pointer_type,
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            ptr,
         )
     }
 }

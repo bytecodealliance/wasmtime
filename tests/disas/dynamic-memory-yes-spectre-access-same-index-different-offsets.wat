@@ -34,32 +34,34 @@
 ;; function u0:0(i64 vmctx, i64, i32) -> i32, i32, i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 536870912 "PublicMemory"
+;;     region2 = 2415919104 "VMMemoryDefinition+0x0"
+;;     region3 = 2415919112 "VMMemoryDefinition+0x8"
+;;     region4 = 536870912 "PublicMemory"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0047                               v7 = load.i64 notrap aligned v0+64
-;; @0047                               v9 = load.i64 notrap aligned can_move v0+56
+;; @0047                               v7 = load.i64 notrap aligned region3 v0+64
+;; @0047                               v9 = load.i64 notrap aligned can_move region2 v0+56
 ;; @0047                               v6 = uextend.i64 v2
 ;; @0047                               v8 = icmp ugt v6, v7
 ;; @0047                               v11 = iconst.i64 0
 ;; @0047                               v10 = iadd v9, v6
 ;; @0047                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
-;; @0047                               v13 = load.i32 little region2 v12
+;; @0047                               v13 = load.i32 little region4 v12
 ;; @004c                               v19 = iconst.i64 4
 ;; @004c                               v20 = iadd v10, v19  ; v19 = 4
 ;; @004c                               v22 = select_spectre_guard v8, v11, v20  ; v11 = 0
-;; @004c                               v23 = load.i32 little region2 v22
+;; @004c                               v23 = load.i32 little region4 v22
 ;; @0051                               v25 = iconst.i64 0x0010_0003
 ;; @0051                               v26 = uadd_overflow_trap v6, v25, heap_oob  ; v25 = 0x0010_0003
 ;; @0051                               v28 = icmp ugt v26, v7
 ;; @0051                               v31 = iconst.i64 0x000f_ffff
 ;; @0051                               v32 = iadd v10, v31  ; v31 = 0x000f_ffff
 ;; @0051                               v34 = select_spectre_guard v28, v11, v32  ; v11 = 0
-;; @0051                               v35 = load.i32 little region2 v34
+;; @0051                               v35 = load.i32 little region4 v34
 ;; @0056                               jump block1
 ;;
 ;;                                 block1:
@@ -69,32 +71,34 @@
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 536870912 "PublicMemory"
+;;     region2 = 2415919104 "VMMemoryDefinition+0x0"
+;;     region3 = 2415919112 "VMMemoryDefinition+0x8"
+;;     region4 = 536870912 "PublicMemory"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @005d                               v7 = load.i64 notrap aligned v0+64
-;; @005d                               v9 = load.i64 notrap aligned can_move v0+56
+;; @005d                               v7 = load.i64 notrap aligned region3 v0+64
+;; @005d                               v9 = load.i64 notrap aligned can_move region2 v0+56
 ;; @005d                               v6 = uextend.i64 v2
 ;; @005d                               v8 = icmp ugt v6, v7
 ;; @005d                               v11 = iconst.i64 0
 ;; @005d                               v10 = iadd v9, v6
 ;; @005d                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
-;; @005d                               store little region2 v3, v12
+;; @005d                               store little region4 v3, v12
 ;; @0064                               v18 = iconst.i64 4
 ;; @0064                               v19 = iadd v10, v18  ; v18 = 4
 ;; @0064                               v21 = select_spectre_guard v8, v11, v19  ; v11 = 0
-;; @0064                               store little region2 v4, v21
+;; @0064                               store little region4 v4, v21
 ;; @006b                               v23 = iconst.i64 0x0010_0003
 ;; @006b                               v24 = uadd_overflow_trap v6, v23, heap_oob  ; v23 = 0x0010_0003
 ;; @006b                               v26 = icmp ugt v24, v7
 ;; @006b                               v29 = iconst.i64 0x000f_ffff
 ;; @006b                               v30 = iadd v10, v29  ; v29 = 0x000f_ffff
 ;; @006b                               v32 = select_spectre_guard v26, v11, v30  ; v11 = 0
-;; @006b                               store little region2 v5, v32
+;; @006b                               store little region4 v5, v32
 ;; @0070                               jump block1
 ;;
 ;;                                 block1:

@@ -41,6 +41,8 @@
 ;; function u2415919104:0(i64 vmctx, i64) tail {
 ;;     region0 = 112 "VMContext+0x70"
 ;;     region1 = 120 "VMContext+0x78"
+;;     region2 = 2415919112 "VMMemoryDefinition+0x8"
+;;     region3 = 2415919104 "VMMemoryDefinition+0x0"
 ;;     sig0 = (i64 vmctx, i64, i64, i64) tail
 ;;     fn0 = colocated u805306368:1 sig0
 ;;
@@ -52,11 +54,11 @@
 ;;
 ;; block1:
 ;;     v6 = load.i32 notrap aligned region1 v0+120
-;;     v8 = load.i64 notrap aligned v0+64
+;;     v8 = load.i64 notrap aligned region2 v0+64
 ;;     v10 = uextend.i64 v6
 ;;     v14 = icmp ugt v10, v8
 ;;     trapnz v14, heap_oob
-;;     v15 = load.i64 notrap aligned readonly can_move v0+56
+;;     v15 = load.i64 notrap aligned readonly can_move region3 v0+56
 ;;     call fn0(v0, v15, v2, v10)
 ;;     jump block2
 ;;
