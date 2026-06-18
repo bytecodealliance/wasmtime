@@ -1,0 +1,160 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; The consequent (taken-if-true) successor is a just-trap block, so the `brif`
+;; becomes a `trapnz` plus a `jump` to the surviving successor (carrying its
+;; block arguments). The now-unreachable trap block is removed.
+function %trapnz(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    brif v0, block1, block2(v1)
+block1:
+    trap user42
+block2(v2: i64):
+    return v2
+}
+
+; function %trapnz(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     trapnz v0, user42
+;     jump block2
+;
+; block2:
+;     return v1
+; }
+
+;; The alternative (taken-if-false) successor is the just-trap block, so the
+;; `brif` becomes a `trapz` plus a `jump` to the surviving successor.
+function %trapz(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    brif v0, block1(v1), block2
+block1(v2: i64):
+    return v2
+block2:
+    trap user42
+}
+
+; function %trapz(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     trapz v0, user42
+;     jump block1
+;
+; block1:
+;     return v1
+; }
+
+;; Both successors are just-trap blocks, so either rewrite is correct. Here the
+;; alternative-successor rule wins, producing a `trapz` (trapping with the
+;; alternative's code) and a jump to the still-trapping, still-reachable
+;; consequent.
+function %could_be_either_doesnt_matter(i64) -> i64 {
+block0(v0: i64):
+    brif v0, block1, block2
+block1:
+    trap user36
+block2:
+    trap user42
+}
+
+; function %could_be_either_doesnt_matter(i64) -> i64 fast {
+; block0(v0: i64):
+;     trapz v0, user42
+;     jump block1
+;
+; block1:
+;     trap user36
+; }
+
+;; A block counts as a just-trap block even when it is not *only* a `trap`: a
+;; pure (side-effect-free) prefix is allowed, because a trapping block never
+;; returns so its pure instructions are unobservable. The `brif` is rewritten
+;; and the pure prefix is dropped with the unreachable block.
+function %trap_block_with_pure_prefix(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    brif v0, block1, block2(v1)
+block1:
+    v10 = iadd v0, v0
+    v11 = imul v10, v10
+    trap user42
+block2(v2: i64):
+    return v2
+}
+
+; function %trap_block_with_pure_prefix(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     trapnz v0, user42
+;     jump block2
+;
+; block2:
+;     return v1
+; }
+
+;; A block with a *side-effecting* instruction before the `trap` is NOT a
+;; just-trap block, so the `brif` is left alone.
+function %trap_block_with_side_effect_not_rewritten(i64, i64) {
+block0(v0: i64, v1: i64):
+    brif v0, block1, block2
+block1:
+    store v1, v0
+    trap user42
+block2:
+    return
+}
+
+; function %trap_block_with_side_effect_not_rewritten(i64, i64) fast {
+; block0(v0: i64, v1: i64):
+;     brif v0, block1, block2
+;
+; block1:
+;     store.i64 v1, v0
+;     trap user42
+;
+; block2:
+;     return
+; }
+
+;; The `brif` folds into a `trapz v0, user1` that is identical to the `trapz`
+;; already dominating it, so the newly inserted trap is re-processed and GVN'd
+;; away (only one `trapz` remains).
+function %folded_trap_is_gvned(i32) -> i32 {
+block0(v0: i32):
+    trapz v0, user1
+    brif v0, block1, block2
+block1:
+    return v0
+block2:
+    trap user1
+}
+
+; function %folded_trap_is_gvned(i32) -> i32 fast {
+; block0(v0: i32):
+;     trapz v0, user1
+;     jump block1
+;
+; block1:
+;     return v0
+; }
+
+;; The `brif`'s condition is a `uextend`, so after it folds into a `trapnz` the
+;; newly inserted trap is re-processed and the truthiness-preserving `uextend`
+;; is stripped from its condition (`trapnz v0` rather than `trapnz (uextend
+;; v0)`).
+function %folded_trap_condition_is_simplified(i8) -> i8 {
+block0(v0: i8):
+    v1 = uextend.i32 v0
+    brif v1, block1, block2
+block1:
+    trap user1
+block2:
+    return v0
+}
+
+; function %folded_trap_condition_is_simplified(i8) -> i8 fast {
+; block0(v0: i8):
+;     trapnz v0, user1
+;     jump block2
+;
+; block2:
+;     return v0
+; }
+

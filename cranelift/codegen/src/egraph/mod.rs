@@ -2,6 +2,7 @@
 
 use crate::FxHashSet;
 use crate::alias_analysis::{AliasAnalysis, LastStores, OptResult};
+use crate::branch_to_trap::BranchToTrapAnalysis;
 use crate::ctxhash::{CtxEq, CtxHash, NullCtx};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::dominator_tree::DominatorTree;
@@ -112,6 +113,10 @@ pub struct EgraphPass<'a> {
     /// The control flow graph, used when eliminating unreachable code
     /// after branch simplification.
     cfg: &'a mut ControlFlowGraph,
+    /// Branch-to-trap analysis: determines which blocks are "just trap" blocks,
+    /// used by `simplify_skeleton` rules to rewrite conditional branches to
+    /// trapping blocks into conditional traps.
+    branch_to_trap_analysis: BranchToTrapAnalysis,
     /// Which Values do we want to rematerialize in each block where
     /// they're used?
     remat_values: FxHashSet<Value>,
@@ -148,6 +153,7 @@ where
     domtree: &'opt DominatorTree,
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
     pub(crate) alias_analysis_state: &'opt mut LastStores,
+    pub(crate) branch_to_trap_analysis: &'opt mut BranchToTrapAnalysis,
     ctrl_plane: &'opt mut ControlPlane,
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
@@ -642,6 +648,28 @@ where
                     return Some(simplification);
                 }
 
+                // `ReplaceBranchCond` is unconditionally accepted: the opcode
+                // and successors don't change, so we can't use the cost-based
+                // ranking the other variants do (skeleton cost can't consider
+                // operand costs).
+                SkeletonInstSimplification::ReplaceBranchCond { cond } => {
+                    log::trace!(" -> simplify_skeleton: replace condition operand with {cond}");
+                    return Some(SkeletonInstSimplification::ReplaceBranchCond { cond });
+                }
+                // `ReplaceWithTwo` (e.g. rewriting a branch-to-trap-block into
+                // a conditional trap + jump) is also unconditionally accepted:
+                // these rules are always an improvement, but due to its shape,
+                // cannot participate in the cost-based ranking other variants
+                // use.
+                SkeletonInstSimplification::ReplaceWithTwo { first, second } => {
+                    log::trace!(
+                        " -> simplify_skeleton: replace inst with `{}; {}`",
+                        ctx.func.dfg.display_inst(first),
+                        ctx.func.dfg.display_inst(second),
+                    );
+                    return Some(SkeletonInstSimplification::ReplaceWithTwo { first, second });
+                }
+
                 // For instruction replacement simplification, we want to check
                 // that the replacements define the same number and types of
                 // values as the original instruction, and also determine
@@ -660,16 +688,6 @@ where
                         ctx.func.dfg.display_inst(inst)
                     );
                     (inst, Some(val))
-                }
-                // `ReplaceBranchCond` is unconditionally accepted — the
-                // opcode and successors don't change, so we can't use the
-                // cost-based ranking the other variants do (replacing the
-                // condition with a cheaper sub-expression keeps the same
-                // opcode/arity, hence the same skeleton cost). The first such
-                // candidate wins; ISLE rule ordering picks the form.
-                SkeletonInstSimplification::ReplaceBranchCond { cond } => {
-                    log::trace!(" -> simplify_skeleton: replace condition operand with {cond}");
-                    return Some(SkeletonInstSimplification::ReplaceBranchCond { cond });
                 }
             };
 
@@ -730,6 +748,7 @@ impl<'a> EgraphPass<'a> {
             alias_analysis,
             ctrl_plane,
             cfg,
+            branch_to_trap_analysis: BranchToTrapAnalysis::default(),
             stats: Stats::default(),
             remat_values: FxHashSet::default(),
         }
@@ -920,6 +939,7 @@ impl<'a> EgraphPass<'a> {
                     domtree: &self.domtree,
                     alias_analysis: self.alias_analysis,
                     alias_analysis_state: &mut alias_analysis_state,
+                    branch_to_trap_analysis: &mut self.branch_to_trap_analysis,
                     ctrl_plane: self.ctrl_plane,
                     optimized_values: Default::default(),
                     optimized_insts: Default::default(),
@@ -977,10 +997,49 @@ impl<'a> EgraphPass<'a> {
         value_to_opt_value: &mut SecondaryMap<Value, Value>,
         old_inst: Inst,
     ) {
-        let mut forward_val = |cursor: &mut FuncCursor, old_val, new_val| {
+        // Redirect uses of `old_val` to `new_val`.
+        let forward_val = |cursor: &mut FuncCursor<'_>,
+                           value_to_opt_value: &mut SecondaryMap<_, _>,
+                           old_val,
+                           new_val| {
             cursor.func.dfg.change_to_alias(old_val, new_val);
             value_to_opt_value[old_val] = new_val;
         };
+
+        // Values created during skeleton-instruction simplification are created
+        // after we've already computed the `value_to_opt_value` map and are
+        // therefore missing entries within it. These values are already
+        // optimized, so map them to themselves.
+        let self_map_operands =
+            |dfg: &DataFlowGraph, value_to_opt_value: &mut SecondaryMap<_, _>, inst| {
+                for val in dfg.inst_values(inst) {
+                    debug_assert!(
+                        value_to_opt_value[val] == val
+                            || value_to_opt_value[val] == Value::reserved_value()
+                    );
+                    value_to_opt_value[val] = core::cmp::min(value_to_opt_value[val], val);
+                }
+            };
+
+        // Any new instructions produced by a simplification inherit the source
+        // location of the instruction they replace.
+        let old_srcloc = cursor.func.srclocs[old_inst];
+        // NB: But we only inherit the source location when it is non-default to
+        // avoid extending the `SecondaryMap`.
+        let old_srcloc = if old_srcloc.is_default() {
+            None
+        } else {
+            Some(old_srcloc)
+        };
+
+        // Rewind the cursor to just before `inst` so that the main loop
+        // re-processes it on its next iteration. This lets a freshly
+        // produced/modified skeleton instruction be GVN'd and/or simplified
+        // further.
+        fn reprocess_from(cursor: &mut FuncCursor, inst: Inst) {
+            cursor.goto_inst(inst);
+            cursor.prev_inst();
+        }
 
         let (new_inst, new_val) = match simplification {
             SkeletonInstSimplification::Remove => {
@@ -991,11 +1050,9 @@ impl<'a> EgraphPass<'a> {
                 cursor.remove_inst_and_step_back();
                 let old_val = cursor.func.dfg.first_result(old_inst);
                 cursor.func.dfg.detach_inst_results(old_inst);
-                forward_val(cursor, old_val, val);
+                forward_val(cursor, value_to_opt_value, old_val, val);
                 return;
             }
-            SkeletonInstSimplification::Replace { inst } => (inst, None),
-            SkeletonInstSimplification::ReplaceWithVal { inst, val } => (inst, Some(val)),
             SkeletonInstSimplification::ReplaceBranchCond { cond } => {
                 // Swap the condition operand (argument 0) of the existing
                 // conditional skeleton instruction in place. The opcode and any
@@ -1007,9 +1064,50 @@ impl<'a> EgraphPass<'a> {
                     crate::ir::Opcode::Brif | crate::ir::Opcode::Trapz | crate::ir::Opcode::Trapnz,
                 ));
                 cursor.func.dfg.inst_args_mut(old_inst)[0] = cond;
+                // Re-process the modified instruction so that, e.g., another
+                // truthiness-preserving layer can be stripped from its
+                // condition or it can be GVN'd.
+                self_map_operands(&cursor.func.dfg, value_to_opt_value, old_inst);
+                reprocess_from(cursor, old_inst);
                 return;
             }
+            SkeletonInstSimplification::ReplaceWithTwo { first, second } => {
+                // We don't forward result values for `ReplaceWithTwo` -- and it
+                // isn't clear what that would mean when both the new
+                // instructions have result values -- so we only support
+                // instructions without results here.
+                debug_assert!(cursor.func.dfg.inst_results(old_inst).is_empty());
+                debug_assert!(cursor.func.dfg.inst_results(first).is_empty());
+                debug_assert!(cursor.func.dfg.inst_results(second).is_empty());
+
+                // If the instruction we're replacing is a block terminator,
+                // then the trailing new instruction must also be a terminator,
+                // so the block remains well-formed.
+                debug_assert!(
+                    !cursor.func.dfg.insts[old_inst].opcode().is_terminator()
+                        || cursor.func.dfg.insts[second].opcode().is_terminator()
+                );
+
+                if let Some(old_srcloc) = old_srcloc {
+                    cursor.func.srclocs[first] = old_srcloc;
+                    cursor.func.srclocs[second] = old_srcloc;
+                }
+
+                cursor.insert_inst(first);
+                cursor.replace_inst(second);
+                self_map_operands(&cursor.func.dfg, value_to_opt_value, first);
+                self_map_operands(&cursor.func.dfg, value_to_opt_value, second);
+                reprocess_from(cursor, first);
+                return;
+            }
+
+            SkeletonInstSimplification::Replace { inst } => (inst, None),
+            SkeletonInstSimplification::ReplaceWithVal { inst, val } => (inst, Some(val)),
         };
+
+        if let Some(old_srcloc) = old_srcloc {
+            cursor.func.srclocs[new_inst] = old_srcloc;
+        }
 
         // Replace the old instruction with the new one.
         cursor.replace_inst(new_inst);
@@ -1029,10 +1127,11 @@ impl<'a> EgraphPass<'a> {
         for i in 0..cursor.func.dfg.inst_results(old_inst).len() {
             let old_val = cursor.func.dfg.inst_results(old_inst)[i];
             let new_val = next_new_val(&cursor.func.dfg);
-            forward_val(cursor, old_val, new_val);
+            forward_val(cursor, value_to_opt_value, old_val, new_val);
         }
 
-        cursor.goto_inst(new_inst);
+        self_map_operands(&cursor.func.dfg, value_to_opt_value, new_inst);
+        reprocess_from(cursor, new_inst);
     }
 
     /// Scoped elaboration: compute a final ordering of op computation

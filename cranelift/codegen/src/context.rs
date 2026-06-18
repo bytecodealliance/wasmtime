@@ -16,7 +16,6 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::inline::{Inline, do_inlining};
 use crate::ir::Function;
 use crate::isa::TargetIsa;
-use crate::legalizer::simple_legalize;
 use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::nan_canonicalization::do_nan_canonicalization;
@@ -173,7 +172,7 @@ impl Context {
             self.canonicalize_nans(isa)?;
         }
 
-        self.legalize(isa)?;
+        self.verify_if(isa)?;
 
         self.compute_cfg();
         self.compute_domtree();
@@ -290,19 +289,6 @@ impl Context {
             _ => true,
         };
         do_nan_canonicalization(&mut self.func, has_vector_support);
-        self.verify_if(isa)
-    }
-
-    /// Run the legalizer for `isa` on the function.
-    pub fn legalize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        // Legalization invalidates the domtree and loop_analysis by mutating the CFG.
-        // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
-        self.domtree.clear();
-        self.loop_analysis.clear();
-        self.cfg.clear();
-
-        // Run some specific legalizations only.
-        simple_legalize(&mut self.func);
         self.verify_if(isa)
     }
 

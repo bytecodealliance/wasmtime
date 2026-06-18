@@ -76,8 +76,7 @@
 ;;                                 block2(v28: i64, v29: i64):
 ;; @003e                               v30 = iconst.i64 1
 ;; @003e                               v31 = icmp eq v28, v30  ; v30 = 1
-;; @003e                               trapnz v31, user22
-;; @003e                               jump block3
+;; @003e                               brif v31, block7, block3
 ;;
 ;;                                 block3:
 ;; @003e                               v32 = load.i64 notrap aligned v29+48
@@ -103,6 +102,9 @@
 ;; @003e                               v47 = iconst.i32 1
 ;; @003e                               v48 = iadd.i32 v39, v47  ; v47 = 1
 ;; @003e                               brif v46, block6, block4(v48)
+;;
+;;                                 block7 cold:
+;; @003e                               trap user22
 ;;
 ;;                                 block6:
 ;; @003e                               store.i64 notrap aligned v29, v27+64

@@ -26,6 +26,19 @@
 (rule (simplify_skeleton (brif (iconst_u _ 0) _ else_dest))
       (jump else_dest))
 
+;; Conditional branch to a block that does nothing but trap: rewrite into a
+;; conditional trap plus a jump to the surviving successor. The trapping
+;; successor's block-call arguments are dropped (it just traps); the surviving
+;; successor's block call (with its arguments) is reused in the new `jump`.
+(rule (simplify_skeleton (brif condition consequent alternative))
+      (if-let trap_code (just_trap_block (block_call_block consequent)))
+      (replace_with_two (trapnz condition trap_code)
+                        (jump alternative)))
+(rule (simplify_skeleton (brif condition consequent alternative))
+      (if-let trap_code (just_trap_block (block_call_block alternative)))
+      (replace_with_two (trapz condition trap_code)
+                        (jump consequent)))
+
 ;; Branch table with known index: resolve the destination from the
 ;; jump table data and replace with an unconditional jump.
 (rule (simplify_skeleton (br_table (iconst_u _ idx) jt))
