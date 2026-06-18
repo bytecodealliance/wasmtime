@@ -1327,6 +1327,19 @@ impl VMStoreContext {
         }
     }
 
+    /// Sets the MMU access control bits to allow read access to the interrupt
+    /// page, effectively beginning a new epoch.
+    pub fn unprotect_interrupt_page(&self) {
+        if let Some(page_ptr) = self.epoch_interrupt_page_ptr {
+            unsafe {
+                mprotect(page_ptr.as_ptr(), page_size(), MprotectFlags::READ)
+                    .expect("any error from mprotect is a programming error")
+            }
+        } else {
+            panic!("called unprotect_interrupt_page though epoch-interruption-via-mmu was not on")
+        }
+    }
+
     /// Disposes of any allocated epoch interrupt page. This must be called if
     /// [`VMStoreContext::with_interrupt_page()`] was used to construct this
     /// instance, lest we leak a page.

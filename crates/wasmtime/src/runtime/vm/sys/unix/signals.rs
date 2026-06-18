@@ -2,12 +2,14 @@
 
 use crate::prelude::*;
 use crate::runtime::module::lookup_code;
-use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, tls};
+use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, raise_preexisting_trap, tls};
+use crate::runtime::vm::{Instance, VMContext, Yield};
 use core::arch::naked_asm;
+use core::hint::cold_path;
 use std::cell::RefCell;
 use std::io;
 use std::mem;
-use std::ptr::{self, null_mut};
+use std::ptr::{self, NonNull, null_mut};
 use wasmtime_unwinder::Handler;
 
 /// Function which may handle custom signals while processing traps.
@@ -134,23 +136,206 @@ now.
     }
 }
 
+/// Causes the active fiber to yield.
+///
+/// Consequently, this returns only after this fiber resumes, appearing to be a
+/// normal synchronous function from the standpoint of the caller.
+///
+/// `wasm_resume_pc` is the address of the instruction after the load that
+/// triggered the signal. `trampoline_fp` is pointer to
+/// `task_switch_trampoline`'s frame, which points at the slot where it saved
+/// the Wasm caller's rbp. Providing these allows this to ape the behavior of
+/// the wasm-to-host trampoline so backtrace capture works in the case of fiber
+/// cancellation.
+///
+/// If this fiber gets cancelled within the duration of our yield, this function
+/// never returns, instead initiating an unwind.
+#[cfg(feature = "async")]
+unsafe extern "C" fn yield_current_fiber(
+    vmctx: NonNull<VMContext>,
+    wasm_resume_pc: usize,
+    trampoline_fp: usize,
+) {
+    unsafe {
+        // is_cancelled means an error occurred and unwind info has been stored
+        // in TLS.
+        let is_cancelled = !Instance::enter_host_from_wasm(vmctx, |store, _instance| {
+            // Mirror the behavior of `block_on!`, which would panic in
+            // `assert_ready()` if async_support were off because `Yield::new()`
+            // is always initially unready.
+            if !store.async_support() {
+                cold_path();
+                panic!("shouldn't try to run async wasm on a store with async_support off");
+            }
+            let store_ctx = store.vm_store_context();
+
+            // Record Wasm-exit state just as a Cranelift-emitted wasm-to-host
+            // trampoline would so that any backtrace capture triggered
+            // while we are in the host (in particular, on the cancellation
+            // path below) sees a coherent topmost Wasm activation. Otherwise,
+            // it hits a debug assert and crashes.
+            *store_ctx.last_wasm_exit_pc.get() = wasm_resume_pc;
+            *store_ctx.last_wasm_exit_trampoline_fp.get() = trampoline_fp;
+
+            // Reset the epoch.
+            store_ctx.unprotect_interrupt_page();
+
+            // And actually switch fibers.
+            let result =
+                store.with_blocking(|_store, cx| cx.block_on(async { Yield::new().await }));
+
+            if result.is_ok() {
+                // Clear the exit state again so it doesn't appear stale once we
+                // resume Wasm.
+                let ctx = store.vm_store_context();
+                *ctx.last_wasm_exit_pc.get() = 0;
+                *ctx.last_wasm_exit_trampoline_fp.get() = 0;
+            }
+            // Else leave exit state in place so `record_unwind` (called via
+            // `raise_preexisting_trap` below) can capture a backtrace.
+
+            result
+        });
+        if is_cancelled {
+            // `block_on()` returned an Err, meaning this fiber has been
+            // cancelled and needs to exit. We unwind it using
+            // `raise_preexisting_trap()`, which, on native targets (the only
+            // ones MMU epochs apply to), never returns, doing a longjmp out and
+            // thus making anything in stack frames above irrelevant. Thus, it
+            // doesn't matter that we never get to restore registers in
+            // `task_switch_trampoline()` or jmp back to the signal-raising
+            // address.
+            Instance::enter_host_from_wasm(vmctx, |store, _instance| {
+                raise_preexisting_trap(store);
+            });
+        }
+    }
+}
+
 /// Switches tasks in response to a signal thrown under MMU-based epoch
 /// interruption.
 ///
 /// Saves register state, makes a host call to switch tasks, restores state, and
-/// returns.
+/// jmps back to the instruction after the one that triggered the signal. The
+/// address of that instruction has been squirreled away in r10 by the signal
+/// handler. The signal handler has also placed the address of the vmctx into
+/// rdi, the first argument register.
 #[unsafe(naked)]
 unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
     naked_asm!(
         "
-        // Save regs.
-        // Call hostcall to do task switch, passing in vmctx.
-        // Restore regs (including r10).
+        // When control reaches here, we have just returned from a signal
+        // handler after rewriting PC to point to this trampoline but updating
+        // no other register state.
+        //
+        // The stack has enough space for this state-saving, ensured by the
+        // stack-limit checks in Cranelift-compiled code.
+
+        // Push a fake return address just to keep the stack 16b-aligned for the
+        // call, as SysV x64 demands.
+        push 0
+        // This is an ordinary frame as seen by stack-walks. We also establish
+        // rbp as our frame pointer so that we can hand it to
+        // `yield_current_fiber` as the trampoline FP: the saved wasm rbp lives
+        // at [rbp], which is exactly what
+        // `VMStoreContext::wasm_exit_fp_from_trampoline_fp` expects.
+        push rbp
+
+        // Save all GPRs except rbp/rsp (saved above and by normal stack
+        // discipline, respectively).
+        push rdx
+
+        // Now that rdx is pushed, take an intermission to put the original
+        // value of rbp into it, for use as arg 3 to yield_current_fiber().
+        lea rdx, [rsp + 8]
+
+        // And do the rest of the GPRs.
+        push rax
+        push rbx
+        push rcx
+        push rdi
+        push rsi
+        push r8
+        push r9
+        push r10
+        push r11
+        push r12
+        push r13
+        push r14
+        push r15
+
+        // N.B.: we don't save rflags; Cranelift-compiled code
+        // never assumes it is saved across instructions outside of
+        // flag-generation / flag-consumption pairs, and the only
+        // resumable traps we are interested in are not flags-related.
+
+        sub rsp, 256 // enough for all 16 XMM registers.
+        movdqu [rsp +  0 * 16], xmm0
+        movdqu [rsp +  1 * 16], xmm1
+        movdqu [rsp +  2 * 16], xmm2
+        movdqu [rsp +  3 * 16], xmm3
+        movdqu [rsp +  4 * 16], xmm4
+        movdqu [rsp +  5 * 16], xmm5
+        movdqu [rsp +  6 * 16], xmm6
+        movdqu [rsp +  7 * 16], xmm7
+        movdqu [rsp +  8 * 16], xmm8
+        movdqu [rsp +  9 * 16], xmm9
+        movdqu [rsp + 10 * 16], xmm10
+        movdqu [rsp + 11 * 16], xmm11
+        movdqu [rsp + 12 * 16], xmm12
+        movdqu [rsp + 13 * 16], xmm13
+        movdqu [rsp + 14 * 16], xmm14
+        movdqu [rsp + 15 * 16], xmm15
+
+        // vmctx is already in rdi, care of the signal handler. Get the 2nd
+        // arg ready (the 3rd already having been put in rdx above)...
+        mov rsi, r10
+        // ...and call yield_current_fiber() to do the task switch.
+        call {}
+
+        // Restore registers.
+        movdqu xmm0,  [rsp +  0 * 16]
+        movdqu xmm1,  [rsp +  1 * 16]
+        movdqu xmm2,  [rsp +  2 * 16]
+        movdqu xmm3,  [rsp +  3 * 16]
+        movdqu xmm4,  [rsp +  4 * 16]
+        movdqu xmm5,  [rsp +  5 * 16]
+        movdqu xmm6,  [rsp +  6 * 16]
+        movdqu xmm7,  [rsp +  7 * 16]
+        movdqu xmm8,  [rsp +  8 * 16]
+        movdqu xmm9,  [rsp +  9 * 16]
+        movdqu xmm10, [rsp + 10 * 16]
+        movdqu xmm11, [rsp + 11 * 16]
+        movdqu xmm12, [rsp + 12 * 16]
+        movdqu xmm13, [rsp + 13 * 16]
+        movdqu xmm14, [rsp + 14 * 16]
+        movdqu xmm15, [rsp + 15 * 16]
+        add rsp, 256
+
+        pop r15
+        pop r14
+        pop r13
+        pop r12
+        pop r11
+        pop r10
+        pop r9
+        pop r8
+        pop rsi
+        pop rdi
+        pop rcx
+        pop rbx
+        pop rax
+        pop rdx
+
+        pop rbp
+        // Pop off the fake return address.
+        add rsp, 8
 
         // Resume right after the load instruction that triggered the signal
         // handler.
         jmp r10
-        "
+        ",
+        sym yield_current_fiber
     );
 }
 

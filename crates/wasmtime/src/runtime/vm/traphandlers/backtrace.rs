@@ -135,7 +135,7 @@ impl Backtrace {
 
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
     ///
-    /// If Wasm hit a trap, and we calling this from the trap handler, then the
+    /// If Wasm hit a trap and we are calling this from the trap handler, then the
     /// Wasm exit trampoline didn't run, and we use the provided PC and FP
     /// instead of looking them up in `VMStoreContext`.
     ///

@@ -74,12 +74,11 @@ fn lazy_per_thread_init() {
 /// activation on the stack, or the entry trampoline back to the the host, if
 /// the exception is uncaught.
 ///
-/// This is currently only called from the `raise` builtin of
-/// Wasmtime. This builtin is only used when the host returns back to
-/// wasm and indicates that a trap or exception should be raised. In
-/// this situation the host has already stored trap or exception
-/// information within the `CallThreadState` and this is the low-level
-/// operation to actually perform an unwind.
+/// This is called from the `raise` builtin of Wasmtime. This builtin is only
+/// used when the host returns back to wasm and indicates that a trap or
+/// exception should be raised. In this situation, the host has already stored
+/// trap or exception information within the `CallThreadState`, and this is the
+/// low-level operation to actually perform an unwind.
 ///
 /// Note that this function is used both for Pulley and for native execution.
 /// For Pulley this function will return and the interpreter will be
@@ -92,7 +91,7 @@ fn lazy_per_thread_init() {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
+pub(crate) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
     tls::with(|info| unsafe { info.unwrap().unwind(store) })
 }
 
