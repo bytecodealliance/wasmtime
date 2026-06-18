@@ -4,7 +4,7 @@ pub(crate) mod stack_switching;
 use crate::alias_region::AliasRegions;
 use crate::compiler::Compiler;
 use crate::translate::{
-    FuncTranslationStacks, Heap, HeapData, Load, MemoryKind, StructFieldsVec, TableData, TableSize,
+    FuncTranslationStacks, Heap, HeapData, MemoryKind, StructFieldsVec, TableData, TableSize,
     TargetEnvironment, VmctxLoadChain,
 };
 use crate::trap::TranslateTrap;
@@ -1653,7 +1653,6 @@ impl FuncEnvironment<'_> {
         func: &mut ir::Function,
         index: TableIndex,
     ) -> (VmctxLoadChain, TableSize) {
-        let pointer_type = self.pointer_type();
         let table = self.module.tables[index];
         let bound_ty = ir::Type::int(
             u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
@@ -1668,58 +1667,51 @@ impl FuncEnvironment<'_> {
             base_flags = base_flags.with_readonly().with_can_move();
         }
 
-        let base = |from: Option<Load>, offset| {
-            VmctxLoadChain::new(
-                from.into_iter()
-                    .chain(std::iter::once(Load {
-                        offset,
-                        flags: base_flags,
-                        ty: pointer_type,
-                    }))
-                    .collect(),
-            )
-        };
-        let bound = |from: Option<Load>, offset| {
-            if is_static {
+        if let Some(def_index) = self.module.defined_table_index(index) {
+            // A defined table's `VMTableDefinition` is inlined into the vmctx,
+            // reached at an absolute `vmctx` offset.
+            let base = VmctxLoadChain::new(smallvec![
+                self.alias_regions
+                    .vmctx_vmtable_definition_base_load(func, def_index, base_flags)
+            ]);
+            let bound = if is_static {
                 TableSize::Static {
                     bound: table.limits.min,
                 }
             } else {
                 TableSize::Dynamic {
-                    bound: VmctxLoadChain::new(
-                        from.into_iter()
-                            .chain(std::iter::once(Load {
-                                offset,
-                                flags: ir::MemFlagsData::trusted(),
-                                ty: bound_ty,
-                            }))
-                            .collect(),
-                    ),
+                    bound: VmctxLoadChain::new(smallvec![
+                        self.alias_regions
+                            .vmctx_vmtable_definition_current_elements_load(
+                                func, def_index, bound_ty
+                            )
+                    ]),
                 }
-            }
-        };
-
-        if let Some(def_index) = self.module.defined_table_index(index) {
-            (
-                base(None, self.offsets.vmctx_vmtable_definition_base(def_index)),
-                bound(
-                    None,
-                    self.offsets
-                        .vmctx_vmtable_definition_current_elements(def_index),
-                ),
-            )
+            };
+            (base, bound)
         } else {
+            // An imported table is reached through a `*mut VMTableDefinition`
+            // loaded from the `vmctx`.
             let from = self.alias_regions.vmctx_vmtable_from_load(func, index);
-            (
-                base(
-                    Some(from),
-                    u32::from(self.offsets.vmtable_definition_base()),
-                ),
-                bound(
-                    Some(from),
-                    u32::from(self.offsets.vmtable_definition_current_elements()),
-                ),
-            )
+            let base = VmctxLoadChain::new(smallvec![
+                from,
+                self.alias_regions
+                    .vmtable_definition_base_load(func, base_flags),
+            ]);
+            let bound = if is_static {
+                TableSize::Static {
+                    bound: table.limits.min,
+                }
+            } else {
+                TableSize::Dynamic {
+                    bound: VmctxLoadChain::new(smallvec![
+                        from,
+                        self.alias_regions
+                            .vmtable_definition_current_elements_load(func, bound_ty),
+                    ]),
+                }
+            };
+            (base, bound)
         }
     }
 

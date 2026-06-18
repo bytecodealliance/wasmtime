@@ -15,6 +15,7 @@ enum VmType {
     VMContext,
     VMStoreContext,
     VMMemoryDefinition,
+    VMTableDefinition,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -103,6 +104,7 @@ impl AliasRegionKey {
     const DEFINED_GLOBAL_KIND: u32 = Self::new_kind(0b0111);
     const GC_HEAP_KIND: u32 = Self::new_kind(0b1000);
     const VM_MEMORY_DEFINITION_KIND: u32 = Self::new_kind(0b1001);
+    const VM_TABLE_DEFINITION_KIND: u32 = Self::new_kind(0b1010);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -114,6 +116,7 @@ impl AliasRegionKey {
                     VmType::VMContext => Self::VM_CONTEXT_KIND,
                     VmType::VMStoreContext => Self::VM_STORE_CONTEXT_KIND,
                     VmType::VMMemoryDefinition => Self::VM_MEMORY_DEFINITION_KIND,
+                    VmType::VMTableDefinition => Self::VM_TABLE_DEFINITION_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -787,6 +790,102 @@ impl AliasRegions<VMOffsets<u8>> {
     ) -> ir::Value {
         self.vmctx_vmmemory_definition_current_length_load(cursor.func, memory)
             .emit(cursor, vmctx)
+    }
+
+    fn vmtable_definition_region(
+        &mut self,
+        func: &mut ir::Function,
+        offset: u32,
+    ) -> ir::AliasRegion {
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMTableDefinition,
+                offset,
+            },
+        )
+    }
+
+    /// Get a `Load` for an inlined-in-the-`vmctx` `VMTableDefinition`'s `base`
+    /// field.
+    pub fn vmctx_vmtable_definition_base_load(
+        &mut self,
+        func: &mut ir::Function,
+        table: DefinedTableIndex,
+        base_flags: ir::MemFlagsData,
+    ) -> Load {
+        // NB: The region is keyed on the field's offset within the
+        // `VMTableDefinition`, not the `vmctx`, so that defined
+        // (`vmctx`-inlined) and imported (via-pointer) tables share one region
+        // per field.
+        let field = self.offsets.vmtable_definition_base();
+        let region = self.vmtable_definition_region(func, field.into());
+
+        Load {
+            offset: self.offsets.vmctx_vmtable_definition_base(table),
+            flags: base_flags.with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
+    }
+
+    /// Get a `Load` for an inlined-in-the-`vmctx` `VMTableDefinition`'s
+    /// `current_elements` field.
+    ///
+    /// The caller supplies `ty` because the field's width depends on the table
+    /// elements' type.
+    pub fn vmctx_vmtable_definition_current_elements_load(
+        &mut self,
+        func: &mut ir::Function,
+        table: DefinedTableIndex,
+        ty: ir::Type,
+    ) -> Load {
+        // See note in `vmctx_vmtable_definition_base_load`.
+        let field = self.offsets.vmtable_definition_current_elements();
+        let region = self.vmtable_definition_region(func, field.into());
+
+        Load {
+            offset: self
+                .offsets
+                .vmctx_vmtable_definition_current_elements(table),
+            flags: ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            ty,
+        }
+    }
+
+    /// Get a `Load` for the `VMTableDefinition::base` field reached through a
+    /// `*mut VMTableDefinition` (an imported table), for use in a
+    /// `VmctxLoadChain`.
+    pub fn vmtable_definition_base_load(
+        &mut self,
+        func: &mut ir::Function,
+        base_flags: ir::MemFlagsData,
+    ) -> Load {
+        let offset = self.offsets.vmtable_definition_base().into();
+        let region = self.vmtable_definition_region(func, offset);
+        Load {
+            offset,
+            flags: base_flags.with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
+    }
+
+    /// Get a `Load` for the `VMTableDefinition::current_elements` field reached
+    /// through a `*mut VMTableDefinition` (an imported table).
+    ///
+    /// The caller supplies `ty` because the field's width depends on the table
+    /// elements' type.
+    pub fn vmtable_definition_current_elements_load(
+        &mut self,
+        func: &mut ir::Function,
+        ty: ir::Type,
+    ) -> Load {
+        let offset = self.offsets.vmtable_definition_current_elements().into();
+        let region = self.vmtable_definition_region(func, offset);
+        Load {
+            offset,
+            flags: ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            ty,
+        }
     }
 }
 
