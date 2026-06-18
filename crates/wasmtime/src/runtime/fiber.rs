@@ -9,11 +9,12 @@ use core::pin::Pin;
 use core::ptr::{self, NonNull};
 use core::task::{Context, Poll};
 use wasmtime_fiber::{Fiber, FiberStack, Suspend};
-#[cfg(feature = "gc")]
+#[cfg(all(feature = "component-model-async", feature = "gc"))]
 use wasmtime_unwinder::Unwind;
 
-#[cfg(feature = "gc")]
+#[cfg(all(feature = "component-model-async", feature = "gc"))]
 use super::module::ModuleRegistry;
+#[cfg(all(feature = "component-model-async", feature = "gc"))]
 use super::vm::GcRootsList;
 
 type WasmtimeResume = Result<NonNull<Context<'static>>>;
@@ -460,7 +461,7 @@ impl<'a> StoreFiber<'a> {
         }
     }
 
-    #[cfg(feature = "gc")]
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
     pub(crate) fn trace_gc_roots(
         &mut self,
         modules: &ModuleRegistry,
@@ -468,7 +469,10 @@ impl<'a> StoreFiber<'a> {
         gc_roots_list: &mut GcRootsList,
     ) {
         if let Some(state) = &mut self.state {
-            state.get_mut().tls.trace_gc_roots(modules, unwind, gc_roots_list);
+            state
+                .get_mut()
+                .tls
+                .trace_gc_roots(modules, unwind, gc_roots_list);
         }
     }
 }

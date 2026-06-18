@@ -1088,9 +1088,9 @@ fn entry_trap_handler(vm_store_context: &VMStoreContext) -> Handler {
 /// thread's current list pointed to by TLS is youngest-to-oldest links, while a
 /// suspended fiber stores oldest-to-youngest links.
 pub(crate) mod tls {
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
     use crate::module::ModuleRegistry;
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
     use crate::store::StoreOpaque;
 
     use super::CallThreadState;
@@ -1169,7 +1169,7 @@ pub(crate) mod tls {
     }
 
     pub use raw::initialize as tls_eager_initialize;
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
     use wasmtime_unwinder::Unwind;
 
     /// Opaque state used to persist the state of the `CallThreadState`
@@ -1277,7 +1277,7 @@ pub(crate) mod tls {
             assert!(!range.contains(&p));
         }
 
-        #[cfg(feature = "gc")]
+        #[cfg(all(feature = "component-model-async", feature = "gc"))]
         pub(crate) fn trace_gc_roots(
             &mut self,
             modules: &ModuleRegistry,
