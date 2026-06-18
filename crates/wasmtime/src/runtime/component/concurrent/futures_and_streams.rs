@@ -2488,10 +2488,7 @@ impl StoreOpaque {
             }
             WriteState::HostReady { .. } => {}
             v @ WriteState::Open => {
-                if let (Some(on_drop_open), false) = (
-                    on_drop_open,
-                    transmit.done || matches!(transmit.read, ReadState::Dropped),
-                ) {
+                if let (Some(on_drop_open), false) = (on_drop_open, transmit.done) {
                     on_drop_open()?;
                 } else {
                     *v = WriteState::Dropped;
