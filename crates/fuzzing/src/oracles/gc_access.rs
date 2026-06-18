@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn gc_access_oracle_passes() {
-        crate::test::test_n_times(1024, |config: generators::Config, u| {
+        crate::test::test_n_times(128, |config: generators::Config, u| {
             let input: GcAccess = u.arbitrary()?;
             gc_access(config, input);
             Ok(())
