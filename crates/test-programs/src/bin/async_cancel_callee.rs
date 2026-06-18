@@ -97,6 +97,16 @@ unsafe extern "C" fn export_dec_backpressure() {
     wit_bindgen::backpressure_dec();
 }
 
+#[unsafe(export_name = "[async-lift]local:local/backpressure#inc-then-later-dec-backpressure")]
+unsafe extern "C" fn export_inc_then_later_dec_backpressure() -> u32 {
+    todo!()
+}
+
+#[unsafe(export_name = "[callback][async-lift]local:local/backpressure#inc-then-later-dec-backpressure")]
+unsafe extern "C" fn callback_inc_then_later_dec_backpressure(_: u32, _: u32, _: u32) -> u32 {
+    todo!()
+}
+
 #[unsafe(export_name = "local:local/yield#yield-times")]
 unsafe extern "C" fn export_yield_yield_times(times: u64) {
     unsafe {

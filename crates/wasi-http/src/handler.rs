@@ -1419,7 +1419,7 @@ async fn when_ready<T, D: HasData>(accessor: &Accessor<T, D>, proxy: &Proxy) -> 
                 .wasi_http_handler()
                 .func_handle()
                 .func()
-                .ready_to_call(accessor)
+                .ready_for_concurrent_call(accessor)
                 .await
         }
         #[cfg(feature = "p2")]
@@ -1428,7 +1428,7 @@ async fn when_ready<T, D: HasData>(accessor: &Accessor<T, D>, proxy: &Proxy) -> 
                 .wasi_http_incoming_handler()
                 .func_handle()
                 .func()
-                .ready_to_call(accessor)
+                .ready_for_concurrent_call(accessor)
                 .await
         }
     }

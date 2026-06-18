@@ -164,10 +164,10 @@ impl Func {
     }
 
     /// Returns a future which will resolve once the component instance
-    /// corresponding to this function is ready to accept a call without queuing
-    /// it (i.e. does not have backpressure enabled and does not have a sync
-    /// call in progress).
-    pub async fn ready_to_call<T: 'static>(
+    /// corresponding to this function is ready to run a concurrent call without
+    /// queuing it (i.e. does not have backpressure enabled and does not have a
+    /// sync call in progress).
+    pub async fn ready_for_concurrent_call<T: 'static>(
         self,
         accessor: impl AsAccessor<Data = T>,
     ) -> Result<()> {
