@@ -1,0 +1,40 @@
+test compile precise-output
+target pulley64
+
+function %f(i8, i64) -> i64 {
+block0(v0: i8, v1: i64):
+  brif v0, block1, block2
+
+;; This block is implicitly cold because it ends in a trap; it should come last
+;; in the lowered block order.
+block1:
+  v2 = iconst.i32 42
+  store notrap aligned v2, v1
+  trap user123
+
+block2:
+  v3 = iconst.i64 0
+  return v3
+}
+
+; VCode:
+; block0:
+;   zext8 x5, x0
+;   br_if32 x5, label2; jump label1
+; block1:
+;   xzero x0
+;   ret
+; block2:
+;   xconst8 x7, 42
+;   xstore32 x1+0, x7 // flags =  notrap aligned
+;   trap // trap=TrapCode(123)
+;
+; Disassembled:
+; zext8 x5, x0
+; br_if32 x5, 0x9    // target = 0xc
+; xzero x0
+; ret
+; xconst8 x7, 42
+; xstore32le_o32 x1, 0, x7
+; trap
+

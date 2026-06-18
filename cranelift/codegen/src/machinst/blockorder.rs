@@ -257,7 +257,7 @@ impl BlockLoweringOrder {
                         lowered_succ_indices
                             .extend(block_succs[range].iter().map(|lb| lb_to_bindex[lb]));
 
-                        if f.layout.is_cold(block) {
+                        if f.is_effectively_cold(block) {
                             cold_blocks.insert(bindex);
                         }
 
@@ -282,7 +282,7 @@ impl BlockLoweringOrder {
                         // Edges inherit indirect branch and cold block metadata from their
                         // successor.
 
-                        if f.layout.is_cold(succ) {
+                        if f.is_effectively_cold(succ) {
                             cold_blocks.insert(bindex);
                         }
 

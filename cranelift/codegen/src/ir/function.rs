@@ -473,6 +473,20 @@ impl Function {
     pub fn import_function(&mut self, data: ExtFuncData) -> FuncRef {
         self.stencil.dfg.ext_funcs.push(data)
     }
+
+    /// Is the given block marked `cold` or otherwise effectively `cold` in
+    /// practice?
+    pub fn is_effectively_cold(&self, block: Block) -> bool {
+        if self.layout.is_cold(block) {
+            return true;
+        }
+
+        // Blocks that unconditionally trap are effectively
+        // also cold.
+        self.layout
+            .last_inst(block)
+            .is_some_and(|inst| self.dfg.insts[inst].opcode() == ir::Opcode::Trap)
+    }
 }
 
 /// Wrapper type capable of displaying a `Function`.
