@@ -381,7 +381,7 @@ impl Instance {
         rep: u32,
     ) -> Result<u32> {
         store
-            .component_resource_tables(Some(self))
+            .component_resource_tables(Some(self))?
             .resource_new(TypedResource::Component { ty, rep })
     }
 
@@ -394,7 +394,7 @@ impl Instance {
         index: u32,
     ) -> Result<u32> {
         store
-            .component_resource_tables(Some(self))
+            .component_resource_tables(Some(self))?
             .resource_rep(TypedResourceIndex::Component { ty, index })
     }
 
@@ -406,7 +406,7 @@ impl Instance {
         index: u32,
     ) -> Result<Option<u32>> {
         store
-            .component_resource_tables(Some(self))
+            .component_resource_tables(Some(self))?
             .resource_drop(TypedResourceIndex::Component { ty, index })
     }
 
@@ -417,7 +417,7 @@ impl Instance {
         src: TypeResourceTableIndex,
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let mut tables = store.component_resource_tables(Some(self));
+        let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_own(TypedResourceIndex::Component { ty: src, index })?;
         tables.resource_lower_own(TypedResource::Component { ty: dst, rep })
     }
@@ -430,7 +430,7 @@ impl Instance {
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
         let dst_owns_resource = self.id().get(store).resource_owned_by_own_instance(dst);
-        let mut tables = store.component_resource_tables(Some(self));
+        let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
         // Implement `lower_borrow`'s special case here where if a borrow's
         // resource type is owned by `dst` then the destination receives the

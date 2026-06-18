@@ -221,7 +221,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         ty: TypeResourceTableIndex,
         rep: u32,
     ) -> Result<u32> {
-        self.resource_tables().guest_resource_lower_own(rep, ty)
+        self.resource_tables()?.guest_resource_lower_own(rep, ty)
     }
 
     /// Lowers a `borrow` resource into the guest, converting the `rep` to a
@@ -242,19 +242,19 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         if self.instance().resource_owned_by_own_instance(ty) {
             return Ok(rep);
         }
-        self.resource_tables().guest_resource_lower_borrow(rep, ty)
+        self.resource_tables()?.guest_resource_lower_borrow(rep, ty)
     }
 
     /// Lifts a host-owned `own` resource at the `idx` specified into the
     /// representation of that resource.
     pub fn host_resource_lift_own(&mut self, idx: HostResourceIndex) -> Result<u32> {
-        self.resource_tables().host_resource_lift_own(idx)
+        self.resource_tables()?.host_resource_lift_own(idx)
     }
 
     /// Lifts a host-owned `borrow` resource at the `idx` specified into the
     /// representation of that resource.
     pub fn host_resource_lift_borrow(&mut self, idx: HostResourceIndex) -> Result<u32> {
-        self.resource_tables().host_resource_lift_borrow(idx)
+        self.resource_tables()?.host_resource_lift_borrow(idx)
     }
 
     /// Lowers a resource into the host-owned table, returning the index it was
@@ -268,7 +268,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         dtor: Option<NonNull<VMFuncRef>>,
         instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
-        self.resource_tables()
+        self.resource_tables()?
             .host_resource_lower_own(rep, dtor, instance)
     }
 
@@ -283,18 +283,18 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         InstanceType::new(self.instance())
     }
 
-    fn resource_tables(&mut self) -> HostResourceTables<'_> {
+    fn resource_tables(&mut self) -> Result<HostResourceTables<'_>> {
         let (tables, data) = self
             .store
             .0
-            .component_resource_tables_and_host_resource_data(Some(self.instance));
-        HostResourceTables::from_parts(tables, data)
+            .component_resource_tables_and_host_resource_data(Some(self.instance))?;
+        Ok(HostResourceTables::from_parts(tables, data))
     }
 
     /// See [`HostResourceTables::validate_scope_exit`].
     #[inline]
     pub fn validate_scope_exit(&mut self) -> Result<()> {
-        self.resource_tables().validate_scope_exit()
+        self.resource_tables()?.validate_scope_exit()
     }
 }
 

@@ -219,7 +219,9 @@ pub unsafe trait VMStore: 'static {
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
-    fn component_task_state_mut(&mut self) -> &mut crate::component::store::ComponentTaskState;
+    fn component_task_state_mut(
+        &mut self,
+    ) -> Result<&mut crate::component::store::ComponentTaskState>;
 
     #[cfg(feature = "component-model-async")]
     fn component_async_store(
