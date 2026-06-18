@@ -1617,7 +1617,7 @@ impl StorageType {
     /// Is this a Wasm value type?
     #[inline]
     pub fn is_val_type(&self) -> bool {
-        matches!(self, Self::I16)
+        matches!(self, Self::ValType(_))
     }
 
     /// Get this storage type's underlying value type, if any.
