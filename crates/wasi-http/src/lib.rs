@@ -71,6 +71,51 @@ mod content_length_tests {
     }
 }
 
+/// Extract the host portion of an `authority` for use as a TLS server name.
+///
+/// `authority` is in `host` or `host:port` form, where an IPv6 `host` is
+/// wrapped in brackets (for example `[::1]:443`). Splitting on the first `:` is
+/// wrong for the bracketed IPv6 form, so handle it explicitly and return the
+/// bare address without brackets, which is what `rustls`' `ServerName` expects.
+#[cfg(all(feature = "default-send-request", any(feature = "p2", feature = "p3")))]
+fn tls_server_name(authority: &str) -> &str {
+    if let Some(rest) = authority.strip_prefix('[') {
+        if let Some(end) = rest.find(']') {
+            return &rest[..end];
+        }
+    }
+    match authority.split_once(':') {
+        Some((host, _port)) => host,
+        None => authority,
+    }
+}
+
+#[cfg(all(
+    test,
+    feature = "default-send-request",
+    any(feature = "p2", feature = "p3")
+))]
+mod tls_server_name_tests {
+    use super::tls_server_name;
+
+    #[test]
+    fn extracts_host_from_authority() {
+        assert_eq!(tls_server_name("example.com"), "example.com");
+        assert_eq!(tls_server_name("example.com:443"), "example.com");
+        assert_eq!(tls_server_name("127.0.0.1:80"), "127.0.0.1");
+
+        // An IPv6 literal is bracketed; the brackets must be dropped and the
+        // whole address kept rather than truncated at the first `:`.
+        assert_eq!(tls_server_name("[::1]:443"), "::1");
+        assert_eq!(tls_server_name("[2001:db8::1]:8443"), "2001:db8::1");
+        assert_eq!(tls_server_name("[::1]"), "::1");
+
+        // Matches what a parsed authority produces for an IPv6 host.
+        let authority = http::uri::Authority::from_static("[2001:db8::1]:8443");
+        assert_eq!(tls_server_name(&authority.to_string()), "2001:db8::1");
+    }
+}
+
 /// Set of [http::header::HeaderName], that are forbidden by default
 /// for requests and responses originating in the guest.
 pub const DEFAULT_FORBIDDEN_HEADERS: [HeaderName; 9] = [

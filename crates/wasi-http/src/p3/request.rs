@@ -356,9 +356,7 @@ pub async fn default_send_request(
             .with_root_certificates(root_cert_store)
             .with_no_client_auth();
         let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
-        let mut parts = authority.split(":");
-        let host = parts.next().unwrap_or(&authority);
-        let domain = ServerName::try_from(host)
+        let domain = ServerName::try_from(crate::tls_server_name(&authority))
             .map_err(|e| {
                 tracing::warn!("dns lookup error: {e:?}");
                 dns_error("invalid dns name".to_string(), 0)
