@@ -707,3 +707,363 @@ fn heap_type_matches_noexn() -> Result<()> {
 
     Ok(())
 }
+
+/// Extract the concrete struct type referenced by a `(ref ... <struct>)` field.
+fn field_concrete_struct(field: &FieldType) -> StructType {
+    match field.element_type() {
+        StorageType::ValType(ValType::Ref(r)) => match r.heap_type() {
+            HeapType::ConcreteStruct(s) => s.clone(),
+            other => panic!("expected concrete struct heap type, got {other:?}"),
+        },
+        other => panic!("expected a ref-typed field, got {other:?}"),
+    }
+}
+
+#[test]
+fn rec_group_self_reference() -> Result<()> {
+    let engine = Engine::default();
+
+    let mut builder = RecGroupBuilder::new(&engine);
+    let node = builder.declare_struct();
+    builder.define_struct(node, [FieldTemplate::ref_(Mutability::Var, true, node)]);
+    let group = builder.build()?;
+
+    assert_eq!(group.len(), 1);
+    let node = group.struct_(node);
+    assert_eq!(node.fields().len(), 1);
+
+    let field = node.field(0).unwrap();
+    let referenced = field_concrete_struct(&field);
+    assert!(StructType::eq(&referenced, &node));
+    Ok(())
+}
+
+#[test]
+fn rec_group_mutual_recursion() -> Result<()> {
+    let engine = Engine::default();
+
+    let mut builder = RecGroupBuilder::new(&engine);
+    let s1 = builder.declare_struct();
+    let s2 = builder.declare_struct();
+    builder.define_struct(s1, [FieldTemplate::ref_(Mutability::Var, true, s2)]);
+    builder.define_struct(s2, [FieldTemplate::ref_(Mutability::Const, false, s1)]);
+    let group = builder.build()?;
+
+    assert_eq!(group.len(), 2);
+    let s1 = group.struct_(s1);
+    let s2 = group.struct_(s2);
+
+    // s1.field0 -> (ref null s2)
+    let f1 = s1.field(0).unwrap();
+    match f1.element_type() {
+        StorageType::ValType(ValType::Ref(r)) => assert!(r.is_nullable()),
+        other => panic!("unexpected {other:?}"),
+    }
+    assert!(StructType::eq(&field_concrete_struct(&f1), &s2));
+
+    // s2.field0 -> (ref s1), non-nullable
+    let f2 = s2.field(0).unwrap();
+    match f2.element_type() {
+        StorageType::ValType(ValType::Ref(r)) => assert!(!r.is_nullable()),
+        other => panic!("unexpected {other:?}"),
+    }
+    assert!(StructType::eq(&field_concrete_struct(&f2), &s1));
+    Ok(())
+}
+
+#[test]
+fn rec_group_mixed_concrete_and_local() -> Result<()> {
+    let engine = Engine::default();
+
+    // An already-registered, one-off struct type.
+    let existing = StructType::new(
+        &engine,
+        [FieldType::new(
+            Mutability::Const,
+            StorageType::ValType(ValType::I32),
+        )],
+    )?;
+
+    let mut builder = RecGroupBuilder::new(&engine);
+    let node = builder.declare_struct();
+    builder.define_struct(
+        node,
+        [
+            // forward ref to the sibling
+            FieldTemplate::ref_(Mutability::Var, true, node),
+            // ref to an already-registered type
+            FieldTemplate::ref_(Mutability::Const, false, existing.clone()),
+            // a plain scalar
+            FieldTemplate::new(Mutability::Var, StorageType::ValType(ValType::I64)),
+        ],
+    );
+    let group = builder.build()?;
+    let node = group.struct_(node);
+
+    assert_eq!(node.fields().len(), 3);
+    assert!(StructType::eq(
+        &field_concrete_struct(&node.field(0).unwrap()),
+        &node
+    ));
+    assert!(StructType::eq(
+        &field_concrete_struct(&node.field(1).unwrap()),
+        &existing
+    ));
+    assert!(node.field(2).unwrap().element_type().is_val_type());
+    Ok(())
+}
+
+#[test]
+fn rec_group_dedup() -> Result<()> {
+    let engine = Engine::default();
+
+    let build = || -> Result<StructType> {
+        let mut builder = RecGroupBuilder::new(&engine);
+        let s1 = builder.declare_struct();
+        let s2 = builder.declare_struct();
+        builder.define_struct(s1, [FieldTemplate::ref_(Mutability::Var, true, s2)]);
+        builder.define_struct(s2, [FieldTemplate::ref_(Mutability::Const, false, s1)]);
+        let group = builder.build()?;
+        Ok(group.struct_(s1))
+    };
+
+    let a = build()?;
+    let b = build()?;
+    // Two identical rec groups are hash-consed to the same registered types.
+    assert!(StructType::eq(&a, &b));
+    Ok(())
+}
+
+#[test]
+fn rec_group_subtyping_via_sibling() -> Result<()> {
+    let engine = Engine::default();
+
+    let mut builder = RecGroupBuilder::new(&engine);
+    let base = builder.declare_struct();
+    let derived = builder.declare_struct();
+    builder.define_struct_with_finality_and_supertype(
+        base,
+        Finality::NonFinal,
+        None::<StructSuperType>,
+        [FieldType::new(
+            Mutability::Const,
+            StorageType::ValType(ValType::I32),
+        )],
+    );
+    builder.define_struct_with_finality_and_supertype(
+        derived,
+        Finality::Final,
+        Some(base),
+        // width subtype: keeps base's field, adds another
+        [
+            FieldType::new(Mutability::Const, StorageType::ValType(ValType::I32)),
+            FieldType::new(Mutability::Const, StorageType::ValType(ValType::I64)),
+        ],
+    );
+    let group = builder.build()?;
+
+    let base = group.struct_(base);
+    let derived = group.struct_(derived);
+    assert!(derived.matches(&base));
+    assert_eq!(
+        derived.supertype().map(|s| StructType::eq(&s, &base)),
+        Some(true)
+    );
+    Ok(())
+}
+
+#[test]
+fn rec_group_subtyping_via_concrete() -> Result<()> {
+    let engine = Engine::default();
+
+    let base = StructType::with_finality_and_supertype(
+        &engine,
+        Finality::NonFinal,
+        None,
+        [FieldType::new(
+            Mutability::Const,
+            StorageType::ValType(ValType::I32),
+        )],
+    )?;
+
+    let mut builder = RecGroupBuilder::new(&engine);
+    let derived = builder.declare_struct();
+    builder.define_struct_with_finality_and_supertype(
+        derived,
+        Finality::Final,
+        Some(base.clone()),
+        [FieldType::new(
+            Mutability::Const,
+            StorageType::ValType(ValType::I32),
+        )],
+    );
+    let group = builder.build()?;
+
+    assert!(group.struct_(derived).matches(&base));
+    Ok(())
+}
+
+#[test]
+fn rec_group_array_and_func_recursive() -> Result<()> {
+    let engine = Engine::default();
+
+    let mut builder = RecGroupBuilder::new(&engine);
+    let node = builder.declare_struct();
+    let arr = builder.declare_array();
+    let func = builder.declare_func();
+    // struct referencing the array and func siblings
+    builder.define_struct(
+        node,
+        [
+            FieldTemplate::ref_(Mutability::Var, true, arr),
+            FieldTemplate::ref_(Mutability::Var, true, func),
+        ],
+    );
+    // array of (ref null node)
+    builder.define_array(arr, FieldTemplate::ref_(Mutability::Var, true, node));
+    // func: (param (ref null node)) -> (ref null node)
+    builder.define_func(
+        func,
+        [ValTypeTemplate::ref_(true, node)],
+        [ValTypeTemplate::ref_(true, node)],
+    );
+    let group = builder.build()?;
+
+    assert_eq!(group.len(), 3);
+    let arr = group.array(arr);
+    let func = group.func(func);
+    assert_eq!(func.params().len(), 1);
+    assert_eq!(func.results().len(), 1);
+    // array element is a ref
+    assert!(arr.field_type().element_type().is_val_type());
+    Ok(())
+}
+
+#[test]
+fn rec_group_declared_but_undefined_errors() {
+    let engine = Engine::default();
+    let mut builder = RecGroupBuilder::new(&engine);
+    let _s = builder.declare_struct();
+    let err = builder.build().unwrap_err();
+    assert!(
+        err.to_string().contains("declared but never defined"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn rec_group_empty_errors() {
+    let engine = Engine::default();
+    let builder = RecGroupBuilder::new(&engine);
+    assert!(builder.build().is_err());
+}
+
+#[test]
+fn rec_group_final_supertype_errors() {
+    let engine = Engine::default();
+    let mut builder = RecGroupBuilder::new(&engine);
+    let base = builder.declare_struct();
+    let derived = builder.declare_struct();
+    // base is final (default)
+    builder.define_struct(
+        base,
+        [FieldType::new(
+            Mutability::Const,
+            StorageType::ValType(ValType::I32),
+        )],
+    );
+    builder.define_struct_with_finality_and_supertype(
+        derived,
+        Finality::Final,
+        Some(base),
+        [FieldType::new(
+            Mutability::Const,
+            StorageType::ValType(ValType::I32),
+        )],
+    );
+    let err = builder.build().unwrap_err();
+    assert!(
+        err.to_string().contains("final supertype"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn rec_group_supertype_mismatch_errors() {
+    let engine = Engine::default();
+    let mut builder = RecGroupBuilder::new(&engine);
+    let base = builder.declare_struct();
+    let derived = builder.declare_struct();
+    builder.define_struct_with_finality_and_supertype(
+        base,
+        Finality::NonFinal,
+        None::<StructSuperType>,
+        [FieldType::new(
+            Mutability::Var,
+            StorageType::ValType(ValType::I32),
+        )],
+    );
+    // mutable fields must be exactly equal; i64 != i32 -> mismatch
+    builder.define_struct_with_finality_and_supertype(
+        derived,
+        Finality::Final,
+        Some(base),
+        [FieldType::new(
+            Mutability::Var,
+            StorageType::ValType(ValType::I64),
+        )],
+    );
+    let err = builder.build().unwrap_err();
+    assert!(
+        err.to_string().contains("does not match its supertype"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn rec_group_nonfinal_root_without_supertype() -> Result<()> {
+    let engine = Engine::default();
+    let mut builder = RecGroupBuilder::new(&engine);
+    let root = builder.declare_struct();
+    // A non-final root with no supertype requires the turbofish on `None`.
+    builder.define_struct_with_finality_and_supertype(
+        root,
+        Finality::NonFinal,
+        None::<StructType>,
+        [FieldType::new(
+            Mutability::Const,
+            StorageType::ValType(ValType::I32),
+        )],
+    );
+    let group = builder.build()?;
+    assert_eq!(group.struct_(root).finality(), Finality::NonFinal);
+    Ok(())
+}
+
+#[test]
+fn rec_group_types_iter() -> Result<()> {
+    let engine = Engine::default();
+    let mut builder = RecGroupBuilder::new(&engine);
+    let s = builder.declare_struct();
+    let a = builder.declare_array();
+    builder.define_struct(
+        s,
+        [FieldType::new(
+            Mutability::Const,
+            StorageType::ValType(ValType::I32),
+        )],
+    );
+    builder.define_array(a, FieldType::new(Mutability::Var, StorageType::I8));
+    let group = builder.build()?;
+
+    let kinds: Vec<_> = group
+        .types()
+        .map(|t| match t {
+            CompositeType::Struct(_) => "struct",
+            CompositeType::Array(_) => "array",
+            CompositeType::Func(_) => "func",
+        })
+        .collect();
+    assert_eq!(kinds, ["struct", "array"]);
+    Ok(())
+}
