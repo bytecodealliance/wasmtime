@@ -245,14 +245,6 @@ impl BlockLoweringOrder {
         let mut lowered_succ_indices = Vec::new();
         let mut cold_blocks = FxHashSet::default();
         let mut indirect_branch_targets = FxHashSet::default();
-        let is_cold = |block| {
-            f.layout.is_cold(block)
-                // Blocks that unconditionally trap are effectively
-                // also cold.
-                || f.layout
-                    .last_inst(block)
-                    .is_some_and(|inst| f.dfg.insts[inst].opcode() == ir::Opcode::Trap)
-        };
         let lowered_succ_ranges =
             Vec::from_iter(lowered_order.iter().enumerate().map(|(ix, lb)| {
                 let bindex = BlockIndex::new(ix);
@@ -265,7 +257,7 @@ impl BlockLoweringOrder {
                         lowered_succ_indices
                             .extend(block_succs[range].iter().map(|lb| lb_to_bindex[lb]));
 
-                        if is_cold(block) {
+                        if f.is_effectively_cold(block) {
                             cold_blocks.insert(bindex);
                         }
 
@@ -290,7 +282,7 @@ impl BlockLoweringOrder {
                         // Edges inherit indirect branch and cold block metadata from their
                         // successor.
 
-                        if is_cold(succ) {
+                        if f.is_effectively_cold(succ) {
                             cold_blocks.insert(bindex);
                         }
 
