@@ -39,3 +39,7 @@ backtrace = "0.3.68"
 # Assume presence of the standard library. Allows propagating
 # panic-unwinds across fiber invocations.
 std = []
+
+# Use embedder-provided stack-switching routines on unsupported architectures.
+# See `src/stackswitch/custom.rs` for the C ABI the embedder must implement.
+custom = []

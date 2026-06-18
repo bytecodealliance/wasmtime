@@ -236,4 +236,29 @@ unsafe extern "C" {
     /// The implementor must handle this case gracefully.
     #[cfg(has_custom_sync)]
     pub fn wasmtime_sync_rwlock_free(lock: *mut usize);
+
+    // The `wasmtime_fiber_*` declarations below are duplicated in
+    // `crates/fiber/src/stackswitch/custom.rs`, which is where Wasmtime
+    // actually imports them from (the `wasmtime-internal-fiber` crate cannot
+    // depend on this crate). Keep the two copies in-sync.
+
+    /// Initializes a fiber stack so that switching to it will begin executing `entry`.
+    #[cfg(has_custom_fiber)]
+    #[expect(
+        dead_code,
+        reason = "imported and called from the `wasmtime-internal-fiber`"
+    )]
+    pub fn wasmtime_fiber_init(
+        top_of_stack: *mut u8,
+        entry: extern "C" fn(*mut u8, *mut u8) -> *mut u8,
+        entry_arg0: *mut u8,
+    );
+
+    /// Switches execution to the fiber stack whose top is `top_of_stack`.
+    #[cfg(has_custom_fiber)]
+    #[expect(
+        dead_code,
+        reason = "imported and called from `wasmtime-internal-fiber`"
+    )]
+    pub fn wasmtime_fiber_switch(top_of_stack: *mut u8);
 }
