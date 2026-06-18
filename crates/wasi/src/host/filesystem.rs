@@ -488,6 +488,9 @@ where
         if symlink_follow(old_path_flags) {
             return Err(ErrorCode::Invalid.into());
         }
+        if old_dir.perms != new_dir.perms || old_dir.file_perms != new_dir.file_perms {
+            return Err(ErrorCode::NotPermitted.into());
+        }
         let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
         old_dir
             .spawn_blocking(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
@@ -696,6 +699,9 @@ where
         }
         let new_dir = table.get(&new_fd)?.dir()?;
         if !new_dir.perms.contains(DirPerms::MUTATE) {
+            return Err(ErrorCode::NotPermitted.into());
+        }
+        if old_dir.perms != new_dir.perms || old_dir.file_perms != new_dir.file_perms {
             return Err(ErrorCode::NotPermitted.into());
         }
         let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);

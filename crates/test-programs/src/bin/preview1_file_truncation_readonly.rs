@@ -18,7 +18,7 @@ unsafe fn test_file_has_expected_contents(dir_fd: wasi::Fd) {
     )
     .expect("reading file content");
 
-    const EXPECTED_CONTENTS: &[u8] = b"truncation test file\n";
+    const EXPECTED_CONTENTS: &[u8] = b"read only test file\n";
     // The file should be as created by the test harness, not truncated.
     assert_eq!(nread, EXPECTED_CONTENTS.len(), "expected untouched file");
     assert_eq!(
