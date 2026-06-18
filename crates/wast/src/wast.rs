@@ -267,6 +267,10 @@ impl WastContext {
                     Ok(())
                 },
             )?;
+            i.func_wrap("gc", |mut store, (): ()| {
+                store.as_context_mut().gc(None)?;
+                Ok(())
+            })?;
         }
         Ok(())
     }
