@@ -8,7 +8,7 @@ struct Component;
 p3::export!(Component);
 
 const FILENAME: &str = "test.txt";
-const EXPECTED_CONTENTS: &[u8] = b"truncation test file\n";
+const EXPECTED_CONTENTS: &[u8] = b"read only test file\n";
 
 impl p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
