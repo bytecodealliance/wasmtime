@@ -15,10 +15,24 @@ fn main() {
     // feature to also be active so check that too.
     let supported_os = (unix || windows) && cfg!(feature = "std");
 
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+
     // Determine if the current host architecture is supported by Cranelift
     // meaning that we might be executing native code.
-    let has_host_compiler_backend = match std::env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
+    let has_host_compiler_backend = match target_arch.as_str() {
         "x86_64" | "riscv64" | "s390x" | "aarch64" => true,
+        _ => false,
+    };
+
+    // Determine if builtin stack-switching routines are provided for the
+    // current host architecture by `wasmtime-internal-fiber`.
+    let has_builtin_stackswitch = match target_arch.as_str() {
+        "aarch64" | "x86_64" | "x86" | "arm" | "s390x" | "riscv64" => true,
+        "riscv32" => std::env::var("CARGO_CFG_TARGET_FEATURE")
+            .unwrap()
+            .split(',')
+            .find(|&feat| matches!(feat, "f" | "v"))
+            .is_none(),
         _ => false,
     };
 
@@ -30,9 +44,11 @@ fn main() {
     let has_custom_sync = !cfg!(feature = "std")
         && cfg!(feature = "custom-sync-primitives")
         && cfg!(feature = "runtime");
+    let has_custom_fiber = !has_builtin_stackswitch && cfg!(feature = "custom-fiber");
 
     custom_cfg("has_native_signals", has_native_signals);
     custom_cfg("has_virtual_memory", has_virtual_memory);
+    custom_cfg("has_custom_fiber", has_custom_fiber);
     custom_cfg("has_custom_sync", has_custom_sync);
     custom_cfg("has_host_compiler_backend", has_host_compiler_backend);
     custom_cfg("gc_zeal", cfg("fuzzing"));

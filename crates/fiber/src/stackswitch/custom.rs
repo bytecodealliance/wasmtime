@@ -6,6 +6,10 @@
 //! rather than relying on inline assembly for a known architecture, the
 //! routines below are declared as `extern "C"` imports which the embedder is
 //! expected to supply.
+//!
+//! These declarations are duplicated in
+//! `crates/wasmtime/src/runtime/vm/sys/custom/capi.rs`,
+//! keep the two copies in-sync.
 
 unsafe extern "C" {
     pub(crate) fn wasmtime_fiber_init(

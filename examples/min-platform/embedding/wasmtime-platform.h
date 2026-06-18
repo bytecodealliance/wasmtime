@@ -16,6 +16,7 @@
 //
 // * `WASMTIME_SIGNALS_BASED_TRAPS` - corresponds to `signals-based-traps`
 // * `WASMTIME_CUSTOM_SYNC` - corresponds to `custom-sync-primitives`
+// * `WASMTIME_CUSTOM_FIBER` - corresponds to `custom-fiber`
 //
 // Some more information about this header can additionally be found at
 // <https://docs.wasmtime.dev/stability-platform-support.html>.
@@ -330,6 +331,22 @@ extern void wasmtime_sync_rwlock_write_release(uintptr_t *lock);
  * The implementor must handle this case gracefully.
  */
 extern void wasmtime_sync_rwlock_free(uintptr_t *lock);
+#endif
+
+#if defined(WASMTIME_CUSTOM_FIBER)
+/**
+ * Initializes a fiber stack so that switching to it will begin executing `entry`.
+ */
+extern void wasmtime_fiber_init(uint8_t *top_of_stack,
+                                uint8_t *(*entry)(uint8_t*, uint8_t*),
+                                uint8_t *entry_arg0);
+#endif
+
+#if defined(WASMTIME_CUSTOM_FIBER)
+/**
+ * Switches execution to the fiber stack whose top is `top_of_stack`.
+ */
+extern void wasmtime_fiber_switch(uint8_t *top_of_stack);
 #endif
 
 #ifdef __cplusplus
