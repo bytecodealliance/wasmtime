@@ -367,27 +367,27 @@ fn p2_udp_send_too_much() {
 
 #[test_log::test]
 fn p1_file_truncation_readonly() {
-    file_truncation_readonly(P1_FILE_TRUNCATION_READONLY_COMPONENT)
+    run_with_readonly_testfile(P1_FILE_TRUNCATION_READONLY_COMPONENT)
 }
 #[test_log::test]
 fn p2_file_truncation_readonly() {
-    file_truncation_readonly(P2_FILE_TRUNCATION_READONLY_COMPONENT)
+    run_with_readonly_testfile(P2_FILE_TRUNCATION_READONLY_COMPONENT)
 }
 
-fn file_truncation_readonly(component_path: &str) {
+fn run_with_readonly_testfile(component_path: &str) {
     use std::path::PathBuf;
     use wasmtime_wasi::{DirPerms, FilePerms};
 
-    let prefix = "wasi_components_truncation_readonly_ro_";
+    let prefix = "wasi_components_ro_";
     let tempdir = tempfile::Builder::new()
         .prefix(prefix)
         .tempdir()
         .expect("create readonly tempdir");
     const FILENAME: &str = "test.txt";
-    const EXPECTED_CONTENTS: &[u8] = b"truncation test file\n";
+    const EXPECTED_CONTENTS: &[u8] = b"read only test file\n";
     let mut file: PathBuf = PathBuf::from(tempdir.path());
     file.push(FILENAME);
-    std::fs::write(&file, EXPECTED_CONTENTS).expect("write truncation test file");
+    std::fs::write(&file, EXPECTED_CONTENTS).expect("write read only test file");
 
     run(component_path, |b| {
         b.preopened_dir(
@@ -398,10 +398,27 @@ fn file_truncation_readonly(component_path: &str) {
         )
         .unwrap();
     })
-    .expect("run p1_file_truncation_readonly guest");
+    .expect("run guest");
 
-    let contents = std::fs::read(&file).expect("read truncation test file");
+    let contents = std::fs::read(&file).expect("read read only test file");
     assert_eq!(EXPECTED_CONTENTS, contents);
+}
+
+#[test_log::test]
+fn p1_file_hardlink_across_perms() {
+    run_with_readonly_testfile(P1_FILE_HARDLINK_ACROSS_PERMS_COMPONENT)
+}
+#[test_log::test]
+fn p2_file_hardlink_across_perms() {
+    run_with_readonly_testfile(P2_FILE_HARDLINK_ACROSS_PERMS_COMPONENT)
+}
+#[test_log::test]
+fn p1_file_rename_across_perms() {
+    run_with_readonly_testfile(P1_FILE_RENAME_ACROSS_PERMS_COMPONENT)
+}
+#[test_log::test]
+fn p2_file_rename_across_perms() {
+    run_with_readonly_testfile(P2_FILE_RENAME_ACROSS_PERMS_COMPONENT)
 }
 
 #[test_log::test]
