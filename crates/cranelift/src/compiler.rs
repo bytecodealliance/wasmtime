@@ -40,7 +40,7 @@ use wasmtime_environ::obj::{ELF_WASMTIME_EXCEPTIONS, ELF_WASMTIME_FRAMES};
 use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
-    FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize, HostCall, Inlining,
+    FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize, HostCall,
     InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder, PtrSize,
     StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables,
     WasmFuncType, WasmValType, prelude::*,
