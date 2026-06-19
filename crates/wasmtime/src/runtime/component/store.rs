@@ -165,6 +165,11 @@ impl ComponentStoreData {
             allocator.decrement_component_instance_count();
         }
     }
+
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
+    pub fn task_state_mut(&mut self) -> &mut ComponentTaskState {
+        &mut self.task_state
+    }
 }
 
 /// A type used to represent an allocated `ComponentInstance` located within a

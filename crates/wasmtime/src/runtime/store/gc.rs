@@ -1,6 +1,7 @@
 //! GC-related methods for stores.
 
 use crate::error::Context;
+use crate::module::ModuleRegistry;
 use crate::store::{
     Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
 };
@@ -631,7 +632,11 @@ impl StoreOpaque {
         log::trace!("End trace GC roots")
     }
 
-    fn trace_wasm_stack_frame(&self, gc_roots_list: &mut GcRootsList, frame: Frame) {
+    pub(crate) fn trace_wasm_stack_frame(
+        modules: &ModuleRegistry,
+        gc_roots_list: &mut GcRootsList,
+        frame: Frame,
+    ) {
         let pc = frame.pc();
         debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 
@@ -641,8 +646,7 @@ impl StoreOpaque {
             "we should always get a valid frame pointer for Wasm frames"
         );
 
-        let (store_code, offset) = self
-            .modules()
+        let (store_code, offset) = modules
             .store_code_by_pc(pc)
             .expect("should have store code for Wasm frame");
         let offset = u32::try_from(offset).unwrap();
@@ -659,7 +663,7 @@ impl StoreOpaque {
             let sp = unsafe { stack_map.sp(fp) };
             for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
                 unsafe {
-                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
+                    Self::trace_wasm_stack_slot(gc_roots_list, stack_slot);
                 }
             }
         }
@@ -668,13 +672,13 @@ impl StoreOpaque {
         if let Some(frame_table) = store_code.code_memory().frame_table() {
             for stack_slot in crate::debug::gc_refs_in_frame(frame_table, offset, fp) {
                 unsafe {
-                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
+                    Self::trace_wasm_stack_slot(gc_roots_list, stack_slot);
                 }
             }
         }
     }
 
-    unsafe fn trace_wasm_stack_slot(&self, gc_roots_list: &mut GcRootsList, stack_slot: *mut u32) {
+    unsafe fn trace_wasm_stack_slot(gc_roots_list: &mut GcRootsList, stack_slot: *mut u32) {
         let raw: u32 = unsafe { core::ptr::read(stack_slot) };
         log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
 
@@ -691,9 +695,24 @@ impl StoreOpaque {
         log::trace!("Begin trace GC roots :: Wasm stack");
 
         Backtrace::trace(self, |frame| {
-            self.trace_wasm_stack_frame(gc_roots_list, frame);
+            Self::trace_wasm_stack_frame(self.modules(), gc_roots_list, frame);
             core::ops::ControlFlow::Continue(())
         });
+
+        #[cfg(feature = "component-model-async")]
+        if self.concurrency_support() {
+            let unwind = self.unwinder();
+            let StoreOpaque {
+                modules,
+                store_data,
+                ..
+            } = self;
+            store_data
+                .components
+                .task_state_mut()
+                .concurrent_state_mut()
+                .trace_fiber_roots(modules, unwind, gc_roots_list);
+        }
 
         log::trace!("End trace GC roots :: Wasm stack");
     }
@@ -717,7 +736,7 @@ impl StoreOpaque {
             match state {
                 VMStackState::Suspended => {
                     Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
-                        self.trace_wasm_stack_frame(gc_roots_list, frame);
+                        Self::trace_wasm_stack_frame(self.modules(), gc_roots_list, frame);
                         core::ops::ControlFlow::Continue(())
                     });
                 }

@@ -1088,6 +1088,11 @@ fn entry_trap_handler(vm_store_context: &VMStoreContext) -> Handler {
 /// thread's current list pointed to by TLS is youngest-to-oldest links, while a
 /// suspended fiber stores oldest-to-youngest links.
 pub(crate) mod tls {
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
+    use crate::module::ModuleRegistry;
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
+    use crate::store::StoreOpaque;
+
     use super::CallThreadState;
 
     pub use raw::Ptr;
@@ -1164,6 +1169,8 @@ pub(crate) mod tls {
     }
 
     pub use raw::initialize as tls_eager_initialize;
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
+    use wasmtime_unwinder::Unwind;
 
     /// Opaque state used to persist the state of the `CallThreadState`
     /// activations associated with a fiber stack that's used as part of an
@@ -1268,6 +1275,32 @@ pub(crate) mod tls {
         pub fn assert_current_state_not_in_range(range: core::ops::Range<usize>) {
             let p = raw::get() as usize;
             assert!(!range.contains(&p));
+        }
+
+        #[cfg(all(feature = "component-model-async", feature = "gc"))]
+        pub(crate) fn trace_gc_roots(
+            &mut self,
+            modules: &ModuleRegistry,
+            unwind: &dyn Unwind,
+            gc_roots_list: &mut crate::vm::GcRootsList,
+        ) {
+            let mut ptr = self.state;
+            unsafe {
+                while let Some(state) = ptr.as_ref() {
+                    let _ = wasmtime_unwinder::visit_frames::<()>(
+                        unwind,
+                        state.old_last_wasm_exit_pc(),
+                        state.old_last_wasm_exit_fp(),
+                        state.old_last_wasm_entry_fp(),
+                        |frame| {
+                            StoreOpaque::trace_wasm_stack_frame(modules, gc_roots_list, frame);
+                            core::ops::ControlFlow::Continue(())
+                        },
+                    );
+
+                    ptr = state.prev.get();
+                }
+            }
         }
     }
 

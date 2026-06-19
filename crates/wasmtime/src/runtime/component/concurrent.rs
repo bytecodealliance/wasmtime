@@ -58,8 +58,12 @@ use crate::component::{
 };
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::hash_set::HashSet;
+#[cfg(feature = "gc")]
+use crate::module::ModuleRegistry;
 use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
+#[cfg(feature = "gc")]
+use crate::vm::GcRootsList;
 use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{
@@ -91,6 +95,8 @@ use wasmtime_environ::component::{
 };
 use wasmtime_environ::packed_option::ReservedValue;
 use wasmtime_environ::{NUM_COMPONENT_CONTEXT_SLOTS, Trap};
+#[cfg(feature = "gc")]
+use wasmtime_unwinder::Unwind;
 
 pub use abort::JoinHandle;
 pub use func::{FuncCallConcurrent, TypedFuncCallConcurrent};
@@ -5182,6 +5188,73 @@ impl ConcurrentState {
 
         if let Some(them) = self.futures.get_mut().take() {
             futures.push(them);
+        }
+    }
+
+    #[cfg(feature = "gc")]
+    pub(crate) fn trace_fiber_roots(
+        &mut self,
+        modules: &ModuleRegistry,
+        unwind: &dyn Unwind,
+        gc_roots_list: &mut GcRootsList,
+    ) {
+        let ConcurrentState {
+            table,
+            worker,
+            high_priority,
+            low_priority,
+
+            // TODO(cm-gc): This field contains `ValRaw`s, but they are never GC
+            // references because the component model doesn't support GC yet. We
+            // will need to trace these somehow when it does.
+            futures: _,
+
+            // These fields do not contain GC references.
+            worker_item: _,
+            current_thread: _,
+            suspend_reason: _,
+            global_error_context_ref_counts: _,
+            interesting_tasks: _,
+            interesting_tasks_empty_waker: _,
+        } = self;
+
+        for entry in table.get_mut().iter_mut() {
+            if let Some(set) = entry.downcast_mut::<WaitableSet>() {
+                for mode in set.waiting.values_mut() {
+                    if let WaitMode::Fiber(fiber) = mode {
+                        fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+                    }
+                }
+            } else if let Some(thread) = entry.downcast_mut::<GuestThread>() {
+                if let GuestThreadState::Suspended(fiber) | GuestThreadState::Ready { fiber, .. } =
+                    &mut thread.state
+                {
+                    fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+                }
+            }
+        }
+
+        if let Some(fiber) = worker {
+            fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+        }
+
+        let mut handle_item = |item: &mut WorkItem| match item {
+            WorkItem::ResumeFiber(fiber) => {
+                fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+            }
+            WorkItem::PushFuture(_future) => {
+                // TODO(cm-gc): once futures can contain GC roots, we will need
+                // to trace them.
+            }
+            WorkItem::ResumeThread(..) | WorkItem::GuestCall(..) | WorkItem::WorkerFunction(..) => {
+            }
+        };
+
+        for item in high_priority {
+            handle_item(item);
+        }
+        for item in low_priority {
+            handle_item(item);
         }
     }
 

@@ -9,6 +9,13 @@ use core::pin::Pin;
 use core::ptr::{self, NonNull};
 use core::task::{Context, Poll};
 use wasmtime_fiber::{Fiber, FiberStack, Suspend};
+#[cfg(all(feature = "component-model-async", feature = "gc"))]
+use wasmtime_unwinder::Unwind;
+
+#[cfg(all(feature = "component-model-async", feature = "gc"))]
+use super::module::ModuleRegistry;
+#[cfg(all(feature = "component-model-async", feature = "gc"))]
+use super::vm::GcRootsList;
 
 type WasmtimeResume = Result<NonNull<Context<'static>>>;
 type WasmtimeYield = StoreFiberYield;
@@ -451,6 +458,21 @@ impl<'a> StoreFiber<'a> {
                 let result = resume_fiber(store, self, Err(format_err!("future dropped")));
                 debug_assert!(result.is_ok());
             }
+        }
+    }
+
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
+    pub(crate) fn trace_gc_roots(
+        &mut self,
+        modules: &ModuleRegistry,
+        unwind: &dyn Unwind,
+        gc_roots_list: &mut GcRootsList,
+    ) {
+        if let Some(state) = &mut self.state {
+            state
+                .get_mut()
+                .tls
+                .trace_gc_roots(modules, unwind, gc_roots_list);
         }
     }
 }
