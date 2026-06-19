@@ -166,6 +166,7 @@ impl ComponentStoreData {
         }
     }
 
+    #[cfg(all(feature = "component-model-async", feature = "gc"))]
     pub fn task_state_mut(&mut self) -> &mut ComponentTaskState {
         &mut self.task_state
     }
