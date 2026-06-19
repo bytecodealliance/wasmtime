@@ -71,23 +71,32 @@ mod content_length_tests {
     }
 }
 
-/// Extract the host portion of an `authority` for use as a TLS server name.
+/// Resolve the rustls [`ServerName`] used for TLS certificate verification from
+/// an outbound request `authority`.
 ///
-/// `authority` is in `host` or `host:port` form, where an IPv6 `host` is
-/// wrapped in brackets (for example `[::1]:443`). Splitting on the first `:` is
-/// wrong for the bracketed IPv6 form, so handle it explicitly and return the
-/// bare address without brackets, which is what `rustls`' `ServerName` expects.
+/// `authority` is in `host:port` form, where an IPv6 `host` is wrapped in
+/// brackets (for example `[::1]:443`). An IP literal is recognized by parsing
+/// the whole authority as a [`SocketAddr`]; this handles the bracketed IPv6
+/// form, which splitting on the first `:` would truncate. Anything else is
+/// treated as a host name, with the port stripped off before it is handed to
+/// rustls.
+///
+/// [`ServerName`]: rustls::pki_types::ServerName
+/// [`SocketAddr`]: std::net::SocketAddr
 #[cfg(all(feature = "default-send-request", any(feature = "p2", feature = "p3")))]
-fn tls_server_name(authority: &str) -> &str {
-    if let Some(rest) = authority.strip_prefix('[') {
-        if let Some(end) = rest.find(']') {
-            return &rest[..end];
-        }
+fn tls_server_name(
+    authority: &str,
+) -> Result<rustls::pki_types::ServerName<'static>, rustls::pki_types::InvalidDnsNameError> {
+    use rustls::pki_types::ServerName;
+
+    if let Ok(addr) = authority.parse::<std::net::SocketAddr>() {
+        return Ok(ServerName::from(addr.ip()));
     }
-    match authority.split_once(':') {
+    let host = match authority.split_once(':') {
         Some((host, _port)) => host,
         None => authority,
-    }
+    };
+    Ok(ServerName::try_from(host)?.to_owned())
 }
 
 #[cfg(all(
@@ -97,22 +106,34 @@ fn tls_server_name(authority: &str) -> &str {
 ))]
 mod tls_server_name_tests {
     use super::tls_server_name;
+    use rustls::pki_types::ServerName;
 
     #[test]
-    fn extracts_host_from_authority() {
-        assert_eq!(tls_server_name("example.com"), "example.com");
-        assert_eq!(tls_server_name("example.com:443"), "example.com");
-        assert_eq!(tls_server_name("127.0.0.1:80"), "127.0.0.1");
+    fn resolves_server_name_from_authority() {
+        // Host names keep their host and drop the port.
+        assert_eq!(
+            tls_server_name("example.com:443").unwrap(),
+            ServerName::try_from("example.com").unwrap()
+        );
+        assert_eq!(
+            tls_server_name("example.com").unwrap(),
+            ServerName::try_from("example.com").unwrap()
+        );
 
-        // An IPv6 literal is bracketed; the brackets must be dropped and the
-        // whole address kept rather than truncated at the first `:`.
-        assert_eq!(tls_server_name("[::1]:443"), "::1");
-        assert_eq!(tls_server_name("[2001:db8::1]:8443"), "2001:db8::1");
-        assert_eq!(tls_server_name("[::1]"), "::1");
-
-        // Matches what a parsed authority produces for an IPv6 host.
-        let authority = http::uri::Authority::from_static("[2001:db8::1]:8443");
-        assert_eq!(tls_server_name(&authority.to_string()), "2001:db8::1");
+        // IP literals resolve to an `IpAddress` server name. The bracketed IPv6
+        // form must not be truncated at the first `:`.
+        assert_eq!(
+            tls_server_name("127.0.0.1:80").unwrap(),
+            ServerName::from(std::net::Ipv4Addr::LOCALHOST)
+        );
+        assert_eq!(
+            tls_server_name("[::1]:443").unwrap(),
+            ServerName::from(std::net::Ipv6Addr::LOCALHOST)
+        );
+        assert_eq!(
+            tls_server_name("[2001:db8::1]:8443").unwrap(),
+            ServerName::from("2001:db8::1".parse::<std::net::Ipv6Addr>().unwrap())
+        );
     }
 }
 
