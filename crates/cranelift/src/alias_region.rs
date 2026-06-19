@@ -8,6 +8,10 @@ use wasmtime_environ::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GetPtrSize, GlobalIndex,
     MemoryIndex, OwnedMemoryIndex, PtrSize as _, RuntimeDataIndex, StaticModuleIndex, TableIndex,
     TagIndex, VMOffsets,
+    component::{
+        LoweredIndex, ResourceIndex, RuntimeCallbackIndex, RuntimeComponentInstanceIndex,
+        RuntimeMemoryIndex, RuntimePostReturnIndex, VMComponentOffsets,
+    },
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -16,6 +20,7 @@ enum VmType {
     VMStoreContext,
     VMMemoryDefinition,
     VMTableDefinition,
+    VMComponentContext,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -105,6 +110,7 @@ impl AliasRegionKey {
     const GC_HEAP_KIND: u32 = Self::new_kind(0b1000);
     const VM_MEMORY_DEFINITION_KIND: u32 = Self::new_kind(0b1001);
     const VM_TABLE_DEFINITION_KIND: u32 = Self::new_kind(0b1010);
+    const VM_COMPONENT_CONTEXT_KIND: u32 = Self::new_kind(0b1011);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -117,6 +123,7 @@ impl AliasRegionKey {
                     VmType::VMStoreContext => Self::VM_STORE_CONTEXT_KIND,
                     VmType::VMMemoryDefinition => Self::VM_MEMORY_DEFINITION_KIND,
                     VmType::VMTableDefinition => Self::VM_TABLE_DEFINITION_KIND,
+                    VmType::VMComponentContext => Self::VM_COMPONENT_CONTEXT_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -1427,6 +1434,216 @@ where
             self.pointer_type,
             ir::MemFlagsData::trusted().with_alias_region(Some(region)),
             ptr,
+        )
+    }
+}
+
+/// `VMComponentContext`-related methods, used when compiling component
+/// trampolines.
+impl AliasRegions<VMComponentOffsets<u8>> {
+    fn vmcomponent_region(&mut self, func: &mut ir::Function, offset: u32) -> ir::AliasRegion {
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMComponentContext,
+                offset,
+            },
+        )
+    }
+
+    fn vmcomponent_load(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        ty: ir::Type,
+        base_flags: ir::MemFlagsData,
+        vmctx: ir::Value,
+        offset: u32,
+    ) -> ir::Value {
+        let region = self.vmcomponent_region(cursor.func, offset);
+        cursor.ins().load(
+            ty,
+            base_flags.with_alias_region(Some(region)),
+            vmctx,
+            i32::try_from(offset).unwrap(),
+        )
+    }
+
+    fn vmcomponent_store(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        base_flags: ir::MemFlagsData,
+        vmctx: ir::Value,
+        offset: u32,
+        val: ir::Value,
+    ) {
+        let region = self.vmcomponent_region(cursor.func, offset);
+        cursor.ins().store(
+            base_flags.with_alias_region(Some(region)),
+            val,
+            vmctx,
+            i32::try_from(offset).unwrap(),
+        );
+    }
+
+    /// Load a lowering's host-data pointer from the `VMComponentContext`.
+    pub fn vmcomponent_lowering_data(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+        index: LoweredIndex,
+    ) -> ir::Value {
+        self.vmcomponent_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            self.offsets.lowering_data(index),
+        )
+    }
+
+    /// Load a lowering's host callee pointer from the `VMComponentContext`.
+    pub fn vmcomponent_lowering_callee(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+        index: LoweredIndex,
+    ) -> ir::Value {
+        self.vmcomponent_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            self.offsets.lowering_callee(index),
+        )
+    }
+
+    /// Load the current task's `may_block` flag from the `VMComponentContext`.
+    pub fn vmcomponent_task_may_block(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+    ) -> ir::Value {
+        self.vmcomponent_load(
+            cursor,
+            ir::types::I32,
+            ir::MemFlagsData::trusted().with_readonly(),
+            vmctx,
+            self.offsets.task_may_block(),
+        )
+    }
+
+    /// Store the current task's `may_block` flag into the `VMComponentContext`.
+    pub fn store_vmcomponent_task_may_block(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+        val: ir::Value,
+    ) {
+        self.vmcomponent_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            self.offsets.task_may_block(),
+            val,
+        )
+    }
+
+    /// Load a resource's destructor function pointer from the
+    /// `VMComponentContext`.
+    pub fn vmcomponent_resource_destructor(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+        index: ResourceIndex,
+    ) -> ir::Value {
+        self.vmcomponent_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted().with_readonly(),
+            vmctx,
+            self.offsets.resource_destructor(index),
+        )
+    }
+
+    /// Load a runtime memory's `*mut VMMemoryDefinition` from the
+    /// `VMComponentContext`.
+    pub fn vmcomponent_runtime_memory(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+        index: RuntimeMemoryIndex,
+    ) -> ir::Value {
+        self.vmcomponent_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            self.offsets.runtime_memory(index),
+        )
+    }
+
+    /// Load a runtime callback function pointer from the `VMComponentContext`.
+    pub fn vmcomponent_runtime_callback(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+        index: RuntimeCallbackIndex,
+    ) -> ir::Value {
+        self.vmcomponent_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            self.offsets.runtime_callback(index),
+        )
+    }
+
+    /// Load a runtime post-return function pointer from the
+    /// `VMComponentContext`.
+    pub fn vmcomponent_runtime_post_return(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+        index: RuntimePostReturnIndex,
+    ) -> ir::Value {
+        self.vmcomponent_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            self.offsets.runtime_post_return(index),
+        )
+    }
+
+    /// Load the base pointer of the component builtins array from the
+    /// `VMComponentContext`.
+    pub fn vmcomponent_builtins(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+    ) -> ir::Value {
+        self.vmcomponent_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted().with_readonly(),
+            vmctx,
+            self.offsets.builtins(),
+        )
+    }
+
+    /// Load a component instance's flags from the `VMComponentContext`.
+    pub fn vmcomponent_instance_flags(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+        instance: RuntimeComponentInstanceIndex,
+    ) -> ir::Value {
+        self.vmcomponent_load(
+            cursor,
+            ir::types::I32,
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            self.offsets.instance_flags(instance),
         )
     }
 }

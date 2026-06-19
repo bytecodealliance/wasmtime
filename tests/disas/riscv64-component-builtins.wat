@@ -14,7 +14,9 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435504 "VMStoreContext+0x30"
 ;;     region2 = 268435512 "VMStoreContext+0x38"
-;;     region3 = 16 "VMContext+0x10"
+;;     region3 = 2952790048 "VMComponentContext+0x20"
+;;     region4 = 2952790024 "VMComponentContext+0x8"
+;;     region5 = 16 "VMContext+0x10"
 ;;     sig0 = (i64 sext, i32 sext, i32 sext, i32 sext) -> i64 sext system_v
 ;;     sig1 = (i64 sext vmctx) system_v
 ;;
@@ -24,11 +26,11 @@
 ;;     store notrap aligned region1 v4, v3+48
 ;;     v5 = get_return_address.i64 
 ;;     store notrap aligned region2 v5, v3+56
-;;     v6 = load.i32 notrap aligned v0+32
+;;     v6 = load.i32 notrap aligned region3 v0+32
 ;;     v7 = iconst.i32 1
 ;;     v8 = band v6, v7  ; v7 = 1
 ;;     trapz v8, user26
-;;     v11 = load.i64 notrap aligned readonly v0+8
+;;     v11 = load.i64 notrap aligned readonly region4 v0+8
 ;;     v12 = load.i64 notrap aligned readonly v11+16
 ;;     v9 = iconst.i32 0
 ;;     v13 = call_indirect sig0, v12(v0, v9, v9, v2)  ; v9 = 0, v9 = 0
@@ -37,7 +39,7 @@
 ;;     brif v15, block2, block1
 ;;
 ;; block1 cold:
-;;     v16 = load.i64 notrap aligned readonly can_move region3 v1+16
+;;     v16 = load.i64 notrap aligned readonly can_move region5 v1+16
 ;;     v17 = load.i64 notrap aligned readonly can_move v16+328
 ;;     call_indirect sig1, v17(v1)
 ;;     trap user1

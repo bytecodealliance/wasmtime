@@ -148,7 +148,6 @@ impl<'a> TrampolineCompiler<'a> {
                 options,
                 lower_ty,
             } => {
-                let pointer_type = self.isa.pointer_type();
                 self.translate_hostcall(
                     HostCallee::Lowering(*index),
                     HostResult::MultiValue {
@@ -158,13 +157,13 @@ impl<'a> TrampolineCompiler<'a> {
                     WasmArgs::ValRawList,
                     |me, params| {
                         let vmctx = params[0];
+                        let lowering_data = me.alias_regions.vmcomponent_lowering_data(
+                            &mut me.builder.cursor(),
+                            vmctx,
+                            *index,
+                        );
                         params.extend([
-                            me.builder.ins().load(
-                                pointer_type,
-                                MemFlagsData::trusted(),
-                                vmctx,
-                                i32::try_from(me.offsets.lowering_data(*index)).unwrap(),
-                            ),
+                            lowering_data,
                             me.index_value(*lower_ty),
                             me.index_value(*options),
                         ]);
@@ -975,11 +974,10 @@ impl<'a> TrampolineCompiler<'a> {
             HostCallee::Lowering(index) => {
                 // Load host function pointer from the vmcontext and then call that
                 // indirect function pointer with the list of arguments.
-                let host_fn = self.builder.ins().load(
-                    pointer_type,
-                    MemFlagsData::trusted(),
+                let host_fn = self.alias_regions.vmcomponent_lowering_callee(
+                    &mut self.builder.cursor(),
                     vmctx,
-                    i32::try_from(self.offsets.lowering_callee(index)).unwrap(),
+                    index,
                 );
                 let host_sig = {
                     let mut sig = ir::Signature::new(CallConv::triple_default(self.isa.triple()));
@@ -1191,18 +1189,14 @@ impl<'a> TrampolineCompiler<'a> {
 
                 if self.compiler.tunables.concurrency_support {
                     // Stash the old value of `may_block` and then set it to false.
-                    let old_may_block = self.builder.ins().load(
-                        ir::types::I32,
-                        trusted,
-                        vmctx,
-                        i32::try_from(self.offsets.task_may_block()).unwrap(),
-                    );
+                    let old_may_block = self
+                        .alias_regions
+                        .vmcomponent_task_may_block(&mut self.builder.cursor(), vmctx);
                     let zero = self.builder.ins().iconst(ir::types::I32, i64::from(0));
-                    self.builder.ins().store(
-                        ir::MemFlagsData::trusted(),
-                        zero,
+                    self.alias_regions.store_vmcomponent_task_may_block(
+                        &mut self.builder.cursor(),
                         vmctx,
-                        i32::try_from(self.offsets.task_may_block()).unwrap(),
+                        zero,
                     );
 
                     // Call `enter_sync_call`
@@ -1242,11 +1236,10 @@ impl<'a> TrampolineCompiler<'a> {
             // NB: despite the vmcontext storing nullable funcrefs for function
             // pointers we know this is statically never null due to the
             // `has_destructor` check above.
-            let dtor_func_ref = self.builder.ins().load(
-                pointer_type,
-                trusted,
+            let dtor_func_ref = self.alias_regions.vmcomponent_resource_destructor(
+                &mut self.builder.cursor(),
                 vmctx,
-                i32::try_from(self.offsets.resource_destructor(index)).unwrap(),
+                index,
             );
             if self.compiler.emit_debug_checks {
                 self.builder
@@ -1317,11 +1310,10 @@ impl<'a> TrampolineCompiler<'a> {
             self.raise_if_host_trapped(result.unwrap());
 
             // Restore the old value of `may_block`
-            self.builder.ins().store(
-                ir::MemFlagsData::trusted(),
-                old_may_block,
+            self.alias_regions.store_vmcomponent_task_may_block(
+                &mut self.builder.cursor(),
                 vmctx,
-                i32::try_from(self.offsets.task_may_block()).unwrap(),
+                old_may_block,
             );
         }
 
@@ -1345,12 +1337,8 @@ impl<'a> TrampolineCompiler<'a> {
     }
 
     fn load_memory(&mut self, vmctx: ir::Value, memory: RuntimeMemoryIndex) -> ir::Value {
-        self.builder.ins().load(
-            self.isa.pointer_type(),
-            MemFlagsData::trusted(),
-            vmctx,
-            i32::try_from(self.offsets.runtime_memory(memory)).unwrap(),
-        )
+        self.alias_regions
+            .vmcomponent_runtime_memory(&mut self.builder.cursor(), vmctx, memory)
     }
 
     fn load_callback(
@@ -1360,11 +1348,10 @@ impl<'a> TrampolineCompiler<'a> {
     ) -> ir::Value {
         let pointer_type = self.isa.pointer_type();
         match callback {
-            Some(idx) => self.builder.ins().load(
-                pointer_type,
-                MemFlagsData::trusted(),
+            Some(idx) => self.alias_regions.vmcomponent_runtime_callback(
+                &mut self.builder.cursor(),
                 vmctx,
-                i32::try_from(self.offsets.runtime_callback(idx)).unwrap(),
+                idx,
             ),
             None => self.builder.ins().iconst(pointer_type, 0),
         }
@@ -1377,11 +1364,10 @@ impl<'a> TrampolineCompiler<'a> {
     ) -> ir::Value {
         let pointer_type = self.isa.pointer_type();
         match post_return {
-            Some(idx) => self.builder.ins().load(
-                pointer_type,
-                MemFlagsData::trusted(),
+            Some(idx) => self.alias_regions.vmcomponent_runtime_post_return(
+                &mut self.builder.cursor(),
                 vmctx,
-                i32::try_from(self.offsets.runtime_post_return(idx)).unwrap(),
+                idx,
             ),
             None => self.builder.ins().iconst(pointer_type, 0),
         }
@@ -1399,12 +1385,9 @@ impl<'a> TrampolineCompiler<'a> {
         let pointer_type = self.isa.pointer_type();
         // First load the pointer to the builtins structure which is static
         // per-process.
-        let builtins_array = self.builder.ins().load(
-            pointer_type,
-            MemFlagsData::trusted().with_readonly(),
-            vmctx,
-            i32::try_from(self.offsets.builtins()).unwrap(),
-        );
+        let builtins_array = self
+            .alias_regions
+            .vmcomponent_builtins(&mut self.builder.cursor(), vmctx);
         // Next load the function pointer at `offset` and return that.
         self.builder.ins().load(
             pointer_type,
@@ -1544,11 +1527,10 @@ impl<'a> TrampolineCompiler<'a> {
     fn check_may_leave_instance(&mut self, instance: RuntimeComponentInstanceIndex) {
         let vmctx = self.builder.func.dfg.block_params(self.block0)[0];
 
-        let flags = self.builder.ins().load(
-            ir::types::I32,
-            ir::MemFlagsData::trusted(),
+        let flags = self.alias_regions.vmcomponent_instance_flags(
+            &mut self.builder.cursor(),
             vmctx,
-            i32::try_from(self.offsets.instance_flags(instance)).unwrap(),
+            instance,
         );
         let may_leave_bit = self
             .builder
