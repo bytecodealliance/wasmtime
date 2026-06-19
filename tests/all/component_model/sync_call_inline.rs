@@ -286,7 +286,11 @@ async fn repeated_calls_have_no_state_leak() -> Result<()> {
         let (result,) = g.call_async(&mut store, (x,)).await?;
         assert_eq!(result, x + 42);
     }
-    assert_eq!(*store.data(), 4, "host import called once per top-level call");
+    assert_eq!(
+        *store.data(),
+        4,
+        "host import called once per top-level call"
+    );
     Ok(())
 }
 
