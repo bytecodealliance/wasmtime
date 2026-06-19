@@ -71,6 +71,72 @@ mod content_length_tests {
     }
 }
 
+/// Resolve the rustls [`ServerName`] used for TLS certificate verification from
+/// an outbound request `authority`.
+///
+/// `authority` is in `host:port` form, where an IPv6 `host` is wrapped in
+/// brackets (for example `[::1]:443`). An IP literal is recognized by parsing
+/// the whole authority as a [`SocketAddr`]; this handles the bracketed IPv6
+/// form, which splitting on the first `:` would truncate. Anything else is
+/// treated as a host name, with the port stripped off before it is handed to
+/// rustls.
+///
+/// [`ServerName`]: rustls::pki_types::ServerName
+/// [`SocketAddr`]: std::net::SocketAddr
+#[cfg(all(feature = "default-send-request", any(feature = "p2", feature = "p3")))]
+fn tls_server_name(
+    authority: &str,
+) -> Result<rustls::pki_types::ServerName<'static>, rustls::pki_types::InvalidDnsNameError> {
+    use rustls::pki_types::ServerName;
+
+    if let Ok(addr) = authority.parse::<std::net::SocketAddr>() {
+        return Ok(ServerName::from(addr.ip()));
+    }
+    let host = match authority.split_once(':') {
+        Some((host, _port)) => host,
+        None => authority,
+    };
+    Ok(ServerName::try_from(host)?.to_owned())
+}
+
+#[cfg(all(
+    test,
+    feature = "default-send-request",
+    any(feature = "p2", feature = "p3")
+))]
+mod tls_server_name_tests {
+    use super::tls_server_name;
+    use rustls::pki_types::ServerName;
+
+    #[test]
+    fn resolves_server_name_from_authority() {
+        // Host names keep their host and drop the port.
+        assert_eq!(
+            tls_server_name("example.com:443").unwrap(),
+            ServerName::try_from("example.com").unwrap()
+        );
+        assert_eq!(
+            tls_server_name("example.com").unwrap(),
+            ServerName::try_from("example.com").unwrap()
+        );
+
+        // IP literals resolve to an `IpAddress` server name. The bracketed IPv6
+        // form must not be truncated at the first `:`.
+        assert_eq!(
+            tls_server_name("127.0.0.1:80").unwrap(),
+            ServerName::from(std::net::Ipv4Addr::LOCALHOST)
+        );
+        assert_eq!(
+            tls_server_name("[::1]:443").unwrap(),
+            ServerName::from(std::net::Ipv6Addr::LOCALHOST)
+        );
+        assert_eq!(
+            tls_server_name("[2001:db8::1]:8443").unwrap(),
+            ServerName::from("2001:db8::1".parse::<std::net::Ipv6Addr>().unwrap())
+        );
+    }
+}
+
 /// Set of [http::header::HeaderName], that are forbidden by default
 /// for requests and responses originating in the guest.
 pub const DEFAULT_FORBIDDEN_HEADERS: [HeaderName; 9] = [
