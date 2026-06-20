@@ -757,13 +757,27 @@ impl CanonicalAbiInfo {
         count: u32,
     ) -> CanonicalAbiInfo {
         CanonicalAbiInfo {
-            size32: element.size32 * count,
+            size32: element.size32.saturating_mul(count),
             align32: element.align32,
-            size64: element.size64 * count,
+            size64: element.size64.saturating_mul(count),
             align64: element.align64,
+
             flat_count: match element.flat_count {
                 None => None,
-                Some(c) => Some(c.saturating_mul(if count > 255 { 255u8 } else { count as u8 })),
+                Some(c) =>
+                // .and_then(|c| u8::try_from(c).ok()) is not yet const
+                {
+                    match count.checked_mul(c as u32) {
+                        Some(product) => {
+                            if product as usize > MAX_FLAT_TYPES || product > u8::MAX as u32 {
+                                None
+                            } else {
+                                Some(product as u8)
+                            }
+                        }
+                        None => None,
+                    }
+                }
             },
         }
     }
