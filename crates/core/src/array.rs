@@ -1,3 +1,5 @@
+//! Not yet stable array functions needed by fixed length list
+
 use core::mem::MaybeUninit;
 
 // See https://doc.rust-lang.org/core/array/fn.try_from_fn.html for the not yet stable original

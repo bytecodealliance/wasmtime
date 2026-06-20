@@ -6,13 +6,13 @@ use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
-use core::array::try_from_fn;
 use core::fmt;
 use core::hash::Hash;
 use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
+use wasmtime_core::array::array_try_from_fn;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
     OptionsIndex, StringEncoding, TypeMap, VariantInfo,
