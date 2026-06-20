@@ -28,42 +28,49 @@ use core::mem::MaybeUninit;
 /// ```
 //
 // this is a reimplementation of array::try_from_fn, replace once that became stable
-pub fn array_try_from_fn<E, F, T, const N: usize>(mut cb: F) -> Result<[T; N], E>
-where
-    F: FnMut(usize) -> Result<T, E>,
-{
-    let mut valid = 0;
-    let mut result: [MaybeUninit<T>; N] = [const { MaybeUninit::uninit() }; N];
-    let mut error: Option<E> = None;
-    for n in 0..N {
-        match cb(n) {
-            Ok(v) => {
-                result[valid].write(v);
-                valid += 1;
-            }
-            Err(e) => {
-                error = Some(e);
-                // continue to consume all input
+pub fn array_try_from_fn<E, T, const N: usize>(
+    mut cb: impl FnMut(usize) -> Result<T, E>,
+) -> Result<[T; N], E> {
+    let mut result: MaybeUninit<[T; N]> = MaybeUninit::uninit();
+    {
+        struct DropGuard<'a, T> {
+            slice: &'a mut [MaybeUninit<T>],
+            initialized: usize,
+        }
+        impl<T> Drop for DropGuard<'_, T> {
+            fn drop(&mut self) {
+                for slot in self.slice[..self.initialized].iter_mut() {
+                    // SAFETY: self.initialized is the number of valid elements at all time
+                    // we can assume init and drop them directly
+                    unsafe {
+                        slot.assume_init_drop();
+                    }
+                }
             }
         }
-    }
-    if let Some(e) = error {
-        // on error drop all valid elements
-        for n in 0..valid {
-            unsafe {
-                result[n].assume_init_drop();
-            }
+        let mut guard = DropGuard {
+            slice: result.as_mut(),
+            initialized: 0,
+        };
+        for (i, slot) in guard.slice.iter_mut().enumerate() {
+            slot.write(cb(i)?);
+            guard.initialized = i + 1;
         }
-        return Err(e);
+        // don't drop valid elements
+        guard.initialized = 0;
     }
-    assert!(valid == N);
-    // this is a copy of array_assume_init from stdlib to avoid requiring nightly
-    Ok(unsafe { (&result as *const _ as *const [T; N]).read() })
+    // SAFETY: All N elements have been successfully written to here
+    unsafe { Ok(result.assume_init()) }
 }
 
 #[cfg(test)]
 mod test {
     use super::array_try_from_fn;
+    use core::cell::Cell;
+    use std_alloc::rc::Rc;
+    use std_alloc::string::{String, ToString};
+
+    // original test from the documentation
     #[test]
     fn array_try_from_fn_test() {
         let array: Result<[u8; 5], _> = array_try_from_fn(|i| i.try_into());
@@ -71,5 +78,64 @@ mod test {
 
         let array: Result<[i8; 200], _> = array_try_from_fn(|i| i.try_into());
         assert!(array.is_err());
+    }
+
+    #[test]
+    fn smoke_try_from_fn() {
+        let arr = array_try_from_fn(|i| Ok::<_, ()>(i * 2)).unwrap();
+        assert_eq!(arr, [0, 2, 4, 6, 8]);
+        assert_eq!(
+            array_try_from_fn::<_, _, 3>(|i| if i == 0 { Ok(0) } else { Err(1) }).unwrap_err(),
+            1
+        )
+    }
+
+    #[test]
+    fn try_from_fn_dont_drop_on_success() {
+        let arr = array_try_from_fn(|i| Ok::<_, String>(i.to_string())).unwrap();
+        assert_eq!(arr, ["0", "1"]);
+    }
+
+    #[test]
+    fn try_from_fn_drop_on_failure() {
+        let drops = Rc::new(Cell::new(0));
+
+        struct DropCounter(Rc<Cell<usize>>);
+        impl Drop for DropCounter {
+            fn drop(&mut self) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+
+        let err = array_try_from_fn::<_, _, 10>(|i| match i {
+            0..=4 => Ok(DropCounter(drops.clone())),
+            _ => Err("error".to_string()),
+        })
+        .err()
+        .unwrap();
+        assert_eq!(err, "error");
+        assert_eq!(drops.get(), 5);
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn try_from_fn_drop_on_panic() {
+        let drops = Rc::new(Cell::new(0));
+
+        struct DropCounter(Rc<Cell<usize>>);
+        impl Drop for DropCounter {
+            fn drop(&mut self) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            array_try_from_fn::<_, _, 10>(|i| match i {
+                0..=4 => Ok::<_, String>(DropCounter(drops.clone())),
+                _ => panic!("hi"),
+            })
+        }));
+        assert!(result.is_err());
+        assert_eq!(drops.get(), 5);
     }
 }
