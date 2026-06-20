@@ -6,6 +6,7 @@ use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
+use core::array::try_from_fn;
 use core::fmt;
 use core::hash::Hash;
 use core::iter;
@@ -3029,40 +3030,6 @@ where
         }
         Ok(())
     }
-}
-
-// this is a reimplementation of array::try_from_fn, replace once that became stable
-fn array_try_from_fn<E, F, T, const N: usize>(mut cb: F) -> Result<[T; N], E>
-where
-    F: FnMut(usize) -> Result<T, E>,
-{
-    let mut valid = 0;
-    let mut result: [MaybeUninit<T>; N] = [const { MaybeUninit::uninit() }; N];
-    let mut error: Option<E> = None;
-    for n in 0..N {
-        match cb(n) {
-            Ok(v) => {
-                result[valid].write(v);
-                valid += 1;
-            }
-            Err(e) => {
-                error = Some(e);
-                // continue to consume all input
-            }
-        }
-    }
-    if let Some(e) = error {
-        // on error drop all valid elements
-        for n in 0..valid {
-            unsafe {
-                result[n].assume_init_drop();
-            }
-        }
-        return Err(e);
-    }
-    assert!(valid == N);
-    // this is a copy of array_assume_init from stdlib to avoid requiring nightly
-    Ok(unsafe { (&result as *const _ as *const [T; N]).read() })
 }
 
 unsafe impl<T, const N: usize> Lift for [T; N]
