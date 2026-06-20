@@ -221,11 +221,15 @@ impl Val {
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_flat(cx, ty, next(src))?.into_val()
             }
-            InterfaceType::FixedLengthList(i) => Val::FixedLengthList(
-                (0..cx.types[i].size)
-                    .map(|_| Self::lift(cx, cx.types[i].element, src))
-                    .collect::<Result<_>>()?,
-            ),
+            InterfaceType::FixedLengthList(i) => {
+                let number_elements = usize::try_from(cx.types[i].size)?;
+                cx.consume_fuel_array(number_elements, size_of::<Val>())?;
+                Val::FixedLengthList(
+                    (0..number_elements)
+                        .map(|_| Self::lift(cx, cx.types[i].element, src))
+                        .collect::<Result<_>>()?,
+                )
+            }
         })
     }
 
@@ -355,18 +359,26 @@ impl Val {
                 ErrorContext::linear_lift_from_memory(cx, ty, bytes)?.into_val()
             }
             InterfaceType::FixedLengthList(i) => {
-                let element = cx.types[i].element;
-                let abi = cx.types.canonical_abi(&element);
-                Val::Tuple(
-                    (0..cx.types[i].size)
-                        .map(|n| {
-                            let offset = abi.size32 * n;
-                            let offset = usize::try_from(offset).unwrap();
-                            let size = usize::try_from(abi.size32).unwrap();
-                            Val::load(cx, element, &bytes[offset..][..size])
-                        })
-                        .collect::<Result<_>>()?,
-                )
+                let element_type = cx.types[i].element;
+                let abi = cx.types.canonical_abi(&element_type);
+                let element_size = usize::try_from(abi.size32)?;
+                let number_elements = usize::try_from(cx.types[i].size)?;
+
+                match number_elements.checked_mul(element_size) {
+                    Some(total_size) if total_size <= bytes.len() => {
+                        cx.consume_fuel_array(number_elements, size_of::<Val>())?;
+                        Val::Tuple(
+                            (0..number_elements)
+                                .map(|n| {
+                                    // the match already checked that the whole array fits into usize
+                                    let offset = element_size.wrapping_mul(n);
+                                    Val::load(cx, element_type, &bytes[offset..][..element_size])
+                                })
+                                .collect::<Result<_>>()?,
+                        )
+                    }
+                    _ => bail!("fixed length list out of bounds of memory"),
+                }
             }
         })
     }
