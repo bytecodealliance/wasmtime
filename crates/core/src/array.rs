@@ -20,12 +20,12 @@ use core::mem::MaybeUninit;
 /// # Example
 ///
 /// ```rust
-/// #![feature(array_try_from_fn)]
+/// use wasmtime_internal_core::array::array_try_from_fn;
 ///
-/// let array: Result<[u8; 5], _> = std::array::try_from_fn(|i| i.try_into());
+/// let array: Result<[u8; 5], _> = array_try_from_fn(|i| i.try_into());
 /// assert_eq!(array, Ok([0, 1, 2, 3, 4]));
 ///
-/// let array: Result<[i8; 200], _> = std::array::try_from_fn(|i| i.try_into());
+/// let array: Result<[i8; 200], _> = array_try_from_fn(|i| i.try_into());
 /// assert!(array.is_err());
 /// ```
 //
