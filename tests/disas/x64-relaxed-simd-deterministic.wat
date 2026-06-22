@@ -124,21 +124,18 @@
 ;;       vpmovsxbw %xmm0, %xmm3
 ;;       vpmovsxbw %xmm1, %xmm4
 ;;       vpmullw %xmm4, %xmm3, %xmm3
+;;       vpmaddwd 0x36(%rip), %xmm3, %xmm3
 ;;       vpalignr $8, %xmm0, %xmm0, %xmm0
 ;;       vpmovsxbw %xmm0, %xmm0
 ;;       vpalignr $8, %xmm1, %xmm1, %xmm1
 ;;       vpmovsxbw %xmm1, %xmm1
 ;;       vpmullw %xmm1, %xmm0, %xmm0
-;;       vphaddw %xmm0, %xmm3, %xmm0
-;;       vpmaddwd 0x17(%rip), %xmm0, %xmm0
+;;       vpmaddwd 0x24(%rip), %xmm0, %xmm0
+;;       vphaddd %xmm0, %xmm3, %xmm0
 ;;       vpaddd  %xmm2, %xmm0, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  1a2: addb    %al, (%rax)
-;;  1a4: addb    %al, (%rax)
-;;  1a6: addb    %al, (%rax)
-;;  1a8: addb    %al, (%rax)
 ;;  1aa: addb    %al, (%rax)
 ;;  1ac: addb    %al, (%rax)
 ;;  1ae: addb    %al, (%rax)
@@ -150,3 +147,11 @@
 ;;  1ba: addl    %eax, (%rax)
 ;;  1bc: addl    %eax, (%rax)
 ;;  1be: addl    %eax, (%rax)
+;;  1c0: addl    %eax, (%rax)
+;;  1c2: addl    %eax, (%rax)
+;;  1c4: addl    %eax, (%rax)
+;;  1c6: addl    %eax, (%rax)
+;;  1c8: addl    %eax, (%rax)
+;;  1ca: addl    %eax, (%rax)
+;;  1cc: addl    %eax, (%rax)
+;;  1ce: addl    %eax, (%rax)

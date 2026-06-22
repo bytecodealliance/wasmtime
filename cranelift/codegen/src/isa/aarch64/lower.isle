@@ -390,20 +390,25 @@
 (rule -1 (lower (iadd_pairwise ty x y))
       (addp x y (vector_size ty)))
 
-;; With FEAT_DotProd, fold the `swiden`/`imul`/`iadd_pairwise`/`iadd` tree that
+;; With FEAT_DotProd, fold the exact-i32 dot-product tree that
 ;; `i32x4.relaxed_dot_i8x16_i7x16_add_s` decomposes into (there is no dot CLIF
-;; opcode) back into a single `sdot`. This is bit-identical to the otherwise
-;; emitted smull/saddlp fallback over the in-i7 input range the op guarantees.
+;; opcode) back into a single `sdot`. `sdot` accumulates the four signed `i8 *
+;; i8` products of each 32-bit lane directly in i32, which is exactly what this
+;; tree computes: `lo`/`hi` are the i16 products of the low/high input halves,
+;; each widened to i32 and reduced pairwise entirely in i32 (no narrowing), then
+;; added to the accumulator `c`.
 ;; Priority 8 stays above the scalar `iadd` rules whose opaque
 ;; `ty_int_ref_scalar_64` guard the overlap checker can't prove disjoint here.
 (rule 8 (lower (and (use_dotprod)
                     (has_type $I32X4
                       (iadd _
                         (iadd_pairwise _
-                          (swiden_low _ dot @ (iadd_pairwise _
-                                                (imul _ (swiden_low _ a) (swiden_low _ b))
-                                                (imul _ (swiden_high _ a) (swiden_high _ b))))
-                          (swiden_high _ dot))
+                          (iadd_pairwise _
+                            (swiden_low _ lo @ (imul _ (swiden_low _ a) (swiden_low _ b)))
+                            (swiden_high _ lo))
+                          (iadd_pairwise _
+                            (swiden_low _ hi @ (imul _ (swiden_high _ a) (swiden_high _ b)))
+                            (swiden_high _ hi)))
                         c))))
       (sdot c a b))
 

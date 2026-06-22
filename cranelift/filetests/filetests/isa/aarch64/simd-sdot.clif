@@ -2,7 +2,8 @@ test compile precise-output
 set unwind_info=false
 target aarch64 has_dotprod
 
-;; Tests the aarch64 `sdot` lowering: the i8 dot-product tree contracts to one `sdot`.
+;; Tests the aarch64 `sdot` lowering: the exact-i32 dot-product tree that
+;; `i32x4.relaxed_dot_i8x16_i7x16_add_s` decomposes into contracts to one `sdot`.
 function %sdot_i8x16(i8x16, i8x16, i32x4) -> i32x4 {
 block0(v0: i8x16, v1: i8x16, v2: i32x4):
     v3 = swiden_low v0
@@ -11,12 +12,15 @@ block0(v0: i8x16, v1: i8x16, v2: i32x4):
     v6 = swiden_high v0
     v7 = swiden_high v1
     v8 = imul v6, v7
-    v9 = iadd_pairwise v5, v8
-    v10 = swiden_low v9
-    v11 = swiden_high v9
-    v12 = iadd_pairwise v10, v11
-    v13 = iadd v12, v2
-    return v13
+    v9 = swiden_low v5
+    v10 = swiden_high v5
+    v11 = iadd_pairwise v9, v10
+    v12 = swiden_low v8
+    v13 = swiden_high v8
+    v14 = iadd_pairwise v12, v13
+    v15 = iadd_pairwise v11, v14
+    v16 = iadd v15, v2
+    return v16
 }
 
 ; VCode:
