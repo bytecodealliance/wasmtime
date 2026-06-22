@@ -2,8 +2,8 @@ use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::vm::{
     self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
-    VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMLazyThread,
-    VMOpaqueContext, VMStoreContext,
+    VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
+    VMStoreContext,
 };
 use crate::store::{Asyncness, AutoAssertNoGc, InstanceId, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
@@ -1476,16 +1476,6 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     #[cfg(feature = "component-model")]
     if result.is_err() {
         store.0.set_trapped();
-
-        // A trap unwinds over any fused adapter frames without running their
-        // `exit-sync-call`s. That can leave `VMStoreContext::current_thread`
-        // pointing at an old, invalid `VMDeferredThread` inside an old,
-        // since-unwound stack frame. Therefore, we must reset `current_thread`
-        // to avoid potential use-after-free bugs.
-        let vm_store_context = store.0.vm_store_context_mut();
-        if vm_store_context.current_thread.is_deferred() {
-            vm_store_context.current_thread = VMLazyThread::forced();
-        }
     }
     core::mem::drop(previous_runtime_state);
     store.0.call_hook(CallHook::ReturningFromWasm)?;
