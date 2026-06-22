@@ -3806,11 +3806,12 @@ impl FuncEnvironment<'_> {
         match entity {
             CheckedEntity::Table { table, initialized } => {
                 assert!(!is_pre_interned_funcref);
+                let region = self.table_alias_region(builder.func, table);
                 self.emit_table_set(
                     builder,
                     table,
                     elem_addr,
-                    ir::MemFlagsData::trusted(),
+                    ir::MemFlagsData::trusted().with_alias_region(Some(region)),
                     value,
                     initialized,
                 )?
@@ -4464,11 +4465,12 @@ impl FuncEnvironment<'_> {
                 };
                 match dst_entity {
                     CheckedEntity::Table { table, initialized } => {
+                        let region = this.table_alias_region(builder.func, table);
                         this.emit_table_set(
                             builder,
                             table,
                             dst,
-                            ir::MemFlagsData::trusted(),
+                            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
                             val,
                             initialized,
                         )?;

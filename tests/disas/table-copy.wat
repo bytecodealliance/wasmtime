@@ -181,7 +181,7 @@
 ;;                                 block7(v65: i64):
 ;; @0090                               v69 = iconst.i64 1
 ;; @0090                               v70 = bor v65, v69  ; v69 = 1
-;; @0090                               store notrap aligned v70, v50
+;; @0090                               store notrap aligned region5 v70, v50
 ;; @0090                               v71 = iconst.i64 8
 ;; @0090                               v72 = iadd.i64 v50, v71  ; v71 = 8
 ;; @0090                               v73 = iconst.i64 8
@@ -200,7 +200,7 @@
 ;;                                 block9(v99: i64):
 ;; @0090                               v103 = iconst.i64 1
 ;; @0090                               v104 = bor v99, v103  ; v103 = 1
-;; @0090                               store notrap aligned v104, v82
+;; @0090                               store notrap aligned region5 v104, v82
 ;; @0090                               v105 = icmp.i64 eq v84, v35
 ;; @0090                               brif v105, block5, block4(v82, v84, v86)
 ;;
@@ -327,7 +327,7 @@
 ;;                                 block7(v68: i64):
 ;; @009f                               v72 = iconst.i64 1
 ;; @009f                               v73 = bor v68, v72  ; v72 = 1
-;; @009f                               store notrap aligned v73, v50
+;; @009f                               store notrap aligned region5 v73, v50
 ;; @009f                               v74 = iconst.i64 8
 ;; @009f                               v75 = iadd.i64 v50, v74  ; v74 = 8
 ;; @009f                               v76 = iconst.i64 8
@@ -346,7 +346,7 @@
 ;;                                 block9(v105: i64):
 ;; @009f                               v109 = iconst.i64 1
 ;; @009f                               v110 = bor v105, v109  ; v109 = 1
-;; @009f                               store notrap aligned v110, v85
+;; @009f                               store notrap aligned region5 v110, v85
 ;; @009f                               v111 = icmp.i64 eq v87, v35
 ;; @009f                               brif v111, block5, block4(v85, v87, v89)
 ;;
