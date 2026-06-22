@@ -54,7 +54,8 @@ use self::error_contexts::GlobalErrorContextRefCount;
 use crate::bail_bug;
 use crate::component::func::{Func, call_post_return};
 use crate::component::{
-    HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
+    HasData, HasSelf, Instance, InstancePre, Resource, ResourceTable, ResourceTableError,
+    RuntimeInstance,
 };
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::hash_set::HashSet;
@@ -468,6 +469,34 @@ where
                 get_data: self.get_data,
             })
         })
+    }
+
+    /// Instantiates a component into the current concurrent store.
+    ///
+    /// This is the [`Accessor`] equivalent of [`InstancePre::instantiate_async`].
+    /// It is useful for embedders that need to lazily instantiate components
+    /// while running inside [`StoreContextMut::run_concurrent`], where the
+    /// current store is available through this accessor rather than as a
+    /// separate [`StoreContextMut`].
+    ///
+    /// # Panics
+    ///
+    /// This method has the same contextual requirements as [`Accessor::with`]:
+    /// it must only be called while this accessor's store is available through
+    /// Wasmtime's concurrent runtime.
+    pub async fn instantiate_async(&self, pre: &InstancePre<T>) -> Result<Instance>
+    where
+        T: Send + 'static,
+    {
+        let store = tls::get(|vmstore| {
+            let store = self.token.as_context_mut(vmstore);
+            // The concurrent runtime makes the store available through TLS
+            // for every poll of the host future. `InstancePre::instantiate_async`
+            // needs to hold the store context across await points, but Rust
+            // cannot express that TLS-scoped lifetime directly.
+            unsafe { mem::transmute::<StoreContextMut<'_, T>, StoreContextMut<'static, T>>(store) }
+        });
+        pre.instantiate_async(store).await
     }
 
     /// Returns the getter this accessor is using to project from `T` into

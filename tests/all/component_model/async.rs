@@ -46,6 +46,68 @@ async fn smoke() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn accessor_can_instantiate_pre() -> Result<()> {
+    let component = r#"
+        (component
+            (import "add-one" (func $add_one (param "x" u32) (result u32)))
+            (core func $add_one (canon lower (func $add_one)))
+
+            (core module $m
+                (import "" "add-one" (func $add_one (param i32) (result i32)))
+                (func (export "answer") (param i32) (result i32)
+                    local.get 0
+                    call $add_one
+                    call $add_one
+                    i32.const 40
+                    i32.add)
+            )
+
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "add-one" (func $add_one))
+                ))
+            ))
+            (func (export "answer") (param "x" u32) (result u32)
+                (canon lift (core func $i "answer")))
+        )
+    "#;
+
+    let engine = super::async_engine();
+    let component = Component::new(&engine, component)?;
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .func_wrap("add-one", |_: StoreContextMut<'_, ()>, (x,): (u32,)| {
+            Ok((x + 1,))
+        })?;
+    let pre = linker.instantiate_pre(&component)?;
+    let mut store = Store::new(&engine, ());
+
+    let (answer_a, answer_b) = store
+        .run_concurrent(async |accessor| -> Result<_> {
+            let instance_a = accessor.instantiate_async(&pre).await?;
+            let instance_b = accessor.instantiate_async(&pre).await?;
+            let (answer_a, answer_b) = accessor.with(|mut access| {
+                let answer_a =
+                    instance_a.get_typed_func::<(u32,), (u32,)>(&mut access, "answer")?;
+                let answer_b =
+                    instance_b.get_typed_func::<(u32,), (u32,)>(&mut access, "answer")?;
+                Ok::<_, wasmtime::Error>((answer_a, answer_b))
+            })?;
+            let (answer_a,) = answer_a.call_concurrent(accessor, (0,)).await?;
+            let (answer_b,) = answer_b.call_concurrent(accessor, (10,)).await?;
+            Ok((answer_a, answer_b))
+        })
+        .await??;
+
+    assert_eq!(answer_a, 42);
+    assert_eq!(answer_b, 52);
+
+    Ok(())
+}
+
 /// Handle an import function, created using component::Linker::func_wrap_async.
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
