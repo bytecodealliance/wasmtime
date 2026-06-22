@@ -78,15 +78,15 @@ use crate::translate::TargetEnvironment;
 use crate::translate::environ::StructFieldsVec;
 use crate::translate::stack::{ControlStackFrame, ElseData};
 use crate::translate::translation_utils::{
-    block_with_params, blocktype_params_results, f32_translation, f64_translation,
+    block_with_params, blocktype_params_results, f32_translation, f64_translation, set_block_params,
 };
 use crate::trap::TranslateTrap;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{
     self, AtomicRmwOp, ExceptionTag, InstBuilder, JumpTableData, MemFlagsData, Value, ValueLabel,
+    types::*,
 };
-use cranelift_codegen::ir::{BlockArg, types::*};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use itertools::Itertools;
@@ -128,7 +128,7 @@ pub fn translate_operator(
     log::trace!("Translating Wasm opcode: {op:?}");
 
     if !environ.is_reachable() {
-        translate_unreachable_operator(validator, &op, builder, environ)?;
+        translate_unreachable_operator(&op, builder, environ)?;
         return Ok(());
     }
 
@@ -269,20 +269,22 @@ pub fn translate_operator(
             let (params, results) = blocktype_params_results(validator, *blockty)?;
             let loop_body = block_with_params(builder, params.clone(), environ)?;
             let next = block_with_params(builder, results.clone(), environ)?;
-            canonicalise_then_jump(builder, loop_body, environ.stacks.peekn(params.len()));
+            canonicalise_then_jump(
+                environ,
+                builder,
+                loop_body,
+                environ.stacks.peekn(params.len()),
+            );
             environ
                 .stacks
                 .push_loop(loop_body, next, params.len(), results.len());
 
-            // Pop the initial `Block` actuals and replace them with the `Block`'s
-            // params since control flow joins at the top of the loop.
+            // Pop the initial `Block` actuals and replace them with the loop
+            // header's parameters since control flow joins at the top of the
+            // loop.
             environ.stacks.popn(params.len());
-            environ
-                .stacks
-                .stack
-                .extend_from_slice(builder.block_params(loop_body));
-
             builder.switch_to_block(loop_body);
+            push_block_params(environ, builder, loop_body);
             environ.translate_loop_header(builder)?;
         }
         Operator::If { blockty } => {
@@ -302,6 +304,7 @@ pub fn translate_operator(
                 // and go back and patch the jump.
                 let destination = block_with_params(builder, results.clone(), environ)?;
                 let branch_inst = canonicalise_brif(
+                    environ,
                     builder,
                     val,
                     next_block,
@@ -320,15 +323,8 @@ pub fn translate_operator(
                 // The `if` type signature is not valid without an `else` block,
                 // so we eagerly allocate the `else` block here.
                 let destination = block_with_params(builder, results.clone(), environ)?;
-                let else_block = block_with_params(builder, params.clone(), environ)?;
-                canonicalise_brif(
-                    builder,
-                    val,
-                    next_block,
-                    &[],
-                    else_block,
-                    environ.stacks.peekn(params.len()),
-                );
+                let else_block = builder.create_block();
+                canonicalise_brif(environ, builder, val, next_block, &[], else_block, &[]);
                 builder.seal_block(else_block);
                 (destination, ElseData::WithElse { else_block })
             };
@@ -402,9 +398,9 @@ pub fn translate_operator(
                                 let (params, _results) =
                                     blocktype_params_results(validator, blocktype)?;
                                 debug_assert_eq!(params.len(), num_return_values);
-                                let else_block =
-                                    block_with_params(builder, params.clone(), environ)?;
+                                let else_block = builder.create_block();
                                 canonicalise_then_jump(
+                                    environ,
                                     builder,
                                     destination,
                                     environ.stacks.peekn(params.len()),
@@ -421,6 +417,7 @@ pub fn translate_operator(
                             }
                             ElseData::WithElse { else_block } => {
                                 canonicalise_then_jump(
+                                    environ,
                                     builder,
                                     destination,
                                     environ.stacks.peekn(num_return_values),
@@ -459,9 +456,13 @@ pub fn translate_operator(
             let frame = environ.stacks.control_stack.pop().unwrap();
             let next_block = frame.following_code();
             let return_count = frame.num_return_values();
-            let return_args = environ.stacks.peekn_mut(return_count);
 
-            canonicalise_then_jump(builder, next_block, return_args);
+            canonicalise_then_jump(
+                environ,
+                builder,
+                next_block,
+                environ.stacks.peekn(return_count),
+            );
             // You might expect that if we just finished an `if` block that
             // didn't have a corresponding `else` block, then we would clean
             // up our duplicate set of parameters that we pushed earlier
@@ -483,10 +484,7 @@ pub fn translate_operator(
                 &mut environ.stacks.stack,
                 &mut environ.stacks.stack_shape,
             );
-            environ
-                .stacks
-                .stack
-                .extend_from_slice(builder.block_params(next_block));
+            push_block_params(environ, builder, next_block);
         }
         /**************************** Branch instructions *********************************
          * The branch instructions all have as arguments a target nesting level, which
@@ -522,8 +520,12 @@ pub fn translate_operator(
                 };
                 (return_count, frame.br_destination())
             };
-            let destination_args = environ.stacks.peekn_mut(return_count);
-            canonicalise_then_jump(builder, br_destination, destination_args);
+            canonicalise_then_jump(
+                environ,
+                builder,
+                br_destination,
+                environ.stacks.peekn(return_count),
+            );
             environ.stacks.popn(return_count);
             environ.stacks.reachable = false;
         }
@@ -607,8 +609,12 @@ pub fn translate_operator(
                         frame.set_branched_to_exit();
                         frame.br_destination()
                     };
-                    let destination_args = environ.stacks.peekn_mut(return_count);
-                    canonicalise_then_jump(builder, real_dest_block, destination_args);
+                    canonicalise_then_jump(
+                        environ,
+                        builder,
+                        real_dest_block,
+                        environ.stacks.peekn(return_count),
+                    );
                 }
                 environ.stacks.popn(return_count);
             }
@@ -2641,7 +2647,15 @@ pub fn translate_operator(
             let is_null = environ.translate_ref_is_null(builder.cursor(), r, r_ty)?;
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, environ);
             let else_block = builder.create_block();
-            canonicalise_brif(builder, is_null, br_destination, inputs, else_block, &[]);
+            canonicalise_brif(
+                environ,
+                builder,
+                is_null,
+                br_destination,
+                &inputs,
+                else_block,
+                &[],
+            );
 
             builder.seal_block(else_block); // The only predecessor is the current block.
             builder.switch_to_block(else_block);
@@ -2660,10 +2674,17 @@ pub fn translate_operator(
             };
             let r_ty = *r_ty;
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, environ);
-            let inputs = inputs.to_vec();
             let is_null = environ.translate_ref_is_null(builder.cursor(), r, r_ty)?;
             let else_block = builder.create_block();
-            canonicalise_brif(builder, is_null, else_block, &[], br_destination, &inputs);
+            canonicalise_brif(
+                environ,
+                builder,
+                is_null,
+                else_block,
+                &[],
+                br_destination,
+                &inputs,
+            );
 
             // In the null case, pop the ref
             environ.stacks.pop1();
@@ -3048,10 +3069,11 @@ pub fn translate_operator(
             let (cast_succeeds_block, inputs) = translate_br_if_args(*relative_depth, environ);
             let cast_fails_block = builder.create_block();
             canonicalise_brif(
+                environ,
                 builder,
                 cast_is_okay,
                 cast_succeeds_block,
-                inputs,
+                &inputs,
                 cast_fails_block,
                 &[
                     // NB: the `cast_fails_block` is dominated by the current
@@ -3082,6 +3104,7 @@ pub fn translate_operator(
             let (cast_fails_block, inputs) = translate_br_if_args(*relative_depth, environ);
             let cast_succeeds_block = builder.create_block();
             canonicalise_brif(
+                environ,
                 builder,
                 cast_is_okay,
                 cast_succeeds_block,
@@ -3090,7 +3113,7 @@ pub fn translate_operator(
                     // block, and therefore doesn't need any block params.
                 ],
                 cast_fails_block,
-                inputs,
+                &inputs,
             );
 
             // The only predecessor is the current block.
@@ -3355,7 +3378,6 @@ pub fn translate_operator(
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
 /// portion so the translation state must be updated accordingly.
 fn translate_unreachable_operator(
-    validator: &FuncValidator<impl WasmModuleResources>,
     op: &Operator,
     builder: &mut FunctionBuilder,
     environ: &mut FuncEnvironment<'_>,
@@ -3390,7 +3412,6 @@ fn translate_unreachable_operator(
                     ref else_data,
                     head_is_reachable,
                     ref mut consequent_ends_reachable,
-                    blocktype,
                     ..
                 } => {
                     debug_assert!(consequent_ends_reachable.is_none());
@@ -3405,9 +3426,7 @@ fn translate_unreachable_operator(
                                 branch_inst,
                                 placeholder,
                             } => {
-                                let (params, _results) =
-                                    blocktype_params_results(validator, blocktype)?;
-                                let else_block = block_with_params(builder, params, environ)?;
+                                let else_block = builder.create_block();
                                 let frame = environ.stacks.control_stack.last().unwrap();
                                 frame.truncate_value_stack_to_else_params(
                                     &mut environ.stacks.stack,
@@ -3445,15 +3464,15 @@ fn translate_unreachable_operator(
             }
         }
         Operator::End => {
-            let value_stack = &mut environ.stacks.stack;
-            let stack_shape = &mut environ.stacks.stack_shape;
-            let control_stack = &mut environ.stacks.control_stack;
-            let frame = control_stack.pop().unwrap();
+            let frame = environ.stacks.control_stack.pop().unwrap();
 
             frame.restore_catch_handlers(&mut environ.stacks.handlers, builder);
 
             // Pop unused parameters from stack.
-            frame.truncate_value_stack_to_original_size(value_stack, stack_shape);
+            frame.truncate_value_stack_to_original_size(
+                &mut environ.stacks.stack,
+                &mut environ.stacks.stack_shape,
+            );
 
             let reachable_anyway = match frame {
                 // If it is a loop we also have to seal the body loop block
@@ -3485,12 +3504,13 @@ fn translate_unreachable_operator(
             };
 
             if frame.exit_is_branched_to() || reachable_anyway {
-                builder.switch_to_block(frame.following_code());
-                builder.seal_block(frame.following_code());
+                let next_block = frame.following_code();
+                builder.switch_to_block(next_block);
+                builder.seal_block(next_block);
 
                 // And add the return values of the block but only if the next block is reachable
                 // (which corresponds to testing if the stack depth is 1)
-                value_stack.extend_from_slice(builder.block_params(frame.following_code()));
+                push_block_params(environ, builder, next_block);
                 environ.stacks.reachable = true;
             }
         }
@@ -4036,16 +4056,16 @@ fn translate_br_if(
         });
     }
 
-    canonicalise_brif(builder, val, br_destination, inputs, next_block, &[]);
+    canonicalise_brif(env, builder, val, br_destination, &inputs, next_block, &[]);
 
     builder.seal_block(next_block); // The only predecessor is the current block.
     builder.switch_to_block(next_block);
 }
 
-fn translate_br_if_args<'a>(
+fn translate_br_if_args(
     relative_depth: u32,
-    env: &'a mut FuncEnvironment<'_>,
-) -> (ir::Block, &'a mut [ir::Value]) {
+    env: &mut FuncEnvironment<'_>,
+) -> (ir::Block, SmallVec<[ir::Value; 8]>) {
     let i = env.stacks.control_stack.len() - 1 - (relative_depth as usize);
     let (return_count, br_destination) = {
         let frame = &mut env.stacks.control_stack[i];
@@ -4059,7 +4079,10 @@ fn translate_br_if_args<'a>(
         };
         (return_count, frame.br_destination())
     };
-    let inputs = env.stacks.peekn_mut(return_count);
+    // Copy the branch arguments off the operand stack into an owned buffer so
+    // that callers can subsequently borrow `env` (e.g. to look up the
+    // destination's parameter variables) without conflicting with this borrow.
+    let inputs = env.stacks.peekn(return_count).to_smallvec();
     (br_destination, inputs)
 }
 
@@ -4311,12 +4334,20 @@ fn is_non_canonical_v128(ty: ir::Type) -> bool {
 /// actually necessary, and if not, the original slice is returned.  Otherwise the cast values
 /// are returned in a slice that belongs to the caller-supplied `SmallVec`.
 fn canonicalise_v128_values<'a>(
-    tmp_canonicalised: &'a mut SmallVec<[BlockArg; 16]>,
+    tmp_canonicalised: &'a mut SmallVec<[ir::Value; 16]>,
     builder: &mut FunctionBuilder,
     values: &'a [ir::Value],
-) -> &'a [BlockArg] {
+) -> &'a [ir::Value] {
     debug_assert!(tmp_canonicalised.is_empty());
-    // Cast, and push the resulting `Value`s into `canonicalised`.
+    // If no value needs canonicalising, we can avoid any work and return the
+    // original slice unchanged.
+    if values
+        .iter()
+        .all(|v| !is_non_canonical_v128(builder.func.dfg.value_type(*v)))
+    {
+        return values;
+    }
+    // Otherwise cast as necessary, and push the resulting `Value`s into `canonicalised`.
     for v in values {
         let value = if is_non_canonical_v128(builder.func.dfg.value_type(*v)) {
             let mut flags = MemFlagsData::new();
@@ -4325,26 +4356,62 @@ fn canonicalise_v128_values<'a>(
         } else {
             *v
         };
-        tmp_canonicalised.push(BlockArg::from(value));
+        tmp_canonicalised.push(value);
     }
     tmp_canonicalised.as_slice()
+}
+
+/// Recover the Wasm stack parameters of `block` and push them onto the operand
+/// stack as we begin translating that block.
+///
+/// The caller must have already switched to `block`.
+///
+/// For a Wasm control-flow target (i.e. a block with associated parameter
+/// `Variable`s) we `use_var` each of those variables. For a block with real
+/// CLIF block parameters (the function's exit block) we read those parameters
+/// directly.
+fn push_block_params(
+    environ: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder,
+    block: ir::Block,
+) {
+    debug_assert_eq!(builder.current_block(), Some(block));
+    match environ.stacks.block_param_vars.get(&block) {
+        Some(vars) => {
+            let vars: SmallVec<[Variable; 6]> = vars.clone();
+            for var in vars {
+                let val = builder.use_var(var);
+                environ.stacks.stack.push(val);
+            }
+        }
+        None => {
+            environ
+                .stacks
+                .stack
+                .extend_from_slice(builder.block_params(block));
+        }
+    }
 }
 
 /// Generate a `jump` instruction, but first cast all 128-bit vector values to I8X16 if they
 /// don't have that type.  This is done in somewhat roundabout way so as to ensure that we
 /// almost never have to do any heap allocation.
 fn canonicalise_then_jump(
+    environ: &FuncEnvironment<'_>,
     builder: &mut FunctionBuilder,
     destination: ir::Block,
     params: &[ir::Value],
 ) -> ir::Inst {
-    let mut tmp_canonicalised = SmallVec::<[_; 16]>::new();
-    let canonicalised = canonicalise_v128_values(&mut tmp_canonicalised, builder, params);
-    builder.ins().jump(destination, canonicalised)
+    let mut canonicalised = SmallVec::<[_; 16]>::new();
+    let canonicalised = canonicalise_v128_values(&mut canonicalised, builder, params);
+    let mut args = SmallVec::<[_; 16]>::new();
+    let args = set_block_params(environ, builder, &mut args, destination, canonicalised);
+    builder.ins().jump(destination, args)
 }
 
-/// The same but for a `brif` instruction.
+/// The same as `canonicalise_then_jump` but for a `brif` instruction.
 fn canonicalise_brif(
+    environ: &FuncEnvironment<'_>,
     builder: &mut FunctionBuilder,
     cond: ir::Value,
     block_then: ir::Block,
@@ -4352,19 +4419,33 @@ fn canonicalise_brif(
     block_else: ir::Block,
     params_else: &[ir::Value],
 ) -> ir::Inst {
-    let mut tmp_canonicalised_then = SmallVec::<[_; 16]>::new();
+    let mut canonicalised_then = SmallVec::<[_; 16]>::new();
     let canonicalised_then =
-        canonicalise_v128_values(&mut tmp_canonicalised_then, builder, params_then);
-    let mut tmp_canonicalised_else = SmallVec::<[_; 16]>::new();
-    let canonicalised_else =
-        canonicalise_v128_values(&mut tmp_canonicalised_else, builder, params_else);
-    builder.ins().brif(
-        cond,
+        canonicalise_v128_values(&mut canonicalised_then, builder, params_then);
+    let mut args_then = SmallVec::<[_; 16]>::new();
+    let args_then = set_block_params(
+        environ,
+        builder,
+        &mut args_then,
         block_then,
         canonicalised_then,
+    );
+
+    let mut canonicalised_else = SmallVec::<[_; 16]>::new();
+    let canonicalised_else =
+        canonicalise_v128_values(&mut canonicalised_else, builder, params_else);
+    let mut args_else = SmallVec::<[_; 16]>::new();
+    let args_else = set_block_params(
+        environ,
+        builder,
+        &mut args_else,
         block_else,
         canonicalised_else,
-    )
+    );
+
+    builder
+        .ins()
+        .brif(cond, block_then, args_then, block_else, args_else)
 }
 
 /// A helper for popping and bitcasting a single value; since SIMD values can lose their type by
@@ -4501,14 +4582,18 @@ fn create_catch_block(
     // are compiling a `*Ref` variant.
 
     let (exn_ref_ty, needs_stack_map) = environ.reference_type(WasmHeapType::Exn);
-    let (exn_payload_wasm_ty, exn_payload_ty) = match environ.pointer_type().bits() {
-        32 => (wasmparser::ValType::I32, I32),
-        64 => (wasmparser::ValType::I64, I64),
+    let exn_payload_ty = match environ.pointer_type().bits() {
+        32 => I32,
+        64 => I64,
         _ => panic!("Unsupported pointer width"),
     };
-    let block = block_with_params(builder, [exn_payload_wasm_ty], environ)?;
+    // Unlike Wasm control-flow targets, a catch block's single parameter is a
+    // real CLIF block parameter: it is filled in by the exception ABI (the
+    // `try_call`'s exception table), not by an ordinary branch. So create it
+    // directly rather than going through `block_with_params`.
+    let block = builder.create_block();
+    let exn_ref = builder.append_block_param(block, exn_payload_ty);
     builder.switch_to_block(block);
-    let exn_ref = builder.func.dfg.block_params(block)[0];
     debug_assert!(exn_ref_ty.bits() <= exn_payload_ty.bits());
     let exn_ref = if exn_ref_ty.bits() < exn_payload_ty.bits() {
         builder.ins().ireduce(exn_ref_ty, exn_ref)
@@ -4543,7 +4628,8 @@ fn create_catch_block(
     let i = environ.stacks.control_stack.len() - 1 - (label as usize);
     let frame = &mut environ.stacks.control_stack[i];
     frame.set_branched_to_exit();
-    canonicalise_then_jump(builder, frame.br_destination(), &params);
+    let br_destination = frame.br_destination();
+    canonicalise_then_jump(environ, builder, br_destination, &params);
 
     Ok(block)
 }

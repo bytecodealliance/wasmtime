@@ -130,15 +130,15 @@
 ;; @007f                               brif v2, block2, block4
 ;;
 ;;                                 block2 cold:
-;; @0081                               v5 = iconst.i32 1
-;; @0083                               jump block3(v5)  ; v5 = 1
+;; @0081                               v4 = iconst.i32 1
+;; @0083                               jump block3(v4)  ; v4 = 1
 ;;
 ;;                                 block4:
-;; @0084                               v6 = iconst.i32 2
-;; @0086                               jump block3(v6)  ; v6 = 2
+;; @0084                               v5 = iconst.i32 2
+;; @0086                               jump block3(v5)  ; v5 = 2
 ;;
-;;                                 block3(v4: i32):
-;; @0087                               jump block1(v4)
+;;                                 block3(v6: i32):
+;; @0087                               jump block1(v6)
 ;;
 ;;                                 block1(v3: i32):
 ;; @0087                               return v3
@@ -156,15 +156,15 @@
 ;; @008c                               brif v2, block2, block4
 ;;
 ;;                                 block2:
-;; @008e                               v5 = iconst.i32 1
-;; @0090                               jump block3(v5)  ; v5 = 1
+;; @008e                               v4 = iconst.i32 1
+;; @0090                               jump block3(v4)  ; v4 = 1
 ;;
 ;;                                 block4 cold:
-;; @0091                               v6 = iconst.i32 2
-;; @0093                               jump block3(v6)  ; v6 = 2
+;; @0091                               v5 = iconst.i32 2
+;; @0093                               jump block3(v5)  ; v5 = 2
 ;;
-;;                                 block3(v4: i32):
-;; @0094                               jump block1(v4)
+;;                                 block3(v6: i32):
+;; @0094                               jump block1(v6)
 ;;
 ;;                                 block1(v3: i32):
 ;; @0094                               return v3

@@ -23,17 +23,17 @@
 ;; @0028                               brif v2, block2, block4
 ;;
 ;;                                 block2:
-;; @002a                               v6 = iconst.i32 2
-;; @002c                               v7 = iadd.i32 v4, v6  ; v4 = 1, v6 = 2
-;; @002d                               jump block3(v7)
+;; @002a                               v5 = iconst.i32 2
+;; @002c                               v6 = iadd.i32 v4, v5  ; v4 = 1, v5 = 2
+;; @002d                               jump block3(v6)
 ;;
 ;;                                 block4:
-;; @002e                               v9 = iconst.i32 -2
-;; @0030                               v10 = iadd.i32 v4, v9  ; v4 = 1, v9 = -2
-;; @0031                               jump block3(v10)
+;; @002e                               v7 = iconst.i32 -2
+;; @0030                               v8 = iadd.i32 v4, v7  ; v4 = 1, v7 = -2
+;; @0031                               jump block3(v8)
 ;;
-;;                                 block3(v5: i32):
-;; @0032                               jump block1(v5)
+;;                                 block3(v9: i32):
+;; @0032                               jump block1(v9)
 ;;
 ;;                                 block1(v3: i32):
 ;; @0032                               return v3

@@ -35,10 +35,10 @@
 ;; @0056                               brif v3, block2, block4
 ;;
 ;;                                 block2:
-;; @0058                               v7 = uextend.i64 v2
-;; @0058                               v8 = load.i64 notrap aligned readonly can_move region2 v0+56
-;; @0058                               v9 = iadd v8, v7
-;; @0058                               v10 = sload16.i64 little region4 v9
+;; @0058                               v6 = uextend.i64 v2
+;; @0058                               v7 = load.i64 notrap aligned readonly can_move region2 v0+56
+;; @0058                               v8 = iadd v7, v6
+;; @0058                               v9 = sload16.i64 little region4 v8
 ;; @005c                               jump block3
 ;;
 ;;                                 block4:

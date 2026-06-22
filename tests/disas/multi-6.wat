@@ -22,7 +22,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0026                               v2 = iconst.i32 1
-;; @002a                               v5 = iconst.i64 2
+;; @002a                               v3 = iconst.i64 2
 ;; @002c                               jump block2
 ;;
 ;;                                 block2:

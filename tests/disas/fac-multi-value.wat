@@ -67,18 +67,18 @@
 ;; @0050                               jump block2(v4, v2)  ; v4 = 1
 ;;
 ;;                                 block2(v5: i64, v6: i64):
-;; @0052                               v8, v9, v10 = call fn0(v0, v0, v5, v6)
-;; @0054                               v11, v12, v13 = call fn0(v0, v0, v9, v10)
-;; @0056                               v14 = imul v12, v13
-;; @0057                               v15, v16, v17 = call fn0(v0, v0, v11, v14)
-;; @0059                               v18 = iconst.i64 1
-;; @005b                               v19 = isub v17, v18  ; v18 = 1
-;; @005c                               v20, v21 = call fn1(v0, v0, v19)
-;; @005e                               v22 = iconst.i64 0
-;; @0060                               v23 = icmp ugt v21, v22  ; v22 = 0
-;; @0060                               v24 = uextend.i32 v23
-;; @0061                               brif v24, block2(v16, v20), block4
+;; @0052                               v7, v8, v9 = call fn0(v0, v0, v5, v6)
+;; @0054                               v10, v11, v12 = call fn0(v0, v0, v8, v9)
+;; @0056                               v13 = imul v11, v12
+;; @0057                               v14, v15, v16 = call fn0(v0, v0, v10, v13)
+;; @0059                               v17 = iconst.i64 1
+;; @005b                               v18 = isub v16, v17  ; v17 = 1
+;; @005c                               v19, v20 = call fn1(v0, v0, v18)
+;; @005e                               v21 = iconst.i64 0
+;; @0060                               v22 = icmp ugt v20, v21  ; v21 = 0
+;; @0060                               v23 = uextend.i32 v22
+;; @0061                               brif v23, block2(v15, v19), block4
 ;;
 ;;                                 block4:
-;; @0064                               return v16
+;; @0064                               return v15
 ;; }

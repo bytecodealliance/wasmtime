@@ -49,18 +49,18 @@
 ;; @0031                               jump block3(v9)  ; v9 = 0
 ;;
 ;;                                 block4:
-;; @0034                               v15 = call fn0(v0, v0, v7, v8, v9)  ; v7 = 0, v8 = 0, v9 = 0
-;; @0036                               jump block3(v15)
+;; @0034                               v11 = call fn0(v0, v0, v7, v8, v9)  ; v7 = 0, v8 = 0, v9 = 0
+;; @0036                               jump block3(v11)
 ;;
-;;                                 block3(v11: i32):
-;; @0037                               v16 = iconst.i32 0
-;; @0039                               v17 = iconst.i32 0
-;; @003b                               brif v17, block5, block7(v11)  ; v17 = 0
+;;                                 block3(v12: i32):
+;; @0037                               v13 = iconst.i32 0
+;; @0039                               v14 = iconst.i32 0
+;; @003b                               brif v14, block5, block7  ; v14 = 0
 ;;
 ;;                                 block5:
 ;; @003f                               jump block6
 ;;
-;;                                 block7(v20: i32):
+;;                                 block7:
 ;; @0042                               jump block6
 ;;
 ;;                                 block6:

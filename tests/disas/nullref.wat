@@ -37,12 +37,12 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0020                               v4 = iconst.i32 0
+;; @0020                               v3 = iconst.i32 0
 ;; @0022                               jump block2
 ;;
 ;;                                 block2:
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;; @0023                               return v4  ; v4 = 0
+;; @0023                               return v3  ; v3 = 0
 ;; }

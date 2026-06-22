@@ -20,6 +20,6 @@
 ;; @002b                               jump block2
 ;;
 ;;                                 block2:
-;; @002d                               v8 = iconst.i64 42
-;; @002f                               return v2, v8  ; v8 = 42
+;; @002d                               v6 = iconst.i64 42
+;; @002f                               return v2, v6  ; v6 = 42
 ;; }

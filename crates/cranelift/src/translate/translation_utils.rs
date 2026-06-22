@@ -1,10 +1,12 @@
 //! Helper functions and structures for the translation.
+use crate::func_environ::FuncEnvironment;
 use crate::translate::environ::TargetEnvironment;
 use core::u32;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
+use smallvec::SmallVec;
 use wasmparser::{FuncValidator, WasmModuleResources};
-use wasmtime_environ::WasmResult;
+use wasmtime_environ::{TypeConvert, WasmResult};
 
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results<'a, T>(
@@ -41,40 +43,70 @@ where
     });
 }
 
-/// Create a `Block` with the given Wasm parameters.
-pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
+/// Set up the Wasm stack parameters of `destination` to `values` ahead of an
+/// argument-less branch to that block.
+///
+/// If `destination` is a Wasm control-flow target (i.e. it has associated
+/// parameter `Variable`s) then we `def_var` each of those variables and the
+/// branch carries no block arguments. Otherwise `destination` has real CLIF
+/// block parameters (e.g. the function exit block), so we return the values as
+/// block arguments to pass directly.
+pub fn set_block_params<'a>(
+    environ: &FuncEnvironment<'_>,
     builder: &mut FunctionBuilder,
-    params: impl IntoIterator<Item = wasmparser::ValType>,
-    environ: &PE,
-) -> WasmResult<ir::Block> {
-    let block = builder.create_block();
-    for ty in params {
-        match ty {
-            wasmparser::ValType::I32 => {
-                builder.append_block_param(block, ir::types::I32);
+    tmp: &'a mut SmallVec<[ir::BlockArg; 16]>,
+    destination: ir::Block,
+    values: &[ir::Value],
+) -> &'a [ir::BlockArg] {
+    debug_assert!(tmp.is_empty());
+    match environ.stacks.block_param_vars.get(&destination) {
+        Some(vars) => {
+            debug_assert_eq!(vars.len(), values.len());
+            for (var, val) in vars.iter().zip(values) {
+                builder.def_var(*var, *val);
             }
-            wasmparser::ValType::I64 => {
-                builder.append_block_param(block, ir::types::I64);
-            }
-            wasmparser::ValType::F32 => {
-                builder.append_block_param(block, ir::types::F32);
-            }
-            wasmparser::ValType::F64 => {
-                builder.append_block_param(block, ir::types::F64);
-            }
-            wasmparser::ValType::Ref(rt) => {
-                let hty = environ.convert_heap_type(rt.heap_type())?;
-                let (ty, needs_stack_map) = environ.reference_type(hty);
-                let val = builder.append_block_param(block, ty);
-                if needs_stack_map {
-                    builder.declare_value_needs_stack_map(val);
-                }
-            }
-            wasmparser::ValType::V128 => {
-                builder.append_block_param(block, ir::types::I8X16);
-            }
+            &[]
+        }
+        None => {
+            tmp.extend(values.iter().map(|v| ir::BlockArg::from(*v)));
+            tmp.as_slice()
         }
     }
+}
+
+/// Create a `Block` representing a Wasm control-flow target with the given Wasm
+/// stack parameters.
+///
+/// Rather than giving the block CLIF block parameters, we create a
+/// `cranelift_frontend::Variable` for each Wasm stack parameter and record the
+/// block-to-variables mapping in `environ.stacks.block_param_vars`. See the
+/// `block_param_vars` docs for more details.
+pub fn block_with_params(
+    builder: &mut FunctionBuilder,
+    params: impl IntoIterator<Item = wasmparser::ValType>,
+    environ: &mut FuncEnvironment<'_>,
+) -> WasmResult<ir::Block> {
+    let block = builder.create_block();
+    let mut vars = SmallVec::<[_; 6]>::new();
+    for ty in params {
+        let (clif_ty, needs_stack_map) = match ty {
+            wasmparser::ValType::I32 => (ir::types::I32, false),
+            wasmparser::ValType::I64 => (ir::types::I64, false),
+            wasmparser::ValType::F32 => (ir::types::F32, false),
+            wasmparser::ValType::F64 => (ir::types::F64, false),
+            wasmparser::ValType::Ref(rt) => {
+                let hty = environ.convert_heap_type(rt.heap_type())?;
+                environ.reference_type(hty)
+            }
+            wasmparser::ValType::V128 => (ir::types::I8X16, false),
+        };
+        let var = builder.declare_var(clif_ty);
+        if needs_stack_map {
+            builder.declare_var_needs_stack_map(var);
+        }
+        vars.push(var);
+    }
+    environ.stacks.block_param_vars.insert(block, vars);
     Ok(block)
 }
 

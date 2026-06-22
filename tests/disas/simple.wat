@@ -61,8 +61,8 @@
 ;; @0030                               v3 = iconst.i32 0
 ;; @0032                               jump block2(v3)  ; v3 = 0
 ;;
-;;                                 block2(v5: i32):
-;; @0036                               v6 = iconst.i32 1
-;; @0038                               v7 = iadd v5, v6  ; v6 = 1
-;; @003b                               jump block2(v7)
+;;                                 block2(v4: i32):
+;; @0036                               v5 = iconst.i32 1
+;; @0038                               v6 = iadd v4, v5  ; v5 = 1
+;; @003b                               jump block2(v6)
 ;; }
