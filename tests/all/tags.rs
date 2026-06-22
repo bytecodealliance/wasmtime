@@ -95,8 +95,8 @@ fn stack_switching_cont_new_high_arity_rejected() -> Result<()> {
     // than 1000 params (the wasmparser limit for function params).
     // With async_stack_size = 8192:
     //   VMContinuationStack::new rounds to page size (8192), adds a
-    //   guard page, so self.len = 8192 + 4096 = 12288.
-    //   800 params * 16 bytes + 64 byte header = 12864 > 12288.
+    //   guard page, so total mmap = 12288 but usable = 8192.
+    //   800 params * 16 bytes + 64 byte header = 12864 > 8192.
     config.async_stack_size(8192);
     config.max_wasm_stack(4096);
 
@@ -108,8 +108,58 @@ fn stack_switching_cont_new_high_arity_rejected() -> Result<()> {
 
     // Build a WAT module with a high-arity function type.
     // 800 params stays under wasmparser's MAX_WASM_FUNCTION_PARAMS (1000)
-    // but exceeds the 12288-byte stack allocation.
+    // but exceeds the 8192-byte usable stack space.
     let n_params = 800;
+    let params: String = (0..n_params).map(|_| " i32").collect();
+    let wat = format!(
+        r#"(module
+            (type $ft (func (param{params})))
+            (type $ct (cont $ft))
+            (func $target (type $ft))
+            (elem declare func $target)
+            (func (export "run")
+                (drop (cont.new $ct (ref.func $target)))
+            )
+        )"#
+    );
+
+    let module = Module::new(&engine, &wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    let err = run.call(&mut store, ()).unwrap_err();
+    err.assert_contains("exceeds");
+
+    return Ok(());
+}
+
+// Regression test for #13703: with async_stack_size=8192 and 600 params, the
+// control data (600 * 16 + 64 = 9664 bytes) fits within the total mmap
+// allocation (12288 = 8192 + 4096 guard) but exceeds the usable stack space
+// (8192). Before the fix, the bounds check compared against self.len (which
+// includes the guard page), so this case passed the check and then wrote
+// into the guard page, causing a segfault.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn stack_switching_cont_new_guard_page_arity_rejected() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_stack_switching(true);
+    config.wasm_exceptions(true);
+    config.wasm_function_references(true);
+    config.async_stack_size(8192);
+    config.max_wasm_stack(4096);
+
+    let Ok(engine) = Engine::new(&config) else {
+        // Stack switching is not supported on all platforms; skip gracefully.
+        assert!(!(cfg!(target_arch = "x86_64") && cfg!(unix)));
+        return Ok(());
+    };
+
+    // 600 params: control data = 600 * 16 + 64 = 9664 bytes.
+    // This exceeds the 8192-byte usable stack but fits within the
+    // 12288-byte total allocation (including guard page).
+    let n_params = 600;
     let params: String = (0..n_params).map(|_| " i32").collect();
     let wat = format!(
         r#"(module

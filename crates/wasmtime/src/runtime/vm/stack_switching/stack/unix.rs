@@ -258,14 +258,21 @@ impl VMContinuationStack {
             let args_data_size = total_control_size - 0x40;
 
             // Ensure the control data (fixed header + args buffer) fits
-            // within the stack allocation. Without this check, a
-            // high-arity function type could write past the guard page
-            // into adjacent memory.
+            // within the usable stack space. For Mmap allocations,
+            // self.len includes the guard page, which is not writable.
+            // Without subtracting the guard page, a high-arity function
+            // type could pass this check but write into the guard page,
+            // causing a segfault (see #13703).
+            let page_size = rustix::param::page_size();
+            let usable_len = match self.allocator {
+                Allocator::Mmap => self.len.saturating_sub(page_size),
+                Allocator::Custom => self.len,
+            };
             ensure!(
-                total_control_size <= self.len,
+                total_control_size <= usable_len,
                 "continuation function type requires {total_control_size} bytes \
-                 of stack control data, which exceeds the {}-byte stack allocation",
-                self.len,
+                 of stack control data, which exceeds the {usable_len}-byte \
+                 usable stack allocation",
             );
             let args_data_ptr = if args_capacity == 0 {
                 ptr::null_mut()
