@@ -1449,54 +1449,55 @@ mod test_vmstore_context {
 // * `Deferred`: A non-zero value with its low-bit clear.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct VMLazyThread(usize);
+pub struct VMLazyThread(Option<VmPtr<VMDeferredThread>>);
 
 impl VMLazyThread {
-    const NONE: usize = 0;
-    const FORCED: usize = 1;
+    const _ASSERT_SIZE: () = assert!(
+        core::mem::size_of::<VMLazyThread>() == core::mem::size_of::<*mut VMDeferredThread>()
+    );
+    const _ASSERT_ALIGN: () = assert!(
+        core::mem::align_of::<VMLazyThread>() == core::mem::align_of::<*mut VMDeferredThread>()
+    );
+
+    const FORCED: VmPtr<VMDeferredThread> = VmPtr::<u8>::dangling().cast();
 
     /// There is no current thread.
     pub const fn none() -> Self {
-        Self(Self::NONE)
+        Self(None)
     }
 
     /// A lazy thread that has already been promoted.
     pub const fn forced() -> Self {
-        Self(Self::FORCED)
+        Self(Some(Self::FORCED))
     }
 
     /// A deferred thread referencing the given on-stack [`VMDeferredThread`].
-    pub fn deferred(ptr: *mut VMDeferredThread) -> Self {
-        let bits = ptr as usize;
-        debug_assert_ne!(bits, Self::NONE);
-        debug_assert_eq!(bits & Self::FORCED, 0);
-        Self(bits)
+    pub fn deferred(ptr: NonNull<VMDeferredThread>) -> Self {
+        debug_assert_eq!(ptr.addr().get() & Self::FORCED.addr().get(), 0);
+        Self(Some(ptr.into()))
     }
 
     /// Returns `true` if there is no current thread.
     pub fn is_none(self) -> bool {
-        self.0 == Self::NONE
+        self.0.is_none()
     }
 
     /// Returns `true` if a deferred thread has been forced/promoted.
     pub fn is_forced(self) -> bool {
-        self.0 & Self::FORCED != 0
+        self.0.is_some_and(|p| p == Self::FORCED)
     }
 
     /// Returns `true` if this is a deferred thread (i.e. neither `None` nor
     /// forced).
     pub fn is_deferred(self) -> bool {
-        self.0 != Self::NONE && self.0 & Self::FORCED == 0
+        self.0.is_some_and(|p| p != Self::FORCED)
     }
 
     /// Returns the deferred [`VMDeferredThread`] pointer if this is a deferred
     /// thread.
-    pub fn as_deferred(self) -> Option<*mut VMDeferredThread> {
-        if self.is_deferred() {
-            Some(self.0 as *mut VMDeferredThread)
-        } else {
-            None
-        }
+    pub fn as_deferred(self) -> Option<VmPtr<VMDeferredThread>> {
+        self.0
+            .and_then(|p| if p == Self::FORCED { None } else { Some(p) })
     }
 }
 

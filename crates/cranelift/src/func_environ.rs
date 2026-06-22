@@ -37,12 +37,12 @@ use wasmtime_environ::{
     BuiltinFunctionIndex, ComponentPC, ConstExpr, ConstOp, DataIndex, DefinedFuncIndex,
     DefinedGlobalIndex, DefinedTableIndex, ElemIndex, EngineOrModuleTypeIndex, FactInlineIntrinsic,
     FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
-    IndexType, Memory, MemoryIndex, MemoryInit, MemorySegmentOffset, MemoryTunables, Module,
-    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, NUM_COMPONENT_CONTEXT_SLOTS,
-    PassiveElemIndex, PtrSize, RuntimeDataIndex, Table, TableIndex, TableInitialValue,
-    TableSegment, TableSegmentElements, TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets,
-    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmStorageType, WasmValType,
+    IndexType, KnownFunc, Memory, MemoryIndex, MemoryInit, MemorySegmentOffset, MemoryTunables,
+    Module, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder,
+    NUM_COMPONENT_CONTEXT_SLOTS, PassiveElemIndex, PtrSize, RuntimeDataIndex, Table, TableIndex,
+    TableInitialValue, TableSegment, TableSegmentElements, TagIndex, Tunables, TypeConvert,
+    TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmStorageType, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -1531,12 +1531,12 @@ impl FuncEnvironment<'_> {
         let signature = self.get_or_create_interned_sig_ref(func, ty);
 
         let key = match self.translation.known_imported_functions[func_index] {
-            Some(key @ FuncKey::DefinedWasmFunction(..)) => key,
+            Some(KnownFunc::FuncKey(key @ FuncKey::DefinedWasmFunction(..))) => key,
 
-            Some(key @ FuncKey::UnsafeIntrinsic(..)) => key,
+            Some(KnownFunc::FuncKey(key @ FuncKey::UnsafeIntrinsic(..))) => key,
 
-            Some(key) => {
-                panic!("unexpected kind of known-import function: {key:?}")
+            Some(ref f) => {
+                panic!("unexpected kind of known-import function: {f:?}")
             }
 
             None => panic!(
@@ -1880,7 +1880,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // The import is always a compile-time builtin intrinsic. Make a
             // direct call to that function (presumably it will eventually be
             // inlined).
-            Some(FuncKey::UnsafeIntrinsic(abi, intrinsic)) => {
+            Some(KnownFunc::FuncKey(FuncKey::UnsafeIntrinsic(abi, intrinsic))) => {
                 let callee = self
                     .env
                     .get_or_create_imported_func_ref(self.builder.func, callee_index);
@@ -1906,7 +1906,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // function, so do a direct call to that function! (Although we take
             // care to still pass its `funcref`'s `vmctx` as the callee `vmctx`
             // in `real_call_args` and not the caller's.)
-            Some(FuncKey::DefinedWasmFunction(..)) => {
+            Some(KnownFunc::FuncKey(FuncKey::DefinedWasmFunction(..))) => {
                 let callee = self
                     .env
                     .get_or_create_imported_func_ref(self.builder.func, callee_index);
@@ -1919,7 +1919,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // and this isn't a tail call (the deferred frame must outlive the
             // call). Otherwise fall back to the indirect call, which is also
             // the out-of-line slow path the inline `exit` branches to.
-            Some(FuncKey::FactInlineIntrinsic(intrinsic)) => {
+            Some(KnownFunc::FactIntrinsic(intrinsic)) => {
                 if self.env.tunables.concurrency_support {
                     debug_assert!(!self.tail);
                     match intrinsic {

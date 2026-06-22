@@ -49,23 +49,24 @@ pub enum FactInlineIntrinsic {
     ExitSyncCall,
 }
 
-impl FactInlineIntrinsic {
-    /// Get this intrinsic's raw `u32` representation (for `FuncKey` packing).
-    pub fn into_raw(self) -> u32 {
-        self as u32
-    }
+/// TODO FITZGEN
+#[derive(Clone, Debug)]
+pub enum KnownFunc {
+    /// TODO FITZGEN
+    FuncKey(FuncKey),
+    /// TODO FITZGEN
+    FactIntrinsic(FactInlineIntrinsic),
+}
 
-    /// Reconstruct from a raw representation produced by [`Self::into_raw`].
-    ///
-    /// Panics on invalid input.
-    pub fn from_raw(raw: u32) -> Self {
-        match raw {
-            x if x == Self::EnterSyncCall.into_raw() => Self::EnterSyncCall,
-            x if x == Self::ExitSyncCall.into_raw() => Self::ExitSyncCall,
-            _ => panic!(
-                "invalid raw representation passed to `FactInlineIntrinsic::from_raw`: {raw}"
-            ),
-        }
+impl From<FuncKey> for KnownFunc {
+    fn from(key: FuncKey) -> Self {
+        Self::FuncKey(key)
+    }
+}
+
+impl From<FactInlineIntrinsic> for KnownFunc {
+    fn from(intrinsic: FactInlineIntrinsic) -> Self {
+        Self::FactIntrinsic(intrinsic)
     }
 }
 
@@ -102,7 +103,7 @@ pub struct ModuleTranslation<'data> {
     /// When filled in, this only ever contains
     /// `FuncKey::DefinedWasmFunction(..)`s, `FuncKey::Intrinsic(..)`s, and
     /// `FuncKey::FactInlineIntrinsic`s.
-    pub known_imported_functions: SecondaryMap<FuncIndex, Option<FuncKey>>,
+    pub known_imported_functions: SecondaryMap<FuncIndex, Option<KnownFunc>>,
 
     /// A list of type signatures which are considered exported from this
     /// module, or those that can possibly be called. This list is sorted, and

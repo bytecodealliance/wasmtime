@@ -1605,7 +1605,7 @@ impl StoreOpaque {
             // adapter's stack frame that is suspended below us on the stack
             // (mid-call, waiting for this nested call to return), so the
             // referent is still valid and exclusively ours to read.
-            let deferred = unsafe { &*ptr };
+            let deferred = unsafe { ptr.as_non_null().as_ref() };
             frames.push((
                 deferred.callee_async != 0,
                 deferred.callee_instance,
@@ -1678,6 +1678,11 @@ impl StoreOpaque {
     /// This task will only be used for the purpose of handling calls to
     /// intrinsic functions; both parameter lowering and result lifting are
     /// assumed to be taken care of elsewhere.
+    ///
+    /// NB: for sync-to-sync, guest-to-guest calls we delay task construction in
+    /// fused adapters, see `StoreOpaque::current_thread`, `VMDeferredThread`,
+    /// and `lower_fact_enter_sync_call`. Make sure all this stuff stays in
+    /// sync!
     pub(crate) fn enter_guest_sync_call(
         &mut self,
         guest_caller: Option<RuntimeInstance>,
@@ -1733,6 +1738,12 @@ impl StoreOpaque {
     }
 
     /// Pop a `GuestTask` previously pushed using `enter_sync_call`.
+    ///
+    /// NB: for sync-to-sync, guest-to-guest calls we delay task construction in
+    /// fused adapters and then when the call returns we check to see if the
+    /// task's contruction was forced and if not avoid calling out of the JIT
+    /// code to this function. See `lower_fact_exit_sync_call`. Make sure all
+    /// this stuff stays in sync!
     pub(crate) fn exit_guest_sync_call(&mut self) -> Result<()> {
         if !self.concurrency_support() {
             return Ok(self.exit_call_not_concurrent());

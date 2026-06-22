@@ -1,29 +1,9 @@
 ;;! component_model_async = true
 ;;! component_model_more_async_builtins = true
 
-;; Runtime tests for the guest-to-guest sync-call fast path (issue #12311).
-;;
-;; When concurrency support is enabled, a fused sync-to-sync adapter's
-;; `enter-sync-call`/`exit-sync-call` intrinsics are lowered *inline* by the
-;; compiler instead of calling the out-of-line libcalls: `enter` pushes an
-;; on-stack `VMDeferredThread`, saving the caller's `context.{get,set}` slots
-;; and zeroing them for the freshly-entered (deferred) callee thread; the
-;; fast-path `exit` pops it and restores the caller's slots. If host code reads
-;; the current thread mid-call (any fallible guest->host libcall, e.g.
-;; `backpressure.{inc,dec}`) the deferred thread is "forced" into a real one and
-;; `exit` instead takes the out-of-line slow path.
-;;
-;; These tests use `context.{get,set}` (slot 0) as a guest-observable witness
-;; for the save / zero / restore / replay logic across the fast path, the
-;; forced slow path, and nested chains. Each component returns an arithmetic
-;; value so the result also witnesses correct value flow through the adapter.
+;; Tests for guest-to-guest, sync-to-sync calls and their inline fast paths.
 
-;; ---------------------------------------------------------------------------
-;; Test 1: single guest-to-guest sync call, fast path (no forcing).
-;;
-;; $B sets its context, calls $A, and checks its context is restored. $A
-;; (the deferred callee) must observe a freshly-zeroed context.
-;; ---------------------------------------------------------------------------
+;; Inline fast path, no task forcing.
 (component
   (component $A
     (core func $cget (canon context.get i32 0))
@@ -80,15 +60,7 @@
 )
 (assert_return (invoke "g") (u32.const 1276))
 
-;; ---------------------------------------------------------------------------
-;; Test 2: single guest-to-guest sync call, forced slow path.
-;;
-;; Same as test 1, but the callee $A makes a fallible guest->host libcall
-;; (`backpressure.inc`/`dec`, net zero) which forces the deferred thread into a
-;; real one. The matching `exit-sync-call` therefore takes the out-of-line slow
-;; path, and `force_current_thread` must still preserve/restore both threads'
-;; context slots.
-;; ---------------------------------------------------------------------------
+;; Single guest-to-guest sync call, forced slow path.
 (component
   (component $A
     (core func $cget (canon context.get i32 0))
@@ -153,13 +125,7 @@
 )
 (assert_return (invoke "g") (u32.const 1276))
 
-;; ---------------------------------------------------------------------------
-;; Test 3: nested A->B->C sync-call chain, fast path.
-;;
-;; $Root calls $Mid calls $Leaf, each through its own fused adapter. Each level
-;; must see a fresh context, and each caller's context must be restored after
-;; its callee returns (two deferred frames active at the deepest point).
-;; ---------------------------------------------------------------------------
+;; Nested A->B->C sync-call chain, fast path.
 (component
   (component $Leaf
     (core func $cget (canon context.get i32 0))
@@ -240,14 +206,7 @@
 )
 (assert_return (invoke "root") (u32.const 1111))
 
-;; ---------------------------------------------------------------------------
-;; Test 4: nested chain, forced at the deepest level.
-;;
-;; As test 3, but $Leaf forces the current thread mid-call. At that point two
-;; deferred frames ($Mid and $Leaf) are linked above the materialized $Root
-;; base; `force_current_thread` must walk and replay both, and both adapter
-;; exits then take the slow path. Every level's context must still be restored.
-;; ---------------------------------------------------------------------------
+;; Nested A->B->C call chain, forced at the deepest level.
 (component
   (component $Leaf
     (core func $cget (canon context.get i32 0))
@@ -262,6 +221,7 @@
       (func (export "leaf'") (param i32) (result i32)
         (if (i32.ne (call $cget) (i32.const 0)) (then unreachable))
         (call $cset (i32.const 0x99aabbcc))
+        ;; Force promotion.
         (call $bpinc)
         (call $bpdec)
         (if (i32.ne (call $cget) (i32.const 0x99aabbcc)) (then unreachable))
@@ -337,14 +297,7 @@
 )
 (assert_return (invoke "root") (u32.const 1111))
 
-;; ---------------------------------------------------------------------------
-;; Test 5: forcing at an intermediate level, then a deeper sync call.
-;;
-;; $Root calls $Mid; $Mid forces (materializing its thread) *before* calling
-;; $Leaf. The $Mid->$Leaf adapter then pushes a fresh deferred frame on top of
-;; the now-forced thread, so $Leaf's exit takes the fast path while $Mid's exit
-;; takes the slow path. Contexts must remain correct across the mix.
-;; ---------------------------------------------------------------------------
+;; Forcing promotion at an intermediate level, then a deeper sync call.
 (component
   (component $Leaf
     (core func $cget (canon context.get i32 0))
@@ -435,14 +388,7 @@
 )
 (assert_return (invoke "root") (u32.const 1111))
 
-;; ---------------------------------------------------------------------------
-;; Test 6: repeated sync calls from the same caller.
-;;
-;; $B calls $A twice in a row. Each call must independently push/pop its own
-;; deferred frame: the second callee must still observe a freshly-zeroed
-;; context, and the caller's context must be restored after each call (no state
-;; left dangling between adapter invocations).
-;; ---------------------------------------------------------------------------
+;; Repeated sync calls from the same caller.
 (component
   (component $A
     (core func $cget (canon context.get i32 0))
@@ -500,15 +446,7 @@
 ;; (1 + 42) + (2 + 42) = 87
 (assert_return (invoke "g") (u32.const 87))
 
-;; ---------------------------------------------------------------------------
-;; Test 7: nested chain forced at *two* levels (re-forcing).
-;;
-;; $Mid forces before descending, materializing its thread; the $Mid->$Leaf
-;; adapter then pushes a fresh deferred frame whose parent is already forced,
-;; and $Leaf forces again. This exercises `force_current_thread` walking a
-;; single deferred frame that sits directly on a forced base, distinct from the
-;; two-frame walk in test 4.
-;; ---------------------------------------------------------------------------
+;; Nested chain forced at *two* levels (re-forcing).
 (component
   (component $Leaf
     (core func $cget (canon context.get i32 0))
@@ -523,6 +461,7 @@
       (func (export "leaf'") (param i32) (result i32)
         (if (i32.ne (call $cget) (i32.const 0)) (then unreachable))
         (call $cset (i32.const 0x99aabbcc))
+        ;; Force promotion.
         (call $bpinc) (call $bpdec)
         (if (i32.ne (call $cget) (i32.const 0x99aabbcc)) (then unreachable))
         (i32.add (local.get 0) (i32.const 1))
@@ -554,6 +493,7 @@
       (func (export "mid'") (param i32) (result i32) (local $r i32)
         (if (i32.ne (call $cget) (i32.const 0)) (then unreachable))
         (call $cset (i32.const 0x55667788))
+        ;; Force promotion.
         (call $bpinc) (call $bpdec)
         (local.set $r (call $leaf' (local.get 0)))
         (if (i32.ne (call $cget) (i32.const 0x55667788)) (then unreachable))

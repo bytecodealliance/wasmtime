@@ -298,6 +298,8 @@ impl StoreOpaque {
     }
 
     pub(crate) fn component_task_state_mut(&mut self) -> Result<&mut ComponentTaskState> {
+        // NB: Force the deferred lazy thread, if any, before handing out task
+        // state.
         #[cfg(feature = "component-model-async")]
         let _ = self.current_thread()?;
 
@@ -396,6 +398,8 @@ impl StoreOpaque {
         vm::component::ResourceTables<'_>,
         &mut crate::component::HostResourceData,
     )> {
+        // NB: Force the current lazy deferred thread, if any, before handing
+        // out resource tables.
         #[cfg(feature = "component-model-async")]
         let _ = self.current_thread()?;
 

@@ -969,10 +969,6 @@ fn is_inlining_function(key: FuncKey) -> bool {
         | FuncKey::ModuleStartup(..) => false,
         FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
 
-        // Never names a compiled function (it only marks an adapter import for
-        // inline lowering), so it never participates in inlining itself.
-        FuncKey::FactInlineIntrinsic(..) => false,
-
         FuncKey::PulleyHostCall(_) => {
             unreachable!("we don't compile artifacts for Pulley host calls")
         }

@@ -3,16 +3,9 @@
 ;;! component_model_threading = true
 
 ;; Like sync-call-context.wast, but drives *both* component-context slots (0 and
-;; 1) at once. The inline `enter-sync-call`/`exit-sync-call` save, zero, and
-;; restore every slot in a loop over `NUM_COMPONENT_CONTEXT_SLOTS`, and the
-;; per-slot frame offset `vmdeferred_thread_saved_context(i)` is only spot
-;; checked for i == 0 by the `deferred_thread_field_offsets` unit test. Using
-;; distinct values in slots 0 and 1 catches a wrong stride / slot-swap for the
-;; second slot, across both the fast path and the forced slow path.
-;;
-;; Slot 1 requires `component-model-threading`.
+;; 1) at once.
 
-;; --- Test A: both slots, fast path. ---
+;; Both slots, inline fast path.
 (component
   (component $A
     (core func $get0 (canon context.get i32 0))
@@ -82,7 +75,7 @@
 )
 (assert_return (invoke "g") (u32.const 1276))
 
-;; --- Test B: both slots, forced slow path. ---
+;; Both slots, forced slow, out-of-line path.
 (component
   (component $A
     (core func $get0 (canon context.get i32 0))
@@ -103,6 +96,7 @@
         (if (i32.ne (call $get1) (i32.const 0)) (then unreachable))
         (call $set0 (i32.const 0xAAAA1111))
         (call $set1 (i32.const 0xBBBB2222))
+        ;; Call `backptressure.{inc,dec}` to force lazy task creation.
         (call $bpinc) (call $bpdec)
         ;; Both slots survive the force.
         (if (i32.ne (call $get0) (i32.const 0xAAAA1111)) (then unreachable))

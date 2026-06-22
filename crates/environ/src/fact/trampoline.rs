@@ -789,6 +789,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
             };
 
             // Push a task onto the current task stack.
+            //
+            // Note that for sync-to-sync calls, we replace this call with
+            // inline code for lazy/deferred task creation during translation to
+            // CLIF. This avoids task creation and out-of-line calls in the
+            // adapter for most sync-to-sync calls, since most sync-to-sync
+            // calls do not do anything to force the task's creation
+            // (e.g. adjust backpressure).
             self.instruction(I32Const(
                 i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
             ));
@@ -889,6 +896,10 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // "you forgot to drop borrows" trap shows up and additionally the
         // lowering below may call realloc which is in the context of the
         // caller's task, not the callee.
+        //
+        // Note that for sync-to-sync calls, we will emit inline code during
+        // translation to CLIF to avoid actually calling out to a libcall when
+        // the deferred task's allocation was never forced.
         if self.emit_resource_call || self.module.tunables.concurrency_support {
             let exit_sync_call = self.module.import_exit_sync_call();
             self.instruction(Call(exit_sync_call.as_u32()));

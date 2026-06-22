@@ -1,27 +1,10 @@
-//! Runtime tests for the guest-to-guest sync-call fast path (issue #12311).
-//!
-//! When concurrency support is enabled a fused sync-to-sync adapter lowers its
-//! `enter-sync-call`/`exit-sync-call` intrinsics inline: `enter` pushes an
-//! on-stack `VMDeferredThread` (saving and zeroing the caller's component
-//! `context.{get,set}` slots), and `exit` pops it inline -- unless host code has
-//! read the current thread in the meantime, in which case the deferred thread
-//! is "forced" into a real one and `exit` falls back to the out-of-line libcall.
-//!
-//! Calling an imported *host* function from inside the callee is the canonical
-//! way to force the deferred thread: every guest->host boundary runs
-//! `StoreOpaque::force_current_thread`. These tests drive that path through the
-//! public `TypedFunc` API and use `context.{get,set}` as a guest-observable
-//! witness that the save / zero / restore / replay logic is correct. The
-//! sibling `.wast` tests cover the pure fast path (no host calls); here we
-//! deliberately force the slow path with a real host import.
+//! Runtime tests for the guest-to-guest sync-call inline fast path.
 
 #![cfg(not(miri))]
 
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Result, Store, StoreContextMut};
 
-/// An engine whose stores have component-model concurrency support (and thus
-/// the inline sync-to-sync adapter optimization) enabled.
 fn engine() -> Engine {
     let mut config = Config::new();
     config.wasm_component_model(true);
@@ -29,9 +12,6 @@ fn engine() -> Engine {
     Engine::new(&config).unwrap()
 }
 
-/// A single guest-to-guest sync call whose callee forces the deferred thread by
-/// calling an imported host function. The slow `exit-sync-call` path must still
-/// restore the caller's context slot, and the callee's mutation must not leak.
 #[tokio::test]
 async fn host_call_forces_slow_path_preserves_context() -> Result<()> {
     let component = r#"
@@ -110,9 +90,6 @@ async fn host_call_forces_slow_path_preserves_context() -> Result<()> {
     Ok(())
 }
 
-/// A three-deep guest-to-guest chain (Root -> Mid -> Leaf) where the innermost
-/// callee forces. Forcing must walk and replay *both* suspended deferred frames
-/// and every level's context slot must come back intact.
 #[tokio::test]
 async fn nested_chain_host_force_preserves_all_contexts() -> Result<()> {
     let component = r#"
@@ -210,10 +187,6 @@ async fn nested_chain_host_force_preserves_all_contexts() -> Result<()> {
     Ok(())
 }
 
-/// Repeated top-level calls must each set up and tear down their own deferred
-/// frame independently: the callee keeps observing a freshly zeroed context and
-/// the caller's context is restored every time, with no state left dangling
-/// between adapter invocations.
 #[tokio::test]
 async fn repeated_calls_have_no_state_leak() -> Result<()> {
     let component = r#"
@@ -294,37 +267,8 @@ async fn repeated_calls_have_no_state_leak() -> Result<()> {
     Ok(())
 }
 
-/// Regression test for a use-after-free in the inline sync-to-sync fast path
-/// (issue #12311).
-///
-/// The inline `enter-sync-call` publishes `VMStoreContext::current_thread`
-/// pointing at a `VMDeferredThread` that lives in the *fused adapter's stack
-/// frame*. If the callee traps, the stack unwinds and discards that frame; the
-/// teardown `exit_guest_sync_call` runs only on the success path (via
-/// post-return), so without a fix-up `current_thread` would be left dangling in
-/// the store.
-///
-/// Re-*entering* the component is gated by `may_enter`, which short-circuits on
-/// `trapped()` before forcing -- but *instantiation* is not gated. Instantiating
-/// another component in the same store runs `enter_guest_sync_call` ->
-/// `force_current_thread`, whose `unsafe { &*ptr }` parent-chain walk would then
-/// dereference the dangling deferred-thread pointer (a freed stack frame). A
-/// two-deep deferred chain (Root -> Mid -> Leaf, where Leaf traps) leaves two
-/// freed `VMDeferredThread` records linked by `parent`, so the walk follows a
-/// `parent` pointer read out of freed stack memory.
-///
-/// Before the fix this aborted/segfaulted reliably (the freed `parent` slot
-/// being read as a misaligned/garbage pointer); `invoke_wasm_and_catch_traps`
-/// now resets `current_thread` to the "forced" sentinel on the trap path, so the
-/// later force is a cheap no-op and this instantiation completes cleanly.
 #[tokio::test]
 async fn trap_then_instantiate_uses_freed_deferred_thread() -> Result<()> {
-    // A nested guest-to-guest sync chain (Root -> Mid -> Leaf) whose innermost
-    // callee traps mid-flight. Each hop's fused adapter has published a
-    // `VMDeferredThread` in its own (now unwound) stack frame, and
-    // `current_thread` is left pointing at the innermost one with a `parent`
-    // link to the next -- two dangling records for `force_current_thread` to
-    // walk.
     let trapping = r#"
 (component
   (component $Leaf
@@ -354,9 +298,6 @@ async fn trap_then_instantiate_uses_freed_deferred_thread() -> Result<()> {
 )
     "#;
 
-    // Any second component whose instantiation drives a core instance runs
-    // `enter_guest_sync_call` -> `force_current_thread`, which reads the dangling
-    // pointer left behind by the trap above.
     let other = r#"
 (component
   (core module $m (func (export "x")))
@@ -378,8 +319,6 @@ async fn trap_then_instantiate_uses_freed_deferred_thread() -> Result<()> {
         "expected a trap, got: {err:?}"
     );
 
-    // BUG: this instantiation forces the dangling deferred thread (use-after-free).
-    // With the bug fixed it instantiates cleanly and the test passes.
     let _ = linker.instantiate_async(&mut store, &other).await?;
     Ok(())
 }

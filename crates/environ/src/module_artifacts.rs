@@ -560,8 +560,7 @@ impl CompiledFunctionsTable {
             #[cfg(feature = "component-model")]
             FuncKeyKind::ComponentTrampoline
             | FuncKeyKind::ResourceDropTrampoline
-            | FuncKeyKind::UnsafeIntrinsic
-            | FuncKeyKind::FactInlineIntrinsic => true,
+            | FuncKeyKind::UnsafeIntrinsic => true,
         }
     }
 
@@ -578,8 +577,7 @@ impl CompiledFunctionsTable {
             #[cfg(feature = "component-model")]
             FuncKeyKind::ComponentTrampoline
             | FuncKeyKind::ResourceDropTrampoline
-            | FuncKeyKind::UnsafeIntrinsic
-            | FuncKeyKind::FactInlineIntrinsic => false,
+            | FuncKeyKind::UnsafeIntrinsic => false,
         }
     }
 }
