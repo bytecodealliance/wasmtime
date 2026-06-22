@@ -2014,9 +2014,7 @@ impl StoreOpaque {
     fn wait_for_event(&mut self, waitable: Waitable) -> Result<()> {
         let state = self.concurrent_state_mut();
 
-        if waitable.common(state)?.set.is_some() {
-            bail!(Trap::WaitableSyncAndAsync);
-        }
+        waitable.trap_if_in_waitable_set(state)?;
 
         let caller = state.current_guest_thread()?;
         let set = state.get_mut(caller.thread)?.sync_call_set;
@@ -3772,6 +3770,10 @@ impl Instance {
 
         log::trace!("subtask_cancel {waitable:?} (handle {task_id})");
 
+        if !async_ {
+            waitable.trap_if_in_waitable_set(concurrent_state)?;
+        }
+
         let needs_block;
         if let Waitable::Host(host_task) = waitable {
             let state = &mut concurrent_state.get_mut(host_task)?.state;
@@ -4860,6 +4862,18 @@ impl Waitable {
             Self::Guest(id) => &mut state.get_mut(*id)?.common,
             Self::Transmit(id) => &mut state.get_mut(*id)?.common,
         })
+    }
+
+    /// Trap if this waitable is currently a member of a waitable set.
+    ///
+    /// A synchronous stream/future/subtask operation may end up blocking on
+    /// this waitable, so it is not allowed to run while the waitable is also
+    /// being watched by a waitable set.
+    fn trap_if_in_waitable_set(&self, state: &mut ConcurrentState) -> Result<()> {
+        if self.common(state)?.set.is_some() {
+            bail!(Trap::WaitableSyncAndAsync);
+        }
+        Ok(())
     }
 
     /// Set or clear the pending event for this waitable and either deliver it
