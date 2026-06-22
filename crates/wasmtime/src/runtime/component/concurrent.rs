@@ -5349,7 +5349,7 @@ impl ConcurrentState {
 
             // These fields do not contain GC references.
             worker_item: _,
-            current_thread: _,
+            unforced_current_thread: _,
             suspend_reason: _,
             global_error_context_ref_counts: _,
             interesting_tasks: _,
