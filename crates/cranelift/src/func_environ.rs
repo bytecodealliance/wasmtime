@@ -1983,7 +1983,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     fn lower_fact_enter_sync_call(&mut self, real_call_args: &[ir::Value]) -> CallRets {
         let ptr_ty = self.env.pointer_type();
         let ptr = self.env.offsets.ptr;
-        let flags = ir::MemFlagsData::trusted();
 
         // Allocate the on-stack `VMDeferredThread`.
         let size = u32::from(ptr.size_of_vmdeferred_thread());
@@ -2035,8 +2034,15 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // Save the caller's context slots into the frame and reset the live
         // values to 0 for the freshly-entered (deferred) thread.
         for i in 0..u8::try_from(NUM_COMPONENT_CONTEXT_SLOTS).unwrap() {
-            let off = i32::from(ptr.vmstore_context_component_context_slot(i));
-            let saved = self.builder.ins().load(ir::types::I32, flags, vmstore, off);
+            let saved = self
+                .env
+                .alias_regions
+                .vmstore_context_component_context_slot(
+                    &mut self.builder.cursor(),
+                    ir::types::I32,
+                    vmstore,
+                    i,
+                );
             self.env
                 .alias_regions
                 .store_vmdeferred_thread_saved_context(
@@ -2046,7 +2052,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     saved,
                 );
             let zero = self.builder.ins().iconst(ir::types::I32, 0);
-            self.builder.ins().store(flags, zero, vmstore, off);
+            self.env
+                .alias_regions
+                .store_vmstore_context_component_context_slot(
+                    &mut self.builder.cursor(),
+                    vmstore,
+                    i,
+                    zero,
+                );
         }
 
         // Publish the deferred thread as the store's current thread.
@@ -2073,8 +2086,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         real_call_args: &[ir::Value],
     ) -> CallRets {
         let ptr_ty = self.env.pointer_type();
-        let ptr = self.env.offsets.ptr;
-        let flags = ir::MemFlagsData::trusted();
 
         let slot = self
             .env
@@ -2115,12 +2126,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 slot_addr,
                 i,
             );
-            self.builder.ins().store(
-                flags,
-                saved,
-                vmstore,
-                i32::from(ptr.vmstore_context_component_context_slot(i)),
-            );
+            self.env
+                .alias_regions
+                .store_vmstore_context_component_context_slot(
+                    &mut self.builder.cursor(),
+                    vmstore,
+                    i,
+                    saved,
+                );
         }
         self.builder.ins().jump(cont_block, &[]);
 

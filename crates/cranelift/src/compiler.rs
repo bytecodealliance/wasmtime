@@ -1528,13 +1528,12 @@ impl Compiler {
             // their `exit-sync-call`s. That can leave
             // `VMStoreContext::current_thread` pointing at an old, invalid
             // `VMDeferredThread` inside an old, since-unwound stack
-            // frame. Therefore, we must reset `current_thread` to avoid potential
-            // use-after-free bugs.
-            let store_ctx = alias_regions.vmctx_store_context(&mut builder.cursor(), vmctx);
+            // frame. Therefore, we must reset `current_thread` to avoid
+            // potential use-after-free bugs.
             let forced = builder.ins().iconst(pointer_type, 1);
             alias_regions.store_vmstore_context_current_thread(
                 &mut builder.cursor(),
-                store_ctx,
+                vm_store_ctx,
                 forced,
             );
         }
