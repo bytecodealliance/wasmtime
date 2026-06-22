@@ -1,6 +1,6 @@
 ## 46.0.0
 
-Released 2026-06-20.
+Released 2026-06-22.
 
 ### Added
 
