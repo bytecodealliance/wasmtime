@@ -15,6 +15,9 @@ pub fn make_api_calls(api: ApiCalls) {
         _ => return,
     };
 
+    // Shared memory budget across all stores.
+    let limits = StoreLimits::new();
+
     let mut stores: HashMap<usize, Store<StoreLimits>> = Default::default();
     let mut modules: HashMap<usize, Module> = Default::default();
     let mut instances: HashMap<usize, (Instance, usize)> = Default::default();
@@ -42,7 +45,7 @@ pub fn make_api_calls(api: ApiCalls) {
         match call {
             ApiCall::StoreNew { id, config } => {
                 log::trace!("creating store {id}");
-                let mut store = Store::new(&engine, StoreLimits::new());
+                let mut store = Store::new(&engine, limits.clone());
                 config.configure_store(&mut store);
                 let old = stores.insert(id, store);
                 assert!(old.is_none());
