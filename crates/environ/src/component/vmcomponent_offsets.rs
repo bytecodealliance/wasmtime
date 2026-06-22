@@ -4,7 +4,7 @@
 //      magic: u32,
 //      builtins: &'static VMComponentBuiltins,
 //      limits: *const VMStoreContext,
-//      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
+//      may_leave: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      task_may_block: u32,
 //      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      unsafe_intrinsics: [VMFuncRef; component.num_unsafe_intrinsics],
@@ -25,10 +25,6 @@ use crate::component::*;
 /// This is stored at the start of all `VMComponentContext` structures and
 /// double-checked on `VMComponentContext::from_opaque`.
 pub const VMCOMPONENT_MAGIC: u32 = u32::from_le_bytes(*b"comp");
-
-/// Flag for the `VMComponentContext::flags` field which corresponds to the
-/// canonical ABI flag `may_leave`
-pub const FLAG_MAY_LEAVE: i32 = 1 << 0;
 
 /// Runtime offsets within a `VMComponentContext` for a specific component.
 #[derive(Debug, Clone, Copy)]
@@ -63,7 +59,7 @@ pub struct VMComponentOffsets<P> {
     magic: u32,
     builtins: u32,
     vm_store_context: u32,
-    flags: u32,
+    may_leave: u32,
     task_may_block: u32,
     trampoline_func_refs: u32,
     intrinsic_func_refs: u32,
@@ -132,7 +128,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             magic: 0,
             builtins: 0,
             vm_store_context: 0,
-            flags: 0,
+            may_leave: 0,
             task_may_block: 0,
             trampoline_func_refs: 0,
             intrinsic_func_refs: 0,
@@ -176,7 +172,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(builtins) = ret.ptr.size(),
             size(vm_store_context) = ret.ptr.size(),
             align(16),
-            size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
+            size(may_leave) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             size(task_may_block) = ret.ptr.size_of_vmglobal_definition(),
             align(u32::from(ret.ptr.size())),
             size(trampoline_func_refs) = cmul(ret.num_trampolines, ret.ptr.size_of_vm_func_ref()),
@@ -218,11 +214,11 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.builtins
     }
 
-    /// The offset of the `flags` field.
+    /// The offset of the `may_leave` flag for the given component instance.
     #[inline]
-    pub fn instance_flags(&self, index: RuntimeComponentInstanceIndex) -> u32 {
+    pub fn may_leave(&self, index: RuntimeComponentInstanceIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_component_instances);
-        self.flags + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
+        self.may_leave + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
 
     /// The offset of the `task_may_block` field.

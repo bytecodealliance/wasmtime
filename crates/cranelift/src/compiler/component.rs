@@ -1113,9 +1113,8 @@ impl<'a> TrampolineCompiler<'a> {
         //    run_destructor_block:
         //      ;; test may_leave, but only if the component instances
         //      ;; differ
-        //      flags = load.i32 vmctx+$instance_flags_offset
-        //      masked = band flags, $FLAG_MAY_LEAVE
-        //      trapz masked, $TRAP_CANNOT_LEAVE_COMPONENT
+        //      may_leave = load.i32 vmctx+$instance_flags_offset
+        //      trapz may_leave, $TRAP_CANNOT_LEAVE_COMPONENT
         //
         //      ;; set may_block to false, saving the old value to restore
         //      ;; later, but only if the component instances differ and
@@ -1527,17 +1526,13 @@ impl<'a> TrampolineCompiler<'a> {
     fn check_may_leave_instance(&mut self, instance: RuntimeComponentInstanceIndex) {
         let vmctx = self.builder.func.dfg.block_params(self.block0)[0];
 
-        let flags = self.alias_regions.vmcomponent_instance_flags(
+        let may_leave = self.alias_regions.vmcomponent_instance_may_leave(
             &mut self.builder.cursor(),
             vmctx,
             instance,
         );
-        let may_leave_bit = self
-            .builder
-            .ins()
-            .band_imm_u(flags, i64::from(FLAG_MAY_LEAVE));
         let (mut traps, builder) = self.traps();
-        traps.trapz(builder, may_leave_bit, TRAP_CANNOT_LEAVE_COMPONENT);
+        traps.trapz(builder, may_leave, TRAP_CANNOT_LEAVE_COMPONENT);
     }
 
     fn traps(

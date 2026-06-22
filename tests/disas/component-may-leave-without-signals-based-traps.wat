@@ -25,9 +25,9 @@
 ;;       movq    8(%rcx), %rcx
 ;;       movq    %rcx, 0x38(%rax)
 ;;       movl    0x20(%rdi), %eax
-;;       testl   $1, %eax
-;;       je      0x13e
-;;   fe: movq    8(%rdi), %rax
+;;       testl   %eax, %eax
+;;       je      0x13b
+;;   fb: movq    8(%rdi), %rax
 ;;       movq    (%rax), %rax
 ;;       xorl    %ecx, %ecx
 ;;       movl    %ecx, %esi
@@ -36,21 +36,21 @@
 ;;       movl    %ecx, %ecx
 ;;       callq   *%rax
 ;;       cmpq    $-1, %rax
-;;       je      0x129
-;;  11c: movq    (%rsp), %rbx
+;;       je      0x126
+;;  119: movq    (%rsp), %rbx
 ;;       addq    $0x10, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  129: movq    %rbx, %rsi
-;;  12c: movq    0x10(%rsi), %rax
-;;  130: movq    0x148(%rax), %rax
-;;  137: movq    %rbx, %rdi
-;;  13a: callq   *%rax
-;;  13c: ud2
-;;  13e: movl    $0x17, %esi
-;;  143: movq    %rbx, %rdi
-;;  146: callq   0x6a
-;;  14b: movq    %rbx, %rdi
-;;  14e: callq   0x9b
-;;  153: ud2
+;;  126: movq    %rbx, %rsi
+;;  129: movq    0x10(%rsi), %rax
+;;  12d: movq    0x148(%rax), %rax
+;;  134: movq    %rbx, %rdi
+;;  137: callq   *%rax
+;;  139: ud2
+;;  13b: movl    $0x17, %esi
+;;  140: movq    %rbx, %rdi
+;;  143: callq   0x6a
+;;  148: movq    %rbx, %rdi
+;;  14b: callq   0x9b
+;;  150: ud2
