@@ -5,7 +5,8 @@ target aarch64 has_dotprod
 target x86_64 has_sse3 has_ssse3 has_sse41
 target s390x
 
-;; Tests the aarch64 `sdot` lowering of the i8 4-way dot product.
+;; Tests the deterministic lowering of the wasm relaxed-simd instruction
+;; `i32x4.relaxed_dot_i8x16_i7x16_add_s`
 function %sdot_i8x16(i8x16, i8x16, i32x4) -> i32x4 {
 block0(v0: i8x16, v1: i8x16, v2: i32x4):
     v3 = swiden_low v0
@@ -14,14 +15,18 @@ block0(v0: i8x16, v1: i8x16, v2: i32x4):
     v6 = swiden_high v0
     v7 = swiden_high v1
     v8 = imul v6, v7
-    v9 = iadd_pairwise v5, v8
-    v10 = swiden_low v9
-    v11 = swiden_high v9
-    v12 = iadd_pairwise v10, v11
-    v13 = iadd v12, v2
-    return v13
+    v9 = swiden_low v5
+    v10 = swiden_high v5
+    v11 = iadd_pairwise v9, v10
+    v12 = swiden_low v8
+    v13 = swiden_high v8
+    v14 = iadd_pairwise v12, v13
+    v15 = iadd_pairwise v11, v14
+    v16 = iadd v15, v2
+    return v16
 }
-; each i32x4 lane i = c[i] + sum_{j=4i..4i+3} a[j]*b[j]
+
 ; run: %sdot_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1], [0 0 0 0]) == [10 26 42 58]
 ; run: %sdot_i8x16([-1 -2 -3 -4 1 2 3 4 5 5 5 5 -5 -5 -5 -5], [2 2 2 2 3 3 3 3 1 1 1 1 4 4 4 4], [100 200 300 400]) == [80 230 320 320]
 ; run: %sdot_i8x16([127 127 127 127 -128 -128 -128 -128 100 -100 100 -100 0 0 0 0], [127 127 127 127 127 127 127 127 63 63 63 63 1 2 3 4], [0 0 0 0]) == [64516 -65024 0 0]
+; run: %sdot_i8x16([-128 -128 0 0 -128 -128 -128 -128 127 127 127 127 0 0 0 0], [-128 -128 0 0 -128 -128 -128 -128 127 127 127 127 0 0 0 0], [0 0 0 0]) == [32768 65536 64516 0]

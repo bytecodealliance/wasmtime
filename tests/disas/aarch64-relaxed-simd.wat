@@ -79,9 +79,10 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       smull   v16.8h, v0.8b, v1.8b
-;;       smull2  v17.8h, v0.16b, v1.16b
-;;       addp    v16.8h, v16.8h, v17.8h
 ;;       saddlp  v16.4s, v16.8h
+;;       smull2  v17.8h, v0.16b, v1.16b
+;;       saddlp  v17.4s, v17.8h
+;;       addp    v16.4s, v16.4s, v17.4s
 ;;       add     v0.4s, v16.4s, v2.4s
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

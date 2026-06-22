@@ -2605,24 +2605,32 @@ pub fn translate_operator(
         Operator::I32x4RelaxedDotI8x16I7x16AddS => {
             let c = pop1_with_bitcast(environ, I32X4, builder);
             let (a, b) = pop2_with_bitcast(environ, I8X16, builder);
-            let dot =
+            let dot32 =
                 if environ.relaxed_simd_deterministic() || !environ.use_x86_pmaddubsw_for_dot() {
-                    // Deterministic semantics are to treat both operands as
-                    // signed integers and perform the dot product.
+                    // Deterministic semantics, or the lowering on any non-x86
+                    // target. Each i32 lane is the *exact* sum of the four
+                    // signed `i8 * i8` products covering it.
                     let alo = builder.ins().swiden_low(a);
                     let blo = builder.ins().swiden_low(b);
                     let lo = builder.ins().imul(alo, blo);
                     let ahi = builder.ins().swiden_high(a);
                     let bhi = builder.ins().swiden_high(b);
                     let hi = builder.ins().imul(ahi, bhi);
-                    builder.ins().iadd_pairwise(lo, hi)
+                    let lo_lo = builder.ins().swiden_low(lo);
+                    let lo_hi = builder.ins().swiden_high(lo);
+                    let hi_lo = builder.ins().swiden_low(hi);
+                    let hi_hi = builder.ins().swiden_high(hi);
+                    let s_lo = builder.ins().iadd_pairwise(lo_lo, lo_hi);
+                    let s_hi = builder.ins().iadd_pairwise(hi_lo, hi_hi);
+                    builder.ins().iadd_pairwise(s_lo, s_hi)
                 } else {
-                    builder.ins().x86_pmaddubsw(a, b)
+                    let dot = builder.ins().x86_pmaddubsw(a, b);
+                    let dotlo = builder.ins().swiden_low(dot);
+                    let dothi = builder.ins().swiden_high(dot);
+                    let dot32 = builder.ins().iadd_pairwise(dotlo, dothi);
                 };
-            let dotlo = builder.ins().swiden_low(dot);
-            let dothi = builder.ins().swiden_high(dot);
-            let dot32 = builder.ins().iadd_pairwise(dotlo, dothi);
-            environ.stacks.push1(builder.ins().iadd(dot32, c));
+            let result = builder.ins().iadd(dot32, c);
+            environ.stacks.push1(result);
         }
 
         Operator::BrOnNull { relative_depth } => {
