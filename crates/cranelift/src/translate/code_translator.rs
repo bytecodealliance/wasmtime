@@ -2627,7 +2627,7 @@ pub fn translate_operator(
                     let dot = builder.ins().x86_pmaddubsw(a, b);
                     let dotlo = builder.ins().swiden_low(dot);
                     let dothi = builder.ins().swiden_high(dot);
-                    let dot32 = builder.ins().iadd_pairwise(dotlo, dothi);
+                    builder.ins().iadd_pairwise(dotlo, dothi)
                 };
             let result = builder.ins().iadd(dot32, c);
             environ.stacks.push1(result);
