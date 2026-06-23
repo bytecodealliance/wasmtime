@@ -41,12 +41,12 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @003d                               v3 = load.i64 notrap aligned readonly can_move region2 v0+48
-;; @003d                               v4 = load.i32 notrap aligned region3 v3
+;; @003d                               v2 = load.i64 notrap aligned readonly can_move region2 v0+48
+;; @003d                               v3 = load.i32 notrap aligned region3 v2
 ;; @003f                               jump block1
 ;;
 ;;                                 block1:
-;; @003f                               return v4
+;; @003f                               return v3
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
@@ -60,12 +60,12 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0042                               v3 = load.i64 notrap aligned readonly can_move region2 v0+72
-;; @0042                               v4 = load.i32 notrap aligned region3 v3
+;; @0042                               v2 = load.i64 notrap aligned readonly can_move region2 v0+72
+;; @0042                               v3 = load.i32 notrap aligned region3 v2
 ;; @0044                               jump block1
 ;;
 ;;                                 block1:
-;; @0044                               return v4
+;; @0044                               return v3
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
@@ -77,11 +77,11 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0047                               v3 = iconst.i32 42
+;; @0047                               v2 = iconst.i32 42
 ;; @0049                               jump block1
 ;;
 ;;                                 block1:
-;; @0049                               return v3  ; v3 = 42
+;; @0049                               return v2  ; v2 = 42
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64) -> i32 tail {
@@ -94,9 +94,9 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @004c                               v3 = load.i32 notrap aligned region2 v0+112
+;; @004c                               v2 = load.i32 notrap aligned region2 v0+112
 ;; @004e                               jump block1
 ;;
 ;;                                 block1:
-;; @004e                               return v3
+;; @004e                               return v2
 ;; }

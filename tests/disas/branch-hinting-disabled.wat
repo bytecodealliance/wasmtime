@@ -39,18 +39,18 @@
 ;; @0043                               brif v2, block2, block4
 ;;
 ;;                                 block2:
-;; @0045                               v4 = iconst.i32 1
-;; @0047                               jump block3(v4)  ; v4 = 1
+;; @0045                               v3 = iconst.i32 1
+;; @0047                               jump block3(v3)  ; v3 = 1
 ;;
 ;;                                 block4:
-;; @0048                               v5 = iconst.i32 2
-;; @004a                               jump block3(v5)  ; v5 = 2
+;; @0048                               v4 = iconst.i32 2
+;; @004a                               jump block3(v4)  ; v4 = 2
 ;;
-;;                                 block3(v6: i32):
-;; @004b                               jump block1(v6)
+;;                                 block3(v5: i32):
+;; @004b                               jump block1
 ;;
-;;                                 block1(v3: i32):
-;; @004b                               return v3
+;;                                 block1:
+;; @004b                               return v5
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
@@ -65,13 +65,13 @@
 ;; @0052                               brif v2, block2, block3
 ;;
 ;;                                 block3:
-;; @0054                               v4 = iconst.i32 1
-;; @0056                               return v4  ; v4 = 1
+;; @0054                               v3 = iconst.i32 1
+;; @0056                               return v3  ; v3 = 1
 ;;
 ;;                                 block2:
 ;; @005a                               jump block1
 ;;
 ;;                                 block1:
-;; @0058                               v5 = iconst.i32 2
-;; @005a                               return v5  ; v5 = 2
+;; @0058                               v4 = iconst.i32 2
+;; @005a                               return v4  ; v4 = 2
 ;; }

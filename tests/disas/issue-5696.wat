@@ -21,6 +21,6 @@
 ;; @001e                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v7 = iconst.i64 0
-;; @001e                               return v7  ; v7 = 0
+;;                                     v6 = iconst.i64 0
+;; @001e                               return v6  ; v6 = 0
 ;; }

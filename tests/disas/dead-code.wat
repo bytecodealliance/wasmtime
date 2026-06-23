@@ -87,6 +87,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0042                               v4 = iconst.i32 1
-;; @0044                               return v4  ; v4 = 1
+;; @0042                               v3 = iconst.i32 1
+;; @0044                               return v3  ; v3 = 1
 ;; }

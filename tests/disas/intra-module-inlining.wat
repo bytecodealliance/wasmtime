@@ -21,8 +21,8 @@
 ;; @001b                               jump block1
 ;;
 ;;                                 block1:
-;; @0019                               v3 = iconst.i32 42
-;; @001b                               return v3  ; v3 = 42
+;; @0019                               v2 = iconst.i32 42
+;; @001b                               return v2  ; v2 = 42
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
@@ -51,6 +51,6 @@
 ;; @0020                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v6 = iconst.i32 42
-;; @0020                               return v6  ; v6 = 42
+;;                                     v4 = iconst.i32 42
+;; @0020                               return v4  ; v4 = 42
 ;; }

@@ -22,12 +22,12 @@
 ;; @002a                               brif v3, block2, block3(v2)
 ;;
 ;;                                 block2:
-;; @002d                               v5 = iconst.i64 -1
-;; @002f                               jump block3(v5)  ; v5 = -1
+;; @002d                               v4 = iconst.i64 -1
+;; @002f                               jump block3(v4)  ; v4 = -1
 ;;
-;;                                 block3(v6: i64):
-;; @0030                               jump block1(v6)
+;;                                 block3(v5: i64):
+;; @0030                               jump block1
 ;;
-;;                                 block1(v4: i64):
-;; @0030                               return v4
+;;                                 block1:
+;; @0030                               return v5
 ;; }

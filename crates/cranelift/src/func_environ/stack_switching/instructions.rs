@@ -7,7 +7,6 @@ use cranelift_codegen::ir::{self, MemFlagsData};
 use cranelift_codegen::ir::{Block, BlockCall, InstBuilder, JumpTableData};
 use cranelift_frontend::FunctionBuilder;
 use itertools::{Either, Itertools};
-use smallvec::SmallVec;
 use wasmtime_environ::{PtrSize, TagIndex, TypeIndex, WasmResult, WasmValType, wasm_unsupported};
 
 fn control_context_size(triple: &target_lexicon::Triple) -> WasmResult<u8> {
@@ -1536,9 +1535,8 @@ pub(crate) fn translate_resume<'a>(
 
             values.clear(env, builder, false);
 
-            let mut tmp = SmallVec::new();
-            let args = set_block_params(env, builder, &mut tmp, target_block, &suspend_args);
-            builder.ins().jump(target_block, args);
+            set_block_params(env, builder, target_block, &suspend_args);
+            builder.ins().jump(target_block, &[]);
         }
 
         preamble_blocks

@@ -26,18 +26,18 @@
 ;; @0037                               brif v2, block2, block4
 ;;
 ;;                                 block2:
-;; @0039                               v7 = iadd.i64 v4, v3
-;; @003a                               v8 = iconst.i64 1
-;; @003c                               jump block3(v7, v8)  ; v8 = 1
+;; @0039                               v5 = iadd.i64 v4, v3
+;; @003a                               v6 = iconst.i64 1
+;; @003c                               jump block3(v5, v6)  ; v6 = 1
 ;;
 ;;                                 block4:
-;; @003d                               v9 = isub.i64 v4, v3
-;; @003e                               v10 = iconst.i64 2
-;; @0040                               jump block3(v9, v10)  ; v10 = 2
+;; @003d                               v7 = isub.i64 v4, v3
+;; @003e                               v8 = iconst.i64 2
+;; @0040                               jump block3(v7, v8)  ; v8 = 2
 ;;
-;;                                 block3(v11: i64, v12: i64):
-;; @0041                               jump block1(v11, v12)
+;;                                 block3(v9: i64, v10: i64):
+;; @0041                               jump block1
 ;;
-;;                                 block1(v5: i64, v6: i64):
-;; @0041                               return v5, v6
+;;                                 block1:
+;; @0041                               return v9, v10
 ;; }

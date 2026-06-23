@@ -38,24 +38,24 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
-;; @0025                               v6 = iconst.i32 0
-;; @0027                               v7 = iconst.i32 0
-;; @0029                               v8 = iconst.i32 0
-;; @002b                               v9 = iconst.i32 0
-;; @002d                               v10 = iconst.i32 0
-;; @002f                               brif v10, block2, block4  ; v10 = 0
+;; @0025                               v5 = iconst.i32 0
+;; @0027                               v6 = iconst.i32 0
+;; @0029                               v7 = iconst.i32 0
+;; @002b                               v8 = iconst.i32 0
+;; @002d                               v9 = iconst.i32 0
+;; @002f                               brif v9, block2, block4  ; v9 = 0
 ;;
 ;;                                 block2:
-;; @0031                               jump block3(v9)  ; v9 = 0
+;; @0031                               jump block3(v8)  ; v8 = 0
 ;;
 ;;                                 block4:
-;; @0034                               v11 = call fn0(v0, v0, v7, v8, v9)  ; v7 = 0, v8 = 0, v9 = 0
-;; @0036                               jump block3(v11)
+;; @0034                               v10 = call fn0(v0, v0, v6, v7, v8)  ; v6 = 0, v7 = 0, v8 = 0
+;; @0036                               jump block3(v10)
 ;;
-;;                                 block3(v12: i32):
-;; @0037                               v13 = iconst.i32 0
-;; @0039                               v14 = iconst.i32 0
-;; @003b                               brif v14, block5, block7  ; v14 = 0
+;;                                 block3(v11: i32):
+;; @0037                               v12 = iconst.i32 0
+;; @0039                               v13 = iconst.i32 0
+;; @003b                               brif v13, block5, block7  ; v13 = 0
 ;;
 ;;                                 block5:
 ;; @003f                               jump block6
@@ -67,5 +67,5 @@
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
-;; @0043                               return v6  ; v6 = 0
+;; @0043                               return v5  ; v5 = 0
 ;; }

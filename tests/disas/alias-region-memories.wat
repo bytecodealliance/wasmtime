@@ -28,14 +28,14 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @003b                               v6 = load.i64 notrap aligned readonly can_move region2 v0+48
-;; @003b                               v7 = load.i64 notrap aligned readonly can_move region3 v6
-;; @003b                               v5 = uextend.i64 v2
-;; @003b                               v8 = iadd v7, v5
-;; @003b                               store little region5 v3, v8
-;; @0042                               v10 = load.i64 notrap aligned readonly can_move region3 v0+80
-;; @0042                               v11 = iadd v10, v5
-;; @0042                               store little region6 v3, v11
+;; @003b                               v5 = load.i64 notrap aligned readonly can_move region2 v0+48
+;; @003b                               v6 = load.i64 notrap aligned readonly can_move region3 v5
+;; @003b                               v4 = uextend.i64 v2
+;; @003b                               v7 = iadd v6, v4
+;; @003b                               store little region5 v3, v7
+;; @0042                               v9 = load.i64 notrap aligned readonly can_move region3 v0+80
+;; @0042                               v10 = iadd v9, v4
+;; @0042                               store little region6 v3, v10
 ;; @004b                               jump block1
 ;;
 ;;                                 block1:

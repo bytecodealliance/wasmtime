@@ -26,15 +26,15 @@
 ;; @0032                               jump block4
 ;;
 ;;                                 block5:
-;; @0033                               v5 = iconst.i32 4
-;; @0035                               jump block2(v5)  ; v5 = 4
+;; @0033                               v4 = iconst.i32 4
+;; @0035                               jump block2(v4)  ; v4 = 4
 ;;
 ;;                                 block4:
 ;; @0038                               jump block2(v3)
 ;;
-;;                                 block2(v6: i32):
-;; @0039                               jump block1(v6)
+;;                                 block2(v5: i32):
+;; @0039                               jump block1
 ;;
-;;                                 block1(v4: i32):
-;; @0039                               return v4
+;;                                 block1:
+;; @0039                               return v5
 ;; }

@@ -59,19 +59,19 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @004c                               v4 = uextend.i64 v2
-;; @004c                               v5 = iconst.i64 0xffff_0001
-;; @004c                               v6 = uadd_overflow_trap v4, v5, heap_oob  ; v5 = 0xffff_0001
-;; @004c                               v7 = load.i64 notrap aligned region3 v0+64
-;; @004c                               v8 = icmp ugt v6, v7
-;; @004c                               trapnz v8, heap_oob
-;; @004c                               v9 = load.i64 notrap aligned can_move region2 v0+56
-;; @004c                               v10 = iadd v9, v4
-;; @004c                               v11 = iconst.i64 0xffff_0000
-;; @004c                               v12 = iadd v10, v11  ; v11 = 0xffff_0000
-;; @004c                               v13 = uload8.i32 little region4 v12
+;; @004c                               v3 = uextend.i64 v2
+;; @004c                               v4 = iconst.i64 0xffff_0001
+;; @004c                               v5 = uadd_overflow_trap v3, v4, heap_oob  ; v4 = 0xffff_0001
+;; @004c                               v6 = load.i64 notrap aligned region3 v0+64
+;; @004c                               v7 = icmp ugt v5, v6
+;; @004c                               trapnz v7, heap_oob
+;; @004c                               v8 = load.i64 notrap aligned can_move region2 v0+56
+;; @004c                               v9 = iadd v8, v3
+;; @004c                               v10 = iconst.i64 0xffff_0000
+;; @004c                               v11 = iadd v9, v10  ; v10 = 0xffff_0000
+;; @004c                               v12 = uload8.i32 little region4 v11
 ;; @0053                               jump block1
 ;;
 ;;                                 block1:
-;; @0053                               return v13
+;; @0053                               return v12
 ;; }

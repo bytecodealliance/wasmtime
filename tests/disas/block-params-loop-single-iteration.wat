@@ -25,13 +25,13 @@
 ;; @001b                               jump block2
 ;;
 ;;                                 block2:
-;; @001d                               v5 = iconst.i32 1
-;; @001f                               v6 = iadd.i32 v2, v5  ; v5 = 1
+;; @001d                               v4 = iconst.i32 1
+;; @001f                               v5 = iadd.i32 v2, v4  ; v4 = 1
 ;; @0020                               jump block3
 ;;
 ;;                                 block3:
 ;; @0021                               jump block1
 ;;
 ;;                                 block1:
-;; @0021                               return v6
+;; @0021                               return v5
 ;; }

@@ -23,38 +23,38 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i8x16):
-;; @0033                               v5 = iconst.i32 23
-;; @0033                               v6 = icmp uge v2, v5  ; v5 = 23
-;; @0033                               v7 = uextend.i64 v2
-;; @0033                               v8 = load.i64 notrap aligned readonly can_move region2 v0+48
-;; @0033                               v9 = iconst.i64 3
-;; @0033                               v10 = ishl v7, v9  ; v9 = 3
-;; @0033                               v11 = iadd v8, v10
-;; @0033                               v12 = iconst.i64 0
-;; @0033                               v13 = select_spectre_guard v6, v12, v11  ; v12 = 0
-;; @0033                               v14 = load.i64 user6 aligned region3 v13
-;; @0033                               v15 = iconst.i64 -2
-;; @0033                               v16 = band v14, v15  ; v15 = -2
-;; @0033                               brif v14, block3(v16), block2
+;; @0033                               v4 = iconst.i32 23
+;; @0033                               v5 = icmp uge v2, v4  ; v4 = 23
+;; @0033                               v6 = uextend.i64 v2
+;; @0033                               v7 = load.i64 notrap aligned readonly can_move region2 v0+48
+;; @0033                               v8 = iconst.i64 3
+;; @0033                               v9 = ishl v6, v8  ; v8 = 3
+;; @0033                               v10 = iadd v7, v9
+;; @0033                               v11 = iconst.i64 0
+;; @0033                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
+;; @0033                               v13 = load.i64 user6 aligned region3 v12
+;; @0033                               v14 = iconst.i64 -2
+;; @0033                               v15 = band v13, v14  ; v14 = -2
+;; @0033                               brif v13, block3(v15), block2
 ;;
 ;;                                 block2 cold:
-;; @0033                               v18 = iconst.i32 0
-;; @0033                               v19 = uextend.i64 v2
-;; @0033                               v20 = call fn0(v0, v18, v19)  ; v18 = 0
-;; @0033                               jump block3(v20)
+;; @0033                               v17 = iconst.i32 0
+;; @0033                               v18 = uextend.i64 v2
+;; @0033                               v19 = call fn0(v0, v17, v18)  ; v17 = 0
+;; @0033                               jump block3(v19)
 ;;
-;;                                 block3(v17: i64):
-;; @0033                               v21 = load.i64 notrap aligned readonly can_move region4 v0+40
-;; @0033                               v22 = load.i32 notrap aligned readonly can_move v21
-;; @0033                               v23 = load.i32 user7 aligned readonly v17+16
-;; @0033                               v24 = icmp eq v23, v22
-;; @0033                               v25 = uextend.i32 v24
-;; @0033                               trapz v25, user8
-;; @0033                               v26 = load.i64 notrap aligned readonly v17+8
-;; @0033                               v27 = load.i64 notrap aligned readonly v17+24
-;; @0033                               v28 = call_indirect sig0, v26(v27, v0, v3)
+;;                                 block3(v16: i64):
+;; @0033                               v20 = load.i64 notrap aligned readonly can_move region4 v0+40
+;; @0033                               v21 = load.i32 notrap aligned readonly can_move v20
+;; @0033                               v22 = load.i32 user7 aligned readonly v16+16
+;; @0033                               v23 = icmp eq v22, v21
+;; @0033                               v24 = uextend.i32 v23
+;; @0033                               trapz v24, user8
+;; @0033                               v25 = load.i64 notrap aligned readonly v16+8
+;; @0033                               v26 = load.i64 notrap aligned readonly v16+24
+;; @0033                               v27 = call_indirect sig0, v25(v26, v0, v3)
 ;; @0036                               jump block1
 ;;
 ;;                                 block1:
-;; @0036                               return v28
+;; @0036                               return v27
 ;; }

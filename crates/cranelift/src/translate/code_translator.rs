@@ -4366,30 +4366,19 @@ fn canonicalise_v128_values<'a>(
 ///
 /// The caller must have already switched to `block`.
 ///
-/// For a Wasm control-flow target (i.e. a block with associated parameter
-/// `Variable`s) we `use_var` each of those variables. For a block with real
-/// CLIF block parameters (the function's exit block) we read those parameters
-/// directly.
+/// Every block whose Wasm parameters we recover this way (a Wasm control-flow
+/// target or the function exit block) has associated parameter `Variable`s, so
+/// we `use_var` each of them.
 fn push_block_params(
     environ: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder,
     block: ir::Block,
 ) {
     debug_assert_eq!(builder.current_block(), Some(block));
-    match environ.stacks.block_param_vars.get(&block) {
-        Some(vars) => {
-            let vars: SmallVec<[Variable; 6]> = vars.clone();
-            for var in vars {
-                let val = builder.use_var(var);
-                environ.stacks.stack.push(val);
-            }
-        }
-        None => {
-            environ
-                .stacks
-                .stack
-                .extend_from_slice(builder.block_params(block));
-        }
+    let vars = &environ.stacks.block_param_vars[block];
+    for var in vars {
+        let val = builder.use_var(*var);
+        environ.stacks.stack.push(val);
     }
 }
 
@@ -4404,9 +4393,8 @@ fn canonicalise_then_jump(
 ) -> ir::Inst {
     let mut canonicalised = SmallVec::<[_; 16]>::new();
     let canonicalised = canonicalise_v128_values(&mut canonicalised, builder, params);
-    let mut args = SmallVec::<[_; 16]>::new();
-    let args = set_block_params(environ, builder, &mut args, destination, canonicalised);
-    builder.ins().jump(destination, args)
+    set_block_params(environ, builder, destination, canonicalised);
+    builder.ins().jump(destination, &[])
 }
 
 /// The same as `canonicalise_then_jump` but for a `brif` instruction.
@@ -4422,30 +4410,14 @@ fn canonicalise_brif(
     let mut canonicalised_then = SmallVec::<[_; 16]>::new();
     let canonicalised_then =
         canonicalise_v128_values(&mut canonicalised_then, builder, params_then);
-    let mut args_then = SmallVec::<[_; 16]>::new();
-    let args_then = set_block_params(
-        environ,
-        builder,
-        &mut args_then,
-        block_then,
-        canonicalised_then,
-    );
+    set_block_params(environ, builder, block_then, canonicalised_then);
 
     let mut canonicalised_else = SmallVec::<[_; 16]>::new();
     let canonicalised_else =
         canonicalise_v128_values(&mut canonicalised_else, builder, params_else);
-    let mut args_else = SmallVec::<[_; 16]>::new();
-    let args_else = set_block_params(
-        environ,
-        builder,
-        &mut args_else,
-        block_else,
-        canonicalised_else,
-    );
+    set_block_params(environ, builder, block_else, canonicalised_else);
 
-    builder
-        .ins()
-        .brif(cond, block_then, args_then, block_else, args_else)
+    builder.ins().brif(cond, block_then, &[], block_else, &[])
 }
 
 /// A helper for popping and bitcasting a single value; since SIMD values can lose their type by

@@ -24,16 +24,16 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0022                               trapz v2, user16
-;; @0022                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0022                               v6 = load.i64 notrap aligned readonly can_move region2 v5+32
-;; @0022                               v4 = uextend.i64 v2
-;; @0022                               v7 = iadd v6, v4
-;; @0022                               v8 = iconst.i64 16
-;; @0022                               v9 = iadd v7, v8  ; v8 = 16
-;; @0022                               v10 = load.i8x16 user2 little region4 v9
+;; @0022                               v4 = load.i64 notrap aligned readonly can_move region0 v0+8
+;; @0022                               v5 = load.i64 notrap aligned readonly can_move region2 v4+32
+;; @0022                               v3 = uextend.i64 v2
+;; @0022                               v6 = iadd v5, v3
+;; @0022                               v7 = iconst.i64 16
+;; @0022                               v8 = iadd v6, v7  ; v7 = 16
+;; @0022                               v9 = load.i8x16 user2 little region4 v8
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:
-;; @002c                               v18 = bxor.i8x16 v10, v10
-;; @002e                               return v18
+;; @002c                               v17 = bxor.i8x16 v9, v9
+;; @002e                               return v17
 ;; }

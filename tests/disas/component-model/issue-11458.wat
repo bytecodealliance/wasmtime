@@ -39,14 +39,14 @@
 ;; @006f                               jump block2
 ;;
 ;;                                 block2:
-;; @006f                               v5 = load.i64 notrap aligned readonly can_move region2 v0+72
-;;                                     v9 = iconst.i32 1
-;;                                     v11 = call fn1(v5, v5, v9)  ; v9 = 1
+;; @006f                               v4 = load.i64 notrap aligned readonly can_move region2 v0+72
+;;                                     v7 = iconst.i32 1
+;;                                     v9 = call fn1(v4, v4, v7)  ; v7 = 1
 ;;                                     jump block4
 ;;
 ;;                                 block4:
 ;; @0071                               jump block1
 ;;
 ;;                                 block1:
-;; @0071                               return v11
+;; @0071                               return v9
 ;; }

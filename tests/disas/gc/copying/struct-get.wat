@@ -35,17 +35,17 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0033                               trapz v2, user16
-;; @0033                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0033                               v6 = load.i64 notrap aligned readonly can_move region2 v5+32
-;; @0033                               v4 = uextend.i64 v2
-;; @0033                               v7 = iadd v6, v4
-;; @0033                               v8 = iconst.i64 16
-;; @0033                               v9 = iadd v7, v8  ; v8 = 16
-;; @0033                               v10 = load.f32 user2 little region4 v9
+;; @0033                               v4 = load.i64 notrap aligned readonly can_move region0 v0+8
+;; @0033                               v5 = load.i64 notrap aligned readonly can_move region2 v4+32
+;; @0033                               v3 = uextend.i64 v2
+;; @0033                               v6 = iadd v5, v3
+;; @0033                               v7 = iconst.i64 16
+;; @0033                               v8 = iadd v6, v7  ; v7 = 16
+;; @0033                               v9 = load.f32 user2 little region4 v8
 ;; @0037                               jump block1
 ;;
 ;;                                 block1:
-;; @0037                               return v10
+;; @0037                               return v9
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
@@ -61,18 +61,18 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @003c                               trapz v2, user16
-;; @003c                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @003c                               v6 = load.i64 notrap aligned readonly can_move region2 v5+32
-;; @003c                               v4 = uextend.i64 v2
-;; @003c                               v7 = iadd v6, v4
-;; @003c                               v8 = iconst.i64 20
-;; @003c                               v9 = iadd v7, v8  ; v8 = 20
-;; @003c                               v10 = load.i8 user2 little region4 v9
+;; @003c                               v4 = load.i64 notrap aligned readonly can_move region0 v0+8
+;; @003c                               v5 = load.i64 notrap aligned readonly can_move region2 v4+32
+;; @003c                               v3 = uextend.i64 v2
+;; @003c                               v6 = iadd v5, v3
+;; @003c                               v7 = iconst.i64 20
+;; @003c                               v8 = iadd v6, v7  ; v7 = 20
+;; @003c                               v9 = load.i8 user2 little region4 v8
 ;; @0040                               jump block1
 ;;
 ;;                                 block1:
-;; @003c                               v11 = sextend.i32 v10
-;; @0040                               return v11
+;; @003c                               v10 = sextend.i32 v9
+;; @0040                               return v10
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i32) -> i32 tail {
@@ -88,18 +88,18 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0045                               trapz v2, user16
-;; @0045                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0045                               v6 = load.i64 notrap aligned readonly can_move region2 v5+32
-;; @0045                               v4 = uextend.i64 v2
-;; @0045                               v7 = iadd v6, v4
-;; @0045                               v8 = iconst.i64 20
-;; @0045                               v9 = iadd v7, v8  ; v8 = 20
-;; @0045                               v10 = load.i8 user2 little region4 v9
+;; @0045                               v4 = load.i64 notrap aligned readonly can_move region0 v0+8
+;; @0045                               v5 = load.i64 notrap aligned readonly can_move region2 v4+32
+;; @0045                               v3 = uextend.i64 v2
+;; @0045                               v6 = iadd v5, v3
+;; @0045                               v7 = iconst.i64 20
+;; @0045                               v8 = iadd v6, v7  ; v7 = 20
+;; @0045                               v9 = load.i8 user2 little region4 v8
 ;; @0049                               jump block1
 ;;
 ;;                                 block1:
-;; @0045                               v11 = uextend.i32 v10
-;; @0049                               return v11
+;; @0045                               v10 = uextend.i32 v9
+;; @0049                               return v10
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32) -> i32 tail {
@@ -115,15 +115,15 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @004e                               trapz v2, user16
-;; @004e                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @004e                               v6 = load.i64 notrap aligned readonly can_move region2 v5+32
-;; @004e                               v4 = uextend.i64 v2
-;; @004e                               v7 = iadd v6, v4
-;; @004e                               v8 = iconst.i64 24
-;; @004e                               v9 = iadd v7, v8  ; v8 = 24
-;; @004e                               v10 = load.i32 user2 little region4 v9
+;; @004e                               v4 = load.i64 notrap aligned readonly can_move region0 v0+8
+;; @004e                               v5 = load.i64 notrap aligned readonly can_move region2 v4+32
+;; @004e                               v3 = uextend.i64 v2
+;; @004e                               v6 = iadd v5, v3
+;; @004e                               v7 = iconst.i64 24
+;; @004e                               v8 = iadd v6, v7  ; v7 = 24
+;; @004e                               v9 = load.i32 user2 little region4 v8
 ;; @0052                               jump block1
 ;;
 ;;                                 block1:
-;; @0052                               return v10
+;; @0052                               return v9
 ;; }

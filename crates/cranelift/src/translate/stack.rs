@@ -5,9 +5,9 @@
 //! a single function.
 
 use cranelift_codegen::ir::{self, Block, ExceptionTag, Inst, Value};
+use cranelift_entity::SecondaryMap;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use smallvec::SmallVec;
-use std::collections::HashMap;
 use std::vec::Vec;
 use wasmtime_environ::FrameStackShape;
 
@@ -283,11 +283,10 @@ pub struct FuncTranslationStacks {
     /// differing values) instead of pessimistically creating one for every
     /// Wasm block.
     ///
-    /// Note that not every CLIF block is present in this map: the function's
-    /// exit block keeps real CLIF block parameters (for the function returns),
-    /// and various internal blocks (e.g. an `if`'s consequent, or the
-    /// fall-through after a `br_if`) have no parameters at all.
-    pub(crate) block_param_vars: HashMap<Block, SmallVec<[Variable; 6]>>,
+    /// The only blocks with real CLIF block parameters are the entry block
+    /// (function parameters) and `try_table` catch blocks (the exception
+    /// payload, filled in by the exception ABI).
+    pub(crate) block_param_vars: SecondaryMap<Block, SmallVec<[Variable; 6]>>,
     /// Exception handler state, updated as we enter and exit
     /// `try_table` scopes and attached to each call that we make.
     pub(crate) handlers: HandlerState,
@@ -312,7 +311,7 @@ impl FuncTranslationStacks {
             stack: Vec::new(),
             stack_shape: Vec::new(),
             control_stack: Vec::new(),
-            block_param_vars: HashMap::new(),
+            block_param_vars: SecondaryMap::new(),
             handlers: HandlerState::default(),
             reachable: true,
         }

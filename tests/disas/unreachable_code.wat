@@ -114,8 +114,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0061                               v3 = iconst.i32 1
-;; @0063                               brif v3, block6, block13  ; v3 = 1
+;; @0061                               v2 = iconst.i32 1
+;; @0063                               brif v2, block6, block13  ; v2 = 1
 ;;
 ;;                                 block6:
 ;; @006a                               jump block9

@@ -43,34 +43,18 @@ where
     });
 }
 
-/// Set up the Wasm stack parameters of `destination` to `values` ahead of an
+/// Set the parameter `Variable`s of `destination` to `values` ahead of an
 /// argument-less branch to that block.
-///
-/// If `destination` is a Wasm control-flow target (i.e. it has associated
-/// parameter `Variable`s) then we `def_var` each of those variables and the
-/// branch carries no block arguments. Otherwise `destination` has real CLIF
-/// block parameters (e.g. the function exit block), so we return the values as
-/// block arguments to pass directly.
-pub fn set_block_params<'a>(
+pub fn set_block_params(
     environ: &FuncEnvironment<'_>,
     builder: &mut FunctionBuilder,
-    tmp: &'a mut SmallVec<[ir::BlockArg; 16]>,
     destination: ir::Block,
     values: &[ir::Value],
-) -> &'a [ir::BlockArg] {
-    debug_assert!(tmp.is_empty());
-    match environ.stacks.block_param_vars.get(&destination) {
-        Some(vars) => {
-            debug_assert_eq!(vars.len(), values.len());
-            for (var, val) in vars.iter().zip(values) {
-                builder.def_var(*var, *val);
-            }
-            &[]
-        }
-        None => {
-            tmp.extend(values.iter().map(|v| ir::BlockArg::from(*v)));
-            tmp.as_slice()
-        }
+) {
+    let vars = &environ.stacks.block_param_vars[destination];
+    debug_assert_eq!(vars.len(), values.len());
+    for (var, val) in vars.iter().zip(values) {
+        builder.def_var(*var, *val);
     }
 }
 
@@ -106,7 +90,8 @@ pub fn block_with_params(
         }
         vars.push(var);
     }
-    environ.stacks.block_param_vars.insert(block, vars);
+    let old = environ.stacks.block_param_vars.insert(block, vars);
+    debug_assert!(old.is_none());
     Ok(block)
 }
 

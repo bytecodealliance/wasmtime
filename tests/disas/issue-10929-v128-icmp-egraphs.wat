@@ -23,7 +23,7 @@
 ;; @0025                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v9 = vconst.i8x16 const0
-;; @0023                               v6 = icmp.i8x16 ne v2, v9  ; v9 = const0
-;; @0025                               return v6
+;;                                     v8 = vconst.i8x16 const0
+;; @0023                               v5 = icmp.i8x16 ne v2, v8  ; v8 = const0
+;; @0025                               return v5
 ;; }

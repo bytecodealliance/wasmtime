@@ -22,10 +22,10 @@
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v4 = iconst.i32 0
-;;                                     v5 = icmp.i32 eq v2, v4  ; v4 = 0
-;;                                     v6 = uextend.i32 v5
-;; @0023                               return v6
+;;                                     v3 = iconst.i32 0
+;;                                     v4 = icmp.i32 eq v2, v3  ; v3 = 0
+;;                                     v5 = uextend.i32 v4
+;; @0023                               return v5
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
@@ -40,6 +40,6 @@
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v4 = iconst.i32 0
-;; @0029                               return v4  ; v4 = 0
+;;                                     v3 = iconst.i32 0
+;; @0029                               return v3  ; v3 = 0
 ;; }

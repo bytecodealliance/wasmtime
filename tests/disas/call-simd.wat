@@ -45,12 +45,12 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16, v3: i8x16):
-;; @004f                               v5 = bitcast.i32x4 little v2
-;; @004f                               v6 = bitcast.i32x4 little v3
-;; @004f                               v7 = iadd v5, v6
-;; @0052                               v8 = bitcast.i8x16 little v7
+;; @004f                               v4 = bitcast.i32x4 little v2
+;; @004f                               v5 = bitcast.i32x4 little v3
+;; @004f                               v6 = iadd v4, v5
+;; @0052                               v7 = bitcast.i8x16 little v6
 ;; @0052                               jump block1
 ;;
 ;;                                 block1:
-;; @0052                               return v8
+;; @0052                               return v7
 ;; }

@@ -56,8 +56,8 @@
 ;; wasm[0]::function[0]::i8x16.all_true:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       pxor    %xmm7, %xmm7
-;;       pcmpeqb %xmm7, %xmm0
+;;       pxor    %xmm6, %xmm6
+;;       pcmpeqb %xmm6, %xmm0
 ;;       ptest   %xmm0, %xmm0
 ;;       je      0x21
 ;;   17: movl    $0xc8, %eax
@@ -70,8 +70,8 @@
 ;; wasm[0]::function[1]::i16x8.all_true:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       pxor    %xmm7, %xmm7
-;;       pcmpeqw %xmm7, %xmm0
+;;       pxor    %xmm6, %xmm6
+;;       pcmpeqw %xmm6, %xmm0
 ;;       ptest   %xmm0, %xmm0
 ;;       je      0x61
 ;;   57: movl    $0xc8, %eax
@@ -84,8 +84,8 @@
 ;; wasm[0]::function[2]::i32x4.all_true:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       pxor    %xmm7, %xmm7
-;;       pcmpeqd %xmm7, %xmm0
+;;       pxor    %xmm6, %xmm6
+;;       pcmpeqd %xmm6, %xmm0
 ;;       ptest   %xmm0, %xmm0
 ;;       je      0xa1
 ;;   97: movl    $0xc8, %eax
@@ -98,8 +98,8 @@
 ;; wasm[0]::function[3]::i64x2.all_true:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       pxor    %xmm7, %xmm7
-;;       pcmpeqq %xmm7, %xmm0
+;;       pxor    %xmm6, %xmm6
+;;       pcmpeqq %xmm6, %xmm0
 ;;       ptest   %xmm0, %xmm0
 ;;       je      0xe2
 ;;   d8: movl    $0xc8, %eax
