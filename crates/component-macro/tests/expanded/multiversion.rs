@@ -242,7 +242,7 @@ pub mod my {
                 T: 'static,
             {
                 let mut inst = linker.instance("my:dep/a@0.1.0")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }
@@ -293,7 +293,7 @@ pub mod my {
                 T: 'static,
             {
                 let mut inst = linker.instance("my:dep/a@0.2.0")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }
