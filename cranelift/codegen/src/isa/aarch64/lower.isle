@@ -2772,6 +2772,15 @@
                                     (u8_from_uimm8 lane)))
       (fpu_move_from_vec val lane (vector_size vty)))
 
+;; A full `i32x4` horizontal add — two (GVN-shared) `iadd_pairwise`es then a
+;; lane-0 extract — is a single `addv`, replacing `addp; addp; umov`.
+(rule 3 (lower (extractlane $I32
+                            (iadd_pairwise $I32X4
+                                (iadd_pairwise $I32X4 x x)
+                                (iadd_pairwise $I32X4 x x))
+                            (u8_from_uimm8 0)))
+      (mov_from_vec (addv x (vector_size $I32X4)) 0 (scalar_size $I32)))
+
 ;;; Rules for `insertlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (insertlane _ vec @ (value_type vty)

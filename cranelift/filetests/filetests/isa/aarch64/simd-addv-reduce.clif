@@ -1,0 +1,25 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+;; A complete `i32x4` horizontal-add reduction contracts to a single `addv`.
+function %hsum_i32x4(i32x4) -> i32 {
+block0(v0: i32x4):
+    v1 = iadd_pairwise v0, v0
+    v2 = iadd_pairwise v1, v1
+    v3 = extractlane v2, 0
+    return v3
+}
+
+; VCode:
+; block0:
+;   addv s2, v0.4s
+;   mov w0, v2.s[0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addv s2, v0.4s
+;   mov w0, v2.s[0]
+;   ret
+
