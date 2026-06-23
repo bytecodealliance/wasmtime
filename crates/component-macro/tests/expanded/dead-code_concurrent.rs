@@ -249,7 +249,7 @@ pub mod a {
                 T: 'static + Send,
             {
                 let mut inst = linker.instance("a:b/interface-with-live-type")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -334,7 +334,7 @@ pub mod a {
                 T: 'static,
             {
                 let mut inst = linker.instance("a:b/interface-with-dead-type")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }
