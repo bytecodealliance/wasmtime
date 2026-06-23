@@ -493,7 +493,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/the-interface")?;
-                add_to_linker_instance(&mut inst, options, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, options, host_getter)
             }
         }
     }

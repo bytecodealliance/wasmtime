@@ -1116,7 +1116,7 @@ pub mod foo {
                 T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/resources")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -1182,7 +1182,7 @@ pub mod foo {
                 T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain1")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -1218,7 +1218,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain2")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -1254,7 +1254,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain3")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -1308,7 +1308,7 @@ pub mod foo {
                 T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain4")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -1375,7 +1375,7 @@ pub mod foo {
             {
                 let mut inst = linker
                     .instance("foo:foo/transitive-interface-with-resource")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }
