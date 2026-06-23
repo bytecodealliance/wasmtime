@@ -365,8 +365,8 @@ impl ComponentInstance {
     #[inline]
     pub fn instance_flags(&self, instance: RuntimeComponentInstanceIndex) -> InstanceFlags {
         unsafe {
-            let ptr = self
-                .vmctx_plus_offset_raw::<VMGlobalDefinition>(self.offsets.instance_flags(instance));
+            let ptr =
+                self.vmctx_plus_offset_raw::<VMGlobalDefinition>(self.offsets.may_leave(instance));
             InstanceFlags(SendSyncPtr::new(ptr))
         }
     }
@@ -704,9 +704,9 @@ impl ComponentInstance {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
             let mut def = VMGlobalDefinition::new();
             // SAFETY: this is a valid initialization of all globals which are
-            // 32-bit values.
+            // 32-bit values. The `may_leave` flag starts out `true`.
             unsafe {
-                *def.as_i32_mut() = FLAG_MAY_LEAVE;
+                *def.as_i32_mut() = 1;
                 self.instance_flags(i).as_raw().write(def);
             }
         }
@@ -1062,17 +1062,13 @@ impl InstanceFlags {
 
     #[inline]
     pub unsafe fn may_leave(&self) -> bool {
-        unsafe { *self.as_raw().as_ref().as_i32() & FLAG_MAY_LEAVE != 0 }
+        unsafe { *self.as_raw().as_ref().as_i32() != 0 }
     }
 
     #[inline]
     pub unsafe fn set_may_leave(&mut self, val: bool) {
         unsafe {
-            if val {
-                *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_LEAVE;
-            } else {
-                *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_LEAVE;
-            }
+            *self.as_raw().as_mut().as_i32_mut() = val as i32;
         }
     }
 

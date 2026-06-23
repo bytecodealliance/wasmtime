@@ -1631,8 +1631,8 @@ impl AliasRegions<VMComponentOffsets<u8>> {
         )
     }
 
-    /// Load a component instance's flags from the `VMComponentContext`.
-    pub fn vmcomponent_instance_flags(
+    /// Load a component instance's `may_leave` flag from the `VMComponentContext`.
+    pub fn vmcomponent_instance_may_leave(
         &mut self,
         cursor: &mut FuncCursor<'_>,
         vmctx: ir::Value,
@@ -1643,7 +1643,7 @@ impl AliasRegions<VMComponentOffsets<u8>> {
             ir::types::I32,
             ir::MemFlagsData::trusted(),
             vmctx,
-            self.offsets.instance_flags(instance),
+            self.offsets.may_leave(instance),
         )
     }
 }

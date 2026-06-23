@@ -16,13 +16,12 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_LEAVE, FixedEncoding as FE, FlatType,
-    InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT,
-    PREPARE_ASYNC_WITH_RESULT, START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode,
-    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedLengthListIndex,
-    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex, TypeOptionIndex,
-    TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
-    TypeVariantIndex, VariantInfo,
+    CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType,
+    MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
+    START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode, TypeComponentLocalErrorContextTableIndex,
+    TypeEnumIndex, TypeFixedLengthListIndex, TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex,
+    TypeMapIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
+    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -701,9 +700,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .map(|(i, ty)| (i as u32, *ty))
             .collect::<Vec<_>>();
 
-        self.set_flag(adapter.lift.flags, FLAG_MAY_LEAVE, false);
+        let saved = self.clear_may_leave(adapter.lift.flags);
         self.translate_params(adapter, &param_locals);
-        self.set_flag(adapter.lift.flags, FLAG_MAY_LEAVE, true);
+        self.restore_may_leave(adapter.lift.flags, saved);
 
         self.finish();
     }
@@ -727,7 +726,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .map(|(i, ty)| (i as u32, *ty))
             .collect::<Vec<_>>();
 
-        self.set_flag(adapter.lower.flags, FLAG_MAY_LEAVE, false);
+        let saved = self.clear_may_leave(adapter.lower.flags);
         // Note that we pass `param_locals` as _both_ the `param_locals` and
         // `result_locals` parameters to `translate_results`.  That's because
         // the _parameters_ to `task.return` are actually the _results_ that the
@@ -739,7 +738,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // the import is lowered async, in which case `translate_results` will
         // use that pointer to store the results.
         self.translate_results(adapter, &param_locals, &param_locals);
-        self.set_flag(adapter.lower.flags, FLAG_MAY_LEAVE, true);
+        self.restore_may_leave(adapter.lower.flags, saved);
 
         self.finish()
     }
@@ -763,11 +762,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // This inserts the initial check required by `canon_lower` that the
         // caller instance can be left and additionally checks the
         // flags on the callee if necessary whether it can be entered.
-        self.trap_if_not_flag(
-            adapter.lower.flags,
-            FLAG_MAY_LEAVE,
-            Trap::CannotLeaveComponent,
-        );
+        //
+        // The loaded `may_leave` value is saved into `saved_lower_may_leave`
+        // so that it can be restored after results are translated below
+        // without reloading the global.
+        let saved_lower_may_leave =
+            self.trap_if_not_may_leave(adapter.lower.flags, Trap::CannotLeaveComponent);
 
         let old_task_may_block = if self.module.tunables.concurrency_support {
             // Save, clear, and later restore the `may_block` field.
@@ -823,8 +823,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
             None
         };
 
-        // Perform the translation of arguments. Note that `FLAG_MAY_LEAVE` is
-        // cleared around this invocation for the callee as per the
+        // Perform the translation of arguments. Note that the `may_leave` flag
+        // is cleared around this invocation for the callee as per the
         // `canon_lift` definition in the spec. Additionally note that the
         // precise ordering of traps here is not required since internal state
         // is not visible to either instance and a trap will "lock down" both
@@ -832,10 +832,32 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // reorder lifts/lowers and flags and such as is necessary and
         // convenient here.
         //
-        // TODO: if translation doesn't actually call any functions in either
-        // instance then there's no need to set/clear the flag here and that can
-        // be optimized away.
-        self.set_flag(adapter.lift.flags, FLAG_MAY_LEAVE, false);
+        // The clear-and-restore is structured (a constant `0` store to clear,
+        // then a store of the saved original value to restore) so that if
+        // translation doesn't actually call any functions in either instance
+        // then a future dead-store elimination pass in Cranelift can remove all
+        // the flag juggling entirely (other than trapping when `!may_leave`):
+        //
+        //     may_leave = load vmctx+MAY_LEAVE_OFFSET      ;; (0)
+        //     trapz may_leave
+        //
+        //     ...
+        //
+        //     zero = iconst 0
+        //     store zero, vmctx+MAY_LEAVE_OFFSET           ;; (1)
+        //
+        //     ...
+        //
+        //     store may_leave, vmctx+MAY_LEAVE_OFFSET      ;; (2)
+        //
+        // First, the dead-store elimination pass will see that the the store at
+        // (1) is dead and remove it. Then, the idempotent-store eliminator will
+        // recognize that the store at (2) is storing the same value that the
+        // memory location already contains and it will also be removed. The
+        // more we can reuse locals to make this idempotency obvious, rather
+        // than force Cranelift's optimizer to rediscover this information, the
+        // better.
+        let saved_lift_may_leave = self.clear_may_leave(adapter.lift.flags);
         let param_locals = lower_sig
             .params
             .iter()
@@ -843,7 +865,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .map(|(i, ty)| (i as u32, *ty))
             .collect::<Vec<_>>();
         self.translate_params(adapter, &param_locals);
-        self.set_flag(adapter.lift.flags, FLAG_MAY_LEAVE, true);
+        self.restore_may_leave(adapter.lift.flags, saved_lift_may_leave);
 
         // With all the arguments on the stack the actual target function is
         // now invoked. The core wasm results of the function are then placed
@@ -882,12 +904,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // order of everything doesn't matter since intermediate states cannot
         // be witnessed, hence the setting of flags here to encapsulate both
         // liftings and lowerings.
-        //
-        // TODO: like above the management of the `MAY_LEAVE` flag can probably
-        // be elided here for "simple" results.
-        self.set_flag(adapter.lower.flags, FLAG_MAY_LEAVE, false);
+        self.set_may_leave_false(adapter.lower.flags);
         self.translate_results(adapter, &param_locals, &result_locals);
-        self.set_flag(adapter.lower.flags, FLAG_MAY_LEAVE, true);
+        self.restore_may_leave(adapter.lower.flags, saved_lower_may_leave);
 
         // And finally post-return state is handled here once all results/etc
         // are all translated.
@@ -3575,26 +3594,58 @@ impl<'a, 'b> Compiler<'a, 'b> {
         }
     }
 
-    fn trap_if_not_flag(&mut self, flags_global: GlobalIndex, flag_to_test: i32, trap: Trap) {
+    /// Loads the `may_leave` flag for the given instance, traps with `trap` if
+    /// it is not set, and returns a temporary local holding the loaded value
+    /// so that it can later be restored with `restore_may_leave` without
+    /// reloading the global.
+    ///
+    /// The `may_leave` flag is a boolean (0 or 1) so no masking is required.
+    fn trap_if_not_may_leave(&mut self, flags_global: GlobalIndex, trap: Trap) -> TempLocal {
         self.instruction(GlobalGet(flags_global.as_u32()));
-        self.instruction(I32Const(flag_to_test));
-        self.instruction(I32And);
+        // Save the flag's value (known to be `true` whenever the trap below is
+        // not taken) into a temporary for later restoration.
+        let saved = self.local_tee_new_tmp(ValType::I32);
         self.instruction(I32Eqz);
         self.instruction(If(BlockType::Empty));
         self.trap(trap);
         self.instruction(End);
+        saved
     }
 
-    fn set_flag(&mut self, flags_global: GlobalIndex, flag_to_set: i32, value: bool) {
+    /// Saves the current value of the `may_leave` flag into a fresh temporary
+    /// local (returned) and then clears the flag to `false`.
+    fn clear_may_leave(&mut self, flags_global: GlobalIndex) -> TempLocal {
         self.instruction(GlobalGet(flags_global.as_u32()));
-        if value {
-            self.instruction(I32Const(flag_to_set));
-            self.instruction(I32Or);
-        } else {
-            self.instruction(I32Const(!flag_to_set));
-            self.instruction(I32And);
-        }
+        let saved = self.local_set_new_tmp(ValType::I32);
+        self.set_may_leave_false(flags_global);
+        saved
+    }
+
+    /// Sets the `may_leave` flag to `false` by storing a constant `0`.
+    ///
+    /// Since there is only a single flag there is no need to reload the global
+    /// and mask: storing `0` is sufficient.
+    fn set_may_leave_false(&mut self, flags_global: GlobalIndex) {
+        self.instruction(I32Const(0));
         self.instruction(GlobalSet(flags_global.as_u32()));
+    }
+
+    /// Restores the `may_leave` flag to the value previously saved in `saved`
+    /// (via `clear_may_leave` or `trap_if_not_may_leave`) and frees the
+    /// temporary local.
+    ///
+    /// Storing the previously-loaded value (rather than reloading the global
+    /// and or-ing in the flag bit) makes it clear in the generated CLIF that
+    /// the same value that was there before is being written back. Combined
+    /// with the constant `0` store in `set_may_leave_false`, this lets a future
+    /// dead-store-elimination pass remove the clear-to-`false` store which will
+    /// then allow our idempotent-store elimination to remove this restore for
+    /// adapters whose body never touches the flag (e.g. simple inlined
+    /// callees).
+    fn restore_may_leave(&mut self, flags_global: GlobalIndex, saved: TempLocal) {
+        self.instruction(LocalGet(saved.idx));
+        self.instruction(GlobalSet(flags_global.as_u32()));
+        self.free_temp_local(saved);
     }
 
     fn assert_aligned(&mut self, ty: &InterfaceType, mem: &Memory) {
