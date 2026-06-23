@@ -2660,7 +2660,7 @@ pub fn add_to_linker<T, D>(
         T: 'static {opt_t_send_bound},
 {{
     let mut inst = linker.instance(\"{name}\")?;
-    add_to_linker_instance(&mut inst, {options_param_forward} host_getter)
+    add_to_linker_instance::<T, D>(&mut inst, {options_param_forward} host_getter)
 }}
             "
                 );
