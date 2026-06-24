@@ -303,3 +303,15 @@ fn preview1_file_truncation_readonly() {
         "blank placeholder test to satisfy assert_test_exists. This test exercises wasmtime-wasi functionality is not relevant to wasi-common"
     );
 }
+#[test]
+fn preview1_file_hardlink_across_perms() {
+    println!(
+        "blank placeholder test to satisfy assert_test_exists. This test exercises wasmtime-wasi functionality is not relevant to wasi-common"
+    );
+}
+#[test]
+fn preview1_file_rename_across_perms() {
+    println!(
+        "blank placeholder test to satisfy assert_test_exists. This test exercises wasmtime-wasi functionality is not relevant to wasi-common"
+    );
+}
