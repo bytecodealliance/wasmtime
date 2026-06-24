@@ -7,39 +7,42 @@
 ;; wasm[0]::array_to_wasm_trampoline[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       subq    $0x30, %rsp
-;;       movq    %rbx, (%rsp)
-;;       movq    %r12, 8(%rsp)
-;;       movq    %r13, 0x10(%rsp)
-;;       movq    %r14, 0x18(%rsp)
-;;       movq    %r15, 0x20(%rsp)
+;;       subq    $0x40, %rsp
+;;       movq    %rbx, 0x10(%rsp)
+;;       movq    %r12, 0x18(%rsp)
+;;       movq    %r13, 0x20(%rsp)
+;;       movq    %r14, 0x28(%rsp)
+;;       movq    %r15, 0x30(%rsp)
 ;;       movq    %rbp, %rcx
-;;       movq    8(%rdi), %rax
-;;       movq    %rcx, 0x48(%rax)
+;;       movq    8(%rdi), %r8
+;;       movq    %rcx, 0x48(%r8)
 ;;       movq    %rsp, %rcx
-;;       movq    %rcx, 0x40(%rax)
-;;       leaq    0x2f(%rip), %rcx
-;;       movq    %rcx, 0x50(%rax)
+;;       movq    %rcx, 0x40(%r8)
+;;       leaq    0x34(%rip), %rcx
+;;       movq    %rcx, 0x50(%r8)
+;;       movq    %r8, (%rsp)
 ;;       callq   0
-;;       ├─╼ exception frame offset: SP = FP - 0x30
-;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x71
+;;       ├─╼ exception frame offset: SP = FP - 0x40
+;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x77
 ;;       movl    $1, %eax
-;;       movq    (%rsp), %rbx
-;;       movq    8(%rsp), %r12
-;;       movq    0x10(%rsp), %r13
-;;       movq    0x18(%rsp), %r14
-;;       movq    0x20(%rsp), %r15
-;;       addq    $0x30, %rsp
+;;       movq    0x10(%rsp), %rbx
+;;       movq    0x18(%rsp), %r12
+;;       movq    0x20(%rsp), %r13
+;;       movq    0x28(%rsp), %r14
+;;       movq    0x30(%rsp), %r15
+;;       addq    $0x40, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   71: xorl    %eax, %eax
-;;   73: movq    (%rsp), %rbx
-;;   77: movq    8(%rsp), %r12
-;;   7c: movq    0x10(%rsp), %r13
-;;   81: movq    0x18(%rsp), %r14
-;;   86: movq    0x20(%rsp), %r15
-;;   8b: addq    $0x30, %rsp
-;;   8f: movq    %rbp, %rsp
-;;   92: popq    %rbp
-;;   93: retq
+;;   77: movq    (%rsp), %r8
+;;   7b: movq    $1, 0x88(%r8)
+;;   86: xorl    %eax, %eax
+;;   88: movq    0x10(%rsp), %rbx
+;;   8d: movq    0x18(%rsp), %r12
+;;   92: movq    0x20(%rsp), %r13
+;;   97: movq    0x28(%rsp), %r14
+;;   9c: movq    0x30(%rsp), %r15
+;;   a1: addq    $0x40, %rsp
+;;   a5: movq    %rbp, %rsp
+;;   a8: popq    %rbp
+;;   a9: retq

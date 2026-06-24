@@ -53,7 +53,7 @@
 ;;   8b: xorl    %esi, %esi
 ;;   8d: movq    %r9, %rbx
 ;;   90: movq    %rbx, %rdi
-;;   93: callq   0x219
+;;   93: callq   0x22f
 ;;   98: jmp     0x59
 ;;   9d: ud2
 ;;   9f: ud2
