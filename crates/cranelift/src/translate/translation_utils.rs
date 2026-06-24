@@ -1,10 +1,12 @@
 //! Helper functions and structures for the translation.
+use crate::func_environ::FuncEnvironment;
 use crate::translate::environ::TargetEnvironment;
 use core::u32;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
+use smallvec::SmallVec;
 use wasmparser::{FuncValidator, WasmModuleResources};
-use wasmtime_environ::WasmResult;
+use wasmtime_environ::{TypeConvert, WasmResult};
 
 /// Get the parameter and result types for the given Wasm blocktype.
 pub fn blocktype_params_results<'a, T>(
@@ -41,40 +43,55 @@ where
     });
 }
 
-/// Create a `Block` with the given Wasm parameters.
-pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
+/// Set the parameter `Variable`s of `destination` to `values` ahead of an
+/// argument-less branch to that block.
+pub fn set_block_params(
+    environ: &FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder,
+    destination: ir::Block,
+    values: &[ir::Value],
+) {
+    let vars = &environ.stacks.block_param_vars[destination];
+    debug_assert_eq!(vars.len(), values.len());
+    for (var, val) in vars.iter().zip(values) {
+        builder.def_var(*var, *val);
+    }
+}
+
+/// Create a `Block` representing a Wasm control-flow target with the given Wasm
+/// stack parameters.
+///
+/// Rather than giving the block CLIF block parameters, we create a
+/// `cranelift_frontend::Variable` for each Wasm stack parameter and record the
+/// block-to-variables mapping in `environ.stacks.block_param_vars`. See the
+/// `block_param_vars` docs for more details.
+pub fn block_with_params(
     builder: &mut FunctionBuilder,
     params: impl IntoIterator<Item = wasmparser::ValType>,
-    environ: &PE,
+    environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<ir::Block> {
     let block = builder.create_block();
+    let mut vars = SmallVec::<[_; 6]>::new();
     for ty in params {
-        match ty {
-            wasmparser::ValType::I32 => {
-                builder.append_block_param(block, ir::types::I32);
-            }
-            wasmparser::ValType::I64 => {
-                builder.append_block_param(block, ir::types::I64);
-            }
-            wasmparser::ValType::F32 => {
-                builder.append_block_param(block, ir::types::F32);
-            }
-            wasmparser::ValType::F64 => {
-                builder.append_block_param(block, ir::types::F64);
-            }
+        let (clif_ty, needs_stack_map) = match ty {
+            wasmparser::ValType::I32 => (ir::types::I32, false),
+            wasmparser::ValType::I64 => (ir::types::I64, false),
+            wasmparser::ValType::F32 => (ir::types::F32, false),
+            wasmparser::ValType::F64 => (ir::types::F64, false),
             wasmparser::ValType::Ref(rt) => {
                 let hty = environ.convert_heap_type(rt.heap_type())?;
-                let (ty, needs_stack_map) = environ.reference_type(hty);
-                let val = builder.append_block_param(block, ty);
-                if needs_stack_map {
-                    builder.declare_value_needs_stack_map(val);
-                }
+                environ.reference_type(hty)
             }
-            wasmparser::ValType::V128 => {
-                builder.append_block_param(block, ir::types::I8X16);
-            }
+            wasmparser::ValType::V128 => (ir::types::I8X16, false),
+        };
+        let var = builder.declare_var(clif_ty);
+        if needs_stack_map {
+            builder.declare_var_needs_stack_map(var);
         }
+        vars.push(var);
     }
+    let old = environ.stacks.block_param_vars.insert(block, vars);
+    debug_assert!(old.is_none());
     Ok(block)
 }
 

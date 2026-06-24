@@ -16,12 +16,12 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
-;; @003a                               v10 = f64const 0x1.34a0000000000p10
+;; @003a                               v4 = f64const 0x1.34a0000000000p10
 ;; @0043                               jump block2
 ;;
 ;;                                 block2:
 ;; @0044                               jump block1
 ;;
 ;;                                 block1:
-;; @0044                               return v3, v2, v10  ; v10 = 0x1.34a0000000000p10
+;; @0044                               return v3, v2, v4  ; v4 = 0x1.34a0000000000p10
 ;; }

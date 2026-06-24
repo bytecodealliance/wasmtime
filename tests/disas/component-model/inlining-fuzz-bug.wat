@@ -92,6 +92,6 @@
 ;; @00c6                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v24 = iconst.i32 301
-;; @00c6                               return v24  ; v24 = 301
+;;                                     v20 = iconst.i32 301
+;; @00c6                               return v20  ; v20 = 301
 ;; }

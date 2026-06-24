@@ -29,13 +29,13 @@
 ;; @0038                               return v4, v3
 ;;
 ;;                                 block4:
-;; @003c                               v11 = iconst.i64 0
-;; @003e                               v12 = iconst.i64 0
+;; @003c                               v5 = iconst.i64 0
+;; @003e                               v6 = iconst.i64 0
 ;; @0040                               jump block3
 ;;
 ;;                                 block3:
 ;; @0041                               jump block1
 ;;
 ;;                                 block1:
-;; @0041                               return v11, v12  ; v11 = 0, v12 = 0
+;; @0041                               return v5, v6  ; v5 = 0, v6 = 0
 ;; }

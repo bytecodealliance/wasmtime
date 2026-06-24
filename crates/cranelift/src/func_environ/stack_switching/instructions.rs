@@ -1,12 +1,12 @@
-use cranelift_codegen::ir::BlockArg;
-use itertools::{Either, Itertools};
-
+use crate::translate::set_block_params;
 use crate::trap::TranslateTrap;
+use cranelift_codegen::ir::BlockArg;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, MemFlagsData};
 use cranelift_codegen::ir::{Block, BlockCall, InstBuilder, JumpTableData};
 use cranelift_frontend::FunctionBuilder;
+use itertools::{Either, Itertools};
 use wasmtime_environ::{PtrSize, TagIndex, TypeIndex, WasmResult, WasmValType, wasm_unsupported};
 
 fn control_context_size(triple: &target_lexicon::Triple) -> WasmResult<u8> {
@@ -1522,23 +1522,21 @@ pub(crate) fn translate_resume<'a>(
                 .collect();
 
             let values = suspended_contref.values(env, builder);
-            let mut suspend_args: Vec<BlockArg> = values
-                .load_data_entries(env, builder, &param_types)
-                .into_iter()
-                .map(|v| BlockArg::Value(v))
-                .collect();
+            let mut suspend_args: Vec<ir::Value> =
+                values.load_data_entries(env, builder, &param_types);
 
             // At the suspend site, we store the suspend args in the the
             // `values` buffer of the VMContRef that was active at the time that
             // the suspend instruction was performed.
-            suspend_args.push(BlockArg::Value(suspended_contobj));
+            suspend_args.push(suspended_contobj);
 
             // We clear the suspend args. This is mostly for consistency. Note
             // that we don't zero out the data buffer, we still need it for the
 
             values.clear(env, builder, false);
 
-            builder.ins().jump(target_block, &suspend_args);
+            set_block_params(env, builder, target_block, &suspend_args);
+            builder.ins().jump(target_block, &[]);
         }
 
         preamble_blocks

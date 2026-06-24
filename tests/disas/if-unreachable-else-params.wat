@@ -61,13 +61,13 @@
 ;; @0049                               brif.i32 v2, block4, block6
 ;;
 ;;                                 block4:
-;; @004b                               v7 = uextend.i64 v3  ; v3 = 35
-;; @004b                               v8 = load.i64 notrap aligned readonly can_move region2 v0+56
-;; @004b                               v9 = iadd v8, v7
-;; @004b                               v10 = sload16.i64 little region4 v9
+;; @004b                               v6 = uextend.i64 v3  ; v3 = 35
+;; @004b                               v7 = load.i64 notrap aligned readonly can_move region2 v0+56
+;; @004b                               v8 = iadd v7, v6
+;; @004b                               v9 = sload16.i64 little region4 v8
 ;; @004e                               trap user12
 ;;
 ;;                                 block6:
-;; @005d                               v11 = popcnt.i32 v3  ; v3 = 35
+;; @005d                               v10 = popcnt.i32 v3  ; v3 = 35
 ;; @0060                               return
 ;; }

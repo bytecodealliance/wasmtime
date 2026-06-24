@@ -43,29 +43,29 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0047                               v7 = load.i64 notrap aligned region3 v0+64
-;; @0047                               v9 = load.i64 notrap aligned can_move region2 v0+56
-;; @0047                               v6 = uextend.i64 v2
-;; @0047                               v8 = icmp ugt v6, v7
-;; @0047                               v11 = iconst.i64 0
-;; @0047                               v10 = iadd v9, v6
-;; @0047                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
-;; @0047                               v13 = load.i32 little region4 v12
-;; @004c                               v19 = iconst.i64 4
-;; @004c                               v20 = iadd v10, v19  ; v19 = 4
-;; @004c                               v22 = select_spectre_guard v8, v11, v20  ; v11 = 0
-;; @004c                               v23 = load.i32 little region4 v22
-;; @0051                               v25 = iconst.i64 0x0010_0003
-;; @0051                               v26 = uadd_overflow_trap v6, v25, heap_oob  ; v25 = 0x0010_0003
-;; @0051                               v28 = icmp ugt v26, v7
-;; @0051                               v31 = iconst.i64 0x000f_ffff
-;; @0051                               v32 = iadd v10, v31  ; v31 = 0x000f_ffff
-;; @0051                               v34 = select_spectre_guard v28, v11, v32  ; v11 = 0
-;; @0051                               v35 = load.i32 little region4 v34
+;; @0047                               v4 = load.i64 notrap aligned region3 v0+64
+;; @0047                               v6 = load.i64 notrap aligned can_move region2 v0+56
+;; @0047                               v3 = uextend.i64 v2
+;; @0047                               v5 = icmp ugt v3, v4
+;; @0047                               v8 = iconst.i64 0
+;; @0047                               v7 = iadd v6, v3
+;; @0047                               v9 = select_spectre_guard v5, v8, v7  ; v8 = 0
+;; @0047                               v10 = load.i32 little region4 v9
+;; @004c                               v16 = iconst.i64 4
+;; @004c                               v17 = iadd v7, v16  ; v16 = 4
+;; @004c                               v19 = select_spectre_guard v5, v8, v17  ; v8 = 0
+;; @004c                               v20 = load.i32 little region4 v19
+;; @0051                               v22 = iconst.i64 0x0010_0003
+;; @0051                               v23 = uadd_overflow_trap v3, v22, heap_oob  ; v22 = 0x0010_0003
+;; @0051                               v25 = icmp ugt v23, v4
+;; @0051                               v28 = iconst.i64 0x000f_ffff
+;; @0051                               v29 = iadd v7, v28  ; v28 = 0x000f_ffff
+;; @0051                               v31 = select_spectre_guard v25, v8, v29  ; v8 = 0
+;; @0051                               v32 = load.i32 little region4 v31
 ;; @0056                               jump block1
 ;;
 ;;                                 block1:
-;; @0056                               return v13, v23, v35
+;; @0056                               return v10, v20, v32
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32) tail {

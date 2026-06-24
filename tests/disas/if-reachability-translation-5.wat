@@ -36,9 +36,9 @@
 ;; @0024                               trap user12
 ;;
 ;;                                 block3:
-;; @0026                               v5 = iconst.i32 0
+;; @0026                               v4 = iconst.i32 0
 ;; @0028                               jump block1
 ;;
 ;;                                 block1:
-;; @0028                               return v5  ; v5 = 0
+;; @0028                               return v4  ; v4 = 0
 ;; }

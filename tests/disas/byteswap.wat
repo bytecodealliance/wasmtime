@@ -83,8 +83,8 @@
 ;; @0057                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v19 = bswap.i32 v2
-;; @0057                               return v19
+;;                                     v18 = bswap.i32 v2
+;; @0057                               return v18
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i64) -> i64 tail {
@@ -99,6 +99,6 @@
 ;; @00ad                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v39 = bswap.i64 v2
-;; @00ad                               return v39
+;;                                     v38 = bswap.i64 v2
+;; @00ad                               return v38
 ;; }

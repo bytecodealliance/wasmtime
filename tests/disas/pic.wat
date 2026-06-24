@@ -59,14 +59,14 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @005e                               v7 = load.i64 notrap aligned readonly can_move region2 v0+56
-;;                                     v15 = iconst.i64 0x0010_0000
-;; @005e                               v8 = iadd v7, v15  ; v15 = 0x0010_0000
-;; @005e                               v9 = load.i32 little region4 v8
+;; @005e                               v6 = load.i64 notrap aligned readonly can_move region2 v0+56
+;;                                     v14 = iconst.i64 0x0010_0000
+;; @005e                               v7 = iadd v6, v14  ; v14 = 0x0010_0000
+;; @005e                               v8 = load.i32 little region4 v7
 ;; @0061                               jump block1
 ;;
 ;;                                 block1:
-;; @0061                               return v9
+;; @0061                               return v8
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
@@ -85,30 +85,30 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0066                               v5 = load.i32 notrap aligned region2 v0+128
-;; @0068                               v6 = iconst.i32 16
-;; @006a                               v7 = isub v5, v6  ; v6 = 16
-;; @006d                               store notrap aligned region2 v7, v0+128
-;; @0073                               v9 = load.i64 notrap aligned readonly can_move region3 v0+56
-;; @0073                               v8 = uextend.i64 v2
-;; @0073                               v10 = iadd v9, v8
-;; @0073                               v11 = load.i32 little region5 v10
-;; @0078                               v12 = uextend.i64 v7
-;; @0078                               v14 = iadd v9, v12
-;; @0078                               v15 = iconst.i64 12
-;; @0078                               v16 = iadd v14, v15  ; v15 = 12
-;; @0078                               store little region5 v11, v16
-;; @0084                               v21 = load.i64 notrap aligned readonly can_move region7 v0+80
-;; @0084                               v20 = load.i64 notrap aligned readonly can_move region6 v0+96
-;;                                     v29 = iconst.i32 -4
-;;                                     v30 = iadd v5, v29  ; v29 = -4
-;; @0084                               call_indirect sig0, v21(v20, v0, v30)
-;;                                     v37 = iconst.i64 0x0010_0000
-;; @0090                               v26 = iadd v9, v37  ; v37 = 0x0010_0000
-;; @0090                               store little region5 v11, v26
-;; @0098                               store notrap aligned region2 v5, v0+128
+;; @0066                               v4 = load.i32 notrap aligned region2 v0+128
+;; @0068                               v5 = iconst.i32 16
+;; @006a                               v6 = isub v4, v5  ; v5 = 16
+;; @006d                               store notrap aligned region2 v6, v0+128
+;; @0073                               v8 = load.i64 notrap aligned readonly can_move region3 v0+56
+;; @0073                               v7 = uextend.i64 v2
+;; @0073                               v9 = iadd v8, v7
+;; @0073                               v10 = load.i32 little region5 v9
+;; @0078                               v11 = uextend.i64 v6
+;; @0078                               v13 = iadd v8, v11
+;; @0078                               v14 = iconst.i64 12
+;; @0078                               v15 = iadd v13, v14  ; v14 = 12
+;; @0078                               store little region5 v10, v15
+;; @0084                               v20 = load.i64 notrap aligned readonly can_move region7 v0+80
+;; @0084                               v19 = load.i64 notrap aligned readonly can_move region6 v0+96
+;;                                     v28 = iconst.i32 -4
+;;                                     v29 = iadd v4, v28  ; v28 = -4
+;; @0084                               call_indirect sig0, v20(v19, v0, v29)
+;;                                     v36 = iconst.i64 0x0010_0000
+;; @0090                               v25 = iadd v8, v36  ; v36 = 0x0010_0000
+;; @0090                               store little region5 v10, v25
+;; @0098                               store notrap aligned region2 v4, v0+128
 ;; @009c                               jump block1
 ;;
 ;;                                 block1:
-;; @009c                               return v11
+;; @009c                               return v10
 ;; }

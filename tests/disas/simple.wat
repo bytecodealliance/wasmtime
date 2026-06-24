@@ -27,12 +27,12 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0021                               v4 = iconst.i32 1
-;; @0023                               v5 = iadd v2, v4  ; v4 = 1
+;; @0021                               v3 = iconst.i32 1
+;; @0023                               v4 = iadd v2, v3  ; v3 = 1
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:
-;; @0024                               return v5
+;; @0024                               return v4
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
@@ -44,9 +44,9 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0029                               v4 = iconst.i32 1
-;; @002b                               v5 = iadd v2, v4  ; v4 = 1
-;; @002c                               return v5
+;; @0029                               v3 = iconst.i32 1
+;; @002b                               v4 = iadd v2, v3  ; v3 = 1
+;; @002c                               return v4
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
@@ -58,11 +58,11 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0030                               v3 = iconst.i32 0
-;; @0032                               jump block2(v3)  ; v3 = 0
+;; @0030                               v2 = iconst.i32 0
+;; @0032                               jump block2(v2)  ; v2 = 0
 ;;
-;;                                 block2(v5: i32):
-;; @0036                               v6 = iconst.i32 1
-;; @0038                               v7 = iadd v5, v6  ; v6 = 1
-;; @003b                               jump block2(v7)
+;;                                 block2(v3: i32):
+;; @0036                               v4 = iconst.i32 1
+;; @0038                               v5 = iadd v3, v4  ; v4 = 1
+;; @003b                               jump block2(v5)
 ;; }

@@ -23,16 +23,16 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @008f                               v6 = iconst.i64 80
-;; @008f                               v7 = iadd v0, v6  ; v6 = 80
-;; @008f                               v8 = load.i32 notrap aligned region2 v7
-;; @0091                               v9 = iconst.i64 96
-;; @0091                               v10 = iadd v0, v9  ; v9 = 96
-;; @0091                               v11 = load.i32 notrap aligned region2 v10
-;; @0093                               v12 = load.i64 notrap aligned region2 v0+112
-;; @0095                               v13 = load.i64 notrap aligned region2 v0+128
+;; @008f                               v2 = iconst.i64 80
+;; @008f                               v3 = iadd v0, v2  ; v2 = 80
+;; @008f                               v4 = load.i32 notrap aligned region2 v3
+;; @0091                               v5 = iconst.i64 96
+;; @0091                               v6 = iadd v0, v5  ; v5 = 96
+;; @0091                               v7 = load.i32 notrap aligned region2 v6
+;; @0093                               v8 = load.i64 notrap aligned region2 v0+112
+;; @0095                               v9 = load.i64 notrap aligned region2 v0+128
 ;; @0097                               jump block1
 ;;
 ;;                                 block1:
-;; @0097                               return v8, v11, v12, v13
+;; @0097                               return v4, v7, v8, v9
 ;; }

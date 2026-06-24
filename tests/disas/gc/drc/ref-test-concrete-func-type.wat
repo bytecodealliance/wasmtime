@@ -19,25 +19,25 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @0020                               v4 = iconst.i64 0
-;; @0020                               v5 = icmp eq v2, v4  ; v4 = 0
-;; @0020                               v7 = iconst.i32 0
-;; @0020                               brif v5, block4(v7), block2  ; v7 = 0
+;; @0020                               v3 = iconst.i64 0
+;; @0020                               v4 = icmp eq v2, v3  ; v3 = 0
+;; @0020                               v6 = iconst.i32 0
+;; @0020                               brif v4, block4(v6), block2  ; v6 = 0
 ;;
 ;;                                 block2:
 ;; @0020                               jump block3
 ;;
 ;;                                 block3:
-;; @0020                               v10 = load.i32 user2 readonly region3 v2+16
-;; @0020                               v8 = load.i64 notrap aligned readonly can_move region2 v0+40
-;; @0020                               v9 = load.i32 notrap aligned readonly can_move v8
-;; @0020                               v11 = icmp eq v10, v9
-;; @0020                               v12 = uextend.i32 v11
-;; @0020                               jump block4(v12)
+;; @0020                               v9 = load.i32 user2 readonly region3 v2+16
+;; @0020                               v7 = load.i64 notrap aligned readonly can_move region2 v0+40
+;; @0020                               v8 = load.i32 notrap aligned readonly can_move v7
+;; @0020                               v10 = icmp eq v9, v8
+;; @0020                               v11 = uextend.i32 v10
+;; @0020                               jump block4(v11)
 ;;
-;;                                 block4(v13: i32):
-;; @0023                               jump block1(v13)
+;;                                 block4(v12: i32):
+;; @0023                               jump block1
 ;;
-;;                                 block1(v3: i32):
-;; @0023                               return v3
+;;                                 block1:
+;; @0023                               return v12
 ;; }

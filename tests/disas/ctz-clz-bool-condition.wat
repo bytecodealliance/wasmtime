@@ -272,9 +272,9 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movl    $0x20, %esi
-;;       bsfl    %edx, %r9d
-;;       cmovel  %esi, %r9d
-;;       cmpl    $4, %r9d
+;;       bsfl    %edx, %r8d
+;;       cmovel  %esi, %r8d
+;;       cmpl    $4, %r8d
 ;;       je      0x345
 ;;  33b: movl    $0xc8, %eax
 ;;       jmp     0x34a

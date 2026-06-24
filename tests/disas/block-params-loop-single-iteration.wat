@@ -1,18 +1,18 @@
 ;;! target = "x86_64"
 
-;; Reachable `if` head and reachable consequent and alternative means that the
-;; following block is also reachable.
+;; A `loop` that never branches back to the loop header only ever runs a single
+;; iteration, so its header block has just one predecessor and should have no
+;; block parameters.
 
 (module
   (func (param i32) (result i32)
     local.get 0
-    if  ;; label = @2
-      nop
-    else
-      nop
-    end
-    i32.const 0))
-
+    (loop (param i32) (result i32)
+      i32.const 1
+      i32.add
+    )
+  )
+)
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
@@ -22,18 +22,16 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @001b                               brif v2, block2, block4
+;; @001b                               jump block2
 ;;
 ;;                                 block2:
-;; @001e                               jump block3
-;;
-;;                                 block4:
+;; @001d                               v4 = iconst.i32 1
+;; @001f                               v5 = iadd.i32 v2, v4  ; v4 = 1
 ;; @0020                               jump block3
 ;;
 ;;                                 block3:
-;; @0021                               v3 = iconst.i32 0
-;; @0023                               jump block1
+;; @0021                               jump block1
 ;;
 ;;                                 block1:
-;; @0023                               return v3  ; v3 = 0
+;; @0021                               return v5
 ;; }

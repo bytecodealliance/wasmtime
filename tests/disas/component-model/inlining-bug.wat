@@ -63,9 +63,9 @@
 ;;                                     jump block4
 ;;
 ;;                                 block4:
-;; @00d4                               v3 = load.i64 notrap aligned readonly can_move region2 v0+72
-;;                                     v9 = load.i64 notrap aligned readonly can_move region3 v3+104
-;;                                     call fn2(v9, v9)
+;; @00d4                               v2 = load.i64 notrap aligned readonly can_move region2 v0+72
+;;                                     v6 = load.i64 notrap aligned readonly can_move region3 v2+104
+;;                                     call fn2(v6, v6)
 ;;                                     jump block5
 ;;
 ;;                                 block5:
@@ -81,6 +81,6 @@
 ;; @00d6                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v10 = iconst.i32 1
-;; @00d6                               return v10  ; v10 = 1
+;;                                     v7 = iconst.i32 1
+;; @00d6                               return v7  ; v7 = 1
 ;; }

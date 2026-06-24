@@ -85,32 +85,32 @@
 ;;                                 block2:
 ;;                                     jump block6
 ;;
-;;                                 block8(v9: i64):
+;;                                 block8(v5: i64):
 ;;                                     jump block5
 ;;
 ;;                                 block6:
-;; @00ee                               v4 = load.i64 notrap aligned readonly can_move region2 v0+72
-;;                                     v14 = load.i64 notrap aligned readonly can_move region3 v4+136
-;;                                     v15 = load.i32 notrap aligned region4 v14
-;;                                     v13 = iconst.i32 0
-;;                                     v17 = icmp eq v15, v13  ; v13 = 0
-;;                                     brif v17, block9, block10
+;; @00ee                               v3 = load.i64 notrap aligned readonly can_move region2 v0+72
+;;                                     v9 = load.i64 notrap aligned readonly can_move region3 v3+136
+;;                                     v10 = load.i32 notrap aligned region4 v9
+;;                                     v8 = iconst.i32 0
+;;                                     v12 = icmp eq v10, v8  ; v8 = 0
+;;                                     brif v12, block9, block10
 ;;
 ;;                                 block9:
-;;                                     v21 = load.i64 notrap aligned readonly can_move region6 v4+88
-;;                                     v20 = load.i64 notrap aligned readonly can_move region5 v4+104
-;;                                     v19 = iconst.i32 23
-;;                                     try_call_indirect v21(v20, v4, v19), sig1, block11, [ context v4, default: block8(exn0) ]  ; v19 = 23
+;;                                     v16 = load.i64 notrap aligned readonly can_move region6 v3+88
+;;                                     v15 = load.i64 notrap aligned readonly can_move region5 v3+104
+;;                                     v14 = iconst.i32 23
+;;                                     try_call_indirect v16(v15, v3, v14), sig1, block11, [ context v3, default: block8(exn0) ]  ; v14 = 23
 ;;
 ;;                                 block11:
 ;;                                     trap user12
 ;;
 ;;                                 block10:
-;;                                     v26 = load.i64 notrap aligned readonly can_move region7 v4+112
-;;                                     v27 = load.i32 notrap aligned region4 v26
-;;                                     v43 = iconst.i32 0
-;;                                     store notrap aligned region4 v43, v26  ; v43 = 0
-;;                                     store notrap aligned region4 v27, v26
+;;                                     v21 = load.i64 notrap aligned readonly can_move region7 v3+112
+;;                                     v22 = load.i32 notrap aligned region4 v21
+;;                                     v38 = iconst.i32 0
+;;                                     store notrap aligned region4 v38, v21  ; v38 = 0
+;;                                     store notrap aligned region4 v22, v21
 ;;                                     jump block13
 ;;
 ;;                                 block13:
@@ -120,17 +120,17 @@
 ;;                                     jump block12
 ;;
 ;;                                 block12:
-;;                                     v44 = iconst.i32 0
-;;                                     store notrap aligned region4 v44, v14  ; v44 = 0
-;;                                     store.i32 notrap aligned region4 v15, v14
+;;                                     v39 = iconst.i32 0
+;;                                     store notrap aligned region4 v39, v9  ; v39 = 0
+;;                                     store.i32 notrap aligned region4 v10, v9
 ;;                                     jump block7
 ;;
 ;;                                 block7:
 ;;                                     jump block4
 ;;
 ;;                                 block5:
-;;                                     v23 = iconst.i32 49
-;;                                     call_indirect.i64 sig1, v21(v20, v4, v23)  ; v23 = 49
+;;                                     v18 = iconst.i32 49
+;;                                     call_indirect.i64 sig1, v16(v15, v3, v18)  ; v18 = 49
 ;;                                     trap user12
 ;;
 ;;                                 block4:
@@ -143,6 +143,6 @@
 ;; @00f0                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v37 = iconst.i32 1276
-;; @00f0                               return v37  ; v37 = 1276
+;;                                     v32 = iconst.i32 1276
+;; @00f0                               return v32  ; v32 = 1276
 ;; }

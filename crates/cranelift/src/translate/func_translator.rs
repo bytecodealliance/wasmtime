@@ -11,7 +11,8 @@ use crate::translate::translation_utils::get_vmctx_value_label;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
-use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
+use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+use smallvec::SmallVec;
 use wasmparser::{BinaryReader, FuncValidator, FunctionBody, OperatorsReader, WasmModuleResources};
 use wasmtime_environ::{TypeConvert, WasmResult};
 
@@ -84,12 +85,34 @@ impl FuncTranslator {
         // Set up the translation state with a single pushed control block representing the whole
         // function and its return values.
         let exit_block = builder.create_block();
-        builder.append_block_params_for_function_returns(exit_block);
         environ
             .stacks
             .initialize(&builder.func.signature, exit_block);
 
         parse_local_decls(&mut reader, &mut builder, num_params, environ, validator)?;
+
+        // Represent the function's return values as `Variable`s, exactly like
+        // Wasm block parameters, rather than as real CLIF block parameters.
+        //
+        // Note this must happen *after* `parse_local_decls`: the Wasm locals'
+        // `Variable`s must be indexed contiguously after the parameters, so we
+        // can only declare these additional variables once all locals exist.
+        let return_types: SmallVec<[ir::Type; 6]> = builder
+            .func
+            .signature
+            .returns
+            .iter()
+            .map(|ret| ret.value_type)
+            .collect();
+        let return_vars: SmallVec<[Variable; 6]> = return_types
+            .iter()
+            .map(|ty| builder.declare_var(*ty))
+            .collect();
+        environ
+            .stacks
+            .block_param_vars
+            .insert(exit_block, return_vars);
+
         parse_function_body(validator, reader, &mut builder, environ)?;
 
         builder.finalize(environ.target_config());

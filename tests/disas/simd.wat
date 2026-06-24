@@ -39,13 +39,13 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @004e                               v3 = iconst.i32 42
-;; @0050                               v4 = splat.i32x4 v3  ; v3 = 42
-;; @0052                               v5 = extractlane v4, 0
+;; @004e                               v2 = iconst.i32 42
+;; @0050                               v3 = splat.i32x4 v2  ; v2 = 42
+;; @0052                               v4 = extractlane v3, 0
 ;; @0055                               jump block1
 ;;
 ;;                                 block1:
-;; @0055                               return v5
+;; @0055                               return v4
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
@@ -58,15 +58,15 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0058                               v3 = vconst.i8x16 const0
-;; @006a                               v4 = iconst.i32 99
-;; @006d                               v5 = bitcast.i32x4 little v3  ; v3 = const0
-;; @006d                               v6 = insertlane v5, v4, 1  ; v4 = 99
-;; @0070                               v7 = extractlane v6, 1
+;; @0058                               v2 = vconst.i8x16 const0
+;; @006a                               v3 = iconst.i32 99
+;; @006d                               v4 = bitcast.i32x4 little v2  ; v2 = const0
+;; @006d                               v5 = insertlane v4, v3, 1  ; v3 = 99
+;; @0070                               v6 = extractlane v5, 1
 ;; @0073                               jump block1
 ;;
 ;;                                 block1:
-;; @0073                               return v7
+;; @0073                               return v6
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
@@ -79,13 +79,13 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0076                               v3 = vconst.i8x16 const0
-;; @0088                               v4 = bitcast.i32x4 little v3  ; v3 = const0
-;; @0088                               v5 = extractlane v4, 3
+;; @0076                               v2 = vconst.i8x16 const0
+;; @0088                               v3 = bitcast.i32x4 little v2  ; v2 = const0
+;; @0088                               v4 = extractlane v3, 3
 ;; @008b                               jump block1
 ;;
 ;;                                 block1:
-;; @008b                               return v5
+;; @008b                               return v4
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64) tail {

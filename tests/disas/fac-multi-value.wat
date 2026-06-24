@@ -63,22 +63,22 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @004c                               v4 = iconst.i64 1
-;; @0050                               jump block2(v4, v2)  ; v4 = 1
+;; @004c                               v3 = iconst.i64 1
+;; @0050                               jump block2(v3, v2)  ; v3 = 1
 ;;
-;;                                 block2(v5: i64, v6: i64):
-;; @0052                               v8, v9, v10 = call fn0(v0, v0, v5, v6)
-;; @0054                               v11, v12, v13 = call fn0(v0, v0, v9, v10)
-;; @0056                               v14 = imul v12, v13
-;; @0057                               v15, v16, v17 = call fn0(v0, v0, v11, v14)
-;; @0059                               v18 = iconst.i64 1
-;; @005b                               v19 = isub v17, v18  ; v18 = 1
-;; @005c                               v20, v21 = call fn1(v0, v0, v19)
-;; @005e                               v22 = iconst.i64 0
-;; @0060                               v23 = icmp ugt v21, v22  ; v22 = 0
-;; @0060                               v24 = uextend.i32 v23
-;; @0061                               brif v24, block2(v16, v20), block4
+;;                                 block2(v4: i64, v5: i64):
+;; @0052                               v6, v7, v8 = call fn0(v0, v0, v4, v5)
+;; @0054                               v9, v10, v11 = call fn0(v0, v0, v7, v8)
+;; @0056                               v12 = imul v10, v11
+;; @0057                               v13, v14, v15 = call fn0(v0, v0, v9, v12)
+;; @0059                               v16 = iconst.i64 1
+;; @005b                               v17 = isub v15, v16  ; v16 = 1
+;; @005c                               v18, v19 = call fn1(v0, v0, v17)
+;; @005e                               v20 = iconst.i64 0
+;; @0060                               v21 = icmp ugt v19, v20  ; v20 = 0
+;; @0060                               v22 = uextend.i32 v21
+;; @0061                               brif v22, block2(v14, v18), block4
 ;;
 ;;                                 block4:
-;; @0064                               return v16
+;; @0064                               return v14
 ;; }

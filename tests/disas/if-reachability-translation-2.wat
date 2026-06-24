@@ -31,9 +31,9 @@
 ;; @0020                               jump block3
 ;;
 ;;                                 block3:
-;; @0021                               v4 = iconst.i32 0
+;; @0021                               v3 = iconst.i32 0
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;; @0023                               return v4  ; v4 = 0
+;; @0023                               return v3  ; v3 = 0
 ;; }
