@@ -3932,11 +3932,10 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.libc]]
-version = "0.2.146"
-when = "2023-06-06"
-user-id = 2915
-user-login = "Amanieu"
-user-name = "Amanieu d'Antras"
+version = "0.2.174"
+when = "2025-06-17"
+user-id = 55123
+user-login = "rust-lang-owner"
 
 [[publisher.libm]]
 version = "0.2.8"
@@ -5713,12 +5712,6 @@ criteria = "safe-to-deploy"
 version = "1.4.0"
 notes = "I have read over the macros, and audited the unsafe code."
 aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.libc]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "0.2.147 -> 0.2.148"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.libloading]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
