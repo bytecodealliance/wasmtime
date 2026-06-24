@@ -21,7 +21,7 @@ fn test_file_has_expected_contents(dir: &Descriptor) {
     drop(stream);
     drop(file);
 
-    const EXPECTED_CONTENTS: &[u8] = b"truncation test file\n";
+    const EXPECTED_CONTENTS: &[u8] = b"read only test file\n";
     // The file should not be empty due to truncation
     assert_eq!(read, EXPECTED_CONTENTS, "expected untouched file contents");
 }
