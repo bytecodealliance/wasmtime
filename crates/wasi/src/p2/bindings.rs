@@ -171,7 +171,7 @@ pub mod sync {
                 "wasi:sockets/tcp.tcp-socket": super::super::sockets::tcp::TcpSocket,
                 "wasi:sockets/udp.incoming-datagram-stream": super::super::sockets::udp::IncomingDatagramStream,
                 "wasi:sockets/udp.outgoing-datagram-stream": super::super::sockets::udp::OutgoingDatagramStream,
-                "wasi:sockets/udp.udp-socket": crate::sockets::UdpSocket,
+                "wasi:sockets/udp.udp-socket": crate::p2::UdpSocket,
 
                 // Error host trait from wasmtime-wasi-io is synchronous, so we can alias it
                 "wasi:io/error": wasmtime_wasi_io::bindings::wasi::io::error,
@@ -365,11 +365,12 @@ mod async_io {
             "wasi:filesystem/types.[method]descriptor.unlink-file-at": async | tracing | trappable,
             "wasi:filesystem/types.[method]descriptor.write": async | tracing | trappable,
             "wasi:filesystem/types.[method]directory-entry-stream.read-directory-entry": async | tracing | trappable,
+            "wasi:sockets/udp-create-socket.create-udp-socket": async | tracing | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-bind": async | tracing | trappable,
-            "wasi:sockets/tcp.[method]tcp-socket.start-connect": async | tracing | trappable,
+            "wasi:sockets/tcp.[method]tcp-socket.start-listen": async | tracing | trappable,
             "wasi:sockets/udp.[method]udp-socket.start-bind": async | tracing | trappable,
             "wasi:sockets/udp.[method]udp-socket.stream": async | tracing | trappable,
-            "wasi:sockets/udp.[method]outgoing-datagram-stream.send": async | tracing | trappable,
+            "wasi:sockets/udp.[drop]outgoing-datagram-stream": async | tracing | trappable,
             default: tracing | trappable,
         },
         exports: { default: async },
@@ -389,8 +390,8 @@ mod async_io {
             // Configure all other resources to be concrete types defined in
             // this crate
             "wasi:sockets/network.network": crate::p2::network::Network,
-            "wasi:sockets/tcp.tcp-socket": crate::sockets::TcpSocket,
-            "wasi:sockets/udp.udp-socket": crate::sockets::UdpSocket,
+            "wasi:sockets/tcp.tcp-socket": crate::p2::TcpSocket,
+            "wasi:sockets/udp.udp-socket": crate::p2::UdpSocket,
             "wasi:sockets/udp.incoming-datagram-stream": crate::p2::udp::IncomingDatagramStream,
             "wasi:sockets/udp.outgoing-datagram-stream": crate::p2::udp::OutgoingDatagramStream,
             "wasi:sockets/ip-name-lookup.resolve-address-stream": crate::p2::ip_name_lookup::ResolveAddressStream,

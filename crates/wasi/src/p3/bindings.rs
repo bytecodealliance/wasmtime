@@ -89,6 +89,7 @@ mod generated {
             "wasi:sockets/types.[method]tcp-socket.listen": async | store | tracing | trappable,
             "wasi:sockets/types.[method]tcp-socket.send": store | tracing | trappable,
             "wasi:sockets/types.[method]tcp-socket.receive": store | tracing | trappable,
+            "wasi:sockets/types.[static]udp-socket.create": async | tracing | trappable,
             "wasi:sockets/types.[method]udp-socket.bind": async | tracing | trappable,
             "wasi:sockets/types.[method]udp-socket.connect": async | tracing | trappable,
             default: tracing | trappable,

@@ -1,10 +1,9 @@
-use super::is_addr_allowed;
 use crate::TrappableError;
 use crate::p3::bindings::sockets::types::{
-    ErrorCode, HostUdpSocket, HostUdpSocketWithStore, IpAddressFamily, IpSocketAddress,
+    HostUdpSocket, HostUdpSocketWithStore, IpAddressFamily, IpSocketAddress,
 };
 use crate::p3::sockets::{SocketResult, WasiSockets};
-use crate::sockets::{MAX_UDP_DATAGRAM_SIZE, SocketAddrUse, UdpSocket, WasiSocketsCtxView};
+use crate::sockets::{UdpSocket, WasiSocketsCtxView};
 use std::net::SocketAddr;
 use wasmtime::component::{Accessor, Resource, ResourceTable};
 use wasmtime::error::Context as _;
@@ -36,58 +35,12 @@ impl<T> HostUdpSocketWithStore<T> for WasiSockets {
         data: Vec<u8>,
         remote_address: Option<IpSocketAddress>,
     ) -> SocketResult<()> {
-        if data.len() > MAX_UDP_DATAGRAM_SIZE {
-            return Err(ErrorCode::DatagramTooLarge.into());
-        }
-        let remote_address = remote_address.map(SocketAddr::from);
-
-        if let Some(addr) = remote_address {
-            if !is_addr_allowed(store, addr, SocketAddrUse::UdpOutgoingDatagram).await {
-                return Err(ErrorCode::AccessDenied.into());
-            }
-        }
-
-        // If this socket is not yet explicitly bound then part of this
-        // operation is performing an implicit bind. This is done for a few
-        // reasons:
-        //
-        // * The host's `socket_addr_check` callback, if any, gets an
-        //   opportunity to have an opinion about the implicit use of this
-        //   address.
-        // * On the first send the OS will automatically assign a free local
-        //   port. However, if the `send` syscall failed, we can't reliably know
-        //   which state the socket is in at the kernel level and our own
-        //   state bookkeeping may have become out-of-sync.
-        //
-        // To avoid that, we perform the implicit bind ourselves here. This way,
-        // we always leave the socket in a consistent state: Bound.
-        //
-        // Note that implicit binding only happens when the socket isn't bound
-        // and the remote address is `Some`. If the remote address is `None` and
-        // we're unbound then that's an invalid state that `send_p3` below will
-        // reject.
-        let (needs_implicit_bind, family) = store.with(|mut view| -> SocketResult<_> {
-            let socket = get_socket_mut(view.get().table, &socket)?;
-            let needs_implicit_bind = !socket.is_bound() && remote_address.is_some();
-            Ok((needs_implicit_bind, socket.address_family()))
-        })?;
-        if needs_implicit_bind {
-            let implicit_addr = crate::sockets::util::implicit_bind_addr(family);
-            if !is_addr_allowed(store, implicit_addr, SocketAddrUse::UdpBind).await {
-                return Err(ErrorCode::AccessDenied.into());
-            }
-            store.with(|mut view| -> SocketResult<_> {
+        store
+            .with(|mut view| -> SocketResult<_> {
                 let socket = get_socket_mut(view.get().table, &socket)?;
-                socket.bind(implicit_addr)?;
-                socket.finish_bind()?;
-                Ok(())
-            })?;
-        }
-
-        let fut = store.with(|mut view| {
-            get_socket_mut(view.get().table, &socket).map(|sock| sock.send_p3(data, remote_address))
-        })?;
-        fut.await?;
+                Ok(socket.send(data, remote_address.map(SocketAddr::from)))
+            })?
+            .await?;
         Ok(())
     }
 
@@ -95,10 +48,13 @@ impl<T> HostUdpSocketWithStore<T> for WasiSockets {
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
     ) -> SocketResult<(Vec<u8>, IpSocketAddress)> {
-        let fut = store
-            .with(|mut view| get_socket(view.get().table, &socket).map(|sock| sock.receive_p3()))?;
-        let (result, addr) = fut.await?;
-        Ok((result, addr.into()))
+        let (data, addr) = store
+            .with(|mut view| -> SocketResult<_> {
+                let socket = get_socket_mut(view.get().table, &socket)?;
+                Ok(socket.recv())
+            })?
+            .await?;
+        Ok((data, addr.into()))
     }
 }
 
@@ -109,12 +65,8 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
         let local_address = SocketAddr::from(local_address);
-        if !(self.ctx.socket_addr_check)(local_address, SocketAddrUse::UdpBind).await {
-            return Err(ErrorCode::AccessDenied.into());
-        }
         let socket = get_socket_mut(self.table, &socket)?;
-        socket.bind(local_address)?;
-        socket.finish_bind()?;
+        socket.bind(local_address).await?;
         Ok(())
     }
 
@@ -124,16 +76,16 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
         remote_address: IpSocketAddress,
     ) -> SocketResult<()> {
         let remote_address = SocketAddr::from(remote_address);
-        if !(self.ctx.socket_addr_check)(remote_address, SocketAddrUse::UdpConnect).await {
-            return Err(ErrorCode::AccessDenied.into());
-        }
         let socket = get_socket_mut(self.table, &socket)?;
-        socket.connect_p3(remote_address)?;
+        socket.connect(remote_address).await?;
         Ok(())
     }
 
-    fn create(&mut self, address_family: IpAddressFamily) -> SocketResult<Resource<UdpSocket>> {
-        let socket = UdpSocket::new(self.ctx, address_family.into())?;
+    async fn create(
+        &mut self,
+        address_family: IpAddressFamily,
+    ) -> SocketResult<Resource<UdpSocket>> {
+        let socket = UdpSocket::new(self.ctx, address_family.into()).await?;
         self.table
             .push(socket)
             .context("failed to push socket resource to table")
@@ -147,12 +99,12 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
     }
 
     fn get_local_address(&mut self, socket: Resource<UdpSocket>) -> SocketResult<IpSocketAddress> {
-        let sock = get_socket(self.table, &socket)?;
+        let sock = get_socket_mut(self.table, &socket)?;
         Ok(sock.local_address()?.into())
     }
 
     fn get_remote_address(&mut self, socket: Resource<UdpSocket>) -> SocketResult<IpSocketAddress> {
-        let sock = get_socket(self.table, &socket)?;
+        let sock = get_socket_mut(self.table, &socket)?;
         Ok(sock.remote_address()?.into())
     }
 

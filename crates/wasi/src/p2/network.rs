@@ -1,7 +1,6 @@
 use crate::TrappableError;
 use crate::p2::bindings::sockets::network::ErrorCode;
-use crate::sockets::{SocketAddrCheck, SocketAddrUse};
-use std::net::SocketAddr;
+use crate::p2::bindings::sockets::tcp::ShutdownType;
 
 pub type SocketResult<T> = Result<T, SocketError>;
 
@@ -34,7 +33,7 @@ impl From<crate::sockets::util::ErrorCode> for SocketError {
 impl From<crate::sockets::util::ErrorCode> for ErrorCode {
     fn from(error: crate::sockets::util::ErrorCode) -> Self {
         match error {
-            crate::sockets::util::ErrorCode::Unknown => Self::Unknown,
+            crate::sockets::util::ErrorCode::Other => Self::Unknown,
             crate::sockets::util::ErrorCode::AccessDenied => Self::AccessDenied,
             crate::sockets::util::ErrorCode::NotSupported => Self::NotSupported,
             crate::sockets::util::ErrorCode::InvalidArgument => Self::InvalidArgument,
@@ -45,26 +44,31 @@ impl From<crate::sockets::util::ErrorCode> for ErrorCode {
             crate::sockets::util::ErrorCode::AddressInUse => Self::AddressInUse,
             crate::sockets::util::ErrorCode::RemoteUnreachable => Self::RemoteUnreachable,
             crate::sockets::util::ErrorCode::ConnectionRefused => Self::ConnectionRefused,
+            crate::sockets::util::ErrorCode::ConnectionBroken => Self::Unknown,
             crate::sockets::util::ErrorCode::ConnectionReset => Self::ConnectionReset,
             crate::sockets::util::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
             crate::sockets::util::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
-            crate::sockets::util::ErrorCode::NotInProgress => Self::NotInProgress,
-            crate::sockets::util::ErrorCode::ConcurrencyConflict => Self::ConcurrencyConflict,
         }
     }
 }
 
-pub struct Network {
-    pub(crate) socket_addr_check: SocketAddrCheck,
-    pub(crate) allow_ip_name_lookup: bool,
+impl From<ShutdownType> for std::net::Shutdown {
+    fn from(value: ShutdownType) -> Self {
+        match value {
+            ShutdownType::Receive => Self::Read,
+            ShutdownType::Send => Self::Write,
+            ShutdownType::Both => Self::Both,
+        }
+    }
 }
 
-impl Network {
-    pub async fn check_socket_addr(
-        &self,
-        addr: SocketAddr,
-        reason: SocketAddrUse,
-    ) -> std::io::Result<()> {
-        self.socket_addr_check.check(addr, reason).await
-    }
+/// A network resource representing the capability to use the networking
+/// APIs in WASI 0.2. The concept of network handles has been removed in
+/// WASI 0.3.
+///
+/// Note that in Wasmtime all permissions are checked through the `WasiCtx` and
+/// not through the `Network` resource itself. The `Network` resource is just a
+/// placeholder capability handle.
+pub struct Network {
+    pub(crate) _priv: (),
 }

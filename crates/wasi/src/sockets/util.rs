@@ -8,9 +8,8 @@ use rustix::io::Errno;
 use rustix::net::{bind, connect, connect_unspec, sockopt};
 use tracing::debug;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum ErrorCode {
-    Unknown,
     AccessDenied,
     NotSupported,
     InvalidArgument,
@@ -21,11 +20,11 @@ pub enum ErrorCode {
     AddressInUse,
     RemoteUnreachable,
     ConnectionRefused,
+    ConnectionBroken,
     ConnectionReset,
     ConnectionAborted,
     DatagramTooLarge,
-    NotInProgress,
-    ConcurrencyConflict,
+    Other,
 }
 
 impl fmt::Display for ErrorCode {
@@ -133,9 +132,13 @@ impl From<&std::io::Error> for ErrorCode {
             std::io::ErrorKind::PermissionDenied => Self::AccessDenied,
             std::io::ErrorKind::TimedOut => Self::Timeout,
             std::io::ErrorKind::Unsupported => Self::NotSupported,
+            std::io::ErrorKind::HostUnreachable => Self::RemoteUnreachable,
+            std::io::ErrorKind::NetworkUnreachable => Self::RemoteUnreachable,
+            std::io::ErrorKind::NetworkDown => Self::RemoteUnreachable,
+            std::io::ErrorKind::BrokenPipe => Self::ConnectionBroken,
             _ => {
                 debug!("unknown I/O error: {value}");
-                Self::Unknown
+                Self::Other
             }
         }
     }
@@ -156,6 +159,8 @@ impl From<&Errno> for ErrorCode {
             Errno::ADDRINUSE => Self::AddressInUse,
             Errno::ADDRNOTAVAIL => Self::AddressNotBindable,
             Errno::TIMEDOUT => Self::Timeout,
+            #[cfg(not(windows))]
+            Errno::PIPE => Self::ConnectionBroken,
             Errno::CONNREFUSED => Self::ConnectionRefused,
             Errno::CONNRESET => Self::ConnectionReset,
             Errno::CONNABORTED => Self::ConnectionAborted,
@@ -184,7 +189,7 @@ impl From<&Errno> for ErrorCode {
             // FYI, EINPROGRESS should have already been handled by connect.
             _ => {
                 debug!("unknown I/O error: {value}");
-                Self::Unknown
+                Self::Other
             }
         }
     }
@@ -365,6 +370,52 @@ pub fn tcp_bind(
         })
 }
 
+pub async fn tcp_accept(
+    listener: &tokio::net::TcpListener,
+) -> std::io::Result<(tokio::net::TcpStream, SocketAddr)> {
+    listener
+        .accept()
+        .await
+        .map_err(|err| match Errno::from_io_error(&err) {
+            // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
+            // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
+            // > or the service provider is still processing a callback function.
+            //
+            // wasi-sockets doesn't have an equivalent to the EINPROGRESS error,
+            // because in POSIX this error is only returned by a non-blocking
+            // `connect` and wasi-sockets has a different solution for that.
+            #[cfg(windows)]
+            Some(Errno::INPROGRESS) => Errno::INTR.into(),
+
+            // Normalize Linux' non-standard behavior.
+            //
+            // From https://man7.org/linux/man-pages/man2/accept.2.html:
+            // > Linux accept() passes already-pending network errors on the
+            // > new socket as an error code from accept(). This behavior
+            // > differs from other BSD socket implementations. (...)
+            #[cfg(target_os = "linux")]
+            Some(
+                Errno::CONNRESET
+                | Errno::NETRESET
+                | Errno::HOSTUNREACH
+                | Errno::HOSTDOWN
+                | Errno::NETDOWN
+                | Errno::NETUNREACH
+                | Errno::PROTO
+                | Errno::NOPROTOOPT
+                | Errno::NONET
+                | Errno::OPNOTSUPP,
+            ) => Errno::CONNABORTED.into(),
+
+            _ => err,
+        })
+}
+
+pub fn tcp_reset(socket: tokio::net::TcpStream) {
+    _ = socket.set_zero_linger();
+    drop(socket);
+}
+
 /// Creates a non-blocking/cloexec UDP socket.
 pub fn udp_socket(family: SocketAddressFamily) -> std::io::Result<rustix::fd::OwnedFd> {
     // Let the standard library be responsible for handling `WSAStartup`.
@@ -478,8 +529,7 @@ pub fn parse_host(name: &str) -> Result<url::Host, ErrorCode> {
     }
 }
 
-#[cfg(feature = "p3")]
-pub fn implicit_bind_addr(family: SocketAddressFamily) -> SocketAddr {
+pub fn unspecified_addr(family: SocketAddressFamily) -> SocketAddr {
     let ip = match family {
         SocketAddressFamily::Ipv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
         SocketAddressFamily::Ipv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),

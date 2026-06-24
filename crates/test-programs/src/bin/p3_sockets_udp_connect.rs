@@ -32,23 +32,33 @@ fn test_udp_connect_disconnect_reconnect(family: IpAddressFamily) {
         Err(ErrorCode::InvalidState)
     ));
 
-    _ = client.connect(remote1).unwrap();
+    client.connect(remote1).unwrap();
     assert_eq!(client.get_remote_address().unwrap(), remote1);
 
-    _ = client.connect(remote1).unwrap();
+    client.connect(remote1).unwrap();
     assert_eq!(client.get_remote_address().unwrap(), remote1);
 
-    _ = client.connect(remote2).unwrap();
+    client.connect(remote2).unwrap();
     assert_eq!(client.get_remote_address().unwrap(), remote2);
 
-    _ = client.disconnect().unwrap();
+    client.disconnect().unwrap();
     assert!(matches!(
         client.get_remote_address(),
         Err(ErrorCode::InvalidState)
     ));
 
-    _ = client.connect(remote1).unwrap();
+    client.connect(remote1).unwrap();
     assert_eq!(client.get_remote_address().unwrap(), remote1);
+}
+
+// `disconnect` should keep the socket bound.
+fn test_udp_disconnect_local_address(family: IpAddressFamily) {
+    let some_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 4321);
+    let client = UdpSocket::create(family).unwrap();
+
+    client.connect(some_addr).unwrap();
+    client.disconnect().unwrap();
+    assert!(client.get_local_address().is_ok());
 }
 
 /// `0.0.0.0` / `::` is not a valid remote address in WASI.
@@ -194,6 +204,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         let supports_ipv6 = supports_ipv6();
 
         test_udp_connect_disconnect_reconnect(IpAddressFamily::Ipv4);
+        test_udp_disconnect_local_address(IpAddressFamily::Ipv4);
         test_udp_connect_unspec(IpAddressFamily::Ipv4);
         test_udp_connect_local_address_change(IpAddressFamily::Ipv4);
         test_udp_connect_port_0(IpAddressFamily::Ipv4);
@@ -204,6 +215,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
 
         if supports_ipv6 {
             test_udp_connect_disconnect_reconnect(IpAddressFamily::Ipv6);
+            test_udp_disconnect_local_address(IpAddressFamily::Ipv6);
             test_udp_connect_unspec(IpAddressFamily::Ipv6);
             test_udp_connect_local_address_change(IpAddressFamily::Ipv6);
             test_udp_connect_port_0(IpAddressFamily::Ipv6);

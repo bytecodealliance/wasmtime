@@ -248,7 +248,8 @@ mod write_stream;
 pub use self::filesystem::{FsError, FsResult, ReaddirIterator};
 pub use self::network::{Network, SocketError, SocketResult};
 pub use self::stdio::IsATTY;
-pub(crate) use tcp::P2TcpStreamingState;
+pub use tcp::TcpSocket;
+pub use udp::UdpSocket;
 // These contents of wasmtime-wasi-io are re-exported by this module for compatibility:
 // they were originally defined in this module before being factored out, and many
 // users of this module depend on them at these names.
@@ -327,6 +328,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
     bindings::filesystem::types::add_to_linker::<T, WasiFilesystem>(l, T::filesystem)?;
     bindings::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 
@@ -358,7 +360,6 @@ where
     cli::terminal_stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
     cli::terminal_stderr::add_to_linker::<T, WasiCli>(l, T::cli)?;
     sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
-    sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     sockets::instance_network::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     sockets::network::add_to_linker::<T, WasiSockets>(l, &options.into(), T::sockets)?;
     sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
@@ -467,6 +468,7 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
     bindings::sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(l, T::filesystem)?;
     bindings::sync::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sync::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sync::sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 

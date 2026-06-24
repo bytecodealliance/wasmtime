@@ -1,17 +1,15 @@
 use core::future::Future;
 use core::ops::Deref;
-use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::{net::SocketAddr, task::Poll};
 use wasmtime::component::{HasData, ResourceTable};
 
 mod tcp;
 mod udp;
 pub(crate) mod util;
-
-#[cfg(feature = "p3")]
-pub(crate) use tcp::NonInheritedOptions;
 pub use tcp::TcpSocket;
+pub(crate) use tcp::{TcpListenStream, TcpReceiveStream, TcpSendStream};
 pub use udp::UdpSocket;
 
 /// A helper struct which implements [`HasData`] for the `wasi:sockets` APIs.
@@ -181,20 +179,117 @@ impl Default for SocketAddrCheck {
 /// The reason what a socket address is being used for.
 #[derive(Clone, Copy, Debug)]
 pub enum SocketAddrUse {
-    /// Binding TCP socket
+    /// Binding TCP socket.
+    ///
+    /// This is invoked for both explicit calls to `bind` as well as implicit
+    /// binds that are about to be performed by the OS as part of
+    /// e.g. `connect` & `listen`.
+    ///
+    /// The address that is passed to the check is the address provided to
+    /// `bind` for explicit binds, or the wildcard address for implicit binds.
     TcpBind,
-    /// Connecting TCP socket
+
+    /// Put a TCP socket in listener mode.
+    ///
+    /// If the socket was already bound at the time of the call, the actual
+    /// local address of the socket is passed to the check. If the socket is
+    /// about to be implicitly bound by `listen`, the wildcard address is passed.
+    TcpListen,
+
+    /// Accepting a new client TCP socket.
+    ///
+    /// The address passed to the check is the remote address of the client that
+    /// is being accepted. If the check fails, the client socket will be
+    /// silently dropped before reaching the guest.
+    TcpAccept,
+
+    /// Connecting a TCP socket.
+    ///
+    /// The address passed to the check is the remote address that the socket is
+    /// attempting to connect to.
     TcpConnect,
-    /// Binding UDP socket
+
+    /// Binding UDP socket.
+    ///
+    /// This is invoked for both explicit calls to `bind` as well as implicit
+    /// binds that are about to be performed by the OS as part of
+    /// e.g. `connect` & `send`.
+    ///
+    /// The address that is passed to the check is the address provided to
+    /// `bind` for explicit binds, or the wildcard address for implicit binds.
     UdpBind,
-    /// Connecting UDP socket
-    UdpConnect,
-    /// Sending datagram on non-connected UDP socket
-    UdpOutgoingDatagram,
+
+    /// Sending a datagram on a UDP socket.
+    ///
+    /// The address passed to the check is the remote address that the socket is
+    /// attempting to send to.
+    UdpSend,
+
+    /// Receiving a datagram on a UDP socket.
+    ///
+    /// The address passed to the check is the remote address of the datagram
+    /// that is being received. If the check fails, the datagram will be
+    /// silently dropped before reaching the guest.
+    UdpReceive,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SocketAddressFamily {
     Ipv4,
     Ipv6,
+}
+
+/// A utility type that separates
+/// (1) polling a future for completion and
+/// (2) obtaining the output of a future
+/// into separate operations. This is a common pattern in WASI 0.2.
+pub(crate) enum MaybeReady<T> {
+    Pending(Pin<Box<dyn Future<Output = T> + Send>>),
+    Ready(T),
+}
+impl<T> MaybeReady<T> {
+    pub(crate) fn new(fut: impl Future<Output = T> + Send + 'static) -> Self {
+        Self::Pending(Box::pin(fut))
+    }
+
+    /// Poll the future and attempt to resolve it immediately. If the future is
+    /// not ready yet, it will be moved to a background task.
+    pub(crate) fn poll_or_spawn(fut: impl Future<Output = T> + Send + 'static) -> Self
+    where
+        T: Send + 'static,
+    {
+        let mut fut = Box::pin(fut);
+        match fut.as_mut().poll(&mut noop_cx()) {
+            Poll::Ready(val) => Self::Ready(val),
+            Poll::Pending => Self::new(crate::runtime::spawn(fut)),
+        }
+    }
+    pub(crate) fn unwrap_ready(self) -> T {
+        match self {
+            Self::Ready(val) => val,
+            Self::Pending(_) => panic!("future not ready"),
+        }
+    }
+    pub(crate) fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
+        match self {
+            Self::Pending(fut) => match fut.as_mut().poll(cx) {
+                Poll::Ready(val) => {
+                    *self = Self::Ready(val);
+                    Poll::Ready(())
+                }
+                Poll::Pending => Poll::Pending,
+            },
+            Self::Ready(_) => Poll::Ready(()),
+        }
+    }
+    pub(crate) async fn into_future(self) -> T {
+        match self {
+            Self::Ready(val) => val,
+            Self::Pending(fut) => fut.await,
+        }
+    }
+}
+
+pub(crate) fn noop_cx() -> std::task::Context<'static> {
+    std::task::Context::from_waker(futures::task::noop_waker_ref())
 }

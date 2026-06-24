@@ -35,6 +35,19 @@ fn test_udp_connect_disconnect_reconnect(net: &Network, family: IpAddressFamily)
     assert_eq!(client.remote_address(), Ok(remote1));
 }
 
+// `stream(None)` should keep the socket bound.
+fn test_udp_disconnect_local_address(net: &Network, family: IpAddressFamily) {
+    let unspecified_addr = IpSocketAddress::new(IpAddress::new_unspecified(family), 0);
+    let some_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 4321);
+
+    let client = UdpSocket::new(family).unwrap();
+    client.blocking_bind(&net, unspecified_addr).unwrap();
+
+    _ = client.stream(Some(some_addr)).unwrap();
+    _ = client.stream(None).unwrap();
+    assert!(client.local_address().is_ok());
+}
+
 /// `0.0.0.0` / `::` is not a valid remote address in WASI.
 fn test_udp_connect_unspec(net: &Network, family: IpAddressFamily) {
     let addr = IpSocketAddress::new(IpAddress::new_unspecified(family), SOME_PORT);
@@ -146,6 +159,9 @@ fn main() {
 
     test_udp_connect_disconnect_reconnect(&net, IpAddressFamily::Ipv4);
     test_udp_connect_disconnect_reconnect(&net, IpAddressFamily::Ipv6);
+
+    test_udp_disconnect_local_address(&net, IpAddressFamily::Ipv4);
+    test_udp_disconnect_local_address(&net, IpAddressFamily::Ipv6);
 
     test_udp_connect_unspec(&net, IpAddressFamily::Ipv4);
     test_udp_connect_unspec(&net, IpAddressFamily::Ipv6);

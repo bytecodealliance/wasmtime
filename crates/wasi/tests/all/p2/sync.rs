@@ -334,6 +334,10 @@ fn p2_udp_states() {
     run(P2_UDP_STATES_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
+fn p2_udp_stream() {
+    run(P2_UDP_STREAM_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
 fn p2_udp_bind() {
     run(P2_UDP_BIND_COMPONENT, |_| {}).unwrap()
 }

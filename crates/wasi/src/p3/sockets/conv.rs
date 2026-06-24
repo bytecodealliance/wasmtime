@@ -207,7 +207,7 @@ impl From<&Errno> for types::ErrorCode {
 impl From<crate::sockets::util::ErrorCode> for types::ErrorCode {
     fn from(code: crate::sockets::util::ErrorCode) -> Self {
         match code {
-            crate::sockets::util::ErrorCode::Unknown => Self::Other(None),
+            crate::sockets::util::ErrorCode::Other => Self::Other(None),
             crate::sockets::util::ErrorCode::AccessDenied => Self::AccessDenied,
             crate::sockets::util::ErrorCode::NotSupported => Self::NotSupported,
             crate::sockets::util::ErrorCode::InvalidArgument => Self::InvalidArgument,
@@ -218,11 +218,10 @@ impl From<crate::sockets::util::ErrorCode> for types::ErrorCode {
             crate::sockets::util::ErrorCode::AddressInUse => Self::AddressInUse,
             crate::sockets::util::ErrorCode::RemoteUnreachable => Self::RemoteUnreachable,
             crate::sockets::util::ErrorCode::ConnectionRefused => Self::ConnectionRefused,
+            crate::sockets::util::ErrorCode::ConnectionBroken => Self::ConnectionBroken,
             crate::sockets::util::ErrorCode::ConnectionReset => Self::ConnectionReset,
             crate::sockets::util::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
             crate::sockets::util::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
-            crate::sockets::util::ErrorCode::NotInProgress => Self::InvalidState,
-            crate::sockets::util::ErrorCode::ConcurrencyConflict => Self::InvalidState,
         }
     }
 }

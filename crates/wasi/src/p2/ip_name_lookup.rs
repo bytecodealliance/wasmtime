@@ -24,11 +24,14 @@ impl Host for WasiSocketsCtxView<'_> {
         network: Resource<Network>,
         name: String,
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
-        let network = self.table.get(&network)?;
+        // The network resource itself represents the capability to use this
+        // method, so we need to check its validity. Other than that, we have no
+        // use for it.
+        _ = self.table.get(&network)?;
 
         let host = parse_host(&name)?;
 
-        if !network.allow_ip_name_lookup {
+        if !self.ctx.allowed_network_uses.ip_name_lookup {
             return Err(ErrorCode::PermanentResolverFailure.into());
         }
 

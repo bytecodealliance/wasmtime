@@ -360,6 +360,10 @@ async fn p2_udp_states() {
     run(P2_UDP_STATES_COMPONENT, |_| {}).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_udp_stream() {
+    run(P2_UDP_STREAM_COMPONENT, |_| {}).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_udp_bind() {
     run(P2_UDP_BIND_COMPONENT, |_| {}).await.unwrap()
 }
