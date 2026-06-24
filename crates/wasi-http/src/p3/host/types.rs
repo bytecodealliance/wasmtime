@@ -468,7 +468,10 @@ impl HostRequest for WasiHttpCtxView<'_> {
             req.authority = None;
             return Ok(Ok(()));
         };
-        let has_port = authority.contains(':');
+        let has_port = match authority.rsplit_once(']') {
+            Some((_, suffix)) => suffix.starts_with(':'),
+            None => authority.contains(':'),
+        };
         let Ok(authority) = http::uri::Authority::try_from(authority) else {
             return Ok(Err(()));
         };
