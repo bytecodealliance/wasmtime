@@ -5,6 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
+use crate::runtime::vm::SendSyncPtr;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
 use crate::vm::stack_switching::VMStackChain;
@@ -1313,10 +1314,21 @@ impl VMStoreContext {
         ret
     }
 
-    /// Twiddles MMU access control bits such that reads from the interrupt page
-    /// will cause a segfault. This effectively ends the epoch, as running wasm
-    /// will soon execute such reads.
-    pub fn protect_interrupt_page(&self) {
+    /// Iff MMU-based interruption is on, returns an object from which we can
+    /// perform an interrupt (that is, protect the interrupt page).
+    pub fn mmu_interrupter(&self) -> Option<MmuInterrupter> {
+        if self.epoch_interrupt_page_ptr.is_some() {
+            Some(MmuInterrupter {
+                vm_store_context: crate::runtime::vm::SendSyncPtr::new(NonNull::from(self)),
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Sets the MMU access control bits to prevent read access. The public road
+    /// to this is through [`VMStoreContext::mmu_interrupter()`].
+    fn protect_interrupt_page(&self) {
         if let Some(page_ptr) = self.epoch_interrupt_page_ptr {
             unsafe {
                 mprotect(page_ptr.as_ptr(), page_size(), MprotectFlags::empty())
@@ -1354,6 +1366,25 @@ impl VMStoreContext {
             }
         }
         self.epoch_interrupt_page_ptr = None
+    }
+}
+
+/// A thread-safe handle that can trigger an MMU-based epoch interruption
+#[derive(Clone)]
+pub struct MmuInterrupter {
+    vm_store_context: SendSyncPtr<VMStoreContext>,
+}
+
+impl MmuInterrupter {
+    /// Twiddles MMU access control bits such that reads from the interrupt page
+    /// will cause a segfault. This soon interrupts the running Wasm, as it will
+    /// will execute such reads at the next function or loop header.
+    pub fn interrupt(&self) {
+        // SAFETY: `MmuInterrupter` is constructed only from a `VMStoreContext`
+        // owned by a `Store`, which outlives the page pointer used here. Also,
+        // the ptr is stable for the store's lifetime, and we here perform only
+        // a thread-safe `mprotect`.
+        unsafe { self.vm_store_context.as_ref().protect_interrupt_page() }
     }
 }
 

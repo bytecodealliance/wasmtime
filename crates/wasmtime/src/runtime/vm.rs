@@ -123,11 +123,11 @@ pub use crate::runtime::vm::table::{Table, TableElementType};
 pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
 #[cfg(feature = "component-model")]
-pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
 pub use crate::runtime::vm::vmcontext::{
-    VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
-    VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
+    MmuInterrupter, VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
+    VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition,
+    VMMemoryImport, VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport,
+    VMWasmCallFunction, ValRaw,
 };
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;

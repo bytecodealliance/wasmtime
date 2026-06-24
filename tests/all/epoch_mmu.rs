@@ -25,7 +25,7 @@ fn store_with_ended_epoch(engine: &Engine) -> Store<()> {
     let mut store = Store::new(&engine, ());
     store.epoch_deadline_trap(); // Allegedly the default.
     // Protect the memory page:
-    store.end_mmu_epoch();
+    store.mmu_interrupter().unwrap().interrupt();
     store
 }
 

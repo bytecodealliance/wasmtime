@@ -1178,10 +1178,15 @@ impl<T> Store<T> {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
 
-    /// Iff epoch_interruption_via_mmu() is on, end the current epoch, causing
-    /// Wasm code belonging to this store to yield to a different task.
-    pub fn end_mmu_epoch(&self) {
-        self.inner.vm_store_context().protect_interrupt_page();
+    /// Returns an [`MmuEpochInterrupter`] iff MMU-based interruption is enabled
+    /// for this store.
+    ///
+    /// The returned handle is `Send + Sync` and can be used from any thread
+    /// to trigger an epoch interruption, like
+    /// [`Engine::increment_epoch`](crate::Engine::increment_epoch) can for
+    /// deadline-based epochs.
+    pub fn mmu_interrupter(&self) -> Option<vm::MmuInterrupter> {
+        self.inner.vm_store_context().mmu_interrupter()
     }
 
     /// Set an exception as the currently pending exception, and
