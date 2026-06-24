@@ -187,18 +187,21 @@ async fn p3_file_write_blocking() -> wasmtime::Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_file_truncation_readonly() -> wasmtime::Result<()> {
-    let prefix = "wasi_components_p3_truncation_readonly_ro_";
+    run_with_readonly_testfile(P3_FILE_TRUNCATION_READONLY_COMPONENT).await
+}
+async fn run_with_readonly_testfile(component_path: &str) -> wasmtime::Result<()> {
+    let prefix = "wasi_components_p3_ro_";
     let tempdir = tempfile::Builder::new()
         .prefix(prefix)
         .tempdir()
         .expect("create readonly tempdir");
     const FILENAME: &str = "test.txt";
-    const EXPECTED_CONTENTS: &[u8] = b"truncation test file\n";
+    const EXPECTED_CONTENTS: &[u8] = b"read only test file\n";
     let mut file = PathBuf::from(tempdir.path());
     file.push(FILENAME);
-    std::fs::write(&file, EXPECTED_CONTENTS).expect("write truncation test file");
+    std::fs::write(&file, EXPECTED_CONTENTS).expect("write read only test file");
 
-    run_with_builder(P3_FILE_TRUNCATION_READONLY_COMPONENT, false, |builder| {
+    run_with_builder(component_path, false, |builder| {
         builder
             .preopened_dir(
                 tempdir.path(),
@@ -210,7 +213,16 @@ async fn p3_file_truncation_readonly() -> wasmtime::Result<()> {
     })
     .await?;
 
-    let contents = std::fs::read(&file).expect("read truncation test file");
+    let contents = std::fs::read(&file).expect("read read only test file");
     assert_eq!(EXPECTED_CONTENTS, contents);
     Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_file_hardlink_across_perms() -> wasmtime::Result<()> {
+    run_with_readonly_testfile(P3_FILE_HARDLINK_ACROSS_PERMS_COMPONENT).await
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_file_rename_across_perms() -> wasmtime::Result<()> {
+    run_with_readonly_testfile(P3_FILE_RENAME_ACROSS_PERMS_COMPONENT).await
 }
