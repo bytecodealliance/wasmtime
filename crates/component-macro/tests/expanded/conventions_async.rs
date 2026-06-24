@@ -470,7 +470,7 @@ pub mod foo {
                 T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/conventions")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }
