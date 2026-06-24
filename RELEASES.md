@@ -1,3 +1,15 @@
+
+## 46.0.1
+
+Released 2026-06-24.
+
+### Fixed
+
+* Explicit hint for generic call in wasmtime wit-bindgen.
+  [#13719](https://github.com/bytecodealliance/wasmtime/pull/13719)
+
+--------------------------------------------------------------------------------
+
 ## 46.0.0
 
 Released 2026-06-22.
