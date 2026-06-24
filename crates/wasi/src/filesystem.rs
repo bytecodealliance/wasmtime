@@ -916,6 +916,9 @@ impl Dir {
         if old_path_flags.contains(PathFlags::SYMLINK_FOLLOW) {
             return Err(ErrorCode::Invalid);
         }
+        if self.perms != new_dir.perms || self.file_perms != new_dir.file_perms {
+            return Err(ErrorCode::NotPermitted);
+        }
         let new_dir_handle = Arc::clone(&new_dir.dir);
         self.run_blocking(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
             .await?;
@@ -1093,6 +1096,9 @@ impl Dir {
             return Err(ErrorCode::NotPermitted);
         }
         if !new_dir.perms.contains(DirPerms::MUTATE) {
+            return Err(ErrorCode::NotPermitted);
+        }
+        if self.perms != new_dir.perms || self.file_perms != new_dir.file_perms {
             return Err(ErrorCode::NotPermitted);
         }
         let new_dir_handle = Arc::clone(&new_dir.dir);

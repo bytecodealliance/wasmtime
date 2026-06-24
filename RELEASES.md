@@ -1,3 +1,14 @@
+## 45.0.3
+
+Released 2026-06-24.
+
+### Fixed
+
+* WASI hard links and renames check wasmtime-wasi's FilePerms for destination
+  [GHSA-4ch3-9j33-3pmj](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-4ch3-9j33-3pmj)
+
+--------------------------------------------------------------------------------
+
 ## 45.0.2
 
 Released 2026-06-15.
