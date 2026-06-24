@@ -22,13 +22,13 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0036                               v3 = iconst.i64 48
-;; @0036                               v4 = iadd v0, v3  ; v3 = 48
-;; @0036                               v5 = load.i32 notrap aligned region2 v4
+;; @0036                               v2 = iconst.i64 48
+;; @0036                               v3 = iadd v0, v2  ; v2 = 48
+;; @0036                               v4 = load.i32 notrap aligned region2 v3
 ;; @0038                               jump block1
 ;;
 ;;                                 block1:
-;; @0038                               return v5
+;; @0038                               return v4
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) tail {
