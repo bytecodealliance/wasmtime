@@ -213,7 +213,7 @@
 /**
  * \brief Wasmtime version string.
  */
-#define WASMTIME_VERSION "36.0.11"
+#define WASMTIME_VERSION "36.0.12"
 /**
  * \brief Wasmtime major version number.
  */
@@ -225,6 +225,6 @@
 /**
  * \brief Wasmtime patch version number.
  */
-#define WASMTIME_VERSION_PATCH 11
+#define WASMTIME_VERSION_PATCH 12
 
 #endif // WASMTIME_API_H
