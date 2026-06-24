@@ -267,7 +267,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/store")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }

@@ -214,7 +214,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/green")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -268,7 +268,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/red")?;
-                add_to_linker_instance(&mut inst, host_getter)
+                add_to_linker_instance::<T, D>(&mut inst, host_getter)
             }
         }
     }
