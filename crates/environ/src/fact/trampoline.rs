@@ -3607,12 +3607,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
     ///
     /// The `may_leave` flag is a boolean (0 or 1) so no masking is required.
     fn trap_if_not_may_leave(&mut self, flags_global: GlobalIndex, trap: Trap) -> TempLocal {
+        self.instruction(Block(BlockType::Empty));
         self.instruction(GlobalGet(flags_global.as_u32()));
         // Save the flag's value (known to be `true` whenever the trap below is
         // not taken) into a temporary for later restoration.
         let saved = self.local_tee_new_tmp(ValType::I32);
-        self.instruction(I32Eqz);
-        self.instruction(If(BlockType::Empty));
+        self.instruction(BrIf(0));
         self.trap(trap);
         self.instruction(End);
         saved
