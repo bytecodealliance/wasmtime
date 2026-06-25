@@ -126,13 +126,13 @@ pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
 #[cfg(feature = "component-model")]
 pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
+#[cfg(feature = "component-model-async")]
+pub use crate::runtime::vm::vmcontext::VMLazyThread;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
     VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
-#[cfg(feature = "component-model-async")]
-pub use crate::runtime::vm::vmcontext::VMLazyThread;
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;
 
