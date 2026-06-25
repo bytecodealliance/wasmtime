@@ -10,7 +10,7 @@ repository to run the example locally:
 This example shows off how to interact with wasm memory in a module. Be sure to
 read the documentation for [`Memory`] as well.
 
-[`Memory`]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Memory.html
+[`Memory`]: https://docs.rs/wasmtime/latest/wasmtime/struct.Memory.html
 
 ## Wasm Source
 

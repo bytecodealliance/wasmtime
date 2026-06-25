@@ -190,4 +190,5 @@ perf annotate --input perf.jit.data
 
 ![perf annotate output](assets/perf-annotate-fib.png)
 
-[`Config::debug_info`]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.debug_info
+[`Config::debug_info`]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.debug_info
+[`Config::profiler`]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.profiler
