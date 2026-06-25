@@ -51,12 +51,12 @@
 ;;                                     v261 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;;                                     v262 = load.i64 notrap aligned readonly can_move region4 v261+32
 ;; @0025                               v39 = iadd v262, v22
-;; @0025                               store notrap aligned v260, v39  ; v260 = -1476394994
+;; @0025                               store user2 region5 v260, v39  ; v260 = -1476394994
 ;;                                     v263 = load.i64 notrap aligned readonly can_move region3 v0+40
 ;;                                     v264 = load.i32 notrap aligned readonly can_move v263
-;; @0025                               store notrap aligned v264, v39+4
+;; @0025                               store user2 region5 v264, v39+4
 ;;                                     v265 = iconst.i64 32
-;; @0025                               istore32 notrap aligned v265, v39+8  ; v265 = 32
+;; @0025                               istore32 user2 region5 v265, v39+8  ; v265 = 32
 ;; @0025                               jump block4(v15, v39)
 ;;
 ;;                                 block3 cold:

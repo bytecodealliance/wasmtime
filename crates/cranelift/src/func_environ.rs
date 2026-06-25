@@ -3818,8 +3818,11 @@ impl FuncEnvironment<'_> {
             }
             CheckedEntity::Array { initialized, .. } => {
                 if is_pre_interned_funcref {
+                    let region = self.alias_regions.gc_heap_region(builder.func);
                     builder.ins().store(
-                        ir::MemFlagsData::trusted().with_endianness(Endianness::Little),
+                        ir::MemFlagsData::trusted()
+                            .with_endianness(Endianness::Little)
+                            .with_alias_region(Some(region)),
                         value,
                         elem_addr,
                         0,

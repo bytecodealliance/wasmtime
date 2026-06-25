@@ -68,7 +68,7 @@
 ;; @003b                               brif v44, block3, block2(v29)
 ;;
 ;;                                 block2(v45: i64):
-;; @003b                               store.i32 notrap aligned little v41, v45
+;; @003b                               store.i32 notrap aligned little region4 v41, v45
 ;;                                     v56 = iconst.i64 4
 ;;                                     v57 = iadd v45, v56  ; v56 = 4
 ;; @003b                               v48 = icmp eq v57, v42
@@ -129,7 +129,7 @@
 ;; @0049                               brif v44, block3, block2(v29)
 ;;
 ;;                                 block2(v45: i64):
-;; @0049                               store.i32 notrap aligned little v41, v45
+;; @0049                               store.i32 notrap aligned little region4 v41, v45
 ;;                                     v55 = iconst.i64 4
 ;;                                     v56 = iadd v45, v55  ; v55 = 4
 ;; @0049                               v48 = icmp eq v56, v42
@@ -198,7 +198,7 @@
 ;; @0057                               brif v45, block3, block2(v30)
 ;;
 ;;                                 block2(v46: i64):
-;; @0057                               store.i32 notrap aligned little v42, v46
+;; @0057                               store.i32 notrap aligned little region4 v42, v46
 ;;                                     v64 = iconst.i64 4
 ;;                                     v65 = iadd v46, v64  ; v64 = 4
 ;; @0057                               v49 = icmp eq v65, v43
