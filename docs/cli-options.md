@@ -148,7 +148,7 @@ quotes is more complicated and harder to read and therefore not ideal). For
 example:
 
 ```bash
-wasmtime run - invoke "initialize(\"hello\")" foo.wasm
+wasmtime run --invoke "initialize(\"hello\")" foo.wasm
 ```
 
 ## `serve`
