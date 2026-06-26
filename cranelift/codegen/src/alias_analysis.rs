@@ -141,25 +141,32 @@ impl LastStores {
         }
     }
 
-    fn meet_from(&mut self, other: &LastStores, loc: Inst) {
-        let meet = |a: PackedOption<Inst>, b: PackedOption<Inst>| -> PackedOption<Inst> {
-            match (a.into(), b.into()) {
-                (None, None) => None.into(),
-                (Some(a), None) => a,
-                (None, Some(b)) => b,
-                (Some(a), Some(b)) if a == b => a,
-                _ => loc.into(),
-            }
+    /// Meet `self` with `other` and place the result in `self`.
+    ///
+    /// Returns `true` if `self` changed, `false` otherwise.
+    fn meet_from(&mut self, other: &LastStores, loc: Inst) -> bool {
+        let meet = |a: &mut PackedOption<Inst>, b: PackedOption<Inst>| -> bool {
+            let (inst, changed) = match (a.expand(), b.expand()) {
+                (None, None) => (None.into(), false),
+                (Some(a), None) => (Some(a), true),
+                (None, Some(b)) => (Some(b), true),
+                (Some(a), Some(b)) if a == b => (Some(a), false),
+                (Some(a), Some(_)) => (Some(loc), a != loc),
+            };
+            *a = inst.into();
+            changed
         };
 
         // Meet all region slots.
+        let mut changed = false;
         let max_len = core::cmp::max(self.regions.keys().len(), other.regions.keys().len());
         for i in 0..max_len {
             let ar = AliasRegion::new(i);
-            self.regions[ar] = meet(self.regions[ar], other.regions[ar]);
+            changed |= meet(&mut self.regions[ar], other.regions[ar]);
         }
-        self.other = meet(self.other, other.other);
-        self.last_fence = meet(self.last_fence, other.last_fence);
+        changed |= meet(&mut self.other, other.other);
+        changed |= meet(&mut self.last_fence, other.last_fence);
+        changed
     }
 }
 
@@ -262,11 +269,7 @@ impl<'a> AliasAnalysis<'a> {
             visit_block_succs(func, block, |_inst, succ, _from_table| {
                 let succ_first_inst = func.layout.block_insts(succ).next().unwrap();
                 let updated = match self.block_input.get_mut(&succ) {
-                    Some(succ_state) => {
-                        let old = succ_state.clone();
-                        succ_state.meet_from(&state, succ_first_inst);
-                        *succ_state != old
-                    }
+                    Some(succ_state) => succ_state.meet_from(&state, succ_first_inst),
                     None => {
                         self.block_input.insert(succ, state.clone());
                         true
