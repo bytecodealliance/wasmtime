@@ -454,6 +454,61 @@ mod tests {
     }
 
     #[test]
+    // Don't run under `std` -- we assert that the stack is page-aligned there.
+    #[cfg(not(feature = "std"))]
+    fn custom_stack() {
+        use super::RuntimeFiberStack;
+        use core::ops::Range;
+
+        struct CustomStack {
+            // `u128` to guarantee alignment.
+            buf: std::vec::Vec<u128>,
+        }
+        unsafe impl Send for CustomStack {}
+        unsafe impl Sync for CustomStack {}
+        unsafe impl RuntimeFiberStack for CustomStack {
+            fn top(&self) -> *mut u8 {
+                self.range().end as *mut u8
+            }
+            fn range(&self) -> Range<usize> {
+                let base = self.buf.as_ptr() as usize;
+                base..base + self.buf.len() * core::mem::size_of::<u128>()
+            }
+            fn guard_range(&self) -> Range<*mut u8> {
+                core::ptr::null_mut()..core::ptr::null_mut()
+            }
+        }
+
+        // A 1 MiB stack (65536 * 16 bytes).
+        let stack = FiberStack::from_custom(std::boxed::Box::new(CustomStack {
+            buf: std::vec![0u128; 1024 * 1024 / 16],
+        }))
+        .unwrap();
+        // A custom stack is not considered a `from_raw_parts` stack.
+        assert!(!stack.is_from_raw_parts());
+
+        let hit = Rc::new(Cell::new(false));
+        let hit2 = hit.clone();
+        let fiber = Fiber::<(), (), ()>::new(stack, move |_, s| {
+            hit2.set(true);
+            s.suspend(());
+            hit2.set(false);
+        })
+        .unwrap();
+        assert!(!hit.get());
+        // First resume runs up to the suspend point.
+        assert!(fiber.resume(()).is_err());
+        assert!(hit.get());
+        // Second resume runs to completion.
+        assert!(fiber.resume(()).is_ok());
+        assert!(!hit.get());
+
+        // The reclaimed stack still reports its range correctly.
+        let stack = fiber.into_stack();
+        assert!(stack.range().is_some());
+    }
+
+    #[test]
     fn cross_thread_fiber() {
         let fiber = Fiber::<(), (), ()>::new(fiber_stack(1024 * 1024), move |_, s| {
             s.suspend(());
