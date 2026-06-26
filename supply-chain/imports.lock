@@ -1267,6 +1267,20 @@ user-id = 6025
 user-login = "Thomasdezeeuw"
 user-name = "Thomas de Zeeuw"
 
+[[publisher.mutatis]]
+version = "0.5.2"
+when = "2026-04-29"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
+[[publisher.mutatis-derive]]
+version = "0.5.2"
+when = "2026-04-29"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
 [[publisher.num_cpus]]
 version = "1.17.0"
 when = "2025-05-30"
@@ -1445,6 +1459,13 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
+[[publisher.shuffling-allocator]]
+version = "1.1.2"
+when = "2021-01-21"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
+
 [[publisher.slab]]
 version = "0.4.11"
 when = "2025-08-08"
@@ -1458,6 +1479,13 @@ when = "2026-03-06"
 user-id = 6025
 user-login = "Thomasdezeeuw"
 user-name = "Thomas de Zeeuw"
+
+[[publisher.souper-ir]]
+version = "2.1.0"
+when = "2020-10-16"
+user-id = 696
+user-login = "fitzgen"
+user-name = "Nick Fitzgerald"
 
 [[publisher.syn]]
 version = "1.0.92"
