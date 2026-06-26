@@ -454,6 +454,8 @@ mod tests {
     }
 
     #[test]
+    // Don't run under `std` -- we assert that the stack is page-aligned there.
+    #[cfg(not(feature = "std"))]
     fn custom_stack() {
         use super::RuntimeFiberStack;
         use core::ops::Range;
