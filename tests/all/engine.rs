@@ -23,7 +23,8 @@ fn engine_without_compiler_can_deserialize_and_run() -> Result<()> {
     config.enable_compiler(false);
     let engine_without_compiler = Engine::new(&config)?;
 
-    let deserialized_module = unsafe { Module::deserialize(&engine_without_compiler, &serialized)? };
+    let deserialized_module =
+        unsafe { Module::deserialize(&engine_without_compiler, &serialized)? };
 
     let mut store = Store::new(&engine_without_compiler, ());
     let instance = Instance::new(&mut store, &deserialized_module, &[])?;
