@@ -1293,10 +1293,12 @@ impl VMStoreContext {
         }
     }
 
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn component_context_mut(&mut self) -> &mut [u32; NUM_COMPONENT_CONTEXT_SLOTS] {
         self.component_context.get_mut()
     }
 
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn current_thread_mut(&mut self) -> &mut VMLazyThread {
         self.current_thread.get_mut()
     }
