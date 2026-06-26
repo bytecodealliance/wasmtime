@@ -765,6 +765,25 @@
         (high XReg (rv_andn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
 
+;; Zvbb: band(x, bnot(y)) -> vandn.vv
+(rule 18 (lower (band (ty_supported_vec ty) x (bnot _ y)))
+  (if-let true (has_zvbb))
+  (rv_vandn_vv x y (unmasked) ty))
+
+(rule 19 (lower (band (ty_supported_vec ty) (bnot _ y) x))
+  (if-let true (has_zvbb))
+  (rv_vandn_vv x y (unmasked) ty))
+
+(rule 20 (lower (band (ty_supported_vec ty) x (bnot _ (splat _ y))))
+  (if-let true (has_zvbb))
+  (if (ty_vector_not_float ty))
+  (rv_vandn_vx x y (unmasked) ty))
+
+(rule 21 (lower (band (ty_supported_vec ty) (bnot _ (splat _ y)) x))
+  (if-let true (has_zvbb))
+  (if (ty_vector_not_float ty))
+  (rv_vandn_vx x y (unmasked) ty))
+
 (rule 9 (lower (band (ty_supported_vec ty) x y))
   (rv_vand_vv x y (unmasked) ty))
 
@@ -1107,6 +1126,7 @@
   (rv_rev8 x))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule (lower (ctz (fits_in_64 ty) x))
   (lower_ctz ty x))
 
@@ -1122,6 +1142,7 @@
     (value_regs result (imm $I64 0))))
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule 0 (lower (clz (fits_in_64 ty) x))
   (gen_cltz true x ty))
 
@@ -1248,6 +1269,11 @@
      (high XReg (rv_cpop (value_regs_get x 1)))
      (result XReg (rv_add low high)))
     (value_regs result (imm $I64 0))))
+
+;; Zvbb: vcpop.v
+(rule 5 (lower (popcnt (ty_supported_vec ty) x))
+  (if-let true (has_zvbb))
+  (rv_vcpop_v x (unmasked) ty))
 
 ;; Popcount using multiply.
 ;; This is popcount64c() from
@@ -1470,6 +1496,12 @@
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Zvbb: vrol.vx (rotl on vector with scalar amount)
+(rule 5 (lower (rotl (ty_supported_vec ty) x y))
+  (if-let true (has_zvbb))
+  (if (ty_vector_not_float ty))
+  (rv_vrol_vx x y (unmasked) ty))
+
 (rule 0 (lower (rotl (fits_in_64 ty) rs amount))
   (let
     ((rs XReg (zext rs))
@@ -1525,6 +1557,12 @@
     )))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Zvbb: vror.vx (rotr on vector with scalar amount)
+(rule 5 (lower (rotr (ty_supported_vec ty) x y))
+  (if-let true (has_zvbb))
+  (if (ty_vector_not_float ty))
+  (rv_vror_vx x y (unmasked) ty))
 
 (rule (lower (rotr (fits_in_64 ty) rs amount))
   (let
