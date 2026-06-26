@@ -123,6 +123,25 @@ fn delete_request_options(
         .context("failed to delete request options from table")
 }
 
+/// Parse an outgoing request `authority`, rejecting a malformed value.
+///
+/// `http::uri::Authority` accepts an authority whose port section is empty or
+/// non-numeric (for example `example.com:` or `example.com:abc`), so the port
+/// is validated here as well. A `:` inside an IPv6 literal host such as `[::1]`
+/// is part of the host rather than a port delimiter, so the port is only looked
+/// for after any closing bracket.
+fn parse_authority(authority: String) -> Result<http::uri::Authority, ()> {
+    let has_port = match authority.rfind(']') {
+        Some(i) => authority[i..].contains(':'),
+        None => authority.contains(':'),
+    };
+    let authority = http::uri::Authority::try_from(authority).map_err(|_| ())?;
+    if has_port && authority.port_u16().is_none() {
+        return Err(());
+    }
+    Ok(authority)
+}
+
 fn parse_header_value(
     name: &http::HeaderName,
     value: impl AsRef<[u8]>,
@@ -468,13 +487,9 @@ impl HostRequest for WasiHttpCtxView<'_> {
             req.authority = None;
             return Ok(Ok(()));
         };
-        let has_port = authority.contains(':');
-        let Ok(authority) = http::uri::Authority::try_from(authority) else {
+        let Ok(authority) = parse_authority(authority) else {
             return Ok(Err(()));
         };
-        if has_port && authority.port_u16().is_none() {
-            return Ok(Err(()));
-        }
         req.authority = Some(authority);
         Ok(Ok(()))
     }
@@ -730,5 +745,25 @@ mod tests {
 
         // other header names are unaffected
         assert!(parse_header_value(&CONTENT_TYPE, "text/plain").is_ok());
+    }
+
+    #[test]
+    fn authority_accepts_ipv6_and_validates_ports() {
+        use super::parse_authority;
+
+        // Host names and IPv4 literals, with and without an explicit port.
+        assert!(parse_authority("example.com".into()).is_ok());
+        assert!(parse_authority("example.com:443".into()).is_ok());
+        assert!(parse_authority("127.0.0.1:80".into()).is_ok());
+
+        // Bracketed IPv6 literals: the colons belong to the host, so a missing
+        // port must still be accepted and not mistaken for an empty port.
+        assert!(parse_authority("[::1]".into()).is_ok());
+        assert!(parse_authority("[2001:db8::1]".into()).is_ok());
+        assert!(parse_authority("[::1]:443".into()).is_ok());
+
+        // When a port section is present it must be a valid number.
+        assert!(parse_authority("example.com:".into()).is_err());
+        assert!(parse_authority("example.com:abc".into()).is_err());
     }
 }
