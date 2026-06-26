@@ -340,7 +340,12 @@ impl StoreOpaque {
         &mut self,
     ) -> &mut ConcurrentState {
         debug_assert!(self.concurrency_support());
-        debug_assert!(!self.vm_store_context().current_thread.is_deferred());
+        debug_assert!(
+            !self
+                .vm_store_context_mut()
+                .current_thread_mut()
+                .is_deferred()
+        );
         self.concurrent_state_mut_without_forcing_current_thread()
     }
 

@@ -1226,7 +1226,9 @@ pub struct VMStoreContext {
     /// `VMOffsets` conditional.
     ///
     /// This is saved/restored when threads are swapped in the component model.
-    pub component_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
+    ///
+    /// NB: `UnsafeCell` because JIT code writes to the slots.
+    pub component_context: UnsafeCell<[u32; NUM_COMPONENT_CONTEXT_SLOTS]>,
 
     /// JIT-visible current thread for the component model's sync-to-sync
     /// adapter fast path.
@@ -1234,7 +1236,9 @@ pub struct VMStoreContext {
     /// Like `component_context`, this is unconditionally present to keep
     /// `VMOffsets` logic unconditional even though it is only used when
     /// `component-model-async` is enabled.
-    pub current_thread: VMLazyThread,
+    ///
+    /// NB: `UnsafeCell` because JIT code writes to this field.
+    pub current_thread: UnsafeCell<VMLazyThread>,
 }
 
 impl VMStoreContext {
@@ -1288,6 +1292,14 @@ impl VMStoreContext {
             0
         }
     }
+
+    pub(crate) fn component_context_mut(&mut self) -> &mut [u32; NUM_COMPONENT_CONTEXT_SLOTS] {
+        self.component_context.get_mut()
+    }
+
+    pub(crate) fn current_thread_mut(&mut self) -> &mut VMLazyThread {
+        self.current_thread.get_mut()
+    }
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1319,8 +1331,8 @@ impl Default for VMStoreContext {
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
-            component_context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
-            current_thread: VMLazyThread::none(),
+            component_context: UnsafeCell::new([0; NUM_COMPONENT_CONTEXT_SLOTS]),
+            current_thread: UnsafeCell::new(VMLazyThread::none()),
         }
     }
 }
@@ -1404,9 +1416,9 @@ mod test_vmstore_context {
         // accurate.
         let slot_width = offsets.ptr.vmstore_context_component_context_slot(1)
             - offsets.ptr.vmstore_context_component_context_slot(0);
-        let default = VMStoreContext::default();
+        let mut default = VMStoreContext::default();
         assert_eq!(
-            size_of_val(&default.component_context[0]),
+            size_of_val(&default.component_context.get_mut()[0]),
             usize::from(slot_width)
         );
     }
