@@ -2,33 +2,34 @@
 //! values" pass. These two passes operate as one fused pass, and so
 //! are implemented together here.
 //!
-//! We partition memory state into several *disjoint pieces* of
-//! "abstract state". There are a finite number of such pieces:
-//! currently, we call them "heap", "table", "vmctx", and "other".Any
-//! given address in memory belongs to exactly one disjoint piece.
+//! We partition memory state into several *disjoint regions* of
+//! "abstract state". These regions are defined by `ir::AliasRegion`
+//! and may correspond to distinct linear memories in Wasm, different
+//! types (or fields) that cannot alias each other (known as
+//! type-based alias analysis, or TBAA), unique stack slots,
+//! etc... Any given address in memory belongs to at most one region.
 //!
-//! One never tracks which piece a concrete address belongs to at
+//! We never track which piece a concrete address belongs to at
 //! runtime; this is a purely static concept. Instead, all
-//! memory-accessing instructions (loads and stores) are labeled with
-//! one of these four categories in the `MemFlagsData`. It is forbidden
-//! for a load or store to access memory under one category and a
-//! later load or store to access the same memory under a different
-//! category. This is ensured to be true by construction during
-//! frontend translation into CLIF and during legalization.
+//! memory-accessing instructions (loads and stores) are tagged with
+//! one of these regions in their `ir::MemFlagsData`. It is forbidden
+//! for one instruction tagged with region `R` to access a memory
+//! location `L` and then for another instruction tagged with region
+//! `S` to access the same memory location `L`. This invariant must be
+//! provided by the CLIF-producing frontend.
 //!
-//! Given that this non-aliasing property is ensured by the producer
-//! of CLIF, we can compute a *may-alias* property: one load or store
-//! may-alias another load or store if both access the same category
-//! of abstract state.
+//! Given that this non-aliasing property is provided by the CLIF
+//! producer, we can compute a *may-alias* property: one load or store
+//! may-alias another load or store if both access the same region.
 //!
 //! The "last store" pass helps to compute this aliasing: it scans the
 //! code, finding at each program point the last instruction that
-//! *might have* written to a given part of abstract state.
+//! *might have* written to a given region.
 //!
 //! We can't say for sure that the "last store" *did* actually write
-//! that state, but we know for sure that no instruction *later* than
-//! it (up to the current instruction) did. However, we can get a
-//! must-alias property from this: if at a given load or store, we
+//! that region, but we know for sure that no instruction *later* than
+//! it (up to the current instruction) did. However, we can derive a
+//! *must-alias* property from this: if at a given load or store, we
 //! look backward to the "last store", *AND* we find that it has
 //! exactly the same address expression and type, then we know that
 //! the current instruction's access *must* be to the same memory
@@ -52,7 +53,7 @@
 //!
 //! In theory we could also do *dead-store elimination*, where if a
 //! store overwrites a key in the table, *and* if no other load/store
-//! to the abstract state category occurred, *and* no other trapping
+//! to the abstract region occurred, *and* no other trapping
 //! instruction occurred (at which point we need an up-to-date memory
 //! state because post-trap-termination memory state can be observed),
 //! *and* we can prove the original store could not have trapped, then
