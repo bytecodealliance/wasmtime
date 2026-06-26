@@ -1226,7 +1226,19 @@ pub struct VMStoreContext {
     /// `VMOffsets` conditional.
     ///
     /// This is saved/restored when threads are swapped in the component model.
-    pub component_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
+    ///
+    /// NB: `UnsafeCell` because JIT code writes to the slots.
+    pub component_context: UnsafeCell<[u32; NUM_COMPONENT_CONTEXT_SLOTS]>,
+
+    /// JIT-visible current thread for the component model's sync-to-sync
+    /// adapter fast path.
+    ///
+    /// Like `component_context`, this is unconditionally present to keep
+    /// `VMOffsets` logic unconditional even though it is only used when
+    /// `component-model-async` is enabled.
+    ///
+    /// NB: `UnsafeCell` because JIT code writes to this field.
+    pub current_thread: UnsafeCell<VMLazyThread>,
 }
 
 impl VMStoreContext {
@@ -1280,6 +1292,16 @@ impl VMStoreContext {
             0
         }
     }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn component_context_mut(&mut self) -> &mut [u32; NUM_COMPONENT_CONTEXT_SLOTS] {
+        self.component_context.get_mut()
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn current_thread_mut(&mut self) -> &mut VMLazyThread {
+        self.current_thread.get_mut()
+    }
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1311,7 +1333,8 @@ impl Default for VMStoreContext {
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
-            component_context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
+            component_context: UnsafeCell::new([0; NUM_COMPONENT_CONTEXT_SLOTS]),
+            current_thread: UnsafeCell::new(VMLazyThread::none()),
         }
     }
 }
@@ -1386,15 +1409,173 @@ mod test_vmstore_context {
             offset_of!(VMStoreContext, component_context),
             usize::from(offsets.ptr.vmstore_context_component_context_slot(0))
         );
+        assert_eq!(
+            offset_of!(VMStoreContext, current_thread),
+            usize::from(offsets.ptr.vmstore_context_current_thread())
+        );
 
         // Make sure that the calculation for the size of a slot is also
         // accurate.
         let slot_width = offsets.ptr.vmstore_context_component_context_slot(1)
             - offsets.ptr.vmstore_context_component_context_slot(0);
-        let default = VMStoreContext::default();
+        let mut default = VMStoreContext::default();
         assert_eq!(
-            size_of_val(&default.component_context[0]),
+            size_of_val(&default.component_context.get_mut()[0]),
             usize::from(slot_width)
+        );
+    }
+}
+
+/// JIT-visible representation of the store's current thread for the component
+/// model, encoded as a single pointer-sized integer so that generated JIT code
+/// can load, store, and compare it with a handful of instructions.
+///
+/// This is the inline fast-path counterpart to the host-side `CurrentThread`: a
+/// fused sync-to-sync adapter records a lazy deferred thread here (a pointer to
+/// a `VMDeferredThread` on its own stack frame) instead of eagerly allocating a
+/// `GuestTask`/`GuestThread` in the host. Host code promotes the deferred
+/// thread into a real one only when it actually needs it; see
+/// `StoreOpaque::force_current_thread`.
+///
+/// This type is a bitpacked equivalent of the following logical `enum`:
+///
+/// ```ignore
+/// enum VMLazyThread {
+///     /// No thread.
+///     None,
+///
+///     /// The lazy thread was promoted and materialized; get it from
+///     /// `ConcurrentState::current_thread`.
+///     Forced,
+///
+///     /// The lazy thread has not been materialized, here is a pointer to the
+///     /// stack-allocated data needed to do force that promotion.
+///     Deferred(*mut VMDeferredThread),
+/// }
+/// ```
+//
+// Bitpacking details:
+//
+// * `None`: `0`
+//
+// * `Forced`: A non-zero value with its low-bit set.
+//
+// * `Deferred`: A non-zero value with its low-bit clear.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct VMLazyThread(Option<VmPtr<VMDeferredThread>>);
+
+impl VMLazyThread {
+    const _ASSERT_SIZE: () = assert!(
+        core::mem::size_of::<VMLazyThread>() == core::mem::size_of::<*mut VMDeferredThread>()
+    );
+    const _ASSERT_ALIGN: () = assert!(
+        core::mem::align_of::<VMLazyThread>() == core::mem::align_of::<*mut VMDeferredThread>()
+    );
+
+    const FORCED: VmPtr<VMDeferredThread> = VmPtr::<u8>::dangling().cast();
+
+    /// There is no current thread.
+    pub const fn none() -> Self {
+        Self(None)
+    }
+
+    /// A lazy thread that has already been promoted.
+    pub const fn forced() -> Self {
+        Self(Some(Self::FORCED))
+    }
+
+    /// A deferred thread referencing the given on-stack [`VMDeferredThread`].
+    pub fn deferred(ptr: NonNull<VMDeferredThread>) -> Self {
+        debug_assert_eq!(ptr.addr().get() & Self::FORCED.addr().get(), 0);
+        Self(Some(ptr.into()))
+    }
+
+    /// Returns `true` if there is no current thread.
+    pub fn is_none(self) -> bool {
+        self.0.is_none()
+    }
+
+    /// Returns `true` if a deferred thread has been forced/promoted.
+    pub fn is_forced(self) -> bool {
+        self.0.is_some_and(|p| p == Self::FORCED)
+    }
+
+    /// Returns `true` if this is a deferred thread (i.e. neither `None` nor
+    /// forced).
+    pub fn is_deferred(self) -> bool {
+        self.0.is_some_and(|p| p != Self::FORCED)
+    }
+
+    /// Returns the deferred [`VMDeferredThread`] pointer if this is a deferred
+    /// thread.
+    pub fn as_deferred(self) -> Option<VmPtr<VMDeferredThread>> {
+        self.0
+            .and_then(|p| if p == Self::FORCED { None } else { Some(p) })
+    }
+}
+
+/// A deferred component-model thread.
+///
+/// This is an on-stack record pushed by a fused sync-to-sync adapter's fast
+/// path to defer the work that the `enter_sync_call` libcall would otherwise do
+/// eagerly.
+///
+/// The adapter allocates one of these in its own stack frame, links the
+/// previous current-thread value to it via `parent`, and finally points
+/// `VMStoreContext::current_thread` at it. When host code actually needs the
+/// real thread, it walks the `parent` chain to materialize thread state (see
+/// `StoreOpaque::force_current_thread`).
+#[derive(Debug)]
+#[repr(C)]
+pub struct VMDeferredThread {
+    /// The previous value of `VMStoreContext::current_thread`.
+    pub parent: VMLazyThread,
+    /// The caller component instance (a deferred `enter_sync_call` argument).
+    pub caller_instance: u32,
+    /// Whether the callee is async-lifted (a deferred `enter_sync_call` arg).
+    pub callee_async: u32,
+    /// The callee component instance (a deferred `enter_sync_call` argument).
+    pub callee_instance: u32,
+    /// The caller thread's `context.{get,set}` slots, saved on entry and
+    /// restored on the fast-path exit (or recovered while forcing).
+    pub saved_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
+}
+
+#[cfg(test)]
+mod test_vmdeferred_thread {
+    use super::*;
+    use core::mem::offset_of;
+    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
+
+    #[test]
+    fn deferred_thread_field_offsets() {
+        let module = Module::new(StaticModuleIndex::from_u32(0));
+        let offsets = VMOffsets::new(HostPtr, &module);
+        let ptr = offsets.ptr;
+        assert_eq!(
+            offset_of!(VMDeferredThread, parent),
+            usize::from(ptr.vmdeferred_thread_parent())
+        );
+        assert_eq!(
+            offset_of!(VMDeferredThread, caller_instance),
+            usize::from(ptr.vmdeferred_thread_caller_instance())
+        );
+        assert_eq!(
+            offset_of!(VMDeferredThread, callee_async),
+            usize::from(ptr.vmdeferred_thread_callee_async())
+        );
+        assert_eq!(
+            offset_of!(VMDeferredThread, callee_instance),
+            usize::from(ptr.vmdeferred_thread_callee_instance())
+        );
+        assert_eq!(
+            offset_of!(VMDeferredThread, saved_context),
+            usize::from(ptr.vmdeferred_thread_saved_context(0))
+        );
+        assert_eq!(
+            size_of::<VMDeferredThread>(),
+            usize::from(ptr.size_of_vmdeferred_thread())
         );
     }
 }

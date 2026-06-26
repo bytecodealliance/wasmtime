@@ -1523,6 +1523,20 @@ impl Compiler {
         // succeed". Note that register restoration is part of the `try_call`
         // and handler implementation.
         builder.switch_to_block(exceptional_return);
+        if cfg!(feature = "component-model") && self.tunables().concurrency_support {
+            // NB: A trap unwinds over any fused adapter frames without running
+            // their `exit-sync-call`s. That can leave
+            // `VMStoreContext::current_thread` pointing at an old, invalid
+            // `VMDeferredThread` inside an old, since-unwound stack
+            // frame. Therefore, we must reset `current_thread` to avoid
+            // potential use-after-free bugs.
+            let forced = builder.ins().iconst(pointer_type, 1);
+            alias_regions.store_vmstore_context_current_thread(
+                &mut builder.cursor(),
+                vm_store_ctx,
+                forced,
+            );
+        }
         let false_return = builder.ins().iconst(ir::types::I8, 0);
         builder.ins().return_(&[false_return]);
 

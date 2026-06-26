@@ -44,6 +44,8 @@
 use crate::vm::SendSyncPtr;
 use core::fmt;
 use core::marker;
+use core::marker::PhantomData;
+use core::num::NonZero;
 use core::num::NonZeroUsize;
 use core::ptr::NonNull;
 use core::sync::atomic::AtomicUsize;
@@ -117,8 +119,25 @@ impl<T> VmPtr<T> {
     }
 
     /// Similar to `{NonNull,core::ptr}::dangling()` but for `VmPtr`.
-    pub fn dangling() -> Self {
-        NonNull::dangling().into()
+    pub const fn dangling() -> Self {
+        let ptr = core::mem::align_of::<T>();
+        Self {
+            ptr: NonZeroUsize::new(ptr).unwrap(),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Similar to `NonNull::cast` but for `VmPtr`.
+    pub const fn cast<U>(self) -> VmPtr<U> {
+        VmPtr {
+            ptr: self.ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Similar to `NonNull::addr` but for `VmPtr`.
+    pub fn addr(&self) -> NonZero<usize> {
+        self.ptr
     }
 }
 
@@ -130,6 +149,32 @@ impl<T> Clone for VmPtr<T> {
 }
 
 impl<T> Copy for VmPtr<T> {}
+
+impl<T> PartialEq for VmPtr<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ptr == other.ptr
+    }
+}
+
+impl<T> Eq for VmPtr<T> {}
+
+impl<T> PartialOrd for VmPtr<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        self.ptr.partial_cmp(&other.ptr)
+    }
+}
+
+impl<T> Ord for VmPtr<T> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.ptr.cmp(&other.ptr)
+    }
+}
+
+impl<T> core::hash::Hash for VmPtr<T> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.ptr.hash(state);
+    }
+}
 
 // Forward debugging to `SendSyncPtr<T>` which renders the address.
 impl<T> fmt::Debug for VmPtr<T> {

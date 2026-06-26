@@ -94,7 +94,7 @@
 ;;   f4: movl    (%rax), %edx
 ;;   f6: movl    $0x20, %ecx
 ;;   fb: movl    $0x10, %r8d
-;;  101: callq   0x271
+;;  101: callq   0x286
 ;;  106: movq    8(%rsp), %r9
 ;;  10b: movq    8(%r9), %rcx
 ;;  10f: movl    %eax, %esi

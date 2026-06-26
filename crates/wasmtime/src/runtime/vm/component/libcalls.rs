@@ -688,7 +688,7 @@ fn enter_sync_call(
 
 fn exit_sync_call(store: &mut dyn VMStore, instance: Instance) -> Result<()> {
     store
-        .component_resource_tables(Some(instance))
+        .component_resource_tables(Some(instance))?
         .validate_scope_exit()?;
     store.exit_guest_sync_call()
 }

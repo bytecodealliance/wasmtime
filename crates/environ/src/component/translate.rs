@@ -3,9 +3,9 @@ use crate::component::dfg::AbstractInstantiations;
 use crate::component::*;
 use crate::prelude::*;
 use crate::{
-    EngineOrModuleTypeIndex, EntityIndex, FuncKey, ModuleEnvironment, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, ScopeVec, TagIndex, Tunables, TypeConvert,
-    WasmHeapType, WasmResult, WasmValType,
+    EngineOrModuleTypeIndex, EntityIndex, FactInlineIntrinsic, FuncKey, ModuleEnvironment,
+    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, ScopeVec, TagIndex,
+    Tunables, TypeConvert, WasmHeapType, WasmResult, WasmValType,
 };
 use core::str::FromStr;
 use cranelift_entity::SecondaryMap;
@@ -623,12 +623,21 @@ impl<'a, 'data> Translator<'a, 'data> {
                     // turn them into direct calls even though we probably
                     // wouldn't ever inline them, but it just doesn't seem worth
                     // the effort.
-                    CoreDef::Trampoline(_) => continue,
+                    //
+                    // That said, a couple of adapter trampolines are lowered
+                    // inline during translation. We record these here so
+                    // `FuncEnvironment` recognizes them. All other trampolines
+                    // remain indirect calls.
+                    CoreDef::Trampoline(index) => match translation.trampolines[*index] {
+                        Trampoline::EnterSyncCall => FactInlineIntrinsic::EnterSyncCall.into(),
+                        Trampoline::ExitSyncCall => FactInlineIntrinsic::ExitSyncCall.into(),
+                        _ => continue,
+                    },
 
                     // This import is a compile-time builtin intrinsic, we
                     // should inline its implementation during function
                     // translation.
-                    CoreDef::UnsafeIntrinsic(i) => FuncKey::UnsafeIntrinsic(Abi::Wasm, *i),
+                    CoreDef::UnsafeIntrinsic(i) => FuncKey::UnsafeIntrinsic(Abi::Wasm, *i).into(),
 
                     // This imported function is an export from another
                     // instance, a perfect candidate for becoming an inlinable
@@ -660,7 +669,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             continue;
                         };
 
-                        FuncKey::DefinedWasmFunction(*arg_module, arg_module_def_func)
+                        FuncKey::DefinedWasmFunction(*arg_module, arg_module_def_func).into()
                     }
                 };
 

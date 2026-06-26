@@ -499,7 +499,7 @@ impl Func {
         // as they're required to have been dropped by this point.
         store
             .0
-            .component_resource_tables(Some(self.instance))
+            .component_resource_tables(Some(self.instance))?
             .validate_scope_exit()?;
 
         // SAFETY: We're relying on the correctness of the structure of

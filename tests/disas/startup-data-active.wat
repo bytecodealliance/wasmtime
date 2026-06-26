@@ -13,6 +13,7 @@
 ;;     region1 = 268435528 "VMStoreContext+0x48"
 ;;     region2 = 268435520 "VMStoreContext+0x40"
 ;;     region3 = 268435536 "VMStoreContext+0x50"
+;;     region4 = 268435592 "VMStoreContext+0x88"
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u2415919104:0 sig0
 ;;
@@ -34,8 +35,10 @@
 ;;     return v8  ; v8 = 1
 ;;
 ;; block3:
-;;     v9 = iconst.i8 0
-;;     return v9  ; v9 = 0
+;;     v9 = iconst.i64 1
+;;     store notrap aligned region4 v9, v4+136  ; v9 = 1
+;;     v10 = iconst.i8 0
+;;     return v10  ; v10 = 0
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {

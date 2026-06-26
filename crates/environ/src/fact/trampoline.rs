@@ -790,8 +790,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
             // Push a task onto the current task stack.
             //
-            // FIXME: Apply the optimizations described in #12311.
-
+            // Note that for sync-to-sync calls, we replace this call with
+            // inline code for lazy/deferred task creation during translation to
+            // CLIF. This avoids task creation and out-of-line calls in the
+            // adapter for most sync-to-sync calls, since most sync-to-sync
+            // calls do not do anything to force the task's creation
+            // (e.g. adjust backpressure).
             self.instruction(I32Const(
                 i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
             ));
@@ -893,7 +897,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // lowering below may call realloc which is in the context of the
         // caller's task, not the callee.
         //
-        // FIXME: Apply the optimizations described in #12311.
+        // Note that for sync-to-sync calls, we will emit inline code during
+        // translation to CLIF to avoid actually calling out to a libcall when
+        // the deferred task's allocation was never forced.
         if self.emit_resource_call || self.module.tunables.concurrency_support {
             let exit_sync_call = self.module.import_exit_sync_call();
             self.instruction(Call(exit_sync_call.as_u32()));
@@ -3601,12 +3607,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
     ///
     /// The `may_leave` flag is a boolean (0 or 1) so no masking is required.
     fn trap_if_not_may_leave(&mut self, flags_global: GlobalIndex, trap: Trap) -> TempLocal {
+        self.instruction(Block(BlockType::Empty));
         self.instruction(GlobalGet(flags_global.as_u32()));
         // Save the flag's value (known to be `true` whenever the trap below is
         // not taken) into a temporary for later restoration.
         let saved = self.local_tee_new_tmp(ValType::I32);
-        self.instruction(I32Eqz);
-        self.instruction(If(BlockType::Empty));
+        self.instruction(BrIf(0));
         self.trap(trap);
         self.instruction(End);
         saved

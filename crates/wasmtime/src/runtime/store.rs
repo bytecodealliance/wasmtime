@@ -2472,7 +2472,9 @@ unsafe impl<T> VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "component-model")]
-    fn component_task_state_mut(&mut self) -> &mut crate::component::store::ComponentTaskState {
+    fn component_task_state_mut(
+        &mut self,
+    ) -> Result<&mut crate::component::store::ComponentTaskState> {
         StoreOpaque::component_task_state_mut(self)
     }
 

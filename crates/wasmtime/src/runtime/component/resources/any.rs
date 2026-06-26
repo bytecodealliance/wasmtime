@@ -109,7 +109,7 @@ impl ResourceAny {
         D: PartialEq + Send + Sync + Copy + 'static,
     {
         let store = store.as_context_mut();
-        let mut tables = HostResourceTables::new_host(store.0);
+        let mut tables = HostResourceTables::new_host(store.0)?;
         let ResourceAny { idx, ty, owned } = self;
         let ty = T::typecheck(ty).ok_or_else(|| crate::format_err!("resource type mismatch"))?;
         if owned {
@@ -189,7 +189,7 @@ impl ResourceAny {
         //
         // This could fail if the index is invalid or if this is removing an
         // `Own` entry which is currently being borrowed.
-        let pair = HostResourceTables::new_host(store.0).host_resource_drop(self.idx)?;
+        let pair = HostResourceTables::new_host(store.0)?.host_resource_drop(self.idx)?;
 
         let (rep, slot) = match (pair, self.owned) {
             (Some(pair), true) => pair,

@@ -1001,7 +1001,7 @@ async fn async_call_stack() -> Result<()> {
     linker.root().func_wrap(
         "a",
         |mut store: StoreContextMut<Option<GuestTaskId>>, (): ()| {
-            let stack = store.async_call_stack().collect::<Vec<_>>();
+            let stack = store.async_call_stack()?.collect::<Vec<_>>();
             assert_eq!(stack, [store.data().unwrap()]);
             Ok(())
         },
@@ -1046,7 +1046,7 @@ async fn async_call_stack() -> Result<()> {
     linker.root().func_wrap(
         "a",
         |mut store: StoreContextMut<Option<GuestTaskId>>, (): ()| {
-            let stack = store.async_call_stack().collect::<Vec<_>>();
+            let stack = store.async_call_stack()?.collect::<Vec<_>>();
             assert_eq!(stack.len(), 2);
             assert_eq!(stack.last(), store.data().as_ref());
             Ok(())

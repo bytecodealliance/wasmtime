@@ -461,7 +461,7 @@ pub async fn test_round_trip(
                     .map(|(a, b)| (String::from(*a), String::from(*b)))
                     .collect::<Vec<_>>(),
                 tx,
-            });
+            })?;
 
             store.run_concurrent(async |_| rx.await).await??;
 

@@ -136,7 +136,7 @@ impl ComponentStoreData {
         let mut fibers = Vec::new();
         let mut futures = Vec::new();
         store
-            .concurrent_state_mut()
+            .concurrent_state_mut_without_forcing_current_thread()
             .take_fibers_and_futures(&mut fibers, &mut futures);
 
         for mut fiber in fibers {
@@ -297,8 +297,13 @@ impl StoreOpaque {
         &mut self.store_data_mut().components
     }
 
-    pub(crate) fn component_task_state_mut(&mut self) -> &mut ComponentTaskState {
-        &mut self.component_data_mut().task_state
+    pub(crate) fn component_task_state_mut(&mut self) -> Result<&mut ComponentTaskState> {
+        // NB: Force the deferred lazy thread, if any, before handing out task
+        // state.
+        #[cfg(feature = "component-model-async")]
+        let _ = self.current_thread()?;
+
+        Ok(&mut self.component_data_mut().task_state)
     }
 
     pub(crate) fn push_component_instance(&mut self, instance: Instance) {
@@ -323,9 +328,32 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_state_mut(&mut self) -> &mut ConcurrentState {
+    pub(crate) fn concurrent_state_mut_without_forcing_current_thread(
+        &mut self,
+    ) -> &mut ConcurrentState {
         debug_assert!(self.concurrency_support());
         self.component_data_mut().task_state.concurrent_state_mut()
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_state_mut_already_forced_current_thread(
+        &mut self,
+    ) -> &mut ConcurrentState {
+        debug_assert!(self.concurrency_support());
+        debug_assert!(
+            !self
+                .vm_store_context_mut()
+                .current_thread_mut()
+                .is_deferred()
+        );
+        self.concurrent_state_mut_without_forcing_current_thread()
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_state_mut(&mut self) -> Result<&mut ConcurrentState> {
+        debug_assert!(self.concurrency_support());
+        self.current_thread()?;
+        Ok(self.component_data_mut().task_state.concurrent_state_mut())
     }
 
     #[inline]
@@ -362,18 +390,24 @@ impl StoreOpaque {
     pub(crate) fn component_resource_tables(
         &mut self,
         instance: Option<Instance>,
-    ) -> vm::component::ResourceTables<'_> {
-        self.component_resource_tables_and_host_resource_data(instance)
-            .0
+    ) -> Result<vm::component::ResourceTables<'_>> {
+        Ok(self
+            .component_resource_tables_and_host_resource_data(instance)?
+            .0)
     }
 
     pub(crate) fn component_resource_tables_and_host_resource_data(
         &mut self,
         instance: Option<Instance>,
-    ) -> (
+    ) -> Result<(
         vm::component::ResourceTables<'_>,
         &mut crate::component::HostResourceData,
-    ) {
+    )> {
+        // NB: Force the current lazy deferred thread, if any, before handing
+        // out resource tables.
+        #[cfg(feature = "component-model-async")]
+        let _ = self.current_thread()?;
+
         let store_id = self.id();
         let data = self.component_data_mut();
         let guest = instance.map(|i| {
@@ -386,14 +420,14 @@ impl StoreOpaque {
                 .instance_states()
         });
 
-        (
+        Ok((
             vm::component::ResourceTables {
                 host_table: &mut data.component_host_table,
                 task_state: &mut data.task_state,
                 guest,
             },
             &mut data.host_resource_data,
-        )
+        ))
     }
 
     pub(crate) fn enter_call_not_concurrent(&mut self) -> Result<()> {
@@ -424,7 +458,10 @@ impl StoreOpaque {
     #[cfg(feature = "component-model-async")]
     fn concurrent_resource_table(&mut self) -> Option<&mut ResourceTable> {
         if self.concurrency_support() {
-            Some(self.concurrent_state_mut().table())
+            Some(
+                self.concurrent_state_mut_without_forcing_current_thread()
+                    .table(),
+            )
         } else {
             None
         }

@@ -101,7 +101,7 @@ impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
                 .map_err(|e| Error::from(e));
             _ = send_result_tx.send(combined_result);
             Ok(())
-        }));
+        }))?;
         let result = ResultProducer::new(getter, send_result_rx);
 
         Ok((
@@ -167,7 +167,7 @@ impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
                 .map_err(|e| Error::from(e));
             _ = recv_result_tx.send(combined_result);
             Ok(())
-        }));
+        }))?;
         let result = ResultProducer::new(getter, recv_result_rx);
 
         Ok((

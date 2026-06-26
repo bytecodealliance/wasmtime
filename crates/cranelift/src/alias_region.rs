@@ -24,6 +24,7 @@ enum VmType {
     VMDrcHeapData,
     VMCopyingHeapData,
     VMNullHeapData,
+    VMDeferredThread,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -117,6 +118,7 @@ impl AliasRegionKey {
     const VM_DRC_HEAP_DATA_KIND: u32 = Self::new_kind(0b1100);
     const VM_COPYING_HEAP_DATA_KIND: u32 = Self::new_kind(0b1101);
     const VM_NULL_HEAP_DATA_KIND: u32 = Self::new_kind(0b1110);
+    const VM_DEFERRED_THREAD_KIND: u32 = Self::new_kind(0b1111);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -133,6 +135,7 @@ impl AliasRegionKey {
                     VmType::VMDrcHeapData => Self::VM_DRC_HEAP_DATA_KIND,
                     VmType::VMCopyingHeapData => Self::VM_COPYING_HEAP_DATA_KIND,
                     VmType::VMNullHeapData => Self::VM_NULL_HEAP_DATA_KIND,
+                    VmType::VMDeferredThread => Self::VM_DEFERRED_THREAD_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -1108,6 +1111,44 @@ where
         )
     }
 
+    /// Load the `VMStoreContext::current_thread` field (the JIT-visible
+    /// deferred-thread pointer; see `VMLazyThread`).
+    pub fn vmstore_context_current_thread(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_current_thread()
+                .into(),
+        )
+    }
+
+    /// Store the `VMStoreContext::current_thread` field.
+    pub fn store_vmstore_context_current_thread(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+        new_thread: ir::Value,
+    ) {
+        self.vmstore_context_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_current_thread()
+                .into(),
+            new_thread,
+        )
+    }
+
     /// Get a `Load` of the GC heap base pointer (`VMStoreContext::gc_heap.base`).
     ///
     /// The caller supplies the base flags because whether the base pointer is
@@ -1336,6 +1377,194 @@ where
             self.offsets
                 .get_ptr_size()
                 .vmstore_context_component_context_slot(slot)
+                .into(),
+            val,
+        )
+    }
+}
+
+/// `VMDeferredThread`-related methods.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    fn vmdeferred_thread_region(
+        &mut self,
+        func: &mut ir::Function,
+        offset: u32,
+    ) -> ir::AliasRegion {
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMDeferredThread,
+                offset,
+            },
+        )
+    }
+
+    fn vmdeferred_thread_load(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        ty: ir::Type,
+        base_flags: ir::MemFlagsData,
+        vmdeferred_thread_ptr: ir::Value,
+        offset: u32,
+    ) -> ir::Value {
+        let region = self.vmdeferred_thread_region(cursor.func, offset);
+        cursor.ins().load(
+            ty,
+            base_flags.with_alias_region(Some(region)),
+            vmdeferred_thread_ptr,
+            i32::try_from(offset).unwrap(),
+        )
+    }
+
+    fn vmdeferred_thread_store(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        base_flags: ir::MemFlagsData,
+        vmdeferred_thread_ptr: ir::Value,
+        offset: u32,
+        val: ir::Value,
+    ) {
+        let region = self.vmdeferred_thread_region(cursor.func, offset);
+        cursor.ins().store(
+            base_flags.with_alias_region(Some(region)),
+            val,
+            vmdeferred_thread_ptr,
+            i32::try_from(offset).unwrap(),
+        );
+    }
+
+    /// Load `VMDeferredThread::parent` (the current thread this frame replaced).
+    pub fn vmdeferred_thread_parent(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmdeferred_thread_ptr: ir::Value,
+    ) -> ir::Value {
+        self.vmdeferred_thread_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmdeferred_thread_ptr,
+            self.offsets
+                .get_ptr_size()
+                .vmdeferred_thread_parent()
+                .into(),
+        )
+    }
+
+    /// Store `VMDeferredThread::parent`.
+    pub fn store_vmdeferred_thread_parent(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmdeferred_thread_ptr: ir::Value,
+        parent: ir::Value,
+    ) {
+        self.vmdeferred_thread_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmdeferred_thread_ptr,
+            self.offsets
+                .get_ptr_size()
+                .vmdeferred_thread_parent()
+                .into(),
+            parent,
+        )
+    }
+
+    /// Store `VMDeferredThread::caller_instance`.
+    pub fn store_vmdeferred_thread_caller_instance(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmdeferred_thread_ptr: ir::Value,
+        caller_instance: ir::Value,
+    ) {
+        self.vmdeferred_thread_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmdeferred_thread_ptr,
+            self.offsets
+                .get_ptr_size()
+                .vmdeferred_thread_caller_instance()
+                .into(),
+            caller_instance,
+        )
+    }
+
+    /// Store `VMDeferredThread::callee_async`.
+    pub fn store_vmdeferred_thread_callee_async(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmdeferred_thread_ptr: ir::Value,
+        callee_async: ir::Value,
+    ) {
+        self.vmdeferred_thread_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmdeferred_thread_ptr,
+            self.offsets
+                .get_ptr_size()
+                .vmdeferred_thread_callee_async()
+                .into(),
+            callee_async,
+        )
+    }
+
+    /// Store `VMDeferredThread::callee_instance`.
+    pub fn store_vmdeferred_thread_callee_instance(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmdeferred_thread_ptr: ir::Value,
+        callee_instance: ir::Value,
+    ) {
+        self.vmdeferred_thread_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmdeferred_thread_ptr,
+            self.offsets
+                .get_ptr_size()
+                .vmdeferred_thread_callee_instance()
+                .into(),
+            callee_instance,
+        )
+    }
+
+    /// Load `VMDeferredThread::saved_context[i]` (a saved `context.{get,set}`
+    /// slot).
+    pub fn vmdeferred_thread_saved_context(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmdeferred_thread_ptr: ir::Value,
+        i: u8,
+    ) -> ir::Value {
+        self.vmdeferred_thread_load(
+            cursor,
+            ir::types::I32,
+            ir::MemFlagsData::trusted(),
+            vmdeferred_thread_ptr,
+            self.offsets
+                .get_ptr_size()
+                .vmdeferred_thread_saved_context(i)
+                .into(),
+        )
+    }
+
+    /// Store `VMDeferredThread::saved_context[i]`.
+    pub fn store_vmdeferred_thread_saved_context(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmdeferred_thread_ptr: ir::Value,
+        i: u8,
+        val: ir::Value,
+    ) {
+        self.vmdeferred_thread_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmdeferred_thread_ptr,
+            self.offsets
+                .get_ptr_size()
+                .vmdeferred_thread_saved_context(i)
                 .into(),
             val,
         )

@@ -292,7 +292,7 @@ where
         } = self;
         let store = store.as_context_mut();
 
-        let mut tables = HostResourceTables::new_host(store.0);
+        let mut tables = HostResourceTables::new_host(store.0)?;
         let (idx, owned) = match state.get() {
             ResourceState::Borrow => (tables.host_resource_lower_borrow(rep)?, false),
             ResourceState::NotInTable => {

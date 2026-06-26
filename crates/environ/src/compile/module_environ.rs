@@ -37,6 +37,39 @@ pub struct ModuleEnvironment<'a, 'data> {
     tunables: &'a Tunables,
 }
 
+/// Identifies a FACT adapter-module import that the compiler lowers inline when
+/// translating the adapter function.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FactInlineIntrinsic {
+    /// `enter-sync-call`: push a deferred component-model thread inline.
+    EnterSyncCall,
+    /// `exit-sync-call`: pop the deferred thread inline on the fast path, or
+    /// fall back to the out-of-line `exit-sync-call` libcall when the thread
+    /// was promoted.
+    ExitSyncCall,
+}
+
+/// TODO FITZGEN
+#[derive(Clone, Debug)]
+pub enum KnownFunc {
+    /// TODO FITZGEN
+    FuncKey(FuncKey),
+    /// TODO FITZGEN
+    FactIntrinsic(FactInlineIntrinsic),
+}
+
+impl From<FuncKey> for KnownFunc {
+    fn from(key: FuncKey) -> Self {
+        Self::FuncKey(key)
+    }
+}
+
+impl From<FactInlineIntrinsic> for KnownFunc {
+    fn from(intrinsic: FactInlineIntrinsic) -> Self {
+        Self::FactIntrinsic(intrinsic)
+    }
+}
+
 /// The result of translating via `ModuleEnvironment`.
 ///
 /// Function bodies are not yet translated, and data initializers have not yet
@@ -68,8 +101,9 @@ pub struct ModuleTranslation<'data> {
     /// imports table into direct calls, when possible.
     ///
     /// When filled in, this only ever contains
-    /// `FuncKey::DefinedWasmFunction(..)`s and `FuncKey::Intrinsic(..)`s.
-    pub known_imported_functions: SecondaryMap<FuncIndex, Option<FuncKey>>,
+    /// `FuncKey::DefinedWasmFunction(..)`s, `FuncKey::Intrinsic(..)`s, and
+    /// `FuncKey::FactInlineIntrinsic`s.
+    pub known_imported_functions: SecondaryMap<FuncIndex, Option<KnownFunc>>,
 
     /// A list of type signatures which are considered exported from this
     /// module, or those that can possibly be called. This list is sorted, and
