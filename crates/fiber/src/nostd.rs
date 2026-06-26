@@ -39,9 +39,19 @@ pub use wasmtime_environ::error::Error;
 pub struct FiberStack {
     base: BasePtr,
     len: usize,
+    storage: FiberStackStorage,
+}
+
+#[expect(
+    dead_code,
+    reason = "fields are held to own the backing storage until drop"
+)]
+enum FiberStackStorage {
     /// Backing storage, if owned. Allocated once at startup and then
     /// not reallocated afterward.
-    storage: TryVec<Align16>,
+    Owned(TryVec<Align16>),
+    Unmanaged,
+    Custom(Box<dyn RuntimeFiberStack>),
 }
 
 #[repr(align(16))]
@@ -70,24 +80,30 @@ impl FiberStack {
         Ok(FiberStack {
             base: BasePtr(storage.as_mut_ptr().cast()),
             len: storage.capacity() * 16,
-            storage,
+            storage: FiberStackStorage::Owned(storage),
         })
     }
 
     pub unsafe fn from_raw_parts(base: *mut u8, guard_size: usize, len: usize) -> Result<Self> {
         Ok(FiberStack {
-            storage: TryVec::default(),
+            storage: FiberStackStorage::Unmanaged,
             base: BasePtr(unsafe { base.offset(isize::try_from(guard_size).unwrap()) }),
             len,
         })
     }
 
     pub fn is_from_raw_parts(&self) -> bool {
-        self.storage.is_empty()
+        matches!(self.storage, FiberStackStorage::Unmanaged)
     }
 
-    pub fn from_custom(_custom: Box<dyn RuntimeFiberStack>) -> Result<Self> {
-        unimplemented!("Custom fiber stacks not supported in no_std fiber library")
+    pub fn from_custom(custom: Box<dyn RuntimeFiberStack>) -> Result<Self> {
+        let range = custom.range();
+        let start_ptr = range.start as *mut u8;
+        Ok(FiberStack {
+            base: BasePtr(start_ptr),
+            len: range.len(),
+            storage: FiberStackStorage::Custom(custom),
+        })
     }
 
     pub fn top(&self) -> Option<*mut u8> {
