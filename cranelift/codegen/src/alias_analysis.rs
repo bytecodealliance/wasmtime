@@ -147,7 +147,7 @@ impl LastStores {
     fn meet_from(&mut self, other: &LastStores, loc: Inst) -> bool {
         let meet = |a: &mut PackedOption<Inst>, b: PackedOption<Inst>| -> bool {
             let (inst, changed) = match (a.expand(), b.expand()) {
-                (None, None) => (None.into(), false),
+                (None, None) => (None, false),
                 (Some(a), None) => (Some(a), true),
                 (None, Some(b)) => (Some(b), true),
                 (Some(a), Some(b)) if a == b => (Some(a), false),
