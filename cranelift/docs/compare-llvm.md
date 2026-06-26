@@ -76,22 +76,25 @@ representation. Some target ISAs have a fast instruction selector that can
 translate simple code directly to MachineInstrs, bypassing SelectionDAG when
 possible.
 
-[Cranelift IR](ir.md) uses a single intermediate representation to cover
-these levels of abstraction. This is possible in part because of Cranelift's
-smaller scope.
+[Cranelift IR](ir.md) is an ISA-agnostic SSA IR that serves as the input to
+the code generator. Cranelift uses a two-phase approach:
 
-- Cranelift does not provide assemblers and disassemblers, so it is not
-  necessary to be able to represent every weird instruction in an ISA. Only
-  those instructions that the code generator emits have a representation.
-- Cranelift's opcodes are ISA-agnostic, but after legalization / instruction
-  selection, each instruction is annotated with an ISA-specific encoding which
-  represents a native instruction.
-- SSA form is preserved throughout. After register allocation, each SSA value
-  is annotated with an assigned ISA register or stack slot.
+1. **Mid-end optimizations**: CLIF IR is first optimized by machine-independent
+   passes (e-graph-based GVN, alias analysis, etc.) that work entirely on CLIF
+   opcodes.
+
+2. **Backend lowering**: The optimized CLIF is then lowered to machine
+   instructions by an ISA-specific backend, using ISLE (Instruction Selection
+   and Lowering Engine) rewrite rules. The result is a `VCode` container of
+   virtual-register machine instructions. Register allocation then assigns
+   physical registers, after which the instructions are emitted as binary code.
+
+Cranelift does not provide assemblers or disassemblers, so only those
+instructions that the code generator emits need a representation.
 
 The Cranelift intermediate representation is similar to LLVM IR, but at a slightly
 lower level of abstraction, to allow it to be used all the way through the
-codegen process.
+optimization phase of the codegen process.
 
 This design tradeoff does mean that Cranelift IR is less friendly for mid-level
 optimizations. Cranelift doesn't currently perform mid-level optimizations,
@@ -166,12 +169,10 @@ instead models this by returning a single value of an aggregate type.
 
 LLVM has a small well-defined basic instruction set and a large number of
 intrinsics, some of which are ISA-specific. Cranelift has a larger instruction
-set and no intrinsics. Some Cranelift instructions are ISA-specific.
+set and no intrinsics.
 
-Since Cranelift instructions are used all the way until the binary machine code
-is emitted, there are opcodes for every native instruction that can be
-generated. There is a lot of overlap between different ISAs, so for example the
-`iadd_imm` instruction is used by every ISA that can add an
-immediate integer to a register. A simple RISC ISA like RISC-V can be defined
-with only shared instructions, while x86 needs a number of specific
-instructions to model addressing modes.
+Cranelift's CLIF opcodes are ISA-agnostic and are used for both optimization
+and as the input to instruction selection. ISA-specific machine instructions
+are defined separately in each backend (in ISLE) and are never exposed at the
+CLIF IR level. Lowering rules in ISLE match patterns of CLIF opcodes and emit
+the corresponding sequences of machine instructions into `VCode`.

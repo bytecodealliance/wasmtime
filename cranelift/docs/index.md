@@ -1,51 +1,75 @@
 # Cranelift Documentation
 
-## Miscellaneous documentation pages:
+## Reference
 
  - [Cranelift IR](ir.md)
-   Cranelift IR is the data structure that most of the compiler operates on.
+   The data structure that most of the compiler operates on: opcodes, types,
+   basic blocks, function signatures, and the textual `.clif` format.
 
  - [Testing Cranelift](testing.md)
-   This page documents Cranelift's testing frameworks.
+   Cranelift's testing frameworks: Rust unit tests, filecheck-based `.clif`
+   file tests, and the available `test` commands.
 
  - [Cranelift compared to LLVM](compare-llvm.md)
-   LLVM and Cranelift have similarities and differences.
+   Similarities and differences between Cranelift and LLVM in terms of IR
+   design, optimization model, and code generation approach.
 
-## Cranelift crate documentation:
+ - [How ISLE is Integrated with Cranelift](isle-integration.md)
+   How the ISLE DSL fits into Cranelift's build system and lowering pipeline.
+
+## Architecture
+
+ - [Backend Architecture](backend-architecture.md)
+   How the backend pipeline works: CLIF → VCode → binary. Covers ISLE
+   instruction selection, the `MachInst` trait, `VCode`, register allocation
+   via regalloc2, and `MachBuffer` emission.
+
+## Contributor Guides
+
+ - [How to Add a New Backend](add-new-backend.md)
+   Step-by-step guide to creating a new ISA backend: directory layout,
+   register definitions, machine instruction enum, ABI, ISLE lowering rules,
+   and binary emission.
+
+ - [How to Add a New Instruction to CLIF](add-clif-instruction.md)
+   Adding a new opcode to the Cranelift IR: format definitions, the meta
+   DSL, verifier checks, interpreter support, and testing.
+
+ - [How to Add a Machine Instruction and Lowering](add-machine-instruction.md)
+   Adding a new machine instruction variant to a backend and writing ISLE
+   rules to lower CLIF opcodes to it.
+
+ - [Debugging Code Generation](debugging-codegen.md)
+   Strategies for debugging miscompilations, panics, and register allocation
+   failures: printing IR, minimizing test cases, diffing output, chaos mode,
+   and common error patterns.
+
+## Cranelift crate documentation
 
  - [cranelift](https://docs.rs/cranelift)
-    This is an umbrella crate that re-exports the codegen and frontend crates,
-    to make them easier to use.
+    Umbrella crate that re-exports `cranelift-codegen` and `cranelift-frontend`.
 
  - [cranelift-codegen](https://docs.rs/cranelift-codegen)
-    This is the core code generator crate. It takes Cranelift IR as input
-    and emits encoded machine instructions, along with symbolic relocations,
-    as output.
-
- - [cranelift-codegen-meta](https://docs.rs/cranelift-codegen-meta)
-    This crate contains the meta-language utilities and descriptions used by the
-    code generator.
+    Core code generator crate. Takes Cranelift IR as input and emits encoded
+    machine instructions with symbolic relocations.
 
  - [cranelift-frontend](https://docs.rs/cranelift-frontend)
-    This crate provides utilities for translating code into Cranelift IR.
+    Utilities for translating code into Cranelift IR, including SSA construction.
 
  - [cranelift-native](https://docs.rs/cranelift-native)
-    This crate performs auto-detection of the host, allowing Cranelift to
-    generate code optimized for the machine it's running on.
+    Auto-detection of the host ISA and feature flags.
 
  - [cranelift-reader](https://docs.rs/cranelift-reader)
-    This crate translates from Cranelift IR's text format into Cranelift IR
-    in in-memory data structures.
+    Parses the textual `.clif` format into in-memory IR data structures.
 
  - [cranelift-module](https://docs.rs/cranelift-module)
-    This crate manages compiling multiple functions and data objects
-    together.
+    Manages compiling multiple functions and data objects together and linking
+    them into a module.
 
  - [cranelift-object](https://docs.rs/cranelift-object)
-    This crate provides a object-based backend for `cranelift-module`, which
-    emits native object files using the
-    [object](https://github.com/gimli-rs/object) library.
+    Object-file backend for `cranelift-module`, emitting native object files
+    via the [object](https://github.com/gimli-rs/object) library.
 
  - [cranelift-jit](https://docs.rs/cranelift-jit)
-    This crate provides a JIT backend for `cranelift-module`, which
-    emits code and data into memory.
+    JIT backend for `cranelift-module`, emitting code and data directly into
+    executable memory.

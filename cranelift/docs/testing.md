@@ -20,16 +20,16 @@ Compilers work with large data structures representing programs, and it quickly
 gets unwieldy to generate test data programmatically. File-level tests make it
 easier to provide substantial input functions for the compiler tests.
 
-File tests are `*.clif` files in the `filetests/` directory
-hierarchy. Each file has a header describing what to test followed by a number
-of input functions in the :doc:`Cranelift textual intermediate representation
-<ir>`:
+File tests are `*.clif` files in the `filetests/` directory hierarchy. Each
+file has a header describing what to test followed by a number of input
+functions in the [Cranelift textual intermediate representation](ir.md):
 
-.. productionlist::
-    test_file     : test_header `function_list`
-    test_header   : test_commands (`isa_specs` | `settings`)
-    test_commands : test_command { test_command }
-    test_command  : "test" test_name { option } "\n"
+```
+test_file     ::= test_header function_list
+test_header   ::= test_commands (isa_specs | settings)
+test_commands ::= test_command { test_command }
+test_command  ::= "test" test_name { option } "\n"
+```
 
 The available test commands are described below.
 
@@ -37,34 +37,32 @@ Many test commands only make sense in the context of a target instruction set
 architecture. These tests require one or more ISA specifications in the test
 header:
 
-.. productionlist::
-    isa_specs     : { [`settings`] isa_spec }
-    isa_spec      : "isa" isa_name { `option` } "\n"
+```
+isa_specs ::= { [settings] isa_spec }
+isa_spec  ::= "isa" isa_name { option } "\n"
+```
 
-The options given on the `isa` line modify the ISA-specific settings defined in
-`cranelift-codegen/meta-python/isa/*/settings.py`.
+The options given on the `isa` line modify ISA-specific settings.
 
 All types of tests allow shared Cranelift settings to be modified:
 
-.. productionlist::
-    settings      : { setting }
-    setting       : "set" { option } "\n"
-    option        : flag | setting "=" value
-
-The shared settings available for all target ISAs are defined in
-`cranelift-codegen/meta-python/base/settings.py`.
+```
+settings ::= { setting }
+setting  ::= "set" { option } "\n"
+option   ::= flag | setting "=" value
+```
 
 The `set` lines apply settings cumulatively:
 
 ```
-    test legalizer
-    set opt_level=best
-    set is_pic=1
-    target riscv64
-    set is_pic=0
-    target riscv32 supports_m=false
+test legalizer
+set opt_level=best
+set is_pic=1
+target riscv64
+set is_pic=0
+target riscv32 supports_m=false
 
-    function %foo() {}
+function %foo() {}
 ```
 
 This example will run the legalizer test twice. Both runs will have
@@ -87,7 +85,8 @@ $ CRANELIFT_FILETESTS_THREADS=1 clif-util test path/to/file.clif
 
 Many of the test commands described below use *filecheck* to verify their
 output. Filecheck is a Rust implementation of the LLVM tool of the same name.
-See the `documentation <https://docs.rs/filecheck/>`_ for details of its syntax.
+See the [filecheck documentation](https://docs.rs/filecheck/) for details of
+its syntax.
 
 Comments in `.clif` files are associated with the entity they follow.
 This typically means an instruction or the whole function. Those tests that
@@ -101,9 +100,9 @@ This is useful for defining common regular expression variables with the
 
 Note that LLVM's file tests don't separate filecheck directives by their
 associated function. It verifies the concatenated output against all filecheck
-directives in the test file. LLVM's :command:`FileCheck` command has a
-`CHECK-LABEL:` directive to help separate the output from different functions.
-Cranelift's tests don't need this.
+directives in the test file. LLVM's `FileCheck` command has a `CHECK-LABEL:`
+directive to help separate the output from different functions. Cranelift's
+tests don't need this.
 
 ### `test cat`
 
@@ -115,18 +114,18 @@ against the associated filecheck directives.
 Example:
 
 ```
-    function %r1() -> i32, f32 {
-    block1:
-        v10 = iconst.i32 3
-        v20 = f32const 0.0
-        return v10, v20
-    }
-    ; sameln: function %r1() -> i32, f32 {
-    ; nextln: block0:
-    ; nextln:     v10 = iconst.i32 3
-    ; nextln:     v20 = f32const 0.0
-    ; nextln:     return v10, v20
-    ; nextln: }
+function %r1() -> i32, f32 {
+block1:
+    v10 = iconst.i32 3
+    v20 = f32const 0.0
+    return v10, v20
+}
+; sameln: function %r1() -> i32, f32 {
+; nextln: block0:
+; nextln:     v10 = iconst.i32 3
+; nextln:     v20 = f32const 0.0
+; nextln:     return v10, v20
+; nextln: }
 ```
 
 ### `test verifier`
@@ -139,13 +138,13 @@ instruction that produces the verifier error*. Both the error message and
 reported location of the error is verified:
 
 ```
-    test verifier
+test verifier
 
-    function %test(i32) {
-        block0(v0: i32):
-            jump block1       ; error: terminator
-            return
-    }
+function %test(i32) {
+    block0(v0: i32):
+        jump block1       ; error: terminator
+        return
+}
 ```
 
 This example test passes if the verifier fails with an error message containing
@@ -158,51 +157,50 @@ function verifies correctly.
 ### `test print-cfg`
 
 Print the control flow graph of each function as a Graphviz graph, and run
-filecheck over the result. See also the :command:`clif-util print-cfg`
-command:
+filecheck over the result. See also the `clif-util print-cfg` command:
 
 ```
-    ; For testing cfg generation. This code is nonsense.
-    test print-cfg
-    test verifier
+; For testing cfg generation. This code is nonsense.
+test print-cfg
+test verifier
 
-    function %nonsense(i32, i32) -> f32 {
-    ; check: digraph %nonsense {
-    ; regex: I=\binst\d+\b
-    ; check: label="{block0 | <$(BRIF=$I)>brif v1, block1(v2), block2 }"]
+function %nonsense(i32, i32) -> f32 {
+; check: digraph %nonsense {
+; regex: I=\binst\d+\b
+; check: label="{block0 | <$(BRIF=$I)>brif v1, block1(v2), block2 }"]
 
-    block0(v0: i32, v1: i32):
-        v2 = iconst.i32 0
-        brif v1, block1(v2), block2  ; unordered: block0:$BRIF -> block1
-                                     ; unordered: block0:$BRIF -> block2
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    brif v1, block1(v2), block2  ; unordered: block0:$BRIF -> block1
+                                 ; unordered: block0:$BRIF -> block2
 
-    block1(v5: i32):
-        return v0
+block1(v5: i32):
+    return v0
 
-    block2:
-        v100 = f32const 0.0
-        return v100
-    }
+block2:
+    v100 = f32const 0.0
+    return v100
+}
 ```
 
 ### `test domtree`
 
 Compute the dominator tree of each function and validate it against the
-`dominates:` annotations::
+`dominates:` annotations:
 
 ```
-    test domtree
+test domtree
 
-    function %test(i32) {
-        block0(v0: i32):
-            jump block1              ; dominates: block1
-        block1:
-            brif v0, block2, block3  ; dominates: block2, block3
-        block2:
-            jump block3
-        block3:
-            return
-    }
+function %test(i32) {
+    block0(v0: i32):
+        jump block1              ; dominates: block1
+    block1:
+        brif v0, block2, block3  ; dominates: block2, block3
+    block2:
+        jump block3
+    block3:
+        return
+}
 ```
 
 Every reachable basic block except for the entry block has an
@@ -212,71 +210,50 @@ both correct and complete.
 
 This test also sends the computed CFG post-order through filecheck.
 
-### `test legalizer`
+### `test optimize`
 
-Legalize each function for the specified target ISA and run the resulting
-function through filecheck. This test command can be used to validate the
-encodings selected for legal instructions as well as the instruction
-transformations performed by the legalizer.
+Run each function through the optimization passes (e-graph based GVN and
+rewrites, alias analysis, etc.) but not lowering or register allocation. The
+resulting CLIF IR is sent to filecheck.
 
-### `test regalloc`
+Requires a target ISA.
 
-Test the register allocator.
+Supports the `precise-output` option, which requires the filecheck directives
+to be a complete and exact description of the optimized output. This is useful
+for tests that need to verify the exact form of the optimized IR and can be
+auto-updated with `clif-util test --update-comments`.
 
-First, each function is legalized for the specified target ISA. This is
-required for register allocation since the instruction encodings provide
-register class constraints to the register allocator.
+Example:
 
-Second, the register allocator is run on the function, inserting spill code and
-assigning registers and stack slots to all values.
+```
+test optimize
+target x86_64
 
-The resulting function is then run through filecheck.
+function %foo(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = iadd v2, v0
+    return v3
+}
+; check: v4 = iadd v0, v0
+; check: v5 = iadd v4, v1
+; check: return v5
+```
 
+### `test alias-analysis`
 
-### `test simple-gvn`
-
-Test the simple GVN pass.
-
-The simple GVN pass is run on each function, and then results are run
-through filecheck.
-
-### `test licm`
-
-Test the LICM pass.
-
-The LICM pass is run on each function, and then results are run
-through filecheck.
-
-### `test dce`
-
-Test the DCE pass.
-
-The DCE pass is run on each function, and then results are run
-through filecheck.
-
-### `test shrink`
-
-Test the instruction shrinking pass.
-
-The shrink pass is run on each function, and then results are run
-through filecheck.
-
-### `test simple_preopt`
-
-Test the preopt pass.
-
-The preopt pass is run on each function, and then results are run
-through filecheck.
+Run each function through the GVN and alias analysis passes (redundant load
+elimination), then send the resulting CLIF to filecheck. Does not perform
+lowering or register allocation.
 
 ### `test compile`
 
 Test the whole code generation pipeline.
 
 Each function is passed through the full `Context::compile()` function
-which is normally used to compile code. This type of test often depends
-on assertions or verifier errors, but it is also possible to use
-filecheck directives which will be matched against the final form of the
-Cranelift IR right before binary machine code emission.
+which is normally used to compile code. Filecheck directives are matched
+against the final form of the Cranelift IR right before binary machine code
+emission.
 
 ### `test run`
 
@@ -284,48 +261,76 @@ Compile and execute a function.
 
 This test command allows several directives:
  - to print the result of running a function to stdout, add a `print`
- directive and call the preceding function with arguments (see `%foo` in
- the example below); remember to enable `--nocapture` if running these
- tests through Cargo
+   directive and call the preceding function with arguments (see `%foo` in
+   the example below); remember to enable `--nocapture` if running these
+   tests through Cargo
  - to check the result of a function, add a `run` directive and call the
- preceding function with a comparison (`==` or `!=`) (see `%bar` below)
+   preceding function with a comparison (`==` or `!=`) (see `%bar` below)
  - for backwards compatibility, to check the result of a function with a
- `() -> i*` signature, only the `run` directive is required, with no
- invocation or comparison (see `%baz` below);  a non zero value is
- interpreted as a successful test execution, whereas a zero value is
- interpreted as a failed test.
+   `() -> i*` signature, only the `run` directive is required, with no
+   invocation or comparison (see `%baz` below); a non-zero value is
+   interpreted as a successful test execution, whereas a zero value is
+   interpreted as a failed test.
 
 Currently a `target` is required but is only used to indicate whether the host
-platform can run the test and currently only the architecture is filtered. The
-host platform's native target will be used to actually compile the test.
+platform can run the test; only the architecture is filtered. The host
+platform's native target will be used to actually compile the test.
 
 Example:
 
 ```
-    test run
-    target x86_64
+test run
+target x86_64
 
-    ; how to print the results of a function
-    function %foo() -> i32 {
-    block0:
-        v0 = iconst.i32 42
-        return v0
-    }
-    ; print: %foo()
+; how to print the results of a function
+function %foo() -> i32 {
+block0:
+    v0 = iconst.i32 42
+    return v0
+}
+; print: %foo()
 
-    ; how to check the results of a function
-    function %bar(i32) -> i32 {
-    block0(v0:i32):
-        v1 = iadd_imm v0, 1
-        return v1
-    }
-    ; run: %bar(1) == 2
+; how to check the results of a function
+function %bar(i32) -> i32 {
+block0(v0:i32):
+    v1 = iadd_imm v0, 1
+    return v1
+}
+; run: %bar(1) == 2
 
-    ; legacy method of checking the results of a function
-    function %baz() -> i8 {
-    block0:
-        v0 = iconst.i8 1
-        return v0
-    }
-    ; run
+; legacy method of checking the results of a function
+function %baz() -> i8 {
+block0:
+    v0 = iconst.i8 1
+    return v0
+}
+; run
 ```
+
+### `test interpret`
+
+Interpret each function using Cranelift's interpreter rather than compiling it.
+Use `run:` and `print:` directives the same way as in `test run`. This does not
+require a target ISA and runs platform-independently.
+
+### `test inline`
+
+Inline all calls in each function, optionally followed by optimization passes,
+and send the resulting CLIF to filecheck. Does not perform lowering or register
+allocation.
+
+Supports the following options:
+ - `precise-output`: require filecheck directives to be a complete and exact
+   description of the output
+ - `optimize`: run optimization passes after inlining
+
+### `test safepoint`
+
+Run CFG and dominator tree computation for each function, then send the CLIF
+to filecheck. Useful for verifying safepoint/stackmap-related IR.
+
+### `test unwind`
+
+Run each function through the full code generation pipeline and verify the
+generated unwind information (DWARF `.eh_frame` entries or Windows x64 unwind
+data) against filecheck directives. Requires a target ISA.
