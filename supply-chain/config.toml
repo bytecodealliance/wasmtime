@@ -475,14 +475,6 @@ criteria = "safe-to-deploy"
 version = "2.14.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.shuffling-allocator]]
-version = "1.1.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.souper-ir]]
-version = "2.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.tempfile]]
 version = "3.3.0"
 criteria = "safe-to-deploy"

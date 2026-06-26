@@ -60,6 +60,7 @@ pub mod inline;
 pub mod ir;
 pub mod isa;
 pub mod loop_analysis;
+pub mod post_dominator_tree;
 pub mod print_errors;
 pub mod settings;
 pub mod timing;

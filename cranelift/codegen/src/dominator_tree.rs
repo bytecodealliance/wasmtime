@@ -14,6 +14,71 @@ mod simple;
 
 pub use simple::SimpleDominatorTree;
 
+/// A directed graph over a function's basic blocks, used to drive the generic
+/// (post-)dominator tree computation shared by [`DominatorTree`] and
+/// `PostDominatorTree`.
+///
+/// The `successors`/`predecessors` methods are in the *analysis* direction:
+/// `successors` is the direction the spanning-tree DFS walks away from the
+/// roots, and `predecessors` is the direction used while computing
+/// semidominators. For the forward dominator tree (see `ForwardGraph`) this is
+/// just the control-flow graph. For the post-dominator tree it is the
+/// *reversed* control-flow graph, augmented with a virtual sink that sits above
+/// the function's exit blocks; the spanning tree's existing virtual root (node
+/// 0) plays the role of that sink.
+pub(crate) trait DomTreeGraph {
+    /// The number of blocks in the underlying function, used to size the
+    /// per-block maps.
+    fn num_blocks(&self) -> usize;
+
+    /// The roots of the (post-)dominator forest: the blocks that are direct
+    /// children of the virtual root/sink.
+    ///
+    /// For the dominator tree this is the entry block; for the post-dominator
+    /// tree these are the function's exit blocks.
+    fn roots(&self) -> impl Iterator<Item = Block>;
+
+    /// The successors of `block`.
+    fn successors(&self, block: Block) -> impl Iterator<Item = Block>;
+
+    /// The predecessors of `block`.
+    fn predecessors(&self, block: Block) -> impl Iterator<Item = Block>;
+}
+
+/// The forward control-flow graph, used to compute the standard
+/// `DominatorTree`.
+struct ForwardGraph<'a> {
+    func: &'a Function,
+    cfg: &'a ControlFlowGraph,
+}
+
+impl DomTreeGraph for ForwardGraph<'_> {
+    fn num_blocks(&self) -> usize {
+        self.func.dfg.num_blocks()
+    }
+
+    fn roots(&self) -> impl Iterator<Item = Block> {
+        self.func.layout.entry_block().into_iter()
+    }
+
+    fn successors(&self, block: Block) -> impl Iterator<Item = Block> {
+        // Heuristic: chase the children in reverse. This puts the first
+        // successor block first in the postorder, all other things being equal,
+        // which tends to prioritize loop backedges over out-edges, putting the
+        // edge-block closer to the loop body and minimizing live-ranges in
+        // linear instruction space. This heuristic doesn't have any effect on
+        // the computation of dominators, and is purely for other consumers of
+        // the postorder we cache here.
+        self.func.block_successors(block).rev()
+    }
+
+    fn predecessors(&self, block: Block) -> impl Iterator<Item = Block> {
+        self.cfg
+            .pred_iter(block)
+            .map(|pred: BlockPredecessor| pred.block)
+    }
+}
+
 /// Spanning tree node, used during domtree computation.
 #[derive(Clone, Default)]
 struct SpanningTreeNode {
@@ -350,10 +415,19 @@ impl DominatorTree {
     pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph) {
         let _tt = timing::domtree();
         debug_assert!(cfg.is_valid());
+        self.compute_from_graph(&ForwardGraph { func, cfg });
+    }
 
+    /// Reset and compute a post-order and dominator tree over an arbitrary
+    /// `DomTreeGraph`.
+    ///
+    /// This is the shared core used both by `DominatorTree::compute` (over the
+    /// control-flow graph) and by `PostDominatorTree` (over the reversed
+    /// control-flow graph augmented with a virtual sink).
+    pub(crate) fn compute_from_graph(&mut self, graph: &impl DomTreeGraph) {
         self.clear();
-        self.compute_spanning_tree(func);
-        self.compute_domtree(cfg);
+        self.compute_spanning_tree(graph);
+        self.compute_domtree(graph);
         self.compute_domtree_preorder();
 
         self.valid = true;
@@ -379,12 +453,12 @@ impl DominatorTree {
 
     /// Reset all internal data structures, build spanning tree
     /// and compute a post-order of the control flow graph.
-    fn compute_spanning_tree(&mut self, func: &Function) {
-        self.nodes.resize(func.dfg.num_blocks());
-        self.stree.reserve(func.dfg.num_blocks());
+    fn compute_spanning_tree(&mut self, graph: &impl DomTreeGraph) {
+        self.nodes.resize(graph.num_blocks());
+        self.stree.reserve(graph.num_blocks());
 
-        if let Some(block) = func.layout.entry_block() {
-            self.dfs_worklist.push(TraversalEvent::Enter(0, block));
+        for root in graph.roots() {
+            self.dfs_worklist.push(TraversalEvent::Enter(0, root));
         }
 
         loop {
@@ -400,19 +474,12 @@ impl DominatorTree {
                     let pre_number = self.stree.push(parent, block);
                     node.pre_number = pre_number;
 
-                    // Use the same traversal heuristics as in traversals.rs.
+                    // Push successors in the analysis direction. Any ordering
+                    // heuristic (such as the forward graph's `.rev()`) lives in
+                    // the `DomTreeGraph` implementation.
                     self.dfs_worklist.extend(
-                        func.block_successors(block)
-                            // Heuristic: chase the children in reverse. This puts
-                            // the first successor block first in the postorder, all
-                            // other things being equal, which tends to prioritize
-                            // loop backedges over out-edges, putting the edge-block
-                            // closer to the loop body and minimizing live-ranges in
-                            // linear instruction space. This heuristic doesn't have
-                            // any effect on the computation of dominators, and is
-                            // purely for other consumers of the postorder we cache
-                            // here.
-                            .rev()
+                        graph
+                            .successors(block)
                             // A simple optimization: push less items to the stack.
                             .filter(|successor| self.nodes[*successor].pre_number == NOT_VISITED)
                             .map(|successor| TraversalEvent::Enter(pre_number, successor)),
@@ -463,7 +530,7 @@ impl DominatorTree {
         self.stree[v].label
     }
 
-    fn compute_domtree(&mut self, cfg: &ControlFlowGraph) {
+    fn compute_domtree(&mut self, graph: &impl DomTreeGraph) {
         // Compute semi-dominators.
         for w in (1..self.stree.len() as u32).rev() {
             let w_node = &mut self.stree[w];
@@ -472,10 +539,7 @@ impl DominatorTree {
 
             let last_linked = w + 1;
 
-            for pred in cfg
-                .pred_iter(block)
-                .map(|pred: BlockPredecessor| pred.block)
-            {
+            for pred in graph.predecessors(block) {
                 // Skip unreachable nodes.
                 if self.nodes[pred].pre_number == NOT_VISITED {
                     continue;
@@ -522,13 +586,20 @@ impl DominatorTree {
                 let sib = mem::replace(&mut self.nodes[idom].child, block.into());
                 self.nodes[block].sibling = sib;
             } else {
-                // The only block without an immediate dominator is the entry.
+                // Blocks without an immediate dominator are the roots of the
+                // (post-)dominator forest: the entry block for the forward tree,
+                // or the exit blocks for a post-dominator tree.
                 self.dfs_worklist.push(TraversalEvent::Enter(0, block));
             }
         }
 
         // Assign pre-order numbers from a DFS of the dominator tree.
-        debug_assert!(self.dfs_worklist.len() <= 1);
+        //
+        // The worklist now holds every root of the (post-)dominator forest: a
+        // single entry block for the forward `DominatorTree`, but possibly many
+        // (one per exit block) for a post-dominator forest. Each root begins a
+        // disjoint subtree, so the numbering below assigns each its own
+        // contiguous `dom_pre_number` range.
         let mut n = 0;
         while let Some(event) = self.dfs_worklist.pop() {
             if let TraversalEvent::Enter(_, block) = event {

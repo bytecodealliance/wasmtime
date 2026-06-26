@@ -7215,6 +7215,12 @@ user-id = 6025 # Thomas de Zeeuw (Thomasdezeeuw)
 start = "2019-12-17"
 end = "2027-04-15"
 
+[[trusted.mutatis-derive]]
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2024-08-15"
+end = "2027-06-26"
+
 [[trusted.num_cpus]]
 criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
@@ -7371,6 +7377,12 @@ user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-05-02"
 end = "2026-10-08"
 
+[[trusted.shuffling-allocator]]
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2021-01-12"
+end = "2027-06-26"
+
 [[trusted.slab]]
 criteria = "safe-to-deploy"
 user-id = 6741 # Alice Ryhl (Darksonn)
@@ -7388,6 +7400,12 @@ criteria = "safe-to-deploy"
 user-id = 6025 # Thomas de Zeeuw (Thomasdezeeuw)
 start = "2020-09-09"
 end = "2027-04-15"
+
+[[trusted.souper-ir]]
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2020-07-17"
+end = "2027-06-26"
 
 [[trusted.syn]]
 criteria = "safe-to-deploy"

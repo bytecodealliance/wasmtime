@@ -55,6 +55,7 @@ criterion = { workspace = true }
 similar = { workspace = true }
 env_logger = { workspace = true }
 proptest = { workspace = true }
+mutatis = { workspace = true }
 
 [build-dependencies]
 cranelift-codegen-meta = { path = "meta", version = "0.134.0" }
