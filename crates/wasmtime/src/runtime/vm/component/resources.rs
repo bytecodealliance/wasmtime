@@ -21,6 +21,7 @@
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
 use super::{HandleTable, InstanceState, RemovedResource};
+use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
 use core::error::Error;
@@ -74,7 +75,7 @@ pub struct ResourceTables<'a> {
 
     /// Identifier for the current "scope" which is used for various functions
     /// on `task_state` above to mutate borrows/etc of the current scope.
-    pub current_scope_id: u32,
+    pub current_scope_id: Option<u32>,
 }
 
 /// Typed representation of a "rep" for a resource.
@@ -265,6 +266,13 @@ impl ResourceTables<'_> {
         }
     }
 
+    fn current_scope_id(&self) -> Result<u32> {
+        match self.current_scope_id {
+            Some(id) => Ok(id),
+            None => bail_bug!("no current scope"),
+        }
+    }
+
     /// Extracts the underlying resource representation by lifting a "borrow"
     /// from the tables.
     ///
@@ -277,10 +285,8 @@ impl ResourceTables<'_> {
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
         let (rep, is_own) = self.table_for_index(&index).resource_lend(index)?;
         if is_own {
-            self.task_state
-                .call_context(self.current_scope_id)?
-                .lenders
-                .push(index);
+            let current = self.current_scope_id()?;
+            self.task_state.call_context(current)?.lenders.push(index);
         }
         Ok(rep)
     }
@@ -298,7 +304,7 @@ impl ResourceTables<'_> {
     /// `VMComponentContext` which handles the special case of avoiding borrow
     /// tracking entirely.
     pub fn resource_lower_borrow(&mut self, resource: TypedResource) -> Result<u32> {
-        let scope = self.current_scope_id;
+        let scope = self.current_scope_id()?;
         let cx = self.task_state.call_context(scope)?;
         cx.borrow_count = cx.borrow_count.checked_add(1).unwrap();
         self.table_for_resource(&resource)
@@ -312,7 +318,7 @@ impl ResourceTables<'_> {
     /// resources that were originally passed in.
     #[inline]
     pub fn validate_scope_exit(&mut self) -> Result<()> {
-        let cx = self.task_state.call_context(self.current_scope_id)?;
+        let cx = self.task_state.call_context(self.current_scope_id()?)?;
         if cx.borrow_count > 0 {
             bail!("borrow handles still remain at the end of the call")
         }

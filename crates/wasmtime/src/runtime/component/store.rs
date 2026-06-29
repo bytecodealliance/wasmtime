@@ -465,9 +465,12 @@ impl StoreOpaque {
         }
     }
 
-    pub(crate) fn current_scope_id_not_concurrent(&mut self) -> Result<u32> {
+    pub(crate) fn current_scope_id_not_concurrent(&mut self) -> Result<Option<u32>> {
         match &mut self.component_data_mut().task_state {
-            ComponentTaskState::NotConcurrent(state) => Ok(u32::try_from(state.scopes.len() - 1)?),
+            ComponentTaskState::NotConcurrent(state) => match state.scopes.len().checked_sub(1) {
+                Some(i) => Ok(Some(u32::try_from(i)?)),
+                None => Ok(None),
+            },
             ComponentTaskState::Concurrent(_) => bail_bug!("should not be reachable"),
         }
     }

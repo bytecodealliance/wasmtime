@@ -195,7 +195,7 @@ impl StoreOpaque {
         Ok(!self.trapped())
     }
 
-    pub(crate) fn current_scope_id(&mut self) -> Result<u32> {
+    pub(crate) fn current_scope_id(&mut self) -> Result<Option<u32>> {
         self.current_scope_id_not_concurrent()
     }
 }

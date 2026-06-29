@@ -2299,17 +2299,17 @@ impl StoreOpaque {
 
     /// Used by `ResourceTables` to record the scope of a borrow to get undone
     /// in the future.
-    pub(crate) fn current_scope_id(&mut self) -> Result<u32> {
+    pub(crate) fn current_scope_id(&mut self) -> Result<Option<u32>> {
         if !self.concurrency_support() {
             return self.current_scope_id_not_concurrent();
         }
         let (bits, is_host) = match self.current_thread()? {
             CurrentThread::Guest(id) => (id.task.rep(), false),
             CurrentThread::Host(id) => (id.rep(), true),
-            CurrentThread::None => bail_bug!("current thread is not set"),
+            CurrentThread::None => return Ok(None),
         };
         assert_eq!((bits << 1) >> 1, bits);
-        Ok((bits << 1) | u32::from(is_host))
+        Ok(Some((bits << 1) | u32::from(is_host)))
     }
 }
 

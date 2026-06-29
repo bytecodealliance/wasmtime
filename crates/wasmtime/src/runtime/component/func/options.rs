@@ -306,7 +306,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
 #[doc(hidden)]
 pub struct LiftContext<'a> {
     store_id: StoreId,
-    current_scope_id: u32,
+    current_scope_id: Option<u32>,
     /// Like lowering, lifting always has options configured.
     options: OptionsIndex,
 
