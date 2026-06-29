@@ -49,12 +49,12 @@ pub enum FactInlineIntrinsic {
     ExitSyncCall,
 }
 
-/// TODO FITZGEN
+/// A statically-known function import.
 #[derive(Clone, Debug)]
 pub enum KnownFunc {
-    /// TODO FITZGEN
+    /// A function described by the given key.
     FuncKey(FuncKey),
-    /// TODO FITZGEN
+    /// An always-inlined FACT intrinsic.
     FactIntrinsic(FactInlineIntrinsic),
 }
 

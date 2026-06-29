@@ -1411,3 +1411,6 @@ mod tests {
         assert!(is_aligned(align(31, 16)));
     }
 }
+
+/// The bit pattern of `VMLazyThread::forced()`.
+pub const VM_LAZY_THREAD_FORCED: u64 = 1;

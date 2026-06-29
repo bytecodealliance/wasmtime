@@ -1530,7 +1530,10 @@ impl Compiler {
             // `VMDeferredThread` inside an old, since-unwound stack
             // frame. Therefore, we must reset `current_thread` to avoid
             // potential use-after-free bugs.
-            let forced = builder.ins().iconst(pointer_type, 1);
+            let forced = builder.ins().iconst(
+                pointer_type,
+                i64::try_from(wasmtime_environ::VM_LAZY_THREAD_FORCED).unwrap(),
+            );
             alias_regions.store_vmstore_context_current_thread(
                 &mut builder.cursor(),
                 vm_store_ctx,
