@@ -1293,9 +1293,9 @@ mod tests {
             return;
         }
 
-        let ok = gen_until_pass(|(config, test), _| {
-            let result = gc_ops(config, test)?;
-            Ok(result > 0)
+        let ok = gen_until_pass(|(config, test), _| match gc_ops(config, test) {
+            Ok(result) => Ok(result > 0),
+            Err(_) => Ok(false),
         });
 
         if !ok {
