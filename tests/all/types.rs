@@ -725,10 +725,11 @@ fn rec_group_self_reference() -> Result<()> {
 
     let mut builder = RecGroupBuilder::new(&engine);
     let node = builder.declare();
-    // forward_ref_field(mutability, is_nullable, target)
     builder
         .define_struct(node)
-        .forward_ref_field(Mutability::Const, true, node);
+        .forward_ref_field(node)
+        .nullable(true)
+        .finish();
     let group = builder.build()?;
 
     assert_eq!(group.len(), 1);
@@ -749,10 +750,15 @@ fn rec_group_mutual_recursion() -> Result<()> {
     let s2 = builder.declare();
     builder
         .define_struct(s1)
-        .forward_ref_field(Mutability::Var, true, s2);
+        .forward_ref_field(s2)
+        .mutability(Mutability::Var)
+        .nullable(true)
+        .finish();
     builder
         .define_struct(s2)
-        .forward_ref_field(Mutability::Const, false, s1);
+        .forward_ref_field(s1)
+        .nullable(false)
+        .finish();
     let group = builder.build()?;
 
     assert_eq!(group.len(), 2);
@@ -793,7 +799,10 @@ fn rec_group_mixed_concrete_and_local() -> Result<()> {
     builder
         .define_struct(node)
         // forward ref to the sibling
-        .forward_ref_field(Mutability::Var, true, node)
+        .forward_ref_field(node)
+        .mutability(Mutability::Var)
+        .nullable(true)
+        .finish()
         // ref to an already-registered type
         .field(FieldType::new(
             Mutability::Const,
@@ -832,10 +841,14 @@ fn rec_group_dedup() -> Result<()> {
         let s2 = builder.declare();
         builder
             .define_struct(s1)
-            .forward_ref_field(Mutability::Const, true, s2);
+            .forward_ref_field(s2)
+            .nullable(true)
+            .finish();
         builder
             .define_struct(s2)
-            .forward_ref_field(Mutability::Const, false, s1);
+            .forward_ref_field(s1)
+            .nullable(false)
+            .finish();
         Ok(builder.build()?.get_struct(s1).unwrap())
     };
 
@@ -857,15 +870,23 @@ fn rec_group_array_and_func_recursive() -> Result<()> {
 
     builder
         .define_struct(node)
-        .forward_ref_field(Mutability::Var, true, arr)
-        .forward_ref_field(Mutability::Var, true, func);
+        .forward_ref_field(arr)
+        .mutability(Mutability::Var)
+        .finish()
+        .forward_ref_field(func)
+        .mutability(Mutability::Var)
+        .finish();
     builder
         .define_array(arr)
-        .forward_ref_element(Mutability::Var, true, node);
+        .forward_ref_element(node)
+        .mutability(Mutability::Var)
+        .finish();
     builder
         .define_func(func)
-        .forward_ref_param(true, node)
-        .forward_ref_result(true, node);
+        .forward_ref_param(node)
+        .finish()
+        .forward_ref_result(node)
+        .finish();
 
     let group = builder.build()?;
     assert_eq!(group.len(), 3);

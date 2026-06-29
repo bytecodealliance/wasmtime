@@ -21,9 +21,8 @@
 //! let mut builder = RecGroupBuilder::new(&engine);
 //! let a = builder.declare();
 //! let b = builder.declare();
-//! // forward_ref_field(mutability, is_nullable, target)
-//! builder.define_struct(a).forward_ref_field(Mutability::Const, true, b);
-//! builder.define_struct(b).forward_ref_field(Mutability::Const, false, a);
+//! builder.define_struct(a).forward_ref_field(b).nullable(true).finish();
+//! builder.define_struct(b).forward_ref_field(a).nullable(false).finish();
 //! let group = builder.build()?;
 //!
 //! let a: StructType = group.get_struct(a).unwrap();
@@ -331,24 +330,65 @@ impl<'a> StructTypeBuilder<'a> {
     }
 
     /// Append a field that is a reference to another type being defined in the
-    /// same rec group, with the given mutability and nullability.
+    /// same rec group.
+    ///
+    /// Returns a builder for configuring the reference; call
+    /// [`finish`][ForwardRefFieldBuilder::finish] to commit the field. The field
+    /// defaults to immutable and nullable.
     #[track_caller]
-    pub fn forward_ref_field(
-        &mut self,
-        mutability: Mutability,
-        is_nullable: bool,
-        ty: PendingType,
-    ) -> &mut Self {
+    pub fn forward_ref_field(&mut self, ty: PendingType) -> ForwardRefFieldBuilder<'_, 'a> {
         assert_eq!(
             ty.builder_id, self.rec.builder_id,
             "`PendingType` used with a different `RecGroupBuilder` than it came from"
         );
-        self.fields_mut().push(FieldDef::Forward {
+        ForwardRefFieldBuilder {
+            parent: self,
             target: ty.index,
-            nullable: is_nullable,
+            mutability: Mutability::Const,
+            nullable: true,
+        }
+    }
+}
+
+/// Builder for a struct field that forward-references another type in the same
+/// rec group. Created by [`StructTypeBuilder::forward_ref_field`].
+///
+/// Configure the reference, then call [`finish`][Self::finish] to commit the
+/// field and return to the struct builder.
+pub struct ForwardRefFieldBuilder<'p, 'a> {
+    parent: &'p mut StructTypeBuilder<'a>,
+    target: u32,
+    mutability: Mutability,
+    nullable: bool,
+}
+
+impl<'p, 'a> ForwardRefFieldBuilder<'p, 'a> {
+    /// Set the field's mutability. Defaults to [`Mutability::Const`].
+    pub fn mutability(mut self, mutability: Mutability) -> Self {
+        self.mutability = mutability;
+        self
+    }
+
+    /// Set whether the reference is nullable. Defaults to `true`.
+    pub fn nullable(mut self, is_nullable: bool) -> Self {
+        self.nullable = is_nullable;
+        self
+    }
+
+    /// Commit this field and return to the struct builder.
+    pub fn finish(self) -> &'p mut StructTypeBuilder<'a> {
+        let ForwardRefFieldBuilder {
+            parent,
+            target,
+            mutability,
+            nullable,
+        } = self;
+        parent.fields_mut().push(FieldDef::Forward {
+            target,
+            nullable,
             mutable: mutability.is_var(),
         });
-        self
+        parent
     }
 }
 
@@ -412,24 +452,65 @@ impl<'a> ArrayTypeBuilder<'a> {
     }
 
     /// Set the array's element type to a reference to another type being defined
-    /// in the same rec group, with the given mutability and nullability.
+    /// in the same rec group.
+    ///
+    /// Returns a builder for configuring the reference; call
+    /// [`finish`][ForwardRefElementBuilder::finish] to commit the element. The
+    /// element defaults to immutable and nullable.
     #[track_caller]
-    pub fn forward_ref_element(
-        &mut self,
-        mutability: Mutability,
-        is_nullable: bool,
-        ty: PendingType,
-    ) -> &mut Self {
+    pub fn forward_ref_element(&mut self, ty: PendingType) -> ForwardRefElementBuilder<'_, 'a> {
         assert_eq!(
             ty.builder_id, self.rec.builder_id,
             "`PendingType` used with a different `RecGroupBuilder` than it came from"
         );
-        self.set_element(FieldDef::Forward {
+        ForwardRefElementBuilder {
+            parent: self,
             target: ty.index,
-            nullable: is_nullable,
+            mutability: Mutability::Const,
+            nullable: true,
+        }
+    }
+}
+
+/// Builder for an array element that forward-references another type in the same
+/// rec group. Created by [`ArrayTypeBuilder::forward_ref_element`].
+///
+/// Configure the reference, then call [`finish`][Self::finish] to commit the
+/// element and return to the array builder.
+pub struct ForwardRefElementBuilder<'p, 'a> {
+    parent: &'p mut ArrayTypeBuilder<'a>,
+    target: u32,
+    mutability: Mutability,
+    nullable: bool,
+}
+
+impl<'p, 'a> ForwardRefElementBuilder<'p, 'a> {
+    /// Set the element's mutability. Defaults to [`Mutability::Const`].
+    pub fn mutability(mut self, mutability: Mutability) -> Self {
+        self.mutability = mutability;
+        self
+    }
+
+    /// Set whether the reference is nullable. Defaults to `true`.
+    pub fn nullable(mut self, is_nullable: bool) -> Self {
+        self.nullable = is_nullable;
+        self
+    }
+
+    /// Commit this element and return to the array builder.
+    pub fn finish(self) -> &'p mut ArrayTypeBuilder<'a> {
+        let ForwardRefElementBuilder {
+            parent,
+            target,
+            mutability,
+            nullable,
+        } = self;
+        parent.set_element(FieldDef::Forward {
+            target,
+            nullable,
             mutable: mutability.is_var(),
         });
-        self
+        parent
     }
 }
 
@@ -501,27 +582,37 @@ impl<'a> FuncTypeBuilder<'a> {
     }
 
     /// Append a parameter that is a reference to another type being defined in
-    /// the same rec group, with the given nullability.
+    /// the same rec group.
+    ///
+    /// Returns a builder for configuring the reference; call
+    /// [`finish`][ForwardRefFuncValBuilder::finish] to commit it. Defaults to
+    /// nullable.
     #[track_caller]
-    pub fn forward_ref_param(&mut self, is_nullable: bool, ty: PendingType) -> &mut Self {
+    pub fn forward_ref_param(&mut self, ty: PendingType) -> ForwardRefFuncValBuilder<'_, 'a> {
         self.check_owns(ty);
-        self.params_mut().push(ValDef::Forward {
+        ForwardRefFuncValBuilder {
+            parent: self,
             target: ty.index,
-            nullable: is_nullable,
-        });
-        self
+            nullable: true,
+            is_result: false,
+        }
     }
 
     /// Append a result that is a reference to another type being defined in the
-    /// same rec group, with the given nullability.
+    /// same rec group.
+    ///
+    /// Returns a builder for configuring the reference; call
+    /// [`finish`][ForwardRefFuncValBuilder::finish] to commit it. Defaults to
+    /// nullable.
     #[track_caller]
-    pub fn forward_ref_result(&mut self, is_nullable: bool, ty: PendingType) -> &mut Self {
+    pub fn forward_ref_result(&mut self, ty: PendingType) -> ForwardRefFuncValBuilder<'_, 'a> {
         self.check_owns(ty);
-        self.results_mut().push(ValDef::Forward {
+        ForwardRefFuncValBuilder {
+            parent: self,
             target: ty.index,
-            nullable: is_nullable,
-        });
-        self
+            nullable: true,
+            is_result: true,
+        }
     }
 
     #[track_caller]
@@ -530,6 +621,45 @@ impl<'a> FuncTypeBuilder<'a> {
             ty.builder_id, self.rec.builder_id,
             "`PendingType` used with a different `RecGroupBuilder` than it came from"
         );
+    }
+}
+
+/// Builder for a function parameter or result that forward-references another
+/// type in the same rec group. Created by
+/// [`FuncTypeBuilder::forward_ref_param`] and
+/// [`FuncTypeBuilder::forward_ref_result`].
+///
+/// Configure the reference, then call [`finish`][Self::finish] to commit it and
+/// return to the function builder.
+pub struct ForwardRefFuncValBuilder<'p, 'a> {
+    parent: &'p mut FuncTypeBuilder<'a>,
+    target: u32,
+    nullable: bool,
+    is_result: bool,
+}
+
+impl<'p, 'a> ForwardRefFuncValBuilder<'p, 'a> {
+    /// Set whether the reference is nullable. Defaults to `true`.
+    pub fn nullable(mut self, is_nullable: bool) -> Self {
+        self.nullable = is_nullable;
+        self
+    }
+
+    /// Commit this parameter/result and return to the function builder.
+    pub fn finish(self) -> &'p mut FuncTypeBuilder<'a> {
+        let ForwardRefFuncValBuilder {
+            parent,
+            target,
+            nullable,
+            is_result,
+        } = self;
+        let def = ValDef::Forward { target, nullable };
+        if is_result {
+            parent.results_mut().push(def);
+        } else {
+            parent.params_mut().push(def);
+        }
+        parent
     }
 }
 
