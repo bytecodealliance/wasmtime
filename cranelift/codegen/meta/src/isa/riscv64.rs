@@ -154,6 +154,13 @@ pub(crate) fn define() -> TargetIsa {
         false,
     );
 
+    let _has_zvbb = setting.add_bool(
+        "has_zvbb",
+        "has extension Zvbb?",
+        "Zvbb: Vector Basic Bit-manipulation",
+        false,
+    );
+
     let _has_zicsr = setting.add_bool(
         "has_zicsr",
         "has extension zicsr?",

@@ -525,6 +525,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zicond()
     }
 
+    fn has_zvbb(&mut self) -> bool {
+        self.backend.isa_flags.has_zvbb()
+    }
+
     fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64) -> AMode {
         AMode::RegOffset(base, offset)
     }

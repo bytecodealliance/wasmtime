@@ -1039,6 +1039,9 @@
 (decl pure has_zicond () bool)
 (extern constructor has_zicond has_zicond)
 
+(decl pure has_zvbb () bool)
+(extern constructor has_zvbb has_zvbb)
+
 
 ;;;; Type Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

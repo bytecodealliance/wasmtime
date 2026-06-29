@@ -203,6 +203,14 @@
   (VmfleVF)
   (VmfgtVF)
   (VmfgeVF)
+
+  ;; Zvbb: Vector Basic Bit-manipulation
+  (VandnVV)
+  (VandnVX)
+  (VrolVV)
+  (VrolVX)
+  (VrorVV)
+  (VrorVX)
 ))
 
 
@@ -260,6 +268,9 @@
   (VmsleVI)
   (VmsgtuVI)
   (VmsgtVI)
+
+  ;; Zvbb: Vector Basic Bit-manipulation
+  (VrorVI)
 ))
 
 ;; Imm only ALU Ops
@@ -294,6 +305,14 @@
   (VfcvtfxV)
   (VfwcvtffV)
   (VfncvtffW)
+
+  ;; Zvbb: Vector Basic Bit-manipulation
+  (VbrevV)
+  (Vbrev8V)
+  (Vrev8V)
+  (VclzV)
+  (VctzV)
+  (VcpopV)
 ))
 
 ;; Returns the canonical destination type for a VecAluOpRRImm5.
@@ -802,6 +821,60 @@
 (decl rv_vxor_vi (VReg Imm5 VecOpMasking VState) VReg)
 (rule (rv_vxor_vi vs2 imm mask vstate)
   (vec_alu_rr_imm5 (VecAluOpRRImm5.VxorVI) vs2 imm mask vstate))
+
+;;;; Zvbb: Vector Basic Bit-manipulation ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl rv_vandn_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vandn_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VandnVV) vs2 vs1 mask vstate))
+
+(decl rv_vandn_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vandn_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VandnVX) vs2 vs1 mask vstate))
+
+(decl rv_vrol_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vrol_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VrolVV) vs2 vs1 mask vstate))
+
+(decl rv_vrol_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vrol_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VrolVX) vs2 vs1 mask vstate))
+
+(decl rv_vror_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vror_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VrorVV) vs2 vs1 mask vstate))
+
+(decl rv_vror_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vror_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VrorVX) vs2 vs1 mask vstate))
+
+(decl rv_vror_vi (VReg Imm5 VecOpMasking VState) VReg)
+(rule (rv_vror_vi vs2 imm mask vstate)
+  (vec_alu_rr_imm5 (VecAluOpRRImm5.VrorVI) vs2 imm mask vstate))
+
+(decl rv_vbrev_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vbrev_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VbrevV) vs mask vstate))
+
+(decl rv_vbrev8_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vbrev8_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.Vbrev8V) vs mask vstate))
+
+(decl rv_vrev8_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vrev8_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.Vrev8V) vs mask vstate))
+
+(decl rv_vclz_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vclz_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VclzV) vs mask vstate))
+
+(decl rv_vctz_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vctz_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VctzV) vs mask vstate))
+
+(decl rv_vcpop_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vcpop_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VcpopV) vs mask vstate))
 
 ;; Helper for emitting the `vssrl.vi` instruction.
 ;;
