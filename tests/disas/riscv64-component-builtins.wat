@@ -12,10 +12,10 @@
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 268435504 "VMStoreContext+0x30"
-;;     region2 = 268435512 "VMStoreContext+0x38"
-;;     region3 = 2952790048 "VMComponentContext+0x20"
-;;     region4 = 2952790024 "VMComponentContext+0x8"
+;;     region1 = 134217776 "VMStoreContext+0x30"
+;;     region2 = 134217784 "VMStoreContext+0x38"
+;;     region3 = 1476395040 "VMComponentContext+0x20"
+;;     region4 = 1476395016 "VMComponentContext+0x8"
 ;;     region5 = 16 "VMContext+0x10"
 ;;     sig0 = (i64 sext, i32 sext, i32 sext, i32 sext) -> i64 sext system_v
 ;;     sig1 = (i64 sext vmctx) system_v
