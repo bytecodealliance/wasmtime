@@ -149,10 +149,8 @@ impl LastStores {
             let old = a.expand();
             let new = match (old, b.expand()) {
                 (None, None) => None,
-                (Some(a), None) => Some(a),
-                (None, Some(b)) => Some(b),
                 (Some(a), Some(b)) if a == b => Some(a),
-                (Some(_), Some(_)) => Some(loc),
+                _ => Some(loc),
             };
             *a = new.into();
             old != new
