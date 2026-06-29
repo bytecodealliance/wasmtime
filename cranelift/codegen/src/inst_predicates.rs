@@ -144,23 +144,6 @@ pub fn inst_store_data(func: &Function, inst: Inst) -> Option<Value> {
     }
 }
 
-/// Determine whether this opcode behaves as a memory fence, i.e.,
-/// prohibits any moving of memory accesses across it.
-pub fn has_memory_fence_semantics(op: Opcode) -> bool {
-    match op {
-        Opcode::AtomicRmw
-        | Opcode::AtomicCas
-        | Opcode::AtomicLoad
-        | Opcode::AtomicStore
-        | Opcode::Fence
-        | Opcode::Debugtrap
-        | Opcode::SequencePoint => true,
-        Opcode::Call | Opcode::CallIndirect | Opcode::TryCall | Opcode::TryCallIndirect => true,
-        op if op.can_trap() => true,
-        _ => false,
-    }
-}
-
 /// Visit all successors of a block with a given visitor closure. The closure
 /// arguments are the branch instruction that is used to reach the successor,
 /// the successor block itself, and a flag indicating whether the block is

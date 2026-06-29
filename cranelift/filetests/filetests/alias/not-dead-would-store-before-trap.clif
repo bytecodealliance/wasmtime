@@ -1,0 +1,38 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; The first store is not dead because removing it would not preserve the set of
+;; memory stores made when writing to `v0` traps:
+;;
+;; * Before: no writes, just trap with `user1`
+;;
+;; * After, if we treated the first store as dead: write to `v1`, then trap with
+;;   `user1`
+function %f(i64, i64) {
+    region0 = 0 "R0"
+    region1 = 1 "R1"
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 11
+    store aligned region0 user1 v2, v0
+    v3 = iconst.i32 22
+    store aligned region1 notrap v3, v1
+    v4 = iconst.i32 33
+    store aligned region0 user1 v4, v0
+    return
+}
+
+; function %f(i64, i64) fast {
+;     region0 = 0 "R0"
+;     region1 = 1 "R1"
+;
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i32 11
+;     store user1 aligned region0 v2, v0  ; v2 = 11
+;     v3 = iconst.i32 22
+;     store notrap aligned region1 v3, v1  ; v3 = 22
+;     v4 = iconst.i32 33
+;     store user1 aligned region0 v4, v0  ; v4 = 33
+;     return
+; }
+

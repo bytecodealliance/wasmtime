@@ -1,0 +1,35 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; Stores without an alias region are also subject to dead store elimination.
+function %no_region_dead_store(i64, i32, i32) {
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned v1, v0
+    store notrap aligned v2, v0
+    return
+}
+
+; function %no_region_dead_store(i64, i32, i32) fast {
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned v2, v0
+;     return
+; }
+
+;; A load without an alias region observes the unregioned store and keeps it.
+function %no_region_load_observes(i64, i32, i32) -> i32 {
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned v1, v0
+    v3 = load.i32 notrap v0+1
+    store notrap aligned v2, v0
+    return v3
+}
+
+; function %no_region_load_observes(i64, i32, i32) -> i32 fast {
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned v1, v0
+;     v3 = load.i32 notrap v0+1
+;     store notrap aligned v2, v0
+;     return v3
+; }
+

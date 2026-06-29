@@ -104,8 +104,6 @@
 ;;                                 block9:
 ;;                                     v11 = load.i64 notrap aligned readonly can_move region3 v3+112
 ;;                                     v12 = load.i32 notrap aligned region4 v11
-;;                                     v8 = iconst.i32 0
-;;                                     store notrap aligned region4 v8, v11  ; v8 = 0
 ;;                                     store notrap aligned region4 v12, v11
 ;;                                     jump block13
 ;;
@@ -116,8 +114,6 @@
 ;;                                     jump block12
 ;;
 ;;                                 block12:
-;;                                     v35 = iconst.i32 0
-;;                                     store notrap aligned region4 v35, v9  ; v35 = 0
 ;;                                     store.i32 notrap aligned region4 v10, v9
 ;;                                     jump block7
 ;;
