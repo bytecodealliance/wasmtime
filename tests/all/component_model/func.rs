@@ -773,12 +773,12 @@ fn strings() -> Result<()> {
 
         let ret = str_to_list8.call(&mut store, (x,))?.0;
         assert_eq!(
-            ret.iter(&mut store).collect::<Result<Vec<_>>>()?,
+            ret.iter(&mut store)?.collect::<Result<Vec<_>>>()?,
             x.as_bytes()
         );
 
         let ret = str_to_list16.call(&mut store, (x,))?.0;
-        assert_eq!(ret.iter(&mut store).collect::<Result<Vec<_>>>()?, utf16,);
+        assert_eq!(ret.iter(&mut store)?.collect::<Result<Vec<_>>>()?, utf16,);
 
         Ok(())
     };
