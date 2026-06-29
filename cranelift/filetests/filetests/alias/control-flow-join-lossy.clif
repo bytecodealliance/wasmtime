@@ -1,0 +1,49 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+function %f(i64) -> i32 {
+    region0 = 0 "R"
+    fn0 = colocated %g()
+
+block0(v0: i64):
+    v1 = iconst.i32 42
+    store.i32 region0 v1, v0
+    brif v0, block1, block2
+
+block1:
+    call fn0()
+    jump block3
+
+block2:
+    jump block3
+
+block3:
+    ;; Because the the call (which acts as a memory fence) we must forget the
+    ;; current value at memory location `v0+0` at the control-flow join point
+    ;; and we cannot do store-to-load forwarding here.
+    v2 = load.i32 region0 v0
+    return v2
+}
+
+; function %f(i64) -> i32 fast {
+;     region0 = 0 "R"
+;     sig0 = () fast
+;     fn0 = colocated %g sig0
+;
+; block0(v0: i64):
+;     v1 = iconst.i32 42
+;     store region0 v1, v0  ; v1 = 42
+;     brif v0, block1, block2
+;
+; block1:
+;     call fn0()
+;     jump block3
+;
+; block2:
+;     jump block3
+;
+; block3:
+;     v2 = load.i32 region0 v0
+;     return v2
+; }
