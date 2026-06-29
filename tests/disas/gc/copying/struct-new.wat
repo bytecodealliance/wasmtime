@@ -29,7 +29,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: f32, v3: i32, v4: i32):
 ;;                                     v45 = stack_addr.i64 ss0
-;;                                     store notrap v4, v45
+;;                                     store notrap aligned v4, v45
 ;; @002a                               v6 = load.i64 notrap aligned readonly can_move region2 v0+32
 ;; @002a                               v7 = load.i32 notrap aligned region3 v6
 ;; @002a                               v8 = load.i32 notrap aligned region4 v6+4
@@ -76,7 +76,7 @@
 ;; @002a                               v39 = iconst.i64 20
 ;; @002a                               v40 = iadd v36, v39  ; v39 = 20
 ;; @002a                               istore8.i32 user2 little region7 v3, v40
-;;                                     v44 = load.i32 notrap v45
+;;                                     v44 = load.i32 notrap aligned v45
 ;; @002a                               v41 = iconst.i64 24
 ;; @002a                               v42 = iadd v36, v41  ; v41 = 24
 ;; @002a                               store user2 little region7 v44, v42

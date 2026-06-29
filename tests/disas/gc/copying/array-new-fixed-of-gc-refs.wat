@@ -30,11 +30,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;;                                     v137 = stack_addr.i64 ss2
-;;                                     store notrap v2, v137
+;;                                     store notrap aligned v2, v137
 ;;                                     v138 = stack_addr.i64 ss1
-;;                                     store notrap v3, v138
+;;                                     store notrap aligned v3, v138
 ;;                                     v139 = stack_addr.i64 ss0
-;;                                     store notrap v4, v139
+;;                                     store notrap aligned v4, v139
 ;; @0025                               v14 = load.i64 notrap aligned readonly can_move region2 v0+32
 ;; @0025                               v15 = load.i32 notrap aligned region3 v14
 ;; @0025                               v16 = load.i32 notrap aligned region4 v14+4
@@ -98,7 +98,7 @@
 ;; @0025                               v6 = iconst.i32 20
 ;; @0025                               v63 = uadd_overflow_trap v181, v6, user2  ; v6 = 20
 ;; @0025                               v67 = uadd_overflow_trap v43, v63, user2
-;;                                     v136 = load.i32 notrap v137
+;;                                     v136 = load.i32 notrap aligned v137
 ;; @0025                               v68 = uextend.i64 v67
 ;; @0025                               v71 = iadd v267, v68
 ;; @0025                               v72 = isub v63, v6  ; v6 = 20
@@ -116,7 +116,7 @@
 ;;                                     v207 = ishl v82, v180  ; v180 = 2
 ;; @0025                               v91 = uadd_overflow_trap v207, v6, user2  ; v6 = 20
 ;; @0025                               v95 = uadd_overflow_trap v43, v91, user2
-;;                                     v134 = load.i32 notrap v138
+;;                                     v134 = load.i32 notrap aligned v138
 ;; @0025                               v96 = uextend.i64 v95
 ;; @0025                               v99 = iadd v267, v96
 ;;                                     v220 = iconst.i32 24
@@ -134,7 +134,7 @@
 ;;                                     v235 = ishl v110, v180  ; v180 = 2
 ;; @0025                               v119 = uadd_overflow_trap v235, v6, user2  ; v6 = 20
 ;; @0025                               v123 = uadd_overflow_trap v43, v119, user2
-;;                                     v132 = load.i32 notrap v139
+;;                                     v132 = load.i32 notrap aligned v139
 ;; @0025                               v124 = uextend.i64 v123
 ;; @0025                               v127 = iadd v267, v124
 ;;                                     v253 = iconst.i32 28

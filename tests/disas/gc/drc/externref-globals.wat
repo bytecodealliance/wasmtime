@@ -36,7 +36,7 @@
 ;; @0034                               v3 = iadd v0, v2  ; v2 = 48
 ;; @0034                               v4 = load.i32 notrap aligned region2 v3
 ;;                                     v76 = stack_addr.i64 ss0
-;;                                     store notrap v4, v76
+;;                                     store notrap aligned v4, v76
 ;; @0034                               v5 = iconst.i32 1
 ;; @0034                               v6 = band v4, v5  ; v5 = 1
 ;; @0034                               v7 = iconst.i32 0
@@ -93,7 +93,7 @@
 ;; @0036                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v59 = load.i32 notrap v76
+;;                                     v59 = load.i32 notrap aligned v76
 ;; @0036                               return v59
 ;; }
 ;;

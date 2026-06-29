@@ -1,7 +1,7 @@
 //! A frontend for building Cranelift IR from other languages.
 use crate::ssa::{SSABuilder, SideEffects};
 use crate::variable::Variable;
-use alloc::{vec, vec::Vec};
+use alloc::{boxed::Box, vec, vec::Vec};
 use core::fmt::{self, Debug};
 use cranelift_codegen::cursor::{Cursor, CursorPosition, FuncCursor};
 use cranelift_codegen::entity::{EntityRef, EntitySet, PrimaryMap, SecondaryMap};
@@ -76,6 +76,7 @@ impl FunctionBuilderContext {
         status.clear();
         variables.clear();
         safepoints.clear();
+        safepoints.make_alias_region = None;
     }
 
     fn is_empty(&self) -> bool {
@@ -675,6 +676,25 @@ impl<'a> FunctionBuilder<'a> {
                 .dfg
                 .append_block_param(block, argtyp.value_type);
         }
+    }
+
+    /// Configure a callback that assigns an alias region to the loads and
+    /// stores inserted when spilling and reloading values that are live across
+    /// safepoints.
+    ///
+    /// The callback is given the function's [`ir::AliasRegionSet`] (so it can
+    /// intern a region), along with the type, stack slot, and offset of the
+    /// spill/reload being emitted, and returns the alias region to attach to
+    /// that load or store (or `None` to leave it unannotated).
+    pub fn make_stack_map_alias_region(
+        &mut self,
+        make_alias_region: Box<
+            dyn Fn(&mut ir::AliasRegionSet, ir::Type, ir::StackSlot, u32) -> Option<ir::AliasRegion>
+                + Send
+                + Sync,
+        >,
+    ) {
+        self.func_ctx.safepoints.make_alias_region = Some(make_alias_region);
     }
 
     /// Declare that translation of the current function is complete.
