@@ -18,9 +18,9 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 2684354560 "VMTableDefinition+0x0"
-;;     region3 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region1 = 134217752 "VMStoreContext+0x18"
+;;     region2 = 1342177280 "VMTableDefinition+0x0"
+;;     region3 = 671088640 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     region4 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8

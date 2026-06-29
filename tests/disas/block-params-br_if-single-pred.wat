@@ -22,7 +22,7 @@
 )
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region1 = 134217752 "VMStoreContext+0x18"
 ;;     region2 = 72 "VMContext+0x48"
 ;;     region3 = 56 "VMContext+0x38"
 ;;     region4 = 104 "VMContext+0x68"

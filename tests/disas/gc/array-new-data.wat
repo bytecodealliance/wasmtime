@@ -78,16 +78,16 @@
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region1 = 134217752 "VMStoreContext+0x18"
 ;;     region2 = 56 "VMContext+0x38"
 ;;     region3 = 48 "VMContext+0x30"
 ;;     region4 = 32 "VMContext+0x20"
-;;     region5 = 3489660928 "VMCopyingHeapData+0x0"
-;;     region6 = 3489660932 "VMCopyingHeapData+0x4"
+;;     region5 = 1744830464 "VMCopyingHeapData+0x0"
+;;     region6 = 1744830468 "VMCopyingHeapData+0x4"
 ;;     region7 = 40 "VMContext+0x28"
-;;     region8 = 268435488 "VMStoreContext+0x20"
-;;     region9 = 2147483648 "GcHeap"
-;;     region10 = 268435496 "VMStoreContext+0x28"
+;;     region8 = 134217760 "VMStoreContext+0x20"
+;;     region9 = 1073741824 "GcHeap"
+;;     region10 = 134217768 "VMStoreContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

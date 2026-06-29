@@ -16,14 +16,14 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i32, i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 2415919104 "VMMemoryDefinition+0x0"
-;;     region3 = 2415919112 "VMMemoryDefinition+0x8"
-;;     region4 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region1 = 134217752 "VMStoreContext+0x18"
+;;     region2 = 1207959552 "VMMemoryDefinition+0x0"
+;;     region3 = 1207959560 "VMMemoryDefinition+0x8"
+;;     region4 = 402653184 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     region5 = 72 "VMContext+0x48"
-;;     region6 = 2684354560 "VMTableDefinition+0x0"
-;;     region7 = 2684354568 "VMTableDefinition+0x8"
-;;     region8 = 1073741824 "PublicTable"
+;;     region6 = 1342177280 "VMTableDefinition+0x0"
+;;     region7 = 1342177288 "VMTableDefinition+0x8"
+;;     region8 = 536870912 "PublicTable"
 ;;     region9 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8

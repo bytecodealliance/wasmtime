@@ -15,15 +15,15 @@
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
-;;     region3 = 268435488 "VMStoreContext+0x20"
-;;     region4 = 268435496 "VMStoreContext+0x28"
-;;     region5 = 2147483648 "GcHeap"
+;;     region1 = 134217752 "VMStoreContext+0x18"
+;;     region2 = 939524096 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
+;;     region3 = 134217760 "VMStoreContext+0x20"
+;;     region4 = 134217768 "VMStoreContext+0x28"
+;;     region5 = 1073741824 "GcHeap"
 ;;     region6 = 32 "VMContext+0x20"
-;;     region7 = 3221225472 "VMDrcHeapData+0x0"
-;;     region8 = 3221225476 "VMDrcHeapData+0x4"
-;;     region9 = 3221225480 "VMDrcHeapData+0x8"
+;;     region7 = 1610612736 "VMDrcHeapData+0x0"
+;;     region8 = 1610612740 "VMDrcHeapData+0x4"
+;;     region9 = 1610612744 "VMDrcHeapData+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -99,11 +99,11 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
-;;     region3 = 268435488 "VMStoreContext+0x20"
-;;     region4 = 268435496 "VMStoreContext+0x28"
-;;     region5 = 2147483648 "GcHeap"
+;;     region1 = 134217752 "VMStoreContext+0x18"
+;;     region2 = 939524096 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
+;;     region3 = 134217760 "VMStoreContext+0x20"
+;;     region4 = 134217768 "VMStoreContext+0x28"
+;;     region5 = 1073741824 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
