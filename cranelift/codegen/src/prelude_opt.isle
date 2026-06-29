@@ -121,7 +121,12 @@
         ;; Neither instruction may define any results, and if the instruction
         ;; being replaced is a block terminator then `second` must also be a
         ;; block terminator.
-        (ReplaceWithTwo (first Inst) (second Inst))))
+        (ReplaceWithTwo (first Inst) (second Inst))
+
+        ;; Remove a dead store.
+        ;;
+        ;; The trap code from `dead` (if any) is copied to `killer`.
+        (RemoveDeadStore (dead Inst) (killer Inst))))
 
 (decl pure inst_to_skeleton_inst_simplification (Inst) SkeletonInstSimplification)
 (rule (inst_to_skeleton_inst_simplification inst)

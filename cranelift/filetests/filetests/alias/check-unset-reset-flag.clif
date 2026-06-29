@@ -1,0 +1,27 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+function u1:0(i64 vmctx, i32) -> i32 tail {
+    region0 = 0 "flag"
+
+block0(v0: i64, v1: i32):
+    v2 = load.i64 notrap aligned region0 v0
+    trapz v2, user42
+    v3 = iconst.i64 0
+    store notrap aligned region0 v3, v0
+    v4 = iadd v1, v1
+    store notrap aligned region0 v2, v0
+    return v4
+}
+
+; function u1:0(i64 vmctx, i32) -> i32 tail {
+;     region0 = 0 "flag"
+;
+; block0(v0: i64, v1: i32):
+;     v2 = load.i64 notrap aligned region0 v0
+;     trapz v2, user42
+;     store notrap aligned region0 v2, v0
+;     v4 = iadd v1, v1
+;     return v4
+; }

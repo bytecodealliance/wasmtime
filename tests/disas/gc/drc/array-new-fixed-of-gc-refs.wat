@@ -63,8 +63,7 @@
 ;; @0025                               brif v58, block3, block2
 ;;
 ;;                                 block2:
-;;                                     v197 = load.i32 notrap aligned region9 v202
-;; @0025                               v59 = uextend.i64 v197
+;; @0025                               v59 = uextend.i64 v201
 ;; @0025                               v62 = iadd.i64 v20, v59
 ;; @0025                               v63 = iconst.i64 8
 ;; @0025                               v64 = iadd v62, v63  ; v63 = 8
@@ -75,12 +74,11 @@
 ;; @0025                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v193 = load.i32 notrap aligned region9 v202
 ;; @0025                               v46 = uextend.i64 v45
 ;; @0025                               v49 = iadd.i64 v20, v46
 ;;                                     v206 = iconst.i64 12
 ;; @0025                               v52 = isub v49, v206  ; v206 = 12
-;; @0025                               store user2 little region5 v193, v52
+;; @0025                               store.i32 user2 little region5 v201, v52
 ;;                                     v305 = iadd.i64 v22, v23  ; v23 = 24
 ;; @0025                               v81 = load.i32 user2 readonly region5 v305
 ;;                                     v306 = iconst.i32 1
@@ -106,8 +104,7 @@
 ;; @0025                               brif v107, block5, block4
 ;;
 ;;                                 block4:
-;;                                     v187 = load.i32 notrap aligned region8 v203
-;; @0025                               v108 = uextend.i64 v187
+;; @0025                               v108 = uextend.i64 v191
 ;; @0025                               v111 = iadd.i64 v20, v108
 ;;                                     v311 = iconst.i64 8
 ;; @0025                               v113 = iadd v111, v311  ; v311 = 8
@@ -118,14 +115,13 @@
 ;; @0025                               jump block5
 ;;
 ;;                                 block5:
-;;                                     v183 = load.i32 notrap aligned region8 v203
 ;; @0025                               v95 = uextend.i64 v94
 ;; @0025                               v98 = iadd.i64 v20, v95
 ;;                                     v269 = iconst.i32 32
 ;; @0025                               v99 = isub.i32 v90, v269  ; v269 = 32
 ;; @0025                               v100 = uextend.i64 v99
 ;; @0025                               v101 = isub v98, v100
-;; @0025                               store user2 little region5 v183, v101
+;; @0025                               store.i32 user2 little region5 v191, v101
 ;;                                     v313 = iadd.i64 v22, v23  ; v23 = 24
 ;; @0025                               v130 = load.i32 user2 readonly region5 v313
 ;;                                     v314 = iconst.i32 2
@@ -151,8 +147,7 @@
 ;; @0025                               brif v156, block7, block6
 ;;
 ;;                                 block6:
-;;                                     v177 = load.i32 notrap aligned region7 v204
-;; @0025                               v157 = uextend.i64 v177
+;; @0025                               v157 = uextend.i64 v181
 ;; @0025                               v160 = iadd.i64 v20, v157
 ;;                                     v326 = iconst.i64 8
 ;; @0025                               v162 = iadd v160, v326  ; v326 = 8
@@ -163,14 +158,13 @@
 ;; @0025                               jump block7
 ;;
 ;;                                 block7:
-;;                                     v173 = load.i32 notrap aligned region7 v204
 ;; @0025                               v144 = uextend.i64 v143
 ;; @0025                               v147 = iadd.i64 v20, v144
 ;;                                     v299 = iconst.i32 36
 ;; @0025                               v148 = isub.i32 v139, v299  ; v299 = 36
 ;; @0025                               v149 = uextend.i64 v148
 ;; @0025                               v150 = isub v147, v149
-;; @0025                               store user2 little region5 v173, v150
+;; @0025                               store.i32 user2 little region5 v181, v150
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:

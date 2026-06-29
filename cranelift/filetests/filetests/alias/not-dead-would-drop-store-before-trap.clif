@@ -1,0 +1,70 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; The first store must NOT be removed, because when writing to `v0` traps:
+;;
+;; * Now: no writes, just trap
+;;
+;; * If the first store was treated as dead asn removed: write to `v1`, then
+;;   trap
+function %f(i64, i64) {
+    region0 = 0 "R0"
+    region1 = 1 "R1"
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 11
+    store aligned region0 user1 v2, v0
+    v3 = iconst.i32 22
+    store aligned region1 user1 v3, v1
+    v4 = iconst.i32 33
+    store aligned region0 user1 v4, v0
+    return
+}
+
+; function %f(i64, i64) fast {
+;     region0 = 0 "R0"
+;     region1 = 1 "R1"
+;
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i32 11
+;     store user1 aligned region0 v2, v0  ; v2 = 11
+;     v3 = iconst.i32 22
+;     store user1 aligned region1 v3, v1  ; v3 = 22
+;     v4 = iconst.i32 33
+;     store user1 aligned region0 v4, v0  ; v4 = 33
+;     return
+; }
+
+;; Same as above, but with the almost-dead stores being non-trapping. In the
+;; case that writing to `v1` traps:
+;;
+;; * Now: write to `v0`, then trap
+;;
+;; * If the first store was treated as dead and removed: no stores, just trap
+function %f(i64, i64) {
+    region0 = 0 "R0"
+    region1 = 1 "R1"
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 11
+    store aligned region0 notrap v2, v0
+    v3 = iconst.i32 22
+    store aligned region1 user1 v3, v1
+    v4 = iconst.i32 33
+    store aligned region0 notrap v4, v0
+    return
+}
+
+; function %f(i64, i64) fast {
+;     region0 = 0 "R0"
+;     region1 = 1 "R1"
+;
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i32 11
+;     store notrap aligned region0 v2, v0  ; v2 = 11
+;     v3 = iconst.i32 22
+;     store user1 aligned region1 v3, v1  ; v3 = 22
+;     v4 = iconst.i32 33
+;     store notrap aligned region0 v4, v0  ; v4 = 33
+;     return
+; }
+
