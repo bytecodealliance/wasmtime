@@ -23,10 +23,8 @@
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32) -> i32, i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 72 "VMContext+0x48"
-;;     region3 = 56 "VMContext+0x38"
-;;     region4 = 104 "VMContext+0x68"
-;;     region5 = 88 "VMContext+0x58"
+;;     region2 = 2415919128 "VMFunctionImport+0x18"
+;;     region3 = 2415919112 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -43,8 +41,8 @@
 ;; @003b                               jump block3
 ;;
 ;;                                 block4:
-;; @003c                               v7 = load.i64 notrap aligned readonly can_move region4 v0+104
-;; @003c                               v8 = load.i64 notrap aligned readonly can_move region5 v0+88
+;; @003c                               v7 = load.i64 notrap aligned readonly can_move region2 v0+104
+;; @003c                               v8 = load.i64 notrap aligned readonly can_move region3 v0+88
 ;; @003c                               call_indirect sig0, v8(v7, v0)
 ;; @0042                               jump block3
 ;;

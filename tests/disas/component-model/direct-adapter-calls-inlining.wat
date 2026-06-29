@@ -57,12 +57,10 @@
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 72 "VMContext+0x48"
-;;     region3 = 136 "VMContext+0x88"
+;;     region2 = 2415919128 "VMFunctionImport+0x18"
+;;     region3 = 2952790016 "VMGlobalImport+0x0"
 ;;     region4 = 805306368 "PublicGlobal"
-;;     region5 = 112 "VMContext+0x70"
-;;     region6 = 104 "VMContext+0x68"
-;;     region7 = 88 "VMContext+0x58"
+;;     region5 = 2415919112 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -95,8 +93,8 @@
 ;;                                     brif v10, block9, block10
 ;;
 ;;                                 block10:
-;;                                     v24 = load.i64 notrap aligned readonly can_move region7 v3+88
-;;                                     v23 = load.i64 notrap aligned readonly can_move region6 v3+104
+;;                                     v24 = load.i64 notrap aligned readonly can_move region5 v3+88
+;;                                     v23 = load.i64 notrap aligned readonly can_move region2 v3+104
 ;;                                     v22 = iconst.i32 23
 ;;                                     try_call_indirect v24(v23, v3, v22), sig1, block11, [ context v3, default: block8(exn0) ]  ; v22 = 23
 ;;
@@ -104,7 +102,7 @@
 ;;                                     trap user12
 ;;
 ;;                                 block9:
-;;                                     v11 = load.i64 notrap aligned readonly can_move region5 v3+112
+;;                                     v11 = load.i64 notrap aligned readonly can_move region3 v3+112
 ;;                                     v12 = load.i32 notrap aligned region4 v11
 ;;                                     v8 = iconst.i32 0
 ;;                                     store notrap aligned region4 v8, v11  ; v8 = 0

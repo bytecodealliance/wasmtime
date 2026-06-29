@@ -27,6 +27,11 @@ enum VmType {
     VMDeferredThread,
     VMContRef,
     ContinuationStackMemory,
+    VMFunctionImport,
+    VMMemoryImport,
+    VMTableImport,
+    VMTagImport,
+    VMGlobalImport,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -123,6 +128,11 @@ impl AliasRegionKey {
     const VM_DEFERRED_THREAD_KIND: u32 = Self::new_kind(0b01111);
     const VM_CONTREF_KIND: u32 = Self::new_kind(0b10000);
     const CONTINUATION_STACK_MEMORY_KIND: u32 = Self::new_kind(0b10001);
+    const VM_FUNCTION_IMPORT_KIND: u32 = Self::new_kind(0b10010);
+    const VM_MEMORY_IMPORT_KIND: u32 = Self::new_kind(0b10011);
+    const VM_TABLE_IMPORT_KIND: u32 = Self::new_kind(0b10100);
+    const VM_TAG_IMPORT_KIND: u32 = Self::new_kind(0b10101);
+    const VM_GLOBAL_IMPORT_KIND: u32 = Self::new_kind(0b10110);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -142,6 +152,11 @@ impl AliasRegionKey {
                     VmType::VMDeferredThread => Self::VM_DEFERRED_THREAD_KIND,
                     VmType::VMContRef => Self::VM_CONTREF_KIND,
                     VmType::ContinuationStackMemory => Self::CONTINUATION_STACK_MEMORY_KIND,
+                    VmType::VMFunctionImport => Self::VM_FUNCTION_IMPORT_KIND,
+                    VmType::VMMemoryImport => Self::VM_MEMORY_IMPORT_KIND,
+                    VmType::VMTableImport => Self::VM_TABLE_IMPORT_KIND,
+                    VmType::VMTagImport => Self::VM_TAG_IMPORT_KIND,
+                    VmType::VMGlobalImport => Self::VM_GLOBAL_IMPORT_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -453,6 +468,34 @@ where
 /// `VMContext`-related methods that are specific to a particular Wasm module's
 /// `VMOffsets`.
 impl AliasRegions<VMOffsets<u8>> {
+    /// Like `vmctx_load`, but tags the load with a per-import alias region
+    /// rather than the coarse `VMContext` region. Used for fields of the
+    /// `VM*Import` structs inlined into the `VMContext`.
+    fn vmimport_load(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        ty: ir::Type,
+        base_flags: ir::MemFlagsData,
+        vmctx: ir::Value,
+        vmctx_offset: u32,
+        field_offset: u32,
+        vm_type: VmType,
+    ) -> ir::Value {
+        let region = self.region(
+            cursor.func,
+            AliasRegionKey::Vm {
+                ty: vm_type,
+                offset: field_offset,
+            },
+        );
+        cursor.ins().load(
+            ty,
+            base_flags.with_alias_region(Some(region)),
+            vmctx,
+            i32::try_from(vmctx_offset).unwrap(),
+        )
+    }
+
     /// Load the imported tag's `VMTagImport::vmctx` field from the `*mut
     /// VMContext`.
     pub fn vmctx_vmtag_import_vmctx(
@@ -461,12 +504,14 @@ impl AliasRegions<VMOffsets<u8>> {
         vmctx: ir::Value,
         tag: TagIndex,
     ) -> ir::Value {
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmtag_import_vmctx(tag),
+            self.offsets.vmtag_import_vmctx().into(),
+            VmType::VMTagImport,
         )
     }
 
@@ -478,12 +523,14 @@ impl AliasRegions<VMOffsets<u8>> {
         vmctx: ir::Value,
         tag: TagIndex,
     ) -> ir::Value {
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             ir::types::I32,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmtag_import_index(tag),
+            self.offsets.vmtag_import_index().into(),
+            VmType::VMTagImport,
         )
     }
 
@@ -495,12 +542,14 @@ impl AliasRegions<VMOffsets<u8>> {
         vmctx: ir::Value,
         tag: TagIndex,
     ) -> ir::Value {
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmtag_import_from(tag),
+            self.offsets.vmtag_import_from().into(),
+            VmType::VMTagImport,
         )
     }
 
@@ -512,12 +561,14 @@ impl AliasRegions<VMOffsets<u8>> {
         vmctx: ir::Value,
         func: FuncIndex,
     ) -> ir::Value {
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmfunction_import_vmctx(func),
+            self.offsets.vmfunction_import_vmctx().into(),
+            VmType::VMFunctionImport,
         )
     }
 
@@ -529,12 +580,14 @@ impl AliasRegions<VMOffsets<u8>> {
         vmctx: ir::Value,
         func: FuncIndex,
     ) -> ir::Value {
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmfunction_import_wasm_call(func),
+            self.offsets.vmfunction_import_wasm_call().into(),
+            VmType::VMFunctionImport,
         )
     }
 
@@ -548,12 +601,14 @@ impl AliasRegions<VMOffsets<u8>> {
     ) -> ir::Value {
         let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
         let mem_vmctx_offset = mem_offset + u32::from(self.offsets.vmmemory_import_vmctx());
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             mem_vmctx_offset,
+            self.offsets.vmmemory_import_vmctx().into(),
+            VmType::VMMemoryImport,
         )
     }
 
@@ -567,12 +622,14 @@ impl AliasRegions<VMOffsets<u8>> {
     ) -> ir::Value {
         let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
         let mem_index_offset = mem_offset + u32::from(self.offsets.vmmemory_import_index());
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             ir::types::I32,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             mem_index_offset,
+            self.offsets.vmmemory_import_index().into(),
+            VmType::VMMemoryImport,
         )
     }
 
@@ -597,7 +654,13 @@ impl AliasRegions<VMOffsets<u8>> {
     ) -> Load {
         let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
         let offset = mem_offset + u32::from(self.offsets.vmmemory_import_from());
-        let region = self.vmctx_region(func, offset);
+        let region = self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMMemoryImport,
+                offset: self.offsets.vmmemory_import_from().into(),
+            },
+        );
         Load {
             offset,
             flags: ir::MemFlagsData::trusted()
@@ -618,12 +681,14 @@ impl AliasRegions<VMOffsets<u8>> {
     ) -> ir::Value {
         let table_offset = self.offsets.vmctx_vmtable_import(table);
         let table_vmctx_offset = table_offset + u32::from(self.offsets.vmtable_import_vmctx());
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             table_vmctx_offset,
+            self.offsets.vmtable_import_vmctx().into(),
+            VmType::VMTableImport,
         )
     }
 
@@ -637,12 +702,14 @@ impl AliasRegions<VMOffsets<u8>> {
     ) -> ir::Value {
         let table_offset = self.offsets.vmctx_vmtable_import(table);
         let table_index_offset = table_offset + u32::from(self.offsets.vmtable_import_index());
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             ir::types::I32,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             table_index_offset,
+            self.offsets.vmtable_import_index().into(),
+            VmType::VMTableImport,
         )
     }
 
@@ -650,7 +717,13 @@ impl AliasRegions<VMOffsets<u8>> {
     /// `*mut VMTableDefinition`) out of a `*mut VMContext`.
     pub fn vmctx_vmtable_from_load(&mut self, func: &mut ir::Function, table: TableIndex) -> Load {
         let offset = self.offsets.vmctx_vmtable_from(table);
-        let region = self.vmctx_region(func, offset);
+        let region = self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMTableImport,
+                offset: self.offsets.vmtable_import_from().into(),
+            },
+        );
         Load {
             offset,
             flags: ir::MemFlagsData::trusted()
@@ -670,12 +743,14 @@ impl AliasRegions<VMOffsets<u8>> {
         global: GlobalIndex,
     ) -> ir::Value {
         let from_offset = self.offsets.vmctx_vmglobal_import_from(global);
-        self.vmctx_load(
+        self.vmimport_load(
             cursor,
             self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             from_offset,
+            self.offsets.vmglobal_import_from().into(),
+            VmType::VMGlobalImport,
         )
     }
 

@@ -33,7 +33,7 @@
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 48 "VMContext+0x30"
+;;     region2 = 2952790016 "VMGlobalImport+0x0"
 ;;     region3 = 805306368 "PublicGlobal"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
@@ -52,7 +52,7 @@
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 72 "VMContext+0x48"
+;;     region2 = 2952790016 "VMGlobalImport+0x0"
 ;;     region3 = 805306368 "PublicGlobal"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8

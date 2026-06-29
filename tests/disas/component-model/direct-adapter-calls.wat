@@ -77,7 +77,7 @@
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 72 "VMContext+0x48"
+;;     region2 = 2415919128 "VMFunctionImport+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -98,12 +98,10 @@
 ;; function u2:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 136 "VMContext+0x88"
+;;     region2 = 2952790016 "VMGlobalImport+0x0"
 ;;     region3 = 805306368 "PublicGlobal"
-;;     region4 = 104 "VMContext+0x68"
-;;     region5 = 88 "VMContext+0x58"
-;;     region6 = 112 "VMContext+0x70"
-;;     region7 = 72 "VMContext+0x48"
+;;     region4 = 2415919128 "VMFunctionImport+0x18"
+;;     region5 = 2415919112 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -133,12 +131,12 @@
 ;; @008c                               trap user12
 ;;
 ;;                                 block7:
-;; @008e                               v11 = load.i64 notrap aligned readonly can_move region6 v0+112
+;; @008e                               v11 = load.i64 notrap aligned readonly can_move region2 v0+112
 ;; @008e                               v12 = load.i32 notrap aligned region3 v11
 ;; @0075                               v3 = iconst.i32 0
 ;; @0094                               store notrap aligned region3 v3, v11  ; v3 = 0
 ;; @009a                               store notrap aligned region3 v12, v11
-;; @009c                               v16 = load.i64 notrap aligned readonly can_move region7 v0+72
+;; @009c                               v16 = load.i64 notrap aligned readonly can_move region4 v0+72
 ;; @009c                               try_call fn0(v16, v0, v2), sig1, block10(ret0), [ context v0, default: block6(exn0) ]
 ;;
 ;;                                 block10(v17: i32):

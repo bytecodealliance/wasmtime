@@ -20,7 +20,7 @@
 ;;     region2 = 1207959552 "VMMemoryDefinition+0x0"
 ;;     region3 = 1207959560 "VMMemoryDefinition+0x8"
 ;;     region4 = 402653184 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
-;;     region5 = 72 "VMContext+0x48"
+;;     region5 = 2684354560 "VMTableImport+0x0"
 ;;     region6 = 1342177280 "VMTableDefinition+0x0"
 ;;     region7 = 1342177288 "VMTableDefinition+0x8"
 ;;     region8 = 536870912 "PublicTable"

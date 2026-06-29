@@ -17,7 +17,7 @@
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 48 "VMContext+0x30"
+;;     region2 = 2952790016 "VMGlobalImport+0x0"
 ;;     region3 = 805306368 "PublicGlobal"
 ;;     region4 = 939524096 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
 ;;     gv0 = vmctx

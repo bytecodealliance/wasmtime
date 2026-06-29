@@ -36,8 +36,8 @@
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 96 "VMContext+0x60"
-;;     region3 = 80 "VMContext+0x50"
+;;     region2 = 2415919128 "VMFunctionImport+0x18"
+;;     region3 = 2415919112 "VMFunctionImport+0x8"
 ;;     region4 = 1207959552 "VMMemoryDefinition+0x0"
 ;;     region5 = 1207959560 "VMMemoryDefinition+0x8"
 ;;     region6 = 402653184 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"

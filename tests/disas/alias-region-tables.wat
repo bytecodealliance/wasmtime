@@ -18,7 +18,7 @@
 ;; function u0:0(i64 vmctx, i64, i32, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 48 "VMContext+0x30"
+;;     region2 = 2684354560 "VMTableImport+0x0"
 ;;     region3 = 1342177280 "VMTableDefinition+0x0"
 ;;     region4 = 1342177288 "VMTableDefinition+0x8"
 ;;     region5 = 536870912 "PublicTable"
