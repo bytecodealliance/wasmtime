@@ -1515,6 +1515,19 @@ impl VMLazyThread {
     }
 }
 
+#[cfg(test)]
+mod test_vmlazy_thread {
+    use super::*;
+
+    #[test]
+    fn vmlazy_thread_forced() {
+        assert_eq!(
+            VMLazyThread::forced().0.unwrap().addr().get(),
+            usize::try_from(wasmtime_environ::VM_LAZY_THREAD_FORCED).unwrap()
+        );
+    }
+}
+
 /// A deferred component-model thread.
 ///
 /// This is an on-stack record pushed by a fused sync-to-sync adapter's fast
