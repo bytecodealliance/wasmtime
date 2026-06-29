@@ -306,6 +306,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
 #[doc(hidden)]
 pub struct LiftContext<'a> {
     store_id: StoreId,
+    current_scope_id: Option<u32>,
     /// Like lowering, lifting always has options configured.
     options: OptionsIndex,
 
@@ -337,9 +338,10 @@ impl<'a> LiftContext<'a> {
         store: &'a mut StoreOpaque,
         options: OptionsIndex,
         instance_handle: Instance,
-    ) -> LiftContext<'a> {
+    ) -> Result<LiftContext<'a>> {
         let store_id = store.id();
         let hostcall_fuel = store.hostcall_fuel();
+        let current_scope_id = store.current_scope_id()?;
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
         // `CallContexts`, and `HandleTable`. There's no native API for that
@@ -352,8 +354,9 @@ impl<'a> LiftContext<'a> {
             store.lift_context_parts(instance_handle);
         let (component, instance) = instance.component_and_self();
 
-        LiftContext {
+        Ok(LiftContext {
             store_id,
+            current_scope_id,
             memory,
             options,
             types: component.types(),
@@ -363,7 +366,7 @@ impl<'a> LiftContext<'a> {
             host_table,
             host_resource_data,
             hostcall_fuel,
-        }
+        })
     }
 
     /// Returns the canonical options that are being used during lifting.
@@ -471,6 +474,7 @@ impl<'a> LiftContext<'a> {
                 host_table: self.host_table,
                 task_state: self.task_state,
                 guest: Some(self.instance.as_mut().instance_states()),
+                current_scope_id: self.current_scope_id,
             },
             self.host_resource_data,
         )

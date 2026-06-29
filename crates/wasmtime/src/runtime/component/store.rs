@@ -6,7 +6,7 @@ use crate::runtime::vm::component::{
     CallContext, ComponentInstance, HandleTable, OwnedComponentInstance,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
-use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut};
+use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
 use core::pin::Pin;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
@@ -403,10 +403,7 @@ impl StoreOpaque {
         vm::component::ResourceTables<'_>,
         &mut crate::component::HostResourceData,
     )> {
-        // NB: Force the current lazy deferred thread, if any, before handing
-        // out resource tables.
-        #[cfg(feature = "component-model-async")]
-        let _ = self.current_thread()?;
+        let current_scope_id = self.current_scope_id()?;
 
         let store_id = self.id();
         let data = self.component_data_mut();
@@ -425,6 +422,7 @@ impl StoreOpaque {
                 host_table: &mut data.component_host_table,
                 task_state: &mut data.task_state,
                 guest,
+                current_scope_id,
             },
             &mut data.host_resource_data,
         ))
@@ -464,6 +462,16 @@ impl StoreOpaque {
             )
         } else {
             None
+        }
+    }
+
+    pub(crate) fn current_scope_id_not_concurrent(&mut self) -> Result<Option<u32>> {
+        match &mut self.component_data_mut().task_state {
+            ComponentTaskState::NotConcurrent(state) => match state.scopes.len().checked_sub(1) {
+                Some(i) => Ok(Some(u32::try_from(i)?)),
+                None => Ok(None),
+            },
+            ComponentTaskState::Concurrent(_) => bail_bug!("should not be reachable"),
         }
     }
 }
@@ -547,13 +555,6 @@ impl ComponentTaskState {
         match self {
             ComponentTaskState::NotConcurrent(state) => Ok(&mut state.scopes[id as usize]),
             ComponentTaskState::Concurrent(state) => state.call_context(id),
-        }
-    }
-
-    pub fn current_call_context_scope_id(&self) -> Result<u32> {
-        match self {
-            ComponentTaskState::NotConcurrent(state) => Ok(u32::try_from(state.scopes.len() - 1)?),
-            ComponentTaskState::Concurrent(state) => state.current_call_context_scope_id(),
         }
     }
 

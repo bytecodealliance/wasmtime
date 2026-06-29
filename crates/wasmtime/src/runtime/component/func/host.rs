@@ -422,7 +422,7 @@ where
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
-        let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance);
+        let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_PARAMS, storage)?;
 
         let ret = match self.run(store.as_context_mut(), params) {
@@ -473,7 +473,7 @@ where
 
         // Lift the parameters, either from flat storage or from linear
         // memory.
-        let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance);
+        let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_ASYNC_PARAMS, storage)?;
 
         // Load/validate the return pointer, if present.
