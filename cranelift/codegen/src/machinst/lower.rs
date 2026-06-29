@@ -1623,6 +1623,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Increment the reference count for the Value, ensuring that it gets lowered.
+    #[cfg(any(
+        feature = "x86",
+        feature = "arm64",
+        feature = "riscv64",
+        feature = "s390x",
+        feature = "pulley"
+    ))]
     pub fn increment_lowered_uses(&mut self, val: Value) {
         self.value_lowered_uses[val] += 1
     }
