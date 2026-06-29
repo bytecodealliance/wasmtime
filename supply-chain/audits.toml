@@ -3879,6 +3879,15 @@ criteria = "safe-to-deploy"
 delta = "0.6.4 -> 0.6.5"
 notes = "Just updating dependencies"
 
+[[audits.memmap2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.3 -> 0.9.11"
+notes = """
+Large update, but everything is still as expected in this crate. Lots of
+`unsafe`, but that's what you get for using `mmap`. Nothing looks awry.
+"""
+
 [[audits.memoffset]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
