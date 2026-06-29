@@ -146,15 +146,16 @@ impl LastStores {
     /// Returns `true` if `self` changed, `false` otherwise.
     fn meet_from(&mut self, other: &LastStores, loc: Inst) -> bool {
         let meet = |a: &mut PackedOption<Inst>, b: PackedOption<Inst>| -> bool {
-            let (inst, changed) = match (a.expand(), b.expand()) {
-                (None, None) => (None, false),
-                (Some(a), None) => (Some(a), true),
-                (None, Some(b)) => (Some(b), true),
-                (Some(a), Some(b)) if a == b => (Some(a), false),
-                (Some(a), Some(_)) => (Some(loc), a != loc),
+            let old = a.expand();
+            let new = match (old, b.expand()) {
+                (None, None) => None,
+                (Some(a), None) => Some(a),
+                (None, Some(b)) => Some(b),
+                (Some(a), Some(b)) if a == b => Some(a),
+                (Some(_), Some(_)) => Some(loc),
             };
-            *a = inst.into();
-            changed
+            *a = new.into();
+            old != new
         };
 
         // Meet all region slots.
