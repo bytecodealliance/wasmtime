@@ -696,7 +696,7 @@ impl Func {
         lift: impl FnOnce(&mut LiftContext, InterfaceType) -> Result<R>,
     ) -> Result<R> {
         let (options, _flags, ty, _) = self.abi_info(store);
-        let mut cx = LiftContext::new(store, options, self.instance);
+        let mut cx = LiftContext::new(store, options, self.instance)?;
         let ty = InterfaceType::Tuple(cx.types[ty].results);
         lift(&mut cx, ty)
     }

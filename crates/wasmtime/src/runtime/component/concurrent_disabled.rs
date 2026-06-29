@@ -194,4 +194,8 @@ impl StoreOpaque {
     pub(crate) fn may_enter(&mut self, _instance: RuntimeInstance) -> Result<bool> {
         Ok(!self.trapped())
     }
+
+    pub(crate) fn current_scope_id(&mut self) -> Result<u32> {
+        self.current_scope_id_not_concurrent()
+    }
 }

@@ -1809,7 +1809,10 @@ impl<T: Lift> WasmList<T> {
     // consumers should be validating through the iterator.
     pub fn get(&self, mut store: impl AsContextMut, index: usize) -> Option<Result<T>> {
         let store = store.as_context_mut().0;
-        let mut cx = LiftContext::new(store, self.options, self.instance);
+        let mut cx = match LiftContext::new(store, self.options, self.instance) {
+            Ok(cx) => cx,
+            Err(e) => return Some(Err(e)),
+        };
         self.get_from_store(&mut cx, index)
     }
 
@@ -1834,10 +1837,10 @@ impl<T: Lift> WasmList<T> {
     pub fn iter<'a, U: 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, U>>,
-    ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
+    ) -> Result<impl ExactSizeIterator<Item = Result<T>> + 'a> {
         let store = store.into().0;
-        let mut cx = LiftContext::new(store, self.options, self.instance);
-        (0..self.len).map(move |i| self.get_from_store(&mut cx, i).unwrap())
+        let mut cx = LiftContext::new(store, self.options, self.instance)?;
+        Ok((0..self.len).map(move |i| self.get_from_store(&mut cx, i).unwrap()))
     }
 }
 

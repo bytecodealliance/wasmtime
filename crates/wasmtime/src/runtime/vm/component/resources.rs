@@ -71,6 +71,10 @@ pub struct ResourceTables<'a> {
     /// Task information about calls actively in use to track information such
     /// as borrow counts.
     pub task_state: &'a mut ComponentTaskState,
+
+    /// Identifier for the current "scope" which is used for various functions
+    /// on `task_state` above to mutate borrows/etc of the current scope.
+    pub current_scope_id: u32,
 }
 
 /// Typed representation of a "rep" for a resource.
@@ -273,8 +277,10 @@ impl ResourceTables<'_> {
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
         let (rep, is_own) = self.table_for_index(&index).resource_lend(index)?;
         if is_own {
-            let scope = self.task_state.current_call_context_scope_id()?;
-            self.task_state.call_context(scope)?.lenders.push(index);
+            self.task_state
+                .call_context(self.current_scope_id)?
+                .lenders
+                .push(index);
         }
         Ok(rep)
     }
@@ -292,7 +298,7 @@ impl ResourceTables<'_> {
     /// `VMComponentContext` which handles the special case of avoiding borrow
     /// tracking entirely.
     pub fn resource_lower_borrow(&mut self, resource: TypedResource) -> Result<u32> {
-        let scope = self.task_state.current_call_context_scope_id()?;
+        let scope = self.current_scope_id;
         let cx = self.task_state.call_context(scope)?;
         cx.borrow_count = cx.borrow_count.checked_add(1).unwrap();
         self.table_for_resource(&resource)
@@ -306,8 +312,7 @@ impl ResourceTables<'_> {
     /// resources that were originally passed in.
     #[inline]
     pub fn validate_scope_exit(&mut self) -> Result<()> {
-        let current = self.task_state.current_call_context_scope_id()?;
-        let cx = self.task_state.call_context(current)?;
+        let cx = self.task_state.call_context(self.current_scope_id)?;
         if cx.borrow_count > 0 {
             bail!("borrow handles still remain at the end of the call")
         }
