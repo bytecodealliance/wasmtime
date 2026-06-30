@@ -645,6 +645,7 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::SyncStartCall { callback } => {
                 let pointer_type = self.isa.pointer_type();
                 let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
+                    &mut self.alias_regions,
                     &WasmFuncType::new([], self.signature.results().iter().copied()).panic_on_oom(),
                     &mut self.builder,
                     &[],
@@ -877,6 +878,7 @@ impl<'a> TrampolineCompiler<'a> {
         let pointer_type = self.isa.pointer_type();
 
         let (ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
+            &mut self.alias_regions,
             self.signature,
             &mut self.builder,
             args,
@@ -953,6 +955,7 @@ impl<'a> TrampolineCompiler<'a> {
             // A mixture of the above two.
             WasmArgs::InRegistersUpTo(n) => {
                 let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
+                    &mut self.alias_regions,
                     &WasmFuncType::new(self.signature.params().iter().skip(n).copied(), [])
                         .panic_on_oom(),
                     &mut self.builder,
@@ -1032,6 +1035,7 @@ impl<'a> TrampolineCompiler<'a> {
                 let len = len.or(val_raw_len).unwrap();
                 self.raise_if_host_trapped(result.unwrap());
                 let results = self.compiler.load_values_from_array(
+                    &mut self.alias_regions,
                     self.signature.results(),
                     &mut self.builder,
                     ptr,

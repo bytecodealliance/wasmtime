@@ -38,6 +38,7 @@ enum VmType {
     EpochCounter,
     BuiltinFunctionsArray,
     ComponentBuiltinFunctionsArray,
+    HostValRaw,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -161,6 +162,7 @@ impl AliasRegionKey {
     const BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b11011);
     const COMPONENT_BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b11100);
     const UNSAFE_INTRINSIC_MEMORY_KIND: u32 = Self::new_kind(0b11101);
+    const HOST_VAL_RAW_KIND: u32 = Self::new_kind(0b11110);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -192,6 +194,7 @@ impl AliasRegionKey {
                     VmType::ComponentBuiltinFunctionsArray => {
                         Self::COMPONENT_BUILTIN_FUNCTIONS_KIND
                     }
+                    VmType::HostValRaw => Self::HOST_VAL_RAW_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -1901,6 +1904,27 @@ where
             i32::from(offset),
         )
     }
+
+    /// Load the `array_call` field of the `VMFuncRef` inlined in a
+    /// `VMArrayCallHostFuncContext`.
+    pub fn vmarray_call_host_func_context_array_call(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        host_func_ctx: ir::Value,
+    ) -> ir::Value {
+        let func_ref = self
+            .offsets
+            .get_ptr_size()
+            .vmarray_call_host_func_context_func_ref();
+        let field = self.offsets.get_ptr_size().vm_func_ref_array_call();
+        let region = self.vmfuncref_region(cursor.func, field.into());
+        cursor.ins().load(
+            self.pointer_type,
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            host_func_ctx,
+            i32::from(func_ref) + i32::from(field),
+        )
+    }
 }
 
 /// `[VMSharedTypeIndex]`-related methods.
@@ -2045,6 +2069,19 @@ where
                 .with_alias_region(Some(region)),
             array,
             i32::try_from(offset).unwrap(),
+        )
+    }
+
+    /// Get the alias region for the `ValRaw` array used to marshal arguments
+    /// and results across the array calling convention used by various
+    /// trampolines.
+    pub fn host_val_raw_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::HostValRaw,
+                offset: 0,
+            },
         )
     }
 }
