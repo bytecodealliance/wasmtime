@@ -83,7 +83,7 @@
 ;;
 ;;                                 block4(v40: i32, v41: i64):
 ;;                                     v88 = stack_addr.i64 ss0
-;;                                     store notrap v40, v88
+;;                                     store notrap aligned v40, v88
 ;; @001f                               v42 = iconst.i64 16
 ;; @001f                               v43 = iadd v41, v42  ; v42 = 16
 ;; @001f                               store.i32 user2 region7 v2, v43
@@ -109,6 +109,6 @@
 ;; @0022                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v81 = load.i32 notrap v88
+;;                                     v81 = load.i32 notrap aligned v88
 ;; @0022                               return v81
 ;; }

@@ -55,11 +55,11 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @0049                               v5 = select v4, v2, v3
 ;;                                     v12 = stack_addr.i64 ss0
-;;                                     store notrap v5, v12
+;;                                     store notrap aligned v5, v12
 ;; @004c                               v7 = load.i64 notrap aligned readonly can_move region3 v0+88
 ;; @004c                               v6 = load.i64 notrap aligned readonly can_move region2 v0+104
 ;; @004c                               call_indirect sig0, v7(v6, v0), stack_map=[i32 @ ss0+0]
-;;                                     v11 = load.i32 notrap v12
+;;                                     v11 = load.i32 notrap aligned v12
 ;; @004e                               v9 = load.i64 notrap aligned readonly can_move region3 v0+56
 ;; @004e                               v8 = load.i64 notrap aligned readonly can_move region2 v0+72
 ;; @004e                               call_indirect sig1, v9(v8, v0, v11)

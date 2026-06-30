@@ -33,7 +33,7 @@
 ;; @0020                               v7 = iconst.i32 8
 ;; @0020                               v8 = call fn0(v0, v4, v6, v3, v7)  ; v4 = -1342177280, v3 = 32, v7 = 8
 ;;                                     v21 = stack_addr.i64 ss0
-;;                                     store notrap v8, v21
+;;                                     store notrap aligned v8, v21
 ;; @0020                               v15 = call fn1(v0, v2), stack_map=[i32 @ ss0+0]
 ;; @0020                               v16 = ireduce.i32 v15
 ;; @0020                               v9 = load.i64 notrap aligned readonly can_move region0 v0+8
@@ -46,6 +46,6 @@
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v18 = load.i32 notrap v21
+;;                                     v18 = load.i32 notrap aligned v21
 ;; @0023                               return v18
 ;; }

@@ -160,10 +160,10 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;;                                     v56 = stack_addr.i64 ss0
-;;                                     store notrap v2, v56
+;;                                     store notrap aligned v2, v56
 ;; @0053                               v5 = iconst.i32 3
 ;; @0053                               v6 = call fn0(v0, v5), stack_map=[i32 @ ss0+0]  ; v5 = 3
-;;                                     v55 = load.i32 notrap v56
+;;                                     v55 = load.i32 notrap aligned v56
 ;; @0057                               trapz v55, user16
 ;; @0057                               v8 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0057                               v9 = load.i64 notrap aligned readonly can_move region2 v8+32
