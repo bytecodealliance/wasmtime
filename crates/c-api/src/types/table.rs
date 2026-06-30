@@ -1,5 +1,5 @@
 use crate::{CExternType, wasm_externtype_t, wasm_limits_t, wasm_valtype_t};
-use std::cell::OnceCell;
+use std::sync::OnceLock;
 use wasmtime::{TableType, ValType};
 
 #[repr(transparent)]
@@ -13,8 +13,8 @@ wasmtime_c_api_macros::declare_ty!(wasm_tabletype_t);
 #[derive(Clone)]
 pub(crate) struct CTableType {
     pub(crate) ty: TableType,
-    element_cache: OnceCell<wasm_valtype_t>,
-    limits_cache: OnceCell<wasm_limits_t>,
+    element_cache: OnceLock<wasm_valtype_t>,
+    limits_cache: OnceLock<wasm_limits_t>,
 }
 
 impl wasm_tabletype_t {
@@ -43,8 +43,8 @@ impl CTableType {
     pub(crate) fn new(ty: TableType) -> CTableType {
         CTableType {
             ty,
-            element_cache: OnceCell::new(),
-            limits_cache: OnceCell::new(),
+            element_cache: OnceLock::new(),
+            limits_cache: OnceLock::new(),
         }
     }
 }
