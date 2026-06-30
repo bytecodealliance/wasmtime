@@ -1263,10 +1263,9 @@ pub fn translate_ref_test(
             let expected_shared_ty =
                 func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
 
-            let gc_memflags = func_env.gc_memflags(&mut builder.func);
-            let actual_shared_ty = func_env.load_funcref_type_index(
+            let actual_shared_ty = func_env.alias_regions.vmfuncref_type_index(
                 &mut builder.cursor(),
-                gc_memflags.with_readonly(),
+                ir::MemFlagsData::trusted().with_readonly(),
                 val,
             );
 

@@ -32,6 +32,7 @@ enum VmType {
     VMTableImport,
     VMTagImport,
     VMGlobalImport,
+    VMFuncRef,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -140,6 +141,7 @@ impl AliasRegionKey {
     const VM_TAG_IMPORT_KIND: u32 = Self::new_kind(0b10101);
     const VM_GLOBAL_IMPORT_KIND: u32 = Self::new_kind(0b10110);
     const STACK_KIND: u32 = Self::new_kind(0b10111);
+    const VM_FUNC_REF_KIND: u32 = Self::new_kind(0b11000);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -164,6 +166,7 @@ impl AliasRegionKey {
                     VmType::VMTableImport => Self::VM_TABLE_IMPORT_KIND,
                     VmType::VMTagImport => Self::VM_TAG_IMPORT_KIND,
                     VmType::VMGlobalImport => Self::VM_GLOBAL_IMPORT_KIND,
+                    VmType::VMFuncRef => Self::VM_FUNC_REF_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -1783,6 +1786,83 @@ where
             self.pointer_type,
             ir::MemFlagsData::trusted().with_alias_region(Some(region)),
             ptr,
+        )
+    }
+}
+
+/// `VMFuncRef`-related methods.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    fn vmfuncref_region(&mut self, func: &mut ir::Function, offset: u32) -> ir::AliasRegion {
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMFuncRef,
+                offset,
+            },
+        )
+    }
+
+    /// Load the `VMFuncRef::type_index` field out of a `*const VMFuncRef`.
+    pub fn vmfuncref_type_index(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        base_flags: ir::MemFlagsData,
+        funcref: ir::Value,
+    ) -> ir::Value {
+        let offset = self.offsets.get_ptr_size().vm_func_ref_type_index();
+        let region = self.vmfuncref_region(cursor.func, offset.into());
+        let ty = ir::Type::int_with_byte_size(
+            self.offsets
+                .get_ptr_size()
+                .size_of_vmshared_type_index()
+                .into(),
+        )
+        .unwrap();
+        cursor.ins().load(
+            ty,
+            base_flags.with_alias_region(Some(region)),
+            funcref,
+            i32::from(offset),
+        )
+    }
+
+    /// Load the `VMFuncRef::wasm_call` field out of a `*const VMFuncRef`.
+    ///
+    /// The caller supplies the base flags because this load may carry an
+    /// optional trap code for the null-funcref case.
+    pub fn vmfuncref_wasm_call(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        base_flags: ir::MemFlagsData,
+        funcref: ir::Value,
+    ) -> ir::Value {
+        let offset = self.offsets.get_ptr_size().vm_func_ref_wasm_call();
+        let region = self.vmfuncref_region(cursor.func, offset.into());
+        cursor.ins().load(
+            self.pointer_type,
+            base_flags.with_alias_region(Some(region)),
+            funcref,
+            i32::from(offset),
+        )
+    }
+
+    /// Load the `VMFuncRef::vmctx` field out of a `*const VMFuncRef`.
+    pub fn vmfuncref_vmctx(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        base_flags: ir::MemFlagsData,
+        funcref: ir::Value,
+    ) -> ir::Value {
+        let offset = self.offsets.get_ptr_size().vm_func_ref_vmctx();
+        let region = self.vmfuncref_region(cursor.func, offset.into());
+        cursor.ins().load(
+            self.pointer_type,
+            base_flags.with_alias_region(Some(region)),
+            funcref,
+            i32::from(offset),
         )
     }
 }

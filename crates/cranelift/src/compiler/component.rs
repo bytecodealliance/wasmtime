@@ -1058,7 +1058,6 @@ impl<'a> TrampolineCompiler<'a> {
         let args = self.abi_load_params();
         let vmctx = args[0];
         let caller_vmctx = args[1];
-        let pointer_type = self.isa.pointer_type();
 
         // The arguments this shim passes along to the libcall are:
         //
@@ -1245,17 +1244,15 @@ impl<'a> TrampolineCompiler<'a> {
                     .ins()
                     .trapz(dtor_func_ref, TRAP_INTERNAL_ASSERT);
             }
-            let func_addr = self.builder.ins().load(
-                pointer_type,
+            let func_addr = self.alias_regions.vmfuncref_wasm_call(
+                &mut self.builder.cursor(),
                 trusted,
                 dtor_func_ref,
-                i32::from(self.offsets.ptr.vm_func_ref_wasm_call()),
             );
-            let callee_vmctx = self.builder.ins().load(
-                pointer_type,
+            let callee_vmctx = self.alias_regions.vmfuncref_vmctx(
+                &mut self.builder.cursor(),
                 trusted,
                 dtor_func_ref,
-                i32::from(self.offsets.ptr.vm_func_ref_vmctx()),
             );
 
             let sig = crate::wasm_call_signature(self.isa, self.signature, &self.compiler.tunables);

@@ -24,6 +24,9 @@
 ;;     region5 = 536870912 "PublicTable"
 ;;     region6 = 671088640 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     region7 = 40 "VMContext+0x28"
+;;     region8 = 3221225488 "VMFuncRef+0x10"
+;;     region9 = 3221225480 "VMFuncRef+0x8"
+;;     region10 = 3221225496 "VMFuncRef+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -64,13 +67,13 @@
 ;; @004d                               jump block3(v48)
 ;;
 ;;                                 block3(v45: i64):
-;; @004d                               v51 = load.i32 user7 aligned readonly v45+16
+;; @004d                               v51 = load.i32 user7 aligned readonly region8 v45+16
 ;; @004d                               v49 = load.i64 notrap aligned readonly can_move region7 v0+40
 ;; @004d                               v50 = load.i32 notrap aligned readonly can_move v49
 ;; @004d                               v52 = icmp eq v51, v50
 ;; @004d                               trapz v52, user8
-;; @004d                               v54 = load.i64 notrap aligned readonly v45+8
-;; @004d                               v55 = load.i64 notrap aligned readonly v45+24
+;; @004d                               v54 = load.i64 notrap aligned readonly region9 v45+8
+;; @004d                               v55 = load.i64 notrap aligned readonly region10 v45+24
 ;; @004d                               v56 = call_indirect sig0, v54(v55, v0)
 ;; @0050                               jump block1
 ;;
