@@ -17,8 +17,9 @@
 ;;     region3 = 1744830464 "VMCopyingHeapData+0x0"
 ;;     region4 = 1744830468 "VMCopyingHeapData+0x4"
 ;;     region5 = 40 "VMContext+0x28"
-;;     region6 = 134217760 "VMStoreContext+0x20"
-;;     region7 = 1073741824 "GcHeap"
+;;     region6 = 3355443200 "TypeIdsArray+0x0"
+;;     region7 = 134217760 "VMStoreContext+0x20"
+;;     region8 = 1073741824 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -43,25 +44,25 @@
 ;; @0021                               store notrap aligned region3 v57, v6
 ;;                                     v60 = iconst.i32 -1342177246
 ;;                                     v61 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v62 = load.i64 notrap aligned readonly can_move region6 v61+32
+;;                                     v62 = load.i64 notrap aligned readonly can_move region7 v61+32
 ;; @0021                               v31 = iadd v62, v14
-;; @0021                               store user2 region7 v60, v31  ; v60 = -1342177246
+;; @0021                               store user2 region8 v60, v31  ; v60 = -1342177246
 ;;                                     v63 = load.i64 notrap aligned readonly can_move region5 v0+40
-;;                                     v64 = load.i32 notrap aligned readonly can_move v63
-;; @0021                               store user2 region7 v64, v31+4
+;;                                     v64 = load.i32 notrap aligned readonly can_move region6 v63
+;; @0021                               store user2 region8 v64, v31+4
 ;;                                     v65 = iconst.i64 32
-;; @0021                               istore32 user2 region7 v65, v31+8  ; v65 = 32
+;; @0021                               istore32 user2 region8 v65, v31+8  ; v65 = 32
 ;; @0021                               jump block4(v7, v31)
 ;;
 ;;                                 block3 cold:
 ;; @0021                               v18 = iconst.i32 -1342177246
 ;; @0021                               v19 = load.i64 notrap aligned readonly can_move region5 v0+40
-;; @0021                               v20 = load.i32 notrap aligned readonly can_move v19
+;; @0021                               v20 = load.i32 notrap aligned readonly can_move region6 v19
 ;; @0021                               v5 = iconst.i32 32
 ;; @0021                               v21 = iconst.i32 16
 ;; @0021                               v22 = call fn0(v0, v18, v20, v5, v21)  ; v18 = -1342177246, v5 = 32, v21 = 16
 ;; @0021                               v23 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0021                               v24 = load.i64 notrap aligned readonly can_move region6 v23+32
+;; @0021                               v24 = load.i64 notrap aligned readonly can_move region7 v23+32
 ;; @0021                               v25 = uextend.i64 v22
 ;; @0021                               v26 = iadd v24, v25
 ;; @0021                               jump block4(v22, v26)
@@ -70,14 +71,14 @@
 ;; @0021                               v2 = f32const 0.0
 ;; @0021                               v37 = iconst.i64 16
 ;; @0021                               v38 = iadd v36, v37  ; v37 = 16
-;; @0021                               store user2 little region7 v2, v38  ; v2 = 0.0
+;; @0021                               store user2 little region8 v2, v38  ; v2 = 0.0
 ;; @0021                               v3 = iconst.i32 0
 ;; @0021                               v39 = iconst.i64 20
 ;; @0021                               v40 = iadd v36, v39  ; v39 = 20
-;; @0021                               istore8 user2 little region7 v3, v40  ; v3 = 0
+;; @0021                               istore8 user2 little region8 v3, v40  ; v3 = 0
 ;; @0021                               v41 = iconst.i64 24
 ;; @0021                               v42 = iadd v36, v41  ; v41 = 24
-;; @0021                               store user2 little region7 v3, v42  ; v3 = 0
+;; @0021                               store user2 little region8 v3, v42  ; v3 = 0
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:

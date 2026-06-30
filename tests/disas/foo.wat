@@ -25,9 +25,10 @@
 ;;     region7 = 1342177288 "VMTableDefinition+0x8"
 ;;     region8 = 536870912 "PublicTable"
 ;;     region9 = 40 "VMContext+0x28"
-;;     region10 = 3221225488 "VMFuncRef+0x10"
-;;     region11 = 3221225480 "VMFuncRef+0x8"
-;;     region12 = 3221225496 "VMFuncRef+0x18"
+;;     region10 = 3355443204 "TypeIdsArray+0x4"
+;;     region11 = 3221225488 "VMFuncRef+0x10"
+;;     region12 = 3221225480 "VMFuncRef+0x8"
+;;     region13 = 3221225496 "VMFuncRef+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -63,13 +64,13 @@
 ;; @0043                               jump block3(v26)
 ;;
 ;;                                 block3(v23: i64):
-;; @0043                               v29 = load.i32 user7 aligned readonly region10 v23+16
+;; @0043                               v29 = load.i32 user7 aligned readonly region11 v23+16
 ;; @0043                               v27 = load.i64 notrap aligned readonly can_move region9 v0+40
-;; @0043                               v28 = load.i32 notrap aligned readonly can_move v27+4
+;; @0043                               v28 = load.i32 notrap aligned readonly can_move region10 v27+4
 ;; @0043                               v30 = icmp eq v29, v28
 ;; @0043                               trapz v30, user8
-;; @0043                               v32 = load.i64 notrap aligned readonly region11 v23+8
-;; @0043                               v33 = load.i64 notrap aligned readonly region12 v23+24
+;; @0043                               v32 = load.i64 notrap aligned readonly region12 v23+8
+;; @0043                               v33 = load.i64 notrap aligned readonly region13 v23+24
 ;; @0043                               v34 = call_indirect sig0, v32(v33, v0, v2)
 ;; @004a                               v40 = load.i32 little region4 v6
 ;; @004d                               v42 = load.i64 notrap aligned region7 v8+8
@@ -93,11 +94,11 @@
 ;; @004d                               jump block5(v59)
 ;;
 ;;                                 block5(v56: i64):
-;; @004d                               v62 = load.i32 user7 aligned readonly region10 v56+16
+;; @004d                               v62 = load.i32 user7 aligned readonly region11 v56+16
 ;; @004d                               v63 = icmp eq v62, v28
 ;; @004d                               trapz v63, user8
-;; @004d                               v65 = load.i64 notrap aligned readonly region11 v56+8
-;; @004d                               v66 = load.i64 notrap aligned readonly region12 v56+24
+;; @004d                               v65 = load.i64 notrap aligned readonly region12 v56+8
+;; @004d                               v66 = load.i64 notrap aligned readonly region13 v56+24
 ;; @004d                               v67 = call_indirect sig0, v65(v66, v0, v2)
 ;; @0050                               jump block1
 ;;

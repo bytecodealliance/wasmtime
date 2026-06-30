@@ -20,11 +20,12 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
 ;;     region2 = 40 "VMContext+0x28"
-;;     region3 = 134217760 "VMStoreContext+0x20"
-;;     region4 = 134217768 "VMStoreContext+0x28"
-;;     region5 = 1073741824 "GcHeap"
-;;     region6 = 2415919128 "VMFunctionImport+0x18"
-;;     region7 = 2415919112 "VMFunctionImport+0x8"
+;;     region3 = 3355443200 "TypeIdsArray+0x0"
+;;     region4 = 134217760 "VMStoreContext+0x20"
+;;     region5 = 134217768 "VMStoreContext+0x28"
+;;     region6 = 1073741824 "GcHeap"
+;;     region7 = 2415919128 "VMFunctionImport+0x18"
+;;     region8 = 2415919112 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -44,14 +45,14 @@
 ;;
 ;;                                 block4:
 ;; @002f                               v13 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @002f                               v14 = load.i64 notrap aligned readonly can_move region3 v13+32
+;; @002f                               v14 = load.i64 notrap aligned readonly can_move region4 v13+32
 ;; @002f                               v12 = uextend.i64 v2
 ;; @002f                               v15 = iadd v14, v12
 ;; @002f                               v16 = iconst.i64 4
 ;; @002f                               v17 = iadd v15, v16  ; v16 = 4
-;; @002f                               v18 = load.i32 user2 readonly region5 v17
+;; @002f                               v18 = load.i32 user2 readonly region6 v17
 ;; @002f                               v10 = load.i64 notrap aligned readonly can_move region2 v0+40
-;; @002f                               v11 = load.i32 notrap aligned readonly can_move v10
+;; @002f                               v11 = load.i32 notrap aligned readonly can_move region3 v10
 ;; @002f                               v19 = icmp eq v18, v11
 ;; @002f                               v20 = uextend.i32 v19
 ;; @002f                               jump block5(v20)
@@ -60,14 +61,14 @@
 ;; @002f                               brif v21, block2, block6
 ;;
 ;;                                 block6:
-;; @0035                               v23 = load.i64 notrap aligned readonly can_move region7 v0+56
-;; @0035                               v22 = load.i64 notrap aligned readonly can_move region6 v0+72
+;; @0035                               v23 = load.i64 notrap aligned readonly can_move region8 v0+56
+;; @0035                               v22 = load.i64 notrap aligned readonly can_move region7 v0+72
 ;; @0035                               call_indirect sig0, v23(v22, v0)
 ;; @0037                               return
 ;;
 ;;                                 block2:
-;; @0039                               v25 = load.i64 notrap aligned readonly can_move region7 v0+88
-;; @0039                               v24 = load.i64 notrap aligned readonly can_move region6 v0+104
+;; @0039                               v25 = load.i64 notrap aligned readonly can_move region8 v0+88
+;; @0039                               v24 = load.i64 notrap aligned readonly can_move region7 v0+104
 ;; @0039                               call_indirect sig0, v25(v24, v0)
 ;; @003b                               return
 ;; }

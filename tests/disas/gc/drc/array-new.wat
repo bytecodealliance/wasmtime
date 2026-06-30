@@ -13,9 +13,10 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
 ;;     region2 = 40 "VMContext+0x28"
-;;     region3 = 134217760 "VMStoreContext+0x20"
-;;     region4 = 1073741824 "GcHeap"
-;;     region5 = 134217768 "VMStoreContext+0x28"
+;;     region3 = 3355443200 "TypeIdsArray+0x0"
+;;     region4 = 134217760 "VMStoreContext+0x20"
+;;     region5 = 1073741824 "GcHeap"
+;;     region6 = 134217768 "VMStoreContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -36,18 +37,18 @@
 ;; @0022                               v11 = uadd_overflow_trap v4, v73, user18  ; v4 = 32
 ;; @0022                               v12 = iconst.i32 -1476395008
 ;; @0022                               v13 = load.i64 notrap aligned readonly can_move region2 v0+40
-;; @0022                               v14 = load.i32 notrap aligned readonly can_move v13
+;; @0022                               v14 = load.i32 notrap aligned readonly can_move region3 v13
 ;;                                     v70 = iconst.i32 8
 ;; @0022                               v16 = call fn0(v0, v12, v14, v11, v70)  ; v12 = -1476395008, v70 = 8
 ;; @0022                               v17 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0022                               v18 = load.i64 notrap aligned readonly can_move region3 v17+32
+;; @0022                               v18 = load.i64 notrap aligned readonly can_move region4 v17+32
 ;; @0022                               v19 = uextend.i64 v16
 ;; @0022                               v20 = iadd v18, v19
 ;; @0022                               v21 = iconst.i64 24
 ;; @0022                               v22 = iadd v20, v21  ; v21 = 24
-;; @0022                               store user2 region4 v3, v22
+;; @0022                               store user2 region5 v3, v22
 ;; @0022                               trapz v16, user16
-;; @0022                               v54 = load.i64 notrap aligned region5 v17+40
+;; @0022                               v54 = load.i64 notrap aligned region6 v17+40
 ;; @0022                               v43 = iadd v20, v8  ; v8 = 32
 ;; @0022                               v56 = uadd_overflow_trap v43, v66, user2
 ;; @0022                               v55 = iadd v18, v54
@@ -60,7 +61,7 @@
 ;; @0022                               brif v60, block3, block2(v43)
 ;;
 ;;                                 block2(v61: i64):
-;; @0022                               store.i64 user2 little region4 v2, v61
+;; @0022                               store.i64 user2 little region5 v2, v61
 ;;                                     v91 = iconst.i64 8
 ;;                                     v92 = iadd v61, v91  ; v91 = 8
 ;; @0022                               v64 = icmp eq v92, v58
