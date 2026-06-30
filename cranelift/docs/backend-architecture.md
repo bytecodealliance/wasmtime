@@ -47,9 +47,15 @@ Every ISA backend defines a type that implements `MachInst`. This trait
 provides:
 
 - `get_operands`: enumerate register uses and definitions (for regalloc)
-- `is_term`: whether this is a block terminator
-- `branch_destination`: return target blocks for branch instructions
-- `emit`: encode the instruction into bytes in a `MachBuffer`
+- `is_term`: whether this is a block terminator; returns a `MachTerminator`
+  that carries branch target block indices for conditional and unconditional
+  branches
+- `gen_move`, `gen_jump`, `gen_nop`, etc.: generate specific instruction forms
+  needed by the backend framework
+
+Binary encoding is handled by the separate `MachInstEmit` trait (also
+implemented on the same `Inst` type), whose `emit` method writes bytes into a
+`MachBuffer`.
 
 ### `MachBuffer`
 
@@ -81,10 +87,19 @@ Engine), a domain-specific language for writing pattern-matching lowering rules.
 ### ISLE compilation model
 
 ISLE source files (`.isle`) are compiled at build time by the ISLE compiler
-(in `cranelift/isle`) into Rust code. The generated Rust is checked in at
-`cranelift/codegen/src/isa/<arch>/lower/isle/generated_code.rs` to allow
-building Cranelift without running the ISLE compiler (though it is
-automatically re-run when any `.isle` file changes).
+(in `cranelift/isle`) into Rust code. The build script (`build.rs`) runs the
+ISLE compiler automatically whenever a `.isle` file changes — no manual step
+is required. The generated Rust code is placed in Cargo's output directory
+(`target/`).
+
+Each backend has a thin `generated_code.rs` file in the source tree that does
+nothing but `include!()` the actual generated file from `target/`. The actual
+generated code is never checked in. To inspect the generated code, set the
+`ISLE_SOURCE_DIR` environment variable to redirect it to a readable path:
+
+```shell
+$ ISLE_SOURCE_DIR=$(pwd)/isle-sources cargo check -p cranelift-codegen
+```
 
 ### How lowering works
 
@@ -101,8 +116,8 @@ instructions into the `VCodeBuilder`.
 
 For a given backend (e.g. `aarch64`):
 
-- `cranelift/codegen/src/isa/aarch64/inst/*.isle`: machine instruction
-  definitions (the `MInstruction` term and its variants)
+- `cranelift/codegen/src/isa/aarch64/inst.isle` (and `inst_neon.isle`):
+  machine instruction definitions (the `MInstruction` term and its variants)
 - `cranelift/codegen/src/isa/aarch64/lower.isle`: lowering rules (patterns
   matching CLIF and emitting machine instructions)
 - `cranelift/codegen/src/prelude.isle`: shared declarations available to all
@@ -147,8 +162,8 @@ inst/
 lower/
     isle.rs     - Glue between the Rust lowering entry point and ISLE
     isle/
-        generated_code.rs  - ISLE compiler output (checked in)
-*.isle          - ISLE source files
+        generated_code.rs  - include!() wrapper for ISLE output in target/
+*.isle          - ISLE source files (compiled to Rust by build.rs)
 ```
 
 ## Optimization pipeline context

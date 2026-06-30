@@ -8,14 +8,17 @@ allocation failures.
 
 ### Print CLIF input
 
-To see the CLIF IR that a function starts with, use `clif-util print`:
+To see the CLIF IR that a function starts with, use `clif-util cat`:
 
 ```
-cargo run -p cranelift-codegen --example clif-util -- print path/to/function.clif
+cargo run -p cranelift-tools -- cat path/to/function.clif
 ```
 
-Or use the `CRANELIFT_VERBOSE` environment variable to make `cranelift-codegen`
-print CLIF at key stages during normal compilation.
+To print CLIF at key stages during normal compilation, enable trace logging:
+
+```
+RUST_LOG=cranelift_codegen=trace cargo test ...
+```
 
 ### Print optimized CLIF
 
@@ -35,13 +38,13 @@ function %my_func(i32, i32) -> i32 {
 Run with:
 
 ```
-cargo run -p cranelift-codegen --example clif-util -- test path/to/test.clif
+cargo run -p cranelift-tools -- test path/to/test.clif
 ```
 
 ### Print VCode (machine instructions before regalloc)
 
-Set `CRANELIFT_VERBOSE=1` or enable the `trace` log level for
-`cranelift_codegen::machinst`. With `RUST_LOG=cranelift_codegen::machinst=trace`:
+Enable the `trace` log level for `cranelift_codegen::machinst`:
+
 
 ```
 RUST_LOG=cranelift_codegen::machinst=trace cargo test ...
@@ -80,7 +83,7 @@ helps enormously to reduce the input to a small `.clif` file.
 
 2. Save the function to a `.clif` file and run:
    ```
-   cargo run -p cranelift-codegen --example clif-util -- test path/to/test.clif
+   cargo run -p cranelift-tools -- test path/to/test.clif
    ```
 
 3. Manually simplify the function: remove instructions, replace values with
@@ -126,10 +129,10 @@ Use `test run` with different `target` lines to run the same function on
 different ISAs and compare results. The interpreter (`test interpret`) provides
 a reference implementation that does not go through native code generation.
 
-### Using `clif-util disasm`
+### Using `clif-util compile --disasm`
 
 ```
-cargo run -p cranelift-codegen --example clif-util -- compile --disasm -t aarch64 path/to/test.clif
+cargo run -p cranelift-tools -- compile --disasm --target aarch64 path/to/test.clif
 ```
 
 This prints the generated machine code as both hex and disassembly.
@@ -167,14 +170,15 @@ Cranelift supports a `ControlPlane` mechanism that can randomize certain
 compilation decisions (such as block layout). This is useful for finding
 latent bugs that only manifest with a particular ordering.
 
-Pass `--chaos` to `clif-util` to enable chaos mode:
+Chaos mode is enabled via a Cargo feature. Build with the `chaos` feature to
+activate it:
 
 ```
-cargo run -p cranelift-codegen --example clif-util -- test --chaos path/to/test.clif
+cargo test -p cranelift-filetests --features cranelift-control/chaos
 ```
 
-When a test fails under chaos mode, bisect which random seed triggers the
-failure by setting `CRANELIFT_SEED=<N>`.
+When a miscompilation only appears under chaos mode, run tests repeatedly or
+use a fuzzer seed to reproduce the specific ordering that triggers the bug.
 
 ## Debugging ISLE rule selection
 

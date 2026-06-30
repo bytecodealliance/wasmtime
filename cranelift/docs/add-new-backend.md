@@ -46,20 +46,31 @@ And add it to the default features if appropriate.
 
 ## Step 3: Define ISA-specific settings
 
-Create `cranelift/codegen/meta/src/isa/<arch>/mod.rs` (or `settings.rs`)
-defining ISA-specific settings using the meta DSL:
+Create `cranelift/codegen/meta/src/isa/<arch>.rs` (a single file alongside
+the other ISA files in that directory) defining ISA-specific settings using
+the meta DSL:
 
 ```rust
-pub fn define() -> SettingGroup {
-    let mut setting = SettingGroupBuilder::new("newarch");
-    // add flags/enums as needed
-    setting.build()
+use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::settings::SettingGroupBuilder;
+
+pub(crate) fn define() -> TargetIsa {
+    let mut settings = SettingGroupBuilder::new("newarch");
+    // add flags/enums as needed, e.g.:
+    // settings.add_bool("has_feature_x", "Has feature X.", "", false);
+    TargetIsa::new("newarch", settings.build())
 }
 ```
 
-Run `cargo build -p cranelift-codegen` once to generate
-`cranelift/codegen/src/isa/<arch>/settings.rs` from the meta definition.
-This generated file defines `Flags` and `Builder` types for your ISA settings.
+The meta build will generate a `settings-<arch>.rs` file into `OUT_DIR`. You
+must create `cranelift/codegen/src/isa/<arch>/settings.rs` as a stub that
+`include!()`s it — exactly like the existing backends:
+
+```rust
+include!(concat!(env!("OUT_DIR"), "/settings-<arch>.rs"));
+```
+
+This file defines `Flags` and `Builder` types for your ISA settings.
 
 Register your settings in `cranelift/codegen/meta/src/isa/mod.rs` and in
 `cranelift/codegen/meta/src/lib.rs`.
@@ -83,14 +94,26 @@ pub fn f_reg(enc: usize) -> Reg { ... }
 pub fn create_machine_env() -> MachineEnv {
     MachineEnv {
         preferred_regs_by_class: [
-            // integer registers
-            vec![x_reg(0), x_reg(1), /* ... */],
-            // float registers
-            vec![f_reg(0), f_reg(1), /* ... */],
-            // vector registers (if any)
-            vec![],
+            // integer registers (caller-saved / not callee-saved)
+            PRegSet::empty()
+                .with(PReg::new(0, RegClass::Int))
+                .with(PReg::new(1, RegClass::Int)),
+                /* ... */
+            // float/vector registers
+            PRegSet::empty()
+                .with(PReg::new(0, RegClass::Float))
+                /* ... */,
+            // second vector class (unused on most ISAs)
+            PRegSet::empty(),
         ],
-        non_preferred_regs_by_class: [vec![], vec![], vec![]],
+        non_preferred_regs_by_class: [
+            // callee-saved integer registers
+            PRegSet::empty()
+                .with(PReg::new(8, RegClass::Int))
+                /* ... */,
+            PRegSet::empty(),
+            PRegSet::empty(),
+        ],
         fixed_stack_slots: vec![],
         scratch_by_class: [None, None, None],
     }
@@ -102,27 +125,42 @@ pub fn create_machine_env() -> MachineEnv {
 In `inst/mod.rs`, define an enum `Inst` for all machine instructions. Each
 variant holds the operands and addressing modes for that instruction.
 
-`Inst` must implement the `MachInst` trait:
+`Inst` must implement the `MachInst` trait. The key required methods are:
 
 ```rust
 impl MachInst for Inst {
     type ABIMachineSpec = NewArchABIMachineSpec;
-    type LabelUse = LabelUse;
+    type LabelUse = LabelUse;  // your label-use kind enum
 
-    fn get_operands(&self, collector: &mut impl OperandVisitor) { ... }
-    fn is_term(&self) -> MachTerminator { ... }
-    fn branch_destination<'a>(&'a self, targets: &'a [MachLabel]) -> ... { ... }
-    fn is_included_in_clobbers(&self) -> bool { ... }
+    const TRAP_OPCODE: &'static [u8] = &[/* ISA-specific trap encoding */];
+
+    fn get_operands(&mut self, collector: &mut impl OperandVisitor) { ... }
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> { ... }
-    fn gen_move(to: Writable<Reg>, from: Reg, ty: Type) -> Inst { ... }
-    fn gen_nop(preferred_size: usize) -> Inst { ... }
+    fn is_term(&self) -> MachTerminator { ... }
+    fn is_trap(&self) -> bool { ... }
+    fn is_args(&self) -> bool { ... }
+    fn call_type(&self) -> CallType { ... }
+    fn is_included_in_clobbers(&self) -> bool { ... }
+    fn is_mem_access(&self) -> bool { ... }
+    fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self { ... }
+    fn gen_dummy_use(reg: Reg) -> Self { ... }
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> { ... }
     fn canonical_type_for_rc(rc: RegClass) -> Type { ... }
-    fn gen_jump(target: MachLabel) -> Inst { ... }
+    fn gen_jump(target: MachLabel) -> Self { ... }
+    fn gen_nop(preferred_size: usize) -> Self { ... }
+    fn gen_nop_units() -> Vec<Vec<u8>> { ... }
     fn worst_case_size() -> CodeOffset { ... }
-    fn ref_type_regclass(_: &settings::Flags) -> RegClass { ... }
+    fn worst_case_island_growth() -> CodeOffset { ... }
+    fn ref_type_regclass(_flags: &Flags) -> RegClass { ... }
+    fn is_safepoint(&self) -> bool { ... }
+    fn function_alignment() -> FunctionAlignment { ... }
 }
 ```
+
+Several methods have default implementations and can be omitted — check the
+trait definition in `cranelift/codegen/src/machinst/mod.rs` to see which ones.
+`type LabelUse`, `const TRAP_OPCODE`, and `fn function_alignment` are required
+with no default.
 
 ## Step 6: Implement binary emission
 
@@ -133,12 +171,13 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, allocs: &[regalloc2::Allocation], sink: &mut MachBuffer<Inst>, info: &EmitInfo, state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffer<Inst>, info: &EmitInfo, state: &mut EmitState) {
         match self {
             Inst::Add { rd, rn, rm } => {
-                let rd = allocs[0].as_reg().unwrap();
-                let rn = allocs[1].as_reg().unwrap();
-                let rm = allocs[2].as_reg().unwrap();
+                // Registers are already physical by the time emit() is called.
+                let rd = rd.to_reg().to_real_reg().unwrap().hw_enc();
+                let rn = rn.to_real_reg().unwrap().hw_enc();
+                let rm = rm.to_real_reg().unwrap().hw_enc();
                 // encode and write bytes to sink
                 sink.put4(encode_add(rd, rn, rm));
             }
@@ -165,12 +204,11 @@ impl ABIMachineSpec for NewArchABIMachineSpec {
     fn word_bits() -> u32 { 64 }
     fn stack_align(_call_conv: isa::CallConv) -> u32 { 16 }
     fn compute_arg_locs(...) -> ... { ... }
-    fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type, flags: MemFlags) -> Inst { ... }
-    fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst { ... }
-    fn gen_move(to: Writable<Reg>, from: Reg, ty: Type) -> Inst { ... }
-    fn gen_extend(to: Writable<Reg>, from: Reg, signed: bool, from_bits: u8, to_bits: u8) -> Inst { ... }
-    fn gen_ret(setup_frame: bool, isa_flags: &Self::F, rets: &[Reg]) -> Inst { ... }
-    fn gen_add_imm(rd: Writable<Reg>, rn: Reg, imm: u32) -> SmallVec<[Inst; 4]> { ... }
+    fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I { ... }
+    fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I { ... }
+    fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self::I { ... }
+    fn gen_rets(rets: Vec<RetPair>) -> Self::I { ... }
+    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallVec<[Self::I; 4]> { ... }
     // ... many more
 }
 ```
@@ -259,5 +297,5 @@ cargo test -p cranelift-filetests
 or for a specific file:
 
 ```
-cargo run -p cranelift-codegen --example clif-util -- test path/to/test.clif
+cargo run -p cranelift-tools -- test path/to/test.clif
 ```

@@ -62,11 +62,12 @@ In `cranelift/codegen/src/isa/<arch>/inst/emit.rs`, add an arm in the
 
 ```rust
 Inst::FMAdd { rd, rn, rm, ra, ty } => {
-    // Resolve virtual registers to physical registers from the allocation.
-    let rd = allocs.next_writable().to_real_reg().unwrap().hw_enc();
-    let rn = allocs.next().to_real_reg().unwrap().hw_enc();
-    let rm = allocs.next().to_real_reg().unwrap().hw_enc();
-    let ra = allocs.next().to_real_reg().unwrap().hw_enc();
+    // By the time emit() is called, regalloc has already resolved all
+    // virtual registers to physical registers in the instruction struct.
+    let rd = rd.to_reg().to_real_reg().unwrap().hw_enc();
+    let rn = rn.to_real_reg().unwrap().hw_enc();
+    let rm = rm.to_real_reg().unwrap().hw_enc();
+    let ra = ra.to_real_reg().unwrap().hw_enc();
 
     // Emit the encoding. AArch64 FMADD (scalar):
     // 0001_1111 | ftype | 0 | rm | ra | rn | rd
@@ -81,15 +82,11 @@ Inst::FMAdd { rd, rn, rm, ra, ty } => {
 }
 ```
 
-The registers must be consumed in the same order they were yielded in
-`get_operands` (defs first, then uses, or whatever order `regalloc2` expects —
-check how other instructions in the same backend do it).
-
 ### Step 5: Add ISLE declarations
 
 The new machine instruction needs to be declared in ISLE so that lowering rules
 can produce it. In the backend's ISLE instruction definition file
-(`cranelift/codegen/src/isa/<arch>/inst/<arch>.isle` or similar), add:
+(`cranelift/codegen/src/isa/<arch>/inst.isle`), add:
 
 ```lisp
 ;; Declare the constructor that the lowering rules will call.
@@ -213,5 +210,5 @@ contains an `fmadd` instruction.
 Run the test:
 
 ```
-cargo run -p cranelift-codegen --example clif-util -- test path/to/test.clif
+cargo run -p cranelift-tools -- test path/to/test.clif
 ```

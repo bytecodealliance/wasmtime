@@ -29,16 +29,19 @@ to generate:
 
 An *instruction format* defines the structural shape of an instruction. Look
 at the existing formats in `cranelift/codegen/meta/src/shared/formats.rs`. If
-none fit, add a new one:
+none fit, add a new one by adding a field to the `Formats` struct and
+initializing it in `Formats::new()`:
 
 ```rust
-formats.add(
-    InstructionFormatBuilder::new("NewFormat")
-        .value_operand()     // one SSA value input
-        .value_operand()     // another SSA value input
-        .imm::<Imm64>()      // a 64-bit immediate
-        .build(),
-);
+// In the Formats struct:
+pub(crate) new_format: Rc<InstructionFormat>,
+
+// In Formats::new():
+new_format: Builder::new("NewFormat")
+    .value()          // one SSA value input
+    .value()          // another SSA value input
+    .imm(&imm.imm64)  // a 64-bit immediate
+    .build(),
 ```
 
 A format is shared by multiple opcodes that have the same structural shape. For
@@ -77,9 +80,9 @@ Where `iN` is a `TypeVar` describing which types this opcode is polymorphic
 over. Look at existing definitions for examples of how to construct `TypeVar`
 instances.
 
-If the instruction can trap, call `.can_trap(true)` on the builder.  
-If the instruction has side effects, call `.other_side_effects(true)`.  
-If it is a memory operation, use `.can_load(true)` or `.can_store(true)`.
+If the instruction can trap, call `.can_trap()` on the builder.  
+If the instruction has side effects, call `.other_side_effects()`.  
+If it is a memory operation, use `.can_load()` or `.can_store()`.
 
 ## Step 3: Rebuild the generated code
 
@@ -89,42 +92,41 @@ Run:
 cargo build -p cranelift-codegen
 ```
 
-This re-runs the meta build script and regenerates:
-- `cranelift/codegen/src/ir/instructions.rs`
-- `cranelift/codegen/src/ir/builder.rs`
-- Various ISLE `extern` files in `target/`
+This re-runs the meta build script and writes into `OUT_DIR` (`target/`):
+- `opcodes.rs` — `include!()`-ed by `cranelift/codegen/src/ir/instructions.rs`
+- `inst_builder.rs` — `include!()`-ed by `cranelift/codegen/src/ir/builder.rs`
+- ISLE `extern` declarations for opcodes and types
+
+The source files `instructions.rs` and `builder.rs` are not themselves
+regenerated; they `include!()` the generated content from `OUT_DIR`.
 
 If anything is structurally wrong with your definition, the build will fail
 with a descriptive error.
 
 ## Step 4: Add a verifier check (optional but recommended)
 
-The IR verifier (`cranelift/codegen/src/verify.rs`) checks semantic invariants.
-If your new instruction has any invariants beyond type correctness (e.g.
-alignment constraints, operand restrictions), add a case to the `verify_inst`
-function:
+The IR verifier (`cranelift/codegen/src/verifier/mod.rs`) checks semantic
+invariants. If your new instruction has any invariants beyond type correctness
+(e.g. alignment constraints, operand restrictions), add a case in the
+`verify_entity_references` function's match on `InstructionData`:
 
 ```rust
-Opcode::MyNewOp => {
-    // Check that the operand is aligned to a power of two
-    if let Some(imm) = dfg.inst_imms(inst).alignment {
-        if !imm.is_power_of_two() {
-            return Err(verifier.error(inst, "alignment must be a power of two"));
-        }
-    }
+InstructionData::YourFormat { opcode: Opcode::MyNewOp, .. } => {
+    // example: check that an immediate satisfies a constraint
+    errors.report((inst, self.context(inst), "description of the error"));
 }
 ```
 
 ## Step 5: Add interpreter support
 
 The Cranelift interpreter (`cranelift/interpreter/`) is used by the `test run`
-and `test interpret` filetest commands. Add a case for your opcode in
-`cranelift/interpreter/src/interpreter.rs` under the `step` function:
+and `test interpret` filetest commands. Add a case for your opcode in the
+`step` function in `cranelift/interpreter/src/step.rs`:
 
 ```rust
 Opcode::MyNewOp => {
-    let x = self.frame.get(inst_args[0]);
-    let y = self.frame.get(inst_args[1]);
+    let x = arg(0);
+    let y = arg(1);
     let result = /* compute semantics */;
     Ok(ControlFlow::Assign(smallvec![result]))
 }

@@ -55,19 +55,19 @@ option   ::= flag | setting "=" value
 The `set` lines apply settings cumulatively:
 
 ```
-test legalizer
+test compile
 set opt_level=best
 set is_pic=1
 target riscv64
 set is_pic=0
-target riscv32 supports_m=false
+target riscv64 has_m=false
 
 function %foo() {}
 ```
 
-This example will run the legalizer test twice. Both runs will have
-`opt_level=best`, but they will have different `is_pic` settings. The 32-bit
-run will also have the RISC-V specific flag `supports_m` disabled.
+This example will run the compile test twice. Both runs will have
+`opt_level=best`, but they will have different `is_pic` settings. The second
+run will also have the RISC-V specific flag `has_m` disabled.
 
 The filetests are run automatically as part of `cargo test`, and they can
 also be run manually with the `clif-util test` command.
@@ -221,7 +221,7 @@ Requires a target ISA.
 Supports the `precise-output` option, which requires the filecheck directives
 to be a complete and exact description of the optimized output. This is useful
 for tests that need to verify the exact form of the optimized IR and can be
-auto-updated with `clif-util test --update-comments`.
+auto-updated by setting `CRANELIFT_TEST_BLESS=1` when running the tests.
 
 Example:
 
