@@ -547,6 +547,11 @@ impl AliasRegionSet {
         self.dedupe_map.contains_key(&user_id)
     }
 
+    /// Get the alias region with the given id, if any.
+    pub fn get(&self, user_id: u32) -> Option<AliasRegion> {
+        self.dedupe_map.get(&user_id).copied()
+    }
+
     /// Returns `true` if the given alias region reference is valid.
     pub fn is_valid(&self, ar: AliasRegion) -> bool {
         self.alias_regions.is_valid(ar)
