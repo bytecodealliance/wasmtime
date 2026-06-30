@@ -5,9 +5,9 @@ use cranelift_codegen::{
     ir::{self, InstBuilder as _},
 };
 use wasmtime_environ::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GetPtrSize, GlobalIndex,
-    MemoryIndex, ModuleInternedTypeIndex, OwnedMemoryIndex, PtrSize as _, RuntimeDataIndex,
-    StaticModuleIndex, TableIndex, TagIndex, VMOffsets,
+    BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GetPtrSize, GlobalIndex, MemoryIndex, ModuleInternedTypeIndex, OwnedMemoryIndex, PtrSize as _,
+    RuntimeDataIndex, StaticModuleIndex, TableIndex, TagIndex, VMOffsets,
     component::{
         LoweredIndex, ResourceIndex, RuntimeCallbackIndex, RuntimeComponentInstanceIndex,
         RuntimeMemoryIndex, RuntimePostReturnIndex, VMComponentOffsets,
@@ -35,6 +35,7 @@ enum VmType {
     VMFuncRef,
     TypeIdsArray,
     EpochCounter,
+    BuiltinFunctionsArray,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -146,6 +147,7 @@ impl AliasRegionKey {
     const VM_FUNC_REF_KIND: u32 = Self::new_kind(0b11000);
     const TYPE_IDS_ARRAY_KIND: u32 = Self::new_kind(0b11001);
     const EPOCH_COUNTER_KIND: u32 = Self::new_kind(0b11010);
+    const BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b11011);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -173,6 +175,7 @@ impl AliasRegionKey {
                     VmType::VMFuncRef => Self::VM_FUNC_REF_KIND,
                     VmType::TypeIdsArray => Self::TYPE_IDS_ARRAY_KIND,
                     VmType::EpochCounter => Self::EPOCH_COUNTER_KIND,
+                    VmType::BuiltinFunctionsArray => Self::BUILTIN_FUNCTIONS_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -1939,6 +1942,45 @@ where
             ir::MemFlagsData::trusted().with_alias_region(Some(region)),
             epoch_ptr,
             0,
+        )
+    }
+}
+
+/// Builtin-functions array methods.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    /// Load a host function pointer element out of a builtin-functions array
+    /// (either `VMContext::builtin_functions` or
+    /// `VMComponentContext::builtin_functions`).
+    pub fn builtin_functions_array_element(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        array: ir::Value,
+        builtin: BuiltinFunctionIndex,
+    ) -> ir::Value {
+        let offset = builtin
+            .index()
+            .checked_mul(self.pointer_type.bytes())
+            .unwrap();
+
+        let region = self.region(
+            cursor.func,
+            AliasRegionKey::Vm {
+                ty: VmType::BuiltinFunctionsArray,
+                offset,
+            },
+        );
+
+        cursor.ins().load(
+            self.pointer_type,
+            ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(region)),
+            array,
+            i32::try_from(offset).unwrap(),
         )
     }
 }
