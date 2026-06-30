@@ -1,6 +1,6 @@
 use std::ptr;
 
-use cranelift_codegen::binemit::Reloc;
+use cranelift_codegen::binemit::{Addend, Reloc};
 use cranelift_module::{ModuleError, ModuleReloc, ModuleRelocTarget, ModuleResult};
 
 use crate::JITMemoryProvider;
@@ -108,6 +108,10 @@ impl CompiledBlob {
         use std::ptr::write_unaligned;
 
         let mut next_veneer_idx = 0;
+        let relocation_target_addr = |name: &ModuleRelocTarget, addend: Addend| {
+            let addend = isize::try_from(addend).unwrap();
+            get_address(name).addr().checked_add_signed(addend).unwrap()
+        };
 
         for (
             i,
@@ -123,22 +127,15 @@ impl CompiledBlob {
             let at = unsafe { self.ptr.offset(isize::try_from(offset).unwrap()) };
             match kind {
                 Reloc::Abs4 => {
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
-                    unsafe {
-                        write_unaligned(at as *mut u32, u32::try_from(what as usize).unwrap())
-                    };
+                    let what = relocation_target_addr(name, addend);
+                    unsafe { write_unaligned(at as *mut u32, u32::try_from(what).unwrap()) };
                 }
                 Reloc::Abs8 => {
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
-                    unsafe {
-                        write_unaligned(at as *mut u64, u64::try_from(what as usize).unwrap())
-                    };
+                    let what = relocation_target_addr(name, addend);
+                    unsafe { write_unaligned(at as *mut u64, u64::try_from(what).unwrap()) };
                 }
                 Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = relocation_target_addr(name, addend);
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
@@ -149,14 +146,12 @@ impl CompiledBlob {
                     panic!("PLT relocation shouldn't be generated when !is_pic");
                 }
                 Reloc::S390xPCRel32Dbl | Reloc::S390xPLTRel32Dbl => {
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = relocation_target_addr(name, addend);
                     let pcrel = i32::try_from(((what as isize) - (at as isize)) >> 1).unwrap();
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::Arm64Call => {
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = relocation_target_addr(name, addend);
                     // The instruction is 32 bits long.
                     let iptr = at as *mut u32;
 
@@ -193,7 +188,7 @@ impl CompiledBlob {
                                 veneer.byte_add(4).cast::<u32>(),
                                 0xd61f0200, // br x16
                             );
-                            write_unaligned(veneer.byte_add(8).cast::<u64>(), what.addr() as u64);
+                            write_unaligned(veneer.byte_add(8).cast::<u64>(), what as u64);
                         };
 
                         // Set the veneer as target of the call
@@ -211,8 +206,7 @@ impl CompiledBlob {
                     panic!("GOT relocation shouldn't be generated when !is_pic");
                 }
                 Reloc::Aarch64AdrPrelPgHi21 => {
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = relocation_target_addr(name, addend);
                     let get_page = |x| x & (!0xfff);
                     // NOTE: This should technically be i33 given that this relocation type allows
                     // a range from -4GB to +4GB, not -2GB to +2GB. But this doesn't really matter
@@ -230,10 +224,9 @@ impl CompiledBlob {
                     unsafe { modify_inst32(iptr, |inst| inst | lo | hi) };
                 }
                 Reloc::Aarch64AddAbsLo12Nc => {
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = relocation_target_addr(name, addend);
                     let iptr = at as *mut u32;
-                    let imm12 = (what.addr() as u32 & 0xfff) << 10;
+                    let imm12 = (what as u32 & 0xfff) << 10;
                     unsafe { modify_inst32(iptr, |inst| inst | imm12) };
                 }
                 Reloc::RiscvCallPlt => {
@@ -242,8 +235,7 @@ impl CompiledBlob {
                     // 1. R_RISCV_PCREL_HI20 on the `auipc`
                     // 2. R_RISCV_PCREL_LO12_I on the `jalr`
 
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = relocation_target_addr(name, addend);
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap() as u32;
 
                     // See https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
@@ -273,8 +265,7 @@ impl CompiledBlob {
                     }
                 }
                 Reloc::PulleyPcRel => {
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = relocation_target_addr(name, addend);
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
                     let at = at as *mut i32;
                     unsafe {
@@ -285,8 +276,7 @@ impl CompiledBlob {
                 // See <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
                 // for why `0x800` is added here.
                 Reloc::RiscvPCRelHi20 => {
-                    let base = get_address(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let what = relocation_target_addr(name, addend);
                     let pcrel = i32::try_from((what as isize) - (at as isize) + 0x800)
                         .unwrap()
                         .cast_unsigned();
