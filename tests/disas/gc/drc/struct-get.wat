@@ -114,6 +114,7 @@
 ;;     region6 = 1610612736 "VMDrcHeapData+0x0"
 ;;     region7 = 1610612740 "VMDrcHeapData+0x4"
 ;;     region8 = 1610612744 "VMDrcHeapData+0x8"
+;;     region9 = 3087007744 "Stack(ss0)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -131,7 +132,7 @@
 ;; @004e                               v8 = iadd v6, v7  ; v7 = 32
 ;; @004e                               v9 = load.i32 user2 little region4 v8
 ;;                                     v81 = stack_addr.i64 ss0
-;;                                     store notrap aligned v9, v81
+;;                                     store notrap aligned region9 v9, v81
 ;; @004e                               v10 = iconst.i32 1
 ;; @004e                               v11 = band v9, v10  ; v10 = 1
 ;; @004e                               v12 = iconst.i32 0
@@ -186,6 +187,6 @@
 ;; @0052                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v64 = load.i32 notrap aligned v81
+;;                                     v64 = load.i32 notrap aligned region9 v81
 ;; @0052                               return v64
 ;; }

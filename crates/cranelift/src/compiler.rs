@@ -1564,6 +1564,7 @@ impl FunctionCompiler<'_> {
             &mut self.cx.codegen_context.func,
             self.cx.func_translator.context(),
         );
+        builder.make_stack_map_alias_region(Box::new(AliasRegions::<u8>::stack_map_region));
 
         let block0 = builder.create_block();
         builder.append_block_params_for_function_params(block0);

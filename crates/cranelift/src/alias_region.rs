@@ -90,6 +90,12 @@ enum AliasRegionKey {
 
     /// A GC heap access.
     GcHeap,
+
+    /// A stack slot access.
+    Stack {
+        /// The stack slot being accessed.
+        slot: ir::StackSlot,
+    },
 }
 
 impl AliasRegionKey {
@@ -133,6 +139,7 @@ impl AliasRegionKey {
     const VM_TABLE_IMPORT_KIND: u32 = Self::new_kind(0b10100);
     const VM_TAG_IMPORT_KIND: u32 = Self::new_kind(0b10101);
     const VM_GLOBAL_IMPORT_KIND: u32 = Self::new_kind(0b10110);
+    const STACK_KIND: u32 = Self::new_kind(0b10111);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -192,6 +199,10 @@ impl AliasRegionKey {
                     | index.as_u32()
             }
             AliasRegionKey::GcHeap => Self::GC_HEAP_KIND,
+            AliasRegionKey::Stack { slot } => {
+                debug_assert_eq!(slot.as_u32() & Self::KIND_MASK, 0);
+                Self::STACK_KIND | (slot.as_u32() & Self::OFFSET_MASK)
+            }
         }
     }
 }
@@ -213,6 +224,7 @@ impl fmt::Debug for AliasRegionKey {
                 write!(f, "DefinedGlobal({module:?}, {index:?})")
             }
             AliasRegionKey::GcHeap => write!(f, "GcHeap"),
+            AliasRegionKey::Stack { slot } => write!(f, "Stack({slot:?})"),
         }
     }
 }
@@ -236,6 +248,24 @@ pub struct AliasRegions<Offsets> {
     /// Avoids allocating a string for the debug formatting of `AliasRegionKey`
     /// as the `ir::AliasRegionData::description` string repeatedly.
     cache: std::collections::HashMap<AliasRegionKey, ir::AliasRegion>,
+}
+
+impl<Offsets> AliasRegions<Offsets> {
+    /// Make the alias region for a stack map.
+    pub fn stack_map_region(
+        regions: &mut ir::AliasRegionSet,
+        _ty: ir::Type,
+        slot: ir::StackSlot,
+        _offset: u32,
+    ) -> Option<ir::AliasRegion> {
+        let key = AliasRegionKey::Stack { slot };
+        let id = key.into_raw();
+        if let Some(region) = regions.get(id) {
+            Some(region)
+        } else {
+            Some(regions.insert(key.into()))
+        }
+    }
 }
 
 impl<Offsets> AliasRegions<Offsets>

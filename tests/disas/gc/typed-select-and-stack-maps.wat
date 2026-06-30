@@ -45,6 +45,7 @@
 ;;     region1 = 134217752 "VMStoreContext+0x18"
 ;;     region2 = 2415919128 "VMFunctionImport+0x18"
 ;;     region3 = 2415919112 "VMFunctionImport+0x8"
+;;     region4 = 3087007744 "Stack(ss0)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -55,11 +56,11 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @0049                               v5 = select v4, v2, v3
 ;;                                     v12 = stack_addr.i64 ss0
-;;                                     store notrap aligned v5, v12
+;;                                     store notrap aligned region4 v5, v12
 ;; @004c                               v7 = load.i64 notrap aligned readonly can_move region3 v0+88
 ;; @004c                               v6 = load.i64 notrap aligned readonly can_move region2 v0+104
 ;; @004c                               call_indirect sig0, v7(v6, v0), stack_map=[i32 @ ss0+0]
-;;                                     v11 = load.i32 notrap aligned v12
+;;                                     v11 = load.i32 notrap aligned region4 v12
 ;; @004e                               v9 = load.i64 notrap aligned readonly can_move region3 v0+56
 ;; @004e                               v8 = load.i64 notrap aligned readonly can_move region2 v0+72
 ;; @004e                               call_indirect sig1, v9(v8, v0, v11)

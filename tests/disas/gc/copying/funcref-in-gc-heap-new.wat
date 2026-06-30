@@ -18,6 +18,7 @@
 ;;     region5 = 40 "VMContext+0x28"
 ;;     region6 = 134217760 "VMStoreContext+0x20"
 ;;     region7 = 1073741824 "GcHeap"
+;;     region8 = 3087007744 "Stack(ss0)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -69,7 +70,7 @@
 ;;
 ;;                                 block4(v33: i32, v34: i64):
 ;;                                     v41 = stack_addr.i64 ss0
-;;                                     store notrap aligned v33, v41
+;;                                     store notrap aligned region8 v33, v41
 ;; @0020                               v37 = call fn1(v0, v2), stack_map=[i32 @ ss0+0]
 ;; @0020                               v38 = ireduce.i32 v37
 ;; @0020                               v35 = iconst.i64 16
@@ -78,6 +79,6 @@
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v40 = load.i32 notrap aligned v41
+;;                                     v40 = load.i32 notrap aligned region8 v41
 ;; @0023                               return v40
 ;; }
