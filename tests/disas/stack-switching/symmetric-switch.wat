@@ -33,6 +33,7 @@
 ;;     region3 = 134217816 "VMStoreContext+0x58"
 ;;     region4 = 2281701376 "ContinuationStackMemory+0x0"
 ;;     region5 = 134217800 "VMStoreContext+0x48"
+;;     region6 = 3087007744 "Stack(ss0)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -204,15 +205,15 @@
 ;; @003e                               v118 = iadd v116, v117  ; v117 = -24
 ;; @003e                               v119 = stack_addr.i64 ss0
 ;; @003e                               v120 = load.i64 notrap aligned region4 v118
-;; @003e                               store notrap aligned v120, v119
+;; @003e                               store notrap aligned region6 v120, v119
 ;; @003e                               v121 = load.i64 notrap aligned region4 v113
 ;; @003e                               store notrap aligned region4 v121, v118
 ;; @003e                               v122 = load.i64 notrap aligned region4 v118+8
-;; @003e                               store notrap aligned v122, v119+8
+;; @003e                               store notrap aligned region6 v122, v119+8
 ;; @003e                               v123 = load.i64 notrap aligned region4 v113+8
 ;; @003e                               store notrap aligned region4 v123, v118+8
 ;; @003e                               v124 = load.i64 notrap aligned region4 v118+16
-;; @003e                               store notrap aligned v124, v119+16
+;; @003e                               store notrap aligned region6 v124, v119+16
 ;; @003e                               v125 = load.i64 notrap aligned region4 v113+16
 ;; @003e                               store notrap aligned region4 v125, v118+16
 ;; @003e                               v126 = iconst.i64 3

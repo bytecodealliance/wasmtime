@@ -1921,13 +1921,15 @@ pub(crate) fn translate_switch<'a>(
         let tmp_control_context = builder.ins().stack_addr(env.pointer_type(), slot, 0);
 
         // The `*_last_ancestor_cc` control contexts live on continuation
-        // stacks, but the temporary lives in a current-frame stack slot, so
-        // only the former get the continuation-stack-memory region.
+        // stacks, but the temporary lives in a current-frame stack slot, so the
+        // former get the continuation-stack-memory region while the latter gets
+        // its own stack-slot region.
         let region = env
             .alias_regions
             .continuation_stack_memory_region(builder.func);
         let cc_flags = MemFlagsData::trusted().with_alias_region(Some(region));
-        let tmp_flags = MemFlagsData::trusted();
+        let tmp_region = env.alias_regions.stack_slot_region(builder.func, slot);
+        let tmp_flags = MemFlagsData::trusted().with_alias_region(Some(tmp_region));
         let mut offset: i32 = 0;
         while offset < i32::from(cctx_size) {
             // switchee_last_ancestor_cc -> tmp control context
