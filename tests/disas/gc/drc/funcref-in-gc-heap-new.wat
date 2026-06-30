@@ -14,9 +14,10 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
 ;;     region2 = 40 "VMContext+0x28"
-;;     region3 = 134217760 "VMStoreContext+0x20"
-;;     region4 = 1073741824 "GcHeap"
-;;     region5 = 3087007744 "Stack(ss0)"
+;;     region3 = 3355443200 "TypeIdsArray+0x0"
+;;     region4 = 134217760 "VMStoreContext+0x20"
+;;     region5 = 1073741824 "GcHeap"
+;;     region6 = 3087007744 "Stack(ss0)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -29,24 +30,24 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
 ;; @0020                               v4 = iconst.i32 -1342177280
 ;; @0020                               v5 = load.i64 notrap aligned readonly can_move region2 v0+40
-;; @0020                               v6 = load.i32 notrap aligned readonly can_move v5
+;; @0020                               v6 = load.i32 notrap aligned readonly can_move region3 v5
 ;; @0020                               v3 = iconst.i32 32
 ;; @0020                               v7 = iconst.i32 8
 ;; @0020                               v8 = call fn0(v0, v4, v6, v3, v7)  ; v4 = -1342177280, v3 = 32, v7 = 8
 ;;                                     v21 = stack_addr.i64 ss0
-;;                                     store notrap aligned region5 v8, v21
+;;                                     store notrap aligned region6 v8, v21
 ;; @0020                               v15 = call fn1(v0, v2), stack_map=[i32 @ ss0+0]
 ;; @0020                               v16 = ireduce.i32 v15
 ;; @0020                               v9 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0020                               v10 = load.i64 notrap aligned readonly can_move region3 v9+32
+;; @0020                               v10 = load.i64 notrap aligned readonly can_move region4 v9+32
 ;; @0020                               v11 = uextend.i64 v8
 ;; @0020                               v12 = iadd v10, v11
 ;; @0020                               v13 = iconst.i64 24
 ;; @0020                               v14 = iadd v12, v13  ; v13 = 24
-;; @0020                               store user2 little region4 v16, v14
+;; @0020                               store user2 little region5 v16, v14
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v18 = load.i32 notrap aligned region5 v21
+;;                                     v18 = load.i32 notrap aligned region6 v21
 ;; @0023                               return v18
 ;; }

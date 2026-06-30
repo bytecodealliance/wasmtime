@@ -1109,17 +1109,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let shared_indices = self.alias_regions.vmctx_shared_type_ids_array(pos, vmctx);
 
         // Calculate the offset in that array for this type's entry.
-        let ty = self.vmshared_type_index_ty();
-        let offset = i32::try_from(interned_ty.as_u32().checked_mul(ty.bytes()).unwrap()).unwrap();
 
         // Load the`VMSharedTypeIndex` that this `ModuleInternedTypeIndex` is
         // associated with at runtime from the array.
-        pos.ins().load(
-            ty,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            shared_indices,
-            offset,
-        )
+        self.alias_regions
+            .type_ids_array_element(pos, shared_indices, interned_ty)
     }
 
     /// Does this function need a GC heap?

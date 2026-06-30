@@ -6,8 +6,8 @@ use cranelift_codegen::{
 };
 use wasmtime_environ::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GetPtrSize, GlobalIndex,
-    MemoryIndex, OwnedMemoryIndex, PtrSize as _, RuntimeDataIndex, StaticModuleIndex, TableIndex,
-    TagIndex, VMOffsets,
+    MemoryIndex, ModuleInternedTypeIndex, OwnedMemoryIndex, PtrSize as _, RuntimeDataIndex,
+    StaticModuleIndex, TableIndex, TagIndex, VMOffsets,
     component::{
         LoweredIndex, ResourceIndex, RuntimeCallbackIndex, RuntimeComponentInstanceIndex,
         RuntimeMemoryIndex, RuntimePostReturnIndex, VMComponentOffsets,
@@ -33,6 +33,7 @@ enum VmType {
     VMTagImport,
     VMGlobalImport,
     VMFuncRef,
+    TypeIdsArray,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -142,6 +143,7 @@ impl AliasRegionKey {
     const VM_GLOBAL_IMPORT_KIND: u32 = Self::new_kind(0b10110);
     const STACK_KIND: u32 = Self::new_kind(0b10111);
     const VM_FUNC_REF_KIND: u32 = Self::new_kind(0b11000);
+    const TYPE_IDS_ARRAY_KIND: u32 = Self::new_kind(0b11001);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -167,6 +169,7 @@ impl AliasRegionKey {
                     VmType::VMTagImport => Self::VM_TAG_IMPORT_KIND,
                     VmType::VMGlobalImport => Self::VM_GLOBAL_IMPORT_KIND,
                     VmType::VMFuncRef => Self::VM_FUNC_REF_KIND,
+                    VmType::TypeIdsArray => Self::TYPE_IDS_ARRAY_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -1863,6 +1866,48 @@ where
             base_flags.with_alias_region(Some(region)),
             funcref,
             i32::from(offset),
+        )
+    }
+}
+
+/// `[VMSharedTypeIndex]`-related methods.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    /// Load a `VMSharedTypeIndex` element out of the `[VMSharedTypeIndex]`
+    /// array pointed at by the `VMContext::type_ids_array` field.
+    pub fn type_ids_array_element(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        array: ir::Value,
+        ty: ModuleInternedTypeIndex,
+    ) -> ir::Value {
+        let load_ty = ir::Type::int_with_byte_size(
+            self.offsets
+                .get_ptr_size()
+                .size_of_vmshared_type_index()
+                .into(),
+        )
+        .unwrap();
+
+        let offset = ty.as_u32().checked_mul(load_ty.bytes()).unwrap();
+        let region = self.region(
+            cursor.func,
+            AliasRegionKey::Vm {
+                ty: VmType::TypeIdsArray,
+                offset,
+            },
+        );
+
+        cursor.ins().load(
+            load_ty,
+            ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(region)),
+            array,
+            i32::try_from(offset).unwrap(),
         )
     }
 }
