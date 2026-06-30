@@ -1339,7 +1339,7 @@ jobs:
   isle_veri_basic_check:
     needs: determine
     if: needs.determine.outputs.run-full
-    name: ISLE verifier build
+    name: ISLE verifier basic check
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
