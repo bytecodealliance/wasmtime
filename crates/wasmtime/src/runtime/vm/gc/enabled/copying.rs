@@ -233,6 +233,17 @@ fn externref_to_copying(externref: &VMExternRef) -> &TypedGcRef<VMCopyingExternR
     gc_ref.as_typed_unchecked()
 }
 
+/// Round a raw GC-heap byte length down to a usable capacity.
+///
+/// The result is a multiple of `2 * ALIGN` so that each semi-space (half the
+/// capacity) is itself a multiple of `ALIGN`. (Rounding only to `ALIGN` is not
+/// enough: e.g. `0xffff_fff0` is an odd multiple of `ALIGN`, and halving it
+/// yields the misaligned `0x7fff_fff8`).
+fn round_down_heap_capacity(current_length: usize) -> u32 {
+    let len = u32::try_from(current_length).unwrap_or(u32::MAX);
+    len & !(2 * ALIGN - 1)
+}
+
 /// A copying (semi-space) heap.
 struct CopyingHeap {
     /// For every type that we have allocated in this heap, how do we trace it?
@@ -324,11 +335,7 @@ impl CopyingHeap {
 
     fn capacity(&self) -> u32 {
         let len = self.vmmemory.as_ref().unwrap().current_length();
-        let len = u32::try_from(len).unwrap_or(u32::MAX);
-        // Round down to a multiple of `ALIGN` so our semi-spaces are
-        // equal-sized.
-        let len = len & !(ALIGN - 1);
-        len
+        round_down_heap_capacity(len)
     }
 
     /// Initialize the semi-spaces for a heap of the given capacity.
@@ -1304,5 +1311,41 @@ mod tests {
             HostPtr.align_of_vmcopying_heap_data() as usize,
             core::mem::align_of::<VMCopyingHeapDataInner>(),
         );
+    }
+
+    #[test]
+    fn semi_space_split_stays_aligned() {
+        fn check(len: usize) {
+            let capacity = round_down_heap_capacity(len);
+            assert_eq!(
+                capacity % (2 * ALIGN),
+                0,
+                "capacity {capacity:#x} for len {len:#x} is not a multiple of 2*ALIGN",
+            );
+            assert_eq!(
+                (capacity / 2) % ALIGN,
+                0,
+                "halfway {:#x} for len {len:#x} is not a multiple of ALIGN",
+                capacity / 2,
+            );
+        }
+
+        for len in [
+            0usize,
+            usize::try_from(ALIGN).unwrap(),
+            usize::try_from(2 * ALIGN).unwrap(),
+            4096,
+            1 << 16,
+            // Largest page-aligned value below 2^32.
+            0xffff_0000,
+            usize::try_from(u32::MAX).unwrap(),
+        ] {
+            check(len);
+        }
+
+        #[cfg(target_pointer_width = "64")]
+        for len in [1usize << 32, 3usize << 32] {
+            check(len);
+        }
     }
 }
