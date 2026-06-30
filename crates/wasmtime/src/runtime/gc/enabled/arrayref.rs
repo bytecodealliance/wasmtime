@@ -541,6 +541,208 @@ impl ArrayRef {
             .await
     }
 
+    /// Synchronously allocate a new `i8` array initialized from the given bytes.
+    ///
+    /// Unlike [`ArrayRef::new_fixed`], which initializes the array one [`Val`]
+    /// at a time, the element body is filled with a single `memcpy`. The bytes
+    /// are passed as `u8`; their signedness is only observed at read time (e.g.
+    /// `array.get_s` vs `array.get_u`).
+    ///
+    /// # Automatic Garbage Collection
+    ///
+    /// If the GC heap is at capacity, and there isn't room for allocating this
+    /// new array, then this method will automatically trigger a synchronous
+    /// collection in an attempt to free up space in the GC heap.
+    ///
+    /// # Errors
+    ///
+    /// If the `allocator`'s array type does not have `i8` elements, an error is
+    /// returned.
+    ///
+    /// If the allocation cannot be satisfied because the GC heap is currently
+    /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
+    /// error is returned. The allocation might succeed on a second attempt if
+    /// you drop some rooted GC references and try again.
+    ///
+    /// If `store` is configured with a
+    /// [`ResourceLimiterAsync`](crate::ResourceLimiterAsync) then an error will
+    /// be returned because [`ArrayRef::new_from_i8_slice_async`] should be used
+    /// instead.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the allocator is not associated with the given store.
+    pub fn new_from_i8_slice(
+        mut store: impl AsContextMut,
+        allocator: &ArrayRefPre,
+        elems: &[u8],
+    ) -> Result<Rooted<ArrayRef>> {
+        let (mut limiter, store) = store
+            .as_context_mut()
+            .0
+            .validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(Self::_new_from_i8_slice_async(
+            store,
+            limiter.as_mut(),
+            allocator,
+            elems,
+            Asyncness::No,
+        ))
+    }
+
+    /// Asynchronously allocate a new `i8` array initialized from the given
+    /// bytes.
+    ///
+    /// This is the `async` equivalent of [`ArrayRef::new_from_i8_slice`]; see
+    /// that method for details. If your engine is not configured for async, use
+    /// [`ArrayRef::new_from_i8_slice`] to perform synchronous allocation.
+    ///
+    /// # Automatic Garbage Collection
+    ///
+    /// If the GC heap is at capacity, and there isn't room for allocating this
+    /// new array, then this method will automatically trigger an asynchronous
+    /// collection in an attempt to free up space in the GC heap.
+    ///
+    /// # Errors
+    ///
+    /// If the `allocator`'s array type does not have `i8` elements, an error is
+    /// returned.
+    ///
+    /// If the allocation cannot be satisfied because the GC heap is currently
+    /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
+    /// error is returned. The allocation might succeed on a second attempt if
+    /// you drop some rooted GC references and try again.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `store` is not configured for async; use
+    /// [`ArrayRef::new_from_i8_slice`] to perform synchronous allocation
+    /// instead.
+    ///
+    /// Panics if the allocator is not associated with the given store.
+    #[cfg(feature = "async")]
+    pub async fn new_from_i8_slice_async(
+        mut store: impl AsContextMut,
+        allocator: &ArrayRefPre,
+        elems: &[u8],
+    ) -> Result<Rooted<ArrayRef>> {
+        let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
+        Self::_new_from_i8_slice_async(store, limiter.as_mut(), allocator, elems, Asyncness::Yes)
+            .await
+    }
+
+    pub(crate) async fn _new_from_i8_slice_async(
+        store: &mut StoreOpaque,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        allocator: &ArrayRefPre,
+        elems: &[u8],
+        asyncness: Asyncness,
+    ) -> Result<Rooted<ArrayRef>> {
+        store
+            .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
+                Self::new_from_i8_slice_inner(store, allocator, elems)
+            })
+            .await
+    }
+
+    /// Allocate a new array initialized from a slice of `i8` bytes.
+    ///
+    /// Does not attempt a GC on OOM; leaves that to callers.
+    fn new_from_i8_slice_inner(
+        store: &mut StoreOpaque,
+        allocator: &ArrayRefPre,
+        elems: &[u8],
+    ) -> Result<Rooted<ArrayRef>> {
+        assert_eq!(
+            store.id(),
+            allocator.store_id,
+            "attempted to use a `ArrayRefPre` with the wrong store"
+        );
+
+        let elem_ty = allocator.ty.element_type();
+        ensure!(
+            elem_ty.is_i8(),
+            "element type mismatch: cannot initialize an array of `{elem_ty}` elements from a slice of `i8`s"
+        );
+
+        let len = u32::try_from(elems.len())?;
+        let layout = allocator.layout();
+
+        let arrayref = store
+            .require_gc_store_mut()?
+            .alloc_uninit_array(allocator.type_index(), len, layout)
+            .context("unrecoverable error when allocating new `arrayref`")?
+            .map_err(|n| GcHeapOutOfMemory::new((), n))?;
+
+        let mut store = AutoAssertNoGc::new(store);
+        let data = store
+            .require_gc_store_mut()?
+            .gc_object_data(arrayref.as_gc_ref())?;
+        let copied = data.copy_from_slice(layout.base_size, elems);
+
+        // If the copy failed then the array is not fully initialized, so we
+        // must eagerly deallocate it before the next GC.
+        match copied {
+            Ok(()) => Ok(Rooted::new(&mut store, arrayref.into())),
+            Err(e) => {
+                store
+                    .require_gc_store_mut()?
+                    .dealloc_uninit_array(arrayref)?;
+                Err(e)
+            }
+        }
+    }
+
+    /// Copy this `i8` array's elements into the given byte slice.
+    ///
+    /// Unlike [`ArrayRef::get`], which decodes each element through a [`Val`],
+    /// the whole element body is copied into `dst` with a single `memcpy`. The
+    /// `i8` elements are read out as raw `u8` bytes.
+    ///
+    /// # Errors
+    ///
+    /// If this array does not have `i8` elements, an error is returned.
+    ///
+    /// If `dst`'s length does not equal this array's length, an error is
+    /// returned.
+    ///
+    /// Returns an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn copy_to_i8_slice(&self, mut store: impl AsContextMut, dst: &mut [u8]) -> Result<()> {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        assert!(
+            self.comes_from_same_store(&store),
+            "attempted to use an array with the wrong store",
+        );
+
+        let field_ty = self.field_ty(&store)?;
+        let elem_ty = field_ty.element_type();
+        ensure!(
+            elem_ty.is_i8(),
+            "element type mismatch: cannot read an array of `{elem_ty}` elements into a slice of `i8`s"
+        );
+
+        let layout = self.layout(&store)?;
+        let arrayref = self.arrayref(&store)?.unchecked_copy();
+        let len = arrayref.len(&store)?;
+
+        let dst_len = u32::try_from(dst.len())?;
+        ensure!(
+            dst_len == len,
+            "destination slice length is {dst_len} but the array length is {len}",
+        );
+
+        let data = store
+            .require_gc_store_mut()?
+            .gc_object_data(arrayref.as_gc_ref())?;
+        let bytes = data.slice(layout.base_size, len)?;
+        dst.copy_from_slice(bytes);
+        Ok(())
+    }
+
     #[inline]
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         self.inner.comes_from_same_store(store)

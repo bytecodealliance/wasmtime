@@ -3297,6 +3297,66 @@ fn typed_option_noneref() -> Result<()> {
 }
 
 #[test]
+fn array_i8_slice_roundtrip() -> Result<()> {
+    let mut store = gc_store()?;
+    let engine = store.engine().clone();
+
+    let array_ty = ArrayType::new(&engine, FieldType::new(Mutability::Var, StorageType::I8));
+    let pre = ArrayRefPre::new(&mut store, array_ty);
+
+    // Bytes 0x80 and 0xFF are `i8` -128 and -1, or `u8` 128 and 255.
+    let src: [u8; 5] = [0x80, 0xFF, 0x00, 0x01, 0x7F];
+    let array = ArrayRef::new_from_i8_slice(&mut store, &pre, &src)?;
+    assert_eq!(array.len(&store)?, 5);
+
+    // Round-trip the bytes back out.
+    let mut dst = [0u8; 5];
+    array.copy_to_i8_slice(&mut store, &mut dst)?;
+    assert_eq!(dst, src);
+
+    // `get` zero-extends, i.e. the `array.get_u` interpretation of the bytes.
+    assert_eq!(array.get(&mut store, 0)?.unwrap_i32(), 128);
+    assert_eq!(array.get(&mut store, 1)?.unwrap_i32(), 255);
+
+    // Same logical contents as building it element-by-element with `new_fixed`.
+    let fixed = ArrayRef::new_fixed(
+        &mut store,
+        &pre,
+        &src.iter().map(|&b| Val::I32(b.into())).collect::<Vec<_>>(),
+    )?;
+    for i in 0..src.len() as u32 {
+        assert_eq!(
+            array.get(&mut store, i)?.unwrap_i32(),
+            fixed.get(&mut store, i)?.unwrap_i32(),
+        );
+    }
+
+    // Empty slices work.
+    let empty = ArrayRef::new_from_i8_slice(&mut store, &pre, &[])?;
+    assert_eq!(empty.len(&store)?, 0);
+    empty.copy_to_i8_slice(&mut store, &mut [])?;
+
+    // A destination of the wrong length is an error.
+    assert!(array.copy_to_i8_slice(&mut store, &mut [0u8; 3]).is_err());
+
+    // The element type must actually be `i8`.
+    let i32_ty = ArrayType::new(
+        &engine,
+        FieldType::new(Mutability::Var, ValType::I32.into()),
+    );
+    let i32_pre = ArrayRefPre::new(&mut store, i32_ty);
+    assert!(ArrayRef::new_from_i8_slice(&mut store, &i32_pre, &[1, 2, 3]).is_err());
+    let i32_array = ArrayRef::new(&mut store, &i32_pre, &Val::I32(0), 3)?;
+    assert!(
+        i32_array
+            .copy_to_i8_slice(&mut store, &mut [0u8; 3])
+            .is_err()
+    );
+
+    Ok(())
+}
+
+#[test]
 #[cfg_attr(miri, ignore)]
 fn typed_option_noextern() -> Result<()> {
     let mut store = gc_store()?;
@@ -3448,6 +3508,31 @@ fn miri_gc_smoke_test() -> Result<()> {
         let e_val = e.field(&mut store, 0)?;
         assert_eq!(e_val.unwrap_i32(), 7);
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn array_i8_slice_async() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let array_ty = ArrayType::new(&engine, FieldType::new(Mutability::Var, StorageType::I8));
+    let pre = ArrayRefPre::new(&mut store, array_ty);
+
+    let src = [0x80, 0xFF, 0x00, 0x01, 0x7F];
+    let array = ArrayRef::new_from_i8_slice_async(&mut store, &pre, &src).await?;
+    assert_eq!(array.len(&store)?, 5);
+
+    let mut dst = [0u8; 5];
+    array.copy_to_i8_slice(&mut store, &mut dst)?;
+    assert_eq!(dst, src);
 
     Ok(())
 }
