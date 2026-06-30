@@ -10,14 +10,14 @@ use crate::{
 };
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::IntCC;
-use cranelift_codegen::ir::{self, InstBuilder, MemFlagsData, Value};
+use cranelift_codegen::ir::{self, InstBuilder, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::GetPtrSize;
 use wasmtime_environ::error::{Result, bail};
 use wasmtime_environ::{
     Abi, BuiltinFunctionIndex, CompiledFunctionBody, EntityRef, FuncKey, HostCall, PanicOnOom as _,
-    PtrSize, TrapSentinel, Tunables, WasmFuncType, WasmValType, component::*,
+    TrapSentinel, Tunables, WasmFuncType, WasmValType, component::*,
     fact::PREPARE_CALL_FIXED_PARAMS,
 };
 
@@ -27,7 +27,6 @@ struct TrampolineCompiler<'a> {
     builder: FunctionBuilder<'a>,
     component: &'a Component,
     types: &'a ComponentTypesBuilder,
-    offsets: VMComponentOffsets<u8>,
     block0: ir::Block,
     signature: &'a WasmFuncType,
     builtins: BuiltinFunctions,
@@ -122,7 +121,6 @@ impl<'a> TrampolineCompiler<'a> {
             builder,
             component,
             types,
-            offsets,
             block0,
             signature,
             builtins: BuiltinFunctions::new(compiler),
@@ -1378,19 +1376,18 @@ impl<'a> TrampolineCompiler<'a> {
         vmctx: ir::Value,
         index: ComponentBuiltinFunctionIndex,
     ) -> ir::Value {
-        let pointer_type = self.isa.pointer_type();
         // First load the pointer to the builtins structure which is static
         // per-process.
         let builtins_array = self
             .alias_regions
             .vmcomponent_builtins(&mut self.builder.cursor(), vmctx);
         // Next load the function pointer at `offset` and return that.
-        self.builder.ins().load(
-            pointer_type,
-            MemFlagsData::trusted().with_readonly(),
-            builtins_array,
-            i32::try_from(index.index() * u32::from(self.offsets.ptr.size())).unwrap(),
-        )
+        self.alias_regions
+            .component_builtin_functions_array_element(
+                &mut self.builder.cursor(),
+                builtins_array,
+                index,
+            )
     }
 
     /// Get a function's parameters regardless of the ABI in use.
@@ -1678,14 +1675,13 @@ impl ComponentCompiler for Compiler {
                     sig,
                     symbol,
                     wasmtime_environ::component::VMCOMPONENT_MAGIC,
-                    |_alias_regions, pointer_type, cursor, vmctx| {
-                        // TODO: `VMComponentContext` doesn't have its own alias
-                        // region or helpers yet.
-                        cursor.ins().load(
+                    |alias_regions, pointer_type, cursor, vmctx| {
+                        alias_regions.vmcomponent_context_generic_load(
+                            cursor,
                             pointer_type,
                             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
                             vmctx,
-                            i32::try_from(offsets.vm_store_context()).unwrap(),
+                            offsets.vm_store_context(),
                         )
                     },
                 )?);
@@ -1760,14 +1756,13 @@ impl ComponentCompiler for Compiler {
                     &wasm_func_ty,
                     symbol,
                     wasmtime_environ::component::VMCOMPONENT_MAGIC,
-                    |_alias_regions, pointer_type, cursor, vmctx| {
-                        // TODO: `VMComponentContext` doesn't have its own alias
-                        // region or helpers yet.
-                        cursor.ins().load(
+                    |alias_regions, pointer_type, cursor, vmctx| {
+                        alias_regions.vmcomponent_context_generic_load(
+                            cursor,
                             pointer_type,
                             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
                             vmctx,
-                            i32::try_from(offsets.vm_store_context()).unwrap(),
+                            offsets.vm_store_context(),
                         )
                     },
                 )?);
@@ -1927,6 +1922,7 @@ impl TrampolineCompiler<'_> {
                 args.push(self.len_param(4, to64));
             }
         };
+        let mut retptr_slot = None;
         if uses_retptr {
             let slot = self
                 .builder
@@ -1936,14 +1932,18 @@ impl TrampolineCompiler<'_> {
                     pointer_type.bytes(),
                     0,
                 ));
+            retptr_slot = Some(slot);
             args.push(self.builder.ins().stack_addr(pointer_type, slot, 0));
         }
         let call = self.call_libcall(vmctx, get_libcall, &args);
         let mut results = self.builder.func.dfg.inst_results(call).to_vec();
-        if uses_retptr {
+        if let Some(slot) = retptr_slot {
+            let region = self
+                .alias_regions
+                .stack_slot_region(self.builder.func, slot);
             results.push(self.builder.ins().load(
                 pointer_type,
-                ir::MemFlagsData::trusted(),
+                ir::MemFlagsData::trusted().with_alias_region(Some(region)),
                 *args.last().unwrap(),
                 0,
             ));
@@ -2158,10 +2158,12 @@ where
         };
 
         // Do the load!
-        let mut value = self
-            .builder
-            .ins()
-            .load(clif_ty, ir::MemFlagsData::trusted(), pointer, 0);
+        let mut value = self.traps.alias_regions().unsafe_intrinsic_load(
+            &mut self.builder.cursor(),
+            clif_ty,
+            ir::MemFlagsData::trusted(),
+            pointer,
+        );
 
         // Extend the value, if necessary. When implementing the
         // `u8-native-load` intrinsic, for example, we will load a Cranelift
@@ -2212,9 +2214,12 @@ where
         }
 
         // Do the store!
-        self.builder
-            .ins()
-            .store(ir::MemFlagsData::trusted(), value, pointer, 0);
+        self.traps.alias_regions().unsafe_intrinsic_store(
+            &mut self.builder.cursor(),
+            ir::MemFlagsData::trusted(),
+            value,
+            pointer,
+        );
 
         Ok(())
     }
@@ -2250,10 +2255,12 @@ where
         )?;
 
         // Do the load!
-        let mut value = self
-            .builder
-            .ins()
-            .load(clif_ty, ir::MemFlagsData::trusted(), addr, 0);
+        let mut value = self.traps.alias_regions().unsafe_intrinsic_load(
+            &mut self.builder.cursor(),
+            clif_ty,
+            ir::MemFlagsData::trusted(),
+            addr,
+        );
 
         // Zero-extend the loaded value to the Wasm result type, if necessary.
         let wasm_clif_ty = crate::value_type(self.isa, wasm_ty);
@@ -2316,9 +2323,12 @@ where
         }
 
         // Do the store!
-        self.builder
-            .ins()
-            .store(ir::MemFlagsData::trusted(), value, addr, 0);
+        self.traps.alias_regions().unsafe_intrinsic_store(
+            &mut self.builder.cursor(),
+            ir::MemFlagsData::trusted(),
+            value,
+            addr,
+        );
 
         Ok(())
     }

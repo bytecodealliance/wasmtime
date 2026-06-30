@@ -47,6 +47,7 @@
 ;;     region1 = 134217752 "VMStoreContext+0x18"
 ;;     region2 = 2415919128 "VMFunctionImport+0x18"
 ;;     region3 = 134217832 "VMStoreContext+0x68"
+;;     region4 = 3892314112 "UnsafeIntrinsicMemory"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -61,10 +62,10 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0153                               v4 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0153                               v5 = load.i64 notrap aligned readonly can_move region3 v4+104
-;; @0155                               v7 = load.i8 notrap aligned v5
+;; @0155                               v7 = load.i8 notrap aligned region4 v5
 ;;                                     v18 = iconst.i8 1
 ;;                                     v19 = iadd v7, v18  ; v18 = 1
-;; @0160                               store notrap aligned v19, v5
+;; @0160                               store notrap aligned region4 v19, v5
 ;; @0162                               jump block1
 ;;
 ;;                                 block1:
