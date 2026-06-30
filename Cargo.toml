@@ -383,7 +383,7 @@ cc = "1.2.0" # intentionally smaller-than-latest to accommodate rust-lang/rust
 object = { version = "0.39.0", default-features = false, features = ['read_core', 'elf'] }
 gimli = { version = "0.33.0", default-features = false, features = ['read'] }
 addr2line = { version = "0.26.0", default-features = false }
-anyhow = { version = "1.0.100", default-features = false }
+anyhow = { version = "1.0.103", default-features = false }
 anyhow-for-testing = { package = "anyhow", version = "1.0.100", default-features = false }
 windows-sys = "0.61.2"
 env_logger = "0.11.5"
