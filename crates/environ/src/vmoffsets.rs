@@ -163,6 +163,12 @@ pub trait PtrSize {
         4 * self.size()
     }
 
+    /// Return the size of `VMSharedTypeIndex`.
+    #[inline]
+    fn size_of_vmshared_type_index(&self) -> u8 {
+        4
+    }
+
     /// Return the size of `VMGlobalDefinition`; this is the size of the largest value type (i.e. a
     /// V128).
     #[inline]
@@ -1037,7 +1043,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMSharedTypeIndex`.
     #[inline]
     pub fn size_of_vmshared_type_index(&self) -> u8 {
-        4
+        self.ptr.size_of_vmshared_type_index()
     }
 }
 

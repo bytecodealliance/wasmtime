@@ -1122,25 +1122,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         )
     }
 
-    /// Load the associated `VMSharedTypeIndex` from inside a `*const VMFuncRef`.
-    ///
-    /// Does not check for null; just assumes that the `funcref` is a valid
-    /// pointer.
-    pub(crate) fn load_funcref_type_index(
-        &mut self,
-        pos: &mut FuncCursor,
-        mem_flags: ir::MemFlagsData,
-        funcref: ir::Value,
-    ) -> ir::Value {
-        let ty = self.vmshared_type_index_ty();
-        pos.ins().load(
-            ty,
-            mem_flags,
-            funcref,
-            i32::from(self.offsets.ptr.vm_func_ref_type_index()),
-        )
-    }
-
     /// Does this function need a GC heap?
     pub fn needs_gc_heap(&self) -> bool {
         self.needs_gc_heap
@@ -2305,9 +2286,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             self.env
                 .trapz(self.builder, funcref_ptr, crate::TRAP_INDIRECT_CALL_TO_NULL);
         }
-        let callee_sig_id =
-            self.env
-                .load_funcref_type_index(&mut self.builder.cursor(), mem_flags, funcref_ptr);
+        let callee_sig_id = self.env.alias_regions.vmfuncref_type_index(
+            &mut self.builder.cursor(),
+            mem_flags,
+            funcref_ptr,
+        );
 
         // Check that they match: in the case of Wasm GC, this means doing a
         // full subtype check. Otherwise, we do a simple equality check.
@@ -2358,8 +2341,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         callee: ir::Value,
         callee_load_trap_code: Option<ir::TrapCode>,
     ) -> (ir::Value, ir::Value) {
-        let pointer_type = self.env.pointer_type();
-
         // Dereference callee pointer to get the function address.
         //
         // Note that this may trap if `callee` hasn't previously been verified
@@ -2376,18 +2357,15 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 self.env.trapz(self.builder, callee, trap);
             }
         }
-        let func_addr = self.builder.ins().load(
-            pointer_type,
+        let func_addr = self.env.alias_regions.vmfuncref_wasm_call(
+            &mut self.builder.cursor(),
             callee_flags,
             callee,
-            i32::from(self.env.offsets.ptr.vm_func_ref_wasm_call()),
         );
-        let callee_vmctx = self.builder.ins().load(
-            pointer_type,
-            mem_flags,
-            callee,
-            i32::from(self.env.offsets.ptr.vm_func_ref_vmctx()),
-        );
+        let callee_vmctx =
+            self.env
+                .alias_regions
+                .vmfuncref_vmctx(&mut self.builder.cursor(), mem_flags, callee);
 
         (func_addr, callee_vmctx)
     }
