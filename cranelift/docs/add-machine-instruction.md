@@ -47,8 +47,11 @@ Inst::FMAdd { rd, rn, rm, ra, .. } => {
 }
 ```
 
-Use `reg_def` for registers written, `reg_use` for registers read, and
-`reg_mod` for registers both read and written (e.g., x86 two-operand instructions).
+Use `reg_def` for registers written and `reg_use` for registers read. For
+x86-style two-operand instructions where the output reuses an input register,
+use `reg_reuse_def(rd, idx)` where `idx` is the index of the `reg_use` call
+that this def reuses; or use `reg_early_def` when the def may be written before
+all uses are read and the regalloc must keep it in a different register.
 
 ### Step 3: Implement `worst_case_size`
 
@@ -132,7 +135,7 @@ Breaking down the rule:
 
 ISLE provides many built-in extractors for common patterns. Some useful ones:
 
-- `(iconst k)` — matches an `iconst` instruction and binds `k` to the constant value
+- `(u64_from_iconst k)` — matches an `iconst` and binds `k` to its value as a `u64`; typed variants `u32_from_iconst`, `i64_from_iconst`, etc. are also available
 - `(fits_in_64 ty)` — succeeds if `ty` has ≤ 64 bits
 - `(ty_int ty)` — succeeds if `ty` is an integer type
 - `(ty_scalar_float ty)` — succeeds if `ty` is `f32` or `f64`
@@ -190,10 +193,12 @@ To inspect the generated Rust code:
 ISLE_SOURCE_DIR=$(pwd)/isle-generated cargo check -p cranelift-codegen
 ```
 
-Then add a filetest:
+Then add a filetest. Compile tests use `test compile precise-output`, which
+compares the full VCode and disassembly output exactly. Add the expected output
+as a comment block after the function:
 
 ```
-test compile
+test compile precise-output
 target aarch64
 
 function %test_fma(f32, f32, f32) -> f32 {
@@ -201,11 +206,17 @@ block0(v0: f32, v1: f32, v2: f32):
     v3 = fma v0, v1, v2
     return v3
 }
-; check: fmadd
-```
 
-The `; check: fmadd` filecheck directive asserts that the compiled output
-contains an `fmadd` instruction.
+; VCode:
+; block0:
+;   fmadd s0, s0, s1, s2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmadd s0, s0, s1, s2
+;   ret
+```
 
 Run the test:
 

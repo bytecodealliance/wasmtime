@@ -351,13 +351,13 @@ retlist      : paramlist
 param        : type [paramext] [paramspecial]
 paramext     : "uext" | "sext"
 paramspecial : "sarg" ( num ) | "sret" | "vmctx" | "stack_limit"
-callconv     : "fast" | "cold" | "system_v" | "windows_fastcall"
-             | "apple_aarch64" | "probestack" | "winch"
+callconv     : "fast" | "tail" | "system_v" | "windows_fastcall"
+             | "apple_aarch64" | "probestack" | "winch" | "preserve_all"
 ```
 
 A function's calling convention determines exactly how arguments and return
 values are passed, and how stack frames are managed. Since all of these details
-depend on both the instruction set /// architecture and possibly the operating
+depend on both the instruction set architecture and possibly the operating
 system, a function's calling convention is only fully determined by a
 `(TargetIsa, CallConv)` tuple.
 
@@ -370,15 +370,17 @@ system, a function's calling convention is only fully determined by a
 
 | Name      | Description |
 | --------- | ----------- |
-| fast      |  not-ABI-stable convention for best performance |
-| cold      |  not-ABI-stable convention for infrequently executed code |
-| system_v  |  System V-style convention used on many platforms |
-| fastcall  |  Windows "fastcall" convention, also used for x64 and ARM |
+| fast             |  not-ABI-stable convention for best performance |
+| tail             |  not-ABI-stable convention supporting tail calls |
+| system_v         |  System V-style convention used on many platforms |
+| windows_fastcall |  Windows x64 calling convention |
+| apple_aarch64    |  Apple AArch64 calling convention |
+| probestack       |  Convention for stack-probe helper functions |
+| winch            |  Convention used by the Winch baseline compiler |
+| preserve_all     |  Preserves all registers; used for signal handlers and similar |
 
-The "not-ABI-stable" conventions do not follow an external specification and
-may change between versions of Cranelift.
-
-The "fastcall" convention is not yet implemented.
+The "not-ABI-stable" conventions (`fast`, `tail`) do not follow an external
+specification and may change between versions of Cranelift.
 
 Parameters and return values have flags whose meaning is mostly target
 dependent. These flags support interfacing with code produced by other

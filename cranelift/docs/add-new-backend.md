@@ -16,15 +16,20 @@ cranelift/codegen/src/isa/<arch>/
     mod.rs
     abi.rs
     settings.rs     (usually generated — see Step 3)
+    lower.rs        (wires up the ISLE-based lowering)
+    inst.isle       (machine instruction ISLE declarations)
+    lower.isle      (CLIF-to-machine lowering rules)
     inst/
         mod.rs
         args.rs
         emit.rs
         regs.rs
     lower/
-        isle.rs
-        *.isle
+        isle.rs     (Rust constructors backing ISLE extern declarations)
 ```
+
+Additional `.isle` files (e.g. `inst_neon.isle`, `lower_vector.isle`) live
+at the same top-level arch directory alongside `inst.isle` and `lower.isle`.
 
 ## Step 2: Register the backend
 
@@ -77,21 +82,25 @@ Register your settings in `cranelift/codegen/meta/src/isa/mod.rs` and in
 
 ## Step 4: Define machine registers
 
-In `inst/regs.rs`, define:
-
-- Constants for physical registers (e.g. `pub const X0: PReg = PReg::new(0, RegClass::Int);`)
-- A `create_machine_env()` function that returns a `regalloc2::MachineEnv`
-  listing allocatable registers, callee-saved registers, etc.
-
-Example:
+In `inst/regs.rs`, define helper functions and constants for physical registers,
+for example:
 
 ```rust
-use regalloc2::{MachineEnv, PReg, PRegSet, RegClass};
+use regalloc2::PReg;
+use crate::machinst::{Reg, RegClass};
 
-pub fn x_reg(enc: usize) -> Reg { ... }
-pub fn f_reg(enc: usize) -> Reg { ... }
+pub const fn x_reg(enc: usize) -> Reg { ... }
+pub const fn f_reg(enc: usize) -> Reg { ... }
+```
 
-pub fn create_machine_env() -> MachineEnv {
+The `regalloc2::MachineEnv` (which lists allocatable, caller-saved, and
+callee-saved registers) is constructed in `abi.rs` inside the
+`ABIMachineSpec::get_machine_env()` implementation. A typical pattern:
+
+```rust
+use regalloc2::{MachineEnv, PRegSet};
+
+const fn create_reg_environment() -> MachineEnv {
     MachineEnv {
         preferred_regs_by_class: [
             // integer registers (caller-saved / not callee-saved)
@@ -116,6 +125,14 @@ pub fn create_machine_env() -> MachineEnv {
         ],
         fixed_stack_slots: vec![],
         scratch_by_class: [None, None, None],
+    }
+}
+
+impl ABIMachineSpec for NewArchABIMachineSpec {
+    // ...
+    fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
+        static MACHINE_ENV: MachineEnv = create_reg_environment();
+        &MACHINE_ENV
     }
 }
 ```
@@ -283,8 +300,9 @@ impl TargetIsa for NewArchBackend {
 
 1. Add filetest `.clif` files in `cranelift/filetests/filetests/` under a
    subdirectory for your ISA.
-2. Use `test compile` to verify end-to-end compilation, and `test run` if your
-   ISA can be run via an interpreter (or natively on CI).
+2. Use `test compile precise-output` to verify end-to-end compilation (the test
+   compares the full VCode and disassembly output exactly), and `test run` /
+   `test interpret` if your ISA can be run via an interpreter or natively on CI.
 3. Add `test verifier` tests to verify that your backend correctly rejects
    invalid IR.
 

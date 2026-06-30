@@ -18,11 +18,12 @@ CLIF opcodes are defined using a meta-language in Rust:
 - `cranelift/codegen/meta/src/shared/immediates.rs` — immediate field types
 
 The meta code is compiled during the build (via `cranelift/codegen/build.rs`)
-to generate:
-- `cranelift/codegen/src/ir/instructions.rs` — the `Opcode` enum and
-  `InstructionData` enum
-- `cranelift/codegen/src/ir/builder.rs` — the `InstBuilder` trait with one
-  builder method per opcode
+to generate Rust source files in `OUT_DIR` (`target/`). These generated files
+are then `include!()`-ed by the handwritten source files in
+`cranelift/codegen/src/ir/`. Generated artifacts include:
+
+- `opcodes.rs` — opcode definitions and instruction metadata
+- `inst_builder.rs` — `InstBuilder` methods for each opcode
 - ISLE `extern` declarations so ISLE rules can reference CLIF opcodes
 
 ## Step 1: Choose or create an instruction format
@@ -49,9 +50,11 @@ example, many opcodes use the `Binary` format (two value inputs, one result).
 
 ## Step 2: Add the opcode definition
 
-In `cranelift/codegen/meta/src/shared/instructions.rs`, find the function that
-logically groups your instruction (e.g. `define_integer_ops`, `define_memory`,
-etc.) and add an entry:
+In `cranelift/codegen/meta/src/shared/instructions.rs`, add an entry in the
+`define()` function. If your instruction is SIMD-related, it may belong in one
+of the three sub-functions called by `define()`: `define_control_flow`,
+`define_simd_lane_access`, or `define_simd_arithmetic`. Otherwise add it
+directly in the body of `define()` alongside similar opcodes:
 
 ```rust
 ig.push(
@@ -108,14 +111,22 @@ with a descriptive error.
 The IR verifier (`cranelift/codegen/src/verifier/mod.rs`) checks semantic
 invariants. If your new instruction has any invariants beyond type correctness
 (e.g. alignment constraints, operand restrictions), add a case in the
-`verify_entity_references` function's match on `InstructionData`:
+`immediate_constraints` function's match on `InstructionData`:
 
 ```rust
-InstructionData::YourFormat { opcode: Opcode::MyNewOp, .. } => {
-    // example: check that an immediate satisfies a constraint
-    errors.report((inst, self.context(inst), "description of the error"));
+ir::InstructionData::YourFormat { opcode: ir::instructions::Opcode::MyNewOp, .. } => {
+    if /* constraint is violated */ {
+        errors.fatal((inst, self.context(inst), "description of the error"))
+    } else {
+        Ok(())
+    }
 }
 ```
+
+Use `errors.fatal` (returns `Err(())` and stops further checks on this
+instruction) or `errors.nonfatal` (returns `Ok(())` and continues) depending
+on severity. Do not use `errors.report` directly here — it returns `()` and
+the match arm must return `VerifierStepResult`.
 
 ## Step 5: Add interpreter support
 
@@ -128,9 +139,13 @@ Opcode::MyNewOp => {
     let x = arg(0);
     let y = arg(1);
     let result = /* compute semantics */;
-    Ok(ControlFlow::Assign(smallvec![result]))
+    Ok(assign(result))
 }
 ```
+
+The `assign` closure (defined near the top of `step`) wraps a single
+`DataValue` result into `ControlFlow::Assign`. Use `assign_multiple` for
+instructions that produce more than one result value.
 
 ## Step 6: Add lowering rules in each backend
 
@@ -149,8 +164,11 @@ constant folding), add ISLE rewrite rules in
 `my_new_op(c1, c2)` where both operands are constants:
 
 ```lisp
-(rule (simplify (my_new_op (iconst k1) (iconst k2)))
-      (subsume (iconst (my_new_op_const_fold k1 k2))))
+(rule (simplify
+       (my_new_op (fits_in_64 ty)
+                  (iconst ty k1)
+                  (iconst ty k2)))
+      (subsume (iconst ty (imm64_my_new_op ty k1 k2))))
 ```
 
 ## Step 8: Write tests
@@ -165,7 +183,14 @@ block0(v0: i32, v1: i32):
     v2 = my_new_op v0, v1
     return v2
 }
-; not: error
+```
+
+A `test verifier` function with no `; error:` annotations is expected to pass
+verification without errors. To assert that a specific instruction *causes* a
+verifier error, annotate it inline:
+
+```
+    v2 = my_new_op v0, v1  ; error: <expected error text>
 ```
 
 Add a `test run` filetest to verify semantics:
