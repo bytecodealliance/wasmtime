@@ -34,6 +34,7 @@ enum VmType {
     VMGlobalImport,
     VMFuncRef,
     TypeIdsArray,
+    EpochCounter,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -144,6 +145,7 @@ impl AliasRegionKey {
     const STACK_KIND: u32 = Self::new_kind(0b10111);
     const VM_FUNC_REF_KIND: u32 = Self::new_kind(0b11000);
     const TYPE_IDS_ARRAY_KIND: u32 = Self::new_kind(0b11001);
+    const EPOCH_COUNTER_KIND: u32 = Self::new_kind(0b11010);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -170,6 +172,7 @@ impl AliasRegionKey {
                     VmType::VMGlobalImport => Self::VM_GLOBAL_IMPORT_KIND,
                     VmType::VMFuncRef => Self::VM_FUNC_REF_KIND,
                     VmType::TypeIdsArray => Self::TYPE_IDS_ARRAY_KIND,
+                    VmType::EpochCounter => Self::EPOCH_COUNTER_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -1908,6 +1911,34 @@ where
                 .with_alias_region(Some(region)),
             array,
             i32::try_from(offset).unwrap(),
+        )
+    }
+}
+
+/// Epoch counter-related methods.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    /// Dereference the epoch pointer (an `*const AtomicU64` previously loaded
+    /// out of the vmctx's `epoch_ptr` field) to read the current epoch counter.
+    pub fn epoch_counter(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        epoch_ptr: ir::Value,
+    ) -> ir::Value {
+        let region = self.region(
+            cursor.func,
+            AliasRegionKey::Vm {
+                ty: VmType::EpochCounter,
+                offset: 0,
+            },
+        );
+        cursor.ins().load(
+            ir::types::I64,
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            epoch_ptr,
+            0,
         )
     }
 }

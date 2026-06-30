@@ -747,12 +747,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     fn epoch_load_current(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
         let addr = builder.use_var(self.epoch_ptr_var);
-        builder.ins().load(
-            ir::types::I64,
-            ir::MemFlagsData::trusted(),
-            addr,
-            ir::immediates::Offset32::new(0),
-        )
+        self.alias_regions
+            .epoch_counter(&mut builder.cursor(), addr)
     }
 
     fn epoch_check(&mut self, builder: &mut FunctionBuilder<'_>) {
