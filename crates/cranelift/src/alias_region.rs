@@ -112,6 +112,9 @@ enum AliasRegionKey {
     /// aliasing of the embedder's data structures that the unsafe intrinsics do
     /// access, so all their accesses are lumped together into the same region.
     UnsafeIntrinsicMemory,
+
+    /// An access of a `ValRaw` inside a passive element segment.
+    ElementSegment,
 }
 
 impl AliasRegionKey {
@@ -163,6 +166,7 @@ impl AliasRegionKey {
     const COMPONENT_BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b11100);
     const UNSAFE_INTRINSIC_MEMORY_KIND: u32 = Self::new_kind(0b11101);
     const HOST_VAL_RAW_KIND: u32 = Self::new_kind(0b11110);
+    const ELEMENT_SEGMENT_KIND: u32 = Self::new_kind(0b11111);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -235,6 +239,7 @@ impl AliasRegionKey {
                 Self::STACK_KIND | (slot.as_u32() & Self::OFFSET_MASK)
             }
             AliasRegionKey::UnsafeIntrinsicMemory => Self::UNSAFE_INTRINSIC_MEMORY_KIND,
+            AliasRegionKey::ElementSegment => Self::ELEMENT_SEGMENT_KIND,
         }
     }
 }
@@ -258,6 +263,7 @@ impl fmt::Debug for AliasRegionKey {
             AliasRegionKey::GcHeap => write!(f, "GcHeap"),
             AliasRegionKey::Stack { slot } => write!(f, "Stack({slot:?})"),
             AliasRegionKey::UnsafeIntrinsicMemory => write!(f, "UnsafeIntrinsicMemory"),
+            AliasRegionKey::ElementSegment => write!(f, "ElementSegment"),
         }
     }
 }
@@ -2083,6 +2089,19 @@ where
                 offset: 0,
             },
         )
+    }
+}
+
+/// Passive element-related methods.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    /// Get the alias region for the runtime `ValRaw` storage of passive element
+    /// segments (written by passive-element initialization and read by
+    /// `table.init` and `array.{new,init}_elem`).
+    pub fn element_segment_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        self.region(func, AliasRegionKey::ElementSegment)
     }
 }
 
