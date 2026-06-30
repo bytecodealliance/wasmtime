@@ -203,23 +203,6 @@
                 (= result (bvsrem x y))))))
 (instantiate srem bv_binary_8_to_64)
 
-
-;; multiplication, division, and remainder are slow for bitvector reasoning
-(attr imul_base_case (tag slow))
-(attr iadd_imul_right (tag slow))
-(attr iadd_imul_left (tag slow))
-(attr isub_imul (tag slow))
-(attr umulhi_64 (tag slow))
-(attr umulhi_fits_in_32 (tag slow))
-(attr udiv_64 (tag slow))
-(attr udiv_fits_in_32 (tag slow))
-(attr sdiv_safe_divisor_i64 (tag slow))
-(attr sdiv_safe_divisor_fits_in_32 (tag slow))
-(attr urem_64 (tag slow))
-(attr urem_fits_in_32 (tag slow))
-(attr srem_64 (tag slow))
-(attr srem_fits_in_32 (tag slow))
-
 ;; "Unsigned addition of x and y, trapping if the result overflows."
 ;; "Accepts 32 or 64-bit integers, and does not support vector types."
 (spec (uadd_overflow_trap ty x y trap_code)
@@ -1299,7 +1282,7 @@
 (attr select_spectre_guard (tag spectre))
 (attr fence (tag TODO))
 
-; Use Z3 solver for the following instructions/rules.
+; Use Z3 solver for the following instructions.
 (attr fadd (tag solver_z3))
 (attr fmul (tag solver_z3))
 (attr fdiv (tag solver_z3))
@@ -1309,10 +1292,8 @@
 (attr clz (tag solver_z3))
 (attr ctz (tag solver_z3))
 (attr popcnt (tag solver_z3))
-(attr iadd_imul_left (tag solver_z3))
-(attr iadd_imul_right (tag solver_z3))
-(attr isub_imul (tag solver_z3))
-(attr imul_base_case (tag solver_z3))
-(attr sdiv_safe_divisor_fits_in_32 (tag solver_z3))
-(attr sdiv_safe_divisor_i64 (tag solver_z3))
-(attr fsub (tag solver_z3))
+(attr imul (tag solver_z3))
+(attr udiv (tag solver_z3))
+(attr sdiv (tag solver_z3))
+(attr urem (tag solver_z3))
+(attr srem (tag solver_z3))

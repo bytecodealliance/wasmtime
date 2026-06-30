@@ -1335,6 +1335,20 @@ jobs:
     - run: ${{ matrix.script }}
       if: ${{ matrix.script }}
 
+  # Check the ISLE verifier builds/runs (without invoking the SMT solver, for now).
+  isle_veri_basic_check:
+    needs: determine
+    if: needs.determine.outputs.run-full
+    name: ISLE verifier basic check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-fast.args --skip-solver
+    - run: cargo run -p cranelift-isle-veri --bin veri -- --name x64 --rule iadd_base_case_32_or_64_lea --skip-solver
+
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
   # this workflow run's list of artifacts.
@@ -1444,6 +1458,7 @@ jobs:
       - verify-publish
       - determine
       - miri
+      - isle_veri_basic_check
       - build-preview1-component-adapter
       - build-preview1-component-adapter-provider
       - test-min-platform-example

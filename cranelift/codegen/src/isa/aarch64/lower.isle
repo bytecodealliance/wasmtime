@@ -1036,10 +1036,10 @@
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (smulhi $I64 x y))
+(rule smulhi_64 1 (lower (smulhi $I64 x y))
       (smulh $I64 x y))
 
-(rule (lower (smulhi (fits_in_32 ty) x y))
+(rule smulhi_fits_in_32 (lower (smulhi (fits_in_32 ty) x y))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_in_reg_sext64 y))
             (mul Reg (madd $I64 x64 y64 (zero_reg)))
@@ -1048,10 +1048,10 @@
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (umulhi $I64 x y))
+(rule umulhi_64 1 (lower (umulhi $I64 x y))
       (umulh $I64 x y))
 
-(rule (lower (umulhi (fits_in_32 ty) x y))
+(rule umulhi_fits_in_32 (lower (umulhi (fits_in_32 ty) x y))
       (let (
           (x64 Reg (put_in_reg_zext64 x))
           (y64 Reg (put_in_reg_zext64 y))
@@ -1096,7 +1096,7 @@
 ;; Note that aarch64's `udiv` doesn't trap so to respect the semantics of
 ;; CLIF's `udiv` the check for zero needs to be manually performed.
 
-(rule udiv_54 1 (lower (udiv $I64 x y))
+(rule udiv_64 1 (lower (udiv $I64 x y))
       (a64_udiv $I64 (put_in_reg x) (put_nonzero_in_reg y (ExtType.Unsigned) $I64)))
 
 (rule udiv_fits_in_32 (lower (udiv (fits_in_32 ty) x y))
@@ -3216,3 +3216,29 @@
 
 (attr load_ext_name (tag TODO))
 (attr get_exception_handler_address (tag TODO))
+
+;; Multiplication, division, and remainder are slow for bitvector reasoning
+(attr rule imul_base_case (tag slow))
+(attr rule iadd_imul_right (tag slow))
+(attr rule iadd_imul_left (tag slow))
+(attr rule isub_imul (tag slow))
+(attr rule umulhi_64 (tag slow))
+(attr rule umulhi_fits_in_32 (tag slow))
+(attr rule smulhi_64 (tag slow))
+(attr rule smulhi_fits_in_32 (tag slow))
+(attr rule udiv_64 (tag slow))
+(attr rule udiv_fits_in_32 (tag slow))
+(attr rule sdiv_safe_divisor_i64 (tag slow))
+(attr rule sdiv_safe_divisor_fits_in_32 (tag slow))
+(attr rule urem_64 (tag slow))
+(attr rule urem_fits_in_32 (tag slow))
+(attr rule srem_64 (tag slow))
+(attr rule srem_fits_in_32 (tag slow))
+
+(attr rule iadd_imul_left (tag solver_z3))
+(attr rule iadd_imul_right (tag solver_z3))
+(attr rule isub_imul (tag solver_z3))
+(attr rule imul_base_case (tag solver_z3))
+(attr rule sdiv_safe_divisor_fits_in_32 (tag solver_z3))
+(attr rule sdiv_safe_divisor_i64 (tag solver_z3))
+(attr fsub (tag solver_z3))
