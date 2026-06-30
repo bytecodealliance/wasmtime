@@ -1,5 +1,5 @@
 use crate::{CExternType, wasm_externtype_t, wasm_name_t};
-use std::cell::OnceCell;
+use std::sync::OnceLock;
 
 #[repr(C)]
 #[derive(Clone)]
@@ -7,9 +7,9 @@ pub struct wasm_importtype_t {
     pub(crate) module: String,
     pub(crate) name: String,
     pub(crate) ty: CExternType,
-    module_cache: OnceCell<wasm_name_t>,
-    name_cache: OnceCell<wasm_name_t>,
-    type_cache: OnceCell<wasm_externtype_t>,
+    module_cache: OnceLock<wasm_name_t>,
+    name_cache: OnceLock<wasm_name_t>,
+    type_cache: OnceLock<wasm_externtype_t>,
 }
 
 wasmtime_c_api_macros::declare_ty!(wasm_importtype_t);
@@ -20,9 +20,9 @@ impl wasm_importtype_t {
             module,
             name,
             ty,
-            module_cache: OnceCell::new(),
-            name_cache: OnceCell::new(),
-            type_cache: OnceCell::new(),
+            module_cache: OnceLock::new(),
+            name_cache: OnceLock::new(),
+            type_cache: OnceLock::new(),
         }
     }
 }

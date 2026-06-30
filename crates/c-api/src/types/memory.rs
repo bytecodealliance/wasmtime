@@ -1,6 +1,6 @@
 use crate::{CExternType, handle_result, wasm_externtype_t, wasm_limits_t, wasmtime_error_t};
 use std::convert::TryFrom;
-use std::{cell::OnceCell, mem::MaybeUninit};
+use std::{mem::MaybeUninit, sync::OnceLock};
 use wasmtime::{MemoryType, MemoryTypeBuilder};
 
 #[repr(transparent)]
@@ -14,7 +14,7 @@ wasmtime_c_api_macros::declare_ty!(wasm_memorytype_t);
 #[derive(Clone)]
 pub(crate) struct CMemoryType {
     pub(crate) ty: MemoryType,
-    limits_cache: OnceCell<wasm_limits_t>,
+    limits_cache: OnceLock<wasm_limits_t>,
 }
 
 impl wasm_memorytype_t {
@@ -43,7 +43,7 @@ impl CMemoryType {
     pub(crate) fn new(ty: MemoryType) -> CMemoryType {
         CMemoryType {
             ty,
-            limits_cache: OnceCell::new(),
+            limits_cache: OnceLock::new(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{CExternType, wasm_externtype_t, wasm_functype_t};
-use std::cell::OnceCell;
+use std::sync::OnceLock;
 use wasmtime::{Engine, TagType};
 
 #[repr(transparent)]
@@ -13,8 +13,8 @@ wasmtime_c_api_macros::declare_ty!(wasm_tagtype_t);
 #[derive(Clone)]
 pub(crate) struct CTagType {
     ty: LazyTagType,
-    tagtype_cache: OnceCell<TagType>,
-    functype_cache: OnceCell<Box<wasm_functype_t>>,
+    tagtype_cache: OnceLock<TagType>,
+    functype_cache: OnceLock<Box<wasm_functype_t>>,
 }
 
 #[derive(Clone)]
@@ -27,16 +27,16 @@ impl CTagType {
     pub(crate) fn new(ty: TagType) -> CTagType {
         CTagType {
             ty: LazyTagType::TagType(ty),
-            tagtype_cache: OnceCell::new(),
-            functype_cache: OnceCell::new(),
+            tagtype_cache: OnceLock::new(),
+            functype_cache: OnceLock::new(),
         }
     }
 
     fn lazy(functype: Box<wasm_functype_t>) -> CTagType {
         CTagType {
             ty: LazyTagType::Lazy(functype),
-            tagtype_cache: OnceCell::new(),
-            functype_cache: OnceCell::new(),
+            tagtype_cache: OnceLock::new(),
+            functype_cache: OnceLock::new(),
         }
     }
 }

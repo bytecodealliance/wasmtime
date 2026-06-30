@@ -1,5 +1,5 @@
 use crate::{CExternType, wasm_externtype_t, wasm_valtype_vec_t};
-use std::cell::OnceCell;
+use std::sync::OnceLock;
 use std::{
     mem,
     sync::{Arc, Mutex},
@@ -83,8 +83,8 @@ impl<'a, T> ExactSizeIterator for LazyFuncTypeIter<'a, T> where T: ExactSizeIter
 #[derive(Clone)]
 pub(crate) struct CFuncType {
     ty: Arc<Mutex<LazyFuncType>>,
-    params_cache: OnceCell<wasm_valtype_vec_t>,
-    returns_cache: OnceCell<wasm_valtype_vec_t>,
+    params_cache: OnceLock<wasm_valtype_vec_t>,
+    returns_cache: OnceLock<wasm_valtype_vec_t>,
 }
 
 impl wasm_functype_t {
@@ -121,16 +121,16 @@ impl CFuncType {
     pub(crate) fn new(ty: FuncType) -> CFuncType {
         CFuncType {
             ty: Arc::new(Mutex::new(LazyFuncType::FuncType(ty))),
-            params_cache: OnceCell::new(),
-            returns_cache: OnceCell::new(),
+            params_cache: OnceLock::new(),
+            returns_cache: OnceLock::new(),
         }
     }
 
     pub(crate) fn lazy(params: Vec<ValType>, results: Vec<ValType>) -> CFuncType {
         CFuncType {
             ty: Arc::new(Mutex::new(LazyFuncType::Lazy { params, results })),
-            params_cache: OnceCell::new(),
-            returns_cache: OnceCell::new(),
+            params_cache: OnceLock::new(),
+            returns_cache: OnceLock::new(),
         }
     }
 
