@@ -3297,7 +3297,6 @@ fn typed_option_noneref() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(miri, ignore)]
 fn array_i8_slice_roundtrip() -> Result<()> {
     let mut store = gc_store()?;
     let engine = store.engine().clone();
@@ -3514,7 +3513,6 @@ fn miri_gc_smoke_test() -> Result<()> {
 }
 
 #[tokio::test]
-#[cfg_attr(miri, ignore)]
 async fn array_i8_slice_async() -> Result<()> {
     let _ = env_logger::try_init();
 
