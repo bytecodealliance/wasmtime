@@ -4037,6 +4037,32 @@
         (if-let true (u64_eq (ty_bytes ty) (u64_wrapping_shl 1 (shift_masked_imm shift_ty n))))
         (amode_reg_scaled (amode_add x offset) y))
 
+;; `base + (extended index)` plus a non-zero scaled-uimm12 offset: fold the
+;; offset into the load and keep `base + index` as one CSE-able value, so loads
+;; sharing `base + index` reuse a single `add` instead of one add per offset.
+(rule 8 (amode_no_more_iconst ty val @ (iadd _ _ (uextend _ (value_type $I32))) offset)
+        (if-let uimm12 (uimm12_scaled_from_i64 offset ty))
+        (AMode.UnsignedOffset val uimm12))
+(rule 8 (amode_no_more_iconst ty val @ (iadd _ _ (sextend _ (value_type $I32))) offset)
+        (if-let uimm12 (uimm12_scaled_from_i64 offset ty))
+        (AMode.UnsignedOffset val uimm12))
+(rule 9 (amode_no_more_iconst ty val @ (iadd _ (uextend _ (value_type $I32)) _) offset)
+        (if-let uimm12 (uimm12_scaled_from_i64 offset ty))
+        (AMode.UnsignedOffset val uimm12))
+(rule 9 (amode_no_more_iconst ty val @ (iadd _ (sextend _ (value_type $I32)) _) offset)
+        (if-let uimm12 (uimm12_scaled_from_i64 offset ty))
+        (AMode.UnsignedOffset val uimm12))
+
+;; offset == 0: keep rules 4/5's single-instruction `RegExtended` form.
+(rule 10 (amode_no_more_iconst ty (iadd _ x (uextend _ y @ (value_type $I32))) 0)
+        (AMode.RegExtended x y (ExtendOp.UXTW)))
+(rule 10 (amode_no_more_iconst ty (iadd _ x (sextend _ y @ (value_type $I32))) 0)
+        (AMode.RegExtended x y (ExtendOp.SXTW)))
+(rule 11 (amode_no_more_iconst ty (iadd _ (uextend _ x @ (value_type $I32)) y) 0)
+        (AMode.RegExtended y x (ExtendOp.UXTW)))
+(rule 11 (amode_no_more_iconst ty (iadd _ (sextend _ x @ (value_type $I32)) y) 0)
+        (AMode.RegExtended y x (ExtendOp.SXTW)))
+
 (attr amode_reg_scaled (veri chain))
 (decl amode_reg_scaled (Reg Value) AMode)
 (rule 0 (amode_reg_scaled base index)
