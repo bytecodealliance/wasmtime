@@ -74,7 +74,7 @@ and expensive division operations.
 
 The verification bin will default to running on a number of threads
 based on the number of logical CPUs on your current machine, pass `--num-threads=n` to
-override this. On a 12-core M2 MacBook, the command above takes about 6 minutes.
+override this. On a 12-core M2 MacBook, the command above takes about 3 minutes.
 
 By default the verifier attempts every expansion it can reach. It seeds an
 expansion at every term that has rules and a constructor, and verifies all rule
