@@ -419,10 +419,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             CheckedEntity::Memory(index) => Some(self.memory_alias_region(func, index)),
             CheckedEntity::Table { table, .. } => Some(self.table_alias_region(func, table)),
             CheckedEntity::Array { .. } => Some(self.alias_regions.gc_heap_region(func)),
-            CheckedEntity::Data { .. } | CheckedEntity::RuntimeData(_) | CheckedEntity::Elem(_) => {
-                None
-            }
+            CheckedEntity::Elem(_) => Some(self.alias_regions.element_segment_region(func)),
+            CheckedEntity::Data { .. } | CheckedEntity::RuntimeData(_) => None,
         }
+    }
+
+    /// Build the `MemFlags` for accessing a passive element segment's runtime
+    /// `ValRaw` storage: little-endian, tagged with the `ElementSegment` region.
+    fn element_segment_memflags(&mut self, func: &mut Function) -> ir::MemFlagsData {
+        let region = self.alias_regions.element_segment_region(func);
+        ir::MemFlagsData::trusted()
+            .with_endianness(Endianness::Little)
+            .with_alias_region(Some(region))
     }
 
     fn get_memory_atomic_wait(&mut self, func: &mut Function, ty: ir::Type) -> ir::FuncRef {
@@ -4630,9 +4638,7 @@ impl FuncEnvironment<'_> {
                         let WasmStorageType::Val(WasmValType::Ref(ty)) = write_ty else {
                             unreachable!();
                         };
-                        // `ValRaw` is always stored as little-endian
-                        let mut flags = ir::MemFlagsData::trusted();
-                        flags.set_endianness(Endianness::Little);
+                        let flags = this.element_segment_memflags(builder.func);
 
                         match ty.heap_type.top() {
                             WasmHeapTopType::Func => {
@@ -5896,13 +5902,11 @@ impl FuncEnvironment<'_> {
         let call = builder.ins().call(libcall, &[vmctx, idx]);
         let base = builder.func.dfg.first_result(call);
 
-        // Values in `ValRaw` are always stored in little-endian.
-        let flags = ir::MemFlagsData::trusted().with_endianness(Endianness::Little);
-
         match exprs {
             TableSegmentElements::Functions(indices) => {
                 for (i, func) in indices.iter().enumerate() {
                     let func = self.translate_ref_func(builder.cursor(), *func)?;
+                    let flags = self.element_segment_memflags(builder.func);
                     builder.ins().store(
                         flags,
                         func,
@@ -5924,6 +5928,7 @@ impl FuncEnvironment<'_> {
                             gc::init_field_at_addr(self, builder, ty, dst, val)?;
                         }
                         WasmHeapTopType::Func | WasmHeapTopType::Cont => {
+                            let flags = self.element_segment_memflags(builder.func);
                             builder.ins().store(
                                 flags,
                                 val,
