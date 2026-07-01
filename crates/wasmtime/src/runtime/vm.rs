@@ -219,12 +219,6 @@ pub unsafe trait VMStore: 'static {
     #[cfg(target_has_atomic = "64")]
     fn new_epoch_updated_deadline(&mut self) -> Result<crate::UpdateDeadline>;
 
-    /// Metadata required for resources for the component model.
-    #[cfg(feature = "component-model")]
-    fn component_task_state_mut(
-        &mut self,
-    ) -> Result<&mut crate::component::store::ComponentTaskState>;
-
     #[cfg(feature = "component-model-async")]
     fn component_async_store(
         &mut self,
