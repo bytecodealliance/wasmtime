@@ -566,7 +566,18 @@ impl StoreOpaque {
             return Ok(());
         }
 
-        log::trace!("============ Begin GC ===========");
+        if log::log_enabled!(log::Level::Trace) {
+            let gc_store = self.gc_store.as_ref().unwrap();
+            let capacity = gc_store.gc_heap_capacity();
+            let live_set_size = gc_store.last_post_gc_allocated_bytes.unwrap_or(0);
+            let utilization = live_set_size as f64 / capacity as f64 * 100.0;
+            log::trace!(
+                "============ Begin GC ===========\n\
+                 \t          GC heap capacity = {capacity:#010x} bytes\n\
+                 \tlast post-GC live-set size = {live_set_size:#010x} bytes\n\
+                 \t       GC heap utilization = {utilization:.02}%",
+            );
+        }
 
         // Take the GC roots out of `self` so we can borrow it mutably but still
         // call mutable methods on `self`.
@@ -589,7 +600,18 @@ impl StoreOpaque {
         roots.clear();
         self.gc_roots_list = roots;
 
-        log::trace!("============ End GC ===========");
+        if log::log_enabled!(log::Level::Trace) {
+            let gc_store = self.gc_store.as_ref().unwrap();
+            let capacity = gc_store.gc_heap_capacity();
+            let live_set_size = gc_store.last_post_gc_allocated_bytes.unwrap_or(0);
+            let utilization = live_set_size as f64 / capacity as f64 * 100.0;
+            log::trace!(
+                "============ End GC ===========\n\
+                 \t     GC heap capacity = {capacity:#010x} bytes\n\
+                 \tpost-GC live-set size = {live_set_size:#010x} bytes\n\
+                 \t  GC heap utilization = {utilization:.02}%",
+            );
+        }
         Ok(())
     }
 
