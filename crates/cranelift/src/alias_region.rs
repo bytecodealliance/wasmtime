@@ -9,8 +9,9 @@ use wasmtime_environ::{
     GetPtrSize, GlobalIndex, MemoryIndex, ModuleInternedTypeIndex, OwnedMemoryIndex, PtrSize as _,
     RuntimeDataIndex, StaticModuleIndex, TableIndex, TagIndex, VMOffsets,
     component::{
-        LoweredIndex, ResourceIndex, RuntimeCallbackIndex, RuntimeComponentInstanceIndex,
-        RuntimeMemoryIndex, RuntimePostReturnIndex, VMComponentOffsets,
+        ComponentBuiltinFunctionIndex, LoweredIndex, ResourceIndex, RuntimeCallbackIndex,
+        RuntimeComponentInstanceIndex, RuntimeMemoryIndex, RuntimePostReturnIndex,
+        VMComponentOffsets,
     },
 };
 
@@ -36,6 +37,7 @@ enum VmType {
     TypeIdsArray,
     EpochCounter,
     BuiltinFunctionsArray,
+    ComponentBuiltinFunctionsArray,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -100,6 +102,15 @@ enum AliasRegionKey {
         /// The stack slot being accessed.
         slot: ir::StackSlot,
     },
+
+    /// All unsafe intrinsics share a single alias region.
+    ///
+    /// By contract, unsafe intrinsics cannot access our internal `VM*` types or
+    /// linear memories or anything else that has its own dedicated alias
+    /// region. However, we cannot guarantee anything about the (lack of)
+    /// aliasing of the embedder's data structures that the unsafe intrinsics do
+    /// access, so all their accesses are lumped together into the same region.
+    UnsafeIntrinsicMemory,
 }
 
 impl AliasRegionKey {
@@ -148,6 +159,8 @@ impl AliasRegionKey {
     const TYPE_IDS_ARRAY_KIND: u32 = Self::new_kind(0b11001);
     const EPOCH_COUNTER_KIND: u32 = Self::new_kind(0b11010);
     const BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b11011);
+    const COMPONENT_BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b11100);
+    const UNSAFE_INTRINSIC_MEMORY_KIND: u32 = Self::new_kind(0b11101);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -176,6 +189,9 @@ impl AliasRegionKey {
                     VmType::TypeIdsArray => Self::TYPE_IDS_ARRAY_KIND,
                     VmType::EpochCounter => Self::EPOCH_COUNTER_KIND,
                     VmType::BuiltinFunctionsArray => Self::BUILTIN_FUNCTIONS_KIND,
+                    VmType::ComponentBuiltinFunctionsArray => {
+                        Self::COMPONENT_BUILTIN_FUNCTIONS_KIND
+                    }
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -215,6 +231,7 @@ impl AliasRegionKey {
                 debug_assert_eq!(slot.as_u32() & Self::KIND_MASK, 0);
                 Self::STACK_KIND | (slot.as_u32() & Self::OFFSET_MASK)
             }
+            AliasRegionKey::UnsafeIntrinsicMemory => Self::UNSAFE_INTRINSIC_MEMORY_KIND,
         }
     }
 }
@@ -237,6 +254,7 @@ impl fmt::Debug for AliasRegionKey {
             }
             AliasRegionKey::GcHeap => write!(f, "GcHeap"),
             AliasRegionKey::Stack { slot } => write!(f, "Stack({slot:?})"),
+            AliasRegionKey::UnsafeIntrinsicMemory => write!(f, "UnsafeIntrinsicMemory"),
         }
     }
 }
@@ -278,6 +296,23 @@ impl<Offsets> AliasRegions<Offsets> {
             Some(regions.insert(key.into()))
         }
     }
+
+    /// Get the alias region for a stack slot.
+    pub fn stack_slot_region(
+        &mut self,
+        func: &mut ir::Function,
+        slot: ir::StackSlot,
+    ) -> ir::AliasRegion {
+        self.region(func, AliasRegionKey::Stack { slot })
+    }
+
+    /// Get the alias region for the given key.
+    fn region(&mut self, func: &mut ir::Function, key: AliasRegionKey) -> ir::AliasRegion {
+        *self
+            .cache
+            .entry(key)
+            .or_insert_with(|| func.dfg.alias_regions.insert(key.into()))
+    }
 }
 
 impl<Offsets> AliasRegions<Offsets>
@@ -292,14 +327,6 @@ where
             offsets,
             cache: std::collections::HashMap::default(),
         }
-    }
-
-    /// Get the alias region for the given key.
-    fn region(&mut self, func: &mut ir::Function, key: AliasRegionKey) -> ir::AliasRegion {
-        *self
-            .cache
-            .entry(key)
-            .or_insert_with(|| func.dfg.alias_regions.insert(key.into()))
     }
 
     /// Get the alias region for accesses into the GC heap.
@@ -1951,9 +1978,8 @@ impl<Offsets> AliasRegions<Offsets>
 where
     Offsets: GetPtrSize,
 {
-    /// Load a host function pointer element out of a builtin-functions array
-    /// (either `VMContext::builtin_functions` or
-    /// `VMComponentContext::builtin_functions`).
+    /// Load a host function pointer element out of the builtin-functions array
+    /// (`VMContext::builtin_functions`)
     pub fn builtin_functions_array_element(
         &mut self,
         cursor: &mut FuncCursor<'_>,
@@ -1982,6 +2008,78 @@ where
             array,
             i32::try_from(offset).unwrap(),
         )
+    }
+}
+
+/// Component builtin-functions array methods.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    /// Load a host function pointer element out of the component
+    /// builtin-functions array (`VMComponentContext::builtins`).
+    pub fn component_builtin_functions_array_element(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        array: ir::Value,
+        builtin: ComponentBuiltinFunctionIndex,
+    ) -> ir::Value {
+        let offset = builtin
+            .index()
+            .checked_mul(self.pointer_type.bytes())
+            .unwrap();
+
+        let region = self.region(
+            cursor.func,
+            AliasRegionKey::Vm {
+                ty: VmType::ComponentBuiltinFunctionsArray,
+                offset,
+            },
+        );
+
+        cursor.ins().load(
+            self.pointer_type,
+            ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(region)),
+            array,
+            i32::try_from(offset).unwrap(),
+        )
+    }
+}
+
+/// Unsafe intrinsic-related methods.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    /// Perform an unsafe intrinsic's load.
+    pub fn unsafe_intrinsic_load(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        ty: ir::Type,
+        base_flags: ir::MemFlagsData,
+        addr: ir::Value,
+    ) -> ir::Value {
+        let region = self.region(cursor.func, AliasRegionKey::UnsafeIntrinsicMemory);
+        cursor
+            .ins()
+            .load(ty, base_flags.with_alias_region(Some(region)), addr, 0)
+    }
+
+    /// Perform an unsafe intrinsic's store.
+    pub fn unsafe_intrinsic_store(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        base_flags: ir::MemFlagsData,
+        val: ir::Value,
+        addr: ir::Value,
+    ) {
+        let region = self.region(cursor.func, AliasRegionKey::UnsafeIntrinsicMemory);
+        cursor
+            .ins()
+            .store(base_flags.with_alias_region(Some(region)), val, addr, 0);
     }
 }
 
@@ -2191,6 +2289,37 @@ impl AliasRegions<VMComponentOffsets<u8>> {
             ir::MemFlagsData::trusted(),
             vmctx,
             self.offsets.may_leave(instance),
+        )
+    }
+}
+
+/// `VMComponentContext`-related methods that need to be generic over `Offsets`
+/// due to the call context.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    /// Load a field at `offset` within a `VMComponentContext`.
+    pub fn vmcomponent_context_generic_load(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        ty: ir::Type,
+        base_flags: ir::MemFlagsData,
+        vmctx: ir::Value,
+        offset: u32,
+    ) -> ir::Value {
+        let region = self.region(
+            cursor.func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMComponentContext,
+                offset,
+            },
+        );
+        cursor.ins().load(
+            ty,
+            base_flags.with_alias_region(Some(region)),
+            vmctx,
+            i32::try_from(offset).unwrap(),
         )
     }
 }

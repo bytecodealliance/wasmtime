@@ -53,6 +53,7 @@
 ;;     region1 = 134217752 "VMStoreContext+0x18"
 ;;     region2 = 2415919128 "VMFunctionImport+0x18"
 ;;     region3 = 134217832 "VMStoreContext+0x68"
+;;     region4 = 3892314112 "UnsafeIntrinsicMemory"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -75,7 +76,7 @@
 ;; @01b0                               v14 = iadd v7, v2
 ;; @01b0                               v16 = select_spectre_guard v13, v15, v14  ; v15 = 0
 ;; @01b0                               trapz v16, heap_oob
-;; @01b0                               v17 = load.i32 notrap aligned v16
+;; @01b0                               v17 = load.i32 notrap aligned region4 v16
 ;; @01bf                               v25, v26 = uadd_overflow v2, v9  ; v9 = 4
 ;; @01bf                               v27 = icmp ugt v25, v3
 ;; @01bf                               v28 = bor v26, v27
@@ -83,7 +84,7 @@
 ;; @01bf                               trapz v31, heap_oob
 ;; @01bc                               v21 = iconst.i32 1
 ;; @01be                               v22 = iadd v17, v21  ; v21 = 1
-;; @01bf                               store notrap aligned v22, v31
+;; @01bf                               store notrap aligned region4 v22, v31
 ;; @01c1                               jump block1
 ;;
 ;;                                 block1:

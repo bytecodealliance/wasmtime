@@ -32,6 +32,8 @@
     )
 )
 ;; function u0:0(i64 vmctx, i64, i64, i64, i64) -> i32 tail {
+;;     region0 = 3892314112 "UnsafeIntrinsicMemory"
+;;
 ;; block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64):
 ;;     v5 = iconst.i64 4
 ;;     v6, v7 = uadd_overflow v3, v5  ; v5 = 4
@@ -41,11 +43,13 @@
 ;;     v10 = iadd v2, v3
 ;;     v12 = select_spectre_guard v9, v11, v10  ; v11 = 0
 ;;     trapz v12, heap_oob
-;;     v13 = load.i32 notrap aligned v12
+;;     v13 = load.i32 notrap aligned region0 v12
 ;;     return v13
 ;; }
 ;;
 ;; function u0:0(i64 vmctx, i64, i64, i64, i64, i32) tail {
+;;     region0 = 3892314112 "UnsafeIntrinsicMemory"
+;;
 ;; block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i32):
 ;;     v6 = iconst.i64 4
 ;;     v7, v8 = uadd_overflow v3, v6  ; v6 = 4
@@ -55,6 +59,6 @@
 ;;     v11 = iadd v2, v3
 ;;     v13 = select_spectre_guard v10, v12, v11  ; v12 = 0
 ;;     trapz v13, heap_oob
-;;     store notrap aligned v5, v13
+;;     store notrap aligned region0 v5, v13
 ;;     return
 ;; }

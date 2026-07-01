@@ -45,8 +45,10 @@
 ;; }
 ;;
 ;; function u0:0(i64 vmctx, i64, i64) -> i32 tail {
+;;     region0 = 3892314112 "UnsafeIntrinsicMemory"
+;;
 ;; block0(v0: i64, v1: i64, v2: i64):
-;;     v3 = load.i8 notrap aligned v2
+;;     v3 = load.i8 notrap aligned region0 v2
 ;;     v4 = uextend.i32 v3
 ;;     return v4
 ;; }
