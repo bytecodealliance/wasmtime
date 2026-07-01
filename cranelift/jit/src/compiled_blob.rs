@@ -110,7 +110,10 @@ impl CompiledBlob {
         let mut next_veneer_idx = 0;
         let relocation_target_addr = |name: &ModuleRelocTarget, addend: Addend| {
             let addend = isize::try_from(addend).unwrap();
-            get_address(name).addr().checked_add_signed(addend).unwrap()
+            get_address(name)
+                .expose_provenance()
+                .checked_add_signed(addend)
+                .unwrap()
         };
 
         for (
