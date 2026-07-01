@@ -793,6 +793,12 @@ where
                     Some((pair, queue))
                 }
             ));
+            let func = match proxy {
+                #[cfg(feature = "p3")]
+                Proxy::P3(guest) => *guest.wasi_http_handler().func_handle().func(),
+                #[cfg(feature = "p2")]
+                Proxy::P2(guest) => *guest.wasi_http_incoming_handler().func_handle().func(),
+            };
             future::poll_fn(|cx| {
                 loop {
                     // First, and crucially first, poll `futures`. This way
@@ -839,6 +845,8 @@ where
                         Poll::Ready(None) | Poll::Pending => {}
                     }
 
+                    let is_ready = accessor.poll_ready_for_concurrent_call(func, cx).is_ready();
+
                     // At this point `futures` is either empty or it's `Pending`
                     // meaning nothing is ready. Note that `Pending` here
                     // doesn't necessarily mean all tasks are blocked on I/O.
@@ -850,6 +858,7 @@ where
                     // at all or all our tasks really are blocked on I/O.
                     self.set_available(
                         may_accept
+                            && is_ready
                             && match dropper
                                 .state
                                 .should_accept_request(futures.len(), reuse_count)
@@ -905,7 +914,7 @@ where
                     // if we're not actually capable of accepting any more work,
                     // then we're completely done and it's time to exit this
                     // worker.
-                    if !may_accept {
+                    if !(may_accept && is_ready) {
                         break Poll::Ready(Ok(()));
                     }
 

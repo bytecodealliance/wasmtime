@@ -32,6 +32,16 @@ impl Backpressure for Component {
     fn dec_backpressure() {
         wit_bindgen::backpressure_dec();
     }
+    async fn inc_then_later_dec_backpressure() {
+        wit_bindgen::backpressure_inc();
+
+        wit_bindgen::spawn_local(async {
+            for _ in 0..10 {
+                wit_bindgen::yield_async().await;
+            }
+            wit_bindgen::backpressure_dec();
+        });
+    }
 }
 
 // Unused function; required since this file is built as a `bin`:

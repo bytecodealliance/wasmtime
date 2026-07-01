@@ -63,6 +63,7 @@ interface backpressure {
   set-backpressure: func(enabled: bool);
   inc-backpressure: func();
   dec-backpressure: func();
+  inc-then-later-dec-backpressure: async func();
 }
 
 interface transmit {
