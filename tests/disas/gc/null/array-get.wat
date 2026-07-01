@@ -32,20 +32,20 @@
 ;; @0022                               v11 = icmp ult v3, v10
 ;; @0022                               trapz v11, user17
 ;; @0022                               v13 = uextend.i64 v10
-;;                                     v32 = iconst.i64 3
-;;                                     v33 = ishl v13, v32  ; v32 = 3
+;;                                     v33 = iconst.i64 3
+;;                                     v34 = ishl v13, v33  ; v33 = 3
 ;; @0022                               v15 = iconst.i64 32
-;; @0022                               v16 = ushr v33, v15  ; v15 = 32
+;; @0022                               v16 = ushr v34, v15  ; v15 = 32
 ;; @0022                               trapnz v16, user2
-;;                                     v42 = iconst.i32 3
-;;                                     v43 = ishl v10, v42  ; v42 = 3
+;;                                     v41 = iconst.i32 3
+;;                                     v42 = ishl v10, v41  ; v41 = 3
 ;; @0022                               v18 = iconst.i32 16
-;; @0022                               v19 = uadd_overflow_trap v43, v18, user2  ; v18 = 16
+;; @0022                               v19 = uadd_overflow_trap v42, v18, user2  ; v18 = 16
 ;; @0022                               v23 = uadd_overflow_trap v2, v19, user2
 ;; @0022                               v24 = uextend.i64 v23
 ;; @0022                               v27 = iadd v6, v24
-;;                                     v49 = ishl v3, v42  ; v42 = 3
-;; @0022                               v22 = iadd v49, v18  ; v18 = 16
+;;                                     v47 = ishl v3, v41  ; v41 = 3
+;; @0022                               v22 = iadd v47, v18  ; v18 = 16
 ;; @0022                               v28 = isub v19, v22
 ;; @0022                               v29 = uextend.i64 v28
 ;; @0022                               v30 = isub v27, v29
