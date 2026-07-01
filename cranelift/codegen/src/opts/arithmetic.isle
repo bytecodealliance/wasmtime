@@ -180,8 +180,6 @@
 ;; `iconst` of that type.
 (rule (simplify (imul ty x (iconst _ (imm64_power_of_two c))))
       (ishl ty x (iconst ty (imm64 c))))
-(rule (simplify (imul ty (iconst _ (imm64_power_of_two c)) x))
-      (ishl ty x (iconst ty (imm64 c))))
 
 ;; fneg(fneg(x)) == x.
 (rule (simplify (fneg ty (fneg ty x))) (subsume x))
