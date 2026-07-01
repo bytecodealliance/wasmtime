@@ -809,6 +809,30 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
+    fn validate_frame_layout(frame_layout: &FrameLayout, guard_size: u32) -> CodegenResult<()> {
+        let rsp_relative: u64 =
+            frame_layout.active_size() as u64 + frame_layout.setup_area_size as u64;
+        let rbp_relative: u64 =
+            frame_layout.tail_args_size as u64 + frame_layout.setup_area_size as u64;
+
+        // The stack-probe loop rounds the frame size up to the next guard-page
+        // boundary (align_to in emit.rs) before encoding it as a 32-bit immediate.
+        // A frame size just under the limit can be pushed over it by this rounding,
+        // so reserve a full guard-page margin.
+        let probe_margin = guard_size as u64;
+
+        if rsp_relative.saturating_add(probe_margin) > i32::MAX as u64
+            || rbp_relative > i32::MAX as u64
+        {
+            return Err(crate::CodegenError::Unsupported(
+                "stack frame size exceeds the 2GB limit supported by the x64 backend \
+             (see rust-lang/rustc_codegen_cranelift#1656)"
+                    .to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -1342,4 +1366,60 @@ const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
     }
 
     env
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_frame_layout(
+        tail_args_size: u32,
+        setup_area_size: u32,
+        clobber_size: u32,
+        fixed_frame_storage_size: u32,
+        outgoing_args_size: u32,
+    ) -> FrameLayout {
+        FrameLayout {
+            word_bytes: 8,
+            incoming_args_size: tail_args_size,
+            tail_args_size,
+            setup_area_size,
+            clobber_size,
+            fixed_frame_storage_size,
+            stackslots_size: 0,
+            outgoing_args_size,
+            clobbered_callee_saves: Vec::new(),
+            function_calls: FunctionCalls::None,
+        }
+    }
+
+    const GUARD_SIZE: u32 = 4096;
+
+    #[test]
+    fn validate_frame_layout_accepts_normal_frame() {
+        let layout = make_frame_layout(64, 16, 64, 1024, 32);
+        assert!(X64ABIMachineSpec::validate_frame_layout(&layout, GUARD_SIZE).is_ok());
+    }
+
+    #[test]
+    fn validate_frame_layout_rejects_oversized_fixed_storage() {
+        let layout = make_frame_layout(64, 16, 64, 2_147_483_647, 32);
+        let result = X64ABIMachineSpec::validate_frame_layout(&layout, GUARD_SIZE);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_frame_layout_rejects_frame_pushed_over_by_guard_margin() {
+        let just_under = (i32::MAX as u32) - 2000;
+        let layout = make_frame_layout(64, 16, 64, just_under, 0);
+        let result = X64ABIMachineSpec::validate_frame_layout(&layout, GUARD_SIZE);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_frame_layout_rejects_oversized_tail_args() {
+        let layout = make_frame_layout(2_147_483_647, 16, 0, 0, 0);
+        let result = X64ABIMachineSpec::validate_frame_layout(&layout, GUARD_SIZE);
+        assert!(result.is_err());
+    }
 }

@@ -555,6 +555,13 @@ pub trait ABIMachineSpec {
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]>;
 
+    /// Validate that the computed frame layout is supported by this backend.
+    /// Default: always succeeds. Backends with encoding limits (e.g. 32-bit
+    /// immediates) should override this to reject layouts they cannot emit.
+    fn validate_frame_layout(_frame_layout: &FrameLayout, _guard_size: u32) -> CodegenResult<()> {
+        Ok(())
+    }
+
     /// Generate a memcpy invocation. Used to set up struct
     /// args. Takes `src`, `dst` as read-only inputs and passes a temporary
     /// allocator.
