@@ -213,7 +213,13 @@ impl JITModule {
         }
     }
 
-    fn get_address(&self, name: &ModuleRelocTarget) -> *const u8 {
+    /// Get the address that the given [`ModuleRelocTarget`] would resolve to.
+    ///
+    /// For locally defined functions and data objects this is equivalent to
+    /// [`Self::get_finalized_function`] cq [`Self::get_finalized_data`], while
+    /// for external functions and data objects this will iterate through the
+    /// registered symbol lookup functions until one matches.
+    pub fn get_address(&self, name: &ModuleRelocTarget) -> *const u8 {
         match name {
             ModuleRelocTarget::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
