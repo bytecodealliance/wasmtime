@@ -75,8 +75,8 @@ block0(v0: i64, v1: i32):
 ;   sxtw x7, w1
 ;   add x7, x7, #32
 ;   add x7, x7, x0
-;   add x6, x7, #4
-;   ldr w0, [x6, x7]
+;   add x7, x7, x7
+;   ldr w0, [x7, #4]
 ;   ret
 ;
 ; Disassembled:
@@ -84,8 +84,8 @@ block0(v0: i64, v1: i32):
 ;   sxtw x7, w1
 ;   add x7, x7, #0x20
 ;   add x7, x7, x0
-;   add x6, x7, #4
-;   ldr w0, [x6, x7] ; trap: heap_oob
+;   add x7, x7, x7
+;   ldr w0, [x7, #4] ; trap: heap_oob
 ;   ret
 
 function %f9(i64, i64, i64) -> i32 {
@@ -101,15 +101,15 @@ block0(v0: i64, v1: i64, v2: i64):
 ; VCode:
 ; block0:
 ;   add x6, x0, x1
-;   add x5, x6, #48
-;   ldr w0, [x5, x2]
+;   add x6, x6, x2
+;   ldr w0, [x6, #48]
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x6, x0, x1
-;   add x5, x6, #0x30
-;   ldr w0, [x5, x2] ; trap: heap_oob
+;   add x6, x6, x2
+;   ldr w0, [x6, #0x30] ; trap: heap_oob
 ;   ret
 
 function %f10(i64, i64, i64) -> i32 {
@@ -124,18 +124,16 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   add x7, x0, x1
-;   movz x5, #4100
-;   add x7, x7, x5
-;   ldr w0, [x7, x2]
+;   add x6, x0, x1
+;   add x6, x6, x2
+;   ldr w0, [x6, #4100]
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   add x7, x0, x1
-;   mov x5, #0x1004
-;   add x7, x7, x5
-;   ldr w0, [x7, x2] ; trap: heap_oob
+;   add x6, x0, x1
+;   add x6, x6, x2
+;   ldr w0, [x6, #0x1004] ; trap: heap_oob
 ;   ret
 
 function %f10() -> i32 {
