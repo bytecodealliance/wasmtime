@@ -163,17 +163,6 @@ impl Func {
         Ok(())
     }
 
-    /// Returns a future which will resolve once the component instance
-    /// corresponding to this function is ready to run a concurrent call without
-    /// queuing it (i.e. does not have backpressure enabled and does not have a
-    /// sync call in progress).
-    pub async fn ready_for_concurrent_call<T: 'static>(
-        self,
-        accessor: impl AsAccessor<Data = T>,
-    ) -> Result<()> {
-        concurrent::ready_to_call(accessor.as_accessor(), self).await
-    }
-
     /// Calls `concurrent::prepare_call` with monomorphized functions for
     /// lowering the parameters and lifting the result.
     fn prepare_call_dynamic<'a, T: Send + 'static>(

@@ -539,8 +539,8 @@ where
     /// otherwise returns `Poll::Pending`. If pending is returned then whenever
     /// the last remaining "interesting" task has exited the provided context's
     /// waker will be notified. Note that only the waker passed to the last call
-    /// to `poll_no_interesting_tasks` will be notified, so this is only
-    /// appropriate to use one-at-a-time.
+    /// to `poll_no_interesting_tasks` for the store will be notified, so this
+    /// is only appropriate to use once-at-a-time per store.
     ///
     /// The component model specification, as of this current date, does not
     /// have a distinction between "interesting" tasks and not. The current
@@ -575,6 +575,39 @@ where
                 Poll::Ready(())
             } else {
                 state.interesting_tasks_empty_waker = Some(cx.waker().clone());
+                Poll::Pending
+            }
+        })
+    }
+
+    /// Poll to see if the component instance corresponding to the specified
+    /// function is ready to run a concurrent call without queuing it (i.e. does
+    /// not have backpressure enabled and does not have a sync call in
+    /// progress).
+    ///
+    /// Returns `Poll::Ready(())` if the component instance is ready to run a
+    /// concurrent call, and otherwise returns `Poll::Pending`.  If pending is
+    /// returned then whenever the instance becomes ready for a call the
+    /// provided context's waker will be notified.  Note that only the waker
+    /// passed to the last call to `poll_ready_for_concurrent_call` for the
+    /// store will be notified (regardless of whether the same or different
+    /// `Func` is specified relative to earlier calls), so this is only
+    /// appropriate to use once-at-a-time per store.  Also note that the waker
+    /// may be notified when _any_ instance becomes callable (i.e. not
+    /// necessarily the last one polled), so this function must be called again
+    /// to determine if the instance of interest is ready.
+    pub fn poll_ready_for_concurrent_call(&self, func: Func, cx: &mut Context<'_>) -> Poll<()> {
+        self.with(|mut access| {
+            let store = access.as_context_mut().0;
+            let (_, _, _, raw_options) = func.abi_info(store);
+            let instance = func.instance().runtime_instance(raw_options.instance);
+            let state = store.instance_state(instance).concurrent_state();
+            if state.backpressure == 0 {
+                Poll::Ready(())
+            } else {
+                store
+                    .concurrent_state_mut_without_forcing_current_thread()
+                    .ready_for_concurrent_call_waker = Some(cx.waker().clone());
                 Poll::Pending
             }
         })
@@ -1983,8 +2016,8 @@ impl StoreOpaque {
     /// Iterate over `InstanceState::pending`, moving any ready items into the
     /// "high priority" work item queue.
     ///
-    /// Also, wake any wakers interested in the transition from not ready to
-    /// ready.
+    /// Also, notify `ConcurrentState::ready_for_concurrent_call_waker` if
+    /// present.
     ///
     /// See `GuestCall::is_ready` for details.
     fn partition_pending(&mut self, instance: RuntimeInstance) -> Result<()> {
@@ -2003,18 +2036,12 @@ impl StoreOpaque {
             }
         }
 
-        for waker in self
-            .instance_state(instance)
-            .concurrent_state()
-            .wakers
-            .get_mut()
-            .iter_mut()
+        if let Some(waker) = self
+            .concurrent_state_mut()?
+            .ready_for_concurrent_call_waker
+            .take()
         {
-            if let Some(waker) = waker.downcast_ref::<Waker>() {
-                waker.wake_by_ref();
-            } else {
-                bail_bug!("`ConcurrentInstanceState::wakers` should contain only `Waker`s");
-            }
+            waker.wake();
         }
 
         Ok(())
@@ -5166,7 +5193,6 @@ pub struct ConcurrentInstanceState {
     /// Pending calls for this instance which require `Self::backpressure` to be
     /// `true` and/or `Self::do_not_enter` to be false before they can proceed.
     pending: BTreeMap<QualifiedThreadId, GuestCallKind>,
-    wakers: AlwaysMut<ResourceTable>,
 }
 
 impl ConcurrentInstanceState {
@@ -5278,6 +5304,12 @@ pub struct ConcurrentState {
     ///
     /// Used in the implementation of `Accessor::poll_no_interesting_tasks`.
     interesting_tasks_empty_waker: Option<Waker>,
+
+    /// Single waker to notify when a component instance goes from
+    /// not-concurrently-callable to concurrently-callable.
+    ///
+    /// Used in the implementation of `Accessor::poll_ready_for_concurrent_call`.
+    ready_for_concurrent_call_waker: Option<Waker>,
 }
 
 impl Default for ConcurrentState {
@@ -5294,6 +5326,7 @@ impl Default for ConcurrentState {
             global_error_context_ref_counts: BTreeMap::new(),
             interesting_tasks: 0,
             interesting_tasks_empty_waker: None,
+            ready_for_concurrent_call_waker: None,
         }
     }
 }
@@ -5392,6 +5425,7 @@ impl ConcurrentState {
             global_error_context_ref_counts: _,
             interesting_tasks: _,
             interesting_tasks_empty_waker: _,
+            ready_for_concurrent_call_waker: _,
         } = self;
 
         for entry in table.get_mut().iter_mut() {
@@ -5911,71 +5945,5 @@ fn queue_call0<T: 'static>(
             callback,
             post_return.map(SendSyncPtr::new),
         )
-    }
-}
-
-pub(crate) struct ReadyToCall<'a, T: 'static, D: HasData + ?Sized> {
-    accessor: &'a Accessor<T, D>,
-    func: Func,
-    waker_key: Option<Resource<Waker>>,
-}
-
-impl<T, D: HasData + ?Sized> Future for ReadyToCall<'_, T, D> {
-    type Output = Result<()>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.accessor.with(|mut store| {
-            let store = store.as_context_mut();
-            let (_, _, _, raw_options) = self.func.abi_info(store.0);
-            let instance = self.func.instance().runtime_instance(raw_options.instance);
-            let state = store.0.instance_state(instance).concurrent_state();
-            if state.backpressure == 0 {
-                Poll::Ready(Ok(()))
-            } else {
-                let waker = cx.waker().clone();
-                if let Some(key) = &self.waker_key {
-                    *state.wakers.get_mut().get_mut(key).unwrap() = waker;
-                } else {
-                    self.waker_key = Some(
-                        state
-                            .wakers
-                            .get_mut()
-                            .push(waker)
-                            .map_err(crate::Error::from)?,
-                    );
-                }
-                Poll::Pending
-            }
-        })
-    }
-}
-
-impl<T, D: HasData + ?Sized> Drop for ReadyToCall<'_, T, D> {
-    fn drop(&mut self) {
-        if let Some(key) = self.waker_key.take() {
-            self.accessor.with(|mut store| {
-                let store = store.as_context_mut();
-                let (_, _, _, raw_options) = self.func.abi_info(store.0);
-                let instance = self.func.instance().runtime_instance(raw_options.instance);
-                _ = store
-                    .0
-                    .instance_state(instance)
-                    .concurrent_state()
-                    .wakers
-                    .get_mut()
-                    .delete(key);
-            });
-        }
-    }
-}
-
-pub(crate) fn ready_to_call<'a, T, D: HasData + ?Sized>(
-    accessor: &'a Accessor<T, D>,
-    func: Func,
-) -> ReadyToCall<'a, T, D> {
-    ReadyToCall {
-        accessor,
-        func,
-        waker_key: None,
     }
 }

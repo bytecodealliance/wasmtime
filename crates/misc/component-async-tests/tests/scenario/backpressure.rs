@@ -67,13 +67,7 @@ pub async fn async_backpressure_callee() -> Result<()> {
                 .call_inc_then_later_dec_backpressure(accessor)
                 .await?;
 
-            let mut instance = Some(Box::pin(
-                guest
-                    .local_local_run()
-                    .func_run()
-                    .func()
-                    .ready_for_concurrent_call(accessor),
-            ));
+            let func = *guest.local_local_run().func_run().func();
 
             let mut a = Some(Box::pin(guest.local_local_run().call_run(accessor)));
             let mut b = Some(Box::pin(guest.local_local_run().call_run(accessor)));
@@ -81,7 +75,7 @@ pub async fn async_backpressure_callee() -> Result<()> {
 
             let mut backpressure_is_set = true;
             future::poll_fn(move |cx| {
-                let instance_ready = is_ready(cx, &mut instance);
+                let instance_ready = accessor.poll_ready_for_concurrent_call(func, cx).is_ready();
                 let a_ready = is_ready(cx, &mut a);
                 let b_ready = is_ready(cx, &mut b);
                 let c_ready = is_ready(cx, &mut c);

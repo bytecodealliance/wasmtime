@@ -31,7 +31,7 @@ use std::sync::{
 use std::task::{Context, Poll};
 use std::time::Instant;
 use tokio::sync::Notify;
-use wasmtime::component::{Accessor, GuestTaskId, HasData, Resource, TypedFuncCallConcurrent};
+use wasmtime::component::{Accessor, GuestTaskId, Resource, TypedFuncCallConcurrent};
 #[cfg(feature = "p2")]
 use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, Result, Store, StoreContextMut, format_err};
@@ -793,7 +793,12 @@ where
                     Some((pair, queue))
                 }
             ));
-            let mut ready = pin!(when_ready(accessor, proxy));
+            let func = match proxy {
+                #[cfg(feature = "p3")]
+                Proxy::P3(guest) => *guest.wasi_http_handler().func_handle().func(),
+                #[cfg(feature = "p2")]
+                Proxy::P2(guest) => *guest.wasi_http_incoming_handler().func_handle().func(),
+            };
             future::poll_fn(|cx| {
                 loop {
                     // First, and crucially first, poll `futures`. This way
@@ -840,12 +845,7 @@ where
                         Poll::Ready(None) | Poll::Pending => {}
                     }
 
-                    ready.set(when_ready(accessor, proxy));
-                    let is_ready = match ready.as_mut().poll(cx) {
-                        Poll::Ready(Ok(())) => true,
-                        Poll::Ready(Err(error)) => break Poll::Ready(Err(error)),
-                        Poll::Pending => false,
-                    };
+                    let is_ready = accessor.poll_ready_for_concurrent_call(func, cx).is_ready();
 
                     // At this point `futures` is either empty or it's `Pending`
                     // meaning nothing is ready. Note that `Pending` here
@@ -1407,29 +1407,6 @@ impl<'a, T: Send> Prepared<'a, T> {
 
                 Ok(sent)
             }
-        }
-    }
-}
-
-async fn when_ready<T, D: HasData>(accessor: &Accessor<T, D>, proxy: &Proxy) -> Result<()> {
-    match proxy {
-        #[cfg(feature = "p3")]
-        Proxy::P3(guest) => {
-            guest
-                .wasi_http_handler()
-                .func_handle()
-                .func()
-                .ready_for_concurrent_call(accessor)
-                .await
-        }
-        #[cfg(feature = "p2")]
-        Proxy::P2(guest) => {
-            guest
-                .wasi_http_incoming_handler()
-                .func_handle()
-                .func()
-                .ready_for_concurrent_call(accessor)
-                .await
         }
     }
 }
