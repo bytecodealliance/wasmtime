@@ -15,9 +15,25 @@ inputs:
 runs:
   using: composite
   steps:
-    # Docker-recommended setup.
+    # Pre-pull the buildkit image that the `docker-container` driver below boots
+    # into. Booting the builder in `setup-buildx-action` pulls this image from
+    # Docker Hub, which is flaky enough to spuriously fail CI, and that action
+    # has no retry option. Pull it here with retries so that the boot below
+    # finds the image already present locally and doesn't need to hit the
+    # network. Note that `driver-opts` below is used to ensure that the two
+    # images in these steps are the same.
+    - name: Pull buildkit image
+      shell: bash
+      run: |
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          docker pull moby/buildkit:buildx-stable-1 && break
+          sleep 5
+        done
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
+      with:
+        driver-opts: image=moby/buildkit:buildx-stable-1
 
     # We'll be using this cache key and the "local" caching mode of docker. This
     # allows pretty fine-grained views into what's being cache. Experimentation
