@@ -228,3 +228,19 @@ TEST(Exception, WasmThrowHostCatch) {
   auto f0 = exn->field(cx, 0).unwrap();
   EXPECT_EQ(f0.i32(), 77);
 }
+
+TEST(ExnRef, NullAndMethods) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+
+  wasmtime_exnref_t null_raw;
+  wasmtime_exnref_set_null(&null_raw);
+  ExnRef null(null_raw);
+  EXPECT_FALSE(null.tag(store));
+  EXPECT_EQ(null.field_count(store), 0);
+  EXPECT_FALSE(null.field(store, 0));
+
+  store.context().throw_exception(null);
+}

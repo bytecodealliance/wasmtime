@@ -263,6 +263,20 @@ TEST(ArrayRef, UpcastAndDowncast) {
   EXPECT_FALSE(aty->element_type().is_mutable());
 }
 
+TEST(ArrayRef, NullAndMethods) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+
+  wasmtime_arrayref_t null_raw;
+  wasmtime_arrayref_set_null(&null_raw);
+  ArrayRef null(null_raw);
+  EXPECT_FALSE(null.len(store));
+  EXPECT_FALSE(null.get(store, 0));
+  EXPECT_FALSE(null.set(store, 0, 0));
+}
+
 TEST(AnyRef, DowncastI31) {
   Config config;
   config.wasm_gc(true);
@@ -342,4 +356,18 @@ TEST(AnyRef, DowncastArray) {
   auto len = arr2.len(cx);
   ASSERT_TRUE(len);
   EXPECT_EQ(len.ok(), 2u);
+}
+
+TEST(StructRef, NullAndMethods) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+
+  wasmtime_structref_t null_raw;
+  wasmtime_structref_set_null(&null_raw);
+  StructRef null(null_raw);
+  // EXPECT_FALSE(null.len(store));
+  EXPECT_FALSE(null.field(store, 0));
+  EXPECT_FALSE(null.set_field(store, 0, 0));
 }
