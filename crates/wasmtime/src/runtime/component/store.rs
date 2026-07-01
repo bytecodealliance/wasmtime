@@ -5,7 +5,7 @@ use crate::runtime::vm::component::{
     CallContext, ComponentInstance, HandleTable, OwnedComponentInstance,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
-use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
+use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut};
 use core::pin::Pin;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
@@ -466,7 +466,7 @@ impl StoreOpaque {
                 None => Ok(None),
             },
             #[cfg(feature = "component-model-async")]
-            ComponentTaskState::Concurrent(_) => bail_bug!("should not be reachable"),
+            ComponentTaskState::Concurrent(_) => crate::bail_bug!("should not be reachable"),
         }
     }
 }
