@@ -774,6 +774,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn gen_clobber_save(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        _isa_flags: &aarch64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let (clobbered_int, clobbered_vec) = frame_layout.clobbered_callee_saves_by_class();
@@ -1020,6 +1021,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
+        _isa_flags: &aarch64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();

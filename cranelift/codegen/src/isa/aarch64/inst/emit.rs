@@ -3661,6 +3661,7 @@ fn emit_return_call_common_sequence<T>(
     for inst in AArch64MachineDeps::gen_clobber_restore(
         CallConv::Tail,
         &emit_info.flags,
+        &emit_info.isa_flags,
         state.frame_layout(),
     ) {
         inst.emit(sink, emit_info, state);

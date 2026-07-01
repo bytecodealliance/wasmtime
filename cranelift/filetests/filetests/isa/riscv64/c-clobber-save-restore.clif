@@ -1,0 +1,452 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_c
+
+;; Tests that the split SP adjustment in clobber save/restore keeps
+;; callee-save store offsets within c.sdsp's 504-byte encoding limit.
+;;
+;; Without the split, a single SP decrement of (clobber_size + frame_size)
+;; would place callee-save stores at offsets >= frame_size from SP —
+;; well beyond 504 bytes for any non-trivial frame — falling back to
+;; uncompressed 4-byte sd/ld instructions.
+;;
+;; With the split, SP is first decremented by clobber_size alone, stores
+;; go at offsets 0..clobber_size (always ≤ 504), then a second decrement
+;; allocates the remaining frame. All stores compress to 2-byte c.sdsp.
+
+;; Case 1: Large frame (100KB). Without the split, callee-save offsets
+;; would start at ~100000. With the split, offsets are 0-56.
+function %large_frame(i64, i64, i64, i64, i64, i64, i64, i64) -> i64 system_v {
+    fn0 = colocated %external_call() -> i64 system_v
+ss0 = explicit_slot 100000
+
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64):
+    v8 = call fn0()
+    v9 = iadd v0, v1
+    v10 = iadd v9, v2
+    v11 = iadd v10, v3
+    v12 = iadd v11, v4
+    v13 = iadd v12, v5
+    v14 = iadd v13, v6
+    v15 = iadd v14, v7
+    v16 = iadd v15, v8
+    return v16
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-64
+;   sd s1,56(sp)
+;   sd s2,48(sp)
+;   sd s3,40(sp)
+;   sd s4,32(sp)
+;   sd s5,24(sp)
+;   sd s6,16(sp)
+;   sd s8,8(sp)
+;   sd s10,0(sp)
+;   lui t6,-24
+;   addi t6,t6,-1696
+;   add sp,sp,t6
+; block0:
+;   mv s1,a2
+;   mv s2,a7
+;   mv s3,a1
+;   mv s4,a6
+;   mv s5,a0
+;   mv s6,a5
+;   mv s8,a4
+;   mv s10,a3
+;   call %external_call
+;   mv a1,s3
+;   mv t0,a0
+;   mv a0,s5
+;   add a0,a0,a1
+;   mv a2,s1
+;   add a0,a0,a2
+;   mv a3,s10
+;   add a0,a0,a3
+;   mv a4,s8
+;   add a0,a0,a4
+;   mv a5,s6
+;   add a0,a0,a5
+;   mv a6,s4
+;   add a0,a0,a6
+;   mv a7,s2
+;   add a0,a0,a7
+;   mv a1,t0
+;   add a0,a0,a1
+;   lui t6,24
+;   addi t6,t6,1696
+;   add sp,sp,t6
+;   ld s1,56(sp)
+;   ld s2,48(sp)
+;   ld s3,40(sp)
+;   ld s4,32(sp)
+;   ld s5,24(sp)
+;   ld s6,16(sp)
+;   ld s8,8(sp)
+;   ld s10,0(sp)
+;   addi sp,sp,64
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x40
+;   c.sdsp s1, 0x38(sp)
+;   c.sdsp s2, 0x30(sp)
+;   c.sdsp s3, 0x28(sp)
+;   c.sdsp s4, 0x20(sp)
+;   c.sdsp s5, 0x18(sp)
+;   c.sdsp s6, 0x10(sp)
+;   c.sdsp s8, 8(sp)
+;   c.sdsp s10, 0(sp)
+;   c.lui t6, 0xfffe8
+;   addi t6, t6, -0x6a0
+;   c.add sp, t6
+; block1: ; offset 0x22
+;   c.mv s1, a2
+;   c.mv s2, a7
+;   c.mv s3, a1
+;   c.mv s4, a6
+;   c.mv s5, a0
+;   c.mv s6, a5
+;   c.mv s8, a4
+;   c.mv s10, a3
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %external_call 0
+;   jalr ra
+;   c.mv a1, s3
+;   c.mv t0, a0
+;   c.mv a0, s5
+;   c.add a0, a1
+;   c.mv a2, s1
+;   c.add a0, a2
+;   c.mv a3, s10
+;   c.add a0, a3
+;   c.mv a4, s8
+;   c.add a0, a4
+;   c.mv a5, s6
+;   c.add a0, a5
+;   c.mv a6, s4
+;   c.add a0, a6
+;   c.mv a7, s2
+;   c.add a0, a7
+;   c.mv a1, t0
+;   c.add a0, a1
+;   c.lui t6, 0x18
+;   addi t6, t6, 0x6a0
+;   c.add sp, t6
+;   c.ldsp s1, 0x38(sp)
+;   c.ldsp s2, 0x30(sp)
+;   c.ldsp s3, 0x28(sp)
+;   c.ldsp s4, 0x20(sp)
+;   c.ldsp s5, 0x18(sp)
+;   c.ldsp s6, 0x10(sp)
+;   c.ldsp s8, 8(sp)
+;   c.ldsp s10, 0(sp)
+;   c.addi16sp sp, 0x40
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+;; Case 2: Minimal frame just over 504 bytes (512). Even a small
+;; overshoot prevents c.sdsp without the split.
+function %just_over_limit(i64, i64) -> i64 system_v {
+    fn0 = colocated %external_call() -> i64 system_v
+ss0 = explicit_slot 512
+
+block0(v0: i64, v1: i64):
+    v2 = call fn0()
+    v3 = iadd v0, v1
+    v4 = iadd v3, v2
+    return v4
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+;   sd s1,8(sp)
+;   sd s2,0(sp)
+;   addi sp,sp,-512
+; block0:
+;   mv s1,a1
+;   mv s2,a0
+;   call %external_call
+;   mv a1,s2
+;   mv a2,s1
+;   add a1,a1,a2
+;   add a0,a1,a0
+;   addi sp,sp,512
+;   ld s1,8(sp)
+;   ld s2,0(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x10
+;   c.sdsp s1, 8(sp)
+;   c.sdsp s2, 0(sp)
+;   c.addi16sp sp, -0x200
+; block1: ; offset 0x10
+;   c.mv s1, a1
+;   c.mv s2, a0
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %external_call 0
+;   jalr ra
+;   c.mv a1, s2
+;   c.mv a2, s1
+;   c.add a1, a2
+;   c.add a0, a1
+;   addi sp, sp, 0x200
+;   c.ldsp s1, 8(sp)
+;   c.ldsp s2, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+;; Case 3: Maximum callee-saved registers (all s1-s11 + float fs0-fs11)
+;; with a large frame, to stress the split with the widest clobber area.
+function %max_clobbers(i64, i64, i64, i64, i64, i64, i64, i64) -> i64 system_v {
+    fn0 = colocated %use_all(f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64) -> i64 system_v
+ss0 = explicit_slot 4096
+
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64):
+    v8 = f64const 0x1.0
+    v9 = f64const 0x2.0
+    v10 = f64const 0x3.0
+    v11 = f64const 0x4.0
+    v12 = f64const 0x5.0
+    v13 = f64const 0x6.0
+    v14 = f64const 0x7.0
+    v15 = f64const 0x8.0
+    v16 = f64const 0x9.0
+    v17 = f64const 0xa.0
+    v18 = f64const 0xb.0
+    v19 = call fn0(v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18)
+    v20 = iadd v0, v1
+    v21 = iadd v20, v2
+    v22 = iadd v21, v3
+    v23 = iadd v22, v4
+    v24 = iadd v23, v5
+    v25 = iadd v24, v6
+    v26 = iadd v25, v7
+    v27 = iadd v26, v19
+    return v27
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-64
+;   sd s1,56(sp)
+;   sd s2,48(sp)
+;   sd s3,40(sp)
+;   sd s4,32(sp)
+;   sd s5,24(sp)
+;   sd s6,16(sp)
+;   sd s7,8(sp)
+;   sd s8,0(sp)
+;   lui t6,-1
+;   addi t6,t6,-32
+;   add sp,sp,t6
+; block0:
+;   mv s1,a7
+;   mv s2,a6
+;   mv s3,a5
+;   mv s4,a4
+;   mv s5,a3
+;   mv s6,a2
+;   mv s7,a1
+;   mv s8,a0
+;   lui a0,1023
+;   slli a0,a0,40
+;   fmv.d.x fa0,a0
+;   lui a0,1
+;   slli a0,a0,50
+;   fmv.d.x fa1,a0
+;   lui a0,2049
+;   slli a0,a0,39
+;   fmv.d.x fa2,a0
+;   lui a0,1025
+;   slli a0,a0,40
+;   fmv.d.x fa3,a0
+;   lui a0,4101
+;   slli a0,a0,38
+;   fmv.d.x fa4,a0
+;   lui a0,2051
+;   slli a0,a0,39
+;   fmv.d.x fa5,a0
+;   lui a0,4103
+;   slli a0,a0,38
+;   fmv.d.x fa6,a0
+;   lui a0,513
+;   slli a0,a0,41
+;   fmv.d.x fa7,a0
+;   lui a0,8209
+;   slli a0,a0,37
+;   fmv.d.x ft0,a0
+;   lui a0,4105
+;   slli a0,a0,38
+;   fmv.d.x ft1,a0
+;   lui a0,8211
+;   slli a0,a0,37
+;   fmv.d.x ft2,a0
+;   fsd ft0,0(sp)
+;   fsd ft1,8(sp)
+;   fsd ft2,16(sp)
+;   call %use_all
+;   mv a1,s8
+;   mv a2,s7
+;   add a1,a1,a2
+;   mv a2,s6
+;   add a1,a1,a2
+;   mv a3,s5
+;   add a1,a1,a3
+;   mv a4,s4
+;   add a1,a1,a4
+;   mv a5,s3
+;   add a1,a1,a5
+;   mv a6,s2
+;   add a1,a1,a6
+;   mv a7,s1
+;   add a1,a1,a7
+;   add a0,a1,a0
+;   lui t6,1
+;   addi t6,t6,32
+;   add sp,sp,t6
+;   ld s1,56(sp)
+;   ld s2,48(sp)
+;   ld s3,40(sp)
+;   ld s4,32(sp)
+;   ld s5,24(sp)
+;   ld s6,16(sp)
+;   ld s7,8(sp)
+;   ld s8,0(sp)
+;   addi sp,sp,64
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x40
+;   c.sdsp s1, 0x38(sp)
+;   c.sdsp s2, 0x30(sp)
+;   c.sdsp s3, 0x28(sp)
+;   c.sdsp s4, 0x20(sp)
+;   c.sdsp s5, 0x18(sp)
+;   c.sdsp s6, 0x10(sp)
+;   c.sdsp s7, 8(sp)
+;   c.sdsp s8, 0(sp)
+;   c.lui t6, 0xfffff
+;   c.addi t6, -0x20
+;   c.add sp, t6
+; block1: ; offset 0x20
+;   c.mv s1, a7
+;   c.mv s2, a6
+;   c.mv s3, a5
+;   c.mv s4, a4
+;   c.mv s5, a3
+;   c.mv s6, a2
+;   c.mv s7, a1
+;   c.mv s8, a0
+;   lui a0, 0x3ff
+;   c.slli a0, 0x28
+;   fmv.d.x fa0, a0
+;   c.lui a0, 1
+;   c.slli a0, 0x32
+;   fmv.d.x fa1, a0
+;   lui a0, 0x801
+;   c.slli a0, 0x27
+;   fmv.d.x fa2, a0
+;   lui a0, 0x401
+;   c.slli a0, 0x28
+;   fmv.d.x fa3, a0
+;   lui a0, 0x1005
+;   c.slli a0, 0x26
+;   fmv.d.x fa4, a0
+;   lui a0, 0x803
+;   c.slli a0, 0x27
+;   fmv.d.x fa5, a0
+;   lui a0, 0x1007
+;   c.slli a0, 0x26
+;   fmv.d.x fa6, a0
+;   lui a0, 0x201
+;   c.slli a0, 0x29
+;   fmv.d.x fa7, a0
+;   lui a0, 0x2011
+;   c.slli a0, 0x25
+;   fmv.d.x ft0, a0
+;   lui a0, 0x1009
+;   c.slli a0, 0x26
+;   fmv.d.x ft1, a0
+;   lui a0, 0x2013
+;   c.slli a0, 0x25
+;   fmv.d.x ft2, a0
+;   c.fsdsp ft0, 0(sp)
+;   c.fsdsp ft1, 8(sp)
+;   c.fsdsp ft2, 0x10(sp)
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %use_all 0
+;   jalr ra
+;   c.mv a1, s8
+;   c.mv a2, s7
+;   c.add a1, a2
+;   c.mv a2, s6
+;   c.add a1, a2
+;   c.mv a3, s5
+;   c.add a1, a3
+;   c.mv a4, s4
+;   c.add a1, a4
+;   c.mv a5, s3
+;   c.add a1, a5
+;   c.mv a6, s2
+;   c.add a1, a6
+;   c.mv a7, s1
+;   c.add a1, a7
+;   c.add a0, a1
+;   c.lui t6, 1
+;   addi t6, t6, 0x20
+;   c.add sp, t6
+;   c.ldsp s1, 0x38(sp)
+;   c.ldsp s2, 0x30(sp)
+;   c.ldsp s3, 0x28(sp)
+;   c.ldsp s4, 0x20(sp)
+;   c.ldsp s5, 0x18(sp)
+;   c.ldsp s6, 0x10(sp)
+;   c.ldsp s7, 8(sp)
+;   c.ldsp s8, 0(sp)
+;   c.addi16sp sp, 0x40
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
