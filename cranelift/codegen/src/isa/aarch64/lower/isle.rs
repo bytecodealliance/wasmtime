@@ -827,6 +827,15 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         UImm12Scaled::maybe_from_i64(val, ty)
     }
 
+    /// Like `uimm12_scaled_from_i64`, but rejects a zero value so `base + index
+    /// + 0` keeps its single-instruction `RegExtended` amode.
+    fn uimm12_scaled_nonzero_from_i64(&mut self, val: i64, ty: Type) -> Option<UImm12Scaled> {
+        if val == 0 {
+            return None;
+        }
+        UImm12Scaled::maybe_from_i64(val, ty)
+    }
+
     fn test_and_compare_bit_const(&mut self, ty: Type, n: u64) -> Option<u8> {
         if n.count_ones() != 1 {
             return None;
