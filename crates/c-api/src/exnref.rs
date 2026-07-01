@@ -105,7 +105,7 @@ pub unsafe extern "C" fn wasmtime_context_set_exception(
             let Err(thrown) = scope
                 .as_context_mut()
                 .throw::<std::convert::Infallible>(rooted);
-            thrown.into()
+            thrown
         }
         None => wasmtime::format_err!("exnref is null"),
     };
