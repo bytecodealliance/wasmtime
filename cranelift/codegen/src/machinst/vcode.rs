@@ -783,7 +783,7 @@ impl<I: VCodeInst> VCode<I> {
             regalloc.num_spillslots,
             clobbers,
             function_calls,
-        );
+        )?;
 
         let guard_size = 1u32 << flags.probestack_size_log2();
         I::ABIMachineSpec::validate_frame_layout(self.abi.frame_layout(), guard_size)?;

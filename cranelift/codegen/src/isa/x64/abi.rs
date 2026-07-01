@@ -824,11 +824,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         if rsp_relative.saturating_add(probe_margin) > i32::MAX as u64
             || rbp_relative > i32::MAX as u64
         {
-            return Err(crate::CodegenError::Unsupported(
-                "stack frame size exceeds the 2GB limit supported by the x64 backend \
-             (see rust-lang/rustc_codegen_cranelift#1656)"
-                    .to_owned(),
-            ));
+            return Err(crate::CodegenError::ImplLimitExceeded);
         }
         Ok(())
     }
