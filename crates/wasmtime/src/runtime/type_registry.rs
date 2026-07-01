@@ -210,7 +210,13 @@ impl Engine {
         types: impl ExactSizeIterator<Item = WasmSubType>,
     ) -> Result<Vec<RegisteredType>, OutOfMemory> {
         let len = types.len();
-        assert!(len >= 1, "a rec group must contain at least one type");
+
+        // An empty rec group (`(rec)`) is valid but contributes no types: there
+        // is nothing to register and no entry to reference, so return early
+        // rather than creating a leaked, referenceless registry entry.
+        if len == 0 {
+            return Ok(Vec::new());
+        }
 
         let engine = self.clone();
         let gc_runtime = engine.gc_runtime().map(|rt| &**rt);
