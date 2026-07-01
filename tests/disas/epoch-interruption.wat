@@ -8,7 +8,8 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
 ;;     region2 = 24 "VMContext+0x18"
-;;     region3 = 134217736 "VMStoreContext+0x8"
+;;     region3 = 3489660928 "EpochCounter+0x0"
+;;     region4 = 134217736 "VMStoreContext+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -18,9 +19,9 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0016                               v2 = load.i64 notrap aligned region2 v0+24
-;; @0016                               v3 = load.i64 notrap aligned v2
+;; @0016                               v3 = load.i64 notrap aligned region3 v2
 ;; @0016                               v4 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0016                               v5 = load.i64 notrap aligned region3 v4+8
+;; @0016                               v5 = load.i64 notrap aligned region4 v4+8
 ;; @0016                               v6 = icmp uge v3, v5
 ;; @0016                               brif v6, block3, block2(v5)
 ;;
@@ -32,12 +33,12 @@
 ;; @0017                               jump block4(v18)
 ;;
 ;;                                 block4(v10: i64):
-;; @0017                               v9 = load.i64 notrap aligned v2
+;; @0017                               v9 = load.i64 notrap aligned region3 v2
 ;; @0017                               v11 = icmp uge v9, v10
 ;; @0017                               brif v11, block7, block6(v10)
 ;;
 ;;                                 block7 cold:
-;; @0017                               v13 = load.i64 notrap aligned region3 v4+8
+;; @0017                               v13 = load.i64 notrap aligned region4 v4+8
 ;; @0017                               v14 = icmp.i64 uge v9, v13
 ;; @0017                               brif v14, block8, block6(v13)
 ;;
