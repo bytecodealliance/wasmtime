@@ -1318,20 +1318,15 @@ impl Compiler {
     where
         O: GetPtrSize,
     {
-        let isa = &*self.isa;
-        let pointer_type = isa.pointer_type();
-
         // Builtins are stored in an array in all `VMContext`s. First load the
-        // base pointer of the array and then load the entry of the array that
-        // corresponds to this builtin.
+        // base pointer of the array...
         let array_addr = alias_regions.vmctx_builtin_functions(&mut builder.cursor(), vmctx);
-
-        let body_offset = i32::try_from(builtin.index() * pointer_type.bytes()).unwrap();
-        let func_addr = builder.ins().load(
-            pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+        // ... and then load the entry in the array that corresponds to this
+        // builtin.
+        let func_addr = alias_regions.builtin_functions_array_element(
+            &mut builder.cursor(),
             array_addr,
-            body_offset,
+            builtin,
         );
 
         let sig = builder.func.import_signature(sig);
