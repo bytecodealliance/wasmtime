@@ -1158,7 +1158,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // universally supported, while native or
         // big-endian formats may not be in all cases
         // (e.g. Pulley on s390x).
-        let mut flags = MemFlagsData::trusted();
+        let mut flags = MemFlagsData::new().with_notrap();
         if ty == WasmValType::V128 {
             flags.set_endianness(Endianness::Little);
         }
@@ -1166,7 +1166,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn memflags_for_debug_slot_value_clif_ty(&self, ty: ir::Type) -> MemFlagsData {
-        let mut flags = MemFlagsData::trusted();
+        let mut flags = MemFlagsData::new().with_notrap();
         if ty.is_vector() {
             flags.set_endianness(Endianness::Little);
         }

@@ -146,6 +146,38 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
     Ok(())
 }
 
+/// Regression test: state-slot values are byte-packed, so an `i64` value can
+/// land at an offset that is not aligned for `i64` after an `i32`.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn stack_values_unaligned_i64() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    test_stack_values(
+        r#"
+    (module
+      (import "" "host" (func))
+      (func (export "main")
+        i32.const 1
+        i64.const 0x1122334455667788
+        call 2)
+      (func (param i32 i64)
+        call 0))
+    "#,
+        |_config| {},
+        |mut caller: Caller<'_, ()>| {
+            let stack = caller.debug_exit_frames().next().unwrap();
+            assert_eq!(stack.num_locals(&mut caller)?, 2);
+            assert_eq!(stack.local(&mut caller, 0)?.unwrap_i32(), 1);
+            assert_eq!(
+                stack.local(&mut caller, 1)?.unwrap_i64(),
+                0x1122334455667788
+            );
+            Ok(())
+        },
+    )
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn stack_values_exceptions() -> wasmtime::Result<()> {
