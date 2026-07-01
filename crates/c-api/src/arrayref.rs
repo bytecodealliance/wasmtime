@@ -74,16 +74,15 @@ pub unsafe extern "C" fn wasmtime_arrayref_len(
     arrayref: Option<&wasmtime_arrayref_t>,
     out: &mut MaybeUninit<u32>,
 ) -> Option<Box<crate::wasmtime_error_t>> {
-    let arrayref = arrayref
-        .and_then(|a| a.as_wasmtime())
-        .expect("non-null arrayref required");
-    match arrayref.len(&cx) {
-        Ok(len) => {
-            out.write(len);
-            None
-        }
-        Err(e) => Some(Box::new(e.into())),
-    }
+    let result = (|| {
+        let arrayref = arrayref
+            .and_then(|a| a.as_wasmtime())
+            .ok_or_else(|| wasmtime::format_err!("non-null arrayref required"))?;
+        arrayref.len(&cx)
+    })();
+    crate::handle_result(result, |len| {
+        out.write(len);
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -93,19 +92,18 @@ pub unsafe extern "C" fn wasmtime_arrayref_get(
     index: u32,
     out: &mut MaybeUninit<crate::wasmtime_val_t>,
 ) -> Option<Box<crate::wasmtime_error_t>> {
-    let arrayref = arrayref
-        .and_then(|a| a.as_wasmtime())
-        .expect("non-null arrayref required");
-    let mut scope = RootScope::new(&mut cx);
-    let rooted = arrayref.to_rooted(&mut scope);
-    match rooted.get(&mut scope, index) {
-        Ok(val) => {
-            let c_val = crate::wasmtime_val_t::from_val(&mut scope, val);
-            out.write(c_val);
-            None
-        }
-        Err(e) => Some(Box::new(e.into())),
-    }
+    let result = (|| {
+        let arrayref = arrayref
+            .and_then(|a| a.as_wasmtime())
+            .ok_or_else(|| wasmtime::format_err!("non-null arrayref required"))?;
+        let mut scope = RootScope::new(&mut cx);
+        let rooted = arrayref.to_rooted(&mut scope);
+        let val = rooted.get(&mut scope, index)?;
+        Ok(crate::wasmtime_val_t::from_val(&mut scope, val))
+    })();
+    crate::handle_result(result, |val| {
+        out.write(val);
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -115,16 +113,16 @@ pub unsafe extern "C" fn wasmtime_arrayref_set(
     index: u32,
     val: &crate::wasmtime_val_t,
 ) -> Option<Box<crate::wasmtime_error_t>> {
-    let arrayref = arrayref
-        .and_then(|a| a.as_wasmtime())
-        .expect("non-null arrayref required");
-    let mut scope = RootScope::new(&mut cx);
-    let rooted = arrayref.to_rooted(&mut scope);
-    let rust_val = val.to_val(&mut scope);
-    match rooted.set(&mut scope, index, rust_val) {
-        Ok(()) => None,
-        Err(e) => Some(Box::new(e.into())),
-    }
+    let result = (|| {
+        let arrayref = arrayref
+            .and_then(|a| a.as_wasmtime())
+            .ok_or_else(|| wasmtime::format_err!("non-null arrayref required"))?;
+        let mut scope = RootScope::new(&mut cx);
+        let rooted = arrayref.to_rooted(&mut scope);
+        let rust_val = val.to_val(&mut scope);
+        rooted.set(&mut scope, index, rust_val)
+    })();
+    crate::handle_result(result, |_| {})
 }
 
 #[unsafe(no_mangle)]

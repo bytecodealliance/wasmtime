@@ -78,19 +78,18 @@ pub unsafe extern "C" fn wasmtime_structref_field(
     index: usize,
     out: &mut MaybeUninit<crate::wasmtime_val_t>,
 ) -> Option<Box<crate::wasmtime_error_t>> {
-    let structref = structref
-        .and_then(|s| s.as_wasmtime())
-        .expect("non-null structref required");
-    let mut scope = RootScope::new(&mut cx);
-    let rooted = structref.to_rooted(&mut scope);
-    match rooted.field(&mut scope, index) {
-        Ok(val) => {
-            let c_val = crate::wasmtime_val_t::from_val(&mut scope, val);
-            out.write(c_val);
-            None
-        }
-        Err(e) => Some(Box::new(e.into())),
-    }
+    let result = (|| {
+        let structref = structref
+            .and_then(|s| s.as_wasmtime())
+            .ok_or_else(|| wasmtime::format_err!("non-null structref required"))?;
+        let mut scope = RootScope::new(&mut cx);
+        let rooted = structref.to_rooted(&mut scope);
+        let val = rooted.field(&mut scope, index)?;
+        Ok(crate::wasmtime_val_t::from_val(&mut scope, val))
+    })();
+    crate::handle_result(result, |val| {
+        out.write(val);
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -100,16 +99,15 @@ pub unsafe extern "C" fn wasmtime_structref_set_field(
     index: usize,
     val: &crate::wasmtime_val_t,
 ) -> Option<Box<crate::wasmtime_error_t>> {
-    let structref = structref
-        .and_then(|s| s.as_wasmtime())
-        .expect("non-null structref required");
-    let mut scope = RootScope::new(&mut cx);
-    let rooted = structref.to_rooted(&mut scope);
-    let rust_val = val.to_val(&mut scope);
-    match rooted.set_field(&mut scope, index, rust_val) {
-        Ok(()) => None,
-        Err(e) => Some(Box::new(e.into())),
-    }
+    let result = (|| {
+        let structref = structref
+            .and_then(|s| s.as_wasmtime())
+            .ok_or_else(|| wasmtime::format_err!("non-null structref required"))?;
+        let mut scope = RootScope::new(&mut cx);
+        let rust_val = val.to_val(&mut scope);
+        structref.set_field(&mut scope, index, rust_val)
+    })();
+    crate::handle_result(result, |()| {})
 }
 
 #[unsafe(no_mangle)]

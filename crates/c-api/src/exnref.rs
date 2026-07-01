@@ -46,9 +46,14 @@ pub extern "C" fn wasmtime_exnref_tag(
     exn: &wasmtime_exnref_t,
     tag_ret: &mut Tag,
 ) -> Option<Box<wasmtime_error_t>> {
-    let mut scope = RootScope::new(&mut store);
-    let rooted = unsafe { exn.as_wasmtime()?.to_rooted(&mut scope) };
-    handle_result(rooted.tag(&mut scope), |tag| {
+    let result = (|| {
+        let exn = unsafe {
+            exn.as_wasmtime()
+                .ok_or_else(|| wasmtime::format_err!("exnref is null"))?
+        };
+        exn.tag(&mut store)
+    })();
+    handle_result(result, |tag| {
         *tag_ret = tag;
     })
 }
@@ -74,10 +79,17 @@ pub unsafe extern "C" fn wasmtime_exnref_field(
     index: usize,
     val_ret: &mut MaybeUninit<wasmtime_val_t>,
 ) -> Option<Box<wasmtime_error_t>> {
-    let mut scope = RootScope::new(&mut store);
-    let rooted = exn.as_wasmtime()?.to_rooted(&mut scope);
-    handle_result(rooted.field(&mut scope, index), |val| {
-        val_ret.write(wasmtime_val_t::from_val(&mut scope, val));
+    let result = (|| {
+        let mut scope = RootScope::new(&mut store);
+        let exn = unsafe {
+            exn.as_wasmtime()
+                .ok_or_else(|| wasmtime::format_err!("exnref is null"))?
+        };
+        let field = exn.field(&mut scope, index)?;
+        Ok(wasmtime_val_t::from_val(&mut scope, field))
+    })();
+    handle_result(result, |val| {
+        val_ret.write(val);
     })
 }
 
@@ -87,11 +99,17 @@ pub unsafe extern "C" fn wasmtime_context_set_exception(
     exn: &wasmtime_exnref_t,
 ) -> Option<Box<wasm_trap_t>> {
     let mut scope = RootScope::new(&mut store);
-    let rooted = exn.as_wasmtime()?.to_rooted(&mut scope);
-    let Err(thrown) = scope
-        .as_context_mut()
-        .throw::<std::convert::Infallible>(rooted);
-    Some(Box::new(wasm_trap_t::new(thrown)))
+    let err = match exn.as_wasmtime() {
+        Some(e) => {
+            let rooted = e.to_rooted(&mut scope);
+            let Err(thrown) = scope
+                .as_context_mut()
+                .throw::<std::convert::Infallible>(rooted);
+            thrown
+        }
+        None => wasmtime::format_err!("exnref is null"),
+    };
+    Some(Box::new(wasm_trap_t::new(err)))
 }
 
 #[unsafe(no_mangle)]
