@@ -27,7 +27,7 @@ mod generated {
             "wasi:http/types.outgoing-request": types::HostOutgoingRequest,
             "wasi:http/types.incoming-request": types::HostIncomingRequest,
             "wasi:http/types.fields": crate::FieldMap,
-            "wasi:http/types.request-options": types::HostRequestOptions,
+            "wasi:http/types.request-options": crate::RequestOptions,
         },
         trappable_error_type: {
             "wasi:http/types.error-code" => crate::p2::HttpError,

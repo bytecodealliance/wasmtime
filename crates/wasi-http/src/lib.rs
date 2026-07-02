@@ -20,9 +20,11 @@ pub mod io;
 pub mod p2;
 #[cfg(feature = "p3")]
 pub mod p3;
+mod request_options;
 
 pub use ctx::*;
 pub use field_map::*;
+pub use request_options::*;
 
 /// Extract the `Content-Length` header value from a [`http::HeaderMap`], returning `None` if it's not
 /// present. This function will return `Err` if it's not possible to parse the `Content-Length`

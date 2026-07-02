@@ -16,13 +16,13 @@ mod proxy;
 mod request;
 mod response;
 
+pub use request::Request;
 #[cfg(feature = "default-send-request")]
 pub use request::default_send_request;
-pub use request::{Request, RequestOptions};
 pub use response::Response;
 
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::{DEFAULT_FORBIDDEN_HEADERS, FieldMapError, WasiHttpCtx};
+use crate::{DEFAULT_FORBIDDEN_HEADERS, FieldMapError, RequestOptions, WasiHttpCtx};
 use bindings::http::{client, types};
 use bytes::Bytes;
 use core::ops::Deref;
