@@ -1,0 +1,21 @@
+;; arm32 (AArch32 / A32) lowering rules.
+
+;; The main lowering entry point.
+(decl partial lower (Inst) InstOutput)
+
+;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (iconst (fits_in_32 ty) (u64_from_imm64 n)))
+  (imm ty n))
+
+;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (return args))
+  (lower_return args))
+
+;;;; Branch lowering ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl partial lower_branch (Inst MachLabelSlice) Unit)
+
+(rule (lower_branch (jump _) (single_target label))
+  (emit_side_effect (jump_impl label)))

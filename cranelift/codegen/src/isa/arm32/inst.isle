@@ -1,0 +1,75 @@
+;; Arm32 instruction definitions.
+;;
+;; The `MInst` type below is the machine-instruction enum for this backend; it
+;; is generated into Rust and re-exported as `Inst` by `inst/mod.rs`.
+
+(type MInst
+  (enum
+    ;; A zero-length no-op.
+    (Nop0)
+    ;; A four-byte no-op.
+    (Nop4)
+
+    ;; Load an arbitrary 32-bit immediate into `rd` (expands to `movw`, plus
+    ;; `movt` when the high half is non-zero).
+    (MovImm
+      (rd WritableReg)
+      (imm u64))
+
+    ;; Register-to-register move: `mov rd, rm`.
+    (Mov
+      (rd WritableReg)
+      (rm Reg))
+
+    ;; Adjust the stack pointer by a (signed) constant amount.
+    (AdjustSp
+      (amount i32))
+
+    ;; Store `rt` to `[base, #offset]`.
+    (Store
+      (rt Reg)
+      (base Reg)
+      (offset i32))
+
+    ;; Load `[base, #offset]` into `rt`.
+    (Load
+      (rt WritableReg)
+      (base Reg)
+      (offset i32))
+
+    ;; An unconditional branch to a label.
+    (Jump
+      (dest MachLabel))
+
+    ;; Pseudo-instruction capturing incoming register arguments in vregs.
+    (Args
+      (args VecArgPair))
+
+    ;; Pseudo-instruction moving vregs into the return registers.
+    (Rets
+      (rets VecRetPair))
+
+    ;; Return from the current function (`bx lr`).
+    (Ret)
+  )
+)
+
+;;;; Instruction-constructor helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Emit a `MovImm` and return its destination register.
+(decl movimm (u64) Reg)
+(rule (movimm n)
+  (let ((dst WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.MovImm dst n))))
+    dst))
+
+;; Materialize an integer constant of the given type into a register.
+(decl imm (Type u64) Reg)
+(rule (imm _ty n) (movimm n))
+
+;;;; Branch lowering ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; An unconditional jump as a side effect.
+(decl jump_impl (MachLabel) SideEffectNoResult)
+(rule (jump_impl label)
+  (SideEffectNoResult.Inst (MInst.Jump label)))

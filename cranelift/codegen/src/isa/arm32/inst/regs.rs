@@ -1,0 +1,140 @@
+//! Arm32 (AArch32 / A32) ISA definitions: registers.
+//!
+//! We model the 16 general-purpose ARM registers r0-r15 as `RegClass::Int`.
+//! Following the AAPCS calling convention:
+//!
+//! * r0-r3   : argument / caller-saved (scratch)
+//! * r4-r10  : callee-saved
+//! * r11 (fp): frame pointer
+//! * r12 (ip): intra-procedure scratch / spill temporary (reserved)
+//! * r13 (sp): stack pointer
+//! * r14 (lr): link register
+//! * r15 (pc): program counter
+//!
+//! Floating-point (VFP/NEON) registers are not modelled yet.
+
+use crate::machinst::{Reg, Writable};
+use regalloc2::{MachineEnv, PReg, RegClass, VReg};
+
+/// Construct a virtual-ish `Reg` referencing GPR `enc` (0-15).
+#[inline]
+pub const fn xreg(enc: u8) -> Reg {
+    let p_reg = PReg::new(enc as usize, RegClass::Int);
+    let v_reg = VReg::new(p_reg.index(), p_reg.class());
+    Reg::from_virtual_reg(v_reg)
+}
+
+/// Construct a `PReg` referencing GPR `enc` (0-15).
+pub const fn preg(enc: u8) -> PReg {
+    PReg::new(enc as usize, RegClass::Int)
+}
+
+/// Get a writable reference to GPR `enc`.
+#[inline]
+pub fn writable_xreg(enc: u8) -> Writable<Reg> {
+    Writable::from_reg(xreg(enc))
+}
+
+/// Frame pointer (r11).
+#[inline]
+pub fn fp_reg() -> Reg {
+    xreg(11)
+}
+
+/// Writable frame pointer.
+#[inline]
+pub fn writable_fp_reg() -> Writable<Reg> {
+    Writable::from_reg(fp_reg())
+}
+
+/// Intra-procedure-call scratch register (r12), used as the spill temporary.
+#[inline]
+pub fn spilltmp_reg() -> Reg {
+    xreg(12)
+}
+
+/// Stack pointer (r13).
+#[inline]
+pub fn stack_reg() -> Reg {
+    xreg(13)
+}
+
+/// Writable stack pointer.
+#[inline]
+#[allow(
+    dead_code,
+    reason = "part of the register API, used as the backend grows"
+)]
+pub fn writable_stack_reg() -> Writable<Reg> {
+    Writable::from_reg(stack_reg())
+}
+
+/// Link register (r14).
+#[inline]
+pub fn link_reg() -> Reg {
+    xreg(14)
+}
+
+/// Writable link register.
+#[inline]
+pub fn writable_link_reg() -> Writable<Reg> {
+    Writable::from_reg(link_reg())
+}
+
+/// Program counter (r15).
+#[inline]
+#[allow(
+    dead_code,
+    reason = "part of the register API, used as the backend grows"
+)]
+pub fn pc_reg() -> Reg {
+    xreg(15)
+}
+
+/// Pretty-print a register with its AAPCS name.
+pub fn reg_name(reg: Reg) -> alloc::string::String {
+    use alloc::string::ToString;
+    match reg.to_real_reg() {
+        Some(real) => match real.hw_enc() {
+            11 => "fp".to_string(),
+            12 => "ip".to_string(),
+            13 => "sp".to_string(),
+            14 => "lr".to_string(),
+            15 => "pc".to_string(),
+            enc => alloc::format!("r{enc}"),
+        },
+        None => alloc::format!("{reg:?}"),
+    }
+}
+
+/// Build the register environment describing which registers the allocator may
+/// use, in preference order.
+pub const fn create_reg_environment() -> MachineEnv {
+    // Preferred registers are the caller-saved (scratch) GPRs; the allocator
+    // reaches for these first since they don't need to be saved/restored.
+    let preferred_int = PRegSet_int(&[0, 1, 2, 3]);
+    // Non-preferred registers are the callee-saved GPRs.
+    let non_preferred_int = PRegSet_int(&[4, 5, 6, 7, 8, 9, 10]);
+
+    MachineEnv {
+        preferred_regs_by_class: [preferred_int, empty(), empty()],
+        non_preferred_regs_by_class: [non_preferred_int, empty(), empty()],
+        fixed_stack_slots: vec![],
+        scratch_by_class: [None, None, None],
+    }
+}
+
+#[allow(non_snake_case)]
+const fn PRegSet_int(encs: &[u8]) -> regalloc2::PRegSet {
+    let mut set = regalloc2::PRegSet::empty();
+    let mut i = 0;
+    while i < encs.len() {
+        set = set.with(preg(encs[i]));
+        i += 1;
+    }
+    set
+}
+
+const fn empty() -> regalloc2::PRegSet {
+    regalloc2::PRegSet::empty()
+}
