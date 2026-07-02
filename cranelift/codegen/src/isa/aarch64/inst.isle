@@ -4037,6 +4037,23 @@
         (if-let true (u64_eq (ty_bytes ty) (u64_wrapping_shl 1 (shift_masked_imm shift_ty n))))
         (amode_reg_scaled (amode_add x offset) y))
 
+;; `base + (extended index)` plus a *non-zero* scaled-uimm12 offset: higher
+;; priority than rules 4/5 to keep `base + index` as one CSE-able value shared
+;; across offsets, folding the offset into the load. A zero offset instead falls
+;; through to rules 4/5's single-instruction `RegExtended` form.
+(rule 8 (amode_no_more_iconst ty val @ (iadd _ _ (uextend _ (value_type $I32))) offset)
+        (if-let uimm12 (uimm12_scaled_nonzero_from_i64 offset ty))
+        (AMode.UnsignedOffset val uimm12))
+(rule 8 (amode_no_more_iconst ty val @ (iadd _ _ (sextend _ (value_type $I32))) offset)
+        (if-let uimm12 (uimm12_scaled_nonzero_from_i64 offset ty))
+        (AMode.UnsignedOffset val uimm12))
+(rule 9 (amode_no_more_iconst ty val @ (iadd _ (uextend _ (value_type $I32)) _) offset)
+        (if-let uimm12 (uimm12_scaled_nonzero_from_i64 offset ty))
+        (AMode.UnsignedOffset val uimm12))
+(rule 9 (amode_no_more_iconst ty val @ (iadd _ (sextend _ (value_type $I32)) _) offset)
+        (if-let uimm12 (uimm12_scaled_nonzero_from_i64 offset ty))
+        (AMode.UnsignedOffset val uimm12))
+
 (attr amode_reg_scaled (veri chain))
 (decl amode_reg_scaled (Reg Value) AMode)
 (rule 0 (amode_reg_scaled base index)
@@ -4095,6 +4112,29 @@
 )
 (decl pure partial uimm12_scaled_from_i64 (i64 Type) UImm12Scaled)
 (extern constructor uimm12_scaled_from_i64 uimm12_scaled_from_i64)
+
+;; As `uimm12_scaled_from_i64`, but additionally requires a non-zero value.
+(spec (uimm12_scaled_nonzero_from_i64 value ty)
+      (match
+            (let
+                  (
+                        (scale (bits2bytes! (int2bv 64 (:bits ty))))
+                        (limit (bvmul (int2bv 64 4095) scale))
+                  )
+                  (and
+                        (not (bv_is_zero! value))
+                        (bvsge value (bvzero! 64))
+                        (bvsle value limit)
+                        (bv_is_zero! (bvand value (bvsub scale (bvone! 64))))
+                  )
+            )
+      )
+      (provide
+            (= result (extract 11 0 (bvudiv value (bits2bytes! (int2bv 64 (:bits ty))))))
+      )
+)
+(decl pure partial uimm12_scaled_nonzero_from_i64 (i64 Type) UImm12Scaled)
+(extern constructor uimm12_scaled_nonzero_from_i64 uimm12_scaled_nonzero_from_i64)
 
 (spec (simm9_from_i64 value)
       (provide (= value (sign_ext 64 result)))

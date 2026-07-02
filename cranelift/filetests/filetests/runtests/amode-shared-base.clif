@@ -1,0 +1,48 @@
+test interpret
+test run
+target aarch64
+target x86_64 has_sse3 has_ssse3 has_sse41
+target s390x
+
+;; Store at a fixed slot offset, then load it back through
+;; `base + (extended index) + offset`, so the computed addressing mode must
+;; resolve to the same byte. Catches a wrong base/offset in the amode.
+function %amode_uext(i32) -> i16 {
+    ss0 = explicit_slot 32
+block0(v0: i32):
+    v1 = iconst.i16 0x1234
+    v2 = stack_addr.i64 ss0
+    store.i16 v1, v2+10
+    v3 = uextend.i64 v0
+    v4 = iadd v2, v3
+    v5 = load.i16 v4+8
+    return v5
+}
+; run: %amode_uext(2) == 0x1234
+
+function %amode_sext(i32) -> i16 {
+    ss0 = explicit_slot 32
+block0(v0: i32):
+    v1 = iconst.i16 0x5678
+    v2 = stack_addr.i64 ss0
+    store.i16 v1, v2+12
+    v3 = sextend.i64 v0
+    v4 = iadd v2, v3
+    v5 = load.i16 v4+8
+    return v5
+}
+; run: %amode_sext(4) == 0x5678
+
+;; Zero offset: exercises the RegExtended guard path.
+function %amode_zero(i32) -> i16 {
+    ss0 = explicit_slot 32
+block0(v0: i32):
+    v1 = iconst.i16 0x4321
+    v2 = stack_addr.i64 ss0
+    store.i16 v1, v2+6
+    v3 = uextend.i64 v0
+    v4 = iadd v2, v3
+    v5 = load.i16 v4
+    return v5
+}
+; run: %amode_zero(6) == 0x4321
