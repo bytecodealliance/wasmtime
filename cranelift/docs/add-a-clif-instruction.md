@@ -10,8 +10,7 @@ Before adding a new instruction, it's worth checking whether the semantics you
 want can already be expressed as a combination of existing instructions. CLIF
 tries to keep its instruction set fairly small; new opcodes are for cases
 where composing existing ones would be either impossible or noticeably worse
-for codegen (e.g. because the mid-end or backends couldn't optimize the
-combination as well as a dedicated instruction).
+for codegen.
 
 ## 1. Declare the instruction
 
@@ -41,16 +40,13 @@ ig.push(
 The third argument to `Inst::new` is an *instruction format*, chosen from
 `cranelift/codegen/meta/src/shared/formats.rs` (`unary`, `binary`, `ternary`,
 `call`, `load`, `store`, `atomic_rmw`, and so on). The format determines what
-shape of operands the generated `InstructionData` variant has; reuse an
+shape of operands the generated `InstructionData` variant has. That is to say,reuse an
 existing format if your instruction fits one, rather than adding a new one.
 
-If your instruction has effects beyond producing a result — it can trap,
-branch, read or write memory, or otherwise isn't safe to reorder or delete —
+If your instruction has effects beyond producing a result
 say so on the `Inst` builder with methods like `.can_trap()`, `.can_load()`,
 `.can_store()`, `.other_side_effects()`, `.branches()`, or `.call()` (see
-`cranelift/codegen/meta/src/cdsl/instructions.rs` for the full list). This
-isn't just documentation: the mid-end and alias analysis read these flags to
-decide what's safe to reorder, hoist, or eliminate.
+`cranelift/codegen/meta/src/cdsl/instructions.rs` for the full list). 
 
 ## 2. Let the build regenerate the Rust and ISLE glue
 
