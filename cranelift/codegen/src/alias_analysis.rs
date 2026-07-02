@@ -79,7 +79,7 @@ use crate::{
     trace,
 };
 use core::cmp::Ordering;
-use cranelift_entity::{EntityRef, EntitySet, SecondaryMap, packed_option::PackedOption};
+use cranelift_entity::{EntityRef, SecondaryMap, packed_option::PackedOption};
 
 /// Determine whether this opcode behaves as a memory fence, i.e.,
 /// prohibits any moving of memory accesses across it.
@@ -137,16 +137,24 @@ fn alias_regions_observed(func: &Function, inst: Inst) -> AliasRegionsObserved {
     }
 }
 
+/// The last-store state for a single named alias region: the last store to the
+/// region (if any) and whether that region has been observed since.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct RegionState {
+    /// Last store to this region.
+    last_store: PackedOption<Inst>,
+
+    /// Whether this region has been observed since it was last stored to.
+    observed: bool,
+}
+
 /// For a given program point, the vector of last-store instruction
 /// indices for each disjoint category of abstract state.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LastStores {
-    /// Last store for each named alias region.
-    regions: SecondaryMap<AliasRegion, PackedOption<Inst>>,
-
-    /// Whether each region has been observed or not since it was last stored
-    /// to.
-    observed_regions: EntitySet<AliasRegion>,
+    /// Last store (and whether it has been observed) for each named alias
+    /// region.
+    regions: SecondaryMap<AliasRegion, RegionState>,
 
     /// Last store for memory accesses with no alias region.
     other: PackedOption<Inst>,
@@ -187,8 +195,10 @@ impl LastStores {
             if let Some(memflags) = func.dfg.insts[inst].memflags() {
                 match func.dfg.mem_flags[memflags].alias_region() {
                     Some(region) => {
-                        self.regions[region] = inst.into();
-                        self.observed_regions.remove(region);
+                        self.regions[region] = RegionState {
+                            last_store: inst.into(),
+                            observed: false,
+                        };
 
                         // And if this store can trap, then we need to observe
                         // all other alias regions, to ensure that their state
@@ -245,7 +255,7 @@ impl LastStores {
                     self.observed_all = true;
                 }
                 AliasRegionsObserved::Just(region) => {
-                    self.observed_regions.insert(region);
+                    self.regions[region].observed = true;
                     // NB: Because stores without regions may alias any other
                     // region, we have also observed the last-store in
                     // `self.other`.
@@ -261,9 +271,9 @@ impl LastStores {
 
     /// Mark all regions except for `excluding` (if given) as observed.
     fn observe_others(&mut self, excluding: Option<AliasRegion>) {
-        for (region, last_store) in self.regions.iter() {
-            if last_store.is_some() && excluding.is_none_or(|r| r != region) {
-                self.observed_regions.insert(region);
+        for (region, state) in self.regions.iter_mut() {
+            if state.last_store.is_some() && excluding.is_none_or(|r| r != region) {
+                state.observed = true;
             }
         }
         self.observed_other = true;
@@ -272,13 +282,14 @@ impl LastStores {
     /// Mark all regions whose last-store can trap as observed, except for
     /// `excluding`.
     fn observe_trapping_others(&mut self, excluding: AliasRegion, func: &Function) {
-        for (region, last_store) in self.regions.iter() {
+        for (region, state) in self.regions.iter_mut() {
             if region != excluding
-                && last_store
+                && state
+                    .last_store
                     .expand()
                     .is_some_and(|s| func.dfg.insts[s].memflags_trap_code(&func.dfg).is_some())
             {
-                self.observed_regions.insert(region);
+                state.observed = true;
             }
         }
 
@@ -291,7 +302,6 @@ impl LastStores {
     /// Handle memory fence-like instructions by clearing all analysis data.
     fn fence(&mut self, inst: Inst) {
         self.regions.clear();
-        self.observed_regions.clear();
         self.other = inst.into();
         self.observed_other = false;
         self.last_fence = inst.into();
@@ -305,15 +315,15 @@ impl LastStores {
             match func.dfg.mem_flags[memflags].alias_region() {
                 None => return (self.other, self.observed_all || self.observed_other),
                 Some(region) => {
-                    let region_store = self.regions[region];
+                    let region_state = self.regions[region];
                     // If the region has never been explicitly stored to,
                     // fall back to the last fence (which affects all regions).
-                    if region_store.is_none() {
+                    if region_state.last_store.is_none() {
                         return (self.last_fence, self.observed_all);
                     } else {
                         return (
-                            region_store,
-                            self.observed_all || self.observed_regions.contains(region),
+                            region_state.last_store,
+                            self.observed_all || region_state.observed,
                         );
                     }
                 }
@@ -339,7 +349,6 @@ impl LastStores {
         // field.
         let LastStores {
             regions,
-            observed_regions,
             other,
             observed_other,
             last_fence,
@@ -357,17 +366,6 @@ impl LastStores {
             old != new
         };
 
-        let union_set_entry = |a: &mut EntitySet<AliasRegion>,
-                               b: &EntitySet<AliasRegion>,
-                               region: AliasRegion|
-         -> bool {
-            if b.contains(region) {
-                a.insert(region)
-            } else {
-                false
-            }
-        };
-
         let union_bool = |a: &mut bool, b: bool| -> bool {
             let old = *a;
             *a = *a || b;
@@ -379,8 +377,12 @@ impl LastStores {
         let max_len = core::cmp::max(regions.keys().len(), rhs.regions.keys().len());
         for i in 0..max_len {
             let region = AliasRegion::new(i);
-            changed |= meet(&mut regions[region], rhs.regions[region]);
-            changed |= union_set_entry(observed_regions, &rhs.observed_regions, region);
+            let rhs_state = rhs.regions[region];
+            let state = &mut regions[region];
+            changed |= meet(&mut state.last_store, rhs_state.last_store);
+            // Union the observed bit: a region is observed after the meet if it
+            // was observed on either incoming path.
+            changed |= union_bool(&mut state.observed, rhs_state.observed);
         }
 
         changed |= meet(other, rhs.other);
