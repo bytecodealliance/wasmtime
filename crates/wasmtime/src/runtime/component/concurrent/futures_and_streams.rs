@@ -3997,6 +3997,10 @@ impl Instance {
         );
         let waitable = Waitable::Transmit(transmit.write_handle);
 
+        if !async_ {
+            waitable.trap_if_in_waitable_set(state)?;
+        }
+
         let code = if let Some(event) = waitable.take_event(state)? {
             let (Event::FutureWrite { code, .. } | Event::StreamWrite { code, .. }) = event else {
                 bail_bug!("expected either a stream or future write event")
@@ -4084,6 +4088,11 @@ impl Instance {
         );
 
         let waitable = Waitable::Transmit(transmit.read_handle);
+
+        if !async_ {
+            waitable.trap_if_in_waitable_set(state)?;
+        }
+
         let code = if let Some(event) = waitable.take_event(state)? {
             let (Event::FutureRead { code, .. } | Event::StreamRead { code, .. }) = event else {
                 bail_bug!("expected either a stream or future read event")
