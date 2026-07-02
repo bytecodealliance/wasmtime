@@ -189,6 +189,85 @@ impl Engine {
             trampolines,
         })
     }
+
+    /// Register a single, embedder-defined recursion group in this engine's
+    /// registry, returning one [`RegisteredType`] per member.
+    ///
+    /// The given `types` are the members of one rec group, in order. References
+    /// *within* the group (i.e. one member referring to another) must use
+    /// [`EngineOrModuleTypeIndex::Module`] whose value is the 0-based index of
+    /// the referenced member within `types`. References to types *outside* of
+    /// this rec group must already be registered in this engine and use
+    /// [`EngineOrModuleTypeIndex::Engine`].
+    ///
+    /// If an identical rec group has already been registered, it is reused (the
+    /// returned types will share its `VMSharedTypeIndex`es).
+    ///
+    /// The returned `RegisteredType`s keep the whole rec group registered for as
+    /// long as any of them is alive.
+    pub(crate) fn register_rec_group_types(
+        &self,
+        types: impl ExactSizeIterator<Item = WasmSubType>,
+    ) -> Result<Vec<RegisteredType>, OutOfMemory> {
+        let len = types.len();
+
+        // An empty rec group (`(rec)`) is valid but contributes no types: there
+        // is nothing to register and no entry to reference, so return early
+        // rather than creating a leaked, referenceless registry entry.
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+
+        let engine = self.clone();
+        let gc_runtime = engine.gc_runtime().map(|rt| &**rt);
+
+        // Gather the parts for each member while holding the registry lock, but
+        // construct the `RegisteredType`s only *after* releasing it:
+        // `RegisteredType::from_parts` itself takes a read lock (via
+        // `debug_assert_contains`), so building them inside this scope would
+        // deadlock. This mirrors `RegisteredType::new`.
+        let parts = {
+            let registry = engine.signatures();
+            let mut inner = registry.0.write();
+
+            // Members reference each other using 0-based module-type indices, so
+            // the rec group occupies `0..len`. There are no module-type
+            // references below `range.start`, so the inter-group canonicalization
+            // map is never consulted and an empty map suffices.
+            let map = TryPrimaryMap::<ModuleInternedTypeIndex, VMSharedTypeIndex>::new();
+            let range = ModuleInternedTypeIndex::from_bits(0)
+                ..ModuleInternedTypeIndex::from_bits(u32::try_from(len).unwrap());
+
+            let entry = inner.register_rec_group(gc_runtime, &map, range, types.map(Ok))?;
+
+            // `register_rec_group` incremented the registration count once on our
+            // behalf. We are about to hand out one `RegisteredType` per member,
+            // each of which owns a registration and decrements it on drop, so
+            // account for the remaining `len - 1`.
+            for _ in 1..len {
+                entry.incref("Engine::register_rec_group_types");
+            }
+
+            entry
+                .0
+                .shared_type_indices
+                .iter()
+                .map(|&index| {
+                    let id = shared_type_index_to_slab_id(index);
+                    let ty = inner.types[id].clone().unwrap();
+                    let layout = inner.type_to_gc_layout.get(index).and_then(|l| l.clone());
+                    (entry.clone(), index, ty, layout)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        Ok(parts
+            .into_iter()
+            .map(|(entry, index, ty, layout)| {
+                RegisteredType::from_parts(engine.clone(), entry, index, ty, layout)
+            })
+            .collect())
+    }
 }
 
 impl TypeCollection {
