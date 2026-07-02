@@ -216,20 +216,14 @@ This test also sends the computed CFG post-order through filecheck.
 
 ### `test optimize`
 
-Run each function through the optimization passes (egraph-based rewriting,
-GVN, LICM, etc.), but not lowering or register allocation, and run the
+Runs each function through the optimization passes (egraph-based rewriting,
+GVN, LICM, etc.), but not lowering or register allocation, and runs the
 resulting function through filecheck. This requires a target ISA, since some
 of the rewrites are ISA-specific.
 
 ### `test compile`
 
-Test the whole code generation pipeline.
-
-Each function is passed through the full `Context::compile()` function
-which is normally used to compile code. This type of test often depends
-on assertions or verifier errors, but it is also possible to use
-filecheck directives which will be matched against the final form of the
-Cranelift IR right before binary machine code emission.
+Tests the whole code generation pipeline. Each function is passed through the full `Context::compile()` function which is normally used to compile code. This type of test often depends on assertions or verifier errors, but it is also possible to use filecheck directives which will be matched against the final form of the Cranelift IR right before binary machine code emission.
 
 ### `test run`
 
