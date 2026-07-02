@@ -2072,9 +2072,11 @@ impl<'a> Parser<'a> {
             | Some(Token::LAngle) => true,
             _ => false,
         } {
-            let srcloc = self.optional_srcloc()?;
-
+            // Debug tags are written before the source location (see
+            // `write_debug_tags`), so parse them in that order.
             let debug_tags = self.optional_debug_tags()?;
+
+            let srcloc = self.optional_srcloc()?;
 
             // We need to parse instruction results here because they are shared
             // between the parsing of value aliases and the parsing of instructions.
