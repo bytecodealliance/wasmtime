@@ -1192,15 +1192,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             let offset = b.add_local(FrameValType::from(ty));
             if let Some(init) = init {
                 let slot = *slot;
+                let region = self.alias_regions.stack_slot_region(builder.func, slot);
                 let address = builder
                     .ins()
                     .stack_addr(self.pointer_type(), slot, offset.offset());
-                builder.ins().store(
-                    self.memflags_for_debug_slot_value_wasm_ty(ty),
-                    init,
-                    address,
-                    0,
-                );
+                let flags = self
+                    .memflags_for_debug_slot_value_wasm_ty(ty)
+                    .with_alias_region(Some(region));
+                builder.ins().store(flags, init, address, 0);
             }
         }
     }
@@ -1244,16 +1243,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     self.stacks.stack_shape.push(this_shape);
 
                     let value = self.stacks.stack[i];
+                    let region = self.alias_regions.stack_slot_region(builder.func, slot);
                     let address =
                         builder
                             .ins()
                             .stack_addr(self.pointer_type(), slot, offset.offset());
-                    builder.ins().store(
-                        self.memflags_for_debug_slot_value_wasm_ty(wasm_ty),
-                        value,
-                        address,
-                        0,
-                    );
+                    let flags = self
+                        .memflags_for_debug_slot_value_wasm_ty(wasm_ty)
+                        .with_alias_region(Some(region));
+                    builder.ins().store(flags, value, address, 0);
                 } else {
                     // Unreachable code with unknown type -- no
                     // flushes for this or later-pushed values.
@@ -1303,40 +1301,45 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Store a new value for a local in the state slot, if present.
     pub(crate) fn state_slot_local_set(
-        &self,
+        &mut self,
         builder: &mut FunctionBuilder,
         local: u32,
         value: ir::Value,
     ) {
-        if let Some((slot, b)) = &self.state_slot {
-            let offset = b.local_offset(local);
-            let address = builder
-                .ins()
-                .stack_addr(self.pointer_type(), *slot, offset.offset());
-            let ty = builder.func.dfg.value_type(value);
-            builder.ins().store(
-                self.memflags_for_debug_slot_value_clif_ty(ty),
-                value,
-                address,
-                0,
-            );
-        }
+        let Some((slot, offset)) = self
+            .state_slot
+            .as_ref()
+            .map(|(slot, b)| (*slot, b.local_offset(local)))
+        else {
+            return;
+        };
+        let region = self.alias_regions.stack_slot_region(builder.func, slot);
+        let address = builder
+            .ins()
+            .stack_addr(self.pointer_type(), slot, offset.offset());
+        let ty = builder.func.dfg.value_type(value);
+        let flags = self
+            .memflags_for_debug_slot_value_clif_ty(ty)
+            .with_alias_region(Some(region));
+        builder.ins().store(flags, value, address, 0);
     }
 
     fn update_state_slot_vmctx(&mut self, builder: &mut FunctionBuilder) {
         if let &Some((slot, _)) = &self.state_slot {
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            // N.B.: we always store vmctx at offset 0 in the
-            // slot. This is relied upon in
-            // crates/wasmtime/src/runtime/debug.rs in
-            // `raw_instance()`. See also the slot layout computation in crates/environ/src/
+            // N.B.: we always store vmctx at offset 0 in the slot. This is
+            // relied upon in `crates/wasmtime/src/runtime/debug.rs` in
+            // `raw_instance()`. See also the slot layout computation in
+            // `crates/environ/src/`.
             //
-            // This is a native-endian store (the only mode for
-            // `stack_store`) because it is read by host code directly
-            // as a pointer.
-            builder
-                .ins()
-                .stack_store(self.pointer_type(), vmctx, slot, 0);
+            // This is a native-endian store because it is read by host code
+            // directly as a pointer.
+            let region = self.alias_regions.stack_slot_region(builder.func, slot);
+            let address = builder.ins().stack_addr(self.pointer_type(), slot, 0);
+            let flags = ir::MemFlagsData::new()
+                .with_notrap()
+                .with_alias_region(Some(region));
+            builder.ins().store(flags, vmctx, address, 0);
         }
     }
 
