@@ -134,9 +134,7 @@ aarch64, we implement the handful of move mitosis special cases at the
 remain pure.
 
 Finally, note that these moves are generally cleaned up by the register
-allocator's move coalescing, and move mitosis will eventually go away completely
-once we switch over to `regalloc2`, which takes instructions in SSA form
-directly as input.
+allocator's move coalescing.
 
 Instructions that implicitly operate on specific registers, or which require
 that certain operands be in certain registers, are handled similarly: the

@@ -94,12 +94,14 @@ lower level of abstraction, to allow it to be used all the way through the
 codegen process.
 
 This design tradeoff does mean that Cranelift IR is less friendly for mid-level
-optimizations. Cranelift doesn't currently perform mid-level optimizations,
-however if it should grow to where this becomes important, the vision is that
-Cranelift would add a separate IR layer, or possibly an separate IR, to support
-this. Instead of frontends producing optimizer IR which is then translated to
-codegen IR, Cranelift would have frontends producing codegen IR, which can be
-translated to optimizer IR and back.
+optimizations. Cranelift performs its mid-level optimizations (GVN, LICM, and
+other rewrites) through an egraph-based pass that works directly on the same
+IR, rather than through a separate optimizer IR. If more aggressive mid-level
+optimization becomes important down the road, the vision is still that
+Cranelift could add a separate IR layer to support it. Instead of frontends
+producing optimizer IR which is then translated to codegen IR, Cranelift would
+have frontends producing codegen IR, which can be translated to optimizer IR
+and back.
 
 This biases the overall system towards fast compilation when mid-level
 optimization is not needed, such as when emitting unoptimized code for or when
