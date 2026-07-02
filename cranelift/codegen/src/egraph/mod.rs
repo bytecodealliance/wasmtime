@@ -151,6 +151,9 @@ where
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
     domtree: &'opt DominatorTree,
+    /// The pre-egraph control-flow graph, used by the alias analysis to lazily
+    /// build a post-dominator tree for dead-store elimination.
+    cfg: &'opt ControlFlowGraph,
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
     pub(crate) alias_analysis_state: &'opt mut LastStores,
     pub(crate) branch_to_trap_analysis: &'opt mut BranchToTrapAnalysis,
@@ -548,7 +551,7 @@ where
         // stored value, or remove an idempotent store).
         match self
             .alias_analysis
-            .process_inst(self.func, self.alias_analysis_state, inst)
+            .process_inst(self.func, self.cfg, self.alias_analysis_state, inst)
         {
             OptResult::AliasedLoad(new_result) => {
                 self.stats.alias_analysis_removed_load += 1;
@@ -987,6 +990,7 @@ impl<'a> EgraphPass<'a> {
                     remat_values: &mut self.remat_values,
                     stats: &mut self.stats,
                     domtree: &self.domtree,
+                    cfg: &*self.cfg,
                     alias_analysis: self.alias_analysis,
                     alias_analysis_state: &mut alias_analysis_state,
                     branch_to_trap_analysis: &mut self.branch_to_trap_analysis,

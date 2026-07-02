@@ -72,13 +72,14 @@ use crate::{FxHashMap, FxHashSet};
 use crate::{
     cursor::{Cursor, FuncCursor},
     dominator_tree::DominatorTree,
+    flowgraph::ControlFlowGraph,
     inst_predicates::{inst_addr_offset_type, inst_store_data, visit_block_succs},
     ir::{AliasRegion, Block, Function, Inst, Opcode, Type, Value, immediates::Offset32},
     post_dominator_tree::PostDominatorTree,
     trace,
 };
-use cranelift_entity::EntitySet;
-use cranelift_entity::{EntityRef, SecondaryMap, packed_option::PackedOption};
+use core::cmp::Ordering;
+use cranelift_entity::{EntityRef, EntitySet, SecondaryMap, packed_option::PackedOption};
 
 /// Determine whether this opcode behaves as a memory fence, i.e.,
 /// prohibits any moving of memory accesses across it.
@@ -447,7 +448,15 @@ pub struct AliasAnalysis<'a> {
     domtree: &'a DominatorTree,
 
     /// The post-dominator tree for the function.
-    post_dom_tree: &'a PostDominatorTree,
+    ///
+    /// This is computed lazily, on the first cross-block dead-store candidate,
+    /// because it is only ever consulted by dead-store elimination and only for
+    /// candidates whose two stores live in different blocks (because we can
+    /// easily test post-domination without building a post-dominator tree when
+    /// the two instructions are in the same block). The majority of functions
+    /// have no such dead-store candidates, so building it eagerly for every
+    /// function is a waste.
+    post_dom_tree: Option<PostDominatorTree>,
 
     /// Input state to a basic block.
     block_input: FxHashMap<Block, LastStores>,
@@ -462,23 +471,46 @@ pub struct AliasAnalysis<'a> {
 
 impl<'a> AliasAnalysis<'a> {
     /// Perform an alias analysis pass.
-    pub fn new(
-        func: &Function,
-        domtree: &'a DominatorTree,
-        post_dom_tree: &'a PostDominatorTree,
-    ) -> AliasAnalysis<'a> {
+    pub fn new(func: &Function, domtree: &'a DominatorTree) -> AliasAnalysis<'a> {
         trace!("alias analysis: input is:\n{:?}", func);
         assert!(domtree.is_valid());
-        assert!(post_dom_tree.is_valid());
         let mut analysis = AliasAnalysis {
             domtree,
-            post_dom_tree,
+            post_dom_tree: None,
             block_input: FxHashMap::default(),
             mem_values: FxHashMap::default(),
         };
 
         analysis.compute_block_input_states(func);
         analysis
+    }
+
+    /// Does `overwriter` post-dominate `maybe_dead`?
+    ///
+    /// That is, does every path from `maybe_dead` out of the function pass
+    /// through `overwriter`? Used as part of deciding whether `maybe_dead` is
+    /// truly a dead store.
+    fn post_dominates_maybe_dead_store(
+        &mut self,
+        func: &Function,
+        cfg: &ControlFlowGraph,
+        overwriter: Inst,
+        maybe_dead: Inst,
+    ) -> bool {
+        let overwriter_block = func.layout.inst_block(overwriter).unwrap();
+        let maybe_dead_block = func.layout.inst_block(maybe_dead).unwrap();
+
+        // When our instructions are in the same block, we do not need to
+        // force computation of the whole post-dominator tree: `overwriter`
+        // post-dominates `maybe_dead` iff `overwriter` is at or after
+        // `maybe_dead`.
+        if overwriter_block == maybe_dead_block {
+            return func.layout.pp_cmp(overwriter, maybe_dead) != Ordering::Less;
+        }
+
+        self.post_dom_tree
+            .get_or_insert_with(|| PostDominatorTree::with_cfg(cfg))
+            .post_dominates(overwriter, maybe_dead, &func.layout)
     }
 
     fn compute_block_input_states(&mut self, func: &Function) {
@@ -538,6 +570,7 @@ impl<'a> AliasAnalysis<'a> {
     pub fn process_inst(
         &mut self,
         func: &mut Function,
+        cfg: &ControlFlowGraph,
         state: &mut LastStores,
         inst: Inst,
     ) -> OptResult {
@@ -584,9 +617,7 @@ impl<'a> AliasAnalysis<'a> {
                         // The last store is only dead if all paths
                         // out of the function from it go through this
                         // instruction.
-                        && self
-                            .post_dom_tree
-                            .post_dominates(inst, last_store, &func.layout)
+                        && self.post_dominates_maybe_dead_store(func, cfg, inst, last_store)
                     {
                         trace!(
                             "  --> discovered dead store at {last_store}: {}",
@@ -709,13 +740,13 @@ impl<'a> AliasAnalysis<'a> {
     /// tracking because resolving some aliases may expose others
     /// (e.g. in cases of double-indirection with two separate chains
     /// of loads).
-    pub fn compute_and_update_aliases(&mut self, func: &mut Function) {
+    pub fn compute_and_update_aliases(&mut self, func: &mut Function, cfg: &ControlFlowGraph) {
         let mut pos = FuncCursor::new(func);
 
         while let Some(block) = pos.next_block() {
             let mut state = self.block_starting_state(block);
             while let Some(inst) = pos.next_inst() {
-                match self.process_inst(pos.func, &mut state, inst) {
+                match self.process_inst(pos.func, cfg, &mut state, inst) {
                     OptResult::None => {}
                     OptResult::AliasedLoad(replaced_result) => {
                         let result = pos.func.dfg.inst_results(inst)[0];
