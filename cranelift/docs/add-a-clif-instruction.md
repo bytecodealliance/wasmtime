@@ -89,7 +89,7 @@ matched" panic the moment it's used. At a minimum, you should add a (rule (lower
 ## 5. Test it
 
 Add file tests under `cranelift/filetests/filetests/`. Use `test interpret` and
-`test run` to verify the execution semantics implemented in stop 3, `test optimize`
+`test run` to verify the execution semantics implemented in step 3, `test optimize`
 to validate any mid-end rewrites, and `test compile` (placed under
 `filetests/isa/<arch>/` for each target architecture)to test the backend lowering implemented in step 4. See
 [Testing Cranelift](testing.md) for how these test commands work.
