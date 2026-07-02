@@ -1,0 +1,74 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+function %f(i64, i64) -> i64 {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = iadd v1, v2
+    store notrap aligned region0 v3, v0
+
+    ;; `v4` should be rewritten into an alias of `v3` via store-to-load
+    ;; forwarding, and should NOT mark `region0` as observed. Then, when we
+    ;; process the second store below, we should be able to eliminate the first
+    ;; store as dead.
+    v4 = load.i64 notrap aligned region0 v0
+
+    v5 = iadd v3, v2
+    store notrap aligned region0 v5, v0
+
+    return v4
+}
+
+; function %f(i64, i64) -> i64 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i64):
+;     v7 = iconst.i64 2
+;     v12 = iadd v1, v7  ; v7 = 2
+;     store notrap aligned region0 v12, v0
+;     v2 = iconst.i64 1
+;     v3 = iadd v1, v2  ; v2 = 1
+;     return v3
+; }
+
+;; TODO: we cannot do both store-to-load forwarding and dead-store elimination
+;; across blocks yet. This would require multiple iterations of the analysis.
+function %f(i64, i64) -> i64 {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = iadd v1, v2
+    store notrap aligned region0 v3, v0
+    jump block1
+
+block1:
+    v4 = load.i64 notrap aligned region0 v0
+    jump block2
+
+block2:
+    v5 = iadd v3, v2
+    store notrap aligned region0 v5, v0
+    return v4
+}
+
+; function %f(i64, i64) -> i64 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 1
+;     v3 = iadd v1, v2  ; v2 = 1
+;     store notrap aligned region0 v3, v0
+;     jump block1
+;
+; block1:
+;     jump block2
+;
+; block2:
+;     v7 = iconst.i64 2
+;     v12 = iadd.i64 v1, v7  ; v7 = 2
+;     store notrap aligned region0 v12, v0
+;     v14 = iadd.i64 v1, v2  ; v2 = 1
+;     return v14
+; }

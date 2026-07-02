@@ -19,6 +19,7 @@ use crate::isa::TargetIsa;
 use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::nan_canonicalization::do_nan_canonicalization;
+use crate::post_dominator_tree::PostDominatorTree;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::{CodegenResult, CompileResult};
 use crate::settings::{FlagsOrIsa, OptLevel};
@@ -45,6 +46,9 @@ pub struct Context {
 
     /// Dominator tree for `func`.
     pub domtree: DominatorTree,
+
+    /// Post-dominator tree for `func`.
+    pub post_dom_tree: PostDominatorTree,
 
     /// Loop analysis of `func`.
     pub loop_analysis: LoopAnalysis,
@@ -74,6 +78,7 @@ impl Context {
             func,
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),
+            post_dom_tree: PostDominatorTree::new(),
             loop_analysis: LoopAnalysis::new(),
             compiled_code: None,
             want_disasm: false,
@@ -182,6 +187,7 @@ impl Context {
         self.func.dfg.resolve_all_aliases();
 
         if opt_level != OptLevel::None {
+            self.compute_post_dom_tree();
             self.egraph_pass(isa, ctrl_plane)?;
         }
 
@@ -302,6 +308,11 @@ impl Context {
         self.domtree.compute(&self.func, &self.cfg);
     }
 
+    /// Compute the post-dominator tree.
+    pub fn compute_post_dom_tree(&mut self) {
+        self.post_dom_tree.compute(&self.func, &self.cfg);
+    }
+
     /// Compute the loop analysis.
     pub fn compute_loop_analysis(&mut self) {
         self.loop_analysis
@@ -332,7 +343,7 @@ impl Context {
     /// by a store instruction to the same instruction (so-called
     /// "store-to-load forwarding").
     pub fn replace_redundant_loads(&mut self) -> CodegenResult<()> {
-        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        let mut analysis = AliasAnalysis::new(&self.func, &self.domtree, &self.post_dom_tree);
         analysis.compute_and_update_aliases(&mut self.func);
         Ok(())
     }
@@ -364,7 +375,7 @@ impl Context {
         );
         let fisa = fisa.into();
         self.compute_loop_analysis();
-        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
+        let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree, &self.post_dom_tree);
         let mut pass = EgraphPass::new(
             &mut self.func,
             &self.domtree,

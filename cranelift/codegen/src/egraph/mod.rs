@@ -529,7 +529,7 @@ where
                         }
                         (_, _) => unreachable!(),
                     }
-                    Some(SkeletonInstSimplification::Remove)
+                    return Some(SkeletonInstSimplification::Remove);
                 }
                 ScopedEntry::Vacant(v) => {
                     // Otherwise, insert it into the value-map.
@@ -539,42 +539,44 @@ where
                     }
                     v.insert(result);
                     trace!(" -> inserts as new (no GVN)");
-                    None
                 }
             }
         }
-        // Otherwise, if a load or store, process it with the alias
-        // analysis to see if we can optimize it (rewrite in terms of
-        // an earlier load or stored value, or remove an idempotent store).
-        else {
-            match self
-                .alias_analysis
-                .process_inst(self.func, self.alias_analysis_state, inst)
-            {
-                OptResult::AliasedLoad(new_result) => {
-                    self.stats.alias_analysis_removed_load += 1;
-                    let result = self.func.dfg.first_result(inst);
-                    trace!(
-                        " -> inst {} has result {} replaced with {}",
-                        inst, result, new_result
-                    );
-                    self.value_to_opt_value[result] = new_result;
-                    self.available_block[result] = self.available_block[new_result];
-                    Some(SkeletonInstSimplification::Remove)
+
+        // Otherwise, if a load or store, process it with the alias analysis to
+        // see if we can optimize it (rewrite in terms of an earlier load or
+        // stored value, or remove an idempotent store).
+        match self
+            .alias_analysis
+            .process_inst(self.func, self.alias_analysis_state, inst)
+        {
+            OptResult::AliasedLoad(new_result) => {
+                self.stats.alias_analysis_removed_load += 1;
+                let result = self.func.dfg.first_result(inst);
+                trace!(
+                    " -> inst {} has result {} replaced with {}",
+                    inst, result, new_result
+                );
+                self.value_to_opt_value[result] = new_result;
+                self.available_block[result] = self.available_block[new_result];
+                Some(SkeletonInstSimplification::Remove)
+            }
+            OptResult::IdempotentStore => {
+                self.stats.alias_analysis_removed_idempotent_store += 1;
+                Some(SkeletonInstSimplification::Remove)
+            }
+            OptResult::DeadStore { dead, killer } => {
+                self.stats.alias_analysis_removed_dead_store += 1;
+                Some(SkeletonInstSimplification::RemoveDeadStore { dead, killer })
+            }
+            OptResult::None => {
+                // Generic side-effecting op -- always keep it, and
+                // set its results to identity-map to original values.
+                for &result in self.func.dfg.inst_results(inst) {
+                    self.value_to_opt_value[result] = result;
+                    self.available_block[result] = block;
                 }
-                OptResult::IdempotentStore => {
-                    self.stats.alias_analysis_removed_store += 1;
-                    Some(SkeletonInstSimplification::Remove)
-                }
-                OptResult::None => {
-                    // Generic side-effecting op -- always keep it, and
-                    // set its results to identity-map to original values.
-                    for &result in self.func.dfg.inst_results(inst) {
-                        self.value_to_opt_value[result] = result;
-                        self.available_block[result] = block;
-                    }
-                    None
-                }
+                None
             }
         }
     }
@@ -668,6 +670,14 @@ where
                         ctx.func.dfg.display_inst(second),
                     );
                     return Some(SkeletonInstSimplification::ReplaceWithTwo { first, second });
+                }
+
+                SkeletonInstSimplification::RemoveDeadStore { dead, killer } => {
+                    log::trace!(
+                        " -> simplify_skeleton: remove other: {dead}: {}",
+                        ctx.func.dfg.display_inst(dead)
+                    );
+                    return Some(SkeletonInstSimplification::RemoveDeadStore { dead, killer });
                 }
 
                 // For instruction replacement simplification, we want to check
@@ -1100,6 +1110,25 @@ impl<'a> EgraphPass<'a> {
                 reprocess_from(cursor, first);
                 return;
             }
+            SkeletonInstSimplification::RemoveDeadStore { dead, killer } => {
+                assert!(!matches!(cursor.position(), CursorPosition::At(inst) if inst == dead));
+                // Copy the trap code (if any) from the dead store to its
+                // killer.
+                if let Some(flags) = cursor.func.dfg.insts[dead].memflags_data(&cursor.func.dfg) {
+                    if let Some(code) = flags.trap_code() {
+                        let flags = cursor.func.dfg.insts[killer]
+                            .memflags_data(&cursor.func.dfg)
+                            .unwrap();
+                        let flags = flags.with_trap_code(Some(code));
+                        let flags = cursor.func.dfg.mem_flags.insert(flags).unwrap();
+                        *cursor.func.dfg.insts[killer].memflags_mut().unwrap() = flags;
+                    }
+                }
+                cursor.func.layout.remove_inst(dead);
+                self_map_operands(&cursor.func.dfg, value_to_opt_value, killer);
+                cursor.prev_inst();
+                return;
+            }
 
             SkeletonInstSimplification::Replace { inst } => (inst, None),
             SkeletonInstSimplification::ReplaceWithVal { inst, val } => (inst, Some(val)),
@@ -1237,7 +1266,8 @@ pub(crate) struct Stats {
     pub(crate) skeleton_inst_simplified: u64,
     pub(crate) skeleton_inst_gvn: u64,
     pub(crate) alias_analysis_removed_load: u64,
-    pub(crate) alias_analysis_removed_store: u64,
+    pub(crate) alias_analysis_removed_idempotent_store: u64,
+    pub(crate) alias_analysis_removed_dead_store: u64,
     pub(crate) new_inst: u64,
     pub(crate) union: u64,
     pub(crate) subsume: u64,
