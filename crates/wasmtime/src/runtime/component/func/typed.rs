@@ -2984,7 +2984,7 @@ where
         clippy::cast_possible_truncation,
         reason = "there is no fallible const conversion, yet"
     )]
-    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::fixed_length_list_static(&T::ABI, N as u32);
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::fixed_length_list_static(&T::ABI, N);
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
         match ty {
