@@ -9,15 +9,12 @@ use crate::p3::body::{Body, HostBodyStreamProducer};
 use crate::p3::{HeaderResult, HttpError, RequestOptionsResult, WasiHttp, WasiHttpCtxView};
 use core::mem;
 use core::pin::Pin;
-use core::task::{Context, Poll, ready};
 use http::header::CONTENT_LENGTH;
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use wasmtime::component::{
-    Access, FutureProducer, FutureReader, Resource, ResourceTable, StreamReader,
-};
+use wasmtime::AsContextMut;
+use wasmtime::component::{Access, FutureReader, Resource, ResourceTable, StreamReader};
 use wasmtime::error::Context as _;
-use wasmtime::{AsContextMut, StoreContextMut};
 
 fn get_fields<'a>(
     table: &'a ResourceTable,
@@ -161,51 +158,13 @@ fn parse_header_value(
     }
 }
 
-enum GuestBodyResultProducer {
-    Receiver(oneshot::Receiver<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>),
-    Future(Pin<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>),
-}
-
-fn poll_future<T>(
-    cx: &mut Context<'_>,
-    fut: Pin<&mut (impl Future<Output = T> + ?Sized)>,
-    finish: bool,
-) -> Poll<Option<T>> {
-    match fut.poll(cx) {
-        Poll::Ready(v) => Poll::Ready(Some(v)),
-        Poll::Pending if finish => Poll::Ready(None),
-        Poll::Pending => Poll::Pending,
-    }
-}
-
-impl<D> FutureProducer<D> for GuestBodyResultProducer {
-    type Item = Result<(), ErrorCode>;
-
-    fn poll_produce(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        _: StoreContextMut<D>,
-        finish: bool,
-    ) -> Poll<wasmtime::Result<Option<Self::Item>>> {
-        match &mut *self {
-            Self::Receiver(rx) => {
-                match ready!(poll_future(cx, Pin::new(rx), finish)) {
-                    Some(Ok(fut)) => {
-                        let mut fut = Box::into_pin(fut);
-                        // poll the received future once and update state
-                        let res = poll_future(cx, fut.as_mut(), finish);
-                        *self = Self::Future(fut);
-                        res.map(Ok)
-                    }
-                    Some(Err(..)) => {
-                        // oneshot sender dropped, treat as success
-                        Poll::Ready(Ok(Some(Ok(()))))
-                    }
-                    None => Poll::Ready(Ok(None)),
-                }
-            }
-            Self::Future(fut) => poll_future(cx, fut.as_mut(), finish).map(Ok),
-        }
+async fn guest_body_result(
+    rx: oneshot::Receiver<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
+) -> wasmtime::Result<Result<(), ErrorCode>> {
+    match rx.await {
+        Ok(fut) => Ok(Pin::from(fut).await),
+        // oneshot sender dropped, treat as success
+        Err(..) => Ok(Ok(())),
     }
 }
 
@@ -375,7 +334,7 @@ impl<T> HostRequestWithStore<T> for WasiHttp {
         let req = table.push(req).context("failed to push request to table")?;
         Ok((
             req,
-            FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx))?,
+            FutureReader::new(&mut store, guest_body_result(result_rx))?,
         ))
     }
 
@@ -648,7 +607,7 @@ impl<T> HostResponseWithStore<T> for WasiHttp {
             .context("failed to push response to table")?;
         Ok((
             res,
-            FutureReader::new(&mut store, GuestBodyResultProducer::Receiver(result_rx))?,
+            FutureReader::new(&mut store, guest_body_result(result_rx))?,
         ))
     }
 

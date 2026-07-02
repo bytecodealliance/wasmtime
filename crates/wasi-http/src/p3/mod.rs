@@ -11,6 +11,7 @@
 pub mod bindings;
 mod body;
 mod conv;
+mod helpers;
 mod host;
 mod proxy;
 mod request;
