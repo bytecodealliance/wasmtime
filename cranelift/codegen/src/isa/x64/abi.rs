@@ -653,6 +653,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
         flags: &settings::Flags,
+        _isa_flags: &x64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
@@ -764,6 +765,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn gen_clobber_restore(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
+        _isa_flags: &x64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();

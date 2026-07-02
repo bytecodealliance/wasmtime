@@ -433,6 +433,7 @@ where
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
+        _isa_flags: &PulleyFlags,
         _frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
         // Note that this is intentionally empty because everything necessary
@@ -443,6 +444,7 @@ where
     fn gen_clobber_restore(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
+        _isa_flags: &PulleyFlags,
         _frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
         // Intentionally empty as restores happen for Pulley in `gen_return`.
