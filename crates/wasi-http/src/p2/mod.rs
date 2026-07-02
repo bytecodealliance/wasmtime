@@ -662,7 +662,7 @@ pub async fn default_send_request(
             .with_root_certificates(root_cert_store)
             .with_no_client_auth();
         let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
-        let domain = crate::tls_server_name(&authority).map_err(|e| {
+        let domain = crate::default_send_request::tls_server_name(&authority).map_err(|e| {
             tracing::warn!("dns lookup error: {e:?}");
             dns_error("invalid dns name".to_string(), 0)
         })?;

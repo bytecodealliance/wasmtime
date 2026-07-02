@@ -1,4 +1,4 @@
-use crate::p3::WasiHttpView;
+use crate::WasiHttpView;
 use crate::p3::bindings::Service;
 use crate::p3::bindings::http::types::{ErrorCode, Request, Response};
 use wasmtime::component::Accessor;

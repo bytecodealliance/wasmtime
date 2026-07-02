@@ -267,7 +267,7 @@ pub enum ViewFn<T> {
     P2(fn(&mut T) -> crate::p2::WasiHttpCtxView),
     /// A p3 getter.
     #[cfg(feature = "p3")]
-    P3(fn(&mut T) -> p3::WasiHttpCtxView),
+    P3(fn(&mut T) -> crate::WasiHttpCtxView),
 }
 
 impl<T> Clone for ViewFn<T> {
@@ -1226,8 +1226,8 @@ pub enum Prepared<'a, T: 'static> {
             (Result<Resource<p3_types::Response>, p3_types::ErrorCode>,),
         >,
         tx: oneshot::Sender<Result<Response, wasmtime::Error>>,
-        request_io_result: Pin<Box<dyn Future<Output = Result<(), p3_types::ErrorCode>> + Send>>,
-        view: fn(&mut T) -> p3::WasiHttpCtxView,
+        request_io_result: Pin<Box<dyn Future<Output = Result<(), crate::Error>> + Send>>,
+        view: fn(&mut T) -> crate::WasiHttpCtxView,
     },
 }
 

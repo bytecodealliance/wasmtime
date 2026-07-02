@@ -18,20 +18,14 @@ mod request;
 mod response;
 
 pub use request::Request;
-#[cfg(feature = "default-send-request")]
-pub use request::default_send_request;
 pub use response::Response;
 
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::{DEFAULT_FORBIDDEN_HEADERS, FieldMapError, RequestOptions, WasiHttpCtx};
+use crate::{Error, FieldMapError, WasiHttp, WasiHttpView};
 use bindings::http::{client, types};
-use bytes::Bytes;
 use core::ops::Deref;
-use http::HeaderName;
-use http::uri::Scheme;
-use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
-use wasmtime::component::{HasData, Linker, ResourceTable};
+use wasmtime::component::Linker;
 use wasmtime_wasi::TrappableError;
 
 pub(crate) type HttpResult<T> = Result<T, HttpError>;
@@ -52,153 +46,14 @@ impl From<FieldMapError> for HeaderError {
     }
 }
 
+impl From<Error> for HttpError {
+    fn from(e: Error) -> Self {
+        HttpError::from(ErrorCode::from(e))
+    }
+}
+
 pub(crate) type RequestOptionsResult<T> = Result<T, RequestOptionsError>;
 pub(crate) type RequestOptionsError = TrappableError<types::RequestOptionsError>;
-
-/// The type for which this crate implements the `wasi:http` interfaces.
-pub struct WasiHttp;
-
-impl HasData for WasiHttp {
-    type Data<'a> = WasiHttpCtxView<'a>;
-}
-
-/// A trait which provides internal WASI HTTP state.
-pub trait WasiHttpHooks: Send {
-    /// Whether a given header should be considered forbidden and not allowed.
-    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        DEFAULT_FORBIDDEN_HEADERS.contains(name)
-    }
-
-    /// Whether a given scheme should be considered supported.
-    ///
-    /// `handle` will return [ErrorCode::HttpProtocolError] for unsupported schemes.
-    fn is_supported_scheme(&mut self, scheme: &Scheme) -> bool {
-        *scheme == Scheme::HTTP || *scheme == Scheme::HTTPS
-    }
-
-    /// Whether to set `host` header in the request passed to `send_request`.
-    fn set_host_header(&mut self) -> bool {
-        true
-    }
-
-    /// Scheme to default to, when not set by the guest.
-    ///
-    /// If [None], `handle` will return [ErrorCode::HttpProtocolError]
-    /// for requests missing a scheme.
-    fn default_scheme(&mut self) -> Option<Scheme> {
-        Some(Scheme::HTTPS)
-    }
-
-    /// Send an outgoing request.
-    ///
-    /// This function will be used by the `wasi:http/handler#handle` implementation.
-    ///
-    /// The specified [Future] `fut` will be used to communicate
-    /// a response processing error, if any.
-    /// For example, if the response body is consumed via `wasi:http/types.response#consume-body`,
-    /// a result will be sent on `fut`.
-    ///
-    /// The returned [Future] can be used to communicate
-    /// a request processing error, if any, to the constructor of the request.
-    /// For example, if the request was constructed via `wasi:http/types.request#new`,
-    /// a result resolved from it will be forwarded to the guest on the future handle returned.
-    ///
-    /// `Content-Length` of the request passed to this function will be validated, however no
-    /// `Content-Length` validation will be performed for the received response.
-    #[cfg(feature = "default-send-request")]
-    fn send_request(
-        &mut self,
-        request: http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
-        options: Option<RequestOptions>,
-        fut: Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
-    ) -> Box<
-        dyn Future<
-                Output = HttpResult<(
-                    http::Response<UnsyncBoxBody<Bytes, ErrorCode>>,
-                    Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
-                )>,
-            > + Send,
-    > {
-        _ = fut;
-        Box::new(async move {
-            use http_body_util::BodyExt;
-
-            let (res, io) = default_send_request(request, options).await?;
-            Ok((
-                res.map(BodyExt::boxed_unsync),
-                Box::new(io) as Box<dyn Future<Output = _> + Send>,
-            ))
-        })
-    }
-
-    /// Send an outgoing request.
-    ///
-    /// This function will be used by the `wasi:http/handler#handle` implementation.
-    ///
-    /// The specified [Future] `fut` will be used to communicate
-    /// a response processing error, if any.
-    /// For example, if the response body is consumed via `wasi:http/types.response#consume-body`,
-    /// a result will be sent on `fut`.
-    ///
-    /// The returned [Future] can be used to communicate
-    /// a request processing error, if any, to the constructor of the request.
-    /// For example, if the request was constructed via `wasi:http/types.request#new`,
-    /// a result resolved from it will be forwarded to the guest on the future handle returned.
-    ///
-    /// `Content-Length` of the request passed to this function will be validated, however no
-    /// `Content-Length` validation will be performed for the received response.
-    #[cfg(not(feature = "default-send-request"))]
-    fn send_request(
-        &mut self,
-        request: http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
-        options: Option<RequestOptions>,
-        fut: Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
-    ) -> Box<
-        dyn Future<
-                Output = HttpResult<(
-                    http::Response<UnsyncBoxBody<Bytes, ErrorCode>>,
-                    Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
-                )>,
-            > + Send,
-    >;
-}
-
-#[cfg(feature = "default-send-request")]
-impl<'a> Default for &'a mut dyn WasiHttpHooks {
-    fn default() -> Self {
-        let x: &mut [(); 0] = &mut [];
-        x
-    }
-}
-
-#[doc(hidden)]
-#[cfg(feature = "default-send-request")]
-impl WasiHttpHooks for [(); 0] {}
-
-/// Returns a value suitable for the `WasiHttpCtxView::hooks` field which has
-/// the default behavior for `wasi:http`.
-#[cfg(feature = "default-send-request")]
-pub fn default_hooks() -> &'static mut dyn WasiHttpHooks {
-    Default::default()
-}
-
-/// View into [WasiHttpCtx] implementation and [ResourceTable].
-pub struct WasiHttpCtxView<'a> {
-    /// Mutable reference to the WASI HTTP hooks.
-    pub hooks: &'a mut dyn WasiHttpHooks,
-
-    /// Mutable reference to table used to manage resources.
-    pub table: &'a mut ResourceTable,
-
-    /// Mutable reference to the WASI HTTP context.
-    pub ctx: &'a mut WasiHttpCtx,
-}
-
-/// A trait which provides internal WASI HTTP state.
-pub trait WasiHttpView: Send {
-    /// Return a [WasiHttpCtxView] from mutable reference to self.
-    fn http(&mut self) -> WasiHttpCtxView<'_>;
-}
 
 /// Add all interfaces from this module into the `linker` provided.
 ///
@@ -211,7 +66,7 @@ pub trait WasiHttpView: Send {
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{Linker, ResourceTable};
-/// use wasmtime_wasi_http::{WasiHttpCtx, p3::{WasiHttpCtxView, WasiHttpView}};
+/// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpCtxView, WasiHttpView};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();

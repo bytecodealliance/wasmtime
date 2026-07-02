@@ -31,7 +31,7 @@ mod generated {
 
     mod with {
         pub type Fields = crate::FieldMap;
-        pub type RequestOptions = crate::p3::MaybeMutable<crate::p3::RequestOptions>;
+        pub type RequestOptions = crate::p3::MaybeMutable<crate::RequestOptions>;
     }
 }
 
