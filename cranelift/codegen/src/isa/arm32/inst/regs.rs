@@ -71,12 +71,14 @@ pub fn writable_stack_reg() -> Writable<Reg> {
 
 /// Link register (r14).
 #[inline]
+#[allow(dead_code, reason = "part of the register API, used as the backend grows")]
 pub fn link_reg() -> Reg {
     xreg(14)
 }
 
 /// Writable link register.
 #[inline]
+#[allow(dead_code, reason = "part of the register API, used as the backend grows")]
 pub fn writable_link_reg() -> Writable<Reg> {
     Writable::from_reg(link_reg())
 }
@@ -112,9 +114,9 @@ pub fn reg_name(reg: Reg) -> alloc::string::String {
 pub const fn create_reg_environment() -> MachineEnv {
     // Preferred registers are the caller-saved (scratch) GPRs; the allocator
     // reaches for these first since they don't need to be saved/restored.
-    let preferred_int = PRegSet_int(&[0, 1, 2, 3]);
+    let preferred_int = preg_set_int(&[0, 1, 2, 3]);
     // Non-preferred registers are the callee-saved GPRs.
-    let non_preferred_int = PRegSet_int(&[4, 5, 6, 7, 8, 9, 10]);
+    let non_preferred_int = preg_set_int(&[4, 5, 6, 7, 8, 9, 10]);
 
     MachineEnv {
         preferred_regs_by_class: [preferred_int, empty(), empty()],
@@ -124,8 +126,7 @@ pub const fn create_reg_environment() -> MachineEnv {
     }
 }
 
-#[allow(non_snake_case)]
-const fn PRegSet_int(encs: &[u8]) -> regalloc2::PRegSet {
+const fn preg_set_int(encs: &[u8]) -> regalloc2::PRegSet {
     let mut set = regalloc2::PRegSet::empty();
     let mut i = 0;
     while i < encs.len() {

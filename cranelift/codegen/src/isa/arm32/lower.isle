@@ -3,19 +3,75 @@
 ;; The main lowering entry point.
 (decl partial lower (Inst) InstOutput)
 
-;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (iconst (fits_in_32 ty) (u64_from_imm64 n)))
   (imm ty n))
 
-;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; `iadd` / `isub` / `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 2 (lower (iadd (fits_in_32 _) x (iconst _ (u64_from_imm64 n))))
+  (add_imm (put_in_reg x) n))
+(rule 1 (lower (iadd (fits_in_32 _) (iconst _ (u64_from_imm64 n)) y))
+  (add_imm (put_in_reg y) n))
+(rule (lower (iadd (fits_in_32 _) x y))
+  (add_reg (put_in_reg x) (put_in_reg y)))
+
+(rule 1 (lower (isub (fits_in_32 _) x (iconst _ (u64_from_imm64 n))))
+  (sub_imm (put_in_reg x) n))
+(rule (lower (isub (fits_in_32 _) x y))
+  (sub_reg (put_in_reg x) (put_in_reg y)))
+
+;; Negation is a reverse-subtract from zero.
+(rule (lower (ineg (fits_in_32 _) x))
+  (rsb_imm (put_in_reg x) 0))
+
+;;;; Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (load (fits_in_32 _) flags addr offset))
+  (arm_load (amode addr offset) (LoadKind.Word)))
+
+(rule (lower (uload8 _ flags addr offset))
+  (arm_load (amode addr offset) (LoadKind.UByte)))
+(rule (lower (sload8 _ flags addr offset))
+  (arm_load (amode addr offset) (LoadKind.SByte)))
+(rule (lower (uload16 _ flags addr offset))
+  (arm_load (amode addr offset) (LoadKind.UHalf)))
+(rule (lower (sload16 _ flags addr offset))
+  (arm_load (amode addr offset) (LoadKind.SHalf)))
+
+;;;; Stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (store flags val @ (value_type (fits_in_32 _)) addr offset))
+  (arm_store (put_in_reg val) (amode addr offset) (StoreKind.Word)))
+
+(rule (lower (istore8 flags val addr offset))
+  (arm_store (put_in_reg val) (amode addr offset) (StoreKind.Byte)))
+(rule (lower (istore16 flags val addr offset))
+  (arm_store (put_in_reg val) (amode addr offset) (StoreKind.Half)))
+
+;;;; `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (return args))
   (lower_return args))
 
-;;;; Branch lowering ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Branches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl partial lower_branch (Inst MachLabelSlice) Unit)
 
 (rule (lower_branch (jump _) (single_target label))
   (emit_side_effect (jump_impl label)))
+
+;; Fuse an `icmp` feeding a `brif` into a compare plus a conditional branch.
+(rule 1 (lower_branch (brif (icmp _ cc a b) _ _) (two_targets taken not_taken))
+  (emit_side_effect
+    (side_effect_concat
+      (cmp_rr (put_in_reg a) (put_in_reg b))
+      (cond_br (cond_from_intcc cc) taken not_taken))))
+
+;; Generic `brif`: branch when the value is non-zero.
+(rule (lower_branch (brif v _ _) (two_targets taken not_taken))
+  (emit_side_effect
+    (side_effect_concat
+      (cmp_imm (put_in_reg v) 0)
+      (cond_br (Cond.Ne) taken not_taken))))

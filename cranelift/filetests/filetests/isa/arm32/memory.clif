@@ -1,0 +1,83 @@
+test compile precise-output
+target arm
+
+function %load_word(i32) -> i32 {
+block0(v0: i32):
+    v1 = load.i32 v0+4
+    return v1
+}
+
+; VCode:
+; block0:
+;   ldr r0, [r0, #4]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr r0, [r0, #4]
+;   bx lr
+
+function %store_word(i32, i32) {
+block0(v0: i32, v1: i32):
+    store.i32 v1, v0+8
+    return
+}
+
+; VCode:
+; block0:
+;   str r1, [r0, #8]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   str r1, [r0, #8]
+;   bx lr
+
+function %load_u8(i32) -> i32 {
+block0(v0: i32):
+    v1 = uload8.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ldrb r0, [r0, #0]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrb r0, [r0]
+;   bx lr
+
+function %store_u8(i32, i32) {
+block0(v0: i32, v1: i32):
+    istore8 v1, v0
+    return
+}
+
+; VCode:
+; block0:
+;   strb r1, [r0, #0]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   strb r1, [r0]
+;   bx lr
+
+function %load_s16(i32) -> i32 {
+block0(v0: i32):
+    v1 = sload16.i32 v0+2
+    return v1
+}
+
+; VCode:
+; block0:
+;   ldrsh r0, [r0, #2]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrsh r0, [r0, #2]
+;   bx lr
+

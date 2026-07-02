@@ -119,12 +119,20 @@ impl ABIMachineSpec for Arm32MachineDeps {
         Ok((next_stack, pos))
     }
 
-    fn gen_load_stack(_mem: StackAMode, _into_reg: Writable<Reg>, _ty: Type) -> Inst {
-        unimplemented!("arm32: stack loads (spills/reloads) not yet implemented")
+    fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
+        Inst::Load {
+            rt: into_reg,
+            mem: amode_from_stack(mem),
+            kind: LoadKind::Word,
+        }
     }
 
-    fn gen_store_stack(_mem: StackAMode, _from_reg: Reg, _ty: Type) -> Inst {
-        unimplemented!("arm32: stack stores (spills/reloads) not yet implemented")
+    fn gen_store_stack(mem: StackAMode, from_reg: Reg, _ty: Type) -> Inst {
+        Inst::Store {
+            rt: from_reg,
+            mem: amode_from_stack(mem),
+            kind: StoreKind::Word,
+        }
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
@@ -180,16 +188,16 @@ impl ABIMachineSpec for Arm32MachineDeps {
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, _ty: Type) -> Inst {
         Inst::Load {
             rt: into_reg,
-            base,
-            offset,
+            mem: AMode::RegOffset { rn: base, offset },
+            kind: LoadKind::Word,
         }
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, _ty: Type) -> Inst {
         Inst::Store {
             rt: from_reg,
-            base,
-            offset,
+            mem: AMode::RegOffset { rn: base, offset },
+            kind: StoreKind::Word,
         }
     }
 
@@ -210,18 +218,10 @@ impl ABIMachineSpec for Arm32MachineDeps {
         let mut insts = smallvec![];
         if frame_layout.setup_area_size > 0 {
             // push {fp, lr}; mov fp, sp
-            insts.push(Inst::AdjustSp { amount: -8 });
-            insts.push(Inst::Store {
-                rt: link_reg(),
-                base: stack_reg(),
-                offset: 4,
+            insts.push(Inst::Push {
+                reg_list: FP_LR_REG_LIST,
             });
-            insts.push(Inst::Store {
-                rt: fp_reg(),
-                base: stack_reg(),
-                offset: 0,
-            });
-            insts.push(Inst::Mov {
+            insts.push(Inst::MovReg {
                 rd: writable_fp_reg(),
                 rm: stack_reg(),
             });
@@ -237,17 +237,10 @@ impl ABIMachineSpec for Arm32MachineDeps {
     ) -> SmallInstVec<Inst> {
         let mut insts = smallvec![];
         if frame_layout.setup_area_size > 0 {
-            insts.push(Inst::Load {
-                rt: writable_fp_reg(),
-                base: stack_reg(),
-                offset: 0,
+            // pop {fp, lr}
+            insts.push(Inst::Pop {
+                reg_list: FP_LR_REG_LIST,
             });
-            insts.push(Inst::Load {
-                rt: writable_link_reg(),
-                base: stack_reg(),
-                offset: 4,
-            });
-            insts.push(Inst::AdjustSp { amount: 8 });
         }
         insts
     }
@@ -288,8 +281,10 @@ impl ABIMachineSpec for Arm32MachineDeps {
             for reg in &frame_layout.clobbered_callee_saves {
                 insts.push(Inst::Store {
                     rt: Reg::from(reg.to_reg()),
-                    base: stack_reg(),
-                    offset: cur_offset,
+                    mem: AMode::SPOffset {
+                        offset: i64::from(cur_offset),
+                    },
+                    kind: StoreKind::Word,
                 });
                 cur_offset += 4;
             }
@@ -310,8 +305,10 @@ impl ABIMachineSpec for Arm32MachineDeps {
         for reg in &frame_layout.clobbered_callee_saves {
             insts.push(Inst::Load {
                 rt: reg.map(Reg::from),
-                base: stack_reg(),
-                offset: cur_offset,
+                mem: AMode::SPOffset {
+                    offset: i64::from(cur_offset),
+                },
+                kind: LoadKind::Word,
             });
             cur_offset += 4;
         }
@@ -410,6 +407,21 @@ impl ABIMachineSpec for Arm32MachineDeps {
 
     fn exception_payload_regs(_call_conv: isa::CallConv) -> &'static [Reg] {
         &[]
+    }
+}
+
+/// Register-list mask for `{fp, lr}` (r11 and r14), as used by push/pop.
+const FP_LR_REG_LIST: u32 = (1 << 11) | (1 << 14);
+
+/// Convert a `StackAMode` (a nominal stack reference) into an `AMode` that is
+/// resolved against the frame layout at emit time.
+fn amode_from_stack(mem: StackAMode) -> AMode {
+    match mem {
+        StackAMode::IncomingArg(off, stack_args_size) => AMode::IncomingArg {
+            offset: i64::from(stack_args_size) - off,
+        },
+        StackAMode::Slot(off) => AMode::SlotOffset { offset: off },
+        StackAMode::OutgoingArg(off) => AMode::SPOffset { offset: off },
     }
 }
 

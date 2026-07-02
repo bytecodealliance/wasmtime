@@ -1,7 +1,66 @@
-;; Arm32 instruction definitions.
+;; arm32 (AArch32 / A32) instruction definitions.
 ;;
 ;; The `MInst` type below is the machine-instruction enum for this backend; it
 ;; is generated into Rust and re-exported as `Inst` by `inst/mod.rs`.
+
+;;;; Supporting types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A data-processing ALU operation.
+(type ALUOp
+  (enum
+    (Add)
+    (Sub)
+    (Rsb)
+    (And)
+    (Orr)
+    (Eor)
+    (Bic)))
+
+;; A flag-setting compare operation.
+(type CmpOp
+  (enum
+    (Cmp)
+    (Cmn)))
+
+;; An ARM condition code (the "always" and "never" codes are omitted).
+(type Cond
+  (enum
+    (Eq) (Ne) (Hs) (Lo) (Mi) (Pl) (Vs) (Vc)
+    (Hi) (Ls) (Ge) (Lt) (Gt) (Le)))
+
+;; The width/signedness of a load.
+(type LoadKind
+  (enum
+    (Word)
+    (UByte)
+    (SByte)
+    (UHalf)
+    (SHalf)))
+
+;; The width of a store.
+(type StoreKind
+  (enum
+    (Word)
+    (Byte)
+    (Half)))
+
+;; A memory addressing mode.
+(type AMode
+  (enum
+    ;; `[rn, #offset]`
+    (RegOffset (rn Reg) (offset i32))
+    ;; `[rn, rm]`
+    (RegReg (rn Reg) (rm Reg))
+    ;; `[sp, #offset]`
+    (SPOffset (offset i64))
+    ;; A reference to a stack slot, resolved to an SP offset at emit time.
+    (SlotOffset (offset i64))
+    ;; A reference into the incoming-argument area, resolved at emit time.
+    (IncomingArg (offset i64))))
+
+(type BoxCallInfo (primitive BoxCallInfo))
+
+;;;; Instruction formats ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MInst
   (enum
@@ -10,66 +69,156 @@
     ;; A four-byte no-op.
     (Nop4)
 
-    ;; Load an arbitrary 32-bit immediate into `rd` (expands to `movw`, plus
-    ;; `movt` when the high half is non-zero).
-    (MovImm
-      (rd WritableReg)
-      (imm u64))
+    ;; Load an arbitrary 32-bit constant into `rd` via `movw` + `movt`.
+    (MovImm (rd WritableReg) (imm u64))
+    ;; `mov rd, #imm` with a rotated 8-bit immediate (pre-encoded imm12).
+    (MovRotImm (rd WritableReg) (imm12 u32))
+    ;; `mvn rd, #imm` with a rotated 8-bit immediate (pre-encoded imm12).
+    (MvnRotImm (rd WritableReg) (imm12 u32))
+    ;; `movw rd, #imm16`.
+    (Movw (rd WritableReg) (imm16 u32))
+    ;; `movt rd, #imm16` (sets the top half, preserving the low half).
+    (Movt (rd WritableReg) (imm16 u32))
+    ;; `mov rd, rm`.
+    (MovReg (rd WritableReg) (rm Reg))
 
-    ;; Register-to-register move: `mov rd, rm`.
-    (Mov
-      (rd WritableReg)
-      (rm Reg))
+    ;; `op rd, rn, rm`.
+    (AluRRR (op ALUOp) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; `op rd, rn, #imm` (pre-encoded rotated imm12).
+    (AluRRImm (op ALUOp) (rd WritableReg) (rn Reg) (imm12 u32))
 
-    ;; Adjust the stack pointer by a (signed) constant amount.
-    (AdjustSp
-      (amount i32))
+    ;; `cmp/cmn rn, rm`.
+    (CmpRR (op CmpOp) (rn Reg) (rm Reg))
+    ;; `cmp/cmn rn, #imm` (pre-encoded rotated imm12).
+    (CmpRImm (op CmpOp) (rn Reg) (imm12 u32))
 
-    ;; Store `rt` to `[base, #offset]`.
-    (Store
-      (rt Reg)
-      (base Reg)
-      (offset i32))
+    ;; A load of the given kind.
+    (Load (rt WritableReg) (mem AMode) (kind LoadKind))
+    ;; A store of the given kind.
+    (Store (rt Reg) (mem AMode) (kind StoreKind))
 
-    ;; Load `[base, #offset]` into `rt`.
-    (Load
-      (rt WritableReg)
-      (base Reg)
-      (offset i32))
+    ;; `push {reglist}` (STMDB sp!). The register list is a 16-bit mask.
+    (Push (reg_list u32))
+    ;; `pop {reglist}` (LDMIA sp!).
+    (Pop (reg_list u32))
 
-    ;; An unconditional branch to a label.
-    (Jump
-      (dest MachLabel))
+    ;; Adjust the stack pointer by a signed constant (add/sub sp).
+    (AdjustSp (amount i32))
+
+    ;; A direct call (`bl`).
+    (Call (info BoxCallInfo))
+
+    ;; An unconditional branch to a label (`b`).
+    (Jump (dest MachLabel))
+
+    ;; A conditional branch: `b<cond> taken; b not_taken`.
+    (CondBr (cond Cond) (taken MachLabel) (not_taken MachLabel))
 
     ;; Pseudo-instruction capturing incoming register arguments in vregs.
-    (Args
-      (args VecArgPair))
-
+    (Args (args VecArgPair))
     ;; Pseudo-instruction moving vregs into the return registers.
-    (Rets
-      (rets VecRetPair))
-
+    (Rets (rets VecRetPair))
     ;; Return from the current function (`bx lr`).
     (Ret)
   )
 )
 
-;;;; Instruction-constructor helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Constant materialization ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Emit a `MovImm` and return its destination register.
-(decl movimm (u64) Reg)
-(rule (movimm n)
-  (let ((dst WritableReg (temp_writable_reg $I32))
-        (_ Unit (emit (MInst.MovImm dst n))))
-    dst))
+;; Materialize an integer constant into a register, choosing the shortest of
+;; `mov`/`mvn`/`movw`/`movw+movt`.
+(decl gen_constant (u64) Reg)
+(extern constructor gen_constant gen_constant)
 
 ;; Materialize an integer constant of the given type into a register.
 (decl imm (Type u64) Reg)
-(rule (imm _ty n) (movimm n))
+(rule (imm _ty n) (gen_constant n))
 
-;;;; Branch lowering ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; ALU helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; An unconditional jump as a side effect.
+;; `op rd, rn, rm`.
+(decl alu_rrr (ALUOp Reg Reg) Reg)
+(rule (alu_rrr op rn rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AluRRR op rd rn rm))))
+    rd))
+
+;; `op rd, rn, #imm` (immediate must be a rotated imm12).
+(decl alu_rr_imm12 (ALUOp Reg u32) Reg)
+(rule (alu_rr_imm12 op rn imm12)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AluRRImm op rd rn imm12))))
+    rd))
+
+;; A constant is encodable as an A32 data-processing immediate; the result is
+;; its pre-encoded 12-bit form.
+(decl pure partial u64_from_rotated_imm12 (u64) u32)
+(extern constructor u64_from_rotated_imm12 u64_from_rotated_imm12)
+
+;; Add: prefer the immediate form when the RHS is an encodable constant.
+(decl add_reg (Reg Reg) Reg)
+(rule (add_reg a b) (alu_rrr (ALUOp.Add) a b))
+
+(decl add_imm (Reg u64) Reg)
+(rule 1 (add_imm a b)
+  (if-let imm12 (u64_from_rotated_imm12 b))
+  (alu_rr_imm12 (ALUOp.Add) a imm12))
+(rule (add_imm a b) (alu_rrr (ALUOp.Add) a (gen_constant b)))
+
+(decl sub_reg (Reg Reg) Reg)
+(rule (sub_reg a b) (alu_rrr (ALUOp.Sub) a b))
+
+(decl sub_imm (Reg u64) Reg)
+(rule 1 (sub_imm a b)
+  (if-let imm12 (u64_from_rotated_imm12 b))
+  (alu_rr_imm12 (ALUOp.Sub) a imm12))
+(rule (sub_imm a b) (alu_rrr (ALUOp.Sub) a (gen_constant b)))
+
+;; Reverse subtract, used for negation: `rsb rd, rn, #0`.
+(decl rsb_imm (Reg u32) Reg)
+(rule (rsb_imm a imm12)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AluRRImm (ALUOp.Rsb) rd a imm12))))
+    rd))
+
+;;;; Loads and stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl arm_load (AMode LoadKind) Reg)
+(rule (arm_load mem kind)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Load rd mem kind))))
+    rd))
+
+(decl arm_store (Reg AMode StoreKind) InstOutput)
+(rule (arm_store val mem kind)
+  (side_effect (SideEffectNoResult.Inst (MInst.Store val mem kind))))
+
+;; Build an addressing mode from an address value plus a constant offset.
+(decl amode (Value Offset32) AMode)
+(rule (amode base offset) (AMode.RegOffset base (offset32_to_i32 offset)))
+
+;;;; Comparisons and branches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Emit a compare (`cmp rn, rm`) as a side effect.
+(decl cmp_rr (Reg Reg) SideEffectNoResult)
+(rule (cmp_rr rn rm)
+  (SideEffectNoResult.Inst (MInst.CmpRR (CmpOp.Cmp) rn rm)))
+
+;; Emit a compare against a rotated imm12 (`cmp rn, #imm`) as a side effect.
+(decl cmp_imm (Reg u32) SideEffectNoResult)
+(rule (cmp_imm rn imm12)
+  (SideEffectNoResult.Inst (MInst.CmpRImm (CmpOp.Cmp) rn imm12)))
+
+;; A conditional branch.
+(decl cond_br (Cond MachLabel MachLabel) SideEffectNoResult)
+(rule (cond_br cond taken not_taken)
+  (SideEffectNoResult.Inst (MInst.CondBr cond taken not_taken)))
+
+;; An unconditional branch.
 (decl jump_impl (MachLabel) SideEffectNoResult)
 (rule (jump_impl label)
   (SideEffectNoResult.Inst (MInst.Jump label)))
+
+;; Map an `IntCC` to the corresponding ARM condition code.
+(decl cond_from_intcc (IntCC) Cond)
+(extern constructor cond_from_intcc cond_from_intcc)

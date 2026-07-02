@@ -9,10 +9,11 @@ block0:
 
 ; VCode:
 ; block0:
-;   movw r0, #42
+;   mov r0, #42
 ;   bx lr
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   movw r0, #0x2a
+;   mov r0, #0x2a
 ;   bx lr
+

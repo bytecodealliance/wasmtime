@@ -1,5 +1,6 @@
 //! arm32 (A32) ISA: binary code emission.
 
+use crate::binemit::Reloc;
 use crate::ir;
 use crate::isa::arm32::inst::*;
 use crate::settings;
@@ -81,70 +82,130 @@ fn machreg_to_gpr(reg: Reg) -> u32 {
     u32::from(reg.to_real_reg().unwrap().hw_enc() & 0xf)
 }
 
-/// `movw rd, #imm16` — load a 16-bit immediate into the low half of `rd`,
-/// zeroing the high half.
+//=============================================================================
+// Instruction encoders.
+
+/// A data-processing instruction with an immediate operand2 (`op{s} rd, rn,
+/// #imm12`). `imm12` is the already-encoded rotated immediate.
+fn enc_dp_imm(opcode: u32, s: u32, rd: u32, rn: u32, imm12: u32) -> u32 {
+    COND_AL | (1 << 25) | (opcode << 21) | (s << 20) | (rn << 16) | (rd << 12) | (imm12 & 0xfff)
+}
+
+/// A data-processing instruction with a register operand2 (`op{s} rd, rn, rm`).
+fn enc_dp_reg(opcode: u32, s: u32, rd: u32, rn: u32, rm: u32) -> u32 {
+    COND_AL | (opcode << 21) | (s << 20) | (rn << 16) | (rd << 12) | rm
+}
+
+/// `movw rd, #imm16` — load a 16-bit immediate into the low half of `rd`.
 fn enc_movw(rd: u32, imm16: u32) -> u32 {
     let imm4 = (imm16 >> 12) & 0xf;
     let imm12 = imm16 & 0xfff;
     COND_AL | 0x0300_0000 | (imm4 << 16) | (rd << 12) | imm12
 }
 
-/// `movt rd, #imm16` — load a 16-bit immediate into the high half of `rd`,
-/// preserving the low half.
+/// `movt rd, #imm16` — load a 16-bit immediate into the high half of `rd`.
 fn enc_movt(rd: u32, imm16: u32) -> u32 {
     let imm4 = (imm16 >> 12) & 0xf;
     let imm12 = imm16 & 0xfff;
     COND_AL | 0x0340_0000 | (imm4 << 16) | (rd << 12) | imm12
 }
 
-/// `mov rd, rm` (register).
-fn enc_mov(rd: u32, rm: u32) -> u32 {
-    COND_AL | 0x01a0_0000 | (rd << 12) | rm
+/// `bx rm` — branch and exchange.
+fn enc_bx(rm: u32) -> u32 {
+    COND_AL | 0x012f_ff10 | rm
 }
 
-/// `bx lr` — branch and exchange to the link register.
-fn enc_bx_lr() -> u32 {
-    COND_AL | 0x012f_ff10 | 14
+/// `b <imm24>` — unconditional branch (offset patched in later).
+fn enc_b(imm24: u32) -> u32 {
+    COND_AL | 0x0a00_0000 | (imm24 & 0x00ff_ffff)
 }
 
-/// `add`/`sub sp, sp, #imm` for a small `imm` (< 256, encoded with rotation 0).
+/// `b<cond> <imm24>` — conditional branch.
+fn enc_bcond(cond: Cond, imm24: u32) -> u32 {
+    (cond.bits() << 28) | 0x0a00_0000 | (imm24 & 0x00ff_ffff)
+}
+
+/// `bl <imm24>` — branch with link (direct call).
+fn enc_bl(imm24: u32) -> u32 {
+    COND_AL | 0x0b00_0000 | (imm24 & 0x00ff_ffff)
+}
+
+/// `add`/`sub sp, sp, #imm`.
 fn enc_sp_adjust(amount: i32) -> u32 {
-    let sp = 13u32;
-    let (base, mag) = if amount < 0 {
-        (0x0240_0000u32, (-amount) as u32) // sub
+    let (op, mag) = if amount < 0 {
+        (ALUOp::Sub, (-amount) as u32)
     } else {
-        (0x0280_0000u32, amount as u32) // add
+        (ALUOp::Add, amount as u32)
     };
-    assert!(
-        mag < 256,
-        "arm32 sp adjust out of simple-immediate range: {amount}"
-    );
-    COND_AL | base | (sp << 16) | (sp << 12) | mag
+    let imm12 = encode_rotated_imm(mag).expect("arm32 sp adjust not encodable as a single immediate");
+    enc_dp_imm(op.opcode(), 0, 13, 13, imm12)
 }
 
-/// `str`/`ldr rt, [base, #offset]` with a 12-bit immediate offset.
-fn enc_ldr_str(load: bool, rt: u32, base: u32, offset: i32) -> u32 {
+/// `ldr`/`str{b} rt, [base, #±offset]` (word or byte).
+fn enc_ldr_str_imm(load: bool, byte: bool, rt: u32, base: u32, offset: i32) -> u32 {
     let (u_bit, mag) = if offset < 0 {
         (0u32, (-offset) as u32)
     } else {
         (1u32, offset as u32)
     };
     assert!(mag < 4096, "arm32 ldr/str offset out of range: {offset}");
-    // cond 01 I(0) P(1) U W(0) B(0) L rn rt imm12
-    let l_bit = if load { 1u32 } else { 0 };
     COND_AL
         | 0x0400_0000
         | (1 << 24) // P = 1 (pre-indexed)
         | (u_bit << 23)
-        | (l_bit << 20)
+        | (if byte { 1 } else { 0 } << 22)
+        | (if load { 1 } else { 0 } << 20)
         | (base << 16)
         | (rt << 12)
         | mag
 }
 
-/// `b label` — unconditional branch (offset patched in later).
-fn enc_b_placeholder() -> u32 {
-    COND_AL | 0x0a00_0000
+/// `ldr`/`str{b} rt, [base, index]` (word or byte, register offset).
+fn enc_ldr_str_reg(load: bool, byte: bool, rt: u32, base: u32, index: u32) -> u32 {
+    COND_AL
+        | 0x0600_0000
+        | (1 << 24) // P = 1
+        | (1 << 23) // U = 1 (add)
+        | (if byte { 1 } else { 0 } << 22)
+        | (if load { 1 } else { 0 } << 20)
+        | (base << 16)
+        | (rt << 12)
+        | index
+}
+
+/// Extra load/store (halfword and signed byte) with an 8-bit immediate offset.
+fn enc_ldrh_strh_imm(load: bool, s: u32, h: u32, rt: u32, base: u32, offset: i32) -> u32 {
+    let (u_bit, mag) = if offset < 0 {
+        (0u32, (-offset) as u32)
+    } else {
+        (1u32, offset as u32)
+    };
+    assert!(mag < 256, "arm32 ldrh/strh offset out of range: {offset}");
+    let imm_h = (mag >> 4) & 0xf;
+    let imm_l = mag & 0xf;
+    COND_AL
+        | (1 << 24) // P = 1
+        | (u_bit << 23)
+        | (1 << 22) // immediate form
+        | (if load { 1 } else { 0 } << 20)
+        | (base << 16)
+        | (rt << 12)
+        | (imm_h << 8)
+        | (1 << 7)
+        | (s << 6)
+        | (h << 5)
+        | (1 << 4)
+        | imm_l
+}
+
+/// `push {reglist}` (STMDB sp!).
+fn enc_push(reg_list: u32) -> u32 {
+    COND_AL | 0x092d_0000 | (reg_list & 0xffff)
+}
+
+/// `pop {reglist}` (LDMIA sp!).
+fn enc_pop(reg_list: u32) -> u32 {
+    COND_AL | 0x08bd_0000 | (reg_list & 0xffff)
 }
 
 fn put_u32(sink: &mut MachBuffer<Inst>, word: u32) {
@@ -157,12 +218,13 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, _emit_info: &Self::Info, _state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffer<Inst>, _emit_info: &Self::Info, state: &mut EmitState) {
         let start = sink.cur_offset();
         match self {
             Inst::Nop0 => {}
             Inst::Nop4 => put_u32(sink, COND_AL | 0x0320_f000),
-            Inst::Ret => put_u32(sink, enc_bx_lr()),
+            Inst::Ret => put_u32(sink, enc_bx(14)),
+
             Inst::MovImm { rd, imm } => {
                 let rd = machreg_to_gpr(rd.to_reg());
                 put_u32(sink, enc_movw(rd, (imm & 0xffff) as u32));
@@ -170,27 +232,87 @@ impl MachInstEmit for Inst {
                     put_u32(sink, enc_movt(rd, (imm >> 16) as u32));
                 }
             }
-            Inst::Mov { rd, rm } => {
+            Inst::MovRotImm { rd, imm12 } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                put_u32(sink, enc_dp_imm(0b1101, 0, rd, 0, *imm12));
+            }
+            Inst::MvnRotImm { rd, imm12 } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                put_u32(sink, enc_dp_imm(0b1111, 0, rd, 0, *imm12));
+            }
+            Inst::Movw { rd, imm16 } => {
+                put_u32(sink, enc_movw(machreg_to_gpr(rd.to_reg()), *imm16));
+            }
+            Inst::Movt { rd, imm16 } => {
+                put_u32(sink, enc_movt(machreg_to_gpr(rd.to_reg()), *imm16));
+            }
+            Inst::MovReg { rd, rm } => {
                 let rd = machreg_to_gpr(rd.to_reg());
                 let rm = machreg_to_gpr(*rm);
-                put_u32(sink, enc_mov(rd, rm));
+                put_u32(sink, enc_dp_reg(0b1101, 0, rd, 0, rm));
             }
+
+            Inst::AluRRR { op, rd, rn, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_dp_reg(op.opcode(), 0, rd, rn, rm));
+            }
+            Inst::AluRRImm { op, rd, rn, imm12 } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                put_u32(sink, enc_dp_imm(op.opcode(), 0, rd, rn, *imm12));
+            }
+            Inst::CmpRR { op, rn, rm } => {
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_dp_reg(op.opcode(), 1, 0, rn, rm));
+            }
+            Inst::CmpRImm { op, rn, imm12 } => {
+                let rn = machreg_to_gpr(*rn);
+                put_u32(sink, enc_dp_imm(op.opcode(), 1, 0, rn, *imm12));
+            }
+
             Inst::AdjustSp { amount } => put_u32(sink, enc_sp_adjust(*amount)),
-            Inst::Store { rt, base, offset } => {
-                let rt = machreg_to_gpr(*rt);
-                let base = machreg_to_gpr(*base);
-                put_u32(sink, enc_ldr_str(false, rt, base, *offset));
-            }
-            Inst::Load { rt, base, offset } => {
+
+            Inst::Load { rt, mem, kind } => {
                 let rt = machreg_to_gpr(rt.to_reg());
-                let base = machreg_to_gpr(*base);
-                put_u32(sink, enc_ldr_str(true, rt, base, *offset));
+                emit_load_store(sink, rt, mem, state, LoadStore::Load(*kind));
             }
+            Inst::Store { rt, mem, kind } => {
+                let rt = machreg_to_gpr(*rt);
+                emit_load_store(sink, rt, mem, state, LoadStore::Store(*kind));
+            }
+
+            Inst::Push { reg_list } => put_u32(sink, enc_push(*reg_list)),
+            Inst::Pop { reg_list } => put_u32(sink, enc_pop(*reg_list)),
+
+            Inst::Call { info } => {
+                sink.add_reloc(Reloc::Arm32Call, &info.dest, 0);
+                put_u32(sink, enc_bl(0));
+            }
+
             Inst::Jump { dest } => {
                 sink.use_label_at_offset(sink.cur_offset(), *dest, LabelUse::Branch26);
                 sink.add_uncond_branch(sink.cur_offset(), sink.cur_offset() + 4, *dest);
-                put_u32(sink, enc_b_placeholder());
+                put_u32(sink, enc_b(0));
             }
+            Inst::CondBr {
+                cond,
+                taken,
+                not_taken,
+            } => {
+                // Conditional branch to `taken`.
+                let inverted = enc_bcond(cond.invert(), 0).to_le_bytes();
+                sink.use_label_at_offset(sink.cur_offset(), *taken, LabelUse::Branch26);
+                sink.add_cond_branch(sink.cur_offset(), sink.cur_offset() + 4, *taken, &inverted);
+                put_u32(sink, enc_bcond(*cond, 0));
+                // Unconditional branch to `not_taken`.
+                sink.use_label_at_offset(sink.cur_offset(), *not_taken, LabelUse::Branch26);
+                sink.add_uncond_branch(sink.cur_offset(), sink.cur_offset() + 4, *not_taken);
+                put_u32(sink, enc_b(0));
+            }
+
             Inst::Args { .. } | Inst::Rets { .. } => {
                 // Pseudo-instructions: no machine code.
             }
@@ -205,5 +327,55 @@ impl MachInstEmit for Inst {
 
     fn pretty_print_inst(&self, state: &mut Self::State) -> String {
         self.print_with_state(state)
+    }
+}
+
+enum LoadStore {
+    Load(LoadKind),
+    Store(StoreKind),
+}
+
+fn emit_load_store(
+    sink: &mut MachBuffer<Inst>,
+    rt: u32,
+    mem: &AMode,
+    state: &EmitState,
+    op: LoadStore,
+) {
+    match mem.resolve(state) {
+        ResolvedAMode::Imm { base, offset } => {
+            let base = machreg_to_gpr(base);
+            let word = match op {
+                LoadStore::Load(LoadKind::Word) => enc_ldr_str_imm(true, false, rt, base, offset),
+                LoadStore::Load(LoadKind::UByte) => enc_ldr_str_imm(true, true, rt, base, offset),
+                LoadStore::Load(LoadKind::SByte) => {
+                    enc_ldrh_strh_imm(true, 1, 0, rt, base, offset)
+                }
+                LoadStore::Load(LoadKind::UHalf) => {
+                    enc_ldrh_strh_imm(true, 0, 1, rt, base, offset)
+                }
+                LoadStore::Load(LoadKind::SHalf) => {
+                    enc_ldrh_strh_imm(true, 1, 1, rt, base, offset)
+                }
+                LoadStore::Store(StoreKind::Word) => enc_ldr_str_imm(false, false, rt, base, offset),
+                LoadStore::Store(StoreKind::Byte) => enc_ldr_str_imm(false, true, rt, base, offset),
+                LoadStore::Store(StoreKind::Half) => {
+                    enc_ldrh_strh_imm(false, 0, 1, rt, base, offset)
+                }
+            };
+            put_u32(sink, word);
+        }
+        ResolvedAMode::Reg { base, index } => {
+            let base = machreg_to_gpr(base);
+            let index = machreg_to_gpr(index);
+            let word = match op {
+                LoadStore::Load(LoadKind::Word) => enc_ldr_str_reg(true, false, rt, base, index),
+                LoadStore::Load(LoadKind::UByte) => enc_ldr_str_reg(true, true, rt, base, index),
+                LoadStore::Store(StoreKind::Word) => enc_ldr_str_reg(false, false, rt, base, index),
+                LoadStore::Store(StoreKind::Byte) => enc_ldr_str_reg(false, true, rt, base, index),
+                _ => unimplemented!("arm32: register-offset sub-word access not yet implemented"),
+            };
+            put_u32(sink, word);
+        }
     }
 }

@@ -12,9 +12,10 @@ use crate::ir::{
     BlockCall, ExternalName, Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
 };
 use crate::isa::arm32::Arm32Backend;
+use crate::isa::arm32::inst::{Cond, encode_rotated_imm};
 use crate::machinst::isle::*;
 use crate::machinst::{
-    ArgPair, CallArgList, CallRetList, InstOutput, Lower, MachInst, MachLabel, RetPair,
+    ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, Lower, MachInst, MachLabel, RetPair,
     VCodeConstant, VCodeConstantData, VCodeInst,
 };
 use alloc::boxed::Box;
@@ -23,6 +24,7 @@ use regalloc2::PReg;
 
 type VecArgPair = Vec<ArgPair>;
 type VecRetPair = Vec<RetPair>;
+type BoxCallInfo = Box<CallInfo<ExternalName>>;
 
 /// The ISLE lowering context for arm32.
 pub(crate) struct Arm32IsleContext<'a, 'b, I, B>
@@ -50,6 +52,49 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
 
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.lower_ctx.emit(inst.clone());
+    }
+
+    /// Materialize a 32-bit constant into a register with the shortest sequence.
+    fn gen_constant(&mut self, val: u64) -> Reg {
+        let val = val as u32;
+        let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        let inst = if let Some(imm12) = encode_rotated_imm(val) {
+            MInst::MovRotImm { rd, imm12 }
+        } else if let Some(imm12) = encode_rotated_imm(!val) {
+            MInst::MvnRotImm { rd, imm12 }
+        } else if val >> 16 == 0 {
+            MInst::Movw {
+                rd,
+                imm16: val,
+            }
+        } else {
+            MInst::MovImm {
+                rd,
+                imm: u64::from(val),
+            }
+        };
+        self.lower_ctx.emit(inst);
+        rd.to_reg()
+    }
+
+    /// Succeeds if the low 32 bits of `val` are encodable as a rotated imm12.
+    fn u64_from_rotated_imm12(&mut self, val: u64) -> Option<u32> {
+        encode_rotated_imm(val as u32)
+    }
+
+    fn cond_from_intcc(&mut self, cc: &IntCC) -> Cond {
+        match cc {
+            IntCC::Equal => Cond::Eq,
+            IntCC::NotEqual => Cond::Ne,
+            IntCC::SignedLessThan => Cond::Lt,
+            IntCC::SignedGreaterThanOrEqual => Cond::Ge,
+            IntCC::SignedGreaterThan => Cond::Gt,
+            IntCC::SignedLessThanOrEqual => Cond::Le,
+            IntCC::UnsignedLessThan => Cond::Lo,
+            IntCC::UnsignedGreaterThanOrEqual => Cond::Hs,
+            IntCC::UnsignedGreaterThan => Cond::Hi,
+            IntCC::UnsignedLessThanOrEqual => Cond::Ls,
+        }
     }
 }
 

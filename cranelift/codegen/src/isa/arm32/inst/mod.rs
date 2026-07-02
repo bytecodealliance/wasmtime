@@ -13,6 +13,8 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 use regalloc2::RegClass;
 
+pub mod args;
+pub use self::args::*;
 pub mod regs;
 pub use self::regs::*;
 pub mod emit;
@@ -44,20 +46,63 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     }
 
     match inst {
-        Inst::Nop0 | Inst::Nop4 | Inst::Ret | Inst::AdjustSp { .. } | Inst::Jump { .. } => {}
-        Inst::MovImm { rd, .. } => def_if_virtual(collector, rd),
-        Inst::Mov { rd, rm } => {
+        Inst::Nop0
+        | Inst::Nop4
+        | Inst::Ret
+        | Inst::AdjustSp { .. }
+        | Inst::Jump { .. }
+        | Inst::CondBr { .. }
+        | Inst::Push { .. }
+        | Inst::Pop { .. } => {}
+
+        Inst::MovImm { rd, .. }
+        | Inst::MovRotImm { rd, .. }
+        | Inst::MvnRotImm { rd, .. }
+        | Inst::Movw { rd, .. }
+        | Inst::Movt { rd, .. } => def_if_virtual(collector, rd),
+
+        Inst::MovReg { rd, rm } => {
             use_if_virtual(collector, rm);
             def_if_virtual(collector, rd);
         }
-        Inst::Store { rt, base, .. } => {
-            use_if_virtual(collector, rt);
-            use_if_virtual(collector, base);
+        Inst::AluRRR { rd, rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
         }
-        Inst::Load { rt, base, .. } => {
-            use_if_virtual(collector, base);
+        Inst::AluRRImm { rd, rn, .. } => {
+            use_if_virtual(collector, rn);
+            def_if_virtual(collector, rd);
+        }
+        Inst::CmpRR { rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+        }
+        Inst::CmpRImm { rn, .. } => use_if_virtual(collector, rn),
+
+        Inst::Store { rt, mem, .. } => {
+            use_if_virtual(collector, rt);
+            mem.get_operands(collector);
+        }
+        Inst::Load { rt, mem, .. } => {
+            mem.get_operands(collector);
             def_if_virtual(collector, rt);
         }
+
+        Inst::Call { info } => {
+            let CallInfo { uses, defs, .. } = &mut **info;
+            for CallArgPair { vreg, preg } in uses {
+                collector.reg_fixed_use(vreg, *preg);
+            }
+            for CallRetPair { vreg, location } in defs {
+                match location {
+                    RetLocation::Reg(preg, ..) => collector.reg_fixed_def(vreg, *preg),
+                    RetLocation::Stack(..) => collector.any_def(vreg),
+                }
+            }
+            collector.reg_clobbers(info.clobbers);
+        }
+
         Inst::Args { args } => {
             for ArgPair { vreg, preg } in args {
                 collector.reg_fixed_def(vreg, *preg);
@@ -93,7 +138,7 @@ impl MachInst for Inst {
     }
 
     fn is_safepoint(&self) -> bool {
-        false
+        matches!(self, Inst::Call { .. })
     }
 
     fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
@@ -102,7 +147,7 @@ impl MachInst for Inst {
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
-            Inst::Mov { rd, rm } => Some((*rd, *rm)),
+            Inst::MovReg { rd, rm } => Some((*rd, *rm)),
             _ => None,
         }
     }
@@ -120,13 +165,16 @@ impl MachInst for Inst {
     }
 
     fn call_type(&self) -> CallType {
-        CallType::None
+        match self {
+            Inst::Call { .. } => CallType::Regular,
+            _ => CallType::None,
+        }
     }
 
     fn is_term(&self) -> MachTerminator {
         match self {
             Inst::Rets { .. } => MachTerminator::Ret,
-            Inst::Jump { .. } => MachTerminator::Branch,
+            Inst::Jump { .. } | Inst::CondBr { .. } => MachTerminator::Branch,
             _ => MachTerminator::None,
         }
     }
@@ -136,7 +184,7 @@ impl MachInst for Inst {
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, _ty: Type) -> Inst {
-        Inst::Mov {
+        Inst::MovReg {
             rd: to_reg,
             rm: from_reg,
         }
@@ -197,6 +245,13 @@ impl MachInst for Inst {
 impl Inst {
     pub(crate) fn print_with_state(&self, _state: &mut EmitState) -> String {
         let r = |reg: Reg| reg_name(reg);
+        let reglist = |mask: u32| -> String {
+            let names: Vec<String> = (0..16)
+                .filter(|i| mask & (1 << i) != 0)
+                .map(|i| reg_name(xreg(i)))
+                .collect();
+            alloc::format!("{{{}}}", names.join(", "))
+        };
         match self {
             Inst::Nop0 => "nop-zero-len".to_string(),
             Inst::Nop4 => "nop".to_string(),
@@ -209,8 +264,34 @@ impl Inst {
                     alloc::format!("movw {rd}, #{}; movt {rd}, #{}", imm & 0xffff, imm >> 16)
                 }
             }
-            Inst::Mov { rd, rm } => {
+            Inst::MovRotImm { rd, imm12 } => {
+                alloc::format!("mov {}, #{}", r(rd.to_reg()), decode_rotated_imm(*imm12))
+            }
+            Inst::MvnRotImm { rd, imm12 } => {
+                alloc::format!("mvn {}, #{}", r(rd.to_reg()), decode_rotated_imm(*imm12))
+            }
+            Inst::Movw { rd, imm16 } => alloc::format!("movw {}, #{}", r(rd.to_reg()), imm16),
+            Inst::Movt { rd, imm16 } => alloc::format!("movt {}, #{}", r(rd.to_reg()), imm16),
+            Inst::MovReg { rd, rm } => {
                 alloc::format!("mov {}, {}", r(rd.to_reg()), r(*rm))
+            }
+            Inst::AluRRR { op, rd, rn, rm } => {
+                alloc::format!("{} {}, {}, {}", op.name(), r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::AluRRImm { op, rd, rn, imm12 } => {
+                alloc::format!(
+                    "{} {}, {}, #{}",
+                    op.name(),
+                    r(rd.to_reg()),
+                    r(*rn),
+                    decode_rotated_imm(*imm12)
+                )
+            }
+            Inst::CmpRR { op, rn, rm } => {
+                alloc::format!("{} {}, {}", op.name(), r(*rn), r(*rm))
+            }
+            Inst::CmpRImm { op, rn, imm12 } => {
+                alloc::format!("{} {}, #{}", op.name(), r(*rn), decode_rotated_imm(*imm12))
             }
             Inst::AdjustSp { amount } => {
                 if *amount < 0 {
@@ -219,13 +300,31 @@ impl Inst {
                     alloc::format!("add sp, sp, #{amount}")
                 }
             }
-            Inst::Store { rt, base, offset } => {
-                alloc::format!("str {}, [{}, #{}]", r(*rt), r(*base), offset)
+            Inst::Store { rt, mem, kind } => {
+                alloc::format!("{} {}, {}", kind.mnemonic(), r(*rt), mem.pretty_print())
             }
-            Inst::Load { rt, base, offset } => {
-                alloc::format!("ldr {}, [{}, #{}]", r(rt.to_reg()), r(*base), offset)
+            Inst::Load { rt, mem, kind } => {
+                alloc::format!(
+                    "{} {}, {}",
+                    kind.mnemonic(),
+                    r(rt.to_reg()),
+                    mem.pretty_print()
+                )
             }
+            Inst::Push { reg_list } => alloc::format!("push {}", reglist(*reg_list)),
+            Inst::Pop { reg_list } => alloc::format!("pop {}", reglist(*reg_list)),
+            Inst::Call { info } => alloc::format!("bl {}", info.dest.display(None)),
             Inst::Jump { dest } => alloc::format!("b {}", dest.to_string()),
+            Inst::CondBr {
+                cond,
+                taken,
+                not_taken,
+            } => alloc::format!(
+                "b{} {}; b {}",
+                cond.name(),
+                taken.to_string(),
+                not_taken.to_string()
+            ),
             Inst::Args { args } => {
                 let mut s = "args".to_string();
                 for arg in args {
