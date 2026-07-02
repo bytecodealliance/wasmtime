@@ -3,14 +3,13 @@
 
 use crate::FieldMap;
 use crate::p2::{
-    WasiHttpCtxView, WasiHttpHooks,
+    HttpResult, WasiHttpCtxView, WasiHttpHooks,
     bindings::http::types::{self, ErrorCode, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Body;
-use std::time::Duration;
 use wasmtime::component::Resource;
 use wasmtime::{Result, bail};
 use wasmtime_wasi::p2::Pollable;
@@ -32,18 +31,6 @@ pub(crate) fn remove_forbidden_headers(
     for name in forbidden_keys {
         headers.remove(&name);
     }
-}
-
-/// Configuration for an outgoing request.
-pub struct OutgoingRequestConfig {
-    /// Whether to use TLS for the request.
-    pub use_tls: bool,
-    /// The timeout for connecting.
-    pub connect_timeout: Duration,
-    /// The timeout until the first byte.
-    pub first_byte_timeout: Duration,
-    /// The timeout between chunks of a streaming body
-    pub between_bytes_timeout: Duration,
 }
 
 impl From<http::Method> for types::Method {
@@ -116,11 +103,7 @@ impl WasiHttpCtxView<'_> {
     {
         let (mut parts, body) = req.into_parts();
         let body = body.map_err(Into::into).boxed_unsync();
-        let body = HostIncomingBody::new(
-            body,
-            // TODO: this needs to be plumbed through
-            std::time::Duration::from_millis(600 * 1000),
-        );
+        let body = HostIncomingBody::new(body);
         let authority = match parts.uri.authority() {
             Some(authority) => authority.to_string(),
             None => match parts.headers.get(http::header::HOST) {
@@ -236,17 +219,6 @@ pub struct HostOutgoingRequest {
     pub body: Option<HyperOutgoingBody>,
 }
 
-/// The concrete type behind a `wasi:http/types.request-options` resource.
-#[derive(Debug, Default)]
-pub struct HostRequestOptions {
-    /// How long to wait for a connection to be established.
-    pub connect_timeout: Option<std::time::Duration>,
-    /// How long to wait for the first byte of the response body.
-    pub first_byte_timeout: Option<std::time::Duration>,
-    /// How long to wait between frames of the response body.
-    pub between_bytes_timeout: Option<std::time::Duration>,
-}
-
 /// The concrete type behind a `wasi:http/types.incoming-response` resource.
 #[derive(Debug)]
 pub struct HostIncomingResponse {
@@ -259,8 +231,7 @@ pub struct HostIncomingResponse {
 }
 
 /// A handle to a future incoming response.
-pub type FutureIncomingResponseHandle =
-    AbortOnDropJoinHandle<wasmtime::Result<Result<IncomingResponse, types::ErrorCode>>>;
+pub type FutureIncomingResponseHandle = AbortOnDropJoinHandle<SendRequestResult>;
 
 /// A response that is in the process of being received.
 #[derive(Debug)]
@@ -269,41 +240,25 @@ pub struct IncomingResponse {
     pub resp: hyper::Response<HyperIncomingBody>,
     /// Optional worker task that continues to process the response.
     pub worker: Option<AbortOnDropJoinHandle<()>>,
-    /// The timeout between chunks of the response.
-    pub between_bytes_timeout: std::time::Duration,
 }
 
+type SendRequestResult = HttpResult<(http::Response<HyperIncomingBody>, AbortOnDropJoinHandle<()>)>;
+
 /// The concrete type behind a `wasi:http/types.future-incoming-response` resource.
-#[derive(Debug)]
 pub enum HostFutureIncomingResponse {
     /// A pending response
     Pending(FutureIncomingResponseHandle),
     /// The response is ready.
     ///
     /// An outer error will trap while the inner error gets returned to the guest.
-    Ready(wasmtime::Result<Result<IncomingResponse, types::ErrorCode>>),
+    Ready(SendRequestResult),
     /// The response has been consumed.
     Consumed,
 }
 
 impl HostFutureIncomingResponse {
-    /// Create a new `HostFutureIncomingResponse` that is pending on the provided task handle.
-    pub fn pending(handle: FutureIncomingResponseHandle) -> Self {
-        Self::Pending(handle)
-    }
-
-    /// Create a new `HostFutureIncomingResponse` that is ready.
-    pub fn ready(result: wasmtime::Result<Result<IncomingResponse, types::ErrorCode>>) -> Self {
-        Self::Ready(result)
-    }
-
-    /// Returns `true` if the response is ready.
-    pub fn is_ready(&self) -> bool {
-        matches!(self, Self::Ready(_))
-    }
-
     /// Unwrap the response, panicking if it is not ready.
-    pub fn unwrap_ready(self) -> wasmtime::Result<Result<IncomingResponse, types::ErrorCode>> {
+    pub(crate) fn unwrap_ready(self) -> SendRequestResult {
         match self {
             Self::Ready(res) => res,
             Self::Pending(_) | Self::Consumed => {

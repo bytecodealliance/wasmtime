@@ -33,8 +33,7 @@ pub struct HostIncomingBody {
 
 impl HostIncomingBody {
     /// Create a new `HostIncomingBody` with the given `body` and a per-frame timeout
-    pub fn new(body: HyperIncomingBody, between_bytes_timeout: Duration) -> HostIncomingBody {
-        let body = BodyWithTimeout::new(body, between_bytes_timeout);
+    pub fn new(body: HyperIncomingBody) -> HostIncomingBody {
         HostIncomingBody {
             body: IncomingBodyState::Start(body),
             worker: None,
@@ -76,7 +75,7 @@ impl HostIncomingBody {
 enum IncomingBodyState {
     /// The body is stored here meaning that within `HostIncomingBody` the
     /// `take_stream` method can be called for example.
-    Start(BodyWithTimeout),
+    Start(HyperIncomingBody),
 
     /// The body is within a `HostIncomingBodyStream` meaning that it's not
     /// currently owned here. The body will be sent back over this channel when
@@ -86,9 +85,9 @@ enum IncomingBodyState {
 
 /// Small wrapper around [`HyperIncomingBody`] which adds a timeout to every frame.
 #[derive(Debug)]
-struct BodyWithTimeout {
+pub(crate) struct BodyWithTimeout<B> {
     /// Underlying stream that frames are coming from.
-    inner: HyperIncomingBody,
+    inner: B,
     /// Currently active timeout that's reset between frames.
     timeout: Pin<Box<tokio::time::Sleep>>,
     /// Whether or not `timeout` needs to be reset on the next call to
@@ -99,8 +98,8 @@ struct BodyWithTimeout {
     between_bytes_timeout: Duration,
 }
 
-impl BodyWithTimeout {
-    fn new(inner: HyperIncomingBody, between_bytes_timeout: Duration) -> BodyWithTimeout {
+impl<B> BodyWithTimeout<B> {
+    pub(crate) fn new(inner: B, between_bytes_timeout: Duration) -> BodyWithTimeout<B> {
         BodyWithTimeout {
             inner,
             between_bytes_timeout,
@@ -112,14 +111,17 @@ impl BodyWithTimeout {
     }
 }
 
-impl Body for BodyWithTimeout {
-    type Data = Bytes;
+impl<B> Body for BodyWithTimeout<B>
+where
+    B: Body<Error = types::ErrorCode> + Unpin,
+{
+    type Data = B::Data;
     type Error = types::ErrorCode;
 
     fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Bytes>, types::ErrorCode>>> {
+    ) -> Poll<Option<Result<Frame<B::Data>, types::ErrorCode>>> {
         let me = Pin::into_inner(self);
 
         // If the timeout timer needs to be reset, do that now relative to the
@@ -152,7 +154,7 @@ impl Body for BodyWithTimeout {
 enum StreamEnd {
     /// The body wasn't completely read and was dropped early. May still have
     /// trailers, but requires reading more frames.
-    Remaining(BodyWithTimeout),
+    Remaining(HyperIncomingBody),
 
     /// Body was completely read and trailers were read. Here are the trailers.
     /// Note that `None` means that the body finished without trailers.
@@ -223,7 +225,7 @@ enum IncomingBodyStreamState {
     /// This state is transitioned to `Closed` when an error happens, EOF
     /// happens, or when trailers are read.
     Open {
-        body: BodyWithTimeout,
+        body: HyperIncomingBody,
         tx: oneshot::Sender<StreamEnd>,
     },
 

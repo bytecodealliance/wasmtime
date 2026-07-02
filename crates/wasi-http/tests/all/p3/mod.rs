@@ -21,10 +21,8 @@ use wasmtime_wasi::p3::bindings::Command;
 use wasmtime_wasi::{TrappableError, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
-use wasmtime_wasi_http::p3::{
-    self, Request, RequestOptions, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
-};
-use wasmtime_wasi_http::{DEFAULT_FORBIDDEN_HEADERS, WasiHttpCtx};
+use wasmtime_wasi_http::p3::{self, Request, WasiHttpCtxView, WasiHttpHooks, WasiHttpView};
+use wasmtime_wasi_http::{DEFAULT_FORBIDDEN_HEADERS, RequestOptions, WasiHttpCtx};
 
 foreach_p3_http!(assert_test_exists);
 

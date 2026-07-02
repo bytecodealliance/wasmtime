@@ -639,19 +639,17 @@ impl types::HostFutureIncomingResponse for WasiHttpCtxView<'_> {
             HostFutureIncomingResponse::Ready(_) => {}
         }
 
-        let resp =
+        let (resp, io) =
             match std::mem::replace(resp, HostFutureIncomingResponse::Consumed).unwrap_ready() {
+                Ok(pair) => pair,
                 Err(e) => {
                     // Trapping if it's not possible to downcast to an wasi-http error
-                    let e = e.downcast::<types::ErrorCode>()?;
+                    let e = e.downcast()?;
                     return Ok(Some(Ok(Err(e))));
                 }
-
-                Ok(Ok(resp)) => resp,
-                Ok(Err(e)) => return Ok(Some(Ok(Err(e)))),
             };
 
-        let (mut parts, body) = resp.resp.into_parts();
+        let (mut parts, body) = resp.into_parts();
         remove_forbidden_headers(self.hooks, &mut parts.headers);
         let headers = FieldMap::new_immutable(parts.headers);
 
@@ -659,10 +657,8 @@ impl types::HostFutureIncomingResponse for WasiHttpCtxView<'_> {
             status: parts.status.as_u16(),
             headers,
             body: Some({
-                let mut body = HostIncomingBody::new(body, resp.between_bytes_timeout);
-                if let Some(worker) = resp.worker {
-                    body.retain_worker(worker);
-                }
+                let mut body = HostIncomingBody::new(body);
+                body.retain_worker(io);
                 body
             }),
         })?;

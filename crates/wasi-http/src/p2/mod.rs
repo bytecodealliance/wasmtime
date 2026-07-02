@@ -221,7 +221,9 @@
 
 #[cfg(feature = "default-send-request")]
 use self::bindings::http::types::ErrorCode;
+use crate::RequestOptions;
 use crate::{DEFAULT_FORBIDDEN_HEADERS, WasiHttpCtx};
+use bytes::Bytes;
 use http::HeaderName;
 use wasmtime::component::{HasData, Linker, ResourceTable};
 
@@ -287,19 +289,41 @@ pub trait WasiHttpHooks: Send {
     #[cfg(feature = "default-send-request")]
     fn send_request(
         &mut self,
-        request: hyper::Request<body::HyperOutgoingBody>,
-        config: types::OutgoingRequestConfig,
-    ) -> HttpResult<types::HostFutureIncomingResponse> {
-        Ok(default_send_request(request, config))
+        request: http::Request<body::HyperOutgoingBody>,
+        options: Option<RequestOptions>,
+    ) -> Box<
+        dyn Future<
+                Output = HttpResult<(
+                    http::Response<body::HyperIncomingBody>,
+                    Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+                )>,
+            > + Send,
+    > {
+        Box::new(async move {
+            use http_body_util::BodyExt;
+
+            let (res, io) = default_send_request(request, options).await?;
+            Ok((
+                res.map(BodyExt::boxed_unsync),
+                Box::new(io) as Box<dyn Future<Output = _> + Send>,
+            ))
+        })
     }
 
     /// Send an outgoing request.
     #[cfg(not(feature = "default-send-request"))]
     fn send_request(
         &mut self,
-        request: hyper::Request<body::HyperOutgoingBody>,
-        config: types::OutgoingRequestConfig,
-    ) -> HttpResult<types::HostFutureIncomingResponse>;
+        request: http::Request<body::HyperOutgoingBody>,
+        options: Option<RequestOptions>,
+    ) -> Box<
+        dyn Future<
+                Output = HttpResult<(
+                    http::Response<body::HyperIncomingBody>,
+                    Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+                )>,
+            > + Send,
+    >;
 
     /// Whether a given header should be considered forbidden and not allowed.
     fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
@@ -552,36 +576,48 @@ where
 /// This implementation is used by the `wasi:http/outgoing-handler` interface
 /// default implementation.
 #[cfg(feature = "default-send-request")]
-pub fn default_send_request(
-    request: hyper::Request<body::HyperOutgoingBody>,
-    config: types::OutgoingRequestConfig,
-) -> types::HostFutureIncomingResponse {
-    let handle = wasmtime_wasi::runtime::spawn(async move {
-        Ok(default_send_request_handler(request, config).await)
-    });
-    types::HostFutureIncomingResponse::pending(handle)
-}
-
-/// The underlying implementation of how an outgoing request is sent. This should likely be spawned
-/// in a task.
-///
-/// This is called from [default_send_request] to actually send the request.
-#[cfg(feature = "default-send-request")]
-pub async fn default_send_request_handler(
-    mut request: hyper::Request<body::HyperOutgoingBody>,
-    types::OutgoingRequestConfig {
-        use_tls,
-        connect_timeout,
-        first_byte_timeout,
-        between_bytes_timeout,
-    }: types::OutgoingRequestConfig,
-) -> Result<types::IncomingResponse, ErrorCode> {
+pub async fn default_send_request(
+    mut request: http::Request<body::HyperOutgoingBody>,
+    options: Option<RequestOptions>,
+) -> Result<
+    (
+        http::Response<impl http_body::Body<Data = Bytes, Error = ErrorCode>>,
+        impl Future<Output = Result<(), ErrorCode>> + Send,
+    ),
+    ErrorCode,
+> {
     use crate::io::TokioIo;
     use crate::p2::{error::dns_error, hyper_request_error};
     use http_body_util::BodyExt;
+    use std::future::poll_fn;
+    use std::pin::{Pin, pin};
+    use std::task::{Poll, ready};
+    use std::time::Duration;
+    use tokio::io::{AsyncRead, AsyncWrite};
     use tokio::net::TcpStream;
     use tokio::time::timeout;
 
+    trait TokioStream: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static {
+        fn boxed(self) -> Box<dyn TokioStream>
+        where
+            Self: Sized,
+        {
+            Box::new(self)
+        }
+    }
+    impl<T> TokioStream for T where T: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static {}
+
+    let connect_timeout = options
+        .and_then(|o| o.connect_timeout)
+        .unwrap_or(Duration::from_secs(600));
+    let first_byte_timeout = options
+        .and_then(|o| o.first_byte_timeout)
+        .unwrap_or(Duration::from_secs(600));
+    let between_bytes_timeout = options
+        .and_then(|o| o.between_bytes_timeout)
+        .unwrap_or(Duration::from_secs(600));
+
+    let use_tls = request.uri().scheme() == Some(&http::uri::Scheme::HTTPS);
     if !request.headers().contains_key(hyper::header::HOST) {
         if let Some(authority) = request.uri().authority() {
             if let Ok(value) = hyper::header::HeaderValue::from_str(authority.as_str()) {
@@ -619,7 +655,7 @@ pub async fn default_send_request_handler(
             }
         })?;
 
-    let (mut sender, worker) = if use_tls {
+    let stream = if use_tls {
         // derived from https://github.com/rustls/rustls/blob/main/examples/src/bin/simpleclient.rs
         let root_cert_store = rustls::RootCertStore {
             roots: webpki_roots::TLS_SERVER_ROOTS.into(),
@@ -636,47 +672,18 @@ pub async fn default_send_request_handler(
             tracing::warn!("tls protocol error: {e:?}");
             ErrorCode::TlsProtocolError
         })?;
-        let stream = TokioIo::new(stream);
-
-        let (sender, conn) = timeout(
-            connect_timeout,
-            hyper::client::conn::http1::handshake(stream),
-        )
-        .await
-        .map_err(|_| ErrorCode::ConnectionTimeout)?
-        .map_err(hyper_request_error)?;
-
-        let worker = wasmtime_wasi::runtime::spawn(async move {
-            match conn.await {
-                Ok(()) => {}
-                // TODO: shouldn't throw away this error and ideally should
-                // surface somewhere.
-                Err(e) => tracing::warn!("dropping error {e}"),
-            }
-        });
-
-        (sender, worker)
+        TokioIo::new(stream.boxed())
     } else {
-        let tcp_stream = TokioIo::new(tcp_stream);
-        let (sender, conn) = timeout(
-            connect_timeout,
-            // TODO: we should plumb the builder through the http context, and use it here
-            hyper::client::conn::http1::handshake(tcp_stream),
-        )
-        .await
-        .map_err(|_| ErrorCode::ConnectionTimeout)?
-        .map_err(hyper_request_error)?;
-
-        let worker = wasmtime_wasi::runtime::spawn(async move {
-            match conn.await {
-                Ok(()) => {}
-                // TODO: same as above, shouldn't throw this error away.
-                Err(e) => tracing::warn!("dropping error {e}"),
-            }
-        });
-
-        (sender, worker)
+        TokioIo::new(tcp_stream.boxed())
     };
+
+    let (mut sender, conn) = timeout(
+        connect_timeout,
+        hyper::client::conn::http1::handshake(stream),
+    )
+    .await
+    .map_err(|_| ErrorCode::ConnectionTimeout)?
+    .map_err(hyper_request_error)?;
 
     // at this point, the request contains the scheme and the authority, but
     // the http packet should only include those if addressing a proxy, so
@@ -692,15 +699,43 @@ pub async fn default_send_request_handler(
         .build()
         .expect("comes from valid request");
 
-    let resp = timeout(first_byte_timeout, sender.send_request(request))
-        .await
-        .map_err(|_| ErrorCode::ConnectionReadTimeout)?
-        .map_err(hyper_request_error)?
-        .map(|body| body.map_err(hyper_request_error).boxed_unsync());
-
-    Ok(types::IncomingResponse {
-        resp,
-        worker: Some(worker),
-        between_bytes_timeout,
+    let resp = async move {
+        Ok(timeout(first_byte_timeout, sender.send_request(request))
+            .await
+            .map_err(|_| ErrorCode::ConnectionReadTimeout)?
+            .map_err(hyper_request_error)?
+            .map(|body| {
+                let body = body.map_err(hyper_request_error);
+                body::BodyWithTimeout::new(body, between_bytes_timeout)
+            }))
+    };
+    let mut resp = pin!(resp);
+    let mut conn = Some(conn);
+    // Wait for response while driving connection I/O
+    let resp = poll_fn(|cx| match resp.as_mut().poll(cx) {
+        Poll::Ready(r) => Poll::Ready(r),
+        // Response is not ready, poll `hyper` connection to drive I/O if it
+        // has not completed yet.
+        Poll::Pending => {
+            let res = match conn.as_mut() {
+                Some(conn) => ready!(Pin::new(conn).poll(cx)),
+                None => return Poll::Pending,
+            };
+            conn = None;
+            match res {
+                // `hyper` connection has successfully completed, optimistically poll for response
+                Ok(()) => resp.as_mut().poll(cx),
+                // `hyper` connection has failed, return the error
+                Err(err) => Poll::Ready(Err(hyper_request_error(err))),
+            }
+        }
     })
+    .await?;
+
+    Ok((resp, async move {
+        if let Some(conn) = conn {
+            conn.await.map_err(hyper_request_error)?;
+        }
+        Ok(())
+    }))
 }
