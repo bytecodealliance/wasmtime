@@ -10,10 +10,11 @@ use core::ops::Deref;
 use wasmtime_environ::PanicOnOom as _;
 use wasmtime_environ::component::{
     ComponentTypes, Export, InterfaceType, ResourceIndex, TypeComponentIndex,
-    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex,
-    TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex, TypeModuleIndex,
-    TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex,
-    TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, alternate_lookup_key,
+    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFixedLengthListIndex, TypeFlagsIndex,
+    TypeFuncIndex, TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex,
+    TypeModuleIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex,
+    TypeResultIndex, TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
+    alternate_lookup_key,
 };
 
 pub use crate::component::resources::ResourceType;
@@ -165,7 +166,10 @@ impl TypeChecker<'_> {
             (InterfaceType::Stream(_), _) => false,
             (InterfaceType::ErrorContext(_), InterfaceType::ErrorContext(_)) => true,
             (InterfaceType::ErrorContext(_), _) => false,
-            (InterfaceType::FixedLengthList(_), _) => todo!(), // FIXME(#12279)
+            (InterfaceType::FixedLengthList(t1), InterfaceType::FixedLengthList(t2)) => {
+                self.fixed_length_lists_equal(t1, t2)
+            }
+            (InterfaceType::FixedLengthList(_), _) => false,
         }
     }
 
@@ -179,6 +183,19 @@ impl TypeChecker<'_> {
         let a = &self.a_types[m1];
         let b = &self.b_types[m2];
         self.interface_types_equal(a.key, b.key) && self.interface_types_equal(a.value, b.value)
+    }
+
+    fn fixed_length_lists_equal(
+        &self,
+        l1: wasmtime_environ::component::TypeFixedLengthListIndex,
+        l2: wasmtime_environ::component::TypeFixedLengthListIndex,
+    ) -> bool {
+        let a = &self.a_types[l1];
+        let b = &self.b_types[l2];
+        if a.size != b.size {
+            return false;
+        }
+        self.interface_types_equal(a.element, b.element)
     }
 
     fn resources_equal(&self, o1: TypeResourceTableIndex, o2: TypeResourceTableIndex) -> bool {
@@ -363,6 +380,34 @@ impl Map {
     /// Retrieve the value type of this `map`.
     pub fn value(&self) -> Type {
         Type::from(&self.0.types[self.0.index].value, &self.0.instance())
+    }
+}
+/// A `list` interface type
+#[derive(Clone, Debug)]
+pub struct FixedLengthList(Handle<TypeFixedLengthListIndex>);
+
+impl PartialEq for FixedLengthList {
+    fn eq(&self, other: &Self) -> bool {
+        self.0
+            .equivalent(&other.0, TypeChecker::fixed_length_lists_equal)
+    }
+}
+
+impl Eq for FixedLengthList {}
+
+impl FixedLengthList {
+    pub(crate) fn from(index: TypeFixedLengthListIndex, ty: &InstanceType<'_>) -> Self {
+        FixedLengthList(Handle::new(index, ty))
+    }
+
+    /// Retrieve the element type of this `list`.
+    pub fn ty(&self) -> Type {
+        Type::from(&self.0.types[self.0.index].element, &self.0.instance())
+    }
+
+    /// Retrieve the length of this `list`.
+    pub fn len(&self) -> u32 {
+        self.0.types[self.0.index].size
     }
 }
 
@@ -738,6 +783,7 @@ pub enum Type {
     Future(FutureType),
     Stream(StreamType),
     ErrorContext,
+    FixedLengthList(FixedLengthList),
 }
 
 impl Type {
@@ -899,7 +945,9 @@ impl Type {
             InterfaceType::Future(index) => Type::Future(instance.future_type(*index)),
             InterfaceType::Stream(index) => Type::Stream(instance.stream_type(*index)),
             InterfaceType::ErrorContext(_) => Type::ErrorContext,
-            InterfaceType::FixedLengthList(_) => todo!(), // FIXME(#12279)
+            InterfaceType::FixedLengthList(index) => {
+                Type::FixedLengthList(FixedLengthList::from(*index, instance))
+            }
         }
     }
 
@@ -932,6 +980,7 @@ impl Type {
             Type::Future(_) => "future",
             Type::Stream(_) => "stream",
             Type::ErrorContext => "error-context",
+            Type::FixedLengthList(_) => "list<_, N>",
         }
     }
 }

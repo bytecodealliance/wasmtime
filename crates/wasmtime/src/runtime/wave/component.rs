@@ -40,6 +40,7 @@ impl WasmType for component::Type {
             Self::Option(_) => WasmTypeKind::Option,
             Self::Result(_) => WasmTypeKind::Result,
             Self::Flags(_) => WasmTypeKind::Flags,
+            Self::FixedLengthList(_) => WasmTypeKind::FixedLengthList,
 
             Self::Own(_)
             | Self::Borrow(_)
@@ -144,6 +145,7 @@ impl WasmValue for component::Val {
             | Self::Future(_)
             | Self::ErrorContext(_)
             | Self::Map(_) => WasmTypeKind::Unsupported,
+            Self::FixedLengthList(_) => WasmTypeKind::FixedLengthList,
         }
     }
 

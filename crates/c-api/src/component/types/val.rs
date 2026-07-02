@@ -32,6 +32,7 @@ pub enum wasmtime_component_valtype_t {
     Stream(Box<wasmtime_component_stream_type_t>),
     ErrorContext,
     Map(Box<wasmtime_component_map_type_t>),
+    FixedLengthList(Box<wasmtime_component_fixed_length_list_type_t>),
 }
 
 impl From<Type> for wasmtime_component_valtype_t {
@@ -63,6 +64,7 @@ impl From<Type> for wasmtime_component_valtype_t {
             Type::Future(ty) => Self::Future(Box::new(ty.into())),
             Type::Stream(ty) => Self::Stream(Box::new(ty.into())),
             Type::Map(ty) => Self::Map(Box::new(ty.into())),
+            Type::FixedLengthList(ty) => Self::FixedLengthList(Box::new(ty.into())),
             Type::ErrorContext => Self::ErrorContext,
         }
     }
@@ -105,6 +107,25 @@ type_wrapper! {
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_component_list_type_element(
     ty: &wasmtime_component_list_type_t,
+    type_ret: &mut MaybeUninit<wasmtime_component_valtype_t>,
+) {
+    type_ret.write(ty.ty.ty().into());
+}
+
+type_wrapper! {
+    #[derive(PartialEq)]
+    pub struct wasmtime_component_fixed_length_list_type_t {
+        pub(crate) ty: FixedLengthList,
+    }
+
+    clone: wasmtime_component_fixed_length_list_type_clone,
+    delete: wasmtime_component_fixed_length_list_type_delete,
+    equal: wasmtime_component_fixed_length_list_type_equal,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_fixed_length_list_type_element(
+    ty: &wasmtime_component_fixed_length_list_type_t,
     type_ret: &mut MaybeUninit<wasmtime_component_valtype_t>,
 ) {
     type_ret.write(ty.ty.ty().into());

@@ -93,6 +93,7 @@ pub enum Val {
     Future(FutureAny),
     Stream(StreamAny),
     ErrorContext(ErrorContextAny),
+    FixedLengthList(Vec<Val>),
 }
 
 impl Val {
@@ -220,7 +221,15 @@ impl Val {
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_flat(cx, ty, next(src))?.into_val()
             }
-            InterfaceType::FixedLengthList(_) => todo!(), // FIXME(#12279)
+            InterfaceType::FixedLengthList(i) => {
+                let number_elements = usize::try_from(cx.types[i].size)?;
+                cx.consume_fuel_array(number_elements, size_of::<Val>())?;
+                Val::FixedLengthList(
+                    (0..number_elements)
+                        .map(|_| Self::lift(cx, cx.types[i].element, src))
+                        .collect::<Result<_>>()?,
+                )
+            }
         })
     }
 
@@ -349,7 +358,28 @@ impl Val {
             InterfaceType::ErrorContext(_) => {
                 ErrorContext::linear_lift_from_memory(cx, ty, bytes)?.into_val()
             }
-            InterfaceType::FixedLengthList(_) => todo!(), // FIXME(#12279)
+            InterfaceType::FixedLengthList(i) => {
+                let element_type = cx.types[i].element;
+                let abi = cx.types.canonical_abi(&element_type);
+                let element_size = usize::try_from(abi.size32)?;
+                let number_elements = usize::try_from(cx.types[i].size)?;
+
+                match number_elements.checked_mul(element_size) {
+                    Some(total_size) if total_size <= bytes.len() => {
+                        cx.consume_fuel_array(number_elements, size_of::<Val>())?;
+                        Val::Tuple(
+                            (0..number_elements)
+                                .map(|n| {
+                                    // the match already checked that the whole array fits into usize
+                                    let offset = element_size.wrapping_mul(n);
+                                    Val::load(cx, element_type, &bytes[offset..][..element_size])
+                                })
+                                .collect::<Result<_>>()?,
+                        )
+                    }
+                    _ => bail!("fixed length list out of bounds of memory"),
+                }
+            }
         })
     }
 
@@ -508,7 +538,17 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
-            (InterfaceType::FixedLengthList(_), _) => todo!(), // FIXME(#12279)
+            (InterfaceType::FixedLengthList(ty), Val::FixedLengthList(values)) => {
+                let ty = &cx.types[ty];
+                if ty.size as usize != values.len() {
+                    bail!("expected vec of size {}, got {}", ty.size, values.len());
+                }
+                for value in values {
+                    value.lower(cx, ty.element, dst)?;
+                }
+                Ok(())
+            }
+            (InterfaceType::FixedLengthList(_), _) => unexpected(ty, self),
         }
     }
 
@@ -671,7 +711,18 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
-            (InterfaceType::FixedLengthList(_), _) => todo!(), // FIXME(#12279)
+            (InterfaceType::FixedLengthList(ty), Val::FixedLengthList(values)) => {
+                let ty = &cx.types[ty];
+                if ty.size as usize != values.len() {
+                    bail!("expected {} types, got {}", ty.size, values.len());
+                }
+                let elemsize = cx.types.canonical_abi(&ty.element).size32 as usize;
+                for (n, value) in values.iter().enumerate() {
+                    value.store(cx, ty.element, elemsize * n)?;
+                }
+                Ok(())
+            }
+            (InterfaceType::FixedLengthList(_), _) => unexpected(ty, self),
         }
     }
 
@@ -703,6 +754,7 @@ impl Val {
             Val::Future(_) => "future",
             Val::Stream(_) => "stream",
             Val::ErrorContext(_) => "error-context",
+            Val::FixedLengthList(_) => "list<_, N>",
         }
     }
 
@@ -789,6 +841,8 @@ impl PartialEq for Val {
             (Self::Stream(_), _) => false,
             (Self::ErrorContext(l), Self::ErrorContext(r)) => l == r,
             (Self::ErrorContext(_), _) => false,
+            (Self::FixedLengthList(l), Self::FixedLengthList(r)) => l == r,
+            (Self::FixedLengthList(_), _) => false,
         }
     }
 }

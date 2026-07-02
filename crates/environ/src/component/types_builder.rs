@@ -584,14 +584,10 @@ impl ComponentTypesBuilder {
         size: u32,
     ) -> TypeFixedLengthListIndex {
         let element_abi = self.component_types.canonical_abi(&element);
-        let mut abi = element_abi.clone();
-        // this assumes that size32 is already rounded up to alignment
-        abi.size32 = element_abi.size32.saturating_mul(size);
-        abi.size64 = element_abi.size64.saturating_mul(size);
-        abi.flat_count = element_abi
-            .flat_count
-            .zip(u8::try_from(size).ok())
-            .and_then(|(flat_count, size)| flat_count.checked_mul(size));
+        let abi = CanonicalAbiInfo::fixed_length_list_static(
+            element_abi,
+            size.try_into().expect("size should fit into usize"),
+        );
         self.add_fixed_length_list_type(TypeFixedLengthList { element, size, abi })
     }
 

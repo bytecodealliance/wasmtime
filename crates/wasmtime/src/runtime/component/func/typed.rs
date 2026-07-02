@@ -12,6 +12,7 @@ use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::str;
+use wasmtime_core::array::array_try_from_fn;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
     OptionsIndex, StringEncoding, TypeMap, VariantInfo,
@@ -2972,6 +2973,99 @@ macro_rules! impl_component_ty_for_tuples {
 }
 
 for_each_function_signature!(impl_component_ty_for_tuples);
+
+unsafe impl<T, const N: usize> ComponentType for [T; N]
+where
+    T: ComponentType,
+{
+    type Lower = [T::Lower; N];
+
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "there is no fallible const conversion, yet"
+    )]
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::fixed_length_list_static(&T::ABI, N);
+
+    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+        match ty {
+            InterfaceType::FixedLengthList(t) => T::typecheck(&types.types[*t].element, types),
+            other => bail!("expected `list<_, N>` found `{}`", desc(other)),
+        }
+    }
+}
+
+unsafe impl<T, const N: usize> Lower for [T; N]
+where
+    T: Lower,
+{
+    fn linear_lower_to_flat<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        dst: &mut MaybeUninit<Self::Lower>,
+    ) -> Result<()> {
+        let element = match ty {
+            InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
+            _ => bad_type_info(),
+        };
+        for (i, val) in self.iter().enumerate() {
+            val.linear_lower_to_flat(cx, element, map_maybe_uninit!(dst[i]))?;
+        }
+        Ok(())
+    }
+
+    fn linear_lower_to_memory<U>(
+        &self,
+        cx: &mut LowerContext<'_, U>,
+        ty: InterfaceType,
+        offset: usize,
+    ) -> Result<()> {
+        debug_assert!(offset % (Self::ALIGN32 as usize) == 0);
+        let element = match ty {
+            InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
+            _ => bad_type_info(),
+        };
+        for (i, val) in self.iter().enumerate() {
+            val.linear_lower_to_memory(cx, element, offset + i * T::SIZE32)?;
+        }
+        Ok(())
+    }
+}
+
+unsafe impl<T, const N: usize> Lift for [T; N]
+where
+    T: Lift + Sized,
+{
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
+        let element = match ty {
+            InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
+            _ => bad_type_info(),
+        };
+        array_try_from_fn(|n| T::linear_lift_from_flat(cx, element, &src[n]))
+    }
+
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
+        debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
+        let element = match ty {
+            InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
+            _ => bad_type_info(),
+        };
+        let mut offset = 0;
+        array_try_from_fn(|_n| {
+            let res = T::linear_lift_from_memory(cx, element, &bytes[offset..offset + T::SIZE32]);
+            offset += T::SIZE32;
+            res
+        })
+    }
+}
 
 pub fn desc(ty: &InterfaceType) -> &'static str {
     match ty {

@@ -126,14 +126,14 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
                     | TypeDefKind::Handle(_)
-                    | TypeDefKind::Resource => true,
+                    | TypeDefKind::Resource
+                    | TypeDefKind::FixedLengthList(..) => true,
                     TypeDefKind::Type(Type::Id(t)) => {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
                     TypeDefKind::Type(Type::String) => true,
                     TypeDefKind::Type(_) => false,
                     TypeDefKind::Unknown => unreachable!(),
-                    TypeDefKind::FixedLengthList(..) => todo!(),
                 }
             }
         }
@@ -194,7 +194,9 @@ pub trait RustGenerator<'a> {
                 format!("std::collections::HashMap<{key}, {value}>")
             }
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedLengthList(..) => todo!(),
+            TypeDefKind::FixedLengthList(t, size) => {
+                format!("[{}; {}]", self.ty(t, mode), size)
+            }
         }
     }
 

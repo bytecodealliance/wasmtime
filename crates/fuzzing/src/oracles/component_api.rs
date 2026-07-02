@@ -138,6 +138,11 @@ fn arbitrary_val(
                 })
                 .collect::<arbitrary::Result<_>>()?,
         ),
+        Type::FixedLengthList(list) => Val::FixedLengthList(
+            (0..list.len())
+                .map(|_| arbitrary_val(&list.ty(), fuel, input))
+                .collect::<arbitrary::Result<_>>()?,
+        ),
 
         Type::Map(map) => {
             let mut pairs = Vec::new();

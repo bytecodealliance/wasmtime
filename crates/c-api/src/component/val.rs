@@ -274,6 +274,7 @@ pub enum wasmtime_component_val_t {
     Flags(wasmtime_component_valflags_t),
     Resource(Box<wasmtime_component_resource_any_t>),
     Map(wasmtime_component_valmap_t),
+    FixedLengthList(wasmtime_component_vallist_t),
 }
 
 // Safety: the C API async contract (documented in async.h) guarantees that
@@ -321,6 +322,7 @@ impl From<&wasmtime_component_val_t> for Val {
             wasmtime_component_val_t::Flags(x) => Val::Flags(x.into()),
             wasmtime_component_val_t::Map(x) => Val::Map(x.into()),
             wasmtime_component_val_t::Resource(x) => Val::Resource(x.resource),
+            wasmtime_component_val_t::FixedLengthList(x) => Val::FixedLengthList(x.into()),
         }
     }
 }
@@ -363,6 +365,9 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::Future(_) => todo!(),
             Val::Stream(_) => todo!(),
             Val::ErrorContext(_) => todo!(),
+            Val::FixedLengthList(ty) => wasmtime_component_val_t::FixedLengthList(
+                wasmtime_component_vallist_t::from(ty.as_ref()),
+            ),
         }
     }
 }
