@@ -86,10 +86,10 @@ impl ExposedBuf {
     }
 }
 
-fn make_engine() -> Result<Engine, Error> {
+fn make_engine(concurrency_support: bool) -> Result<Engine, Error> {
     let mut config = Config::new();
     config.compiler_inlining(wasmtime::Inlining::Yes);
-    config.concurrency_support(false);
+    config.concurrency_support(concurrency_support);
     let engine = Engine::new(&config)?;
     Ok(engine)
 }
@@ -220,16 +220,18 @@ static COMPILE_TIME_BUILTINS: &str = r#"
 mod inc_list {
     use super::*;
 
-    pub fn bench(c: &mut Criterion) {
-        let mut g = c.benchmark_group("increment-each-byte-in-buf");
+    pub fn bench(c: &mut Criterion, concurrency_support: bool) {
+        let mut g = c.benchmark_group(&format!(
+            "increment-each-byte-in-buf/concurrency_support={concurrency_support}"
+        ));
         g.bench_function("func-wrap-host-buf-api", |b| {
-            func_wrap_host_buf_api(b).unwrap();
+            func_wrap_host_buf_api(b, concurrency_support).unwrap();
         });
         g.bench_function("compile-time-builtins-host-buf-api", |b| {
-            compile_time_builtins_host_buf_api(b).unwrap();
+            compile_time_builtins_host_buf_api(b, concurrency_support).unwrap();
         });
         g.bench_function("take-and-return-list-u8", |b| {
-            take_and_return_list_u8(b).unwrap();
+            take_and_return_list_u8(b, concurrency_support).unwrap();
         });
     }
 
@@ -300,8 +302,8 @@ mod inc_list {
         )
     "#;
 
-    fn func_wrap_host_buf_api(b: &mut Bencher<'_>) -> Result<()> {
-        let engine = make_engine()?;
+    fn func_wrap_host_buf_api(b: &mut Bencher<'_>, concurrency_support: bool) -> Result<()> {
+        let engine = make_engine(concurrency_support)?;
         let linker = make_linker(&engine)?;
         let component = Component::new(&engine, HOST_BUF_API_GUEST_WASM.as_bytes())?;
 
@@ -334,8 +336,11 @@ mod inc_list {
         Ok(())
     }
 
-    fn compile_time_builtins_host_buf_api(b: &mut Bencher<'_>) -> Result<()> {
-        let engine = make_engine()?;
+    fn compile_time_builtins_host_buf_api(
+        b: &mut Bencher<'_>,
+        concurrency_support: bool,
+    ) -> Result<()> {
+        let engine = make_engine(concurrency_support)?;
         let linker = make_linker(&engine)?;
 
         let mut builder = CodeBuilder::new(&engine);
@@ -434,8 +439,8 @@ mod inc_list {
         )
     "#;
 
-    fn take_and_return_list_u8(b: &mut Bencher<'_>) -> Result<()> {
-        let engine = make_engine()?;
+    fn take_and_return_list_u8(b: &mut Bencher<'_>, concurrency_support: bool) -> Result<()> {
+        let engine = make_engine(concurrency_support)?;
         let linker = make_linker(&engine)?;
         let component = Component::new(&engine, TAKE_AND_RETURN_INT_LIST_GUEST_WASM.as_bytes())?;
 
@@ -473,16 +478,18 @@ mod inc_random {
     use super::*;
     use rand::{RngExt, SeedableRng as _};
 
-    pub fn bench(c: &mut Criterion) {
-        let mut g = c.benchmark_group("increment-random-byte-in-buf");
+    pub fn bench(c: &mut Criterion, concurrency_support: bool) {
+        let mut g = c.benchmark_group(&format!(
+            "increment-random-byte-in-buf/concurrency_support={concurrency_support}"
+        ));
         g.bench_function("func-wrap-host-buf-api", |b| {
-            func_wrap_host_buf_api(b).unwrap();
+            func_wrap_host_buf_api(b, concurrency_support).unwrap();
         });
         g.bench_function("compile-time-builtins-host-buf-api", |b| {
-            compile_time_builtins_host_buf_api(b).unwrap();
+            compile_time_builtins_host_buf_api(b, concurrency_support).unwrap();
         });
         g.bench_function("take-and-return-list-u8", |b| {
-            take_and_return_list_u8(b).unwrap();
+            take_and_return_list_u8(b, concurrency_support).unwrap();
         });
     }
 
@@ -537,8 +544,8 @@ mod inc_random {
         Ok(i)
     }
 
-    fn func_wrap_host_buf_api(b: &mut Bencher<'_>) -> Result<()> {
-        let engine = make_engine()?;
+    fn func_wrap_host_buf_api(b: &mut Bencher<'_>, concurrency_support: bool) -> Result<()> {
+        let engine = make_engine(concurrency_support)?;
         let linker = make_linker(&engine)?;
         let component = Component::new(&engine, HOST_BUF_API_GUEST_WASM.as_bytes())?;
 
@@ -571,8 +578,11 @@ mod inc_random {
         Ok(())
     }
 
-    fn compile_time_builtins_host_buf_api(b: &mut Bencher<'_>) -> Result<()> {
-        let engine = make_engine()?;
+    fn compile_time_builtins_host_buf_api(
+        b: &mut Bencher<'_>,
+        concurrency_support: bool,
+    ) -> Result<()> {
+        let engine = make_engine(concurrency_support)?;
         let linker = make_linker(&engine)?;
 
         let mut builder = CodeBuilder::new(&engine);
@@ -654,8 +664,8 @@ mod inc_random {
         )
     "#;
 
-    fn take_and_return_list_u8(b: &mut Bencher<'_>) -> Result<()> {
-        let engine = make_engine()?;
+    fn take_and_return_list_u8(b: &mut Bencher<'_>, concurrency_support: bool) -> Result<()> {
+        let engine = make_engine(concurrency_support)?;
         let linker = make_linker(&engine)?;
         let component = Component::new(&engine, TAKE_AND_RETURN_INT_LIST_GUEST_WASM.as_bytes())?;
 
@@ -691,8 +701,10 @@ mod inc_random {
 fn bench(c: &mut Criterion) {
     let _ = env_logger::try_init();
 
-    inc_list::bench(c);
-    inc_random::bench(c);
+    for concurrency_support in [true, false] {
+        inc_list::bench(c, concurrency_support);
+        inc_random::bench(c, concurrency_support);
+    }
 }
 
 criterion_group!(benches, bench);
