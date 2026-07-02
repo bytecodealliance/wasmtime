@@ -110,8 +110,8 @@ enum AliasRegionsObserved {
 }
 
 /// Which alias region(s) can an instruction observe?
-fn alias_regions_observed(func: &Function, inst: Inst) -> AliasRegionsObserved {
-    let opcode = func.dfg.insts[inst].opcode();
+fn alias_regions_observed(func: &Function, inst: Inst, opcode: Opcode) -> AliasRegionsObserved {
+    debug_assert_eq!(func.dfg.insts[inst].opcode(), opcode);
     if opcode.is_return()
         || opcode.is_call()
         || opcode.can_trap()
@@ -250,7 +250,7 @@ impl LastStores {
         // Everything else: determine which, if any, alias regions this
         // instruction observes.
         else {
-            match alias_regions_observed(func, inst) {
+            match alias_regions_observed(func, inst, opcode) {
                 AliasRegionsObserved::All => {
                     self.observed_all = true;
                 }
