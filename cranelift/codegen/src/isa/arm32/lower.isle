@@ -26,6 +26,61 @@
 (rule (lower (ineg (fits_in_32 _) x))
   (rsb_imm (put_in_reg x) 0))
 
+;;;; Logical `band` / `bor` / `bxor` / `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (band (fits_in_32 _) x (iconst _ (u64_from_imm64 n))))
+  (alu_op_imm (ALUOp.And) (put_in_reg x) n))
+(rule (lower (band (fits_in_32 _) x y))
+  (alu_rrr (ALUOp.And) (put_in_reg x) (put_in_reg y)))
+
+(rule 1 (lower (bor (fits_in_32 _) x (iconst _ (u64_from_imm64 n))))
+  (alu_op_imm (ALUOp.Orr) (put_in_reg x) n))
+(rule (lower (bor (fits_in_32 _) x y))
+  (alu_rrr (ALUOp.Orr) (put_in_reg x) (put_in_reg y)))
+
+(rule 1 (lower (bxor (fits_in_32 _) x (iconst _ (u64_from_imm64 n))))
+  (alu_op_imm (ALUOp.Eor) (put_in_reg x) n))
+(rule (lower (bxor (fits_in_32 _) x y))
+  (alu_rrr (ALUOp.Eor) (put_in_reg x) (put_in_reg y)))
+
+;; `x & ~y` maps directly to `bic` (Cranelift's `band_not` builder emits
+;; `band` of `bnot`).
+(rule 2 (lower (band (fits_in_32 _) x (bnot _ y)))
+  (alu_rrr (ALUOp.Bic) (put_in_reg x) (put_in_reg y)))
+(rule 3 (lower (band (fits_in_32 _) (bnot _ y) x))
+  (alu_rrr (ALUOp.Bic) (put_in_reg x) (put_in_reg y)))
+
+;; Bitwise NOT.
+(rule (lower (bnot (fits_in_32 _) x))
+  (mvn_reg (put_in_reg x)))
+
+;;;; `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (imul (fits_in_32 _) x y))
+  (mul (put_in_reg x) (put_in_reg y)))
+
+;;;; Shifts: `ishl` / `ushr` / `sshr` / `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (ishl $I32 x (iconst _ (u64_from_imm64 n))))
+  (gen_shift_imm (ShiftOp.Lsl) (put_in_reg x) n))
+(rule (lower (ishl $I32 x y))
+  (shift_reg (ShiftOp.Lsl) (put_in_reg x) y))
+
+(rule 1 (lower (ushr $I32 x (iconst _ (u64_from_imm64 n))))
+  (gen_shift_imm (ShiftOp.Lsr) (put_in_reg x) n))
+(rule (lower (ushr $I32 x y))
+  (shift_reg (ShiftOp.Lsr) (put_in_reg x) y))
+
+(rule 1 (lower (sshr $I32 x (iconst _ (u64_from_imm64 n))))
+  (gen_shift_imm (ShiftOp.Asr) (put_in_reg x) n))
+(rule (lower (sshr $I32 x y))
+  (shift_reg (ShiftOp.Asr) (put_in_reg x) y))
+
+(rule 1 (lower (rotr $I32 x (iconst _ (u64_from_imm64 n))))
+  (gen_shift_imm (ShiftOp.Ror) (put_in_reg x) n))
+(rule (lower (rotr $I32 x y))
+  (shift_reg (ShiftOp.Ror) (put_in_reg x) y))
+
 ;;;; Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (load (fits_in_32 _) flags addr offset))

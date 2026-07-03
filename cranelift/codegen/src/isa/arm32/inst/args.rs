@@ -4,7 +4,7 @@ use crate::isa::arm32::inst::*;
 use crate::machinst::{OperandVisitor, Reg};
 
 pub use crate::isa::arm32::lower::isle::generated_code::{
-    ALUOp, AMode, CmpOp, Cond, LoadKind, StoreKind,
+    ALUOp, AMode, CmpOp, Cond, LoadKind, ShiftOp, StoreKind,
 };
 
 /// A memory address resolved to a concrete base register and either an
@@ -96,6 +96,8 @@ impl ALUOp {
             ALUOp::Sub => 0b0010,
             ALUOp::Rsb => 0b0011,
             ALUOp::Add => 0b0100,
+            ALUOp::Adc => 0b0101,
+            ALUOp::Sbc => 0b0110,
             ALUOp::Orr => 0b1100,
             ALUOp::Bic => 0b1110,
         }
@@ -108,6 +110,8 @@ impl ALUOp {
             ALUOp::Sub => "sub",
             ALUOp::Rsb => "rsb",
             ALUOp::Add => "add",
+            ALUOp::Adc => "adc",
+            ALUOp::Sbc => "sbc",
             ALUOp::Orr => "orr",
             ALUOp::Bic => "bic",
         }
@@ -118,6 +122,8 @@ impl CmpOp {
     /// The 4-bit data-processing opcode (with the S bit set separately).
     pub(crate) fn opcode(self) -> u32 {
         match self {
+            CmpOp::Tst => 0b1000,
+            CmpOp::Teq => 0b1001,
             CmpOp::Cmp => 0b1010,
             CmpOp::Cmn => 0b1011,
         }
@@ -125,8 +131,31 @@ impl CmpOp {
 
     pub(crate) fn name(self) -> &'static str {
         match self {
+            CmpOp::Tst => "tst",
+            CmpOp::Teq => "teq",
             CmpOp::Cmp => "cmp",
             CmpOp::Cmn => "cmn",
+        }
+    }
+}
+
+impl ShiftOp {
+    /// The 2-bit shift-type field used in a shifted operand2.
+    pub(crate) fn bits(self) -> u32 {
+        match self {
+            ShiftOp::Lsl => 0b00,
+            ShiftOp::Lsr => 0b01,
+            ShiftOp::Asr => 0b10,
+            ShiftOp::Ror => 0b11,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            ShiftOp::Lsl => "lsl",
+            ShiftOp::Lsr => "lsr",
+            ShiftOp::Asr => "asr",
+            ShiftOp::Ror => "ror",
         }
     }
 }

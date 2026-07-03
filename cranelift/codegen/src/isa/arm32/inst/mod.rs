@@ -61,7 +61,7 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         | Inst::Movw { rd, .. }
         | Inst::Movt { rd, .. } => def_if_virtual(collector, rd),
 
-        Inst::MovReg { rd, rm } => {
+        Inst::MovReg { rd, rm } | Inst::MvnReg { rd, rm } => {
             use_if_virtual(collector, rm);
             def_if_virtual(collector, rd);
         }
@@ -73,6 +73,54 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::AluRRImm { rd, rn, .. } => {
             use_if_virtual(collector, rn);
             def_if_virtual(collector, rd);
+        }
+        Inst::AluRRRFlags { rd, rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::ShiftImm { rd, rm, .. } => {
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::ShiftReg { rd, rm, rs, .. } => {
+            use_if_virtual(collector, rm);
+            use_if_virtual(collector, rs);
+            def_if_virtual(collector, rd);
+        }
+        Inst::Mul { rd, rn, rm } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::Mla { rd, rn, rm, ra } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            use_if_virtual(collector, ra);
+            def_if_virtual(collector, rd);
+        }
+        Inst::Umull {
+            rd_lo,
+            rd_hi,
+            rn,
+            rm,
+        }
+        | Inst::Smull {
+            rd_lo,
+            rd_hi,
+            rn,
+            rm,
+        } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            // The two destination registers must be distinct from each other
+            // and from the inputs, so use early defs.
+            if rd_lo.to_reg().to_real_reg().is_none() {
+                collector.reg_early_def(rd_lo);
+            }
+            if rd_hi.to_reg().to_real_reg().is_none() {
+                collector.reg_early_def(rd_hi);
+            }
         }
         Inst::CmpRR { rn, rm, .. } => {
             use_if_virtual(collector, rn);
@@ -275,6 +323,9 @@ impl Inst {
             Inst::MovReg { rd, rm } => {
                 alloc::format!("mov {}, {}", r(rd.to_reg()), r(*rm))
             }
+            Inst::MvnReg { rd, rm } => {
+                alloc::format!("mvn {}, {}", r(rd.to_reg()), r(*rm))
+            }
             Inst::AluRRR { op, rd, rn, rm } => {
                 alloc::format!("{} {}, {}, {}", op.name(), r(rd.to_reg()), r(*rn), r(*rm))
             }
@@ -287,6 +338,62 @@ impl Inst {
                     decode_rotated_imm(*imm12)
                 )
             }
+            Inst::AluRRRFlags { op, rd, rn, rm } => {
+                alloc::format!("{}s {}, {}, {}", op.name(), r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::ShiftImm {
+                op,
+                rd,
+                rm,
+                amount,
+            } => {
+                alloc::format!("{} {}, {}, #{}", op.name(), r(rd.to_reg()), r(*rm), amount)
+            }
+            Inst::ShiftReg { op, rd, rm, rs } => {
+                alloc::format!(
+                    "{} {}, {}, {}",
+                    op.name(),
+                    r(rd.to_reg()),
+                    r(*rm),
+                    r(*rs)
+                )
+            }
+            Inst::Mul { rd, rn, rm } => {
+                alloc::format!("mul {}, {}, {}", r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::Mla { rd, rn, rm, ra } => {
+                alloc::format!(
+                    "mla {}, {}, {}, {}",
+                    r(rd.to_reg()),
+                    r(*rn),
+                    r(*rm),
+                    r(*ra)
+                )
+            }
+            Inst::Umull {
+                rd_lo,
+                rd_hi,
+                rn,
+                rm,
+            } => alloc::format!(
+                "umull {}, {}, {}, {}",
+                r(rd_lo.to_reg()),
+                r(rd_hi.to_reg()),
+                r(*rn),
+                r(*rm)
+            ),
+            Inst::Smull {
+                rd_lo,
+                rd_hi,
+                rn,
+                rm,
+            } => alloc::format!(
+                "smull {}, {}, {}, {}",
+                r(rd_lo.to_reg()),
+                r(rd_hi.to_reg()),
+                r(*rn),
+                r(*rm)
+            ),
             Inst::CmpRR { op, rn, rm } => {
                 alloc::format!("{} {}, {}", op.name(), r(*rn), r(*rm))
             }

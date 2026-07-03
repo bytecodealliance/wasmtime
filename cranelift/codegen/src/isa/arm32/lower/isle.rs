@@ -12,7 +12,7 @@ use crate::ir::{
     BlockCall, ExternalName, Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
 };
 use crate::isa::arm32::Arm32Backend;
-use crate::isa::arm32::inst::{Cond, encode_rotated_imm};
+use crate::isa::arm32::inst::{Cond, ShiftOp, encode_rotated_imm};
 use crate::machinst::isle::*;
 use crate::machinst::{
     ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, Lower, MachInst, MachLabel, RetPair,
@@ -80,6 +80,25 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
     /// Succeeds if the low 32 bits of `val` are encodable as a rotated imm12.
     fn u64_from_rotated_imm12(&mut self, val: u64) -> Option<u32> {
         encode_rotated_imm(val as u32)
+    }
+
+    /// Shift/rotate by a constant, applying Cranelift's modulo-width semantics.
+    /// A masked amount of zero becomes a plain register move.
+    fn gen_shift_imm(&mut self, op: &ShiftOp, rm: Reg, amount: u64) -> Reg {
+        let amount = (amount & 31) as u8;
+        let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        let inst = if amount == 0 {
+            MInst::MovReg { rd, rm }
+        } else {
+            MInst::ShiftImm {
+                op: *op,
+                rd,
+                rm,
+                amount,
+            }
+        };
+        self.lower_ctx.emit(inst);
+        rd.to_reg()
     }
 
     fn cond_from_intcc(&mut self, cc: &IntCC) -> Cond {

@@ -11,16 +11,28 @@
     (Add)
     (Sub)
     (Rsb)
+    (Adc)
+    (Sbc)
     (And)
     (Orr)
     (Eor)
     (Bic)))
 
-;; A flag-setting compare operation.
+;; A flag-setting compare/test operation (destination is discarded).
 (type CmpOp
   (enum
     (Cmp)
-    (Cmn)))
+    (Cmn)
+    (Tst)
+    (Teq)))
+
+;; A shift/rotate operation.
+(type ShiftOp
+  (enum
+    (Lsl)
+    (Lsr)
+    (Asr)
+    (Ror)))
 
 ;; An ARM condition code (the "always" and "never" codes are omitted).
 (type Cond
@@ -81,15 +93,33 @@
     (Movt (rd WritableReg) (imm16 u32))
     ;; `mov rd, rm`.
     (MovReg (rd WritableReg) (rm Reg))
+    ;; `mvn rd, rm` — bitwise-NOT of a register.
+    (MvnReg (rd WritableReg) (rm Reg))
 
     ;; `op rd, rn, rm`.
     (AluRRR (op ALUOp) (rd WritableReg) (rn Reg) (rm Reg))
     ;; `op rd, rn, #imm` (pre-encoded rotated imm12).
     (AluRRImm (op ALUOp) (rd WritableReg) (rn Reg) (imm12 u32))
+    ;; `op{s} rd, rn, rm` — flag-setting form (adds/subs/adcs/sbcs).
+    (AluRRRFlags (op ALUOp) (rd WritableReg) (rn Reg) (rm Reg))
 
-    ;; `cmp/cmn rn, rm`.
+    ;; A shift/rotate by a constant amount (`op rd, rm, #amount`).
+    (ShiftImm (op ShiftOp) (rd WritableReg) (rm Reg) (amount u8))
+    ;; A shift/rotate by a register amount (`op rd, rm, rs`).
+    (ShiftReg (op ShiftOp) (rd WritableReg) (rm Reg) (rs Reg))
+
+    ;; `mul rd, rn, rm` — `rd = rn * rm` (low 32 bits).
+    (Mul (rd WritableReg) (rn Reg) (rm Reg))
+    ;; `mla rd, rn, rm, ra` — `rd = rn * rm + ra` (low 32 bits).
+    (Mla (rd WritableReg) (rn Reg) (rm Reg) (ra Reg))
+    ;; `umull rd_lo, rd_hi, rn, rm` — unsigned 32x32->64 multiply.
+    (Umull (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+    ;; `smull rd_lo, rd_hi, rn, rm` — signed 32x32->64 multiply.
+    (Smull (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+
+    ;; `cmp/cmn/tst/teq rn, rm`.
     (CmpRR (op CmpOp) (rn Reg) (rm Reg))
-    ;; `cmp/cmn rn, #imm` (pre-encoded rotated imm12).
+    ;; `cmp/cmn/tst/teq rn, #imm` (pre-encoded rotated imm12).
     (CmpRImm (op CmpOp) (rn Reg) (imm12 u32))
 
     ;; A load of the given kind.
@@ -179,6 +209,45 @@
 (rule (rsb_imm a imm12)
   (let ((rd WritableReg (temp_writable_reg $I32))
         (_ Unit (emit (MInst.AluRRImm (ALUOp.Rsb) rd a imm12))))
+    rd))
+
+;; A generic ALU op that prefers the immediate form when the RHS is an
+;; encodable constant and otherwise materializes it into a register.
+(decl alu_op_imm (ALUOp Reg u64) Reg)
+(rule 1 (alu_op_imm op a b)
+  (if-let imm12 (u64_from_rotated_imm12 b))
+  (alu_rr_imm12 op a imm12))
+(rule (alu_op_imm op a b) (alu_rrr op a (gen_constant b)))
+
+;;;; Multiplies ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl mul (Reg Reg) Reg)
+(rule (mul a b)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Mul rd a b))))
+    rd))
+
+;; Bitwise-NOT of a register (`mvn rd, rm`).
+(decl mvn_reg (Reg) Reg)
+(rule (mvn_reg rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.MvnReg rd rm))))
+    rd))
+
+;;;; Shifts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Shift/rotate by a constant amount. Handles the Cranelift "modulo width"
+;; semantics (and the shift-by-zero special case) in Rust.
+(decl gen_shift_imm (ShiftOp Reg u64) Reg)
+(extern constructor gen_shift_imm gen_shift_imm)
+
+;; Shift/rotate by a register amount. The amount is masked to 0..31 to match
+;; Cranelift's modulo-width semantics.
+(decl shift_reg (ShiftOp Reg Value) Reg)
+(rule (shift_reg op rm amount)
+  (let ((masked Reg (alu_rr_imm12 (ALUOp.And) (put_in_reg amount) 31))
+        (rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.ShiftReg op rd rm masked))))
     rd))
 
 ;;;; Loads and stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

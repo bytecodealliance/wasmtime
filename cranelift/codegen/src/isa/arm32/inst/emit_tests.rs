@@ -113,6 +113,143 @@ fn arithmetic() {
 }
 
 #[test]
+fn logical() {
+    let cases = [
+        (ALUOp::And, 0xe001_0002u32), // and r0, r1, r2
+        (ALUOp::Orr, 0xe181_0002),    // orr r0, r1, r2
+        (ALUOp::Eor, 0xe021_0002),    // eor r0, r1, r2
+        (ALUOp::Bic, 0xe1c1_0002),    // bic r0, r1, r2
+    ];
+    for (op, want) in cases {
+        assert_eq!(
+            u32_le(Inst::AluRRR {
+                op,
+                rd: writable_xreg(0),
+                rn: xreg(1),
+                rm: xreg(2),
+            }),
+            want,
+            "{op:?}"
+        );
+    }
+    assert_eq!(
+        u32_le(Inst::MvnReg {
+            rd: writable_xreg(0),
+            rm: xreg(1),
+        }),
+        0xe1e0_0001 // mvn r0, r1
+    );
+}
+
+#[test]
+fn flag_setting() {
+    assert_eq!(
+        u32_le(Inst::AluRRRFlags {
+            op: ALUOp::Add,
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        }),
+        0xe091_0002 // adds r0, r1, r2
+    );
+    assert_eq!(
+        u32_le(Inst::AluRRRFlags {
+            op: ALUOp::Sbc,
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        }),
+        0xe0d1_0002 // sbcs r0, r1, r2
+    );
+    assert_eq!(
+        u32_le(Inst::CmpRR {
+            op: CmpOp::Tst,
+            rn: xreg(0),
+            rm: xreg(1),
+        }),
+        0xe110_0001 // tst r0, r1
+    );
+    assert_eq!(
+        u32_le(Inst::CmpRR {
+            op: CmpOp::Teq,
+            rn: xreg(0),
+            rm: xreg(1),
+        }),
+        0xe130_0001 // teq r0, r1
+    );
+}
+
+#[test]
+fn shifts() {
+    assert_eq!(
+        u32_le(Inst::ShiftImm {
+            op: ShiftOp::Lsl,
+            rd: writable_xreg(0),
+            rm: xreg(1),
+            amount: 2,
+        }),
+        0xe1a0_0101 // lsl r0, r1, #2
+    );
+    assert_eq!(
+        u32_le(Inst::ShiftImm {
+            op: ShiftOp::Asr,
+            rd: writable_xreg(0),
+            rm: xreg(1),
+            amount: 3,
+        }),
+        0xe1a0_01c1 // asr r0, r1, #3
+    );
+    assert_eq!(
+        u32_le(Inst::ShiftReg {
+            op: ShiftOp::Lsl,
+            rd: writable_xreg(0),
+            rm: xreg(1),
+            rs: xreg(2),
+        }),
+        0xe1a0_0211 // lsl r0, r1, r2
+    );
+}
+
+#[test]
+fn multiplies() {
+    assert_eq!(
+        u32_le(Inst::Mul {
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        }),
+        0xe000_0291 // mul r0, r1, r2
+    );
+    assert_eq!(
+        u32_le(Inst::Mla {
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+            ra: xreg(3),
+        }),
+        0xe020_3291 // mla r0, r1, r2, r3
+    );
+    assert_eq!(
+        u32_le(Inst::Umull {
+            rd_lo: writable_xreg(0),
+            rd_hi: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+        }),
+        0xe081_0392 // umull r0, r1, r2, r3
+    );
+    assert_eq!(
+        u32_le(Inst::Smull {
+            rd_lo: writable_xreg(0),
+            rd_hi: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+        }),
+        0xe0c1_0392 // smull r0, r1, r2, r3
+    );
+}
+
+#[test]
 fn compares() {
     assert_eq!(
         u32_le(Inst::CmpRR {
