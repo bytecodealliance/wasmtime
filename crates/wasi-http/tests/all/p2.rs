@@ -85,7 +85,7 @@ impl WasiHttpHooks for MyHttpHooks {
             if let Some(rejected_authority) = &me.rejected_authority {
                 let authority = request.uri().authority().map(ToString::to_string).unwrap();
                 if &authority == rejected_authority {
-                    return Err(Error::HttpRequestDenied.into());
+                    return Err(Error::HttpRequestDenied);
                 }
             }
             if let Some(send_request) = me.send_request.clone() {

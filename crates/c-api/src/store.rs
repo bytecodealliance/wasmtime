@@ -107,15 +107,15 @@ impl wasmtime_wasi::WasiView for WasmtimeStoreData {
 }
 
 #[cfg(all(feature = "component-model", feature = "wasi-http"))]
-impl wasmtime_wasi_http::p2::WasiHttpView for WasmtimeStoreData {
-    fn http(&mut self) -> wasmtime_wasi_http::p2::WasiHttpCtxView<'_> {
+impl wasmtime_wasi_http::WasiHttpView for WasmtimeStoreData {
+    fn http(&mut self) -> wasmtime_wasi_http::WasiHttpCtxView<'_> {
         use wasmtime_wasi::WasiView;
         let ctx = self.wasi_http.as_mut().unwrap();
         let table = self.wasi.as_mut().unwrap().ctx().table;
-        wasmtime_wasi_http::p2::WasiHttpCtxView {
+        wasmtime_wasi_http::WasiHttpCtxView {
             ctx,
             table,
-            hooks: wasmtime_wasi_http::p2::default_hooks(),
+            hooks: wasmtime_wasi_http::default_hooks(),
         }
     }
 }
