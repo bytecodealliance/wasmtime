@@ -1,12 +1,12 @@
 //! Implements the base structure that will provide the implementation of the
 //! wasi-http API.
 
-use crate::FieldMap;
 use crate::p2::{
-    HttpResult, WasiHttpCtxView, WasiHttpHooks,
+    HttpResult,
     bindings::http::types::{self, ErrorCode, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
+use crate::{FieldMap, WasiHttpCtxView, WasiHttpHooks};
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Body;

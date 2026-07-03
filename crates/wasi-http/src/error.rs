@@ -83,6 +83,12 @@ impl From<hyper::Error> for Error {
     }
 }
 
+impl From<std::convert::Infallible> for Error {
+    fn from(e: std::convert::Infallible) -> Self {
+        match e {}
+    }
+}
+
 #[cfg(feature = "default-send-request")]
 impl From<rustls::pki_types::InvalidDnsNameError> for Error {
     fn from(err: rustls::pki_types::InvalidDnsNameError) -> Self {

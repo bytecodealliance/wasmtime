@@ -6,7 +6,7 @@ use futures::SinkExt;
 use futures::channel::oneshot;
 use http::HeaderValue;
 use http_body::Body;
-use http_body_util::{BodyExt as _, Collected, Empty, combinators::UnsyncBoxBody};
+use http_body_util::{BodyExt as _, Collected, Empty};
 use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
@@ -18,16 +18,19 @@ use wasm_compose::config::{Config, Dependency, Instantiation, InstantiationArg};
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Result, Store, ToWasmtimeResult as _, error::Context as _, format_err};
 use wasmtime_wasi::p3::bindings::Command;
-use wasmtime_wasi::{TrappableError, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi_http::p3::Request;
 use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
-use wasmtime_wasi_http::p3::{self, Request, WasiHttpCtxView, WasiHttpHooks, WasiHttpView};
-use wasmtime_wasi_http::{DEFAULT_FORBIDDEN_HEADERS, RequestOptions, WasiHttpCtx};
+use wasmtime_wasi_http::{
+    DEFAULT_FORBIDDEN_HEADERS, Error, RequestOptions, WasiBody, WasiHttpCtx, WasiHttpCtxView,
+    WasiHttpHooks, WasiHttpView, default_send_request,
+};
 
 foreach_p3_http!(assert_test_exists);
 
 struct TestHooks {
-    request_body_tx: Option<oneshot::Sender<UnsyncBoxBody<Bytes, ErrorCode>>>,
+    request_body_tx: Option<oneshot::Sender<WasiBody>>,
 }
 
 impl WasiHttpHooks for TestHooks {
@@ -37,17 +40,17 @@ impl WasiHttpHooks for TestHooks {
 
     fn send_request(
         &mut self,
-        request: http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
+        request: http::Request<WasiBody>,
         options: Option<RequestOptions>,
-        fut: Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+        fut: Box<dyn Future<Output = Result<(), Error>> + Send>,
     ) -> Box<
         dyn Future<
                 Output = Result<
                     (
-                        http::Response<UnsyncBoxBody<Bytes, ErrorCode>>,
-                        Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
+                        http::Response<WasiBody>,
+                        Box<dyn Future<Output = Result<(), Error>> + Send>,
                     ),
-                    TrappableError<ErrorCode>,
+                    Error,
                 >,
             > + Send,
     > {
@@ -68,7 +71,7 @@ impl WasiHttpHooks for TestHooks {
             Box::new(async move {
                 use http_body_util::BodyExt;
 
-                let (res, io) = p3::default_send_request(request, options).await?;
+                let (res, io) = default_send_request(request, options).await?;
                 Ok((
                     res.map(BodyExt::boxed_unsync),
                     Box::new(io) as Box<dyn Future<Output = _> + Send>,
@@ -86,7 +89,7 @@ struct Ctx {
 }
 
 impl Ctx {
-    fn new(request_body_tx: oneshot::Sender<UnsyncBoxBody<Bytes, ErrorCode>>) -> Self {
+    fn new(request_body_tx: oneshot::Sender<WasiBody>) -> Self {
         Self {
             table: ResourceTable::default(),
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
@@ -147,10 +150,10 @@ async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
         .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 
-async fn run_http<E: Into<ErrorCode> + 'static>(
+async fn run_http<E: Into<Error> + 'static>(
     component_filename: &str,
     req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
-    request_body_tx: oneshot::Sender<UnsyncBoxBody<Bytes, ErrorCode>>,
+    request_body_tx: oneshot::Sender<WasiBody>,
 ) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);

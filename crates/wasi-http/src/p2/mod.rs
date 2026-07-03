@@ -82,7 +82,7 @@
 //! use wasmtime_wasi_http::p2::bindings::http::types::Scheme;
 //! use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
 //! use wasmtime_wasi_http::io::TokioIo;
-//! use wasmtime_wasi_http::{WasiHttpCtx, p2::{WasiHttpView, WasiHttpCtxView}};
+//! use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView, WasiHttpCtxView};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
@@ -235,197 +235,10 @@ pub mod types;
 
 pub use self::error::*;
 
-/// A trait which provides hooks into internal WASI HTTP operations.
-///
-/// # Example
-///
-/// ```
-/// use wasmtime::component::ResourceTable;
-/// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
-/// use wasmtime_wasi_http::WasiHttpCtx;
-/// use wasmtime_wasi_http::p2::{WasiHttpView, WasiHttpCtxView};
-///
-/// struct MyState {
-///     ctx: WasiCtx,
-///     http_ctx: WasiHttpCtx,
-///     table: ResourceTable,
-/// }
-///
-/// impl WasiHttpView for MyState {
-///     fn http(&mut self) -> WasiHttpCtxView<'_> {
-///         WasiHttpCtxView {
-///             ctx: &mut self.http_ctx,
-///             table: &mut self.table,
-///             hooks: Default::default(),
-///         }
-///     }
-/// }
-///
-/// impl WasiView for MyState {
-///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
-///     }
-/// }
-///
-/// impl MyState {
-///     fn new() -> MyState {
-///         let mut wasi = WasiCtx::builder();
-///         wasi.arg("./foo.wasm");
-///         wasi.arg("--help");
-///         wasi.env("FOO", "bar");
-///
-///         MyState {
-///             ctx: wasi.build(),
-///             table: ResourceTable::new(),
-///             http_ctx: WasiHttpCtx::new(),
-///         }
-///     }
-/// }
-/// ```
-pub trait WasiHttpHooks: Send {
-    /// Send an outgoing request.
-    #[cfg(feature = "default-send-request")]
-    fn send_request(
-        &mut self,
-        request: http::Request<body::HyperOutgoingBody>,
-        options: Option<RequestOptions>,
-    ) -> Box<
-        dyn Future<
-                Output = HttpResult<(
-                    http::Response<body::HyperIncomingBody>,
-                    Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
-                )>,
-            > + Send,
-    > {
-        Box::new(async move {
-            use http_body_util::BodyExt;
-
-            let (res, io) = default_send_request(request, options).await?;
-            Ok((
-                res.map(BodyExt::boxed_unsync),
-                Box::new(io) as Box<dyn Future<Output = _> + Send>,
-            ))
-        })
-    }
-
-    /// Send an outgoing request.
-    #[cfg(not(feature = "default-send-request"))]
-    fn send_request(
-        &mut self,
-        request: http::Request<body::HyperOutgoingBody>,
-        options: Option<RequestOptions>,
-    ) -> Box<
-        dyn Future<
-                Output = HttpResult<(
-                    http::Response<body::HyperIncomingBody>,
-                    Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
-                )>,
-            > + Send,
-    >;
-
-    /// Whether a given header should be considered forbidden and not allowed.
-    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        DEFAULT_FORBIDDEN_HEADERS.contains(name)
-    }
-
-    /// Number of distinct write calls to the outgoing body's output-stream
-    /// that the implementation will buffer.
-    /// Default: 1.
-    fn outgoing_body_buffer_chunks(&mut self) -> usize {
-        DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS
-    }
-
-    /// Maximum size allowed in a write call to the outgoing body's output-stream.
-    /// Default: 1024 * 1024.
-    fn outgoing_body_chunk_size(&mut self) -> usize {
-        DEFAULT_OUTGOING_BODY_CHUNK_SIZE
-    }
-}
-
-#[cfg(feature = "default-send-request")]
-impl<'a> Default for &'a mut dyn WasiHttpHooks {
-    fn default() -> Self {
-        let x: &mut [(); 0] = &mut [];
-        x
-    }
-}
-
-#[doc(hidden)]
-#[cfg(feature = "default-send-request")]
-impl WasiHttpHooks for [(); 0] {}
-
-/// Returns a value suitable for the `WasiHttpCtxView::hooks` field which has
-/// the default behavior for `wasi:http`.
-#[cfg(feature = "default-send-request")]
-pub fn default_hooks() -> &'static mut dyn WasiHttpHooks {
-    Default::default()
-}
-
 /// The default value configured for [`WasiHttpHooks::outgoing_body_buffer_chunks`] in [`WasiHttpView`].
 pub const DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS: usize = 1;
 /// The default value configured for [`WasiHttpHooks::outgoing_body_chunk_size`] in [`WasiHttpView`].
 pub const DEFAULT_OUTGOING_BODY_CHUNK_SIZE: usize = 1024 * 1024;
-
-/// Structure which `wasi:http` `Host`-style traits are implemented for.
-///
-/// This structure is used by embedders with the [`WasiHttpView`] trait's return
-/// value and is used to provide access to this crate all internals necessary to
-/// implement `wasi:http`. This is similar to [`wasmtime_wasi::WasiCtxView`]
-/// for example.
-pub struct WasiHttpCtxView<'a> {
-    /// A reference to a per-store [`WasiHttpCtx`].
-    pub ctx: &'a mut WasiHttpCtx,
-    /// A reference to a per-store table of resources to store host structures
-    /// within.
-    pub table: &'a mut ResourceTable,
-    /// A reference to a per-store set of hooks that can be used to customize
-    /// `wasi:http` behavior.
-    pub hooks: &'a mut dyn WasiHttpHooks,
-}
-
-/// The type for which this crate implements the `wasi:http` interfaces.
-pub struct WasiHttp;
-
-impl HasData for WasiHttp {
-    type Data<'a> = WasiHttpCtxView<'a>;
-}
-
-/// A trait used to project state that this crate needs to implement `wasi:http`
-/// from the `self` type.
-///
-/// This trait is used in [`add_to_linker_sync`] and [`add_to_linker_async`] for
-/// example as a bound on `T` in `Store<T>`. This is used to access data from
-/// `T`, the data within a `Store`, an instance of [`WasiHttpCtxView`]. The
-/// [`WasiHttpCtxView`] contains contextual information such as the
-/// [`ResourceTable`] for the store, HTTP context info in [`WasiHttpCtx`], and
-/// any hooks via [`WasiHttpHooks`] if the embedder desires.
-///
-/// # Example
-///
-/// ```
-/// use wasmtime::component::ResourceTable;
-/// use wasmtime_wasi_http::WasiHttpCtx;
-/// use wasmtime_wasi_http::p2::{WasiHttpView, WasiHttpCtxView};
-///
-/// struct MyState {
-///     http_ctx: WasiHttpCtx,
-///     table: ResourceTable,
-/// }
-///
-/// impl WasiHttpView for MyState {
-///     fn http(&mut self) -> WasiHttpCtxView<'_> {
-///         WasiHttpCtxView {
-///             ctx: &mut self.http_ctx,
-///             table: &mut self.table,
-///             hooks: Default::default(),
-///         }
-///     }
-/// }
-/// ```
-pub trait WasiHttpView {
-    /// Returns an instance of [`WasiHttpCtxView`] projected out of `self`.
-    fn http(&mut self) -> WasiHttpCtxView<'_>;
-}
 
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
 ///
@@ -439,7 +252,7 @@ pub trait WasiHttpView {
 /// use wasmtime::{Engine, Result};
 /// use wasmtime::component::{ResourceTable, Linker};
 /// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
-/// use wasmtime_wasi_http::{WasiHttpCtx, p2::{WasiHttpView, WasiHttpCtxView}};
+/// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView, WasiHttpCtxView};
 ///
 /// fn main() -> Result<()> {
 ///     let engine = Engine::default();
@@ -511,8 +324,7 @@ where
 /// use wasmtime::{Engine, Result, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
 /// use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
-/// use wasmtime_wasi_http::WasiHttpCtx;
-/// use wasmtime_wasi_http::p2::{WasiHttpView, WasiHttpCtxView};
+/// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView, WasiHttpCtxView};
 ///
 /// fn main() -> Result<()> {
 ///     let config = Config::default();
@@ -567,173 +379,4 @@ where
     bindings::sync::http::types::add_to_linker::<_, WasiHttp>(l, &options.into(), T::http)?;
 
     Ok(())
-}
-
-/// The default implementation of how an outgoing request is sent.
-///
-/// This implementation is used by the `wasi:http/outgoing-handler` interface
-/// default implementation.
-#[cfg(feature = "default-send-request")]
-pub async fn default_send_request(
-    mut request: http::Request<body::HyperOutgoingBody>,
-    options: Option<RequestOptions>,
-) -> Result<
-    (
-        http::Response<impl http_body::Body<Data = bytes::Bytes, Error = ErrorCode>>,
-        impl Future<Output = Result<(), ErrorCode>> + Send,
-    ),
-    ErrorCode,
-> {
-    use crate::io::TokioIo;
-    use crate::p2::{error::dns_error, hyper_request_error};
-    use http_body_util::BodyExt;
-    use std::future::poll_fn;
-    use std::pin::{Pin, pin};
-    use std::task::{Poll, ready};
-    use std::time::Duration;
-    use tokio::io::{AsyncRead, AsyncWrite};
-    use tokio::net::TcpStream;
-    use tokio::time::timeout;
-
-    trait TokioStream: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static {
-        fn boxed(self) -> Box<dyn TokioStream>
-        where
-            Self: Sized,
-        {
-            Box::new(self)
-        }
-    }
-    impl<T> TokioStream for T where T: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static {}
-
-    let connect_timeout = options
-        .and_then(|o| o.connect_timeout)
-        .unwrap_or(Duration::from_secs(600));
-    let first_byte_timeout = options
-        .and_then(|o| o.first_byte_timeout)
-        .unwrap_or(Duration::from_secs(600));
-    let between_bytes_timeout = options
-        .and_then(|o| o.between_bytes_timeout)
-        .unwrap_or(Duration::from_secs(600));
-
-    let use_tls = request.uri().scheme() == Some(&http::uri::Scheme::HTTPS);
-    if !request.headers().contains_key(hyper::header::HOST) {
-        if let Some(authority) = request.uri().authority() {
-            if let Ok(value) = hyper::header::HeaderValue::from_str(authority.as_str()) {
-                request.headers_mut().insert(hyper::header::HOST, value);
-            }
-        }
-    }
-
-    let authority = if let Some(authority) = request.uri().authority() {
-        if authority.port().is_some() {
-            authority.to_string()
-        } else {
-            let port = if use_tls { 443 } else { 80 };
-            format!("{}:{port}", authority.to_string())
-        }
-    } else {
-        return Err(ErrorCode::HttpRequestUriInvalid);
-    };
-    let tcp_stream = timeout(connect_timeout, TcpStream::connect(&authority))
-        .await
-        .map_err(|_| ErrorCode::ConnectionTimeout)?
-        .map_err(|e| match e.kind() {
-            std::io::ErrorKind::AddrNotAvailable => {
-                dns_error("address not available".to_string(), 0)
-            }
-
-            _ => {
-                if e.to_string()
-                    .starts_with("failed to lookup address information")
-                {
-                    dns_error("address not available".to_string(), 0)
-                } else {
-                    ErrorCode::ConnectionRefused
-                }
-            }
-        })?;
-
-    let stream = if use_tls {
-        // derived from https://github.com/rustls/rustls/blob/main/examples/src/bin/simpleclient.rs
-        let root_cert_store = rustls::RootCertStore {
-            roots: webpki_roots::TLS_SERVER_ROOTS.into(),
-        };
-        let config = rustls::ClientConfig::builder()
-            .with_root_certificates(root_cert_store)
-            .with_no_client_auth();
-        let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
-        let domain = crate::default_send_request::tls_server_name(&authority).map_err(|e| {
-            tracing::warn!("dns lookup error: {e:?}");
-            dns_error("invalid dns name".to_string(), 0)
-        })?;
-        let stream = connector.connect(domain, tcp_stream).await.map_err(|e| {
-            tracing::warn!("tls protocol error: {e:?}");
-            ErrorCode::TlsProtocolError
-        })?;
-        TokioIo::new(stream.boxed())
-    } else {
-        TokioIo::new(tcp_stream.boxed())
-    };
-
-    let (mut sender, conn) = timeout(
-        connect_timeout,
-        hyper::client::conn::http1::handshake(stream),
-    )
-    .await
-    .map_err(|_| ErrorCode::ConnectionTimeout)?
-    .map_err(hyper_request_error)?;
-
-    // at this point, the request contains the scheme and the authority, but
-    // the http packet should only include those if addressing a proxy, so
-    // remove them here, since SendRequest::send_request does not do it for us
-    *request.uri_mut() = http::Uri::builder()
-        .path_and_query(
-            request
-                .uri()
-                .path_and_query()
-                .map(|p| p.as_str())
-                .unwrap_or("/"),
-        )
-        .build()
-        .expect("comes from valid request");
-
-    let resp = async move {
-        Ok(timeout(first_byte_timeout, sender.send_request(request))
-            .await
-            .map_err(|_| ErrorCode::ConnectionReadTimeout)?
-            .map_err(hyper_request_error)?
-            .map(|body| {
-                let body = body.map_err(hyper_request_error);
-                body::BodyWithTimeout::new(body, between_bytes_timeout)
-            }))
-    };
-    let mut resp = pin!(resp);
-    let mut conn = Some(conn);
-    // Wait for response while driving connection I/O
-    let resp = poll_fn(|cx| match resp.as_mut().poll(cx) {
-        Poll::Ready(r) => Poll::Ready(r),
-        // Response is not ready, poll `hyper` connection to drive I/O if it
-        // has not completed yet.
-        Poll::Pending => {
-            let res = match conn.as_mut() {
-                Some(conn) => ready!(Pin::new(conn).poll(cx)),
-                None => return Poll::Pending,
-            };
-            conn = None;
-            match res {
-                // `hyper` connection has successfully completed, optimistically poll for response
-                Ok(()) => resp.as_mut().poll(cx),
-                // `hyper` connection has failed, return the error
-                Err(err) => Poll::Ready(Err(hyper_request_error(err))),
-            }
-        }
-    })
-    .await?;
-
-    Ok((resp, async move {
-        if let Some(conn) = conn {
-            conn.await.map_err(hyper_request_error)?;
-        }
-        Ok(())
-    }))
 }

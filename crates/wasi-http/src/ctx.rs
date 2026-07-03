@@ -57,6 +57,28 @@ impl HasData for WasiHttp {
 /// access to wasi:http information at runtime.
 ///
 /// [`add_to_linker`]: crate::p3::add_to_linker
+///
+/// # Example
+///
+/// ```
+/// use wasmtime::component::ResourceTable;
+/// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView, WasiHttpCtxView};
+///
+/// struct MyState {
+///     http_ctx: WasiHttpCtx,
+///     table: ResourceTable,
+/// }
+///
+/// impl WasiHttpView for MyState {
+///     fn http(&mut self) -> WasiHttpCtxView<'_> {
+///         WasiHttpCtxView {
+///             ctx: &mut self.http_ctx,
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
+///     }
+/// }
+/// ```
 pub trait WasiHttpView: Send {
     /// Return a [WasiHttpCtxView] from mutable reference to self.
     fn http(&mut self) -> WasiHttpCtxView<'_>;
@@ -125,7 +147,57 @@ impl Default for WasiHttpCtx {
     }
 }
 
-/// A trait which provides internal WASI HTTP state.
+/// Convenience type definition for the bodies used in this crate.
+pub type WasiBody = UnsyncBoxBody<Bytes, Error>;
+
+/// A trait which provides hooks into internal WASI HTTP operations.
+///
+/// Note that when using this type if state is needed to implement the methods
+/// the state will need to be stored separately in a distinct structure to
+/// implement this trait as the same type can't implement both [`WasiHttpView`]
+/// and [`WasiHttpHooks`] and be usable.
+///
+/// # Example
+///
+/// ```
+/// use wasmtime::component::ResourceTable;
+/// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView, WasiHttpCtxView, WasiHttpHooks};
+///
+/// struct MyState {
+///     http_ctx: WasiHttpCtx,
+///     table: ResourceTable,
+///     hooks: MyHooks,
+/// }
+///
+/// impl MyState {
+///     fn new() -> MyState {
+///         MyState {
+///             table: ResourceTable::new(),
+///             http_ctx: WasiHttpCtx::new(),
+///             hooks: MyHooks,
+///         }
+///     }
+/// }
+///
+/// impl WasiHttpView for MyState {
+///     fn http(&mut self) -> WasiHttpCtxView<'_> {
+///         WasiHttpCtxView {
+///             ctx: &mut self.http_ctx,
+///             table: &mut self.table,
+///             hooks: &mut self.hooks,
+///         }
+///     }
+/// }
+///
+/// struct MyHooks;
+///
+/// impl WasiHttpHooks for MyHooks {
+///     fn is_forbidden_header(&mut self, name: &http::HeaderName) -> bool {
+///         *name == http::header::AUTHORIZATION ||
+///             wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS.contains(name)
+///     }
+/// }
+/// ```
 pub trait WasiHttpHooks: Send {
     /// Whether a given header should be considered forbidden and not allowed.
     fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
@@ -171,13 +243,13 @@ pub trait WasiHttpHooks: Send {
     #[cfg(feature = "default-send-request")]
     fn send_request(
         &mut self,
-        request: http::Request<UnsyncBoxBody<Bytes, Error>>,
+        request: http::Request<WasiBody>,
         options: Option<RequestOptions>,
         fut: Box<dyn Future<Output = Result<(), Error>> + Send>,
     ) -> Box<
         dyn Future<
                 Output = Result<(
-                    http::Response<UnsyncBoxBody<Bytes, Error>>,
+                    http::Response<WasiBody>,
                     Box<dyn Future<Output = Result<(), Error>> + Send>,
                 )>,
             > + Send,
@@ -186,7 +258,7 @@ pub trait WasiHttpHooks: Send {
         Box::new(async move {
             use http_body_util::BodyExt;
 
-            let (res, io) = crate::default_send_request::send_request(request, options).await?;
+            let (res, io) = crate::default_send_request(request, options).await?;
             Ok((
                 res.map(BodyExt::boxed_unsync),
                 Box::new(io) as Box<dyn Future<Output = _> + Send>,
@@ -213,17 +285,30 @@ pub trait WasiHttpHooks: Send {
     #[cfg(not(feature = "default-send-request"))]
     fn send_request(
         &mut self,
-        request: http::Request<UnsyncBoxBody<Bytes, Error>>,
+        request: http::Request<WasiBody>,
         options: Option<RequestOptions>,
         fut: Box<dyn Future<Output = Result<(), Error>> + Send>,
     ) -> Box<
         dyn Future<
                 Output = Result<(
-                    http::Response<UnsyncBoxBody<Bytes, Error>>,
+                    http::Response<WasiBody>,
                     Box<dyn Future<Output = Result<(), Error>> + Send>,
                 )>,
             > + Send,
     >;
+
+    /// Number of distinct write calls to the outgoing body's output-stream
+    /// that the implementation will buffer.
+    /// Default: 1.
+    fn p2_outgoing_body_buffer_chunks(&mut self) -> usize {
+        crate::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS
+    }
+
+    /// Maximum size allowed in a write call to the outgoing body's
+    /// output-stream.  Default: 1024 * 1024.
+    fn p2_outgoing_body_chunk_size(&mut self) -> usize {
+        crate::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE
+    }
 }
 
 /// Returns a value suitable for the `WasiHttpCtxView::hooks` field which has

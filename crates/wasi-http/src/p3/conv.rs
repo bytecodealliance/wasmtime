@@ -95,12 +95,22 @@ impl From<ErrorCode> for Error {
 
 impl From<Error> for ErrorCode {
     fn from(e: Error) -> Self {
+        Self::from(&e)
+    }
+}
+
+impl From<&Error> for ErrorCode {
+    fn from(e: &Error) -> Self {
         match e {
             Error::Hyper(err) => {
-                // If there's a source, we might be able to extract a wasi-http error from it.
+                // If there's a source, we might be able to extract a wasi-http
+                // error from it.
                 if let Some(cause) = err.source() {
                     if let Some(err) = cause.downcast_ref::<Self>() {
                         return err.clone();
+                    }
+                    if let Some(err) = cause.downcast_ref::<Error>() {
+                        return err.into();
                     }
                 }
 
@@ -141,9 +151,10 @@ impl From<Error> for ErrorCode {
                 })
             }
             Error::DnsTimeout => Self::DnsTimeout,
-            Error::DnsError { rcode, info_code } => {
-                Self::DnsError(types::DnsErrorPayload { rcode, info_code })
-            }
+            Error::DnsError { rcode, info_code } => Self::DnsError(types::DnsErrorPayload {
+                rcode: rcode.clone(),
+                info_code: *info_code,
+            }),
             Error::DestinationNotFound => Self::DestinationNotFound,
             Error::DestinationUnavailable => Self::DestinationUnavailable,
             Error::DestinationIpProhibited => Self::DestinationIpProhibited,
@@ -160,65 +171,69 @@ impl From<Error> for ErrorCode {
                 alert_id,
                 alert_message,
             } => Self::TlsAlertReceived(types::TlsAlertReceivedPayload {
-                alert_id,
-                alert_message,
+                alert_id: *alert_id,
+                alert_message: alert_message.clone(),
             }),
             Error::HttpRequestDenied => Self::HttpRequestDenied,
             Error::HttpRequestLengthRequired => Self::HttpRequestLengthRequired,
-            Error::HttpRequestBodySize(payload) => Self::HttpRequestBodySize(payload),
+            Error::HttpRequestBodySize(payload) => Self::HttpRequestBodySize(*payload),
             Error::HttpRequestMethodInvalid => Self::HttpRequestMethodInvalid,
             Error::HttpRequestUriInvalid => Self::HttpRequestUriInvalid,
             Error::HttpRequestUriTooLong => Self::HttpRequestUriTooLong,
             Error::HttpRequestHeaderSectionSize(payload) => {
-                Self::HttpRequestHeaderSectionSize(payload)
+                Self::HttpRequestHeaderSectionSize(*payload)
             }
             Error::HttpRequestHeaderSize {
                 field_name,
                 field_size,
             } => Self::HttpRequestHeaderSize(Some(types::FieldSizePayload {
-                field_name,
-                field_size,
+                field_name: field_name.clone(),
+                field_size: *field_size,
             })),
             Error::HttpRequestTrailerSectionSize(payload) => {
-                Self::HttpRequestTrailerSectionSize(payload)
+                Self::HttpRequestTrailerSectionSize(*payload)
             }
             Error::HttpRequestTrailerSize {
                 field_name,
                 field_size,
             } => Self::HttpRequestTrailerSize(types::FieldSizePayload {
-                field_name,
-                field_size,
+                field_name: field_name.clone(),
+                field_size: *field_size,
             }),
             Error::HttpResponseIncomplete => Self::HttpResponseIncomplete,
             Error::HttpResponseHeaderSectionSize(payload) => {
-                Self::HttpResponseHeaderSectionSize(payload)
+                Self::HttpResponseHeaderSectionSize(*payload)
             }
             Error::HttpResponseHeaderSize {
                 field_name,
                 field_size,
             } => Self::HttpResponseHeaderSize(types::FieldSizePayload {
-                field_name,
-                field_size,
+                field_name: field_name.clone(),
+                field_size: *field_size,
             }),
-            Error::HttpResponseBodySize(payload) => Self::HttpResponseBodySize(payload),
+            Error::HttpResponseBodySize(payload) => Self::HttpResponseBodySize(*payload),
             Error::HttpResponseTrailerSectionSize(payload) => {
-                Self::HttpResponseTrailerSectionSize(payload)
+                Self::HttpResponseTrailerSectionSize(*payload)
             }
             Error::HttpResponseTrailerSize {
                 field_name,
                 field_size,
             } => Self::HttpResponseTrailerSize(types::FieldSizePayload {
-                field_name,
-                field_size,
+                field_name: field_name.clone(),
+                field_size: *field_size,
             }),
-            Error::HttpResponseTransferCoding(payload) => Self::HttpResponseTransferCoding(payload),
-            Error::HttpResponseContentCoding(payload) => Self::HttpResponseContentCoding(payload),
+            Error::HttpResponseTransferCoding(payload) => {
+                Self::HttpResponseTransferCoding(payload.clone())
+            }
+            Error::HttpResponseContentCoding(payload) => {
+                Self::HttpResponseContentCoding(payload.clone())
+            }
             Error::HttpResponseTimeout => Self::HttpResponseTimeout,
             Error::HttpUpgradeFailed => Self::HttpUpgradeFailed,
             Error::HttpProtocolError => Self::HttpProtocolError,
             Error::LoopDetected => Self::LoopDetected,
             Error::ConfigurationError => Self::ConfigurationError,
-            Error::InternalError(payload) => Self::InternalError(payload),
+            Error::InternalError(payload) => Self::InternalError(payload.clone()),
         }
     }
 }

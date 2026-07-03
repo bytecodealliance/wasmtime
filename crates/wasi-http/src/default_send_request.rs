@@ -31,7 +31,7 @@ impl<T> TokioStream for T where T: AsyncRead + AsyncWrite + Send + Sync + Unpin 
 /// a result resolved from it will be forwarded to the guest on the future handle returned.
 ///
 /// This function performs no `Content-Length` validation.
-pub async fn send_request(
+pub async fn default_send_request(
     mut req: Request<impl Body<Data = Bytes, Error = Error> + Send + 'static>,
     options: Option<RequestOptions>,
 ) -> Result<

@@ -15,18 +15,16 @@ use wasmtime::{
 };
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe};
 use wasmtime_wasi_http::{
-    RequestOptions, WasiHttpCtx,
+    Error, RequestOptions, WasiBody, WasiHttpCtx, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
     io::TokioIo,
     p2::bindings::http::types::{ErrorCode, Scheme},
-    p2::body::HyperOutgoingBody,
-    p2::{HttpResult, WasiHttpCtxView, WasiHttpHooks, WasiHttpView},
 };
 
 type RequestSender = Arc<
     dyn Fn(
-            hyper::Request<HyperOutgoingBody>,
+            hyper::Request<WasiBody>,
             Option<RequestOptions>,
-        ) -> HttpResult<http::Response<HyperOutgoingBody>>
+        ) -> Result<http::Response<WasiBody>, Error>
         + Send
         + Sync,
 >;
@@ -68,14 +66,18 @@ impl WasiHttpView for Ctx {
 impl WasiHttpHooks for MyHttpHooks {
     fn send_request(
         &mut self,
-        request: hyper::Request<HyperOutgoingBody>,
+        request: http::Request<WasiBody>,
         config: Option<RequestOptions>,
+        _io: Box<dyn Future<Output = Result<(), Error>> + Send>,
     ) -> Box<
         dyn Future<
-                Output = HttpResult<(
-                    http::Response<HyperOutgoingBody>,
-                    Box<dyn Future<Output = Result<(), ErrorCode>> + Send>,
-                )>,
+                Output = Result<
+                    (
+                        http::Response<WasiBody>,
+                        Box<dyn Future<Output = Result<(), Error>> + Send>,
+                    ),
+                    Error,
+                >,
             > + Send,
     > {
         let me = self.clone();
@@ -83,7 +85,7 @@ impl WasiHttpHooks for MyHttpHooks {
             if let Some(rejected_authority) = &me.rejected_authority {
                 let authority = request.uri().authority().map(ToString::to_string).unwrap();
                 if &authority == rejected_authority {
-                    return Err(ErrorCode::HttpRequestDenied.into());
+                    return Err(Error::HttpRequestDenied.into());
                 }
             }
             if let Some(send_request) = me.send_request.clone() {
@@ -93,8 +95,7 @@ impl WasiHttpHooks for MyHttpHooks {
                     Box::new(async { Ok(()) }) as Box<dyn Future<Output = _> + Send>,
                 ))
             } else {
-                let (res, io) =
-                    wasmtime_wasi_http::p2::default_send_request(request, config).await?;
+                let (res, io) = wasmtime_wasi_http::default_send_request(request, config).await?;
                 Ok((res.map(BodyExt::boxed_unsync), Box::new(io)))
             }
         })
@@ -322,16 +323,10 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
     };
 
     let send_request = if override_send_request {
-        Some(
-            Arc::new(move |request: hyper::Request<HyperOutgoingBody>, _opts| {
-                handle(request.into_parts().0).map(|resp| {
-                    resp.map(|body| {
-                        body.map_err(wasmtime_wasi_http::p2::hyper_response_error)
-                            .boxed_unsync()
-                    })
-                })
-            }) as RequestSender,
-        )
+        Some(Arc::new(move |request: hyper::Request<WasiBody>, _opts| {
+            handle(request.into_parts().0)
+                .map(|resp| resp.map(|body| body.map_err(|e| e.into()).boxed_unsync()))
+        }) as RequestSender)
     } else {
         let server = async move {
             loop {
@@ -588,23 +583,22 @@ async fn wasi_http_without_port() -> Result<()> {
 
     // Intercept the outgoing request to verify the authority has no port and
     // return a synthetic response. This avoids depending on external network.
-    let send_request: RequestSender =
-        Arc::new(|request: hyper::Request<HyperOutgoingBody>, _opts| {
-            let authority = request.uri().authority().expect("request has authority");
-            assert!(
-                authority.port().is_none(),
-                "expected no port in authority, got: {authority}"
-            );
-            let resp = hyper::Response::builder()
-                .status(StatusCode::OK)
-                .body(
-                    body::full(Bytes::from("ok"))
-                        .map_err(wasmtime_wasi_http::p2::hyper_response_error)
-                        .boxed_unsync(),
-                )
-                .unwrap();
-            Ok(resp)
-        });
+    let send_request: RequestSender = Arc::new(|request: hyper::Request<WasiBody>, _opts| {
+        let authority = request.uri().authority().expect("request has authority");
+        assert!(
+            authority.port().is_none(),
+            "expected no port in authority, got: {authority}"
+        );
+        let resp = hyper::Response::builder()
+            .status(StatusCode::OK)
+            .body(
+                body::full(Bytes::from("ok"))
+                    .map_err(|e| e.into())
+                    .boxed_unsync(),
+            )
+            .unwrap();
+        Ok(resp)
+    });
 
     let response = run_wasi_http(
         test_programs_artifacts::P2_API_PROXY_FORWARD_REQUEST_COMPONENT,

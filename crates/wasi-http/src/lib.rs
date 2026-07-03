@@ -26,6 +26,8 @@ pub mod p3;
 mod request_options;
 
 pub use ctx::*;
+#[cfg(feature = "default-send-request")]
+pub use default_send_request::*;
 pub use error::*;
 pub use field_map::*;
 pub use request_options::*;

@@ -282,7 +282,7 @@ mod tests {
             WasiHttpCtxView {
                 ctx: &mut self.http,
                 table: &mut self.table,
-                hooks: crate::p3::default_hooks(),
+                hooks: crate::default_hooks(),
             }
         }
     }
@@ -300,9 +300,7 @@ mod tests {
                 Some(PathAndQuery::from_static("/path?query=1")),
                 FieldMap::default(),
                 None,
-                Full::new(Bytes::from_static(b"body"))
-                    .map_err(|x| match x {})
-                    .boxed_unsync(),
+                Full::new(Bytes::from_static(b"body")).boxed_unsync(),
             );
             let mut store = Store::new(&engine, TestCtx::new());
             let (http_req, options) = req.into_http(&mut store, async { Ok(()) }).unwrap();
@@ -336,12 +334,12 @@ mod tests {
             None, // <-- should fail, must be Some(_) when authority is set
             FieldMap::default(),
             None,
-            Empty::new().map_err(|x| match x {}).boxed_unsync(),
+            Empty::new().boxed_unsync(),
         );
         let mut store = Store::new(&Engine::default(), TestCtx::new());
         let result = req
             .into_http(&mut store, async {
-                Err(ErrorCode::InternalError(Some("uh oh".to_string())))
+                Err(Error::InternalError(Some("uh oh".to_string())))
             })
             .unwrap_err();
         assert!(matches!(
@@ -352,7 +350,7 @@ mod tests {
         let result = pin!(fut).poll(&mut cx);
         assert!(matches!(
             result,
-            Poll::Ready(Err(ErrorCode::InternalError(Some(_))))
+            Poll::Ready(Err(Error::InternalError(Some(_))))
         ));
 
         Ok(())
