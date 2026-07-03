@@ -1841,7 +1841,13 @@ impl StoreOpaque {
             use wasmtime_environ::packed_option::ReservedValue;
 
             let engine = store.engine();
-            let mem_ty = engine.tunables().gc_heap_memory_type();
+            let mut mem_ty = engine.tunables().gc_heap_memory_type();
+            let initial_bytes = engine.config().gc_heap_initial_size;
+            if initial_bytes > 0 {
+                let page_size = mem_ty.page_size();
+                mem_ty.limits.min = initial_bytes.div_ceil(page_size);
+            }
+
             ensure!(
                 engine.features().gc_types(),
                 "cannot allocate a GC store when GC is disabled at configuration time"
