@@ -7,13 +7,13 @@ use crate::p2;
 use crate::p2::bindings::http::types as p2_types;
 #[cfg(feature = "p3")]
 use crate::p3;
-use bytes::Bytes;
+use crate::{WasiBody, WasiHttpCtxView};
 use futures::{
     channel::oneshot,
     future::{Either, FutureExt},
     stream::{FuturesUnordered, Stream},
 };
-use http_body_util::{BodyExt, combinators::UnsyncBoxBody};
+use http_body_util::BodyExt;
 #[cfg(feature = "p3")]
 use p3::bindings::http::types as p3_types;
 use std::collections::VecDeque;
@@ -36,258 +36,11 @@ use wasmtime::component::{Accessor, GuestTaskId, Resource, TypedFuncCallConcurre
 use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, Result, Store, StoreContextMut, format_err};
 
-/// Represents either a `wasi:http/types@0.2.x` or `wasi:http/types@0.3.x` `error-code`.
-pub enum ErrorCode {
-    /// A `wasi:http/types@0.2.x` `error-code`.
-    #[cfg(feature = "p2")]
-    P2(p2_types::ErrorCode),
-    /// A `wasi:http/types@0.3.x` `error-code`.
-    #[cfg(feature = "p3")]
-    P3(p3_types::ErrorCode),
-}
-
-#[cfg(feature = "p2")]
-impl From<p2_types::ErrorCode> for ErrorCode {
-    fn from(code: p2_types::ErrorCode) -> Self {
-        Self::P2(code)
-    }
-}
-
-#[cfg(feature = "p3")]
-impl From<p3_types::ErrorCode> for ErrorCode {
-    fn from(code: p3_types::ErrorCode) -> Self {
-        Self::P3(code)
-    }
-}
-
-#[cfg(feature = "p2")]
-impl From<ErrorCode> for p2_types::ErrorCode {
-    fn from(code: ErrorCode) -> p2_types::ErrorCode {
-        match code {
-            ErrorCode::P2(code) => code,
-            #[cfg(feature = "p3")]
-            ErrorCode::P3(code) => code.into(),
-        }
-    }
-}
-
-#[cfg(feature = "p3")]
-impl From<ErrorCode> for p3_types::ErrorCode {
-    fn from(code: ErrorCode) -> p3_types::ErrorCode {
-        match code {
-            #[cfg(feature = "p2")]
-            ErrorCode::P2(code) => code.into(),
-            ErrorCode::P3(code) => code,
-        }
-    }
-}
-
-#[cfg(all(feature = "p2", feature = "p3"))]
-impl From<p2_types::ErrorCode> for p3_types::ErrorCode {
-    fn from(code: p2_types::ErrorCode) -> Self {
-        match code {
-            p2_types::ErrorCode::DnsTimeout => Self::DnsTimeout,
-            p2_types::ErrorCode::DnsError(payload) => Self::DnsError(p3_types::DnsErrorPayload {
-                rcode: payload.rcode,
-                info_code: payload.info_code,
-            }),
-            p2_types::ErrorCode::DestinationNotFound => Self::DestinationNotFound,
-            p2_types::ErrorCode::DestinationUnavailable => Self::DestinationUnavailable,
-            p2_types::ErrorCode::DestinationIpProhibited => Self::DestinationIpProhibited,
-            p2_types::ErrorCode::DestinationIpUnroutable => Self::DestinationIpUnroutable,
-            p2_types::ErrorCode::ConnectionRefused => Self::ConnectionRefused,
-            p2_types::ErrorCode::ConnectionTerminated => Self::ConnectionTerminated,
-            p2_types::ErrorCode::ConnectionTimeout => Self::ConnectionTimeout,
-            p2_types::ErrorCode::ConnectionReadTimeout => Self::ConnectionReadTimeout,
-            p2_types::ErrorCode::ConnectionWriteTimeout => Self::ConnectionWriteTimeout,
-            p2_types::ErrorCode::ConnectionLimitReached => Self::ConnectionLimitReached,
-            p2_types::ErrorCode::TlsProtocolError => Self::TlsProtocolError,
-            p2_types::ErrorCode::TlsCertificateError => Self::TlsCertificateError,
-            p2_types::ErrorCode::TlsAlertReceived(payload) => {
-                Self::TlsAlertReceived(p3_types::TlsAlertReceivedPayload {
-                    alert_id: payload.alert_id,
-                    alert_message: payload.alert_message,
-                })
-            }
-            p2_types::ErrorCode::HttpRequestDenied => Self::HttpRequestDenied,
-            p2_types::ErrorCode::HttpRequestLengthRequired => Self::HttpRequestLengthRequired,
-            p2_types::ErrorCode::HttpRequestBodySize(payload) => Self::HttpRequestBodySize(payload),
-            p2_types::ErrorCode::HttpRequestMethodInvalid => Self::HttpRequestMethodInvalid,
-            p2_types::ErrorCode::HttpRequestUriInvalid => Self::HttpRequestUriInvalid,
-            p2_types::ErrorCode::HttpRequestUriTooLong => Self::HttpRequestUriTooLong,
-            p2_types::ErrorCode::HttpRequestHeaderSectionSize(payload) => {
-                Self::HttpRequestHeaderSectionSize(payload)
-            }
-            p2_types::ErrorCode::HttpRequestHeaderSize(payload) => {
-                Self::HttpRequestHeaderSize(payload.map(|payload| p3_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                }))
-            }
-            p2_types::ErrorCode::HttpRequestTrailerSectionSize(payload) => {
-                Self::HttpRequestTrailerSectionSize(payload)
-            }
-            p2_types::ErrorCode::HttpRequestTrailerSize(payload) => {
-                Self::HttpRequestTrailerSize(p3_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                })
-            }
-            p2_types::ErrorCode::HttpResponseIncomplete => Self::HttpResponseIncomplete,
-            p2_types::ErrorCode::HttpResponseHeaderSectionSize(payload) => {
-                Self::HttpResponseHeaderSectionSize(payload)
-            }
-            p2_types::ErrorCode::HttpResponseHeaderSize(payload) => {
-                Self::HttpResponseHeaderSize(p3_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                })
-            }
-            p2_types::ErrorCode::HttpResponseBodySize(payload) => {
-                Self::HttpResponseBodySize(payload)
-            }
-            p2_types::ErrorCode::HttpResponseTrailerSectionSize(payload) => {
-                Self::HttpResponseTrailerSectionSize(payload)
-            }
-            p2_types::ErrorCode::HttpResponseTrailerSize(payload) => {
-                Self::HttpResponseTrailerSize(p3_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                })
-            }
-            p2_types::ErrorCode::HttpResponseTransferCoding(payload) => {
-                Self::HttpResponseTransferCoding(payload)
-            }
-            p2_types::ErrorCode::HttpResponseContentCoding(payload) => {
-                Self::HttpResponseContentCoding(payload)
-            }
-            p2_types::ErrorCode::HttpResponseTimeout => Self::HttpResponseTimeout,
-            p2_types::ErrorCode::HttpUpgradeFailed => Self::HttpUpgradeFailed,
-            p2_types::ErrorCode::HttpProtocolError => Self::HttpProtocolError,
-            p2_types::ErrorCode::LoopDetected => Self::LoopDetected,
-            p2_types::ErrorCode::ConfigurationError => Self::ConfigurationError,
-            p2_types::ErrorCode::InternalError(payload) => Self::InternalError(payload),
-        }
-    }
-}
-
-#[cfg(all(feature = "p2", feature = "p3"))]
-impl From<p3_types::ErrorCode> for p2_types::ErrorCode {
-    fn from(code: p3_types::ErrorCode) -> Self {
-        match code {
-            p3_types::ErrorCode::DnsTimeout => Self::DnsTimeout,
-            p3_types::ErrorCode::DnsError(payload) => Self::DnsError(p2_types::DnsErrorPayload {
-                rcode: payload.rcode,
-                info_code: payload.info_code,
-            }),
-            p3_types::ErrorCode::DestinationNotFound => Self::DestinationNotFound,
-            p3_types::ErrorCode::DestinationUnavailable => Self::DestinationUnavailable,
-            p3_types::ErrorCode::DestinationIpProhibited => Self::DestinationIpProhibited,
-            p3_types::ErrorCode::DestinationIpUnroutable => Self::DestinationIpUnroutable,
-            p3_types::ErrorCode::ConnectionRefused => Self::ConnectionRefused,
-            p3_types::ErrorCode::ConnectionTerminated => Self::ConnectionTerminated,
-            p3_types::ErrorCode::ConnectionTimeout => Self::ConnectionTimeout,
-            p3_types::ErrorCode::ConnectionReadTimeout => Self::ConnectionReadTimeout,
-            p3_types::ErrorCode::ConnectionWriteTimeout => Self::ConnectionWriteTimeout,
-            p3_types::ErrorCode::ConnectionLimitReached => Self::ConnectionLimitReached,
-            p3_types::ErrorCode::TlsProtocolError => Self::TlsProtocolError,
-            p3_types::ErrorCode::TlsCertificateError => Self::TlsCertificateError,
-            p3_types::ErrorCode::TlsAlertReceived(payload) => {
-                Self::TlsAlertReceived(p2_types::TlsAlertReceivedPayload {
-                    alert_id: payload.alert_id,
-                    alert_message: payload.alert_message,
-                })
-            }
-            p3_types::ErrorCode::HttpRequestDenied => Self::HttpRequestDenied,
-            p3_types::ErrorCode::HttpRequestLengthRequired => Self::HttpRequestLengthRequired,
-            p3_types::ErrorCode::HttpRequestBodySize(payload) => Self::HttpRequestBodySize(payload),
-            p3_types::ErrorCode::HttpRequestMethodInvalid => Self::HttpRequestMethodInvalid,
-            p3_types::ErrorCode::HttpRequestUriInvalid => Self::HttpRequestUriInvalid,
-            p3_types::ErrorCode::HttpRequestUriTooLong => Self::HttpRequestUriTooLong,
-            p3_types::ErrorCode::HttpRequestHeaderSectionSize(payload) => {
-                Self::HttpRequestHeaderSectionSize(payload)
-            }
-            p3_types::ErrorCode::HttpRequestHeaderSize(payload) => {
-                Self::HttpRequestHeaderSize(payload.map(|payload| p2_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                }))
-            }
-            p3_types::ErrorCode::HttpRequestTrailerSectionSize(payload) => {
-                Self::HttpRequestTrailerSectionSize(payload)
-            }
-            p3_types::ErrorCode::HttpRequestTrailerSize(payload) => {
-                Self::HttpRequestTrailerSize(p2_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                })
-            }
-            p3_types::ErrorCode::HttpResponseIncomplete => Self::HttpResponseIncomplete,
-            p3_types::ErrorCode::HttpResponseHeaderSectionSize(payload) => {
-                Self::HttpResponseHeaderSectionSize(payload)
-            }
-            p3_types::ErrorCode::HttpResponseHeaderSize(payload) => {
-                Self::HttpResponseHeaderSize(p2_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                })
-            }
-            p3_types::ErrorCode::HttpResponseBodySize(payload) => {
-                Self::HttpResponseBodySize(payload)
-            }
-            p3_types::ErrorCode::HttpResponseTrailerSectionSize(payload) => {
-                Self::HttpResponseTrailerSectionSize(payload)
-            }
-            p3_types::ErrorCode::HttpResponseTrailerSize(payload) => {
-                Self::HttpResponseTrailerSize(p2_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                })
-            }
-            p3_types::ErrorCode::HttpResponseTransferCoding(payload) => {
-                Self::HttpResponseTransferCoding(payload)
-            }
-            p3_types::ErrorCode::HttpResponseContentCoding(payload) => {
-                Self::HttpResponseContentCoding(payload)
-            }
-            p3_types::ErrorCode::HttpResponseTimeout => Self::HttpResponseTimeout,
-            p3_types::ErrorCode::HttpUpgradeFailed => Self::HttpUpgradeFailed,
-            p3_types::ErrorCode::HttpProtocolError => Self::HttpProtocolError,
-            p3_types::ErrorCode::LoopDetected => Self::LoopDetected,
-            p3_types::ErrorCode::ConfigurationError => Self::ConfigurationError,
-            p3_types::ErrorCode::InternalError(payload) => Self::InternalError(payload),
-        }
-    }
-}
-
-/// Represents either a p2 or p3 `WasiHttpCtxView` getter.
-pub enum ViewFn<T> {
-    /// A p2 getter.
-    #[cfg(feature = "p2")]
-    P2(fn(&mut T) -> crate::p2::WasiHttpCtxView),
-    /// A p3 getter.
-    #[cfg(feature = "p3")]
-    P3(fn(&mut T) -> crate::WasiHttpCtxView),
-}
-
-impl<T> Clone for ViewFn<T> {
-    fn clone(&self) -> Self {
-        match self {
-            #[cfg(feature = "p2")]
-            &Self::P2(view) => Self::P2(view),
-            #[cfg(feature = "p3")]
-            &Self::P3(view) => Self::P3(view),
-        }
-    }
-}
-
-impl<T> Copy for ViewFn<T> {}
-
 /// A Request to be handled using `ProxyHandler::handle`.
-pub type Request = http::Request<UnsyncBoxBody<Bytes, ErrorCode>>;
+pub type Request = http::Request<WasiBody>;
 
 /// A Response returned by `ProxyHandler::handle`.
-pub type Response = http::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>;
+pub type Response = http::Response<WasiBody>;
 
 /// Represents either a `wasi:http/incoming-handler@0.2.x` or
 /// `wasi:http/handler@0.3.x` pre-instance.
@@ -488,7 +241,7 @@ pub struct Instance<T: 'static, E: WorkerExpiration, S: WorkerState> {
     /// The instance to use to handle requests.
     pub proxy: Proxy,
     /// `WasiHttpCtxView` getter function.
-    pub view: ViewFn<T>,
+    pub view: fn(&mut T) -> WasiHttpCtxView<'_>,
     /// See [`WorkerExpiration`].
     pub expiration: E,
     /// See [`WorkerState`].
@@ -661,7 +414,7 @@ where
         mut self,
         store: Store<S::StoreData>,
         proxy: Proxy,
-        view: ViewFn<S::StoreData>,
+        view: fn(&mut S::StoreData) -> WasiHttpCtxView<'_>,
         expiration: S::WorkerExpiration,
         state: S::WorkerState,
         request: Option<WorkerRequest<S>>,
@@ -1237,12 +990,12 @@ impl<'a, T: Send> Prepared<'a, T> {
         mut store: StoreContextMut<'_, T>,
         proxy: &'a Proxy,
         request: Request,
-        view: ViewFn<T>,
+        view: fn(&mut T) -> WasiHttpCtxView<'_>,
         tx: oneshot::Sender<Result<Response, wasmtime::Error>>,
     ) -> Result<Prepared<'a, T>> {
-        match (proxy, view) {
+        match proxy {
             #[cfg(feature = "p3")]
-            (Proxy::P3(guest), ViewFn::P3(view)) => {
+            Proxy::P3(guest) => {
                 let (request, body) = request.into_parts();
                 let body = body.map_err(p3_types::ErrorCode::from);
                 let request = http::Request::from_parts(request, body);
@@ -1261,7 +1014,7 @@ impl<'a, T: Send> Prepared<'a, T> {
                 })
             }
             #[cfg(feature = "p2")]
-            (Proxy::P2(guest), ViewFn::P2(view)) => {
+            Proxy::P2(guest) => {
                 // Here we wrap the sender in an `Arc<Mutex<Option<_>>>`, with one
                 // clone used in the `response-outparam` and the other used to send
                 // an error if the request expires or the handler returns without
@@ -1278,11 +1031,9 @@ impl<'a, T: Send> Prepared<'a, T> {
                             _ = tx.send(
                                 value
                                     .map(|v| {
-                                        v.map(move |body| {
-                                            body.map_err(wasmtime::Error::from).boxed_unsync()
-                                        })
+                                        v.map(move |body| body.map_err(|e| e.into()).boxed_unsync())
                                     })
-                                    .map_err(wasmtime::Error::from),
+                                    .map_err(|e| e.into()),
                             );
                         }
                     }
@@ -1297,8 +1048,6 @@ impl<'a, T: Send> Prepared<'a, T> {
                         .start_call_concurrent(store, (request, out))?,
                 })
             }
-            #[cfg(all(feature = "p2", feature = "p3"))]
-            _ => unreachable!(),
         }
     }
 
@@ -1328,27 +1077,19 @@ impl<'a, T: Send> Prepared<'a, T> {
                 request_io_result,
                 view,
             } => {
-                let handle =
-                    pin!(async move {
-                        let response = guest
-                            .wasi_http_handler()
-                            .func_handle()
-                            .finish_call_concurrent(accessor, call)
-                            .await?
-                            .0?;
+                let handle = pin!(async move {
+                    let response = guest
+                        .wasi_http_handler()
+                        .func_handle()
+                        .finish_call_concurrent(accessor, call)
+                        .await?
+                        .0?;
 
-                        let response = accessor.with(|mut store| {
-                            let response = view(store.get()).table.delete(response)?;
-                            Ok::<_, wasmtime::Error>(response.into_http_with_getter(
-                                &mut store,
-                                request_io_result,
-                                view,
-                            )?)
-                        })?;
-
-                        Ok(response
-                            .map(move |body| body.map_err(wasmtime::Error::from).boxed_unsync()))
-                    });
+                    accessor.with(|mut store| {
+                        let response = view(store.get()).table.delete(response)?;
+                        response.into_http_with_getter(&mut store, request_io_result, view)
+                    })
+                });
 
                 // TODO: We should also use `oneshot::Sender::poll_close` to be
                 // notified when the receiver is dropped, in which case we should
