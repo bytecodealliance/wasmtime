@@ -54,6 +54,9 @@ pub struct Context {
 
     /// Flag: do we want a disassembly with the CompiledCode?
     pub want_disasm: bool,
+
+    /// Reused register allocator context.
+    pub(crate) regalloc_ctx: regalloc2::Ctx,
 }
 
 impl Context {
@@ -77,6 +80,7 @@ impl Context {
             loop_analysis: LoopAnalysis::new(),
             compiled_code: None,
             want_disasm: false,
+            regalloc_ctx: regalloc2::Ctx::default(),
         }
     }
 
@@ -136,7 +140,13 @@ impl Context {
 
             self.verify_if(isa)?;
             self.optimize(isa, ctrl_plane)?;
-            result = isa.compile_function(&self.func, &self.domtree, self.want_disasm, ctrl_plane);
+            result = isa.compile_function(
+                &self.func,
+                &self.domtree,
+                &mut self.regalloc_ctx,
+                self.want_disasm,
+                ctrl_plane,
+            );
         }
         trace!("****** DONE compiling {}\n", self.func.display_spec());
         result

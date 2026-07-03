@@ -53,12 +53,22 @@ impl S390xBackend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        regalloc_ctx: &mut regalloc2::Ctx,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(self.isa_flags.clone());
         let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
         let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<S390xBackend>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
+        compile::compile::<S390xBackend>(
+            func,
+            domtree,
+            regalloc_ctx,
+            self,
+            abi,
+            emit_info,
+            sigs,
+            ctrl_plane,
+        )
     }
 }
 
@@ -67,11 +77,13 @@ impl TargetIsa for S390xBackend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        regalloc_ctx: &mut regalloc2::Ctx,
         want_disasm: bool,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
-        let (vcode, regalloc_result) = self.compile_vcode(func, domtree, ctrl_plane)?;
+        let (vcode, regalloc_result) =
+            self.compile_vcode(func, domtree, regalloc_ctx, ctrl_plane)?;
 
         let emit_result = vcode.emit(&regalloc_result, want_disasm, flags, ctrl_plane)?;
         let value_labels_ranges = emit_result.value_labels_ranges;

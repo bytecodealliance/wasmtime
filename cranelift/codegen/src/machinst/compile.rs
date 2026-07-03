@@ -15,6 +15,7 @@ use regalloc2::{Algorithm, RegallocOptions};
 pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
     domtree: &DominatorTree,
+    regalloc_ctx: &mut regalloc2::Ctx,
     b: &B,
     abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
     emit_info: <B::MInst as MachInstEmit>::Info,
@@ -62,14 +63,19 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             RegallocAlgorithm::SinglePass => Algorithm::Fastalloc,
         };
 
-        regalloc2::run(&vcode, vcode.abi.machine_env(), &options)
+        // Run the allocator with the caller's reused context (owned by the
+        // `cranelift_codegen::Context`), taking its `Output` back out. This
+        // avoids `regalloc2::run` allocating a fresh context -- which owns all
+        // of the allocator's growable scratch state -- for every function.
+        regalloc2::run_with_ctx(&vcode, vcode.abi.machine_env(), &options, regalloc_ctx)
             .map_err(|err| {
                 log::error!(
                     "Register allocation error for vcode\n{vcode:?}\nError: {err:?}\nCLIF for error:\n{f:?}",
                 );
                 err
             })
-            .expect("register allocation")
+            .expect("register allocation");
+        core::mem::take(&mut regalloc_ctx.output)
     };
 
     // Run the regalloc checker, if requested.

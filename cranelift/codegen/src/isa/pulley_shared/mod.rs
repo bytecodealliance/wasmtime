@@ -122,6 +122,7 @@ where
         &self,
         func: &ir::Function,
         domtree: &DominatorTree,
+        regalloc_ctx: &mut regalloc2::Ctx,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<(VCode<inst::InstAndKind<P>>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(
@@ -131,7 +132,16 @@ where
         );
         let sigs = SigSet::new::<abi::PulleyMachineDeps<P>>(func, &self.flags)?;
         let abi = abi::PulleyCallee::new(func, self, &self.isa_flags, &sigs)?;
-        machinst::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
+        machinst::compile::<Self>(
+            func,
+            domtree,
+            regalloc_ctx,
+            self,
+            abi,
+            emit_info,
+            sigs,
+            ctrl_plane,
+        )
     }
 }
 
@@ -172,10 +182,12 @@ where
         &self,
         func: &ir::Function,
         domtree: &DominatorTree,
+        regalloc_ctx: &mut regalloc2::Ctx,
         want_disasm: bool,
         ctrl_plane: &mut cranelift_control::ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let (vcode, regalloc_result) = self.compile_vcode(func, domtree, ctrl_plane)?;
+        let (vcode, regalloc_result) =
+            self.compile_vcode(func, domtree, regalloc_ctx, ctrl_plane)?;
 
         let want_disasm =
             want_disasm || (cfg!(feature = "trace-log") && log::log_enabled!(log::Level::Debug));
