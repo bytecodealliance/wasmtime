@@ -261,6 +261,96 @@ fn enc_mov_cond(cond: Cond, rd: u32, rm: u32) -> u32 {
     (cond.bits() << 28) | 0x01a0_0000 | (rd << 12) | rm
 }
 
+/// `bfc rd, #lsb, #width`.
+fn enc_bfc(rd: u32, lsb: u32, width: u32) -> u32 {
+    let msb = lsb + width - 1;
+    COND_AL | 0x07c0_001f | (msb << 16) | (rd << 12) | (lsb << 7)
+}
+
+/// `bfi rd, rn, #lsb, #width`.
+fn enc_bfi(rd: u32, rn: u32, lsb: u32, width: u32) -> u32 {
+    let msb = lsb + width - 1;
+    COND_AL | 0x07c0_0010 | (msb << 16) | (rd << 12) | (lsb << 7) | rn
+}
+
+/// `sbfx`/`ubfx rd, rn, #lsb, #width` from the op template.
+fn enc_bfx(template: u32, rd: u32, rn: u32, lsb: u32, width: u32) -> u32 {
+    COND_AL | template | ((width - 1) << 16) | (rd << 12) | (lsb << 7) | rn
+}
+
+/// A three-register op `template rd, rn, rm` with `rn`/`rd`/`rm` zeroed
+/// (used by the saturating, parallel, sel, pkh and extend-add families).
+fn enc_rd_rn_rm(template: u32, rd: u32, rn: u32, rm: u32) -> u32 {
+    COND_AL | template | (rn << 16) | (rd << 12) | rm
+}
+
+/// `ssat`/`usat rd, #sat_bits, rm`.
+fn enc_sat(op: SatOp, rd: u32, sat_bits: u32, rm: u32) -> u32 {
+    let field = if op.is_signed() {
+        sat_bits - 1
+    } else {
+        sat_bits
+    };
+    COND_AL | op.template() | (field << 16) | (rd << 12) | rm
+}
+
+/// `rrx rd, rm` (a `mov` with a rotate-right-extend shift).
+fn enc_rrx(rd: u32, rm: u32) -> u32 {
+    COND_AL | 0x01a0_0060 | (rd << 12) | rm
+}
+
+/// The permanently-undefined `udf` encoding (`udf #0`).
+fn enc_udf() -> u32 {
+    0xe7f0_00f0
+}
+
+/// A DSP multiply with a single result: `template` plus `rd`(19:16),
+/// `rm`(11:8), `rn`(3:0).
+fn enc_dsp3(template: u32, rd: u32, rn: u32, rm: u32) -> u32 {
+    COND_AL | template | (rd << 16) | (rm << 8) | rn
+}
+
+/// A DSP multiply-accumulate: `template` plus `rd`(19:16), `ra`(15:12),
+/// `rm`(11:8), `rn`(3:0).
+fn enc_dsp4(template: u32, rd: u32, rn: u32, rm: u32, ra: u32) -> u32 {
+    COND_AL | template | (rd << 16) | (ra << 12) | (rm << 8) | rn
+}
+
+/// A DSP long multiply: `template` plus `rd_hi`(19:16), `rd_lo`(15:12),
+/// `rm`(11:8), `rn`(3:0).
+fn enc_dsp_long(template: u32, rd_lo: u32, rd_hi: u32, rn: u32, rm: u32) -> u32 {
+    COND_AL | template | (rd_hi << 16) | (rd_lo << 12) | (rm << 8) | rn
+}
+
+/// `ldmia`/`stmia rn{!}, {reglist}` (increment-after).
+fn enc_ldm_stm(load: bool, rn: u32, writeback: bool, reg_list: u32) -> u32 {
+    let base = if load { 0x0890_0000 } else { 0x0880_0000 };
+    let wb = if writeback { 0x0020_0000 } else { 0 };
+    COND_AL | base | wb | (rn << 16) | (reg_list & 0xffff)
+}
+
+/// `ldrex`/`ldaex rt, [rn]`.
+fn enc_load_ex(acquire: bool, rt: u32, rn: u32) -> u32 {
+    let base = if acquire { 0x0190_0e9f } else { 0x0190_0f9f };
+    COND_AL | base | (rn << 16) | (rt << 12)
+}
+
+/// `strex`/`stlex rd, rt, [rn]`.
+fn enc_store_ex(acquire: bool, rd: u32, rt: u32, rn: u32) -> u32 {
+    let base = if acquire { 0x0180_0e90 } else { 0x0180_0f90 };
+    COND_AL | base | (rn << 16) | (rd << 12) | rt
+}
+
+/// `lda rt, [rn]`.
+fn enc_lda(rt: u32, rn: u32) -> u32 {
+    COND_AL | 0x0190_0c9f | (rn << 16) | (rt << 12)
+}
+
+/// `stl rt, [rn]`.
+fn enc_stl(rt: u32, rn: u32) -> u32 {
+    COND_AL | 0x0180_fc90 | (rn << 16) | rt
+}
+
 fn put_u32(sink: &mut MachBuffer<Inst>, word: u32) {
     for b in word.to_le_bytes() {
         sink.put1(b);
@@ -441,6 +531,140 @@ impl MachInstEmit for Inst {
                 put_u32(sink, enc_dp_reg(0b1101, 0, rd, 0, rm));
                 put_u32(sink, enc_mov_cond(*cond, rd, rn));
             }
+            Inst::Bfc { rd, lsb, width } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                put_u32(sink, enc_bfc(rd, u32::from(*lsb), u32::from(*width)));
+            }
+            Inst::Bfi { rd, rn, lsb, width } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                put_u32(sink, enc_bfi(rd, rn, u32::from(*lsb), u32::from(*width)));
+            }
+            Inst::Bfx {
+                op,
+                rd,
+                rn,
+                lsb,
+                width,
+            } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                put_u32(
+                    sink,
+                    enc_bfx(op.template(), rd, rn, u32::from(*lsb), u32::from(*width)),
+                );
+            }
+            Inst::QAlu { op, rd, rm, rn } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rm = machreg_to_gpr(*rm);
+                let rn = machreg_to_gpr(*rn);
+                put_u32(sink, enc_rd_rn_rm(op.template(), rd, rn, rm));
+            }
+            Inst::Sat {
+                op,
+                rd,
+                sat_bits,
+                rm,
+            } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_sat(*op, rd, u32::from(*sat_bits), rm));
+            }
+            Inst::ParAlu { op, rd, rn, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_rd_rn_rm(op.template(), rd, rn, rm));
+            }
+            Inst::ExtAdd { op, rd, rn, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_rd_rn_rm(op.template(), rd, rn, rm));
+            }
+            Inst::DspMul3 { op, rd, rn, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_dsp3(op.template(), rd, rn, rm));
+            }
+            Inst::DspMul4 { op, rd, rn, rm, ra } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                let ra = machreg_to_gpr(*ra);
+                put_u32(sink, enc_dsp4(op.template(), rd, rn, rm, ra));
+            }
+            Inst::DspMulL {
+                op,
+                rd_lo,
+                rd_hi,
+                rn,
+                rm,
+            } => {
+                let rd_lo = machreg_to_gpr(rd_lo.to_reg());
+                let rd_hi = machreg_to_gpr(rd_hi.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_dsp_long(op.template(), rd_lo, rd_hi, rn, rm));
+            }
+            Inst::Sel { rd, rn, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_rd_rn_rm(0x0680_0fb0, rd, rn, rm));
+            }
+            Inst::Pkh { op, rd, rn, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_rd_rn_rm(op.template(), rd, rn, rm));
+            }
+            Inst::Rrx { rd, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_rrx(rd, rm));
+            }
+            Inst::Udf { code } => {
+                sink.add_trap(*code);
+                put_u32(sink, enc_udf());
+            }
+            Inst::LdmStm {
+                load,
+                rn,
+                writeback,
+                reg_list,
+            } => {
+                let rn = machreg_to_gpr(*rn);
+                put_u32(sink, enc_ldm_stm(*load, rn, *writeback, *reg_list));
+            }
+            Inst::LoadEx { acquire, rt, rn } => {
+                let rt = machreg_to_gpr(rt.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                put_u32(sink, enc_load_ex(*acquire, rt, rn));
+            }
+            Inst::StoreEx {
+                acquire,
+                rd,
+                rt,
+                rn,
+            } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rt = machreg_to_gpr(*rt);
+                let rn = machreg_to_gpr(*rn);
+                put_u32(sink, enc_store_ex(*acquire, rd, rt, rn));
+            }
+            Inst::LoadAcq { rt, rn } => {
+                let rt = machreg_to_gpr(rt.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                put_u32(sink, enc_lda(rt, rn));
+            }
+            Inst::StoreRel { rt, rn } => {
+                let rt = machreg_to_gpr(*rt);
+                let rn = machreg_to_gpr(*rn);
+                put_u32(sink, enc_stl(rt, rn));
+            }
+            Inst::Barrier { op } => put_u32(sink, op.encoding()),
             Inst::CmpRR { op, rn, rm } => {
                 let rn = machreg_to_gpr(*rn);
                 let rm = machreg_to_gpr(*rm);

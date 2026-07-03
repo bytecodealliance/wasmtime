@@ -63,6 +63,16 @@
 (rule 2 (lower (isub (fits_in_32 _) a (imul _ x y)))
   (mls (put_in_reg x) (put_in_reg y) (put_in_reg a)))
 
+;;;; Traps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trap code))
+  (side_effect (udf code)))
+
+;;;; Fences ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (fence))
+  (side_effect (dmb)))
+
 ;;;; Divides (only when hardware `sdiv`/`udiv` is available) ;;;;;;;;;;;;;;;;;;;
 ;; NOTE: trap-on-zero / INT_MIN overflow checks are not yet emitted.
 

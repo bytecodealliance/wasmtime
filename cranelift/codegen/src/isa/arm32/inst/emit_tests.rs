@@ -355,6 +355,366 @@ fn conditional_select() {
 }
 
 #[test]
+fn bitfield() {
+    assert_eq!(
+        u32_le(Inst::Bfc {
+            rd: writable_xreg(0),
+            lsb: 4,
+            width: 8,
+        }),
+        0xe7cb_021f // bfc r0, #4, #8
+    );
+    assert_eq!(
+        u32_le(Inst::Bfi {
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            lsb: 4,
+            width: 8,
+        }),
+        0xe7cb_0211 // bfi r0, r1, #4, #8
+    );
+    assert_eq!(
+        u32_le(Inst::Bfx {
+            op: BfxOp::Sbfx,
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            lsb: 4,
+            width: 8,
+        }),
+        0xe7a7_0251 // sbfx r0, r1, #4, #8
+    );
+    assert_eq!(
+        u32_le(Inst::Bfx {
+            op: BfxOp::Ubfx,
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            lsb: 4,
+            width: 8,
+        }),
+        0xe7e7_0251 // ubfx r0, r1, #4, #8
+    );
+}
+
+#[test]
+fn saturating() {
+    let q_cases = [
+        (QAluOp::Qadd, 0xe102_0051u32),
+        (QAluOp::Qsub, 0xe122_0051),
+        (QAluOp::Qdadd, 0xe142_0051),
+        (QAluOp::Qdsub, 0xe162_0051),
+    ];
+    for (op, want) in q_cases {
+        // qadd r0, r1, r2  =>  Rd=0, Rm=1, Rn=2
+        assert_eq!(
+            u32_le(Inst::QAlu {
+                op,
+                rd: writable_xreg(0),
+                rm: xreg(1),
+                rn: xreg(2),
+            }),
+            want,
+            "{op:?}"
+        );
+    }
+    assert_eq!(
+        u32_le(Inst::Sat {
+            op: SatOp::Ssat,
+            rd: writable_xreg(0),
+            sat_bits: 8,
+            rm: xreg(1),
+        }),
+        0xe6a7_0011 // ssat r0, #8, r1
+    );
+    assert_eq!(
+        u32_le(Inst::Sat {
+            op: SatOp::Usat,
+            rd: writable_xreg(0),
+            sat_bits: 8,
+            rm: xreg(1),
+        }),
+        0xe6e8_0011 // usat r0, #8, r1
+    );
+}
+
+#[test]
+fn misc_alu() {
+    assert_eq!(
+        u32_le(Inst::Sel {
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        }),
+        0xe681_0fb2 // sel r0, r1, r2
+    );
+    assert_eq!(
+        u32_le(Inst::Pkh {
+            op: PkhOp::Pkhbt,
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        }),
+        0xe681_0012 // pkhbt r0, r1, r2
+    );
+    assert_eq!(
+        u32_le(Inst::Pkh {
+            op: PkhOp::Pkhtb,
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        }),
+        0xe681_0052 // pkhtb r0, r1, r2
+    );
+    assert_eq!(
+        u32_le(Inst::Rrx {
+            rd: writable_xreg(0),
+            rm: xreg(1),
+        }),
+        0xe1a0_0061 // rrx r0, r1
+    );
+    assert_eq!(
+        u32_le(Inst::BitRR {
+            op: BitOp::Revsh,
+            rd: writable_xreg(0),
+            rm: xreg(1),
+        }),
+        0xe6ff_0fb1 // revsh r0, r1
+    );
+    assert_eq!(
+        u32_le(Inst::Udf {
+            code: crate::ir::TrapCode::STACK_OVERFLOW,
+        }),
+        0xe7f0_00f0 // udf #0
+    );
+}
+
+#[test]
+fn extend_variants() {
+    assert_eq!(
+        u32_le(Inst::ExtRR {
+            op: ExtOp::Sxtb16,
+            rd: writable_xreg(0),
+            rm: xreg(1),
+        }),
+        0xe68f_0071 // sxtb16 r0, r1
+    );
+    assert_eq!(
+        u32_le(Inst::ExtRR {
+            op: ExtOp::Uxtb16,
+            rd: writable_xreg(0),
+            rm: xreg(1),
+        }),
+        0xe6cf_0071 // uxtb16 r0, r1
+    );
+    let add_cases = [
+        (ExtAddOp::Sxtab, 0xe6a1_0072u32),
+        (ExtAddOp::Sxtah, 0xe6b1_0072),
+        (ExtAddOp::Sxtab16, 0xe681_0072),
+        (ExtAddOp::Uxtab, 0xe6e1_0072),
+        (ExtAddOp::Uxtah, 0xe6f1_0072),
+        (ExtAddOp::Uxtab16, 0xe6c1_0072),
+    ];
+    for (op, want) in add_cases {
+        assert_eq!(
+            u32_le(Inst::ExtAdd {
+                op,
+                rd: writable_xreg(0),
+                rn: xreg(1),
+                rm: xreg(2),
+            }),
+            want,
+            "{op:?}"
+        );
+    }
+}
+
+#[test]
+fn parallel_add_sub() {
+    let par = |op| {
+        u32_le(Inst::ParAlu {
+            op,
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        })
+    };
+    // Hand-verified reference encodings (`op r0, r1, r2`).
+    assert_eq!(par(ParAluOp::Sadd8), 0xe611_0f92);
+    assert_eq!(par(ParAluOp::Ssub8), 0xe611_0ff2);
+    assert_eq!(par(ParAluOp::Uadd8), 0xe651_0f92);
+    assert_eq!(par(ParAluOp::Uadd16), 0xe651_0f12);
+    assert_eq!(par(ParAluOp::Uhadd16), 0xe671_0f12);
+
+    // All 36 members must encode to distinct, well-formed words that share the
+    // parallel add/sub encoding skeleton.
+    let all = [
+        ParAluOp::Sadd8, ParAluOp::Sadd16, ParAluOp::Ssub8, ParAluOp::Ssub16,
+        ParAluOp::Sasx, ParAluOp::Ssax, ParAluOp::Qadd8, ParAluOp::Qadd16,
+        ParAluOp::Qsub8, ParAluOp::Qsub16, ParAluOp::Qasx, ParAluOp::Qsax,
+        ParAluOp::Shadd8, ParAluOp::Shadd16, ParAluOp::Shsub8, ParAluOp::Shsub16,
+        ParAluOp::Shasx, ParAluOp::Shsax, ParAluOp::Uadd8, ParAluOp::Uadd16,
+        ParAluOp::Usub8, ParAluOp::Usub16, ParAluOp::Uasx, ParAluOp::Usax,
+        ParAluOp::Uqadd8, ParAluOp::Uqadd16, ParAluOp::Uqsub8, ParAluOp::Uqsub16,
+        ParAluOp::Uqasx, ParAluOp::Uqsax, ParAluOp::Uhadd8, ParAluOp::Uhadd16,
+        ParAluOp::Uhsub8, ParAluOp::Uhsub16, ParAluOp::Uhasx, ParAluOp::Uhsax,
+    ];
+    let mut seen = alloc::collections::BTreeSet::new();
+    for op in all {
+        let w = par(op);
+        // Fixed skeleton: cond=AL + [27:24]=0110, bit23=0, [11:8]=1111 & bit4=1,
+        // and the register fields Rn=1, Rd=0, Rm=2.
+        assert_eq!(w & 0xff80_0000, 0xe600_0000, "{op:?}");
+        assert_eq!(w & 0x0000_0f10, 0x0000_0f10, "{op:?}");
+        assert_eq!(w & 0x000f_f00f, 0x0001_0002, "{op:?}");
+        assert!(seen.insert(w), "duplicate encoding for {op:?}");
+    }
+    assert_eq!(seen.len(), 36);
+}
+
+#[test]
+fn dsp_multiplies() {
+    let m3 = |op| {
+        u32_le(Inst::DspMul3 {
+            op,
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        })
+    };
+    // `op r0, r1, r2`
+    assert_eq!(m3(DspMul3Op::Smulbb), 0xe160_0281);
+    assert_eq!(m3(DspMul3Op::Smulbt), 0xe160_02c1);
+    assert_eq!(m3(DspMul3Op::Smultb), 0xe160_02a1);
+    assert_eq!(m3(DspMul3Op::Smultt), 0xe160_02e1);
+    assert_eq!(m3(DspMul3Op::Smulwb), 0xe120_02a1);
+    assert_eq!(m3(DspMul3Op::Smulwt), 0xe120_02e1);
+    assert_eq!(m3(DspMul3Op::Smmul), 0xe750_f211);
+    assert_eq!(m3(DspMul3Op::Smuad), 0xe700_f211);
+    assert_eq!(m3(DspMul3Op::Smusd), 0xe700_f251);
+
+    let m4 = |op| {
+        u32_le(Inst::DspMul4 {
+            op,
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+            ra: xreg(3),
+        })
+    };
+    // `op r0, r1, r2, r3`
+    assert_eq!(m4(DspMul4Op::Smlabb), 0xe100_3281);
+    assert_eq!(m4(DspMul4Op::Smlabt), 0xe100_32c1);
+    assert_eq!(m4(DspMul4Op::Smlatb), 0xe100_32a1);
+    assert_eq!(m4(DspMul4Op::Smlatt), 0xe100_32e1);
+    assert_eq!(m4(DspMul4Op::Smlawb), 0xe120_3281);
+    assert_eq!(m4(DspMul4Op::Smlawt), 0xe120_32c1);
+    assert_eq!(m4(DspMul4Op::Smmla), 0xe750_3211);
+    assert_eq!(m4(DspMul4Op::Smmls), 0xe750_32d1);
+    assert_eq!(m4(DspMul4Op::Smlad), 0xe700_3211);
+    assert_eq!(m4(DspMul4Op::Smlsd), 0xe700_3251);
+
+    let ml = |op| {
+        u32_le(Inst::DspMulL {
+            op,
+            rd_lo: writable_xreg(0),
+            rd_hi: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+        })
+    };
+    // `op r0, r1, r2, r3`
+    assert_eq!(ml(DspMulLOp::Smlalbb), 0xe141_0382);
+    assert_eq!(ml(DspMulLOp::Smlalbt), 0xe141_03c2);
+    assert_eq!(ml(DspMulLOp::Smlaltb), 0xe141_03a2);
+    assert_eq!(ml(DspMulLOp::Smlaltt), 0xe141_03e2);
+    assert_eq!(ml(DspMulLOp::Smlald), 0xe741_0312);
+    assert_eq!(ml(DspMulLOp::Smlsld), 0xe741_0352);
+    assert_eq!(ml(DspMulLOp::Umaal), 0xe041_0392);
+}
+
+#[test]
+fn memory_multiple_and_exclusive() {
+    assert_eq!(
+        u32_le(Inst::LdmStm {
+            load: true,
+            rn: xreg(0),
+            writeback: true,
+            reg_list: (1 << 1) | (1 << 2),
+        }),
+        0xe8b0_0006 // ldmia r0!, {r1, r2}
+    );
+    assert_eq!(
+        u32_le(Inst::LdmStm {
+            load: false,
+            rn: xreg(0),
+            writeback: false,
+            reg_list: (1 << 1) | (1 << 2),
+        }),
+        0xe880_0006 // stmia r0, {r1, r2}
+    );
+    assert_eq!(
+        u32_le(Inst::LoadEx {
+            acquire: false,
+            rt: writable_xreg(1),
+            rn: xreg(0),
+        }),
+        0xe190_1f9f // ldrex r1, [r0]
+    );
+    assert_eq!(
+        u32_le(Inst::LoadEx {
+            acquire: true,
+            rt: writable_xreg(1),
+            rn: xreg(0),
+        }),
+        0xe190_1e9f // ldaex r1, [r0]
+    );
+    assert_eq!(
+        u32_le(Inst::StoreEx {
+            acquire: false,
+            rd: writable_xreg(0),
+            rt: xreg(1),
+            rn: xreg(2),
+        }),
+        0xe182_0f91 // strex r0, r1, [r2]
+    );
+    assert_eq!(
+        u32_le(Inst::StoreEx {
+            acquire: true,
+            rd: writable_xreg(0),
+            rt: xreg(1),
+            rn: xreg(2),
+        }),
+        0xe182_0e91 // stlex r0, r1, [r2]
+    );
+    assert_eq!(
+        u32_le(Inst::LoadAcq {
+            rt: writable_xreg(1),
+            rn: xreg(0),
+        }),
+        0xe190_1c9f // lda r1, [r0]
+    );
+    assert_eq!(
+        u32_le(Inst::StoreRel {
+            rt: xreg(1),
+            rn: xreg(0),
+        }),
+        0xe180_fc91 // stl r1, [r0]
+    );
+}
+
+#[test]
+fn barriers() {
+    assert_eq!(u32_le(Inst::Barrier { op: BarrierOp::Dmb }), 0xf57f_f05f);
+    assert_eq!(u32_le(Inst::Barrier { op: BarrierOp::Dsb }), 0xf57f_f04f);
+    assert_eq!(u32_le(Inst::Barrier { op: BarrierOp::Isb }), 0xf57f_f06f);
+    assert_eq!(
+        u32_le(Inst::Barrier {
+            op: BarrierOp::Clrex
+        }),
+        0xf57f_f01f
+    );
+}
+
+#[test]
 fn compares() {
     assert_eq!(
         u32_le(Inst::CmpRR {

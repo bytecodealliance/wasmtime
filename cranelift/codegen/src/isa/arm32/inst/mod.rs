@@ -93,7 +93,14 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             use_if_virtual(collector, rm);
             def_if_virtual(collector, rd);
         }
-        Inst::Mla { rd, rn, rm, ra } | Inst::Mls { rd, rn, rm, ra } => {
+        Inst::DspMul3 { rd, rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::Mla { rd, rn, rm, ra }
+        | Inst::Mls { rd, rn, rm, ra }
+        | Inst::DspMul4 { rd, rn, rm, ra, .. } => {
             use_if_virtual(collector, rn);
             use_if_virtual(collector, rm);
             use_if_virtual(collector, ra);
@@ -116,6 +123,43 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             if rd.to_reg().to_real_reg().is_none() {
                 collector.reg_early_def(rd);
             }
+        }
+        Inst::Bfc { rd, .. } => def_if_virtual(collector, rd),
+        Inst::Sat { rd, rm, .. } | Inst::Rrx { rd, rm } => {
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::Bfi { rd, rn, .. } | Inst::Bfx { rd, rn, .. } => {
+            use_if_virtual(collector, rn);
+            def_if_virtual(collector, rd);
+        }
+        Inst::QAlu { rd, rm, rn, .. } => {
+            use_if_virtual(collector, rm);
+            use_if_virtual(collector, rn);
+            def_if_virtual(collector, rd);
+        }
+        Inst::Sel { rd, rn, rm }
+        | Inst::Pkh { rd, rn, rm, .. }
+        | Inst::ParAlu { rd, rn, rm, .. }
+        | Inst::ExtAdd { rd, rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::Udf { .. } | Inst::Barrier { .. } => {}
+        Inst::LdmStm { rn, .. } => use_if_virtual(collector, rn),
+        Inst::LoadEx { rt, rn, .. } | Inst::LoadAcq { rt, rn } => {
+            use_if_virtual(collector, rn);
+            def_if_virtual(collector, rt);
+        }
+        Inst::StoreEx { rd, rt, rn, .. } => {
+            use_if_virtual(collector, rt);
+            use_if_virtual(collector, rn);
+            def_if_virtual(collector, rd);
+        }
+        Inst::StoreRel { rt, rn } => {
+            use_if_virtual(collector, rt);
+            use_if_virtual(collector, rn);
         }
         Inst::Umull {
             rd_lo,
@@ -140,6 +184,13 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             rd_hi,
             rn,
             rm,
+        }
+        | Inst::DspMulL {
+            rd_lo,
+            rd_hi,
+            rn,
+            rm,
+            ..
         } => {
             use_if_virtual(collector, rn);
             use_if_virtual(collector, rm);
@@ -237,7 +288,7 @@ impl MachInst for Inst {
     }
 
     fn is_trap(&self) -> bool {
-        false
+        matches!(self, Inst::Udf { .. })
     }
 
     fn is_args(&self) -> bool {
@@ -465,6 +516,123 @@ impl Inst {
                 let rd = r(rd.to_reg());
                 alloc::format!("mov {rd}, {}; mov{} {rd}, {}", r(*rm), cond.name(), r(*rn))
             }
+            Inst::Bfc { rd, lsb, width } => {
+                alloc::format!("bfc {}, #{}, #{}", r(rd.to_reg()), lsb, width)
+            }
+            Inst::Bfi { rd, rn, lsb, width } => {
+                alloc::format!("bfi {}, {}, #{}, #{}", r(rd.to_reg()), r(*rn), lsb, width)
+            }
+            Inst::Bfx {
+                op,
+                rd,
+                rn,
+                lsb,
+                width,
+            } => alloc::format!(
+                "{} {}, {}, #{}, #{}",
+                op.name(),
+                r(rd.to_reg()),
+                r(*rn),
+                lsb,
+                width
+            ),
+            Inst::QAlu { op, rd, rm, rn } => {
+                alloc::format!("{} {}, {}, {}", op.name(), r(rd.to_reg()), r(*rm), r(*rn))
+            }
+            Inst::Sat {
+                op,
+                rd,
+                sat_bits,
+                rm,
+            } => alloc::format!(
+                "{} {}, #{}, {}",
+                op.name(),
+                r(rd.to_reg()),
+                sat_bits,
+                r(*rm)
+            ),
+            Inst::ParAlu { op, rd, rn, rm } => {
+                alloc::format!("{} {}, {}, {}", op.name(), r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::ExtAdd { op, rd, rn, rm } => {
+                alloc::format!("{} {}, {}, {}", op.name(), r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::DspMul3 { op, rd, rn, rm } => {
+                alloc::format!("{} {}, {}, {}", op.name(), r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::DspMul4 { op, rd, rn, rm, ra } => alloc::format!(
+                "{} {}, {}, {}, {}",
+                op.name(),
+                r(rd.to_reg()),
+                r(*rn),
+                r(*rm),
+                r(*ra)
+            ),
+            Inst::DspMulL {
+                op,
+                rd_lo,
+                rd_hi,
+                rn,
+                rm,
+            } => alloc::format!(
+                "{} {}, {}, {}, {}",
+                op.name(),
+                r(rd_lo.to_reg()),
+                r(rd_hi.to_reg()),
+                r(*rn),
+                r(*rm)
+            ),
+            Inst::Sel { rd, rn, rm } => {
+                alloc::format!("sel {}, {}, {}", r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::Pkh { op, rd, rn, rm } => {
+                alloc::format!("{} {}, {}, {}", op.name(), r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::Rrx { rd, rm } => {
+                alloc::format!("rrx {}, {}", r(rd.to_reg()), r(*rm))
+            }
+            Inst::Udf { code } => alloc::format!("udf ; {code}"),
+            Inst::LdmStm {
+                load,
+                rn,
+                writeback,
+                reg_list,
+            } => {
+                let names: Vec<String> = (0..16)
+                    .filter(|i| reg_list & (1 << i) != 0)
+                    .map(|i| reg_name(xreg(i)))
+                    .collect();
+                alloc::format!(
+                    "{} {}{}, {{{}}}",
+                    if *load { "ldmia" } else { "stmia" },
+                    r(*rn),
+                    if *writeback { "!" } else { "" },
+                    names.join(", ")
+                )
+            }
+            Inst::LoadEx { acquire, rt, rn } => alloc::format!(
+                "{} {}, [{}]",
+                if *acquire { "ldaex" } else { "ldrex" },
+                r(rt.to_reg()),
+                r(*rn)
+            ),
+            Inst::StoreEx {
+                acquire,
+                rd,
+                rt,
+                rn,
+            } => alloc::format!(
+                "{} {}, {}, [{}]",
+                if *acquire { "stlex" } else { "strex" },
+                r(rd.to_reg()),
+                r(*rt),
+                r(*rn)
+            ),
+            Inst::LoadAcq { rt, rn } => {
+                alloc::format!("lda {}, [{}]", r(rt.to_reg()), r(*rn))
+            }
+            Inst::StoreRel { rt, rn } => alloc::format!("stl {}, [{}]", r(*rt), r(*rn)),
+            Inst::Barrier { op } => op.name().to_string(),
             Inst::CmpRR { op, rn, rm } => {
                 alloc::format!("{} {}, {}", op.name(), r(*rn), r(*rm))
             }

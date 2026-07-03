@@ -4,7 +4,8 @@ use crate::isa::arm32::inst::*;
 use crate::machinst::{OperandVisitor, Reg};
 
 pub use crate::isa::arm32::lower::isle::generated_code::{
-    ALUOp, AMode, BitOp, CmpOp, Cond, ExtOp, LoadKind, ShiftOp, StoreKind,
+    ALUOp, AMode, BarrierOp, BfxOp, BitOp, CmpOp, Cond, DspMul3Op, DspMul4Op, DspMulLOp, ExtAddOp,
+    ExtOp, LoadKind, ParAluOp, PkhOp, QAluOp, SatOp, ShiftOp, StoreKind,
 };
 
 /// A memory address resolved to a concrete base register and either an
@@ -147,6 +148,7 @@ impl BitOp {
             BitOp::Rev => 0x06bf_0f30,
             BitOp::Rev16 => 0x06bf_0fb0,
             BitOp::Rbit => 0x06ff_0f30,
+            BitOp::Revsh => 0x06ff_0fb0,
         }
     }
 
@@ -156,6 +158,181 @@ impl BitOp {
             BitOp::Rev => "rev",
             BitOp::Rev16 => "rev16",
             BitOp::Rbit => "rbit",
+            BitOp::Revsh => "revsh",
+        }
+    }
+}
+
+impl QAluOp {
+    /// The instruction word for `op rd, rm, rn`, with the registers zeroed.
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            QAluOp::Qadd => 0x0100_0050,
+            QAluOp::Qsub => 0x0120_0050,
+            QAluOp::Qdadd => 0x0140_0050,
+            QAluOp::Qdsub => 0x0160_0050,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            QAluOp::Qadd => "qadd",
+            QAluOp::Qsub => "qsub",
+            QAluOp::Qdadd => "qdadd",
+            QAluOp::Qdsub => "qdsub",
+        }
+    }
+}
+
+impl SatOp {
+    /// The instruction word for `op rd, #sat, rm` (no shift), registers zeroed.
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            SatOp::Ssat => 0x06a0_0010,
+            SatOp::Usat => 0x06e0_0010,
+            SatOp::Ssat16 => 0x06a0_0f30,
+            SatOp::Usat16 => 0x06e0_0f30,
+        }
+    }
+
+    /// Signed operations encode `sat_bits - 1`; unsigned encode `sat_bits`.
+    pub(crate) fn is_signed(self) -> bool {
+        matches!(self, SatOp::Ssat | SatOp::Ssat16)
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            SatOp::Ssat => "ssat",
+            SatOp::Usat => "usat",
+            SatOp::Ssat16 => "ssat16",
+            SatOp::Usat16 => "usat16",
+        }
+    }
+}
+
+impl BfxOp {
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            BfxOp::Sbfx => 0x07a0_0050,
+            BfxOp::Ubfx => 0x07e0_0050,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            BfxOp::Sbfx => "sbfx",
+            BfxOp::Ubfx => "ubfx",
+        }
+    }
+}
+
+impl PkhOp {
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            PkhOp::Pkhbt => 0x0680_0010,
+            PkhOp::Pkhtb => 0x0680_0050,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            PkhOp::Pkhbt => "pkhbt",
+            PkhOp::Pkhtb => "pkhtb",
+        }
+    }
+}
+
+impl ParAluOp {
+    /// The `(op1, op2)` fields of the parallel add/subtract encoding: `op1`
+    /// (bits 22:20) selects the prefix (signedness/saturation) and `op2` (bits
+    /// 7:5) selects the operation.
+    fn parts(self) -> (u32, u32) {
+        // Prefixes: S=1, Q=2, SH=3, U=5, UQ=6, UH=7.
+        // Ops: ADD16=0, ASX=1, SAX=2, SUB16=3, ADD8=4, SUB8=7.
+        match self {
+            ParAluOp::Sadd16 => (1, 0),
+            ParAluOp::Sasx => (1, 1),
+            ParAluOp::Ssax => (1, 2),
+            ParAluOp::Ssub16 => (1, 3),
+            ParAluOp::Sadd8 => (1, 4),
+            ParAluOp::Ssub8 => (1, 7),
+            ParAluOp::Qadd16 => (2, 0),
+            ParAluOp::Qasx => (2, 1),
+            ParAluOp::Qsax => (2, 2),
+            ParAluOp::Qsub16 => (2, 3),
+            ParAluOp::Qadd8 => (2, 4),
+            ParAluOp::Qsub8 => (2, 7),
+            ParAluOp::Shadd16 => (3, 0),
+            ParAluOp::Shasx => (3, 1),
+            ParAluOp::Shsax => (3, 2),
+            ParAluOp::Shsub16 => (3, 3),
+            ParAluOp::Shadd8 => (3, 4),
+            ParAluOp::Shsub8 => (3, 7),
+            ParAluOp::Uadd16 => (5, 0),
+            ParAluOp::Uasx => (5, 1),
+            ParAluOp::Usax => (5, 2),
+            ParAluOp::Usub16 => (5, 3),
+            ParAluOp::Uadd8 => (5, 4),
+            ParAluOp::Usub8 => (5, 7),
+            ParAluOp::Uqadd16 => (6, 0),
+            ParAluOp::Uqasx => (6, 1),
+            ParAluOp::Uqsax => (6, 2),
+            ParAluOp::Uqsub16 => (6, 3),
+            ParAluOp::Uqadd8 => (6, 4),
+            ParAluOp::Uqsub8 => (6, 7),
+            ParAluOp::Uhadd16 => (7, 0),
+            ParAluOp::Uhasx => (7, 1),
+            ParAluOp::Uhsax => (7, 2),
+            ParAluOp::Uhsub16 => (7, 3),
+            ParAluOp::Uhadd8 => (7, 4),
+            ParAluOp::Uhsub8 => (7, 7),
+        }
+    }
+
+    /// The instruction word for `op rd, rn, rm`, with the registers zeroed.
+    pub(crate) fn template(self) -> u32 {
+        let (op1, op2) = self.parts();
+        0x0600_0000 | (op1 << 20) | 0x0000_0f00 | (op2 << 5) | 0x10
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            ParAluOp::Sadd8 => "sadd8",
+            ParAluOp::Sadd16 => "sadd16",
+            ParAluOp::Ssub8 => "ssub8",
+            ParAluOp::Ssub16 => "ssub16",
+            ParAluOp::Sasx => "sasx",
+            ParAluOp::Ssax => "ssax",
+            ParAluOp::Qadd8 => "qadd8",
+            ParAluOp::Qadd16 => "qadd16",
+            ParAluOp::Qsub8 => "qsub8",
+            ParAluOp::Qsub16 => "qsub16",
+            ParAluOp::Qasx => "qasx",
+            ParAluOp::Qsax => "qsax",
+            ParAluOp::Shadd8 => "shadd8",
+            ParAluOp::Shadd16 => "shadd16",
+            ParAluOp::Shsub8 => "shsub8",
+            ParAluOp::Shsub16 => "shsub16",
+            ParAluOp::Shasx => "shasx",
+            ParAluOp::Shsax => "shsax",
+            ParAluOp::Uadd8 => "uadd8",
+            ParAluOp::Uadd16 => "uadd16",
+            ParAluOp::Usub8 => "usub8",
+            ParAluOp::Usub16 => "usub16",
+            ParAluOp::Uasx => "uasx",
+            ParAluOp::Usax => "usax",
+            ParAluOp::Uqadd8 => "uqadd8",
+            ParAluOp::Uqadd16 => "uqadd16",
+            ParAluOp::Uqsub8 => "uqsub8",
+            ParAluOp::Uqsub16 => "uqsub16",
+            ParAluOp::Uqasx => "uqasx",
+            ParAluOp::Uqsax => "uqsax",
+            ParAluOp::Uhadd8 => "uhadd8",
+            ParAluOp::Uhadd16 => "uhadd16",
+            ParAluOp::Uhsub8 => "uhsub8",
+            ParAluOp::Uhsub16 => "uhsub16",
+            ParAluOp::Uhasx => "uhasx",
+            ParAluOp::Uhsax => "uhsax",
         }
     }
 }
@@ -169,6 +346,8 @@ impl ExtOp {
             ExtOp::Sxth => 0x06bf_0070,
             ExtOp::Uxtb => 0x06ef_0070,
             ExtOp::Uxth => 0x06ff_0070,
+            ExtOp::Sxtb16 => 0x068f_0070,
+            ExtOp::Uxtb16 => 0x06cf_0070,
         }
     }
 
@@ -178,6 +357,148 @@ impl ExtOp {
             ExtOp::Sxth => "sxth",
             ExtOp::Uxtb => "uxtb",
             ExtOp::Uxth => "uxth",
+            ExtOp::Sxtb16 => "sxtb16",
+            ExtOp::Uxtb16 => "uxtb16",
+        }
+    }
+}
+
+impl ExtAddOp {
+    /// The instruction word for `op rd, rn, rm` (rotation 0), registers zeroed.
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            ExtAddOp::Sxtab => 0x06a0_0070,
+            ExtAddOp::Sxtah => 0x06b0_0070,
+            ExtAddOp::Sxtab16 => 0x0680_0070,
+            ExtAddOp::Uxtab => 0x06e0_0070,
+            ExtAddOp::Uxtah => 0x06f0_0070,
+            ExtAddOp::Uxtab16 => 0x06c0_0070,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            ExtAddOp::Sxtab => "sxtab",
+            ExtAddOp::Sxtah => "sxtah",
+            ExtAddOp::Sxtab16 => "sxtab16",
+            ExtAddOp::Uxtab => "uxtab",
+            ExtAddOp::Uxtah => "uxtah",
+            ExtAddOp::Uxtab16 => "uxtab16",
+        }
+    }
+}
+
+impl DspMul3Op {
+    /// The instruction word for `op rd, rn, rm`, with `rd`(19:16), `rm`(11:8),
+    /// `rn`(3:0) zeroed. The half-select (M/N) and pre-select bits are baked in.
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            DspMul3Op::Smulbb => 0x0160_0080,
+            DspMul3Op::Smulbt => 0x0160_00c0,
+            DspMul3Op::Smultb => 0x0160_00a0,
+            DspMul3Op::Smultt => 0x0160_00e0,
+            DspMul3Op::Smulwb => 0x0120_00a0,
+            DspMul3Op::Smulwt => 0x0120_00e0,
+            DspMul3Op::Smmul => 0x0750_f010,
+            DspMul3Op::Smuad => 0x0700_f010,
+            DspMul3Op::Smusd => 0x0700_f050,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            DspMul3Op::Smulbb => "smulbb",
+            DspMul3Op::Smulbt => "smulbt",
+            DspMul3Op::Smultb => "smultb",
+            DspMul3Op::Smultt => "smultt",
+            DspMul3Op::Smulwb => "smulwb",
+            DspMul3Op::Smulwt => "smulwt",
+            DspMul3Op::Smmul => "smmul",
+            DspMul3Op::Smuad => "smuad",
+            DspMul3Op::Smusd => "smusd",
+        }
+    }
+}
+
+impl DspMul4Op {
+    /// The instruction word for `op rd, rn, rm, ra`, with `rd`(19:16),
+    /// `ra`(15:12), `rm`(11:8), `rn`(3:0) zeroed.
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            DspMul4Op::Smlabb => 0x0100_0080,
+            DspMul4Op::Smlabt => 0x0100_00c0,
+            DspMul4Op::Smlatb => 0x0100_00a0,
+            DspMul4Op::Smlatt => 0x0100_00e0,
+            DspMul4Op::Smlawb => 0x0120_0080,
+            DspMul4Op::Smlawt => 0x0120_00c0,
+            DspMul4Op::Smmla => 0x0750_0010,
+            DspMul4Op::Smmls => 0x0750_00d0,
+            DspMul4Op::Smlad => 0x0700_0010,
+            DspMul4Op::Smlsd => 0x0700_0050,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            DspMul4Op::Smlabb => "smlabb",
+            DspMul4Op::Smlabt => "smlabt",
+            DspMul4Op::Smlatb => "smlatb",
+            DspMul4Op::Smlatt => "smlatt",
+            DspMul4Op::Smlawb => "smlawb",
+            DspMul4Op::Smlawt => "smlawt",
+            DspMul4Op::Smmla => "smmla",
+            DspMul4Op::Smmls => "smmls",
+            DspMul4Op::Smlad => "smlad",
+            DspMul4Op::Smlsd => "smlsd",
+        }
+    }
+}
+
+impl DspMulLOp {
+    /// The instruction word for `op rd_lo, rd_hi, rn, rm`, with `rd_hi`(19:16),
+    /// `rd_lo`(15:12), `rm`(11:8), `rn`(3:0) zeroed.
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            DspMulLOp::Smlalbb => 0x0140_0080,
+            DspMulLOp::Smlalbt => 0x0140_00c0,
+            DspMulLOp::Smlaltb => 0x0140_00a0,
+            DspMulLOp::Smlaltt => 0x0140_00e0,
+            DspMulLOp::Smlald => 0x0740_0010,
+            DspMulLOp::Smlsld => 0x0740_0050,
+            DspMulLOp::Umaal => 0x0040_0090,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            DspMulLOp::Smlalbb => "smlalbb",
+            DspMulLOp::Smlalbt => "smlalbt",
+            DspMulLOp::Smlaltb => "smlaltb",
+            DspMulLOp::Smlaltt => "smlaltt",
+            DspMulLOp::Smlald => "smlald",
+            DspMulLOp::Smlsld => "smlsld",
+            DspMulLOp::Umaal => "umaal",
+        }
+    }
+}
+
+impl BarrierOp {
+    /// The full (unconditional) instruction word, with the system option (SY).
+    pub(crate) fn encoding(self) -> u32 {
+        match self {
+            BarrierOp::Dmb => 0xf57f_f05f,
+            BarrierOp::Dsb => 0xf57f_f04f,
+            BarrierOp::Isb => 0xf57f_f06f,
+            BarrierOp::Clrex => 0xf57f_f01f,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            BarrierOp::Dmb => "dmb sy",
+            BarrierOp::Dsb => "dsb sy",
+            BarrierOp::Isb => "isb sy",
+            BarrierOp::Clrex => "clrex",
         }
     }
 }

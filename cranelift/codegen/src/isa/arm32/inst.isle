@@ -40,7 +40,47 @@
     (Clz)
     (Rev)
     (Rev16)
-    (Rbit)))
+    (Rbit)
+    (Revsh)))
+
+;; A saturating add/subtract (`qadd`/`qsub`/`qdadd`/`qdsub`).
+(type QAluOp
+  (enum
+    (Qadd)
+    (Qsub)
+    (Qdadd)
+    (Qdsub)))
+
+;; A saturate operation (`ssat`/`usat`/`ssat16`/`usat16`).
+(type SatOp
+  (enum
+    (Ssat)
+    (Usat)
+    (Ssat16)
+    (Usat16)))
+
+;; A bitfield extract (`sbfx`/`ubfx`).
+(type BfxOp
+  (enum
+    (Sbfx)
+    (Ubfx)))
+
+;; A halfword-pack operation (`pkhbt`/`pkhtb`).
+(type PkhOp
+  (enum
+    (Pkhbt)
+    (Pkhtb)))
+
+;; A parallel (SIMD-in-GPR) 8/16-bit add/subtract operation. Names follow the
+;; ARM mnemonics: prefix S/Q/SH/U/UQ/UH, op ADD8/ADD16/SUB8/SUB16/ASX/SAX.
+(type ParAluOp
+  (enum
+    (Sadd8) (Sadd16) (Ssub8) (Ssub16) (Sasx) (Ssax)
+    (Qadd8) (Qadd16) (Qsub8) (Qsub16) (Qasx) (Qsax)
+    (Shadd8) (Shadd16) (Shsub8) (Shsub16) (Shasx) (Shsax)
+    (Uadd8) (Uadd16) (Usub8) (Usub16) (Uasx) (Usax)
+    (Uqadd8) (Uqadd16) (Uqsub8) (Uqsub16) (Uqasx) (Uqsax)
+    (Uhadd8) (Uhadd16) (Uhsub8) (Uhsub16) (Uhasx) (Uhsax)))
 
 ;; A sign/zero extension operation.
 (type ExtOp
@@ -48,7 +88,50 @@
     (Sxtb)
     (Sxth)
     (Uxtb)
-    (Uxth)))
+    (Uxth)
+    (Sxtb16)
+    (Uxtb16)))
+
+;; A sign/zero extend-and-add operation (`sxtab`/`uxtah`/...).
+(type ExtAddOp
+  (enum
+    (Sxtab)
+    (Sxtah)
+    (Sxtab16)
+    (Uxtab)
+    (Uxtah)
+    (Uxtab16)))
+
+;; DSP multiplies with a single 32-bit result (`rd = f(rn, rm)`).
+(type DspMul3Op
+  (enum
+    (Smulbb) (Smulbt) (Smultb) (Smultt)
+    (Smulwb) (Smulwt)
+    (Smmul) (Smuad) (Smusd)))
+
+;; DSP multiply-accumulates with a single 32-bit result (`rd = f(rn, rm) + ra`).
+(type DspMul4Op
+  (enum
+    (Smlabb) (Smlabt) (Smlatb) (Smlatt)
+    (Smlawb) (Smlawt)
+    (Smmla) (Smmls)
+    (Smlad) (Smlsd)))
+
+;; DSP multiplies with a 64-bit accumulator (`{rd_hi:rd_lo} = ...`).
+(type DspMulLOp
+  (enum
+    (Smlalbb) (Smlalbt) (Smlaltb) (Smlaltt)
+    (Smlald) (Smlsld)
+    (Umaal)))
+
+;; A memory-barrier / exclusive-monitor-clear instruction (all use the full
+;; system option).
+(type BarrierOp
+  (enum
+    (Dmb)
+    (Dsb)
+    (Isb)
+    (Clrex)))
 
 ;; An ARM condition code (the "always" and "never" codes are omitted).
 (type Cond
@@ -151,6 +234,57 @@
 
     ;; A conditional select, emitted as `mov rd, rm; mov<cond> rd, rn`.
     (CSel (cond Cond) (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; Bitfield clear: `bfc rd, #lsb, #width`.
+    (Bfc (rd WritableReg) (lsb u8) (width u8))
+    ;; Bitfield insert: `bfi rd, rn, #lsb, #width`.
+    (Bfi (rd WritableReg) (rn Reg) (lsb u8) (width u8))
+    ;; Bitfield extract: `sbfx`/`ubfx rd, rn, #lsb, #width`.
+    (Bfx (op BfxOp) (rd WritableReg) (rn Reg) (lsb u8) (width u8))
+
+    ;; A saturating add/subtract (`op rd, rm, rn`).
+    (QAlu (op QAluOp) (rd WritableReg) (rm Reg) (rn Reg))
+    ;; A saturate: `ssat/usat rd, #sat_bits, rm`.
+    (Sat (op SatOp) (rd WritableReg) (sat_bits u8) (rm Reg))
+
+    ;; A parallel 8/16-bit add/subtract (`op rd, rn, rm`).
+    (ParAlu (op ParAluOp) (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; A sign/zero extend-and-add (`op rd, rn, rm`).
+    (ExtAdd (op ExtAddOp) (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; A DSP multiply producing a single 32-bit result.
+    (DspMul3 (op DspMul3Op) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; A DSP multiply-accumulate producing a single 32-bit result.
+    (DspMul4 (op DspMul4Op) (rd WritableReg) (rn Reg) (rm Reg) (ra Reg))
+    ;; A DSP multiply with a 64-bit accumulator pair.
+    (DspMulL (op DspMulLOp) (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+
+    ;; Byte-wise select using the GE flags (`sel rd, rn, rm`).
+    (Sel (rd WritableReg) (rn Reg) (rm Reg))
+    ;; Halfword pack (`pkhbt`/`pkhtb rd, rn, rm`).
+    (Pkh (op PkhOp) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; Rotate right with extend (`rrx rd, rm`).
+    (Rrx (rd WritableReg) (rm Reg))
+
+    ;; A permanently-undefined instruction used to encode a trap.
+    (Udf (code TrapCode))
+
+    ;; Load/store multiple, increment-after (`ldmia`/`stmia rn{!}, {list}`).
+    (LdmStm (load bool) (rn Reg) (writeback bool) (reg_list u32))
+
+    ;; Load-exclusive (`ldrex`) or load-acquire-exclusive (`ldaex`).
+    (LoadEx (acquire bool) (rt WritableReg) (rn Reg))
+    ;; Store-exclusive (`strex`) or store-release-exclusive (`stlex`); `rd`
+    ;; receives the success flag.
+    (StoreEx (acquire bool) (rd WritableReg) (rt Reg) (rn Reg))
+    ;; Load-acquire (`lda rt, [rn]`).
+    (LoadAcq (rt WritableReg) (rn Reg))
+    ;; Store-release (`stl rt, [rn]`).
+    (StoreRel (rt Reg) (rn Reg))
+
+    ;; A memory barrier / clear-exclusive.
+    (Barrier (op BarrierOp))
 
     ;; `cmp/cmn/tst/teq rn, rm`.
     (CmpRR (op CmpOp) (rn Reg) (rm Reg))
@@ -317,6 +451,18 @@
   (let ((rd WritableReg (temp_writable_reg $I32))
         (_ Unit (emit (MInst.CSel cond rd if_true if_false))))
     rd))
+
+;;;; Traps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl udf (TrapCode) SideEffectNoResult)
+(rule (udf code)
+  (SideEffectNoResult.Inst (MInst.Udf code)))
+
+;;;; Barriers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl dmb () SideEffectNoResult)
+(rule (dmb)
+  (SideEffectNoResult.Inst (MInst.Barrier (BarrierOp.Dmb))))
 
 ;;;; Shifts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
