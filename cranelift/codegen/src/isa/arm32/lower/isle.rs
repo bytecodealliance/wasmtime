@@ -16,7 +16,7 @@ use crate::isa::arm32::inst::{Cond, ShiftOp, encode_rotated_imm};
 use crate::machinst::isle::*;
 use crate::machinst::{
     ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, Lower, MachInst, MachLabel, RetPair,
-    VCodeConstant, VCodeConstantData, VCodeInst,
+    Sig, TryCallInfo, VCodeConstant, VCodeConstantData, VCodeInst,
 };
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -25,6 +25,7 @@ use regalloc2::PReg;
 type VecArgPair = Vec<ArgPair>;
 type VecRetPair = Vec<RetPair>;
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
+type BoxCallIndInfo = Box<CallInfo<Reg>>;
 
 /// The ISLE lowering context for arm32.
 pub(crate) struct Arm32IsleContext<'a, 'b, I, B>
@@ -51,6 +52,45 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
 
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.lower_ctx.emit(inst.clone());
+    }
+
+    fn gen_call_info(
+        &mut self,
+        sig: Sig,
+        dest: ExternalName,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+        patchable: bool,
+    ) -> BoxCallInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info, patchable),
+        )
+    }
+
+    fn gen_call_ind_info(
+        &mut self,
+        sig: Sig,
+        dest: Reg,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallIndInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info, false),
+        )
     }
 
     /// Materialize a 32-bit constant into a register with the shortest sequence.

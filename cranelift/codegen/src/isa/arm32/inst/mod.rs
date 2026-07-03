@@ -233,6 +233,22 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             collector.reg_clobbers(info.clobbers);
         }
+        Inst::CallInd { info } => {
+            let CallInfo {
+                dest, uses, defs, ..
+            } = &mut **info;
+            collector.reg_use(dest);
+            for CallArgPair { vreg, preg } in uses {
+                collector.reg_fixed_use(vreg, *preg);
+            }
+            for CallRetPair { vreg, location } in defs {
+                match location {
+                    RetLocation::Reg(preg, ..) => collector.reg_fixed_def(vreg, *preg),
+                    RetLocation::Stack(..) => collector.any_def(vreg),
+                }
+            }
+            collector.reg_clobbers(info.clobbers);
+        }
 
         Inst::Args { args } => {
             for ArgPair { vreg, preg } in args {
@@ -269,7 +285,7 @@ impl MachInst for Inst {
     }
 
     fn is_safepoint(&self) -> bool {
-        matches!(self, Inst::Call { .. })
+        matches!(self, Inst::Call { .. } | Inst::CallInd { .. })
     }
 
     fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
@@ -297,7 +313,7 @@ impl MachInst for Inst {
 
     fn call_type(&self) -> CallType {
         match self {
-            Inst::Call { .. } => CallType::Regular,
+            Inst::Call { .. } | Inst::CallInd { .. } => CallType::Regular,
             _ => CallType::None,
         }
     }
@@ -660,6 +676,7 @@ impl Inst {
             Inst::Push { reg_list } => alloc::format!("push {}", reglist(*reg_list)),
             Inst::Pop { reg_list } => alloc::format!("pop {}", reglist(*reg_list)),
             Inst::Call { info } => alloc::format!("bl {}", info.dest.display(None)),
+            Inst::CallInd { info } => alloc::format!("blx {}", r(info.dest)),
             Inst::Jump { dest } => alloc::format!("b {}", dest.to_string()),
             Inst::CondBr {
                 cond,

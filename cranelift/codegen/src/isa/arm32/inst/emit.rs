@@ -38,7 +38,6 @@ pub struct EmitState {
 }
 
 impl EmitState {
-    #[expect(dead_code, reason = "will be used once safepoints are supported")]
     fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
         self.user_stack_map.take()
     }
@@ -128,6 +127,42 @@ fn enc_bcond(cond: Cond, imm24: u32) -> u32 {
 /// `bl <imm24>` — branch with link (direct call).
 fn enc_bl(imm24: u32) -> u32 {
     COND_AL | 0x0b00_0000 | (imm24 & 0x00ff_ffff)
+}
+
+/// `blx rm` — branch with link and exchange to a register (indirect call).
+fn enc_blx(rm: u32) -> u32 {
+    COND_AL | 0x012f_ff30 | rm
+}
+
+/// Common post-call sequence: record the safepoint/call site, pop callee stack
+/// args, and load any stack-carried return values.
+fn emit_call_epilogue<T>(
+    sink: &mut MachBuffer<Inst>,
+    emit_info: &EmitInfo,
+    state: &mut EmitState,
+    info: &crate::machinst::CallInfo<T>,
+) {
+    use crate::isa::arm32::abi::Arm32MachineDeps;
+    use crate::machinst::ABIMachineSpec;
+
+    if let Some(s) = state.take_stack_map() {
+        let offset = sink.cur_offset();
+        sink.push_user_stack_map(state, offset, s);
+    }
+    sink.add_call_site();
+
+    let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
+    if callee_pop_size > 0 {
+        for inst in Arm32MachineDeps::gen_sp_reg_adjust(-callee_pop_size) {
+            inst.emit(sink, emit_info, state);
+        }
+    }
+
+    info.emit_retval_loads::<Arm32MachineDeps, _, _>(
+        state.frame_layout().stackslots_size,
+        |inst| inst.emit(sink, emit_info, state),
+        |_needed_space| None,
+    );
 }
 
 /// `add`/`sub sp, sp, #imm`.
@@ -361,7 +396,7 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, _emit_info: &Self::Info, state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         let start = sink.cur_offset();
         match self {
             Inst::Nop0 => {}
@@ -692,6 +727,12 @@ impl MachInstEmit for Inst {
             Inst::Call { info } => {
                 sink.add_reloc(Reloc::Arm32Call, &info.dest, 0);
                 put_u32(sink, enc_bl(0));
+                emit_call_epilogue(sink, emit_info, state, info);
+            }
+            Inst::CallInd { info } => {
+                let rm = machreg_to_gpr(info.dest);
+                put_u32(sink, enc_blx(rm));
+                emit_call_epilogue(sink, emit_info, state, info);
             }
 
             Inst::Jump { dest } => {

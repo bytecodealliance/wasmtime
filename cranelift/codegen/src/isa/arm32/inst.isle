@@ -170,6 +170,7 @@
     (IncomingArg (offset i64))))
 
 (type BoxCallInfo (primitive BoxCallInfo))
+(type BoxCallIndInfo (primitive BoxCallIndInfo))
 
 ;;;; Instruction formats ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -306,6 +307,8 @@
 
     ;; A direct call (`bl`).
     (Call (info BoxCallInfo))
+    ;; An indirect call (`blx rm`).
+    (CallInd (info BoxCallIndInfo))
 
     ;; An unconditional branch to a label (`b`).
     (Jump (dest MachLabel))
@@ -517,6 +520,22 @@
 (decl jump_impl (MachLabel) SideEffectNoResult)
 (rule (jump_impl label)
   (SideEffectNoResult.Inst (MInst.Jump label)))
+
+;;;; Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo bool) BoxCallInfo)
+(extern constructor gen_call_info gen_call_info)
+
+(decl gen_call_ind_info (Sig Reg CallArgList CallRetList OptionTryCallInfo) BoxCallIndInfo)
+(extern constructor gen_call_ind_info gen_call_ind_info)
+
+(decl call_impl (BoxCallInfo) SideEffectNoResult)
+(rule (call_impl info)
+  (SideEffectNoResult.Inst (MInst.Call info)))
+
+(decl call_ind_impl (BoxCallIndInfo) SideEffectNoResult)
+(rule (call_ind_impl info)
+  (SideEffectNoResult.Inst (MInst.CallInd info)))
 
 ;; Map an `IntCC` to the corresponding ARM condition code.
 (decl cond_from_intcc (IntCC) Cond)

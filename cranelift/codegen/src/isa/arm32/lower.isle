@@ -173,6 +173,29 @@
 (rule (lower (return args))
   (lower_return args))
 
+;;;; Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Direct call to an in-range function (`bl`).
+(rule (lower (call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args))
+  (let ((output ValueRegsVec (gen_call_output sig_ref))
+        (abi Sig (abi_sig sig_ref))
+        (uses CallArgList (gen_call_args abi args))
+        (defs CallRetList (gen_call_rets abi output))
+        (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none) patchable))
+        (_ Unit (emit_side_effect (call_impl info))))
+    output))
+
+;; Indirect call through a register (`blx`).
+(rule (lower (call_indirect sig_ref ptr args))
+  (let ((output ValueRegsVec (gen_call_output sig_ref))
+        (abi Sig (abi_sig sig_ref))
+        (target Reg (put_in_reg ptr))
+        (uses CallArgList (gen_call_args abi args))
+        (defs CallRetList (gen_call_rets abi output))
+        (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
+        (_ Unit (emit_side_effect (call_ind_impl info))))
+    output))
+
 ;;;; Branches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl partial lower_branch (Inst MachLabelSlice) Unit)
