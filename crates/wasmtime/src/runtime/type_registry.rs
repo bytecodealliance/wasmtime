@@ -1643,6 +1643,25 @@ impl TypeRegistry {
         inner.type_to_gc_layout.get(index).and_then(|l| l.clone())
     }
 
+    /// Call `f` with the GC layout of each of the given types (`None` for
+    /// types that do not have GC layouts, i.e. function types).
+    ///
+    /// Unlike calling [`Self::layout`] in a loop, this acquires the
+    /// registry's lock only once for the whole batch and hands out borrowed
+    /// layouts rather than deep clones, which matters on hot paths: even read
+    /// acquisitions of the lock modify shared cache lines and therefore
+    /// serialize concurrent stores running on different threads.
+    pub fn for_each_layout(
+        &self,
+        tys: impl IntoIterator<Item = VMSharedTypeIndex>,
+        mut f: impl FnMut(VMSharedTypeIndex, Option<&GcLayout>),
+    ) {
+        let inner = self.0.read();
+        for ty in tys {
+            f(ty, inner.type_to_gc_layout.get(ty).and_then(|l| l.as_ref()));
+        }
+    }
+
     /// Get the trampoline type for the given function type index.
     ///
     /// Panics for non-function type indices.

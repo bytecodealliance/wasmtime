@@ -305,6 +305,14 @@ impl GcStore {
         self.gc_heap.ensure_trace_info(ty)
     }
 
+    /// Eagerly ensure tracing info is registered for all of the given types.
+    ///
+    /// More efficient than calling [`Self::ensure_trace_info`] in a loop; see
+    /// `GcHeap::ensure_trace_infos`.
+    pub fn ensure_trace_infos(&mut self, mut tys: impl Iterator<Item = VMSharedTypeIndex>) {
+        self.gc_heap.ensure_trace_infos(&mut tys)
+    }
+
     /// Allocate an uninitialized struct with the given type index and layout.
     ///
     /// This does NOT check that the index is currently allocated in the types

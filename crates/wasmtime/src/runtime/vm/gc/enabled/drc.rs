@@ -918,6 +918,10 @@ unsafe impl GcHeap for DrcHeap {
         self.trace_infos.ensure(ty);
     }
 
+    fn ensure_trace_infos(&mut self, tys: &mut dyn Iterator<Item = VMSharedTypeIndex>) {
+        self.trace_infos.ensure_many(tys);
+    }
+
     fn as_any(&self) -> &dyn Any {
         self as _
     }

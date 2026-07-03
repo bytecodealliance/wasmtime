@@ -133,19 +133,41 @@ impl TraceInfos {
         self.insert_new(ty);
     }
 
-    fn insert_new(&mut self, ty: VMSharedTypeIndex) {
-        debug_assert!(!self.map.contains_key(&ty));
+    /// Ensure that we have tracing information for all of the given types.
+    ///
+    /// More efficient than calling [`Self::ensure`] in a loop: the engine's
+    /// type registry is consulted only once for the whole batch of types that
+    /// are not already present, rather than once per type.
+    pub fn ensure_many(&mut self, tys: impl IntoIterator<Item = VMSharedTypeIndex>) {
+        let missing = tys
+            .into_iter()
+            .filter(|ty| !self.map.contains_key(ty))
+            .collect::<smallvec::SmallVec<[_; 32]>>();
+        if missing.is_empty() {
+            return;
+        }
 
         let engine = self.engine();
-        let Some(gc_layout) = engine.signatures().layout(ty) else {
-            // Not a GC type (e.g. a function type); no trace info needed.
-            return;
-        };
+        let gc_ref_array_elems_offset = self.gc_ref_array_elems_offset;
+        let map = &mut self.map;
+        engine
+            .signatures()
+            .for_each_layout(missing.iter().copied(), |ty, gc_layout| {
+                // Not a GC type (e.g. a function type); no trace info needed.
+                let Some(gc_layout) = gc_layout else {
+                    return;
+                };
+                let info = Self::info_for_layout(gc_layout, gc_ref_array_elems_offset);
+                let old_entry = map.insert(ty, info);
+                debug_assert!(old_entry.is_none());
+            });
+    }
 
-        let info = match gc_layout {
+    fn info_for_layout(gc_layout: &GcLayout, gc_ref_array_elems_offset: u32) -> TraceInfo {
+        match gc_layout {
             GcLayout::Array(l) => {
                 if l.elems_are_gc_refs {
-                    debug_assert_eq!(l.elem_offset(0), Some(self.gc_ref_array_elems_offset));
+                    debug_assert_eq!(l.elem_offset(0), Some(gc_ref_array_elems_offset));
                 }
                 TraceInfo::Array {
                     gc_ref_elems: l.elems_are_gc_refs,
@@ -158,7 +180,19 @@ impl TraceInfos {
                     .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
                     .collect(),
             },
+        }
+    }
+
+    fn insert_new(&mut self, ty: VMSharedTypeIndex) {
+        debug_assert!(!self.map.contains_key(&ty));
+
+        let engine = self.engine();
+        let Some(gc_layout) = engine.signatures().layout(ty) else {
+            // Not a GC type (e.g. a function type); no trace info needed.
+            return;
         };
+
+        let info = Self::info_for_layout(&gc_layout, self.gc_ref_array_elems_offset);
 
         let old_entry = self.map.insert(ty, info);
         debug_assert!(old_entry.is_none());

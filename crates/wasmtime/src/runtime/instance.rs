@@ -314,9 +314,13 @@ impl Instance {
 
             // Eagerly register trace info for all types in this module.
             if let Some(gc_store) = store.optional_gc_store_mut() {
-                for (_, ty) in module.signatures().as_module_map().iter() {
-                    gc_store.ensure_trace_info(*ty);
-                }
+                gc_store.ensure_trace_infos(
+                    module
+                        .signatures()
+                        .as_module_map()
+                        .iter()
+                        .map(|(_, ty)| *ty),
+                );
             }
         }
 

@@ -122,6 +122,18 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// collector).
     fn ensure_trace_info(&mut self, _ty: VMSharedTypeIndex) {}
 
+    /// Bulk version of [`GcHeap::ensure_trace_info`].
+    ///
+    /// Collectors that derive tracing info from the engine's type registry
+    /// should override this to process the whole batch with a single registry
+    /// access, since acquiring the registry's lock once per type serializes
+    /// concurrent stores running on different threads.
+    fn ensure_trace_infos(&mut self, tys: &mut dyn Iterator<Item = VMSharedTypeIndex>) {
+        for ty in tys {
+            self.ensure_trace_info(ty);
+        }
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // `Any` methods
 
