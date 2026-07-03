@@ -219,11 +219,9 @@
 //! }
 //! ```
 
-#[cfg(feature = "default-send-request")]
 use self::bindings::http::types::ErrorCode;
 use crate::RequestOptions;
 use crate::{DEFAULT_FORBIDDEN_HEADERS, WasiHttpCtx};
-use bytes::Bytes;
 use http::HeaderName;
 use wasmtime::component::{HasData, Linker, ResourceTable};
 
@@ -581,7 +579,7 @@ pub async fn default_send_request(
     options: Option<RequestOptions>,
 ) -> Result<
     (
-        http::Response<impl http_body::Body<Data = Bytes, Error = ErrorCode>>,
+        http::Response<impl http_body::Body<Data = bytes::Bytes, Error = ErrorCode>>,
         impl Future<Output = Result<(), ErrorCode>> + Send,
     ),
     ErrorCode,

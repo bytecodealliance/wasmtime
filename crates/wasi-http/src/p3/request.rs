@@ -3,7 +3,6 @@ use crate::p3::body::{Body, BodyExt as _, GuestBody};
 use crate::p3::{HttpError, HttpResult, WasiHttpCtxView, WasiHttpView};
 use crate::{FieldMap, RequestOptions, get_content_length};
 use bytes::Bytes;
-use core::time::Duration;
 use http::header::HOST;
 use http::uri::{Authority, PathAndQuery, Scheme};
 use http::{HeaderValue, Method, Uri};
@@ -261,6 +260,7 @@ pub async fn default_send_request(
     use core::future::poll_fn;
     use core::pin::{Pin, pin};
     use core::task::{Poll, ready};
+    use core::time::Duration;
     use tokio::io::{AsyncRead, AsyncWrite};
     use tokio::net::TcpStream;
 

@@ -9,7 +9,9 @@ use http_body_util::combinators::UnsyncBoxBody;
 use std::future::Future;
 use std::mem;
 use std::task::{Context, Poll};
-use std::{pin::Pin, sync::Arc, time::Duration};
+#[cfg(feature = "default-send-request")]
+use std::time::Duration;
+use std::{pin::Pin, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 use wasmtime::format_err;
 use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamError};
@@ -85,6 +87,7 @@ enum IncomingBodyState {
 
 /// Small wrapper around [`HyperIncomingBody`] which adds a timeout to every frame.
 #[derive(Debug)]
+#[cfg(feature = "default-send-request")]
 pub(crate) struct BodyWithTimeout<B> {
     /// Underlying stream that frames are coming from.
     inner: B,
@@ -98,6 +101,7 @@ pub(crate) struct BodyWithTimeout<B> {
     between_bytes_timeout: Duration,
 }
 
+#[cfg(feature = "default-send-request")]
 impl<B> BodyWithTimeout<B> {
     pub(crate) fn new(inner: B, between_bytes_timeout: Duration) -> BodyWithTimeout<B> {
         BodyWithTimeout {
@@ -111,6 +115,7 @@ impl<B> BodyWithTimeout<B> {
     }
 }
 
+#[cfg(feature = "default-send-request")]
 impl<B> Body for BodyWithTimeout<B>
 where
     B: Body<Error = types::ErrorCode> + Unpin,
