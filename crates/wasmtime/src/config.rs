@@ -162,6 +162,8 @@ pub struct Config {
     target: Option<target_lexicon::Triple>,
     #[cfg(feature = "gc")]
     collector: Collector,
+    #[cfg(feature = "gc")]
+    pub(crate) gc_heap_initial_size: u64,
     profiling_strategy: ProfilingStrategy,
     tunables: ConfigTunables,
 
@@ -276,6 +278,8 @@ impl Config {
             target: None,
             #[cfg(feature = "gc")]
             collector: Collector::default(),
+            #[cfg(feature = "gc")]
+            gc_heap_initial_size: 0,
             #[cfg(feature = "cache")]
             cache: None,
             profiling_strategy: ProfilingStrategy::None,
@@ -1411,6 +1415,35 @@ impl Config {
     #[cfg(feature = "gc")]
     pub fn collector(&mut self, collector: Collector) -> &mut Self {
         self.collector = collector;
+        self
+    }
+
+    /// Configures the initial size, in bytes, of each store's GC heap.
+    ///
+    /// Wasm modules that use linear memories can set the memories' initial size,
+    /// to reduce the need for repeated growths before reaching a steady state.
+    /// Wasm modules that use GC heaps can't do so. To still avoid repeated
+    /// collect-and-grow ramp-up, this setting can be used to configure the
+    /// initial size of the GC heap. This is particularly useful in combination
+    /// with the pooling allocator, where allocated memory pages are still
+    /// committed lazily, meaning that the memory is not immediately backed by
+    /// physical pages.
+    ///
+    /// The size is rounded up to the GC heap's page size. Note that the
+    /// copying collector divides its heap into two semi-spaces, so only half
+    /// of the configured size is available for allocation under that
+    /// collector.
+    ///
+    /// This only configures the initially-allocated size of the GC heap; the
+    /// heap can still grow beyond it on demand. It is separate from
+    /// [`Config::gc_heap_reservation`], which configures the size of the
+    /// virtual-memory reservation (and therefore how far the heap can grow
+    /// in place).
+    ///
+    /// The default value for this is 0.
+    #[cfg(feature = "gc")]
+    pub fn gc_heap_initial_size(&mut self, bytes: u64) -> &mut Self {
+        self.gc_heap_initial_size = bytes;
         self
     }
 
@@ -4755,6 +4788,14 @@ impl Engine {
     /// Returns the configured [`Config::gc_heap_reservation`] value.
     pub fn get_gc_heap_reservation(&self) -> u64 {
         self.tunables().gc_heap_reservation
+    }
+
+    /// Returns the configured [`Config::gc_heap_initial_size`] value.
+    pub fn get_gc_heap_initial_size(&self) -> Option<u64> {
+        #[cfg(feature = "gc")]
+        return Some(self.config().gc_heap_initial_size);
+        #[cfg(not(feature = "gc"))]
+        return None;
     }
 
     /// Returns the configured [`Config::gc_heap_reservation_for_growth`] value.
