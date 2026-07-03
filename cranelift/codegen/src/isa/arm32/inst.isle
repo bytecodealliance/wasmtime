@@ -524,6 +524,32 @@
 (rule (not_i64 x)
   (value_regs (mvn_reg (vr_lo x)) (mvn_reg (vr_hi x))))
 
+;; `mla rd, rn, rm, ra` — `rd = rn * rm + ra`.
+(decl mla (Reg Reg Reg) Reg)
+(rule (mla rn rm ra)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Mla rd rn rm ra))))
+    rd))
+
+;; 64-bit multiply (low 64 bits): umull for the lo*lo product, then fold in the
+;; two cross terms with mla.
+(decl mul_i64 (ValueRegs ValueRegs) ValueRegs)
+(rule (mul_i64 x y)
+  (let ((xlo Reg (vr_lo x))
+        (xhi Reg (vr_hi x))
+        (ylo Reg (vr_lo y))
+        (yhi Reg (vr_hi y))
+        (lo WritableReg (temp_writable_reg $I32))
+        (hi0 WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Umull lo hi0 xlo ylo)))
+        (hi1 Reg (mla xlo yhi (writable_reg_to_reg hi0)))
+        (hi2 Reg (mla xhi ylo hi1)))
+    (value_regs (writable_reg_to_reg lo) hi2)))
+
+;; Constant shift/rotate of a 64-bit value; the funnel logic is in Rust.
+(decl gen_i64_shift_imm (ShiftOp ValueRegs u64) ValueRegs)
+(extern constructor gen_i64_shift_imm gen_i64_shift_imm)
+
 ;;;; Loads and stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl arm_load (AMode LoadKind) Reg)

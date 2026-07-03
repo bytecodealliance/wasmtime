@@ -45,6 +45,25 @@ impl<'a, 'b> Arm32IsleContext<'a, 'b, MInst, Arm32Backend> {
     pub(crate) fn dfg(&self) -> &crate::ir::DataFlowGraph {
         &self.lower_ctx.f.dfg
     }
+
+    /// Emit a single 32-bit shift `op rd, rm, #amount` (1 <= amount <= 31).
+    fn shift_raw(&mut self, op: ShiftOp, rm: Reg, amount: u8) -> Reg {
+        let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::ShiftImm { op, rd, rm, amount });
+        rd.to_reg()
+    }
+
+    /// Emit `orr rd, a, b`.
+    fn orr_raw(&mut self, a: Reg, b: Reg) -> Reg {
+        let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::AluRRR {
+            op: crate::isa::arm32::inst::ALUOp::Orr,
+            rd,
+            rn: a,
+            rm: b,
+        });
+        rd.to_reg()
+    }
 }
 
 impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
@@ -129,6 +148,73 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
     /// The offset of the high word of a 64-bit memory access.
     fn offset32_plus4(&mut self, offset: Offset32) -> i32 {
         i32::from(offset) + 4
+    }
+
+    /// Shift/rotate a 64-bit `(lo, hi)` pair by a constant amount, emitting the
+    /// funnel-shift sequence. Only Lsl/Lsr/Asr are supported.
+    fn gen_i64_shift_imm(&mut self, op: &ShiftOp, x: ValueRegs, amount: u64) -> ValueRegs {
+        let n = (amount & 63) as u8;
+        let xlo = x.regs()[0];
+        let xhi = x.regs()[1];
+        if n == 0 {
+            return ValueRegs::two(xlo, xhi);
+        }
+        match *op {
+            ShiftOp::Lsl => {
+                if n < 32 {
+                    let lo = self.shift_raw(ShiftOp::Lsl, xlo, n);
+                    let hi_hi = self.shift_raw(ShiftOp::Lsl, xhi, n);
+                    let hi_lo = self.shift_raw(ShiftOp::Lsr, xlo, 32 - n);
+                    let hi = self.orr_raw(hi_hi, hi_lo);
+                    ValueRegs::two(lo, hi)
+                } else {
+                    let zero = self.gen_constant(0);
+                    let hi = if n == 32 {
+                        xlo
+                    } else {
+                        self.shift_raw(ShiftOp::Lsl, xlo, n - 32)
+                    };
+                    ValueRegs::two(zero, hi)
+                }
+            }
+            ShiftOp::Lsr => {
+                if n < 32 {
+                    let hi = self.shift_raw(ShiftOp::Lsr, xhi, n);
+                    let lo_lo = self.shift_raw(ShiftOp::Lsr, xlo, n);
+                    let lo_hi = self.shift_raw(ShiftOp::Lsl, xhi, 32 - n);
+                    let lo = self.orr_raw(lo_lo, lo_hi);
+                    ValueRegs::two(lo, hi)
+                } else {
+                    let zero = self.gen_constant(0);
+                    let lo = if n == 32 {
+                        xhi
+                    } else {
+                        self.shift_raw(ShiftOp::Lsr, xhi, n - 32)
+                    };
+                    ValueRegs::two(lo, zero)
+                }
+            }
+            ShiftOp::Asr => {
+                if n < 32 {
+                    let hi = self.shift_raw(ShiftOp::Asr, xhi, n);
+                    let lo_lo = self.shift_raw(ShiftOp::Lsr, xlo, n);
+                    let lo_hi = self.shift_raw(ShiftOp::Lsl, xhi, 32 - n);
+                    let lo = self.orr_raw(lo_lo, lo_hi);
+                    ValueRegs::two(lo, hi)
+                } else {
+                    // The high word becomes all sign bits; the low word is the
+                    // old high word arithmetically shifted by `n - 32`.
+                    let hi = self.shift_raw(ShiftOp::Asr, xhi, 31);
+                    let lo = if n == 32 {
+                        xhi
+                    } else {
+                        self.shift_raw(ShiftOp::Asr, xhi, n - 32)
+                    };
+                    ValueRegs::two(lo, hi)
+                }
+            }
+            ShiftOp::Ror => unimplemented!("arm32: 64-bit rotate is not implemented"),
+        }
     }
 
     /// Shift/rotate by a constant, applying Cranelift's modulo-width semantics.

@@ -45,6 +45,17 @@
 (rule 4 (lower (ireduce $I32 x @ (value_type $I64)))
   (vr_lo (put_in_regs x)))
 
+(rule 4 (lower (imul $I64 x y))
+  (mul_i64 (put_in_regs x) (put_in_regs y)))
+
+;; 64-bit shifts by a constant amount.
+(rule 4 (lower (ishl $I64 x (iconst _ (u64_from_imm64 n))))
+  (gen_i64_shift_imm (ShiftOp.Lsl) (put_in_regs x) n))
+(rule 4 (lower (ushr $I64 x (iconst _ (u64_from_imm64 n))))
+  (gen_i64_shift_imm (ShiftOp.Lsr) (put_in_regs x) n))
+(rule 4 (lower (sshr $I64 x (iconst _ (u64_from_imm64 n))))
+  (gen_i64_shift_imm (ShiftOp.Asr) (put_in_regs x) n))
+
 ;; 64-bit loads/stores as two 32-bit accesses.
 (rule 4 (lower (load $I64 flags addr offset))
   (value_regs (arm_load (amode addr offset) (LoadKind.Word))
