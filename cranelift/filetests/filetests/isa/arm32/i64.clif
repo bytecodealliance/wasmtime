@@ -1,0 +1,111 @@
+test compile precise-output
+target arm
+
+function %add64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   adds r0, r0, r2
+;   adc r1, r1, r3
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds r0, r0, r2
+;   adc r1, r1, r3
+;   bx lr
+
+function %sub64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   subs r0, r0, r2
+;   sbc r1, r1, r3
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   subs r0, r0, r2
+;   sbc r1, r1, r3
+;   bx lr
+
+function %const64() -> i64 {
+block0:
+    v0 = iconst.i64 0x1234_5678_9abc_def0
+    return v0
+}
+
+; VCode:
+; block0:
+;   movw r0, #57072; movt r0, #39612
+;   movw r1, #22136; movt r1, #4660
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movw r0, #0xdef0
+;   movt r0, #0x9abc
+;   movw r1, #0x5678
+;   movt r1, #0x1234
+;   bx lr
+
+function %uext(i32) -> i64 {
+block0(v0: i32):
+    v1 = uextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   mov r1, #0
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov r1, #0
+;   bx lr
+
+function %sext(i32) -> i64 {
+block0(v0: i32):
+    v1 = sextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   asr r1, r0, #31
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   asr r1, r0, #0x1f
+;   bx lr
+
+function %load64(i32) -> i64 {
+block0(v0: i32):
+    v1 = load.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ldr r2, [r0, #0]
+;   ldr r1, [r0, #4]
+;   mov r0, r2
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr r2, [r0]
+;   ldr r1, [r0, #4]
+;   mov r0, r2
+;   bx lr
+

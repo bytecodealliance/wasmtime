@@ -352,6 +352,13 @@
         (_ Unit (emit (MInst.AluRRImm op rd rn imm12))))
     rd))
 
+;; `op{s} rd, rn, rm` — flag-setting form (adds/subs/adcs/sbcs).
+(decl alu_rrr_flags (ALUOp Reg Reg) Reg)
+(rule (alu_rrr_flags op rn rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AluRRRFlags op rd rn rm))))
+    rd))
+
 ;; A constant is encodable as an A32 data-processing immediate; the result is
 ;; its pre-encoded 12-bit form.
 (decl pure partial u64_from_rotated_imm12 (u64) u32)
@@ -483,6 +490,40 @@
         (_ Unit (emit (MInst.ShiftReg op rd rm masked))))
     rd))
 
+;;;; 64-bit helpers (values held as a (lo, hi) register pair) ;;;;;;;;;;;;;;;;;;
+
+(decl vr_lo (ValueRegs) Reg)
+(rule (vr_lo regs) (value_regs_get regs 0))
+(decl vr_hi (ValueRegs) Reg)
+(rule (vr_hi regs) (value_regs_get regs 1))
+
+;; The high 32 bits of a 64-bit constant.
+(decl pure u64_high32 (u64) u64)
+(extern constructor u64_high32 u64_high32)
+
+;; `adds`/`adc` and `subs`/`sbc` carry chains over the halves.
+(decl add_i64 (ValueRegs ValueRegs) ValueRegs)
+(rule (add_i64 x y)
+  (let ((lo Reg (alu_rrr_flags (ALUOp.Add) (vr_lo x) (vr_lo y)))
+        (hi Reg (alu_rrr (ALUOp.Adc) (vr_hi x) (vr_hi y))))
+    (value_regs lo hi)))
+
+(decl sub_i64 (ValueRegs ValueRegs) ValueRegs)
+(rule (sub_i64 x y)
+  (let ((lo Reg (alu_rrr_flags (ALUOp.Sub) (vr_lo x) (vr_lo y)))
+        (hi Reg (alu_rrr (ALUOp.Sbc) (vr_hi x) (vr_hi y))))
+    (value_regs lo hi)))
+
+;; A bitwise op applied independently to each half.
+(decl logical_i64 (ALUOp ValueRegs ValueRegs) ValueRegs)
+(rule (logical_i64 op x y)
+  (value_regs (alu_rrr op (vr_lo x) (vr_lo y))
+              (alu_rrr op (vr_hi x) (vr_hi y))))
+
+(decl not_i64 (ValueRegs) ValueRegs)
+(rule (not_i64 x)
+  (value_regs (mvn_reg (vr_lo x)) (mvn_reg (vr_hi x))))
+
 ;;;; Loads and stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl arm_load (AMode LoadKind) Reg)
@@ -498,6 +539,13 @@
 ;; Build an addressing mode from an address value plus a constant offset.
 (decl amode (Value Offset32) AMode)
 (rule (amode base offset) (AMode.RegOffset base (offset32_to_i32 offset)))
+
+;; Addressing mode for the high word of a 64-bit access (offset + 4).
+(decl amode_hi (Value Offset32) AMode)
+(rule (amode_hi base offset) (AMode.RegOffset base (offset32_plus4 offset)))
+
+(decl pure offset32_plus4 (Offset32) i32)
+(extern constructor offset32_plus4 offset32_plus4)
 
 ;;;; Comparisons and branches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

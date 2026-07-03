@@ -8,6 +8,52 @@
 (rule (lower (iconst (fits_in_32 ty) (u64_from_imm64 n)))
   (imm ty n))
 
+;;;; 64-bit integer operations (register pairs) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; These use an explicit priority so they don't overlap the `fits_in_32` rules
+;; (ISLE can't prove `$I64` and `fits_in_32` are disjoint on its own).
+
+(rule 4 (lower (iconst $I64 (u64_from_imm64 n)))
+  (value_regs (gen_constant n) (gen_constant (u64_high32 n))))
+
+(rule 4 (lower (iadd $I64 x y))
+  (add_i64 (put_in_regs x) (put_in_regs y)))
+(rule 4 (lower (isub $I64 x y))
+  (sub_i64 (put_in_regs x) (put_in_regs y)))
+
+(rule 4 (lower (band $I64 x y))
+  (logical_i64 (ALUOp.And) (put_in_regs x) (put_in_regs y)))
+(rule 4 (lower (bor $I64 x y))
+  (logical_i64 (ALUOp.Orr) (put_in_regs x) (put_in_regs y)))
+(rule 4 (lower (bxor $I64 x y))
+  (logical_i64 (ALUOp.Eor) (put_in_regs x) (put_in_regs y)))
+(rule 4 (lower (bnot $I64 x))
+  (not_i64 (put_in_regs x)))
+
+;; `iconcat(lo, hi)` builds the pair; `isplit` takes it apart.
+(rule 4 (lower (iconcat $I64 lo hi))
+  (value_regs (put_in_reg lo) (put_in_reg hi)))
+(rule 4 (lower (isplit $I64 x))
+  (let ((regs ValueRegs (put_in_regs x)))
+    (output_pair (value_reg (vr_lo regs)) (value_reg (vr_hi regs)))))
+
+;; Widen/narrow between i32 and i64.
+(rule 4 (lower (uextend $I64 x @ (value_type $I32)))
+  (value_regs (put_in_reg x) (gen_constant 0)))
+(rule 4 (lower (sextend $I64 x @ (value_type $I32)))
+  (let ((lo Reg (put_in_reg x)))
+    (value_regs lo (gen_shift_imm (ShiftOp.Asr) lo 31))))
+(rule 4 (lower (ireduce $I32 x @ (value_type $I64)))
+  (vr_lo (put_in_regs x)))
+
+;; 64-bit loads/stores as two 32-bit accesses.
+(rule 4 (lower (load $I64 flags addr offset))
+  (value_regs (arm_load (amode addr offset) (LoadKind.Word))
+              (arm_load (amode_hi addr offset) (LoadKind.Word))))
+(rule 4 (lower (store flags val @ (value_type $I64) addr offset))
+  (let ((regs ValueRegs (put_in_regs val))
+        (_ InstOutput (arm_store (vr_lo regs) (amode addr offset) (StoreKind.Word))))
+    (arm_store (vr_hi regs) (amode_hi addr offset) (StoreKind.Word))))
+
 ;;;; `iadd` / `isub` / `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower (iadd (fits_in_32 _) x (iconst _ (u64_from_imm64 n))))

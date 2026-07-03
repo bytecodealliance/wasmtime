@@ -121,6 +121,16 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
         encode_rotated_imm(val as u32)
     }
 
+    /// The high 32 bits of a 64-bit constant.
+    fn u64_high32(&mut self, val: u64) -> u64 {
+        val >> 32
+    }
+
+    /// The offset of the high word of a 64-bit memory access.
+    fn offset32_plus4(&mut self, offset: Offset32) -> i32 {
+        i32::from(offset) + 4
+    }
+
     /// Shift/rotate by a constant, applying Cranelift's modulo-width semantics.
     /// A masked amount of zero becomes a plain register move.
     fn gen_shift_imm(&mut self, op: &ShiftOp, rm: Reg, amount: u64) -> Reg {

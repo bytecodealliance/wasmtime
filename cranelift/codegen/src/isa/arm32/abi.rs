@@ -76,6 +76,19 @@ impl ABIMachineSpec for Arm32MachineDeps {
             }
 
             let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+
+            // AAPCS: a 64-bit value passed in registers must start in an
+            // even-numbered register (an r0:r1 / r2:r3 pair). If the aligned
+            // pair would not fully fit, it goes entirely on the (8-aligned)
+            // stack, so bump `next_x_reg` past the argument registers.
+            if rcs.len() == 2 {
+                next_x_reg = align_to(u32::from(next_x_reg), 2) as u8;
+                if next_x_reg + 1 > x_end {
+                    next_x_reg = x_end + 1;
+                    next_stack = align_to(next_stack, 8);
+                }
+            }
+
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
                 assert_eq!(*rc, RegClass::Int, "arm32 only supports integer values");

@@ -1,7 +1,7 @@
 //! This module defines arm32 (AArch32 / A32) machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::types::{I8, I16, I32};
+use crate::ir::types::{I8, I16, I32, I64};
 use crate::ir::{Type, types};
 use crate::isa::FunctionAlignment;
 use crate::isa::arm32::abi::Arm32MachineDeps;
@@ -354,8 +354,10 @@ impl MachInst for Inst {
             I8 => Ok((&[RegClass::Int], &[I8])),
             I16 => Ok((&[RegClass::Int], &[I16])),
             I32 => Ok((&[RegClass::Int], &[I32])),
+            // 64-bit values are held in a pair of 32-bit integer registers.
+            I64 => Ok((&[RegClass::Int, RegClass::Int], &[I32, I32])),
             _ => Err(CodegenError::Unsupported(alloc::format!(
-                "Unsupported type on arm32 (only i8/i16/i32 are implemented so far): {ty}"
+                "Unsupported type on arm32 (only i8/i16/i32/i64 are implemented so far): {ty}"
             ))),
         }
     }
