@@ -1426,22 +1426,10 @@ impl WasiView for Host {
 }
 
 #[cfg(feature = "wasi-http")]
-impl wasmtime_wasi_http::p2::WasiHttpView for Host {
-    fn http(&mut self) -> wasmtime_wasi_http::p2::WasiHttpCtxView<'_> {
+impl wasmtime_wasi_http::WasiHttpView for Host {
+    fn http(&mut self) -> wasmtime_wasi_http::WasiHttpCtxView<'_> {
         let ctx = self.wasi_http.as_mut().unwrap();
-        wasmtime_wasi_http::p2::WasiHttpCtxView {
-            table: WasiView::ctx(self.wasip1_ctx.as_mut().unwrap()).table,
-            ctx,
-            hooks: &mut self.wasi_http_hooks,
-        }
-    }
-}
-
-#[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
-impl wasmtime_wasi_http::p3::WasiHttpView for Host {
-    fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
-        let ctx = self.wasi_http.as_mut().unwrap();
-        wasmtime_wasi_http::p3::WasiHttpCtxView {
+        wasmtime_wasi_http::WasiHttpCtxView {
             table: WasiView::ctx(self.wasip1_ctx.as_mut().unwrap()).table,
             ctx,
             hooks: &mut self.wasi_http_hooks,

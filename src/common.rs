@@ -547,15 +547,12 @@ impl Default for HttpHooks {
 }
 
 #[cfg(feature = "wasi-http")]
-impl wasmtime_wasi_http::p2::WasiHttpHooks for HttpHooks {
-    fn outgoing_body_buffer_chunks(&mut self) -> usize {
+impl wasmtime_wasi_http::WasiHttpHooks for HttpHooks {
+    fn p2_outgoing_body_buffer_chunks(&mut self) -> usize {
         self.p2_outgoing_body_buffer_chunks
     }
 
-    fn outgoing_body_chunk_size(&mut self) -> usize {
+    fn p2_outgoing_body_chunk_size(&mut self) -> usize {
         self.p2_outgoing_body_chunk_size
     }
 }
-
-#[cfg(feature = "wasi-http")]
-impl wasmtime_wasi_http::p3::WasiHttpHooks for HttpHooks {}

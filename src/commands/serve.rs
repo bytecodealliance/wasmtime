@@ -1,8 +1,6 @@
 use crate::common::{HttpHooks, Profile, RunCommon, RunTarget};
-use bytes::Bytes;
 use clap::Parser;
 use http::{HeaderMap, HeaderName, HeaderValue, Response, StatusCode};
-use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt as _, Full};
 use hyper::server::conn::http1;
 use pin_project_lite::pin_project;
@@ -31,7 +29,7 @@ use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::WasiHttpCtx;
 use wasmtime_wasi_http::handler::{
-    self, HandlerState, Instance, Prepared, Proxy, ProxyHandler, ProxyPre, ShouldAccept, ViewFn,
+    HandlerState, Instance, Prepared, Proxy, ProxyHandler, ProxyPre, ShouldAccept,
     WorkerExpiration, WorkerState, WorkerStatus,
 };
 use wasmtime_wasi_http::io::TokioIo;
@@ -82,22 +80,11 @@ impl WasiView for Host {
     }
 }
 
-impl wasmtime_wasi_http::p2::WasiHttpView for Host {
-    fn http(&mut self) -> wasmtime_wasi_http::p2::WasiHttpCtxView<'_> {
-        wasmtime_wasi_http::p2::WasiHttpCtxView {
+impl wasmtime_wasi_http::WasiHttpView for Host {
+    fn http(&mut self) -> wasmtime_wasi_http::WasiHttpCtxView<'_> {
+        wasmtime_wasi_http::WasiHttpCtxView {
             ctx: &mut self.http,
             table: &mut self.table,
-            hooks: &mut self.hooks,
-        }
-    }
-}
-
-#[cfg(feature = "component-model-async")]
-impl wasmtime_wasi_http::p3::WasiHttpView for Host {
-    fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
-        wasmtime_wasi_http::p3::WasiHttpCtxView {
-            table: &mut self.table,
-            ctx: &mut self.http,
             hooks: &mut self.hooks,
         }
     }
@@ -888,13 +875,6 @@ impl HostHandlerState {
         store.data_mut().write_profile = Some(write_profile);
         self.instance.instantiate_async(&mut *store).await
     }
-
-    fn view(&self) -> ViewFn<Host> {
-        match &self.instance {
-            ProxyPre::P2(_) => ViewFn::P2(wasmtime_wasi_http::p2::WasiHttpView::http),
-            ProxyPre::P3(_) => ViewFn::P3(wasmtime_wasi_http::p3::WasiHttpView::http),
-        }
-    }
 }
 
 impl HandlerState for HostHandlerState {
@@ -914,7 +894,7 @@ impl HandlerState for HostHandlerState {
         Ok(Instance {
             store,
             proxy,
-            view: self.view(),
+            view: wasmtime_wasi_http::WasiHttpView::http,
             expiration: HostWorkerExpiration {
                 idle_timeout: self.cmd.idle_instance_timeout,
                 request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
@@ -1172,9 +1152,7 @@ async fn handle_request(
     handler: &ProxyHandler<HostHandlerState>,
     debuggee_store: Option<&mut Store<Host>>,
     mut req: Request,
-) -> Result<hyper::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>> {
-    use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
-
+) -> Result<hyper::Response<wasmtime_wasi_http::WasiBody>> {
     // This is used to throttle the maximum number of concurrent requests that
     // can be processed at any one point in time before delegating to
     // `handler.handle(...)` below.
@@ -1192,11 +1170,7 @@ async fn handle_request(
         req.uri()
     );
 
-    let req = req.map(|body| {
-        body.map_err(ErrorCode::from_hyper_request_error)
-            .map_err(handler::ErrorCode::from)
-            .boxed_unsync()
-    });
+    let req = req.map(|body| body.map_err(|e| e.into()).boxed_unsync());
 
     match debuggee_store {
         // For debugging go ahead and synchronously execute the instance here
@@ -1209,7 +1183,7 @@ async fn handle_request(
                 store.as_context_mut(),
                 &instance,
                 req,
-                handler.state().view(),
+                wasmtime_wasi_http::WasiHttpView::http,
                 tx,
             )?;
             store
