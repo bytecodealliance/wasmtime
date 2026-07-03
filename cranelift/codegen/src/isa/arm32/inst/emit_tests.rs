@@ -250,6 +250,111 @@ fn multiplies() {
 }
 
 #[test]
+fn bit_ops() {
+    let bit_cases = [
+        (BitOp::Clz, 0xe16f_0f11u32),
+        (BitOp::Rev, 0xe6bf_0f31),
+        (BitOp::Rev16, 0xe6bf_0fb1),
+        (BitOp::Rbit, 0xe6ff_0f31),
+    ];
+    for (op, want) in bit_cases {
+        assert_eq!(
+            u32_le(Inst::BitRR {
+                op,
+                rd: writable_xreg(0),
+                rm: xreg(1),
+            }),
+            want,
+            "{op:?}"
+        );
+    }
+    let ext_cases = [
+        (ExtOp::Sxtb, 0xe6af_0071u32),
+        (ExtOp::Sxth, 0xe6bf_0071),
+        (ExtOp::Uxtb, 0xe6ef_0071),
+        (ExtOp::Uxth, 0xe6ff_0071),
+    ];
+    for (op, want) in ext_cases {
+        assert_eq!(
+            u32_le(Inst::ExtRR {
+                op,
+                rd: writable_xreg(0),
+                rm: xreg(1),
+            }),
+            want,
+            "{op:?}"
+        );
+    }
+}
+
+#[test]
+fn divides() {
+    assert_eq!(
+        u32_le(Inst::SDiv {
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        }),
+        0xe710_f211 // sdiv r0, r1, r2
+    );
+    assert_eq!(
+        u32_le(Inst::UDiv {
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+        }),
+        0xe730_f211 // udiv r0, r1, r2
+    );
+}
+
+#[test]
+fn fused_multiply() {
+    assert_eq!(
+        u32_le(Inst::Mls {
+            rd: writable_xreg(0),
+            rn: xreg(1),
+            rm: xreg(2),
+            ra: xreg(3),
+        }),
+        0xe060_3291 // mls r0, r1, r2, r3
+    );
+    assert_eq!(
+        u32_le(Inst::Umlal {
+            rd_lo: writable_xreg(0),
+            rd_hi: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+        }),
+        0xe0a1_0392 // umlal r0, r1, r2, r3
+    );
+    assert_eq!(
+        u32_le(Inst::Smlal {
+            rd_lo: writable_xreg(0),
+            rd_hi: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+        }),
+        0xe0e1_0392 // smlal r0, r1, r2, r3
+    );
+}
+
+#[test]
+fn conditional_select() {
+    // csel ne r0, r1, r2  =>  mov r0, r2 ; movne r0, r1
+    let bytes = encode(Inst::CSel {
+        cond: Cond::Ne,
+        rd: writable_xreg(0),
+        rn: xreg(1),
+        rm: xreg(2),
+    });
+    assert_eq!(bytes.len(), 8);
+    let w0 = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    let w1 = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+    assert_eq!(w0, 0xe1a0_0002); // mov r0, r2
+    assert_eq!(w1, 0x11a0_0001); // movne r0, r1
+}
+
+#[test]
 fn compares() {
     assert_eq!(
         u32_le(Inst::CmpRR {

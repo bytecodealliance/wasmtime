@@ -234,6 +234,33 @@ fn enc_mull(signed: bool, rd_lo: u32, rd_hi: u32, rn: u32, rm: u32) -> u32 {
     COND_AL | base | (rd_hi << 16) | (rd_lo << 12) | (rm << 8) | 0x90 | rn
 }
 
+/// A 32x32->64 multiply-accumulate (`umlal`/`smlal`). `signed` selects `smlal`.
+fn enc_mlal(signed: bool, rd_lo: u32, rd_hi: u32, rn: u32, rm: u32) -> u32 {
+    let base = if signed { 0x00e0_0000 } else { 0x00a0_0000 };
+    COND_AL | base | (rd_hi << 16) | (rd_lo << 12) | (rm << 8) | 0x90 | rn
+}
+
+/// `mls rd, rn, rm, ra` — `rd = ra - rn * rm`.
+fn enc_mls(rd: u32, rn: u32, rm: u32, ra: u32) -> u32 {
+    COND_AL | 0x0060_0090 | (rd << 16) | (ra << 12) | (rm << 8) | rn
+}
+
+/// `sdiv`/`udiv rd, rn, rm`. `signed` selects `sdiv`.
+fn enc_div(signed: bool, rd: u32, rn: u32, rm: u32) -> u32 {
+    let base = if signed { 0x0710_f010 } else { 0x0730_f010 };
+    COND_AL | base | (rd << 16) | (rm << 8) | rn
+}
+
+/// A single-operand `op rd, rm` built from an opcode template.
+fn enc_op_rd_rm(template: u32, rd: u32, rm: u32) -> u32 {
+    COND_AL | template | (rd << 12) | rm
+}
+
+/// A conditional register move: `mov<cond> rd, rm`.
+fn enc_mov_cond(cond: Cond, rd: u32, rm: u32) -> u32 {
+    (cond.bits() << 28) | 0x01a0_0000 | (rd << 12) | rm
+}
+
 fn put_u32(sink: &mut MachBuffer<Inst>, word: u32) {
     for b in word.to_le_bytes() {
         sink.put1(b);
@@ -352,6 +379,67 @@ impl MachInstEmit for Inst {
                 let rn = machreg_to_gpr(*rn);
                 let rm = machreg_to_gpr(*rm);
                 put_u32(sink, enc_mull(true, rd_lo, rd_hi, rn, rm));
+            }
+            Inst::Umlal {
+                rd_lo,
+                rd_hi,
+                rn,
+                rm,
+            } => {
+                let rd_lo = machreg_to_gpr(rd_lo.to_reg());
+                let rd_hi = machreg_to_gpr(rd_hi.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_mlal(false, rd_lo, rd_hi, rn, rm));
+            }
+            Inst::Smlal {
+                rd_lo,
+                rd_hi,
+                rn,
+                rm,
+            } => {
+                let rd_lo = machreg_to_gpr(rd_lo.to_reg());
+                let rd_hi = machreg_to_gpr(rd_hi.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_mlal(true, rd_lo, rd_hi, rn, rm));
+            }
+            Inst::Mls { rd, rn, rm, ra } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                let ra = machreg_to_gpr(*ra);
+                put_u32(sink, enc_mls(rd, rn, rm, ra));
+            }
+            Inst::SDiv { rd, rn, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_div(true, rd, rn, rm));
+            }
+            Inst::UDiv { rd, rn, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_div(false, rd, rn, rm));
+            }
+            Inst::BitRR { op, rd, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_op_rd_rm(op.template(), rd, rm));
+            }
+            Inst::ExtRR { op, rd, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rm = machreg_to_gpr(*rm);
+                put_u32(sink, enc_op_rd_rm(op.template(), rd, rm));
+            }
+            Inst::CSel { cond, rd, rn, rm } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                let rn = machreg_to_gpr(*rn);
+                let rm = machreg_to_gpr(*rm);
+                // Default to the "false" value, then conditionally overwrite.
+                put_u32(sink, enc_dp_reg(0b1101, 0, rd, 0, rm));
+                put_u32(sink, enc_mov_cond(*cond, rd, rn));
             }
             Inst::CmpRR { op, rn, rm } => {
                 let rn = machreg_to_gpr(*rn);

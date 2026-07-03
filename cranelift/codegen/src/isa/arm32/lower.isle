@@ -54,10 +54,63 @@
 (rule (lower (bnot (fits_in_32 _) x))
   (mvn_reg (put_in_reg x)))
 
-;;;; `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; `imul` and multiply-fused `isub` -> `mls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (imul (fits_in_32 _) x y))
   (mul (put_in_reg x) (put_in_reg y)))
+
+;; `a - x*y` fuses into a single `mls`.
+(rule 2 (lower (isub (fits_in_32 _) a (imul _ x y)))
+  (mls (put_in_reg x) (put_in_reg y) (put_in_reg a)))
+
+;;;; Divides (only when hardware `sdiv`/`udiv` is available) ;;;;;;;;;;;;;;;;;;;
+;; NOTE: trap-on-zero / INT_MIN overflow checks are not yet emitted.
+
+(rule (lower (sdiv $I32 x y))
+  (if-let true (use_idiv))
+  (sdiv_reg (put_in_reg x) (put_in_reg y)))
+(rule (lower (udiv $I32 x y))
+  (if-let true (use_idiv))
+  (udiv_reg (put_in_reg x) (put_in_reg y)))
+
+;;;; Counting / byte-swap / bit-reverse ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (clz $I32 x))
+  (bit_rr (BitOp.Clz) (put_in_reg x)))
+(rule (lower (bswap $I32 x))
+  (bit_rr (BitOp.Rev) (put_in_reg x)))
+(rule (lower (bswap $I16 x))
+  (bit_rr (BitOp.Rev16) (put_in_reg x)))
+(rule (lower (bitrev $I32 x))
+  (bit_rr (BitOp.Rbit) (put_in_reg x)))
+
+;;;; Integer extends / reduces ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (sextend $I32 x @ (value_type $I8)))
+  (ext_rr (ExtOp.Sxtb) (put_in_reg x)))
+(rule (lower (sextend $I32 x @ (value_type $I16)))
+  (ext_rr (ExtOp.Sxth) (put_in_reg x)))
+(rule (lower (uextend $I32 x @ (value_type $I8)))
+  (ext_rr (ExtOp.Uxtb) (put_in_reg x)))
+(rule (lower (uextend $I32 x @ (value_type $I16)))
+  (ext_rr (ExtOp.Uxth) (put_in_reg x)))
+
+;; Reducing to a narrower integer is free: the value already lives in a
+;; 32-bit register and consumers read only the low bits.
+(rule (lower (ireduce (fits_in_32 _) x))
+  (put_in_reg x))
+
+;;;; `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Fuse an `icmp` condition into the compare that precedes the select.
+(rule 1 (lower (select (fits_in_32 _) (icmp _ cc x y) a b))
+  (let ((_ Unit (emit_side_effect (cmp_rr (put_in_reg x) (put_in_reg y)))))
+    (csel (cond_from_intcc cc) (put_in_reg a) (put_in_reg b))))
+
+;; Generic select: branch on whether the condition value is non-zero.
+(rule (lower (select (fits_in_32 _) c a b))
+  (let ((_ Unit (emit_side_effect (cmp_imm (put_in_reg c) 0))))
+    (csel (Cond.Ne) (put_in_reg a) (put_in_reg b))))
 
 ;;;; Shifts: `ishl` / `ushr` / `sshr` / `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

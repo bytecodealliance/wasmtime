@@ -34,6 +34,22 @@
     (Asr)
     (Ror)))
 
+;; A single-operand bit-manipulation operation.
+(type BitOp
+  (enum
+    (Clz)
+    (Rev)
+    (Rev16)
+    (Rbit)))
+
+;; A sign/zero extension operation.
+(type ExtOp
+  (enum
+    (Sxtb)
+    (Sxth)
+    (Uxtb)
+    (Uxth)))
+
 ;; An ARM condition code (the "always" and "never" codes are omitted).
 (type Cond
   (enum
@@ -112,10 +128,29 @@
     (Mul (rd WritableReg) (rn Reg) (rm Reg))
     ;; `mla rd, rn, rm, ra` — `rd = rn * rm + ra` (low 32 bits).
     (Mla (rd WritableReg) (rn Reg) (rm Reg) (ra Reg))
+    ;; `mls rd, rn, rm, ra` — `rd = ra - rn * rm` (low 32 bits).
+    (Mls (rd WritableReg) (rn Reg) (rm Reg) (ra Reg))
     ;; `umull rd_lo, rd_hi, rn, rm` — unsigned 32x32->64 multiply.
     (Umull (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
     ;; `smull rd_lo, rd_hi, rn, rm` — signed 32x32->64 multiply.
     (Smull (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+    ;; `umlal rd_lo, rd_hi, rn, rm` — unsigned multiply-accumulate into 64 bits.
+    (Umlal (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+    ;; `smlal rd_lo, rd_hi, rn, rm` — signed multiply-accumulate into 64 bits.
+    (Smlal (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+
+    ;; `sdiv rd, rn, rm` — signed divide `rd = rn / rm`.
+    (SDiv (rd WritableReg) (rn Reg) (rm Reg))
+    ;; `udiv rd, rn, rm` — unsigned divide.
+    (UDiv (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; A single-operand bit operation (`clz`/`rev`/`rev16`/`rbit`).
+    (BitRR (op BitOp) (rd WritableReg) (rm Reg))
+    ;; A sign/zero extension (`sxtb`/`sxth`/`uxtb`/`uxth`).
+    (ExtRR (op ExtOp) (rd WritableReg) (rm Reg))
+
+    ;; A conditional select, emitted as `mov rd, rm; mov<cond> rd, rn`.
+    (CSel (cond Cond) (rd WritableReg) (rn Reg) (rm Reg))
 
     ;; `cmp/cmn/tst/teq rn, rm`.
     (CmpRR (op CmpOp) (rn Reg) (rm Reg))
@@ -232,6 +267,55 @@
 (rule (mvn_reg rm)
   (let ((rd WritableReg (temp_writable_reg $I32))
         (_ Unit (emit (MInst.MvnReg rd rm))))
+    rd))
+
+;; `mls rd, rn, rm, ra` — `rd = ra - rn * rm`.
+(decl mls (Reg Reg Reg) Reg)
+(rule (mls rn rm ra)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Mls rd rn rm ra))))
+    rd))
+
+;;;; Divides ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; True when the hardware integer-divide instructions are available.
+(decl pure use_idiv () bool)
+(extern constructor use_idiv use_idiv)
+
+(decl sdiv_reg (Reg Reg) Reg)
+(rule (sdiv_reg rn rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.SDiv rd rn rm))))
+    rd))
+
+(decl udiv_reg (Reg Reg) Reg)
+(rule (udiv_reg rn rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.UDiv rd rn rm))))
+    rd))
+
+;;;; Bit operations and extends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl bit_rr (BitOp Reg) Reg)
+(rule (bit_rr op rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.BitRR op rd rm))))
+    rd))
+
+(decl ext_rr (ExtOp Reg) Reg)
+(rule (ext_rr op rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.ExtRR op rd rm))))
+    rd))
+
+;;;; Conditional select ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Select `if_true` when `cond` holds (given the current flags), else
+;; `if_false`. Emitted as `mov rd, if_false; mov<cond> rd, if_true`.
+(decl csel (Cond Reg Reg) Reg)
+(rule (csel cond if_true if_false)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.CSel cond rd if_true if_false))))
     rd))
 
 ;;;; Shifts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

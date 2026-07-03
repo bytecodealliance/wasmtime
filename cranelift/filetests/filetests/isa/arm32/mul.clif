@@ -17,3 +17,20 @@ block0(v0: i32, v1: i32):
 ;   mul r0, r0, r1
 ;   bx lr
 
+function %mls(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = isub v0, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   mls r0, r1, r2, r0
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mls r0, r1, r2, r0
+;   bx lr
+

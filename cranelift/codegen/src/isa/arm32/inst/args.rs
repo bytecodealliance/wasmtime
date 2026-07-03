@@ -4,7 +4,7 @@ use crate::isa::arm32::inst::*;
 use crate::machinst::{OperandVisitor, Reg};
 
 pub use crate::isa::arm32::lower::isle::generated_code::{
-    ALUOp, AMode, CmpOp, Cond, LoadKind, ShiftOp, StoreKind,
+    ALUOp, AMode, BitOp, CmpOp, Cond, ExtOp, LoadKind, ShiftOp, StoreKind,
 };
 
 /// A memory address resolved to a concrete base register and either an
@@ -135,6 +135,49 @@ impl CmpOp {
             CmpOp::Teq => "teq",
             CmpOp::Cmp => "cmp",
             CmpOp::Cmn => "cmn",
+        }
+    }
+}
+
+impl BitOp {
+    /// The full instruction word for `op rd, rm`, with `rd`/`rm` zeroed.
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            BitOp::Clz => 0x016f_0f10,
+            BitOp::Rev => 0x06bf_0f30,
+            BitOp::Rev16 => 0x06bf_0fb0,
+            BitOp::Rbit => 0x06ff_0f30,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            BitOp::Clz => "clz",
+            BitOp::Rev => "rev",
+            BitOp::Rev16 => "rev16",
+            BitOp::Rbit => "rbit",
+        }
+    }
+}
+
+impl ExtOp {
+    /// The full instruction word for `op rd, rm` (rotation 0), with `rd`/`rm`
+    /// zeroed.
+    pub(crate) fn template(self) -> u32 {
+        match self {
+            ExtOp::Sxtb => 0x06af_0070,
+            ExtOp::Sxth => 0x06bf_0070,
+            ExtOp::Uxtb => 0x06ef_0070,
+            ExtOp::Uxth => 0x06ff_0070,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            ExtOp::Sxtb => "sxtb",
+            ExtOp::Sxth => "sxth",
+            ExtOp::Uxtb => "uxtb",
+            ExtOp::Uxth => "uxth",
         }
     }
 }

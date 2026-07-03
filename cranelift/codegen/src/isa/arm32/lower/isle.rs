@@ -33,7 +33,6 @@ where
     B: LowerBackend,
 {
     pub lower_ctx: &'a mut Lower<'b, I>,
-    #[allow(dead_code, reason = "kept for symmetry with other backends")]
     pub backend: &'a B,
 }
 
@@ -99,6 +98,11 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
         };
         self.lower_ctx.emit(inst);
         rd.to_reg()
+    }
+
+    /// Whether the hardware integer-divide instructions may be used.
+    fn use_idiv(&mut self) -> bool {
+        self.backend.isa_flags.has_idiv()
     }
 
     fn cond_from_intcc(&mut self, cc: &IntCC) -> Cond {

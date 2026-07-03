@@ -93,11 +93,29 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             use_if_virtual(collector, rm);
             def_if_virtual(collector, rd);
         }
-        Inst::Mla { rd, rn, rm, ra } => {
+        Inst::Mla { rd, rn, rm, ra } | Inst::Mls { rd, rn, rm, ra } => {
             use_if_virtual(collector, rn);
             use_if_virtual(collector, rm);
             use_if_virtual(collector, ra);
             def_if_virtual(collector, rd);
+        }
+        Inst::SDiv { rd, rn, rm } | Inst::UDiv { rd, rn, rm } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::BitRR { rd, rm, .. } | Inst::ExtRR { rd, rm, .. } => {
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::CSel { rd, rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            // `rd` is written before the inputs are all consumed (the default
+            // move), so keep it distinct from the operands.
+            if rd.to_reg().to_real_reg().is_none() {
+                collector.reg_early_def(rd);
+            }
         }
         Inst::Umull {
             rd_lo,
@@ -110,11 +128,25 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             rd_hi,
             rn,
             rm,
+        }
+        | Inst::Umlal {
+            rd_lo,
+            rd_hi,
+            rn,
+            rm,
+        }
+        | Inst::Smlal {
+            rd_lo,
+            rd_hi,
+            rn,
+            rm,
         } => {
             use_if_virtual(collector, rn);
             use_if_virtual(collector, rm);
             // The two destination registers must be distinct from each other
-            // and from the inputs, so use early defs.
+            // and from the inputs, so use early defs. (For the accumulating
+            // `umlal`/`smlal` the destinations are also inputs; those are only
+            // constructed once i64 support wires them up.)
             if rd_lo.to_reg().to_real_reg().is_none() {
                 collector.reg_early_def(rd_lo);
             }
@@ -370,30 +402,69 @@ impl Inst {
                     r(*ra)
                 )
             }
+            Inst::Mls { rd, rn, rm, ra } => {
+                alloc::format!(
+                    "mls {}, {}, {}, {}",
+                    r(rd.to_reg()),
+                    r(*rn),
+                    r(*rm),
+                    r(*ra)
+                )
+            }
             Inst::Umull {
                 rd_lo,
                 rd_hi,
                 rn,
                 rm,
-            } => alloc::format!(
-                "umull {}, {}, {}, {}",
-                r(rd_lo.to_reg()),
-                r(rd_hi.to_reg()),
-                r(*rn),
-                r(*rm)
-            ),
-            Inst::Smull {
+            }
+            | Inst::Smull {
                 rd_lo,
                 rd_hi,
                 rn,
                 rm,
-            } => alloc::format!(
-                "smull {}, {}, {}, {}",
-                r(rd_lo.to_reg()),
-                r(rd_hi.to_reg()),
-                r(*rn),
-                r(*rm)
-            ),
+            }
+            | Inst::Umlal {
+                rd_lo,
+                rd_hi,
+                rn,
+                rm,
+            }
+            | Inst::Smlal {
+                rd_lo,
+                rd_hi,
+                rn,
+                rm,
+            } => {
+                let mnem = match self {
+                    Inst::Umull { .. } => "umull",
+                    Inst::Smull { .. } => "smull",
+                    Inst::Umlal { .. } => "umlal",
+                    _ => "smlal",
+                };
+                alloc::format!(
+                    "{mnem} {}, {}, {}, {}",
+                    r(rd_lo.to_reg()),
+                    r(rd_hi.to_reg()),
+                    r(*rn),
+                    r(*rm)
+                )
+            }
+            Inst::SDiv { rd, rn, rm } => {
+                alloc::format!("sdiv {}, {}, {}", r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::UDiv { rd, rn, rm } => {
+                alloc::format!("udiv {}, {}, {}", r(rd.to_reg()), r(*rn), r(*rm))
+            }
+            Inst::BitRR { op, rd, rm } => {
+                alloc::format!("{} {}, {}", op.name(), r(rd.to_reg()), r(*rm))
+            }
+            Inst::ExtRR { op, rd, rm } => {
+                alloc::format!("{} {}, {}", op.name(), r(rd.to_reg()), r(*rm))
+            }
+            Inst::CSel { cond, rd, rn, rm } => {
+                let rd = r(rd.to_reg());
+                alloc::format!("mov {rd}, {}; mov{} {rd}, {}", r(*rm), cond.name(), r(*rn))
+            }
             Inst::CmpRR { op, rn, rm } => {
                 alloc::format!("{} {}, {}", op.name(), r(*rn), r(*rm))
             }
