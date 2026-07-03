@@ -47,7 +47,7 @@ enum VmType {
 /// that alias regions can be deduplicated during inlining.
 ///
 /// The key encodes into a single `u32` with the following layout:
-/// `[ kind: 5 bits | data: 27 bits ]`
+/// `[ kind: 6 bits | data: 26 bits ]`
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum AliasRegionKey {
     /// An access of a field within a VM data structure of type `ty`.
@@ -115,10 +115,13 @@ enum AliasRegionKey {
 
     /// An access of a `ValRaw` inside a passive element segment.
     ElementSegment,
+
+    /// An access of the bytes inside a data segment.
+    DataSegment,
 }
 
 impl AliasRegionKey {
-    const KIND_BITS: u32 = 5;
+    const KIND_BITS: u32 = 6;
     const KIND_OFFSET: u32 = 32 - Self::KIND_BITS;
     const KIND_MASK: u32 = ((1 << Self::KIND_BITS) - 1) << Self::KIND_OFFSET;
 
@@ -135,38 +138,39 @@ impl AliasRegionKey {
         kind << Self::KIND_OFFSET
     }
 
-    const VM_CONTEXT_KIND: u32 = Self::new_kind(0b00000);
-    const VM_STORE_CONTEXT_KIND: u32 = Self::new_kind(0b00001);
-    const IMPORTED_MEMORY_KIND: u32 = Self::new_kind(0b00010);
-    const DEFINED_MEMORY_KIND: u32 = Self::new_kind(0b00011);
-    const IMPORTED_TABLE_KIND: u32 = Self::new_kind(0b00100);
-    const DEFINED_TABLE_KIND: u32 = Self::new_kind(0b00101);
-    const IMPORTED_GLOBAL_KIND: u32 = Self::new_kind(0b00110);
-    const DEFINED_GLOBAL_KIND: u32 = Self::new_kind(0b00111);
-    const GC_HEAP_KIND: u32 = Self::new_kind(0b01000);
-    const VM_MEMORY_DEFINITION_KIND: u32 = Self::new_kind(0b01001);
-    const VM_TABLE_DEFINITION_KIND: u32 = Self::new_kind(0b01010);
-    const VM_COMPONENT_CONTEXT_KIND: u32 = Self::new_kind(0b01011);
-    const VM_DRC_HEAP_DATA_KIND: u32 = Self::new_kind(0b01100);
-    const VM_COPYING_HEAP_DATA_KIND: u32 = Self::new_kind(0b01101);
-    const VM_NULL_HEAP_DATA_KIND: u32 = Self::new_kind(0b01110);
-    const VM_DEFERRED_THREAD_KIND: u32 = Self::new_kind(0b01111);
-    const VM_CONTREF_KIND: u32 = Self::new_kind(0b10000);
-    const CONTINUATION_STACK_MEMORY_KIND: u32 = Self::new_kind(0b10001);
-    const VM_FUNCTION_IMPORT_KIND: u32 = Self::new_kind(0b10010);
-    const VM_MEMORY_IMPORT_KIND: u32 = Self::new_kind(0b10011);
-    const VM_TABLE_IMPORT_KIND: u32 = Self::new_kind(0b10100);
-    const VM_TAG_IMPORT_KIND: u32 = Self::new_kind(0b10101);
-    const VM_GLOBAL_IMPORT_KIND: u32 = Self::new_kind(0b10110);
-    const STACK_KIND: u32 = Self::new_kind(0b10111);
-    const VM_FUNC_REF_KIND: u32 = Self::new_kind(0b11000);
-    const TYPE_IDS_ARRAY_KIND: u32 = Self::new_kind(0b11001);
-    const EPOCH_COUNTER_KIND: u32 = Self::new_kind(0b11010);
-    const BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b11011);
-    const COMPONENT_BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b11100);
-    const UNSAFE_INTRINSIC_MEMORY_KIND: u32 = Self::new_kind(0b11101);
-    const HOST_VAL_RAW_KIND: u32 = Self::new_kind(0b11110);
-    const ELEMENT_SEGMENT_KIND: u32 = Self::new_kind(0b11111);
+    const VM_CONTEXT_KIND: u32 = Self::new_kind(0b000000);
+    const VM_STORE_CONTEXT_KIND: u32 = Self::new_kind(0b000001);
+    const IMPORTED_MEMORY_KIND: u32 = Self::new_kind(0b000010);
+    const DEFINED_MEMORY_KIND: u32 = Self::new_kind(0b000011);
+    const IMPORTED_TABLE_KIND: u32 = Self::new_kind(0b000100);
+    const DEFINED_TABLE_KIND: u32 = Self::new_kind(0b000101);
+    const IMPORTED_GLOBAL_KIND: u32 = Self::new_kind(0b000110);
+    const DEFINED_GLOBAL_KIND: u32 = Self::new_kind(0b000111);
+    const GC_HEAP_KIND: u32 = Self::new_kind(0b001000);
+    const VM_MEMORY_DEFINITION_KIND: u32 = Self::new_kind(0b001001);
+    const VM_TABLE_DEFINITION_KIND: u32 = Self::new_kind(0b001010);
+    const VM_COMPONENT_CONTEXT_KIND: u32 = Self::new_kind(0b001011);
+    const VM_DRC_HEAP_DATA_KIND: u32 = Self::new_kind(0b001100);
+    const VM_COPYING_HEAP_DATA_KIND: u32 = Self::new_kind(0b001101);
+    const VM_NULL_HEAP_DATA_KIND: u32 = Self::new_kind(0b001110);
+    const VM_DEFERRED_THREAD_KIND: u32 = Self::new_kind(0b001111);
+    const VM_CONTREF_KIND: u32 = Self::new_kind(0b010000);
+    const CONTINUATION_STACK_MEMORY_KIND: u32 = Self::new_kind(0b010001);
+    const VM_FUNCTION_IMPORT_KIND: u32 = Self::new_kind(0b010010);
+    const VM_MEMORY_IMPORT_KIND: u32 = Self::new_kind(0b010011);
+    const VM_TABLE_IMPORT_KIND: u32 = Self::new_kind(0b010100);
+    const VM_TAG_IMPORT_KIND: u32 = Self::new_kind(0b010101);
+    const VM_GLOBAL_IMPORT_KIND: u32 = Self::new_kind(0b010110);
+    const STACK_KIND: u32 = Self::new_kind(0b010111);
+    const VM_FUNC_REF_KIND: u32 = Self::new_kind(0b011000);
+    const TYPE_IDS_ARRAY_KIND: u32 = Self::new_kind(0b011001);
+    const EPOCH_COUNTER_KIND: u32 = Self::new_kind(0b011010);
+    const BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b011011);
+    const COMPONENT_BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b011100);
+    const UNSAFE_INTRINSIC_MEMORY_KIND: u32 = Self::new_kind(0b011101);
+    const HOST_VAL_RAW_KIND: u32 = Self::new_kind(0b011110);
+    const ELEMENT_SEGMENT_KIND: u32 = Self::new_kind(0b011111);
+    const DATA_SEGMENT_KIND: u32 = Self::new_kind(0b100000);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -240,6 +244,7 @@ impl AliasRegionKey {
             }
             AliasRegionKey::UnsafeIntrinsicMemory => Self::UNSAFE_INTRINSIC_MEMORY_KIND,
             AliasRegionKey::ElementSegment => Self::ELEMENT_SEGMENT_KIND,
+            AliasRegionKey::DataSegment => Self::DATA_SEGMENT_KIND,
         }
     }
 }
@@ -264,6 +269,7 @@ impl fmt::Debug for AliasRegionKey {
             AliasRegionKey::Stack { slot } => write!(f, "Stack({slot:?})"),
             AliasRegionKey::UnsafeIntrinsicMemory => write!(f, "UnsafeIntrinsicMemory"),
             AliasRegionKey::ElementSegment => write!(f, "ElementSegment"),
+            AliasRegionKey::DataSegment => write!(f, "DataSegment"),
         }
     }
 }
@@ -2092,7 +2098,7 @@ where
     }
 }
 
-/// Passive element-related methods.
+/// Passive data and element segment-related methods.
 impl<Offsets> AliasRegions<Offsets>
 where
     Offsets: GetPtrSize,
@@ -2102,6 +2108,12 @@ where
     /// `table.init` and `array.{new,init}_elem`).
     pub fn element_segment_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
         self.region(func, AliasRegionKey::ElementSegment)
+    }
+
+    /// Get the alias region for the bytes of data segments (read by
+    /// `memory.init` and `array.{new,init}_data`).
+    pub fn data_segment_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        self.region(func, AliasRegionKey::DataSegment)
     }
 }
 

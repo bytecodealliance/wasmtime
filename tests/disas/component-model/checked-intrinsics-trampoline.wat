@@ -32,7 +32,7 @@
     )
 )
 ;; function u0:0(i64 vmctx, i64, i64, i64, i64) -> i32 tail {
-;;     region0 = 3892314112 "UnsafeIntrinsicMemory"
+;;     region0 = 1946157056 "UnsafeIntrinsicMemory"
 ;;
 ;; block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64):
 ;;     v5 = iconst.i64 4
@@ -48,7 +48,7 @@
 ;; }
 ;;
 ;; function u0:0(i64 vmctx, i64, i64, i64, i64, i32) tail {
-;;     region0 = 3892314112 "UnsafeIntrinsicMemory"
+;;     region0 = 1946157056 "UnsafeIntrinsicMemory"
 ;;
 ;; block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i32):
 ;;     v6 = iconst.i64 4

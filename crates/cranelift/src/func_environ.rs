@@ -414,13 +414,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         &mut self,
         func: &mut Function,
         entity: CheckedEntity,
-    ) -> Option<ir::AliasRegion> {
+    ) -> ir::AliasRegion {
         match entity {
-            CheckedEntity::Memory(index) => Some(self.memory_alias_region(func, index)),
-            CheckedEntity::Table { table, .. } => Some(self.table_alias_region(func, table)),
-            CheckedEntity::Array { .. } => Some(self.alias_regions.gc_heap_region(func)),
-            CheckedEntity::Elem(_) => Some(self.alias_regions.element_segment_region(func)),
-            CheckedEntity::Data { .. } | CheckedEntity::RuntimeData(_) => None,
+            CheckedEntity::Memory(index) => self.memory_alias_region(func, index),
+            CheckedEntity::Table { table, .. } => self.table_alias_region(func, table),
+            CheckedEntity::Array { .. } => self.alias_regions.gc_heap_region(func),
+            CheckedEntity::Elem(_) => self.alias_regions.element_segment_region(func),
+            CheckedEntity::Data { .. } | CheckedEntity::RuntimeData(_) => {
+                self.alias_regions.data_segment_region(func)
+            }
         }
     }
 
@@ -4723,8 +4725,8 @@ impl FuncEnvironment<'_> {
         dst_addr: ir::Value,
         src_addr: ir::Value,
         bytes: u64,
-        src_region: Option<ir::AliasRegion>,
-        dst_region: Option<ir::AliasRegion>,
+        src_region: ir::AliasRegion,
+        dst_region: ir::AliasRegion,
     ) {
         // `trusted()` (notrap + aligned) is sound: the range is already
         // bounds-checked, and each load feeds only its paired store, so the
@@ -4740,10 +4742,10 @@ impl FuncEnvironment<'_> {
         // region-tagged store to the same address.
         let load_flags = ir::MemFlagsData::trusted()
             .with_endianness(Endianness::Little)
-            .with_alias_region(src_region);
+            .with_alias_region(Some(src_region));
         let store_flags = ir::MemFlagsData::trusted()
             .with_endianness(Endianness::Little)
-            .with_alias_region(dst_region);
+            .with_alias_region(Some(dst_region));
         const WIDTHS: &[(u64, ir::Type)] = &[
             (16, ir::types::I8X16),
             (8, ir::types::I64),

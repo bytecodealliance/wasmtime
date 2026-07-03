@@ -13,13 +13,13 @@
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 134217728 "VMStoreContext+0x0"
-;;     region3 = 134217760 "VMStoreContext+0x20"
-;;     region4 = 134217768 "VMStoreContext+0x28"
-;;     region5 = 1073741824 "GcHeap"
-;;     region6 = 3087007744 "Stack(ss0)"
-;;     region7 = 3087007745 "Stack(ss1)"
+;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region2 = 67108864 "VMStoreContext+0x0"
+;;     region3 = 67108896 "VMStoreContext+0x20"
+;;     region4 = 67108904 "VMStoreContext+0x28"
+;;     region5 = 536870912 "GcHeap"
+;;     region6 = 1543503872 "Stack(ss0)"
+;;     region7 = 1543503873 "Stack(ss1)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

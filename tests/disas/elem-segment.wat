@@ -12,10 +12,10 @@
 )
 ;; function u2415919104:1(i64 vmctx, i64, i64, i64) -> i8 system_v {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 134217800 "VMStoreContext+0x48"
-;;     region2 = 134217792 "VMStoreContext+0x40"
-;;     region3 = 134217808 "VMStoreContext+0x50"
-;;     region4 = 134217864 "VMStoreContext+0x88"
+;;     region1 = 67108936 "VMStoreContext+0x48"
+;;     region2 = 67108928 "VMStoreContext+0x40"
+;;     region3 = 67108944 "VMStoreContext+0x50"
+;;     region4 = 67109000 "VMStoreContext+0x88"
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u2415919104:0 sig0
 ;;
@@ -44,7 +44,7 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
-;;     region0 = 4160749568 "ElementSegment"
+;;     region0 = 2080374784 "ElementSegment"
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     sig1 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u805306368:4 sig0

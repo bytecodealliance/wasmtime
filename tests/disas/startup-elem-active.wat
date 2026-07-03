@@ -14,10 +14,10 @@
 )
 ;; function u2415919104:1(i64 vmctx, i64, i64, i64) -> i8 system_v {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 134217800 "VMStoreContext+0x48"
-;;     region2 = 134217792 "VMStoreContext+0x40"
-;;     region3 = 134217808 "VMStoreContext+0x50"
-;;     region4 = 134217864 "VMStoreContext+0x88"
+;;     region1 = 67108936 "VMStoreContext+0x48"
+;;     region2 = 67108928 "VMStoreContext+0x40"
+;;     region3 = 67108944 "VMStoreContext+0x50"
+;;     region4 = 67109000 "VMStoreContext+0x88"
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u2415919104:0 sig0
 ;;
@@ -46,9 +46,9 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
-;;     region0 = 1342177280 "VMTableDefinition+0x0"
-;;     region1 = 1342177288 "VMTableDefinition+0x8"
-;;     region2 = 671088640 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region0 = 671088640 "VMTableDefinition+0x0"
+;;     region1 = 671088648 "VMTableDefinition+0x8"
+;;     region2 = 335544320 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;
 ;; block0(v0: i64, v1: i64):
 ;;     v4 = load.i64 notrap aligned region1 v0+56

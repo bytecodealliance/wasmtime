@@ -21,8 +21,8 @@
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 28, key = 0
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 3087007744 "Stack(ss0)"
+;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region2 = 1543503872 "Stack(ss0)"
 ;;     sig0 = (i64 vmctx, i8) tail
 ;;     sig1 = (i64 vmctx) tail
 ;;     sig2 = (i64) preserve_all
