@@ -431,6 +431,49 @@ impl<T> DerefMut for StoreInner<T> {
     }
 }
 
+/// A cheap multiplicative hasher for the store-local GC type-metadata caches,
+/// whose keys are `VMSharedTypeIndex`es (or pairs thereof, packed into a
+/// `u64`). These caches are on hot paths such as `ref.cast` and GC-object
+/// allocation, so we want to avoid the default hasher's per-lookup overhead.
+/// Collision-based DoS is not a concern for engine-assigned type indices.
+#[cfg(feature = "gc")]
+#[derive(Default)]
+struct GcTypeCacheHasher(u64);
+
+#[cfg(feature = "gc")]
+impl core::hash::BuildHasher for GcTypeCacheHasher {
+    type Hasher = Self;
+
+    #[inline]
+    fn build_hasher(&self) -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(feature = "gc")]
+impl core::hash::Hasher for GcTypeCacheHasher {
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, _bytes: &[u8]) {
+        unreachable!("only used with integer keys")
+    }
+
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.write_u64(i.into());
+    }
+
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        // Fibonacci hashing: cheap and mixes the (small integer) type indices
+        // into the high bits that hashbrown uses for its control bytes.
+        self.0 = i.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    }
+}
+
 /// Monomorphic storage for a `Store<T>`.
 ///
 /// This structure contains the bulk of the metadata about a `Store`. This is
@@ -483,6 +526,16 @@ pub struct StoreOpaque {
     // Types for which the embedder has created an allocator for.
     #[cfg(feature = "gc")]
     gc_host_alloc_types: crate::hash_set::HashSet<crate::type_registry::RegisteredType>,
+    /// A store-local cache of engine-level subtype checks.
+    ///
+    /// Dynamic subtype checks (e.g. for `ref.cast` instructions) consult the
+    /// engine's type registry, which is protected by a read-write lock. Even
+    /// read acquisitions of that lock modify shared cache lines, which
+    /// serializes concurrent stores running on different threads. Caching
+    /// results store-locally keeps the hot path free of shared-memory
+    /// traffic.
+    #[cfg(feature = "gc")]
+    subtype_check_cache: crate::hash_map::HashMap<u64, bool, GcTypeCacheHasher>,
     /// Pending exception, if any. This is also a GC root, because it
     /// needs to be rooted somewhere between the time that a pending
     /// exception is set and the time that the handling code takes the
@@ -758,6 +811,8 @@ impl<T> Store<T> {
             gc_roots_list: GcRootsList::default(),
             #[cfg(feature = "gc")]
             gc_host_alloc_types: Default::default(),
+            #[cfg(feature = "gc")]
+            subtype_check_cache: Default::default(),
             #[cfg(feature = "gc")]
             pending_exception: None,
             modules: ModuleRegistry::default(),
@@ -1960,6 +2015,29 @@ impl StoreOpaque {
     #[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
     pub(crate) fn try_gc_store_mut(&mut self) -> Option<&mut GcStore> {
         self.gc_store.as_mut()
+    }
+
+    /// Is type `sub` a subtype of `sup`?
+    ///
+    /// Equivalent to `self.engine().signatures().is_subtype(sub, sup)` but
+    /// caches results store-locally to avoid contention on the engine's type
+    /// registry lock. See the documentation of the `subtype_check_cache` field
+    /// for details.
+    #[cfg(feature = "gc")]
+    pub(crate) fn is_subtype_cached(
+        &mut self,
+        sub: wasmtime_environ::VMSharedTypeIndex,
+        sup: wasmtime_environ::VMSharedTypeIndex,
+    ) -> bool {
+        if sub == sup {
+            return true;
+        }
+        let key = (u64::from(sub.as_u32()) << 32) | u64::from(sup.as_u32());
+        let engine = &self.engine;
+        *self
+            .subtype_check_cache
+            .entry(key)
+            .or_insert_with(|| engine.signatures().is_subtype(sub, sup))
     }
 
     #[inline]
