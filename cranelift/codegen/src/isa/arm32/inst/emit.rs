@@ -426,6 +426,42 @@ fn enc_vmov_gpr_d(vm: u32, rt_lo: u32, rt_hi: u32) -> u32 {
     COND_AL | 0x0c40_0b10 | (rt_hi << 16) | (rt_lo << 12) | vm
 }
 
+/// `vmov rt, sn` — move a single register into a GPR.
+fn enc_vmov_s_to_gpr(rt: u32, vn: u32) -> u32 {
+    COND_AL | 0x0e10_0a10 | (vn << 16) | (rt << 12)
+}
+
+/// `vmov rt_lo, rt_hi, dm` — move a double register into two GPRs.
+fn enc_vmov_d_to_gpr(rt_lo: u32, rt_hi: u32, vm: u32) -> u32 {
+    COND_AL | 0x0c50_0b10 | (rt_hi << 16) | (rt_lo << 12) | vm
+}
+
+/// The `vmrs APSR_nzcv, FPSCR` instruction (moves the VFP flags to the CPSR).
+const VMRS_APSR_NZCV: u32 = 0xeef1_fa10;
+
+/// `vcmp.f32/f64 sn/dn, sm/dm`.
+fn enc_vcmp(size: FpuSize, n: u32, m: u32) -> u32 {
+    (0xeeb4_0a40 | size.size_bit()) | (n << 12) | m
+}
+
+/// `vcvt.f64.f32`/`vcvt.f32.f64` (`to_f64` selects promote vs demote).
+fn enc_vcvt_ff(to_f64: bool, d: u32, m: u32) -> u32 {
+    let base = if to_f64 { 0xeeb7_0ac0 } else { 0xeeb7_0bc0 };
+    base | (d << 12) | m
+}
+
+/// `vcvt.s32/u32.f32/f64` — float to integer, round toward zero.
+fn enc_vcvt_to_int(signed: bool, size: FpuSize, d: u32, m: u32) -> u32 {
+    let sign = if signed { 0x1_0000 } else { 0 };
+    (0xeebc_0ac0 | sign | size.size_bit()) | (d << 12) | m
+}
+
+/// `vcvt.f32/f64.s32/u32` — integer (in the S reg `m`) to float.
+fn enc_vcvt_from_int(signed: bool, size: FpuSize, d: u32, m: u32) -> u32 {
+    let sign = if signed { 0x80 } else { 0 };
+    (0xeeb8_0a40 | sign | size.size_bit()) | (d << 12) | m
+}
+
 fn put_u32(sink: &mut MachBuffer<Inst>, word: u32) {
     for b in word.to_le_bytes() {
         sink.put1(b);
@@ -778,6 +814,48 @@ impl MachInstEmit for Inst {
                 let rt_lo = machreg_to_gpr(*rt_lo);
                 let rt_hi = machreg_to_gpr(*rt_hi);
                 put_u32(sink, enc_vmov_gpr_d(rd, rt_lo, rt_hi));
+            }
+            Inst::MovFromFpu32 { rt, rm } => {
+                let rt = machreg_to_gpr(rt.to_reg());
+                let rm = machreg_to_vfp(*rm);
+                put_u32(sink, enc_vmov_s_to_gpr(rt, rm));
+            }
+            Inst::MovFromFpu64 { rt_lo, rt_hi, rm } => {
+                let rt_lo = machreg_to_gpr(rt_lo.to_reg());
+                let rt_hi = machreg_to_gpr(rt_hi.to_reg());
+                let rm = machreg_to_vfp(*rm);
+                put_u32(sink, enc_vmov_d_to_gpr(rt_lo, rt_hi, rm));
+            }
+            Inst::VcmpMrs { size, rn, rm } => {
+                let rn = machreg_to_vfp(*rn);
+                let rm = machreg_to_vfp(*rm);
+                put_u32(sink, enc_vcmp(*size, rn, rm));
+                put_u32(sink, VMRS_APSR_NZCV);
+            }
+            Inst::VcvtFF { to_f64, rd, rm } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let rm = machreg_to_vfp(*rm);
+                put_u32(sink, enc_vcvt_ff(*to_f64, rd, rm));
+            }
+            Inst::VcvtToInt {
+                signed,
+                size,
+                rd,
+                rm,
+            } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let rm = machreg_to_vfp(*rm);
+                put_u32(sink, enc_vcvt_to_int(*signed, *size, rd, rm));
+            }
+            Inst::VcvtFromInt {
+                signed,
+                size,
+                rd,
+                rm,
+            } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let rm = machreg_to_vfp(*rm);
+                put_u32(sink, enc_vcvt_from_int(*signed, *size, rd, rm));
             }
             Inst::CmpRR { op, rn, rm } => {
                 let rn = machreg_to_gpr(*rn);

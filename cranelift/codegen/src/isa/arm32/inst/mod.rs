@@ -174,6 +174,25 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             use_if_virtual(collector, rt_hi);
             def_if_virtual(collector, rd);
         }
+        Inst::MovFromFpu32 { rt, rm } => {
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rt);
+        }
+        Inst::MovFromFpu64 { rt_lo, rt_hi, rm } => {
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rt_lo);
+            def_if_virtual(collector, rt_hi);
+        }
+        Inst::VcmpMrs { rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+        }
+        Inst::VcvtFF { rd, rm, .. }
+        | Inst::VcvtToInt { rd, rm, .. }
+        | Inst::VcvtFromInt { rd, rm, .. } => {
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
         Inst::LdmStm { rn, .. } => use_if_virtual(collector, rn),
         Inst::LoadEx { rt, rn, .. } | Inst::LoadAcq { rt, rn } => {
             use_if_virtual(collector, rn);
@@ -725,6 +744,47 @@ impl Inst {
             }
             Inst::MovToFpu64 { rd, rt_lo, rt_hi } => {
                 alloc::format!("vmov {}, {}, {}", r(rd.to_reg()), r(*rt_lo), r(*rt_hi))
+            }
+            Inst::MovFromFpu32 { rt, rm } => {
+                alloc::format!("vmov {}, {}", r(rt.to_reg()), r(*rm))
+            }
+            Inst::MovFromFpu64 { rt_lo, rt_hi, rm } => {
+                alloc::format!("vmov {}, {}, {}", r(rt_lo.to_reg()), r(rt_hi.to_reg()), r(*rm))
+            }
+            Inst::VcmpMrs { size, rn, rm } => {
+                alloc::format!("vcmp.{} {}, {}; vmrs", size.suffix(), r(*rn), r(*rm))
+            }
+            Inst::VcvtFF { to_f64, rd, rm } => {
+                let (dst, src) = if *to_f64 { ("f64", "f32") } else { ("f32", "f64") };
+                alloc::format!("vcvt.{dst}.{src} {}, {}", r(rd.to_reg()), r(*rm))
+            }
+            Inst::VcvtToInt {
+                signed,
+                size,
+                rd,
+                rm,
+            } => {
+                let int = if *signed { "s32" } else { "u32" };
+                alloc::format!(
+                    "vcvt.{int}.{} {}, {}",
+                    size.suffix(),
+                    r(rd.to_reg()),
+                    r(*rm)
+                )
+            }
+            Inst::VcvtFromInt {
+                signed,
+                size,
+                rd,
+                rm,
+            } => {
+                let int = if *signed { "s32" } else { "u32" };
+                alloc::format!(
+                    "vcvt.{}.{int} {}, {}",
+                    size.suffix(),
+                    r(rd.to_reg()),
+                    r(*rm)
+                )
             }
             Inst::CmpRR { op, rn, rm } => {
                 alloc::format!("{} {}, {}", op.name(), r(*rn), r(*rm))

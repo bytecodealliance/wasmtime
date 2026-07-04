@@ -295,6 +295,30 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
         }
     }
 
+    /// Map a `FloatCC` to the ARM condition testing the flags left by a `vcmp`
+    /// (`vmrs`). The `vcmp` sets N/Z/C/V per an IEEE ordered comparison, with an
+    /// unordered result giving C=1, V=1.
+    fn cond_from_floatcc(&mut self, cc: &FloatCC) -> Cond {
+        match cc {
+            FloatCC::Equal => Cond::Eq,
+            FloatCC::NotEqual => Cond::Ne,
+            FloatCC::LessThan => Cond::Mi,
+            FloatCC::LessThanOrEqual => Cond::Ls,
+            FloatCC::GreaterThan => Cond::Gt,
+            FloatCC::GreaterThanOrEqual => Cond::Ge,
+            FloatCC::Ordered => Cond::Vc,
+            FloatCC::Unordered => Cond::Vs,
+            FloatCC::UnorderedOrLessThan => Cond::Lt,
+            FloatCC::UnorderedOrLessThanOrEqual => Cond::Le,
+            FloatCC::UnorderedOrGreaterThan => Cond::Hi,
+            FloatCC::UnorderedOrGreaterThanOrEqual => Cond::Hs,
+            // These need a two-condition sequence and aren't handled yet.
+            FloatCC::OrderedNotEqual | FloatCC::UnorderedOrEqual => {
+                unimplemented!("arm32: fcmp condition {cc:?} not yet implemented")
+            }
+        }
+    }
+
     fn cond_from_intcc(&mut self, cc: &IntCC) -> Cond {
         match cc {
             IntCC::Equal => Cond::Eq,

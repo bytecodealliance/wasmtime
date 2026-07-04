@@ -321,6 +321,21 @@
     (MovToFpu32 (rd WritableReg) (rt Reg))
     ;; Move two GPRs into a D register (`vmov d, rlo, rhi`) for f64 bits.
     (MovToFpu64 (rd WritableReg) (rt_lo Reg) (rt_hi Reg))
+    ;; Move an S register into a GPR (`vmov r, s`).
+    (MovFromFpu32 (rt WritableReg) (rm Reg))
+    ;; Move a D register into two GPRs (`vmov rlo, rhi, d`).
+    (MovFromFpu64 (rt_lo WritableReg) (rt_hi WritableReg) (rm Reg))
+
+    ;; Compare two float registers and move the VFP flags into the CPSR
+    ;; (`vcmp` + `vmrs APSR_nzcv, FPSCR`).
+    (VcmpMrs (size FpuSize) (rn Reg) (rm Reg))
+    ;; Convert between f32 and f64 (`to_f64` selects fpromote vs fdemote).
+    (VcvtFF (to_f64 bool) (rd WritableReg) (rm Reg))
+    ;; Convert a float to a 32-bit integer (round toward zero, saturating).
+    ;; `rd` receives the integer in an S register.
+    (VcvtToInt (signed bool) (size FpuSize) (rd WritableReg) (rm Reg))
+    ;; Convert a 32-bit integer (held in the S register `rm`) to a float.
+    (VcvtFromInt (signed bool) (size FpuSize) (rd WritableReg) (rm Reg))
 
     ;; `cmp/cmn/tst/teq rn, rm`.
     (CmpRR (op CmpOp) (rn Reg) (rm Reg))
@@ -549,6 +564,66 @@
 (decl fpu_store (FpuSize Reg AMode) InstOutput)
 (rule (fpu_store size val mem)
   (side_effect (SideEffectNoResult.Inst (MInst.FpuStore size val mem))))
+
+;; Map a Cranelift `FloatCC` to the ARM condition testing the VFP flags.
+(decl cond_from_floatcc (FloatCC) Cond)
+(extern constructor cond_from_floatcc cond_from_floatcc)
+
+;; `vcmp` + `vmrs` as a side effect (leaves the comparison in the CPSR).
+(decl vcmp (FpuSize Reg Reg) SideEffectNoResult)
+(rule (vcmp size rn rm)
+  (SideEffectNoResult.Inst (MInst.VcmpMrs size rn rm)))
+
+;; f32<->f64 conversion.
+(decl vcvt_ff (bool Reg) Reg)
+(rule (vcvt_ff to_f64 rm)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.VcvtFF to_f64 rd rm))))
+    rd))
+
+;; int (in a GPR) -> float.
+(decl vcvt_from_int (bool FpuSize Reg) Reg)
+(rule (vcvt_from_int signed size gpr)
+  (let ((s WritableReg (temp_writable_reg $F32))
+        (_ Unit (emit (MInst.MovToFpu32 s gpr)))
+        (rd WritableReg (temp_writable_reg $F64))
+        (_2 Unit (emit (MInst.VcvtFromInt signed size rd (writable_reg_to_reg s)))))
+    rd))
+
+;; float -> i32 (in a GPR), round toward zero, saturating.
+(decl vcvt_to_int (bool FpuSize Reg) Reg)
+(rule (vcvt_to_int signed size f)
+  (let ((s WritableReg (temp_writable_reg $F32))
+        (_ Unit (emit (MInst.VcvtToInt signed size s f)))
+        (rd WritableReg (temp_writable_reg $I32))
+        (_2 Unit (emit (MInst.MovFromFpu32 rd (writable_reg_to_reg s)))))
+    rd))
+
+;; bitcast helpers (`vmov` between the GPR and VFP files).
+(decl mov_from_fpu32 (Reg) Reg)
+(rule (mov_from_fpu32 rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.MovFromFpu32 rd rm))))
+    rd))
+
+(decl mov_to_fpu32 (Reg) Reg)
+(rule (mov_to_fpu32 rt)
+  (let ((rd WritableReg (temp_writable_reg $F32))
+        (_ Unit (emit (MInst.MovToFpu32 rd rt))))
+    rd))
+
+(decl mov_from_fpu64 (Reg) ValueRegs)
+(rule (mov_from_fpu64 rm)
+  (let ((lo WritableReg (temp_writable_reg $I32))
+        (hi WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.MovFromFpu64 lo hi rm))))
+    (value_regs (writable_reg_to_reg lo) (writable_reg_to_reg hi))))
+
+(decl mov_to_fpu64 (ValueRegs) Reg)
+(rule (mov_to_fpu64 regs)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.MovToFpu64 rd (vr_lo regs) (vr_hi regs)))))
+    rd))
 
 ;;;; Shifts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

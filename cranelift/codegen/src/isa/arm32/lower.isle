@@ -178,6 +178,50 @@
 (rule 1 (lower (store flags val @ (value_type $F64) addr offset))
   (fpu_store (FpuSize.F64) (put_in_reg val) (amode addr offset)))
 
+;; Float comparisons.
+(rule (lower (fcmp _ cc a @ (value_type $F32) b))
+  (let ((_ Unit (emit_side_effect (vcmp (FpuSize.F32) (put_in_reg a) (put_in_reg b)))))
+    (csetv (cond_from_floatcc cc))))
+(rule (lower (fcmp _ cc a @ (value_type $F64) b))
+  (let ((_ Unit (emit_side_effect (vcmp (FpuSize.F64) (put_in_reg a) (put_in_reg b)))))
+    (csetv (cond_from_floatcc cc))))
+
+;; f32 <-> f64.
+(rule (lower (fpromote $F64 x))
+  (vcvt_ff true (put_in_reg x)))
+(rule (lower (fdemote $F32 x))
+  (vcvt_ff false (put_in_reg x)))
+
+;; int -> float.
+(rule (lower (fcvt_from_sint $F32 x @ (value_type $I32)))
+  (vcvt_from_int true (FpuSize.F32) (put_in_reg x)))
+(rule (lower (fcvt_from_sint $F64 x @ (value_type $I32)))
+  (vcvt_from_int true (FpuSize.F64) (put_in_reg x)))
+(rule (lower (fcvt_from_uint $F32 x @ (value_type $I32)))
+  (vcvt_from_int false (FpuSize.F32) (put_in_reg x)))
+(rule (lower (fcvt_from_uint $F64 x @ (value_type $I32)))
+  (vcvt_from_int false (FpuSize.F64) (put_in_reg x)))
+
+;; float -> i32 (saturating).
+(rule (lower (fcvt_to_sint_sat $I32 x @ (value_type $F32)))
+  (vcvt_to_int true (FpuSize.F32) (put_in_reg x)))
+(rule (lower (fcvt_to_sint_sat $I32 x @ (value_type $F64)))
+  (vcvt_to_int true (FpuSize.F64) (put_in_reg x)))
+(rule (lower (fcvt_to_uint_sat $I32 x @ (value_type $F32)))
+  (vcvt_to_int false (FpuSize.F32) (put_in_reg x)))
+(rule (lower (fcvt_to_uint_sat $I32 x @ (value_type $F64)))
+  (vcvt_to_int false (FpuSize.F64) (put_in_reg x)))
+
+;; Bitcasts between the integer and float register files.
+(rule (lower (bitcast $I32 _ x @ (value_type $F32)))
+  (mov_from_fpu32 (put_in_reg x)))
+(rule (lower (bitcast $F32 _ x @ (value_type $I32)))
+  (mov_to_fpu32 (put_in_reg x)))
+(rule (lower (bitcast $I64 _ x @ (value_type $F64)))
+  (mov_from_fpu64 (put_in_reg x)))
+(rule (lower (bitcast $F64 _ x @ (value_type $I64)))
+  (mov_to_fpu64 (put_in_regs x)))
+
 ;;;; Divides (only when hardware `sdiv`/`udiv` is available) ;;;;;;;;;;;;;;;;;;;
 ;; NOTE: trap-on-zero / INT_MIN overflow checks are not yet emitted.
 
@@ -330,6 +374,18 @@
 (rule 2 (lower_branch (brif (icmp _ cc a @ (value_type $I64) b) _ _) (two_targets taken not_taken))
   (emit_side_effect
     (cond_br (lower_icmp_i64 cc (put_in_regs a) (put_in_regs b)) taken not_taken)))
+
+;; Fuse an `fcmp` feeding a `brif`.
+(rule 1 (lower_branch (brif (fcmp _ cc a @ (value_type $F32) b) _ _) (two_targets taken not_taken))
+  (emit_side_effect
+    (side_effect_concat
+      (vcmp (FpuSize.F32) (put_in_reg a) (put_in_reg b))
+      (cond_br (cond_from_floatcc cc) taken not_taken))))
+(rule 1 (lower_branch (brif (fcmp _ cc a @ (value_type $F64) b) _ _) (two_targets taken not_taken))
+  (emit_side_effect
+    (side_effect_concat
+      (vcmp (FpuSize.F64) (put_in_reg a) (put_in_reg b))
+      (cond_br (cond_from_floatcc cc) taken not_taken))))
 
 ;; Generic `brif`: branch when the value is non-zero.
 (rule (lower_branch (brif v _ _) (two_targets taken not_taken))
