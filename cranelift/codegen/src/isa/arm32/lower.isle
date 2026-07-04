@@ -212,6 +212,27 @@
 (rule (lower (fcvt_to_uint_sat $I32 x @ (value_type $F64)))
   (vcvt_to_int false (FpuSize.F64) (put_in_reg x)))
 
+;; fmin/fmax (WebAssembly NaN-propagating).
+(rule (lower (fmin $F32 x y))
+  (gen_fminmax false (FpuSize.F32) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fmin $F64 x y))
+  (gen_fminmax false (FpuSize.F64) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fmax $F32 x y))
+  (gen_fminmax true (FpuSize.F32) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fmax $F64 x y))
+  (gen_fminmax true (FpuSize.F64) (put_in_reg x) (put_in_reg y)))
+
+;; fcopysign.
+(rule (lower (fcopysign $F32 x y))
+  (gen_copysign_f32 (put_in_reg x) (put_in_reg y)))
+(rule (lower (fcopysign $F64 x y))
+  (gen_copysign_f64 (put_in_reg x) (put_in_reg y)))
+
+;; Float-valued select (priority 2 so it wins over the fits_in_32 rule for f32).
+(rule 2 (lower (select (ty_scalar_float _) c a b))
+  (let ((_ Unit (emit_side_effect (cmp_imm (put_in_reg c) 0))))
+    (fpu_csel (Cond.Ne) (put_in_reg a) (put_in_reg b))))
+
 ;; Bitcasts between the integer and float register files.
 (rule (lower (bitcast $I32 _ x @ (value_type $F32)))
   (mov_from_fpu32 (put_in_reg x)))

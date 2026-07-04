@@ -46,6 +46,7 @@ pub const fn pdreg(enc: u8) -> PReg {
 
 /// Get a writable reference to `D<enc>`.
 #[inline]
+#[allow(dead_code, reason = "part of the register API, used as the backend grows")]
 pub fn writable_dreg(enc: u8) -> Writable<Reg> {
     Writable::from_reg(dreg(enc))
 }

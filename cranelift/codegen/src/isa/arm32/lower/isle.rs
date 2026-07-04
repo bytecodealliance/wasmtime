@@ -58,6 +58,50 @@ impl<'a, 'b> Arm32IsleContext<'a, 'b, MInst, Arm32Backend> {
         self.alu_raw(ALUOp::Orr, false, a, b)
     }
 
+    /// Emit `op rd, rn, #imm12` (immediate already rotated-encoded).
+    fn alu_imm_raw(&mut self, op: ALUOp, rn: Reg, imm12: u32) -> Reg {
+        let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::AluRRImm { op, rd, rn, imm12 });
+        rd.to_reg()
+    }
+
+    /// `vmov r, s` — move an S register's bits into a GPR.
+    fn mov_from_s_raw(&mut self, s: Reg) -> Reg {
+        let rt = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::MovFromFpu32 { rt, rm: s });
+        rt.to_reg()
+    }
+
+    /// `vmov s, r` — move a GPR's bits into an S register.
+    fn mov_to_s_raw(&mut self, gpr: Reg) -> Reg {
+        let rd = self.lower_ctx.alloc_tmp(F32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::MovToFpu32 { rd, rt: gpr });
+        rd.to_reg()
+    }
+
+    /// `vmov rlo, rhi, d` — move a D register's bits into two GPRs.
+    fn mov_from_d_raw(&mut self, d: Reg) -> (Reg, Reg) {
+        let lo = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        let hi = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::MovFromFpu64 {
+            rt_lo: lo,
+            rt_hi: hi,
+            rm: d,
+        });
+        (lo.to_reg(), hi.to_reg())
+    }
+
+    /// `vmov d, rlo, rhi` — move two GPRs into a D register.
+    fn mov_to_d_raw(&mut self, lo: Reg, hi: Reg) -> Reg {
+        let rd = self.lower_ctx.alloc_tmp(F64).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::MovToFpu64 {
+            rd,
+            rt_lo: lo,
+            rt_hi: hi,
+        });
+        rd.to_reg()
+    }
+
     /// Emit `op{s} rd, rn, rm` into a fresh register (which is returned).
     fn alu_raw(&mut self, op: ALUOp, set_flags: bool, rn: Reg, rm: Reg) -> Reg {
         let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
@@ -317,6 +361,29 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
                 unimplemented!("arm32: fcmp condition {cc:?} not yet implemented")
             }
         }
+    }
+
+    /// `fcopysign` for f32: clear the sign bit of `a` and OR in `b`'s sign,
+    /// working on the raw bits in GPRs.
+    fn gen_copysign_f32(&mut self, a: Reg, b: Reg) -> Reg {
+        let sign_mask = encode_rotated_imm(0x8000_0000).unwrap();
+        let a_bits = self.mov_from_s_raw(a);
+        let b_bits = self.mov_from_s_raw(b);
+        let sign = self.alu_imm_raw(ALUOp::And, b_bits, sign_mask);
+        let cleared = self.alu_imm_raw(ALUOp::Bic, a_bits, sign_mask);
+        let res = self.alu_raw(ALUOp::Orr, false, cleared, sign);
+        self.mov_to_s_raw(res)
+    }
+
+    /// `fcopysign` for f64: the sign bit lives in the high word.
+    fn gen_copysign_f64(&mut self, a: Reg, b: Reg) -> Reg {
+        let sign_mask = encode_rotated_imm(0x8000_0000).unwrap();
+        let (a_lo, a_hi) = self.mov_from_d_raw(a);
+        let (_b_lo, b_hi) = self.mov_from_d_raw(b);
+        let sign = self.alu_imm_raw(ALUOp::And, b_hi, sign_mask);
+        let cleared = self.alu_imm_raw(ALUOp::Bic, a_hi, sign_mask);
+        let res_hi = self.alu_raw(ALUOp::Orr, false, cleared, sign);
+        self.mov_to_d_raw(a_lo, res_hi)
     }
 
     fn cond_from_intcc(&mut self, cc: &IntCC) -> Cond {

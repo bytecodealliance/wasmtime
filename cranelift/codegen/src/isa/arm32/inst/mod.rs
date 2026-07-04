@@ -193,6 +193,18 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             use_if_virtual(collector, rm);
             def_if_virtual(collector, rd);
         }
+        Inst::FpuMinMax { rd, rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::FpuCSel { rd, rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            if rd.to_reg().to_real_reg().is_none() {
+                collector.reg_early_def(rd);
+            }
+        }
         Inst::LdmStm { rn, .. } => use_if_virtual(collector, rn),
         Inst::LoadEx { rt, rn, .. } | Inst::LoadAcq { rt, rn } => {
             use_if_virtual(collector, rn);
@@ -786,6 +798,24 @@ impl Inst {
                     r(*rm)
                 )
             }
+            Inst::FpuCSel { cond, rd, rn, rm } => {
+                let rd = r(rd.to_reg());
+                alloc::format!("vmov {rd}, {}; vmov{} {rd}, {}", r(*rm), cond.name(), r(*rn))
+            }
+            Inst::FpuMinMax {
+                max,
+                size,
+                rd,
+                rn,
+                rm,
+            } => alloc::format!(
+                "{}.{} {}, {}, {}",
+                if *max { "vmaxnm" } else { "vminnm" },
+                size.suffix(),
+                r(rd.to_reg()),
+                r(*rn),
+                r(*rm)
+            ),
             Inst::CmpRR { op, rn, rm } => {
                 alloc::format!("{} {}, {}", op.name(), r(*rn), r(*rm))
             }

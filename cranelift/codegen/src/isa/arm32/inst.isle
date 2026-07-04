@@ -336,6 +336,10 @@
     (VcvtToInt (signed bool) (size FpuSize) (rd WritableReg) (rm Reg))
     ;; Convert a 32-bit integer (held in the S register `rm`) to a float.
     (VcvtFromInt (signed bool) (size FpuSize) (rd WritableReg) (rm Reg))
+    ;; A conditional float select, emitted as `vmov rd, rm; vmov<cond> rd, rn`.
+    (FpuCSel (cond Cond) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; IEEE `vminnm`/`vmaxnm` (number min/max; ARMv8). `max` selects vmaxnm.
+    (FpuMinMax (max bool) (size FpuSize) (rd WritableReg) (rn Reg) (rm Reg))
 
     ;; `cmp/cmn/tst/teq rn, rm`.
     (CmpRR (op CmpOp) (rn Reg) (rm Reg))
@@ -569,6 +573,12 @@
 (decl cond_from_floatcc (FloatCC) Cond)
 (extern constructor cond_from_floatcc cond_from_floatcc)
 
+;; `fcopysign` via GPR bit manipulation (clear the sign of `a`, OR in `b`'s).
+(decl gen_copysign_f32 (Reg Reg) Reg)
+(extern constructor gen_copysign_f32 gen_copysign_f32)
+(decl gen_copysign_f64 (Reg Reg) Reg)
+(extern constructor gen_copysign_f64 gen_copysign_f64)
+
 ;; `vcmp` + `vmrs` as a side effect (leaves the comparison in the CPSR).
 (decl vcmp (FpuSize Reg Reg) SideEffectNoResult)
 (rule (vcmp size rn rm)
@@ -624,6 +634,29 @@
   (let ((rd WritableReg (temp_writable_reg $F64))
         (_ Unit (emit (MInst.MovToFpu64 rd (vr_lo regs) (vr_hi regs)))))
     rd))
+
+;; Conditional float select: `if_true` when `cond` holds, else `if_false`.
+(decl fpu_csel (Cond Reg Reg) Reg)
+(rule (fpu_csel cond if_true if_false)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuCSel cond rd if_true if_false))))
+    rd))
+
+;; `vminnm`/`vmaxnm` (IEEE number min/max, ignoring NaN).
+(decl fpu_minmax (bool FpuSize Reg Reg) Reg)
+(rule (fpu_minmax is_max size rn rm)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuMinMax is_max size rd rn rm))))
+    rd))
+
+;; fmin/fmax with WebAssembly NaN propagation: use the IEEE number min/max
+;; (which handles signed zeros) when ordered, and `x+y` (a NaN) when unordered.
+(decl gen_fminmax (bool FpuSize Reg Reg) Reg)
+(rule (gen_fminmax is_max size x y)
+  (let ((nm Reg (fpu_minmax is_max size x y))
+        (nan Reg (fpu_rrr (FpuOp3.Vadd) size x y))
+        (_ Unit (emit_side_effect (vcmp size x y))))
+    (fpu_csel (Cond.Vs) nan nm)))
 
 ;;;; Shifts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

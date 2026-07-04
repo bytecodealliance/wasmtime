@@ -462,6 +462,17 @@ fn enc_vcvt_from_int(signed: bool, size: FpuSize, d: u32, m: u32) -> u32 {
     (0xeeb8_0a40 | sign | size.size_bit()) | (d << 12) | m
 }
 
+/// `vmov<cond>.f64 dd, dm` — a conditional double-register move.
+fn enc_vmov_f64_cond(cond: Cond, d: u32, m: u32) -> u32 {
+    (cond.bits() << 28) | 0x0eb0_0b40 | (d << 12) | m
+}
+
+/// `vminnm`/`vmaxnm` (IEEE number min/max; ARMv8). These are unconditional.
+fn enc_fpu_minmax(max: bool, size: FpuSize, d: u32, n: u32, m: u32) -> u32 {
+    let op = if max { 0 } else { 0x40 };
+    (0xfe80_0a00 | op | size.size_bit()) | (n << 16) | (d << 12) | m
+}
+
 fn put_u32(sink: &mut MachBuffer<Inst>, word: u32) {
     for b in word.to_le_bytes() {
         sink.put1(b);
@@ -856,6 +867,26 @@ impl MachInstEmit for Inst {
                 let rd = machreg_to_vfp(rd.to_reg());
                 let rm = machreg_to_vfp(*rm);
                 put_u32(sink, enc_vcvt_from_int(*signed, *size, rd, rm));
+            }
+            Inst::FpuCSel { cond, rd, rn, rm } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let rn = machreg_to_vfp(*rn);
+                let rm = machreg_to_vfp(*rm);
+                // Default to `if_false`, then conditionally overwrite.
+                put_u32(sink, enc_fpu_rr(FpuOp2::Vmov, FpuSize::F64, rd, rm));
+                put_u32(sink, enc_vmov_f64_cond(*cond, rd, rn));
+            }
+            Inst::FpuMinMax {
+                max,
+                size,
+                rd,
+                rn,
+                rm,
+            } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let rn = machreg_to_vfp(*rn);
+                let rm = machreg_to_vfp(*rm);
+                put_u32(sink, enc_fpu_minmax(*max, *size, rd, rn, rm));
             }
             Inst::CmpRR { op, rn, rm } => {
                 let rn = machreg_to_gpr(*rn);
