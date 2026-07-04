@@ -130,6 +130,17 @@
 (rule (lower (fence))
   (side_effect (dmb)))
 
+;;;; Atomics (32-bit) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (atomic_rmw $I32 _flags op addr x))
+  (atomic_rmw_i32 op (put_in_reg addr) (put_in_reg x)))
+(rule (lower (atomic_cas $I32 _flags addr e x))
+  (atomic_cas_i32 (put_in_reg addr) (put_in_reg e) (put_in_reg x)))
+(rule (lower (atomic_load $I32 _flags addr))
+  (atomic_load_i32 (put_in_reg addr)))
+(rule (lower (atomic_store _flags src @ (value_type $I32) addr))
+  (atomic_store_i32 (put_in_reg src) (put_in_reg addr)))
+
 ;;;; Floating point ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const _ (u32_from_ieee32 n)))

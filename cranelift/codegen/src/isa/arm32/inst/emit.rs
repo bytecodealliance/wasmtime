@@ -2,6 +2,7 @@
 
 use crate::binemit::Reloc;
 use crate::ir;
+use crate::ir::AtomicRmwOp;
 use crate::isa::arm32::inst::*;
 use crate::settings;
 use cranelift_control::ControlPlane;
@@ -787,6 +788,38 @@ impl MachInstEmit for Inst {
                 put_u32(sink, enc_stl(rt, rn));
             }
             Inst::Barrier { op } => put_u32(sink, op.encoding()),
+            Inst::AtomicRmw {
+                op,
+                rd,
+                addr,
+                operand,
+                tmp1,
+                tmp2,
+            } => emit_atomic_rmw(
+                sink,
+                state,
+                *op,
+                machreg_to_gpr(rd.to_reg()),
+                machreg_to_gpr(*addr),
+                machreg_to_gpr(*operand),
+                machreg_to_gpr(tmp1.to_reg()),
+                machreg_to_gpr(tmp2.to_reg()),
+            ),
+            Inst::AtomicCas {
+                rd,
+                addr,
+                expected,
+                new,
+                tmp,
+            } => emit_atomic_cas(
+                sink,
+                state,
+                machreg_to_gpr(rd.to_reg()),
+                machreg_to_gpr(*addr),
+                machreg_to_gpr(*expected),
+                machreg_to_gpr(*new),
+                machreg_to_gpr(tmp.to_reg()),
+            ),
 
             Inst::FpuRRR {
                 op,
@@ -985,7 +1018,11 @@ impl MachInstEmit for Inst {
         // exempt from the per-instruction worst-case-size check.
         let variable_length = matches!(
             self,
-            Inst::BrTable { .. } | Inst::Call { .. } | Inst::CallInd { .. }
+            Inst::BrTable { .. }
+                | Inst::Call { .. }
+                | Inst::CallInd { .. }
+                | Inst::AtomicRmw { .. }
+                | Inst::AtomicCas { .. }
         );
         let end = sink.cur_offset();
         debug_assert!(
@@ -1008,6 +1045,82 @@ fn resolve_fpu_amode(mem: &AMode, state: &EmitState) -> (u32, i32) {
             unimplemented!("arm32: register-offset VFP addressing is not supported")
         }
     }
+}
+
+/// Emit the LDAEX/op/STLEX retry loop for an atomic read-modify-write.
+fn emit_atomic_rmw(
+    sink: &mut MachBuffer<Inst>,
+    state: &mut EmitState,
+    op: AtomicRmwOp,
+    rd: u32,
+    addr: u32,
+    operand: u32,
+    tmp1: u32,
+    tmp2: u32,
+) {
+    let loop_lbl = sink.get_label();
+    sink.bind_label(loop_lbl, state.ctrl_plane_mut());
+    put_u32(sink, enc_load_ex(true, rd, addr)); // ldaex rd, [addr]
+
+    // Compute the new value into tmp1.
+    let alu = |sink: &mut MachBuffer<Inst>, op: ALUOp| {
+        put_u32(sink, enc_dp_reg(op.opcode(), 0, tmp1, rd, operand));
+    };
+    match op {
+        AtomicRmwOp::Add => alu(sink, ALUOp::Add),
+        AtomicRmwOp::Sub => alu(sink, ALUOp::Sub),
+        AtomicRmwOp::And => alu(sink, ALUOp::And),
+        AtomicRmwOp::Or => alu(sink, ALUOp::Orr),
+        AtomicRmwOp::Xor => alu(sink, ALUOp::Eor),
+        AtomicRmwOp::Nand => {
+            alu(sink, ALUOp::And);
+            put_u32(sink, enc_dp_reg(0b1111, 0, tmp1, 0, tmp1)); // mvn tmp1, tmp1
+        }
+        AtomicRmwOp::Xchg => {
+            put_u32(sink, enc_dp_reg(0b1101, 0, tmp1, 0, operand)); // mov tmp1, operand
+        }
+        AtomicRmwOp::Umin | AtomicRmwOp::Umax | AtomicRmwOp::Smin | AtomicRmwOp::Smax => {
+            let cond = match op {
+                AtomicRmwOp::Umin => Cond::Lo,
+                AtomicRmwOp::Umax => Cond::Hi,
+                AtomicRmwOp::Smin => Cond::Lt,
+                _ => Cond::Gt,
+            };
+            // tmp1 = operand; cmp rd, operand; tmp1 = rd if `cond`.
+            put_u32(sink, enc_dp_reg(0b1101, 0, tmp1, 0, operand));
+            put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, rd, operand));
+            put_u32(sink, enc_mov_cond(cond, tmp1, rd));
+        }
+    }
+
+    put_u32(sink, enc_store_ex(true, tmp2, tmp1, addr)); // stlex tmp2, tmp1, [addr]
+    put_u32(sink, enc_dp_imm(CmpOp::Cmp.opcode(), 1, 0, tmp2, 0)); // cmp tmp2, #0
+    sink.use_label_at_offset(sink.cur_offset(), loop_lbl, LabelUse::Branch26);
+    put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne loop
+}
+
+/// Emit the LDAEX/compare/STLEX retry loop for an atomic compare-and-swap.
+fn emit_atomic_cas(
+    sink: &mut MachBuffer<Inst>,
+    state: &mut EmitState,
+    rd: u32,
+    addr: u32,
+    expected: u32,
+    new: u32,
+    tmp: u32,
+) {
+    let loop_lbl = sink.get_label();
+    let done_lbl = sink.get_label();
+    sink.bind_label(loop_lbl, state.ctrl_plane_mut());
+    put_u32(sink, enc_load_ex(true, rd, addr)); // ldaex rd, [addr]
+    put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, rd, expected)); // cmp rd, expected
+    sink.use_label_at_offset(sink.cur_offset(), done_lbl, LabelUse::Branch26);
+    put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne done
+    put_u32(sink, enc_store_ex(true, tmp, new, addr)); // stlex tmp, new, [addr]
+    put_u32(sink, enc_dp_imm(CmpOp::Cmp.opcode(), 1, 0, tmp, 0)); // cmp tmp, #0
+    sink.use_label_at_offset(sink.cur_offset(), loop_lbl, LabelUse::Branch26);
+    put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne loop
+    sink.bind_label(done_lbl, state.ctrl_plane_mut());
 }
 
 enum LoadStore {

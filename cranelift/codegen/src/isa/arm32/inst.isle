@@ -310,6 +310,16 @@
     ;; A memory barrier / clear-exclusive.
     (Barrier (op BarrierOp))
 
+    ;; An atomic read-modify-write loop over a 32-bit word:
+    ;;   loop: ldaex rd, [addr]; <op> tmp1, rd, operand;
+    ;;         stlex tmp2, tmp1, [addr]; cmp tmp2, #0; bne loop
+    ;; `rd` receives the old value.
+    (AtomicRmw (op AtomicRmwOp) (rd WritableReg) (addr Reg) (operand Reg)
+               (tmp1 WritableReg) (tmp2 WritableReg))
+    ;; An atomic compare-and-swap loop over a 32-bit word; `rd` receives the
+    ;; old value.
+    (AtomicCas (rd WritableReg) (addr Reg) (expected Reg) (new Reg) (tmp WritableReg))
+
     ;; A three-register VFP op (`vadd`/`vsub`/`vmul`/`vdiv`).
     (FpuRRR (op FpuOp3) (size FpuSize) (rd WritableReg) (rn Reg) (rm Reg))
     ;; A two-register VFP op (`vmov`/`vneg`/`vabs`/`vsqrt`).
@@ -532,6 +542,34 @@
 (decl dmb () SideEffectNoResult)
 (rule (dmb)
   (SideEffectNoResult.Inst (MInst.Barrier (BarrierOp.Dmb))))
+
+;;;; Atomics (32-bit) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl atomic_rmw_i32 (AtomicRmwOp Reg Reg) Reg)
+(rule (atomic_rmw_i32 op addr operand)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (tmp1 WritableReg (temp_writable_reg $I32))
+        (tmp2 WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicRmw op rd addr operand tmp1 tmp2))))
+    rd))
+
+(decl atomic_cas_i32 (Reg Reg Reg) Reg)
+(rule (atomic_cas_i32 addr expected new)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (tmp WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicCas rd addr expected new tmp))))
+    rd))
+
+;; Sequentially-consistent load/store via load-acquire / store-release.
+(decl atomic_load_i32 (Reg) Reg)
+(rule (atomic_load_i32 addr)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.LoadAcq rd addr))))
+    rd))
+
+(decl atomic_store_i32 (Reg Reg) InstOutput)
+(rule (atomic_store_i32 src addr)
+  (side_effect (SideEffectNoResult.Inst (MInst.StoreRel src addr))))
 
 ;;;; Floating point ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -1,0 +1,161 @@
+test compile precise-output
+target arm
+
+function %rmw_add(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 add v0, v1
+    return v2
+}
+
+; VCode:
+;   push {fp, lr}
+;   mov fp, sp
+;   sub sp, sp, #8
+;   str r7, [sp, #0]
+; block0:
+;   mov r2, r0
+;   mov r7, r1
+;   atomic_rmw.Add r3, [r2], r7
+;   mov r0, r3
+;   ldr r7, [sp, #0]
+;   add sp, sp, #8
+;   pop {fp, lr}
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   push {fp, lr}
+;   mov fp, sp
+;   sub sp, sp, #8
+;   str r7, [sp]
+; block1: ; offset 0x10
+;   mov r2, r0
+;   mov r7, r1
+;   ldaex r3, [r2]
+;   add r1, r3, r7
+;   stlex r0, r1, [r2]
+;   cmp r0, #0
+;   bne #0x18
+;   mov r0, r3
+;   ldr r7, [sp]
+;   add sp, sp, #8
+;   pop {fp, lr}
+;   bx lr
+
+function %rmw_umax(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 umax v0, v1
+    return v2
+}
+
+; VCode:
+;   push {fp, lr}
+;   mov fp, sp
+;   sub sp, sp, #8
+;   str r7, [sp, #0]
+; block0:
+;   mov r2, r0
+;   mov r7, r1
+;   atomic_rmw.Umax r3, [r2], r7
+;   mov r0, r3
+;   ldr r7, [sp, #0]
+;   add sp, sp, #8
+;   pop {fp, lr}
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   push {fp, lr}
+;   mov fp, sp
+;   sub sp, sp, #8
+;   str r7, [sp]
+; block1: ; offset 0x10
+;   mov r2, r0
+;   mov r7, r1
+;   ldaex r3, [r2]
+;   mov r1, r7
+;   cmp r3, r7
+;   movhi r1, r3
+;   stlex r0, r1, [r2]
+;   cmp r0, #0
+;   bne #0x18
+;   mov r0, r3
+;   ldr r7, [sp]
+;   add sp, sp, #8
+;   pop {fp, lr}
+;   bx lr
+
+function %cas(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = atomic_cas.i32 v0, v1, v2
+    return v3
+}
+
+; VCode:
+;   push {fp, lr}
+;   mov fp, sp
+;   sub sp, sp, #8
+;   str r7, [sp, #0]
+; block0:
+;   mov r3, r0
+;   mov r7, r1
+;   atomic_cas r1, [r3], r7, r2
+;   mov r0, r1
+;   ldr r7, [sp, #0]
+;   add sp, sp, #8
+;   pop {fp, lr}
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   push {fp, lr}
+;   mov fp, sp
+;   sub sp, sp, #8
+;   str r7, [sp]
+; block1: ; offset 0x10
+;   mov r3, r0
+;   mov r7, r1
+;   ldaex r1, [r3]
+;   cmp r1, r7
+;   bne #0x30
+;   stlex r0, r2, [r3]
+;   cmp r0, #0
+;   bne #0x18
+;   mov r0, r1
+;   ldr r7, [sp]
+;   add sp, sp, #8
+;   pop {fp, lr}
+;   bx lr
+
+function %aload(i32) -> i32 {
+block0(v0: i32):
+    v1 = atomic_load.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   lda r0, [r0]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lda r0, [r0]
+;   bx lr
+
+function %astore(i32, i32) {
+block0(v0: i32, v1: i32):
+    atomic_store.i32 v1, v0
+    return
+}
+
+; VCode:
+; block0:
+;   stl r1, [r0]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stl r1, [r0]
+;   bx lr
+

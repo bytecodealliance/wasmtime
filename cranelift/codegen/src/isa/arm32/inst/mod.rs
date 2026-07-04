@@ -155,6 +155,39 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::Udf { .. } | Inst::Barrier { .. } => {}
 
+        Inst::AtomicRmw {
+            rd,
+            addr,
+            operand,
+            tmp1,
+            tmp2,
+            ..
+        } => {
+            use_if_virtual(collector, addr);
+            use_if_virtual(collector, operand);
+            for d in [rd, tmp1, tmp2] {
+                if d.to_reg().to_real_reg().is_none() {
+                    collector.reg_early_def(d);
+                }
+            }
+        }
+        Inst::AtomicCas {
+            rd,
+            addr,
+            expected,
+            new,
+            tmp,
+        } => {
+            use_if_virtual(collector, addr);
+            use_if_virtual(collector, expected);
+            use_if_virtual(collector, new);
+            for d in [rd, tmp] {
+                if d.to_reg().to_real_reg().is_none() {
+                    collector.reg_early_def(d);
+                }
+            }
+        }
+
         Inst::FpuRRR { rd, rn, rm, .. } => {
             use_if_virtual(collector, rn);
             use_if_virtual(collector, rm);
@@ -732,6 +765,31 @@ impl Inst {
             }
             Inst::StoreRel { rt, rn } => alloc::format!("stl {}, [{}]", r(*rt), r(*rn)),
             Inst::Barrier { op } => op.name().to_string(),
+            Inst::AtomicRmw {
+                op,
+                rd,
+                addr,
+                operand,
+                ..
+            } => alloc::format!(
+                "atomic_rmw.{op:?} {}, [{}], {}",
+                r(rd.to_reg()),
+                r(*addr),
+                r(*operand)
+            ),
+            Inst::AtomicCas {
+                rd,
+                addr,
+                expected,
+                new,
+                ..
+            } => alloc::format!(
+                "atomic_cas {}, [{}], {}, {}",
+                r(rd.to_reg()),
+                r(*addr),
+                r(*expected),
+                r(*new)
+            ),
 
             Inst::FpuRRR {
                 op,
