@@ -2,7 +2,16 @@
 
 use crate::machinst::Reg;
 
+use crate::RegClass;
 use alloc::string::String;
+use regalloc2::{PReg, VReg};
+
+#[inline]
+pub const fn x_reg(enc: usize) -> Reg {
+    let p_reg = PReg::new(enc, RegClass::Int);
+    let v_reg = VReg::new(p_reg.index(), p_reg.class());
+    Reg::from_virtual_reg(v_reg)
+}
 
 pub fn pretty_print_reg(reg: Reg) -> String {
     match reg.to_real_reg() {

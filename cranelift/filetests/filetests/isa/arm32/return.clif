@@ -1,0 +1,16 @@
+test compile precise-output
+target thumbv7em-none-eabihf
+
+; A function returning its first argument — exercises arg-def via Args pseudo-instruction + Ret.
+function %iconst_ret(i32) -> i32 {
+block0(v0: i32):
+    return v0
+}
+
+; VCode:
+; block0:
+;   Ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bx lr

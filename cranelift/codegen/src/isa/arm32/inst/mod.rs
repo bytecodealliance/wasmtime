@@ -1,10 +1,13 @@
 //! This module defines arm32-specific machine instruction types.
 
+use crate::alloc::borrow::ToOwned;
 use crate::binemit::CodeOffset;
 pub use crate::ir::condcodes::FloatCC;
 pub use crate::ir::condcodes::IntCC;
+use crate::ir::types::{I8, I16, I32, I64, I128, Type};
 use crate::isa::FunctionAlignment;
 use crate::machinst::*;
+use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 
 pub mod emit;
@@ -31,22 +34,61 @@ impl Inst {
     }
 }
 
+// ===========================================================================
+// Operand collection for register allocation.
+// ===========================================================================
+
+/// Collect def/use operands from an instruction into the collector,
+/// so regalloc sees correct operand information. Model on riscv64_get_operands.
+fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
+    match inst {
+        // Ret — no operands (LR used as implicit return target).
+        Inst::Ret => {}
+
+        // Args — defines incoming argument vregs, each fixed to its arg preg.
+        Inst::Args { args } => {
+            for pair in args.iter_mut() {
+                collector.reg_fixed_def(&mut pair.vreg, pair.preg);
+            }
+        }
+
+        // Push {Rn, ...} — uses SP implicitly. No explicit register operands.
+        Inst::Push { rs: _ } => {}
+
+        // Pop {Rt, ...} — uses SP implicitly. No explicit register operands.
+        Inst::Pop { rt: _ } => {}
+
+        // Rets — constrains vregs to specific return registers.
+        Inst::Rets { rets } => {
+            for pair in rets.iter_mut() {
+                collector.reg_fixed_use(&mut pair.vreg, pair.preg);
+            }
+        }
+    }
+}
+
 impl MachInst for Inst {
     type ABIMachineSpec = Arm32MachineDeps;
     type LabelUse = LabelUse;
 
     const TRAP_OPCODE: &'static [u8] = &[0x00, 0xbe];
 
-    fn get_operands(&mut self, _collector: &mut impl OperandVisitor) {
-        todo!()
+    fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
+        arm32_get_operands(self, collector);
     }
 
-    fn is_move(&self) -> Option<(crate::Writable<crate::Reg>, crate::Reg)> {
-        todo!()
+    fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
+        match self {
+            _ => None,
+        }
     }
 
     fn is_term(&self) -> MachTerminator {
-        todo!()
+        match self {
+            Inst::Ret => MachTerminator::Ret,
+            Inst::Rets { .. } => MachTerminator::Ret,
+            _ => MachTerminator::None,
+        }
     }
 
     fn is_trap(&self) -> bool {
@@ -54,15 +96,18 @@ impl MachInst for Inst {
     }
 
     fn is_args(&self) -> bool {
-        todo!()
+        matches!(self, Inst::Args { .. })
     }
 
     fn call_type(&self) -> crate::machinst::CallType {
-        todo!()
+        match self {
+            Inst::Ret => CallType::Regular,
+            _ => CallType::None,
+        }
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        todo!()
+        !matches!(self, Inst::Ret)
     }
 
     fn is_mem_access(&self) -> bool {
@@ -81,10 +126,22 @@ impl MachInst for Inst {
         todo!()
     }
 
-    fn rc_for_type(
-        _ty: crate::ir::Type,
-    ) -> crate::CodegenResult<(&'static [crate::RegClass], &'static [crate::ir::Type])> {
-        todo!()
+    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
+        match ty {
+            I8 => Ok((&[RegClass::Int], &[I8])),
+            I16 => Ok((&[RegClass::Int], &[I16])),
+            I32 => Ok((&[RegClass::Int], &[I32])),
+            I64 => Ok((&[RegClass::Int, RegClass::Int], &[I32, I32])),
+            I128 => Err(CodegenError::Unsupported(
+                "i128 is not supported on ARM32 (deferred)".to_owned(),
+            )),
+            _ if ty.is_vector() => Err(CodegenError::Unsupported(format!(
+                "Vector types are not supported on ARM32: {ty}"
+            ))),
+            _ => Err(CodegenError::Unsupported(format!(
+                "Unexpected SSA-value type: {ty}"
+            ))),
+        }
     }
 
     fn canonical_type_for_rc(_rc: crate::RegClass) -> crate::ir::Type {

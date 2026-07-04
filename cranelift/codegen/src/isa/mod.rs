@@ -109,13 +109,13 @@ macro_rules! isa_builder {
 /// Look for an ISA for the given `triple`.
 /// Return a builder that can create a corresponding `TargetIsa`.
 pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
-    use target_lexicon::ArmArchitecture::{Armv6m, Armv7m, Thumbv6m, Thumbv7m};
+    use target_lexicon::ArmArchitecture::{Armv6m, Armv7m, Thumbv6m, Thumbv7em, Thumbv7m};
     match triple.architecture {
         Architecture::X86_64 => {
             isa_builder!(x64, (feature = "x86"), triple)
         }
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
-        Architecture::Arm(Armv6m | Armv7m | Thumbv6m | Thumbv7m) => {
+        Architecture::Arm(Armv6m | Armv7m | Thumbv6m | Thumbv7m | Thumbv7em) => {
             isa_builder!(arm32, (feature = "arm32"), triple)
         }
         Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),

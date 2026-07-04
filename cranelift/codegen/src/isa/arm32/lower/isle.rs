@@ -11,7 +11,7 @@ use crate::ir::{
     ValueList, immediates::*, types::*,
 };
 use crate::machinst::{
-    CallArgList, CallRetList, InstOutput, MachInst, Reg, TryCallInfo, VCodeConstant,
+    ArgPair, CallArgList, CallRetList, InstOutput, MachInst, Reg, TryCallInfo, VCodeConstant,
     VCodeConstantData, isle::*,
 };
 use alloc::boxed::Box;
@@ -26,7 +26,7 @@ pub(crate) type MInst = generated_code::MInst;
 // type BoxReturnCallInfo = Box<CallInfo<Box<ExternalName>>>;
 type BoxExternalName = Box<ExternalName>;
 // type VecMachLabel = Vec<MachLabel>;
-// type VecArgPair = Vec<ArgPair>;
+type VecArgPair = Vec<ArgPair>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
@@ -73,6 +73,6 @@ impl generated_code::Context for Arm32IsleContext<'_, '_> {
     isle_lower_prelude_methods!();
 
     fn emit(&mut self, inst: &generated_code::MInst) -> Unit {
-        self.lower_ctx.emit(*inst);
+        self.lower_ctx.emit(inst.clone());
     }
 }

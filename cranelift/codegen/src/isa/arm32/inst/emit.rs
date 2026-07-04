@@ -76,7 +76,25 @@ impl MachInstEmit for Inst {
             Inst::Ret => {
                 // RET = BX LR: 0b0100_0111_0111_0000 = 0x4770
                 sink.put2(0x4770);
-            } // _ => todo!(),
+            }
+
+            // Rets is a pseudo-instruction that constrains return registers; it emits no bytes.
+            Inst::Rets { .. } => {}
+
+            // Args is a pseudo-instruction that defines arg registers; emits no bytes.
+            Inst::Args { .. } => {}
+
+            // Push registers — wide STMDB.W sp!, {list}: 0xE92D | reg_list.
+            Inst::Push { rs } => {
+                sink.put2(0xE92Du16);
+                sink.put2(*rs);
+            }
+
+            // Pop registers — wide LDMIA.W sp!, {list}: 0xE8BD | reg_list.
+            Inst::Pop { rt } => {
+                sink.put2(0xE8BDu16);
+                sink.put2(*rt);
+            }
         }
         if self.is_trap() {
             emit_trap(sink);

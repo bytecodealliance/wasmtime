@@ -18,10 +18,10 @@ fn test_arm32_binemit() {
 
     // ---- Pseudo-instructions (zero bytes) ----
     // Rets: pseudo-instruction, emits no bytes
-    // insns.push((Inst::Rets { rets: Vec::new() }, ""));
+    insns.push((Inst::Rets { rets: Vec::new() }, ""));
 
     // Args: pseudo-instruction, emits no bytes
-    // insns.push((Inst::Args { args: Vec::new() }, ""));
+    insns.push((Inst::Args { args: Vec::new() }, ""));
 
     let flags = settings::Flags::new(settings::builder());
     let isa_flags = arm32::settings::Flags::new(&flags, &arm32::settings::builder());
