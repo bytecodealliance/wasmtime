@@ -1,7 +1,7 @@
 //! This module defines arm32 (AArch32 / A32) machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::types::{I8, I16, I32, I64};
+use crate::ir::types::{F32, F64, I8, I16, I32, I64};
 use crate::ir::{Type, types};
 use crate::isa::FunctionAlignment;
 use crate::isa::arm32::abi::Arm32MachineDeps;
@@ -147,6 +147,33 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             def_if_virtual(collector, rd);
         }
         Inst::Udf { .. } | Inst::Barrier { .. } => {}
+
+        Inst::FpuRRR { rd, rn, rm, .. } => {
+            use_if_virtual(collector, rn);
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::FpuRR { rd, rm, .. } => {
+            use_if_virtual(collector, rm);
+            def_if_virtual(collector, rd);
+        }
+        Inst::FpuLoad { rd, mem, .. } => {
+            mem.get_operands(collector);
+            def_if_virtual(collector, rd);
+        }
+        Inst::FpuStore { rt, mem, .. } => {
+            use_if_virtual(collector, rt);
+            mem.get_operands(collector);
+        }
+        Inst::MovToFpu32 { rd, rt } => {
+            use_if_virtual(collector, rt);
+            def_if_virtual(collector, rd);
+        }
+        Inst::MovToFpu64 { rd, rt_lo, rt_hi } => {
+            use_if_virtual(collector, rt_lo);
+            use_if_virtual(collector, rt_hi);
+            def_if_virtual(collector, rd);
+        }
         Inst::LdmStm { rn, .. } => use_if_virtual(collector, rn),
         Inst::LoadEx { rt, rn, .. } | Inst::LoadAcq { rt, rn } => {
             use_if_virtual(collector, rn);
@@ -279,7 +306,7 @@ impl MachInst for Inst {
     fn canonical_type_for_rc(rc: RegClass) -> Type {
         match rc {
             RegClass::Int => I32,
-            RegClass::Float => types::F64,
+            RegClass::Float => F64,
             RegClass::Vector => types::I8X16,
         }
     }
@@ -331,9 +358,20 @@ impl MachInst for Inst {
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, _ty: Type) -> Inst {
-        Inst::MovReg {
-            rd: to_reg,
-            rm: from_reg,
+        if to_reg.to_reg().class() == RegClass::Float {
+            // A `vmov.f64` copies the whole D register, which is correct for an
+            // f32 held in the low half too.
+            Inst::FpuRR {
+                op: FpuOp2::Vmov,
+                size: FpuSize::F64,
+                rd: to_reg,
+                rm: from_reg,
+            }
+        } else {
+            Inst::MovReg {
+                rd: to_reg,
+                rm: from_reg,
+            }
         }
     }
 
@@ -356,8 +394,11 @@ impl MachInst for Inst {
             I32 => Ok((&[RegClass::Int], &[I32])),
             // 64-bit values are held in a pair of 32-bit integer registers.
             I64 => Ok((&[RegClass::Int, RegClass::Int], &[I32, I32])),
+            // Floats live in VFP registers (an f32 in the low half of a D reg).
+            F32 => Ok((&[RegClass::Float], &[F32])),
+            F64 => Ok((&[RegClass::Float], &[F64])),
             _ => Err(CodegenError::Unsupported(alloc::format!(
-                "Unsupported type on arm32 (only i8/i16/i32/i64 are implemented so far): {ty}"
+                "Unsupported type on arm32 (only i8/i16/i32/i64/f32/f64 are implemented so far): {ty}"
             ))),
         }
     }
@@ -651,6 +692,40 @@ impl Inst {
             }
             Inst::StoreRel { rt, rn } => alloc::format!("stl {}, [{}]", r(*rt), r(*rn)),
             Inst::Barrier { op } => op.name().to_string(),
+
+            Inst::FpuRRR {
+                op,
+                size,
+                rd,
+                rn,
+                rm,
+            } => alloc::format!(
+                "{}.{} {}, {}, {}",
+                op.name(),
+                size.suffix(),
+                r(rd.to_reg()),
+                r(*rn),
+                r(*rm)
+            ),
+            Inst::FpuRR { op, size, rd, rm } => alloc::format!(
+                "{}.{} {}, {}",
+                op.name(),
+                size.suffix(),
+                r(rd.to_reg()),
+                r(*rm)
+            ),
+            Inst::FpuLoad { rd, mem, .. } => {
+                alloc::format!("vldr {}, {}", r(rd.to_reg()), mem.pretty_print())
+            }
+            Inst::FpuStore { rt, mem, .. } => {
+                alloc::format!("vstr {}, {}", r(*rt), mem.pretty_print())
+            }
+            Inst::MovToFpu32 { rd, rt } => {
+                alloc::format!("vmov {}, {}", r(rd.to_reg()), r(*rt))
+            }
+            Inst::MovToFpu64 { rd, rt_lo, rt_hi } => {
+                alloc::format!("vmov {}, {}, {}", r(rd.to_reg()), r(*rt_lo), r(*rt_hi))
+            }
             Inst::CmpRR { op, rn, rm } => {
                 alloc::format!("{} {}, {}", op.name(), r(*rn), r(*rm))
             }

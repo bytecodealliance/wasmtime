@@ -29,6 +29,27 @@ pub const fn preg(enc: u8) -> PReg {
     PReg::new(enc as usize, RegClass::Int)
 }
 
+/// Construct a `Reg` referencing VFP double-register `D<enc>` (0-15). An `f32`
+/// value uses the low single-register half (`S<2*enc>`) of its `D` register, so
+/// each value owns a whole `D` register and the S/D register files never alias.
+#[inline]
+pub const fn dreg(enc: u8) -> Reg {
+    let p_reg = PReg::new(enc as usize, RegClass::Float);
+    let v_reg = VReg::new(p_reg.index(), p_reg.class());
+    Reg::from_virtual_reg(v_reg)
+}
+
+/// Construct a `PReg` referencing VFP double-register `D<enc>`.
+pub const fn pdreg(enc: u8) -> PReg {
+    PReg::new(enc as usize, RegClass::Float)
+}
+
+/// Get a writable reference to `D<enc>`.
+#[inline]
+pub fn writable_dreg(enc: u8) -> Writable<Reg> {
+    Writable::from_reg(dreg(enc))
+}
+
 /// Get a writable reference to GPR `enc`.
 #[inline]
 pub fn writable_xreg(enc: u8) -> Writable<Reg> {
@@ -93,17 +114,20 @@ pub fn pc_reg() -> Reg {
     xreg(15)
 }
 
-/// Pretty-print a register with its AAPCS name.
+/// Pretty-print a register with its AAPCS / VFP name.
 pub fn reg_name(reg: Reg) -> alloc::string::String {
     use alloc::string::ToString;
     match reg.to_real_reg() {
-        Some(real) => match real.hw_enc() {
-            11 => "fp".to_string(),
-            12 => "ip".to_string(),
-            13 => "sp".to_string(),
-            14 => "lr".to_string(),
-            15 => "pc".to_string(),
-            enc => alloc::format!("r{enc}"),
+        Some(real) => match real.class() {
+            RegClass::Float => alloc::format!("d{}", real.hw_enc()),
+            _ => match real.hw_enc() {
+                11 => "fp".to_string(),
+                12 => "ip".to_string(),
+                13 => "sp".to_string(),
+                14 => "lr".to_string(),
+                15 => "pc".to_string(),
+                enc => alloc::format!("r{enc}"),
+            },
         },
         None => alloc::format!("{reg:?}"),
     }
@@ -112,25 +136,27 @@ pub fn reg_name(reg: Reg) -> alloc::string::String {
 /// Build the register environment describing which registers the allocator may
 /// use, in preference order.
 pub const fn create_reg_environment() -> MachineEnv {
-    // Preferred registers are the caller-saved (scratch) GPRs; the allocator
-    // reaches for these first since they don't need to be saved/restored.
-    let preferred_int = preg_set_int(&[0, 1, 2, 3]);
-    // Non-preferred registers are the callee-saved GPRs.
-    let non_preferred_int = preg_set_int(&[4, 5, 6, 7, 8, 9, 10]);
+    // Preferred registers are the caller-saved (scratch) registers; the
+    // allocator reaches for these first since they need no save/restore.
+    let preferred_int = preg_set(RegClass::Int, &[0, 1, 2, 3]);
+    let non_preferred_int = preg_set(RegClass::Int, &[4, 5, 6, 7, 8, 9, 10]);
+    // AAPCS: D0-D7 are caller-saved, D8-D15 callee-saved.
+    let preferred_float = preg_set(RegClass::Float, &[0, 1, 2, 3, 4, 5, 6, 7]);
+    let non_preferred_float = preg_set(RegClass::Float, &[8, 9, 10, 11, 12, 13, 14, 15]);
 
     MachineEnv {
-        preferred_regs_by_class: [preferred_int, empty(), empty()],
-        non_preferred_regs_by_class: [non_preferred_int, empty(), empty()],
+        preferred_regs_by_class: [preferred_int, preferred_float, empty()],
+        non_preferred_regs_by_class: [non_preferred_int, non_preferred_float, empty()],
         fixed_stack_slots: vec![],
         scratch_by_class: [None, None, None],
     }
 }
 
-const fn preg_set_int(encs: &[u8]) -> regalloc2::PRegSet {
+const fn preg_set(class: RegClass, encs: &[u8]) -> regalloc2::PRegSet {
     let mut set = regalloc2::PRegSet::empty();
     let mut i = 0;
     while i < encs.len() {
-        set = set.with(preg(encs[i]));
+        set = set.with(PReg::new(encs[i] as usize, class));
         i += 1;
     }
     set

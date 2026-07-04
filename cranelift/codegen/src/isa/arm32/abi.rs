@@ -49,11 +49,15 @@ impl ABIMachineSpec for Arm32MachineDeps {
     ) -> CodegenResult<(u32, Option<usize>)> {
         // Integer arguments/returns go in r0-r3 (r0-r1 for returns), the rest on
         // the stack. This is a simplified AAPCS.
-        let (x_start, x_end) = match args_or_rets {
-            ArgsOrRets::Args => (0u8, 3u8),
-            ArgsOrRets::Rets => (0u8, 1u8),
+        let (x_start, x_end, d_end) = match args_or_rets {
+            ArgsOrRets::Args => (0u8, 3u8, 7u8),
+            ArgsOrRets::Rets => (0u8, 1u8, 1u8),
         };
         let mut next_x_reg = x_start;
+        // VFP (hard-float) register counter: each float value takes one D reg
+        // (an f32 uses the low S-half). This is a simplified AAPCS-VFP that does
+        // not back-fill S registers.
+        let mut next_d_reg = 0u8;
         let mut next_stack: u32 = 0;
 
         let ret_area_ptr = if add_ret_area_ptr {
@@ -91,14 +95,26 @@ impl ABIMachineSpec for Arm32MachineDeps {
 
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
-                assert_eq!(*rc, RegClass::Int, "arm32 only supports integer values");
-                if next_x_reg <= x_end {
+                let reg = match rc {
+                    RegClass::Float if next_d_reg <= d_end => {
+                        let r = dreg(next_d_reg);
+                        next_d_reg += 1;
+                        Some(r)
+                    }
+                    RegClass::Int if next_x_reg <= x_end => {
+                        let r = xreg(next_x_reg);
+                        next_x_reg += 1;
+                        Some(r)
+                    }
+                    RegClass::Int | RegClass::Float => None,
+                    RegClass::Vector => unreachable!("arm32 has no vector registers"),
+                };
+                if let Some(reg) = reg {
                     slots.push(ABIArgSlot::Reg {
-                        reg: xreg(next_x_reg).to_real_reg().unwrap(),
+                        reg: reg.to_real_reg().unwrap(),
                         ty: *reg_ty,
                         extension: param.extension,
                     });
-                    next_x_reg += 1;
                 } else {
                     if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
                         return Err(crate::CodegenError::Unsupported(
@@ -133,18 +149,34 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, _ty: Type) -> Inst {
-        Inst::Load {
-            rt: into_reg,
-            mem: amode_from_stack(mem),
-            kind: LoadKind::Word,
+        if into_reg.to_reg().class() == RegClass::Float {
+            Inst::FpuLoad {
+                size: FpuSize::F64,
+                rd: into_reg,
+                mem: amode_from_stack(mem),
+            }
+        } else {
+            Inst::Load {
+                rt: into_reg,
+                mem: amode_from_stack(mem),
+                kind: LoadKind::Word,
+            }
         }
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, _ty: Type) -> Inst {
-        Inst::Store {
-            rt: from_reg,
-            mem: amode_from_stack(mem),
-            kind: StoreKind::Word,
+        if from_reg.class() == RegClass::Float {
+            Inst::FpuStore {
+                size: FpuSize::F64,
+                rt: from_reg,
+                mem: amode_from_stack(mem),
+            }
+        } else {
+            Inst::Store {
+                rt: from_reg,
+                mem: amode_from_stack(mem),
+                kind: StoreKind::Word,
+            }
         }
     }
 
@@ -292,14 +324,25 @@ impl ABIMachineSpec for Arm32MachineDeps {
             insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
             let mut cur_offset = 0i32;
             for reg in &frame_layout.clobbered_callee_saves {
-                insts.push(Inst::Store {
-                    rt: Reg::from(reg.to_reg()),
-                    mem: AMode::SPOffset {
-                        offset: i64::from(cur_offset),
-                    },
-                    kind: StoreKind::Word,
-                });
-                cur_offset += 4;
+                let r = Reg::from(reg.to_reg());
+                let mem = AMode::SPOffset {
+                    offset: i64::from(cur_offset),
+                };
+                if r.class() == RegClass::Float {
+                    insts.push(Inst::FpuStore {
+                        size: FpuSize::F64,
+                        rt: r,
+                        mem,
+                    });
+                    cur_offset += 8;
+                } else {
+                    insts.push(Inst::Store {
+                        rt: r,
+                        mem,
+                        kind: StoreKind::Word,
+                    });
+                    cur_offset += 4;
+                }
             }
         }
         insts
@@ -316,14 +359,24 @@ impl ABIMachineSpec for Arm32MachineDeps {
             + frame_layout.outgoing_args_size;
         let mut cur_offset = 0i32;
         for reg in &frame_layout.clobbered_callee_saves {
-            insts.push(Inst::Load {
-                rt: reg.map(Reg::from),
-                mem: AMode::SPOffset {
-                    offset: i64::from(cur_offset),
-                },
-                kind: LoadKind::Word,
-            });
-            cur_offset += 4;
+            let mem = AMode::SPOffset {
+                offset: i64::from(cur_offset),
+            };
+            if reg.to_reg().class() == RegClass::Float {
+                insts.push(Inst::FpuLoad {
+                    size: FpuSize::F64,
+                    rd: reg.map(Reg::from),
+                    mem,
+                });
+                cur_offset += 8;
+            } else {
+                insts.push(Inst::Load {
+                    rt: reg.map(Reg::from),
+                    mem,
+                    kind: LoadKind::Word,
+                });
+                cur_offset += 4;
+            }
         }
         if stack_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
@@ -348,9 +401,9 @@ impl ABIMachineSpec for Arm32MachineDeps {
     ) -> u32 {
         match rc {
             RegClass::Int => 1,
-            RegClass::Float | RegClass::Vector => {
-                unimplemented!("arm32: no float/vector registers yet")
-            }
+            // A D register is 8 bytes = two 4-byte spill slots.
+            RegClass::Float => 2,
+            RegClass::Vector => unimplemented!("arm32 has no vector registers"),
         }
     }
 
@@ -438,7 +491,7 @@ fn amode_from_stack(mem: StackAMode) -> AMode {
     }
 }
 
-/// Callee-saved GPRs under AAPCS: r4-r11.
+/// Callee-saved registers under AAPCS: GPRs r4-r11 and VFP D8-D15.
 const DEFAULT_CALLEE_SAVES: PRegSet = PRegSet::empty()
     .with(preg(4))
     .with(preg(5))
@@ -447,21 +500,40 @@ const DEFAULT_CALLEE_SAVES: PRegSet = PRegSet::empty()
     .with(preg(8))
     .with(preg(9))
     .with(preg(10))
-    .with(preg(11));
+    .with(preg(11))
+    .with(pdreg(8))
+    .with(pdreg(9))
+    .with(pdreg(10))
+    .with(pdreg(11))
+    .with(pdreg(12))
+    .with(pdreg(13))
+    .with(pdreg(14))
+    .with(pdreg(15));
 
-/// Caller-saved (clobbered) GPRs: r0-r3 and r12.
+/// Caller-saved (clobbered) registers: GPRs r0-r3, r12 and VFP D0-D7.
 const DEFAULT_CLOBBERS: PRegSet = PRegSet::empty()
     .with(preg(0))
     .with(preg(1))
     .with(preg(2))
     .with(preg(3))
-    .with(preg(12));
+    .with(preg(12))
+    .with(pdreg(0))
+    .with(pdreg(1))
+    .with(pdreg(2))
+    .with(pdreg(3))
+    .with(pdreg(4))
+    .with(pdreg(5))
+    .with(pdreg(6))
+    .with(pdreg(7));
 
 fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
     let mut size = 0;
     for reg in clobbers {
-        debug_assert_eq!(reg.to_reg().class(), RegClass::Int);
-        size += 4;
+        match reg.to_reg().class() {
+            RegClass::Int => size += 4,
+            RegClass::Float => size += 8,
+            RegClass::Vector => unreachable!("arm32 has no vector registers"),
+        }
     }
     align_to(size, 8)
 }

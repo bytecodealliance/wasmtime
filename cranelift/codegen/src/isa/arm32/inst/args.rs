@@ -5,7 +5,7 @@ use crate::machinst::{OperandVisitor, Reg};
 
 pub use crate::isa::arm32::lower::isle::generated_code::{
     ALUOp, AMode, BarrierOp, BfxOp, BitOp, CmpOp, Cond, DspMul3Op, DspMul4Op, DspMulLOp, ExtAddOp,
-    ExtOp, LoadKind, ParAluOp, PkhOp, QAluOp, SatOp, ShiftOp, StoreKind,
+    ExtOp, FpuOp2, FpuOp3, FpuSize, LoadKind, ParAluOp, PkhOp, QAluOp, SatOp, ShiftOp, StoreKind,
 };
 
 /// A memory address resolved to a concrete base register and either an
@@ -603,6 +603,65 @@ impl StoreKind {
             StoreKind::Word => "str",
             StoreKind::Byte => "strb",
             StoreKind::Half => "strh",
+        }
+    }
+}
+
+impl FpuSize {
+    /// The size bit (bit 8) that distinguishes F64 (set) from F32 (clear).
+    pub(crate) fn size_bit(self) -> u32 {
+        match self {
+            FpuSize::F32 => 0,
+            FpuSize::F64 => 0x100,
+        }
+    }
+
+    pub(crate) fn suffix(self) -> &'static str {
+        match self {
+            FpuSize::F32 => "f32",
+            FpuSize::F64 => "f64",
+        }
+    }
+}
+
+impl FpuOp3 {
+    /// The F32 base word (`vadd.f32 s0, s0, s0`); F64 adds the size bit.
+    pub(crate) fn base(self) -> u32 {
+        match self {
+            FpuOp3::Vadd => 0xee30_0a00,
+            FpuOp3::Vsub => 0xee30_0a40,
+            FpuOp3::Vmul => 0xee20_0a00,
+            FpuOp3::Vdiv => 0xee80_0a00,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            FpuOp3::Vadd => "vadd",
+            FpuOp3::Vsub => "vsub",
+            FpuOp3::Vmul => "vmul",
+            FpuOp3::Vdiv => "vdiv",
+        }
+    }
+}
+
+impl FpuOp2 {
+    /// The F32 base word; F64 adds the size bit.
+    pub(crate) fn base(self) -> u32 {
+        match self {
+            FpuOp2::Vmov => 0xeeb0_0a40,
+            FpuOp2::Vneg => 0xeeb1_0a40,
+            FpuOp2::Vabs => 0xeeb0_0ac0,
+            FpuOp2::Vsqrt => 0xeeb1_0ac0,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            FpuOp2::Vmov => "vmov",
+            FpuOp2::Vneg => "vneg",
+            FpuOp2::Vabs => "vabs",
+            FpuOp2::Vsqrt => "vsqrt",
         }
     }
 }

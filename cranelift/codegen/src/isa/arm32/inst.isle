@@ -133,6 +133,28 @@
     (Isb)
     (Clrex)))
 
+;; The precision of a VFP floating-point operation.
+(type FpuSize
+  (enum
+    (F32)
+    (F64)))
+
+;; A three-register VFP data-processing operation.
+(type FpuOp3
+  (enum
+    (Vadd)
+    (Vsub)
+    (Vmul)
+    (Vdiv)))
+
+;; A two-register VFP data-processing operation.
+(type FpuOp2
+  (enum
+    (Vmov)
+    (Vneg)
+    (Vabs)
+    (Vsqrt)))
+
 ;; An ARM condition code (the "always" and "never" codes are omitted).
 (type Cond
   (enum
@@ -286,6 +308,19 @@
 
     ;; A memory barrier / clear-exclusive.
     (Barrier (op BarrierOp))
+
+    ;; A three-register VFP op (`vadd`/`vsub`/`vmul`/`vdiv`).
+    (FpuRRR (op FpuOp3) (size FpuSize) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; A two-register VFP op (`vmov`/`vneg`/`vabs`/`vsqrt`).
+    (FpuRR (op FpuOp2) (size FpuSize) (rd WritableReg) (rm Reg))
+    ;; A VFP load (`vldr`).
+    (FpuLoad (size FpuSize) (rd WritableReg) (mem AMode))
+    ;; A VFP store (`vstr`).
+    (FpuStore (size FpuSize) (rt Reg) (mem AMode))
+    ;; Move a GPR into the low half of an S register (`vmov s, r`) for f32 bits.
+    (MovToFpu32 (rd WritableReg) (rt Reg))
+    ;; Move two GPRs into a D register (`vmov d, rlo, rhi`) for f64 bits.
+    (MovToFpu64 (rd WritableReg) (rt_lo Reg) (rt_hi Reg))
 
     ;; `cmp/cmn/tst/teq rn, rm`.
     (CmpRR (op CmpOp) (rn Reg) (rm Reg))
@@ -474,6 +509,47 @@
 (rule (dmb)
   (SideEffectNoResult.Inst (MInst.Barrier (BarrierOp.Dmb))))
 
+;;;; Floating point ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl fpu_rrr (FpuOp3 FpuSize Reg Reg) Reg)
+(rule (fpu_rrr op size rn rm)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuRRR op size rd rn rm))))
+    rd))
+
+(decl fpu_rr (FpuOp2 FpuSize Reg) Reg)
+(rule (fpu_rr op size rm)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuRR op size rd rm))))
+    rd))
+
+;; An f32 constant: build the bit pattern in a GPR, then move it into an S reg.
+(decl f32_const (u64) Reg)
+(rule (f32_const bits)
+  (let ((r Reg (gen_constant bits))
+        (rd WritableReg (temp_writable_reg $F32))
+        (_ Unit (emit (MInst.MovToFpu32 rd r))))
+    rd))
+
+;; An f64 constant: build the two halves in GPRs, then move them into a D reg.
+(decl f64_const (u64) Reg)
+(rule (f64_const bits)
+  (let ((lo Reg (gen_constant bits))
+        (hi Reg (gen_constant (u64_high32 bits)))
+        (rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.MovToFpu64 rd lo hi))))
+    rd))
+
+(decl fpu_load (FpuSize AMode) Reg)
+(rule (fpu_load size mem)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuLoad size rd mem))))
+    rd))
+
+(decl fpu_store (FpuSize Reg AMode) InstOutput)
+(rule (fpu_store size val mem)
+  (side_effect (SideEffectNoResult.Inst (MInst.FpuStore size val mem))))
+
 ;;;; Shifts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Shift/rotate by a constant amount. Handles the Cranelift "modulo width"
@@ -500,6 +576,10 @@
 ;; The high 32 bits of a 64-bit constant.
 (decl pure u64_high32 (u64) u64)
 (extern constructor u64_high32 u64_high32)
+
+;; Widen a u32 to u64 (zero-extended).
+(decl pure u32_to_u64 (u32) u64)
+(extern constructor u32_to_u64 u32_to_u64)
 
 ;; `adds`/`adc` and `subs`/`sbc` carry chains over the halves.
 (decl add_i64 (ValueRegs ValueRegs) ValueRegs)

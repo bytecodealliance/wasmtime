@@ -130,6 +130,54 @@
 (rule (lower (fence))
   (side_effect (dmb)))
 
+;;;; Floating point ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f32const _ (u32_from_ieee32 n)))
+  (f32_const (u32_to_u64 n)))
+(rule (lower (f64const _ (u64_from_ieee64 n)))
+  (f64_const n))
+
+(rule (lower (fadd $F32 x y))
+  (fpu_rrr (FpuOp3.Vadd) (FpuSize.F32) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fadd $F64 x y))
+  (fpu_rrr (FpuOp3.Vadd) (FpuSize.F64) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fsub $F32 x y))
+  (fpu_rrr (FpuOp3.Vsub) (FpuSize.F32) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fsub $F64 x y))
+  (fpu_rrr (FpuOp3.Vsub) (FpuSize.F64) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fmul $F32 x y))
+  (fpu_rrr (FpuOp3.Vmul) (FpuSize.F32) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fmul $F64 x y))
+  (fpu_rrr (FpuOp3.Vmul) (FpuSize.F64) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fdiv $F32 x y))
+  (fpu_rrr (FpuOp3.Vdiv) (FpuSize.F32) (put_in_reg x) (put_in_reg y)))
+(rule (lower (fdiv $F64 x y))
+  (fpu_rrr (FpuOp3.Vdiv) (FpuSize.F64) (put_in_reg x) (put_in_reg y)))
+
+(rule (lower (fneg $F32 x))
+  (fpu_rr (FpuOp2.Vneg) (FpuSize.F32) (put_in_reg x)))
+(rule (lower (fneg $F64 x))
+  (fpu_rr (FpuOp2.Vneg) (FpuSize.F64) (put_in_reg x)))
+(rule (lower (fabs $F32 x))
+  (fpu_rr (FpuOp2.Vabs) (FpuSize.F32) (put_in_reg x)))
+(rule (lower (fabs $F64 x))
+  (fpu_rr (FpuOp2.Vabs) (FpuSize.F64) (put_in_reg x)))
+(rule (lower (sqrt $F32 x))
+  (fpu_rr (FpuOp2.Vsqrt) (FpuSize.F32) (put_in_reg x)))
+(rule (lower (sqrt $F64 x))
+  (fpu_rr (FpuOp2.Vsqrt) (FpuSize.F64) (put_in_reg x)))
+
+;; Priority 1 so the float result/value type wins over the integer load/store
+;; rules (ISLE can't prove `$F32` disjoint from `fits_in_32`).
+(rule 1 (lower (load $F32 flags addr offset))
+  (fpu_load (FpuSize.F32) (amode addr offset)))
+(rule 1 (lower (load $F64 flags addr offset))
+  (fpu_load (FpuSize.F64) (amode addr offset)))
+(rule 1 (lower (store flags val @ (value_type $F32) addr offset))
+  (fpu_store (FpuSize.F32) (put_in_reg val) (amode addr offset)))
+(rule 1 (lower (store flags val @ (value_type $F64) addr offset))
+  (fpu_store (FpuSize.F64) (put_in_reg val) (amode addr offset)))
+
 ;;;; Divides (only when hardware `sdiv`/`udiv` is available) ;;;;;;;;;;;;;;;;;;;
 ;; NOTE: trap-on-zero / INT_MIN overflow checks are not yet emitted.
 

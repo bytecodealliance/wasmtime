@@ -151,6 +151,11 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
         val >> 32
     }
 
+    /// Zero-extend a u32 to u64.
+    fn u32_to_u64(&mut self, val: u32) -> u64 {
+        u64::from(val)
+    }
+
     /// The offset of the high word of a 64-bit memory access.
     fn offset32_plus4(&mut self, offset: Offset32) -> i32 {
         i32::from(offset) + 4

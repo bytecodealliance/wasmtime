@@ -386,6 +386,46 @@ fn enc_stl(rt: u32, rn: u32) -> u32 {
     COND_AL | 0x0180_fc90 | (rn << 16) | rt
 }
 
+/// The hardware encoding number (0-15) of a VFP register. An f32 uses the low
+/// S-half of its D register, whose Vd/D fields encode identically, so this is
+/// just the D-register number.
+fn machreg_to_vfp(reg: Reg) -> u32 {
+    u32::from(reg.to_real_reg().unwrap().hw_enc() & 0xf)
+}
+
+/// A three-register VFP data-processing instruction.
+fn enc_fpu_rrr(op: FpuOp3, size: FpuSize, d: u32, n: u32, m: u32) -> u32 {
+    op.base() | size.size_bit() | (n << 16) | (d << 12) | m
+}
+
+/// A two-register VFP data-processing instruction.
+fn enc_fpu_rr(op: FpuOp2, size: FpuSize, d: u32, m: u32) -> u32 {
+    op.base() | size.size_bit() | (d << 12) | m
+}
+
+/// `vldr`/`vstr <reg>, [rn, #±offset]` (offset must be a multiple of 4).
+fn enc_vldr_vstr(load: bool, size: FpuSize, vd: u32, rn: u32, offset: i32) -> u32 {
+    let base = (if load { 0xed90_0a00 } else { 0xed80_0a00 }) | size.size_bit();
+    assert!(offset % 4 == 0, "arm32 vldr/vstr offset must be 4-aligned");
+    let (base, mag) = if offset < 0 {
+        (base & !0x0080_0000, ((-offset) as u32) / 4)
+    } else {
+        (base, (offset as u32) / 4)
+    };
+    assert!(mag < 256, "arm32 vldr/vstr offset out of range");
+    base | (rn << 16) | (vd << 12) | mag
+}
+
+/// `vmov sn, rt` — move a GPR into a single-precision register.
+fn enc_vmov_gpr_s(vn: u32, rt: u32) -> u32 {
+    COND_AL | 0x0e00_0a10 | (vn << 16) | (rt << 12)
+}
+
+/// `vmov dm, rt_lo, rt_hi` — move two GPRs into a double register.
+fn enc_vmov_gpr_d(vm: u32, rt_lo: u32, rt_hi: u32) -> u32 {
+    COND_AL | 0x0c40_0b10 | (rt_hi << 16) | (rt_lo << 12) | vm
+}
+
 fn put_u32(sink: &mut MachBuffer<Inst>, word: u32) {
     for b in word.to_le_bytes() {
         sink.put1(b);
@@ -700,6 +740,45 @@ impl MachInstEmit for Inst {
                 put_u32(sink, enc_stl(rt, rn));
             }
             Inst::Barrier { op } => put_u32(sink, op.encoding()),
+
+            Inst::FpuRRR {
+                op,
+                size,
+                rd,
+                rn,
+                rm,
+            } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let rn = machreg_to_vfp(*rn);
+                let rm = machreg_to_vfp(*rm);
+                put_u32(sink, enc_fpu_rrr(*op, *size, rd, rn, rm));
+            }
+            Inst::FpuRR { op, size, rd, rm } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let rm = machreg_to_vfp(*rm);
+                put_u32(sink, enc_fpu_rr(*op, *size, rd, rm));
+            }
+            Inst::FpuLoad { size, rd, mem } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let (base, offset) = resolve_fpu_amode(mem, state);
+                put_u32(sink, enc_vldr_vstr(true, *size, rd, base, offset));
+            }
+            Inst::FpuStore { size, rt, mem } => {
+                let rt = machreg_to_vfp(*rt);
+                let (base, offset) = resolve_fpu_amode(mem, state);
+                put_u32(sink, enc_vldr_vstr(false, *size, rt, base, offset));
+            }
+            Inst::MovToFpu32 { rd, rt } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let rt = machreg_to_gpr(*rt);
+                put_u32(sink, enc_vmov_gpr_s(rd, rt));
+            }
+            Inst::MovToFpu64 { rd, rt_lo, rt_hi } => {
+                let rd = machreg_to_vfp(rd.to_reg());
+                let rt_lo = machreg_to_gpr(*rt_lo);
+                let rt_hi = machreg_to_gpr(*rt_hi);
+                put_u32(sink, enc_vmov_gpr_d(rd, rt_lo, rt_hi));
+            }
             Inst::CmpRR { op, rn, rm } => {
                 let rn = machreg_to_gpr(*rn);
                 let rm = machreg_to_gpr(*rm);
@@ -770,6 +849,17 @@ impl MachInstEmit for Inst {
 
     fn pretty_print_inst(&self, state: &mut Self::State) -> String {
         self.print_with_state(state)
+    }
+}
+
+/// Resolve an `AMode` for a VFP access, which only supports an immediate
+/// offset. Returns the base GPR encoding and the byte offset.
+fn resolve_fpu_amode(mem: &AMode, state: &EmitState) -> (u32, i32) {
+    match mem.resolve(state) {
+        ResolvedAMode::Imm { base, offset } => (machreg_to_gpr(base), offset),
+        ResolvedAMode::Reg { .. } => {
+            unimplemented!("arm32: register-offset VFP addressing is not supported")
+        }
     }
 }
 

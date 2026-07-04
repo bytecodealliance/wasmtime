@@ -1,0 +1,129 @@
+test compile precise-output
+target arm
+
+function %fadd32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   vadd.f32 d0, d0, d1
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vadd.f32 s0, s0, s2
+;   bx lr
+
+function %fmul_fsub64(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+    v3 = fmul v0, v1
+    v4 = fsub v3, v2
+    return v4
+}
+
+; VCode:
+; block0:
+;   vmul.f64 d5, d0, d1
+;   vsub.f64 d0, d5, d2
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vmul.f64 d5, d0, d1
+;   vsub.f64 d0, d5, d2
+;   bx lr
+
+function %fdiv_sqrt(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fdiv v0, v1
+    v3 = sqrt v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   vdiv.f64 d4, d0, d1
+;   vsqrt.f64 d0, d4
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vdiv.f64 d4, d0, d1
+;   vsqrt.f64 d0, d4
+;   bx lr
+
+function %fneg_abs(f32) -> f32 {
+block0(v0: f32):
+    v1 = fneg v0
+    v2 = fabs v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   vneg.f32 d3, d0
+;   vabs.f32 d0, d3
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vneg.f32 s6, s0
+;   vabs.f32 s0, s6
+;   bx lr
+
+function %fconst64() -> f64 {
+block0:
+    v0 = f64const 0x1.8p3
+    return v0
+}
+
+; VCode:
+; block0:
+;   mov r0, #0
+;   movw r2, #0; movt r2, #16424
+;   vmov d0, r0, r2
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov r0, #0
+;   movw r2, #0
+;   movt r2, #0x4028
+;   vmov d0, r0, r2
+;   bx lr
+
+function %load_f32(i32) -> f32 {
+block0(v0: i32):
+    v1 = load.f32 v0+8
+    return v1
+}
+
+; VCode:
+; block0:
+;   vldr d0, [r0, #8]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vldr s0, [r0, #8]
+;   bx lr
+
+function %store_f64(i32, f64) {
+block0(v0: i32, v1: f64):
+    store.f64 v1, v0
+    return
+}
+
+; VCode:
+; block0:
+;   vstr d0, [r0, #0]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vstr d0, [r0]
+;   bx lr
+
