@@ -2,8 +2,10 @@ use cranelift_control::ControlPlane;
 
 use super::Inst;
 use crate::{
-    FrameLayout, MachInstEmit, MachInstEmitState, ir, isa::arm32::abi::Arm32MachineDeps,
-    machinst::Callee, settings,
+    FrameLayout, MachBuffer, MachInstEmit, MachInstEmitState, ir,
+    isa::arm32::abi::Arm32MachineDeps,
+    machinst::{Callee, MachInst},
+    settings,
 };
 
 pub struct EmitInfo {
@@ -60,20 +62,28 @@ impl MachInstEmitState<Inst> for EmitState {
     }
 }
 
+/// Emit a single TrapCode (unconditional trap).
+fn emit_trap(sink: &mut MachBuffer<Inst>) {
+    sink.put2(0xBE00);
+}
+
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(
-        &self,
-        _code: &mut crate::MachBuffer<Self>,
-        _info: &Self::Info,
-        _state: &mut Self::State,
-    ) {
-        todo!()
+    fn emit(&self, sink: &mut MachBuffer<Self>, _info: &Self::Info, _state: &mut Self::State) {
+        match self {
+            Inst::Ret => {
+                // RET = BX LR: 0b0100_0111_0111_0000 = 0x4770
+                sink.put2(0x4770);
+            } // _ => todo!(),
+        }
+        if self.is_trap() {
+            emit_trap(sink);
+        }
     }
 
     fn pretty_print_inst(&self, _state: &mut Self::State) -> std::prelude::v1::String {
-        todo!()
+        format!("{self:?}")
     }
 }

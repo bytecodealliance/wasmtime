@@ -11,8 +11,8 @@ use crate::ir::{
     ValueList, immediates::*, types::*,
 };
 use crate::machinst::{
-    ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, MachInst, Reg, TryCallInfo,
-    VCodeConstant, VCodeConstantData, isle::*,
+    CallArgList, CallRetList, InstOutput, MachInst, Reg, TryCallInfo, VCodeConstant,
+    VCodeConstantData, isle::*,
 };
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -21,12 +21,12 @@ use regalloc2::PReg;
 /// Re-exported Inst type (from ISLE-generated code) for use by callers.
 pub(crate) type MInst = generated_code::MInst;
 
-type BoxCallInfo = Box<CallInfo<ExternalName>>;
-type BoxCallIndInfo = Box<CallInfo<Reg>>;
-type BoxReturnCallInfo = Box<CallInfo<Box<ExternalName>>>;
+// type BoxCallInfo = Box<CallInfo<ExternalName>>;
+// type BoxCallIndInfo = Box<CallInfo<Reg>>;
+// type BoxReturnCallInfo = Box<CallInfo<Box<ExternalName>>>;
 type BoxExternalName = Box<ExternalName>;
-type VecMachLabel = Vec<MachLabel>;
-type VecArgPair = Vec<ArgPair>;
+// type VecMachLabel = Vec<MachLabel>;
+// type VecArgPair = Vec<ArgPair>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(

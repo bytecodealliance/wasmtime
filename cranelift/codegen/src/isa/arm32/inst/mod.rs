@@ -5,6 +5,7 @@ pub use crate::ir::condcodes::FloatCC;
 pub use crate::ir::condcodes::IntCC;
 use crate::isa::FunctionAlignment;
 use crate::machinst::*;
+use alloc::vec::Vec;
 
 pub mod emit;
 pub mod regs;
@@ -20,12 +21,6 @@ use crate::isa::arm32::abi::Arm32MachineDeps;
 
 /// Re-export the ISLE-generated MInst as Inst, matching riscv64 pattern.
 pub use crate::isa::arm32::lower::isle::generated_code::MInst as Inst;
-
-// use crate::{
-//     MachInst,
-//     isa::{FunctionAlignment, arm32::abi::Arm32MachineDeps},
-//     machinst::{MachInstLabelUse, MachTerminator, OperandVisitor},
-// };
 
 impl Inst {
     pub fn function_alignment() -> FunctionAlignment {
@@ -55,7 +50,7 @@ impl MachInst for Inst {
     }
 
     fn is_trap(&self) -> bool {
-        todo!()
+        false
     }
 
     fn is_args(&self) -> bool {
@@ -104,8 +99,8 @@ impl MachInst for Inst {
         todo!()
     }
 
-    fn gen_nop_units() -> std::prelude::v1::Vec<std::prelude::v1::Vec<u8>> {
-        todo!()
+    fn gen_nop_units() -> Vec<Vec<u8>> {
+        vec![vec![0xc0, 0x46]] // ARM Thumb NOP placeholder
     }
 
     fn worst_case_size() -> CodeOffset {
