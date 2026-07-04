@@ -1,9 +1,8 @@
 //! ARM32 ISA definitions: registers.
 
-use crate::machinst::{Reg, Writable};
+use crate::machinst::Reg;
 
 use alloc::string::String;
-use regalloc2::{PReg, RegClass, VReg};
 
 pub fn pretty_print_reg(reg: Reg) -> String {
     match reg.to_real_reg() {

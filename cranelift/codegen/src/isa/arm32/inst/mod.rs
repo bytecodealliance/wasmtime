@@ -1,21 +1,13 @@
 //! This module defines arm32-specific machine instruction types.
 
-use crate::binemit::{Addend, CodeOffset, Reloc};
+use crate::binemit::CodeOffset;
 pub use crate::ir::condcodes::FloatCC;
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{I8, I16, I32, I64, I128};
-pub use crate::ir::{MemFlagsData, Type};
 use crate::isa::FunctionAlignment;
 use crate::machinst::*;
-use crate::{CodegenError, CodegenResult, settings};
-use alloc::borrow::ToOwned;
-use alloc::string::String;
-use alloc::vec::Vec;
-use regalloc2::RegClass;
 
 pub mod emit;
 pub mod regs;
-pub use self::regs::*;
 pub mod unwind;
 
 #[cfg(test)]
@@ -50,7 +42,7 @@ impl MachInst for Inst {
 
     const TRAP_OPCODE: &'static [u8] = &[0x00, 0xbe];
 
-    fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
+    fn get_operands(&mut self, _collector: &mut impl OperandVisitor) {
         todo!()
     }
 
@@ -83,32 +75,32 @@ impl MachInst for Inst {
     }
 
     fn gen_move(
-        to_reg: crate::Writable<crate::Reg>,
-        from_reg: crate::Reg,
-        ty: crate::ir::Type,
+        _to_reg: crate::Writable<crate::Reg>,
+        _from_reg: crate::Reg,
+        _ty: crate::ir::Type,
     ) -> Self {
         todo!()
     }
 
-    fn gen_dummy_use(reg: crate::Reg) -> Self {
+    fn gen_dummy_use(_reg: crate::Reg) -> Self {
         todo!()
     }
 
     fn rc_for_type(
-        ty: crate::ir::Type,
+        _ty: crate::ir::Type,
     ) -> crate::CodegenResult<(&'static [crate::RegClass], &'static [crate::ir::Type])> {
         todo!()
     }
 
-    fn canonical_type_for_rc(rc: crate::RegClass) -> crate::ir::Type {
+    fn canonical_type_for_rc(_rc: crate::RegClass) -> crate::ir::Type {
         todo!()
     }
 
-    fn gen_jump(target: crate::MachLabel) -> Self {
+    fn gen_jump(_target: crate::MachLabel) -> Self {
         todo!()
     }
 
-    fn gen_nop(preferred_size: usize) -> Self {
+    fn gen_nop(_preferred_size: usize) -> Self {
         todo!()
     }
 
@@ -158,7 +150,7 @@ impl MachInstLabelUse for LabelUse {
         todo!()
     }
 
-    fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
+    fn patch(self, _buffer: &mut [u8], _use_offset: CodeOffset, _label_offset: CodeOffset) {
         todo!()
     }
 
@@ -174,11 +166,11 @@ impl MachInstLabelUse for LabelUse {
         todo!()
     }
 
-    fn generate_veneer(self, buffer: &mut [u8], veneer_offset: CodeOffset) -> (CodeOffset, Self) {
+    fn generate_veneer(self, _buffer: &mut [u8], _veneer_offset: CodeOffset) -> (CodeOffset, Self) {
         todo!()
     }
 
-    fn from_reloc(reloc: crate::binemit::Reloc, addend: crate::binemit::Addend) -> Option<Self> {
+    fn from_reloc(_reloc: crate::binemit::Reloc, _addend: crate::binemit::Addend) -> Option<Self> {
         todo!()
     }
 }

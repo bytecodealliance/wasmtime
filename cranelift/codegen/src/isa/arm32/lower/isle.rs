@@ -44,12 +44,12 @@ pub(crate) fn lower(
 pub(crate) fn lower_branch(
     lower_ctx: &mut Lower<generated_code::MInst>,
     backend: &Arm32Backend,
-    branch: Inst,
-    targets: &[MachLabel],
+    _branch: Inst,
+    _targets: &[MachLabel],
 ) -> Option<()> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
-    let mut isle_ctx = Arm32IsleContext::new(lower_ctx, backend);
+    let _isle_ctx = Arm32IsleContext::new(lower_ctx, backend);
     //    generated_code::constructor_lower_branch(&mut isle_ctx, branch, targets)
     todo!()
 }

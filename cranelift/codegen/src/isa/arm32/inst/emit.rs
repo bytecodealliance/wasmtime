@@ -43,7 +43,7 @@ impl MachInstEmitState<Inst> for EmitState {
         }
     }
 
-    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
+    fn pre_safepoint(&mut self, _user_stack_map: Option<ir::UserStackMap>) {
         todo!()
     }
 
@@ -64,11 +64,16 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, code: &mut crate::MachBuffer<Self>, info: &Self::Info, state: &mut Self::State) {
+    fn emit(
+        &self,
+        _code: &mut crate::MachBuffer<Self>,
+        _info: &Self::Info,
+        _state: &mut Self::State,
+    ) {
         todo!()
     }
 
-    fn pretty_print_inst(&self, state: &mut Self::State) -> std::prelude::v1::String {
+    fn pretty_print_inst(&self, _state: &mut Self::State) -> std::prelude::v1::String {
         todo!()
     }
 }
