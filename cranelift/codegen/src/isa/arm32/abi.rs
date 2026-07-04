@@ -397,10 +397,19 @@ impl ABIMachineSpec for Arm32MachineDeps {
 
     fn gen_return(
         _call_conv: crate::isa::CallConv,
-        _isa_flags: &Self::F,
-        _frame_layout: &crate::FrameLayout,
-    ) -> crate::machinst::SmallInstVec<Self::I> {
-        todo!()
+        _isa_flags: &Arm32Flags,
+        frame_layout: &crate::FrameLayout,
+    ) -> crate::machinst::SmallInstVec<Inst> {
+        // If the epilogue already popped PC (direct return), this becomes empty.
+        // Otherwise emit BX LR for explicit return.
+        if frame_layout.setup_area_size > 0 && frame_layout.clobber_size > 0 {
+            // Epilogue uses pop {csave, pc} — nothing to do here.
+            SmallVec::new()
+        } else {
+            let mut insts = SmallVec::new();
+            insts.push(Inst::Ret);
+            insts
+        }
     }
 
     fn gen_probestack(_insts: &mut crate::machinst::SmallInstVec<Self::I>, _frame_size: u32) {
@@ -417,19 +426,49 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn gen_clobber_save(
-        _call_conv: crate::isa::CallConv,
-        _flags: &crate::settings::Flags,
-        _frame_layout: &crate::FrameLayout,
-    ) -> smallvec::SmallVec<[Self::I; 16]> {
-        todo!()
+        _call_conv: isa::CallConv,
+        _flags: &settings::Flags,
+        frame_layout: &FrameLayout,
+    ) -> SmallVec<[Inst; 16]> {
+        if frame_layout.clobber_size == 0 {
+            return SmallVec::new();
+        }
+
+        let clobbered_int = frame_layout.clobbered_callee_saves_by_class().0;
+
+        // Build a single push mask for all callee-saved registers.
+        let mut mask: u16 = 0;
+        for r in clobbered_int {
+            mask |= 1 << r.to_reg().hw_enc();
+        }
+        let mut insts = SmallVec::new();
+        insts.push(Inst::Push { rs: mask });
+        insts
     }
 
     fn gen_clobber_restore(
-        _call_conv: crate::isa::CallConv,
-        _flags: &crate::settings::Flags,
-        _frame_layout: &crate::FrameLayout,
-    ) -> smallvec::SmallVec<[Self::I; 16]> {
-        todo!()
+        _call_conv: isa::CallConv,
+        _flags: &settings::Flags,
+        frame_layout: &FrameLayout,
+    ) -> SmallVec<[Inst; 16]> {
+        if frame_layout.clobber_size == 0 {
+            return SmallVec::new();
+        }
+
+        // On exit, pop the callee-saved registers plus PC to return directly.
+        let clobbered_int = frame_layout.clobbered_callee_saves_by_class().0;
+
+        // Build a single pop mask including PC for direct return.
+        let mut mask: u16 = 0;
+        for r in clobbered_int {
+            mask |= 1 << r.to_reg().hw_enc();
+        }
+        // Add bit 15 (PC) so that popping into the return address triggers a return.
+        mask |= 1 << 15;
+
+        let mut insts = SmallVec::new();
+        insts.push(Inst::Pop { rt: mask });
+        insts
     }
 
     fn gen_memcpy<F: FnMut(crate::ir::Type) -> crate::Writable<crate::Reg>>(

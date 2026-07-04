@@ -161,11 +161,13 @@ impl MachInst for Inst {
     }
 
     fn worst_case_size() -> CodeOffset {
-        todo!()
+        // movw + movt (MovImm) = two wide Thumb-2 instructions = 8 bytes.
+        8
     }
 
     fn worst_case_island_growth() -> CodeOffset {
-        todo!()
+        // Same as worst_case_size since the largest single construct is a MovImm pair.
+        8
     }
 
     fn ref_type_regclass(_flags: &crate::settings::Flags) -> crate::RegClass {
@@ -173,7 +175,7 @@ impl MachInst for Inst {
     }
 
     fn is_safepoint(&self) -> bool {
-        todo!()
+        matches!(self, Inst::Ret)
     }
 
     fn function_alignment() -> FunctionAlignment {

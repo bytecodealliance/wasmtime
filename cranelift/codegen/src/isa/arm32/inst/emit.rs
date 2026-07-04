@@ -45,20 +45,20 @@ impl MachInstEmitState<Inst> for EmitState {
         }
     }
 
-    fn pre_safepoint(&mut self, _user_stack_map: Option<ir::UserStackMap>) {
-        todo!()
+    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
+        self._user_stack_map = user_stack_map;
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
-        todo!()
+        &mut self.ctrl_plane
     }
 
     fn take_ctrl_plane(self) -> ControlPlane {
-        todo!()
+        self.ctrl_plane
     }
 
     fn frame_layout(&self) -> &FrameLayout {
-        todo!()
+        &self.frame_layout
     }
 }
 
