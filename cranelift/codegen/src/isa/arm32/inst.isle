@@ -1,0 +1,9 @@
+;; ARM32 machine instruction definitions (MInst) and helper constructors.
+;; Mirrors the Rust Inst enum in inst/mod.rs.
+
+;;;;;;;; MInst type definition ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type MInst
+    (enum
+        ;; Return — ends the function
+        (Ret)))

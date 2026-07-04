@@ -1,0 +1,14 @@
+;; arm32 instruction selection and CLIF-to-MachInst lowering.
+
+;; The main lowering constructor term: takes a clif `Inst` and returns the
+;; register(s) within which the lowered instruction's result values live.
+(decl partial lower (Inst) InstOutput)
+
+;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;(rule (lower (iconst ty (u64_from_imm64 n)))
+;;  (imm ty n))
+
+;; Return lowering: delegate to prelude lower_return -> gen_return extern.
+(rule 0 (lower (return args))
+        (lower_return args))
