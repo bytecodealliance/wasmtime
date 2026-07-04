@@ -167,10 +167,21 @@
 (rule (lower (ireduce (fits_in_32 _) x))
   (put_in_reg x))
 
+;;;; `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; 32-bit comparison producing a 0/1 boolean.
+(rule (lower (icmp _ cc a @ (value_type (fits_in_32 _)) b))
+  (let ((_ Unit (emit_side_effect (cmp_rr (put_in_reg a) (put_in_reg b)))))
+    (csetv (cond_from_intcc cc))))
+
+;; 64-bit comparison producing a 0/1 boolean.
+(rule 4 (lower (icmp _ cc a @ (value_type $I64) b))
+  (csetv (lower_icmp_i64 cc (put_in_regs a) (put_in_regs b))))
+
 ;;;; `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Fuse an `icmp` condition into the compare that precedes the select.
-(rule 1 (lower (select (fits_in_32 _) (icmp _ cc x y) a b))
+(rule 1 (lower (select (fits_in_32 _) (icmp _ cc x @ (value_type (fits_in_32 _)) y) a b))
   (let ((_ Unit (emit_side_effect (cmp_rr (put_in_reg x) (put_in_reg y)))))
     (csel (cond_from_intcc cc) (put_in_reg a) (put_in_reg b))))
 
@@ -260,12 +271,17 @@
 (rule (lower_branch (jump _) (single_target label))
   (emit_side_effect (jump_impl label)))
 
-;; Fuse an `icmp` feeding a `brif` into a compare plus a conditional branch.
-(rule 1 (lower_branch (brif (icmp _ cc a b) _ _) (two_targets taken not_taken))
+;; Fuse a 32-bit `icmp` feeding a `brif` into a compare plus conditional branch.
+(rule 1 (lower_branch (brif (icmp _ cc a @ (value_type (fits_in_32 _)) b) _ _) (two_targets taken not_taken))
   (emit_side_effect
     (side_effect_concat
       (cmp_rr (put_in_reg a) (put_in_reg b))
       (cond_br (cond_from_intcc cc) taken not_taken))))
+
+;; Fuse a 64-bit `icmp` feeding a `brif`.
+(rule 2 (lower_branch (brif (icmp _ cc a @ (value_type $I64) b) _ _) (two_targets taken not_taken))
+  (emit_side_effect
+    (cond_br (lower_icmp_i64 cc (put_in_regs a) (put_in_regs b)) taken not_taken)))
 
 ;; Generic `brif`: branch when the value is non-zero.
 (rule (lower_branch (brif v _ _) (two_targets taken not_taken))

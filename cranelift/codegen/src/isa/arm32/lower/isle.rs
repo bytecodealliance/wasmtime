@@ -12,7 +12,7 @@ use crate::ir::{
     BlockCall, ExternalName, Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
 };
 use crate::isa::arm32::Arm32Backend;
-use crate::isa::arm32::inst::{Cond, ShiftOp, encode_rotated_imm};
+use crate::isa::arm32::inst::{ALUOp, Cond, ShiftOp, encode_rotated_imm};
 use crate::machinst::isle::*;
 use crate::machinst::{
     ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, Lower, MachInst, MachLabel, RetPair,
@@ -55,15 +55,21 @@ impl<'a, 'b> Arm32IsleContext<'a, 'b, MInst, Arm32Backend> {
 
     /// Emit `orr rd, a, b`.
     fn orr_raw(&mut self, a: Reg, b: Reg) -> Reg {
+        self.alu_raw(ALUOp::Orr, false, a, b)
+    }
+
+    /// Emit `op{s} rd, rn, rm` into a fresh register (which is returned).
+    fn alu_raw(&mut self, op: ALUOp, set_flags: bool, rn: Reg, rm: Reg) -> Reg {
         let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
-        self.lower_ctx.emit(MInst::AluRRR {
-            op: crate::isa::arm32::inst::ALUOp::Orr,
-            rd,
-            rn: a,
-            rm: b,
-        });
+        let inst = if set_flags {
+            MInst::AluRRRFlags { op, rd, rn, rm }
+        } else {
+            MInst::AluRRR { op, rd, rn, rm }
+        };
+        self.lower_ctx.emit(inst);
         rd.to_reg()
     }
+
 }
 
 impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
@@ -239,6 +245,49 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
     /// Whether the hardware integer-divide instructions may be used.
     fn use_idiv(&mut self) -> bool {
         self.backend.isa_flags.has_idiv()
+    }
+
+    /// Emit the compare sequence for a 64-bit `icmp` and return the ARM
+    /// condition code that tests its result.
+    ///
+    /// A 64-bit `subs`/`sbcs` sets N, V and C correctly for the full value but
+    /// its Z flag only reflects the high word, so it's only usable for the
+    /// conditions that don't depend on Z (lt/ge/lo/hs). The gt/le/hi/ls forms
+    /// are obtained by swapping the operands, and eq/ne use a separate
+    /// `eor`/`eor`/`orrs` reduction.
+    fn lower_icmp_i64(&mut self, cc: &IntCC, a: ValueRegs, b: ValueRegs) -> Cond {
+        let (alo, ahi) = (a.regs()[0], a.regs()[1]);
+        let (blo, bhi) = (b.regs()[0], b.regs()[1]);
+        match cc {
+            IntCC::Equal | IntCC::NotEqual => {
+                let tlo = self.alu_raw(ALUOp::Eor, false, alo, blo);
+                let thi = self.alu_raw(ALUOp::Eor, false, ahi, bhi);
+                // `orrs` sets Z iff both halves are equal, i.e. a == b.
+                let _ = self.alu_raw(ALUOp::Orr, true, tlo, thi);
+                if matches!(cc, IntCC::Equal) {
+                    Cond::Eq
+                } else {
+                    Cond::Ne
+                }
+            }
+            _ => {
+                // (lo1, hi1) - (lo2, hi2), then test `cond`.
+                let (lo1, hi1, lo2, hi2, cond) = match cc {
+                    IntCC::SignedLessThan => (alo, ahi, blo, bhi, Cond::Lt),
+                    IntCC::SignedGreaterThanOrEqual => (alo, ahi, blo, bhi, Cond::Ge),
+                    IntCC::SignedGreaterThan => (blo, bhi, alo, ahi, Cond::Lt),
+                    IntCC::SignedLessThanOrEqual => (blo, bhi, alo, ahi, Cond::Ge),
+                    IntCC::UnsignedLessThan => (alo, ahi, blo, bhi, Cond::Lo),
+                    IntCC::UnsignedGreaterThanOrEqual => (alo, ahi, blo, bhi, Cond::Hs),
+                    IntCC::UnsignedGreaterThan => (blo, bhi, alo, ahi, Cond::Lo),
+                    IntCC::UnsignedLessThanOrEqual => (blo, bhi, alo, ahi, Cond::Hs),
+                    _ => unreachable!(),
+                };
+                let _ = self.alu_raw(ALUOp::Sub, true, lo1, lo2); // subs
+                let _ = self.alu_raw(ALUOp::Sbc, true, hi1, hi2); // sbcs
+                cond
+            }
+        }
     }
 
     fn cond_from_intcc(&mut self, cc: &IntCC) -> Cond {

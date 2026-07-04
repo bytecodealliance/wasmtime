@@ -614,3 +614,13 @@
 ;; Map an `IntCC` to the corresponding ARM condition code.
 (decl cond_from_intcc (IntCC) Cond)
 (extern constructor cond_from_intcc cond_from_intcc)
+
+;; Emit the compare sequence for a 64-bit `icmp` and return the ARM condition
+;; that then tests it (the compare itself is emitted as a side effect).
+(decl lower_icmp_i64 (IntCC ValueRegs ValueRegs) Cond)
+(extern constructor lower_icmp_i64 lower_icmp_i64)
+
+;; Materialize a boolean 0/1 from the current flags and a condition
+;; (`mov rd, #0; mov<cond> rd, #1`).
+(decl csetv (Cond) Reg)
+(rule (csetv cond) (csel cond (gen_constant 1) (gen_constant 0)))
