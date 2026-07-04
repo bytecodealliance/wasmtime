@@ -73,6 +73,6 @@ impl generated_code::Context for Arm32IsleContext<'_, '_> {
     isle_lower_prelude_methods!();
 
     fn emit(&mut self, inst: &generated_code::MInst) -> Unit {
-        self.lower_ctx.emit(inst.clone());
+        self.lower_ctx.emit(*inst);
     }
 }
