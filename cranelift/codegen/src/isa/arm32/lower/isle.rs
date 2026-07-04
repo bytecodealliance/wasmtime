@@ -24,6 +24,7 @@ use regalloc2::PReg;
 
 type VecArgPair = Vec<ArgPair>;
 type VecRetPair = Vec<RetPair>;
+type VecMachLabel = Vec<MachLabel>;
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
 type BoxCallIndInfo = Box<CallInfo<Reg>>;
 
@@ -121,6 +122,15 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
 
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.lower_ctx.emit(inst.clone());
+    }
+
+    fn lower_br_table(&mut self, index: Reg, targets: &[MachLabel]) -> Unit {
+        let tmp = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::BrTable {
+            index,
+            tmp,
+            targets: targets.to_vec(),
+        });
     }
 
     fn gen_call_info(

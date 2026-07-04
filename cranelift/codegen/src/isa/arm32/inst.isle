@@ -193,6 +193,7 @@
 
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
+(type VecMachLabel extern (enum))
 
 ;;;; Instruction formats ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -369,6 +370,10 @@
 
     ;; A conditional branch: `b<cond> taken; b not_taken`.
     (CondBr (cond Cond) (taken MachLabel) (not_taken MachLabel))
+
+    ;; A jump table: bounds-check `index` against the entry count and branch to
+    ;; `targets[index]`, else to the default (`targets[0]`).
+    (BrTable (index Reg) (tmp WritableReg) (targets VecMachLabel))
 
     ;; Pseudo-instruction capturing incoming register arguments in vregs.
     (Args (args VecArgPair))
@@ -782,6 +787,10 @@
 (decl jump_impl (MachLabel) SideEffectNoResult)
 (rule (jump_impl label)
   (SideEffectNoResult.Inst (MInst.Jump label)))
+
+;; A jump table (the first target is the default block).
+(decl lower_br_table (Reg MachLabelSlice) Unit)
+(extern constructor lower_br_table lower_br_table)
 
 ;;;; Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

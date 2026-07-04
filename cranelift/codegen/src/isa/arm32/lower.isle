@@ -384,6 +384,9 @@
 (rule (lower_branch (jump _) (single_target label))
   (emit_side_effect (jump_impl label)))
 
+(rule (lower_branch (br_table index _) targets)
+  (lower_br_table (put_in_reg index) targets))
+
 ;; Fuse a 32-bit `icmp` feeding a `brif` into a compare plus conditional branch.
 (rule 1 (lower_branch (brif (icmp _ cc a @ (value_type (fits_in_32 _)) b) _ _) (two_targets taken not_taken))
   (emit_side_effect

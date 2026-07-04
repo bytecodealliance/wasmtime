@@ -55,6 +55,13 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         | Inst::Push { .. }
         | Inst::Pop { .. } => {}
 
+        Inst::BrTable { index, tmp, .. } => {
+            use_if_virtual(collector, index);
+            if tmp.to_reg().to_real_reg().is_none() {
+                collector.reg_early_def(tmp);
+            }
+        }
+
         Inst::MovImm { rd, .. }
         | Inst::MovRotImm { rd, .. }
         | Inst::MvnRotImm { rd, .. }
@@ -379,7 +386,9 @@ impl MachInst for Inst {
     fn is_term(&self) -> MachTerminator {
         match self {
             Inst::Rets { .. } => MachTerminator::Ret,
-            Inst::Jump { .. } | Inst::CondBr { .. } => MachTerminator::Branch,
+            Inst::Jump { .. } | Inst::CondBr { .. } | Inst::BrTable { .. } => {
+                MachTerminator::Branch
+            }
             _ => MachTerminator::None,
         }
     }
@@ -845,6 +854,16 @@ impl Inst {
             Inst::Call { info } => alloc::format!("bl {}", info.dest.display(None)),
             Inst::CallInd { info } => alloc::format!("blx {}", r(info.dest)),
             Inst::Jump { dest } => alloc::format!("b {}", dest.to_string()),
+            Inst::BrTable { index, targets, .. } => {
+                let (default, entries) = targets.split_first().unwrap();
+                let entries: Vec<String> = entries.iter().map(|l| l.to_string()).collect();
+                alloc::format!(
+                    "br_table {} [{}] default {}",
+                    r(*index),
+                    entries.join(", "),
+                    default.to_string()
+                )
+            }
             Inst::CondBr {
                 cond,
                 taken,

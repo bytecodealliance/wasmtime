@@ -928,6 +928,38 @@ impl MachInstEmit for Inst {
                 sink.add_uncond_branch(sink.cur_offset(), sink.cur_offset() + 4, *dest);
                 put_u32(sink, enc_b(0));
             }
+            Inst::BrTable {
+                index,
+                tmp,
+                targets,
+            } => {
+                let (default, entries) = targets.split_first().unwrap();
+                let index = machreg_to_gpr(*index);
+                let n = entries.len() as u32;
+
+                // Bounds check: branch to the default block if `index >=u n`.
+                if let Some(imm12) = encode_rotated_imm(n) {
+                    put_u32(sink, enc_dp_imm(CmpOp::Cmp.opcode(), 1, 0, index, imm12));
+                } else {
+                    let tmp = machreg_to_gpr(tmp.to_reg());
+                    put_u32(sink, enc_movw(tmp, n & 0xffff));
+                    if n >> 16 != 0 {
+                        put_u32(sink, enc_movt(tmp, n >> 16));
+                    }
+                    put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, index, tmp));
+                }
+                sink.use_label_at_offset(sink.cur_offset(), *default, LabelUse::Branch26);
+                put_u32(sink, enc_bcond(Cond::Hs, 0));
+
+                // Jump into the inline table: `pc` reads as this instruction's
+                // address + 8, so the table begins one slot after the filler.
+                put_u32(sink, 0xe08f_f100 | index); // add pc, pc, index, lsl #2
+                put_u32(sink, COND_AL | 0x0320_f000); // nop (filler)
+                for target in entries {
+                    sink.use_label_at_offset(sink.cur_offset(), *target, LabelUse::Branch26);
+                    put_u32(sink, enc_b(0));
+                }
+            }
             Inst::CondBr {
                 cond,
                 taken,
@@ -949,9 +981,15 @@ impl MachInstEmit for Inst {
             }
         }
 
+        // `BrTable` and calls emit variable-length sequences, so they are
+        // exempt from the per-instruction worst-case-size check.
+        let variable_length = matches!(
+            self,
+            Inst::BrTable { .. } | Inst::Call { .. } | Inst::CallInd { .. }
+        );
         let end = sink.cur_offset();
         debug_assert!(
-            (end - start) <= Inst::worst_case_size(),
+            variable_length || (end - start) <= Inst::worst_case_size(),
             "instruction {self:?} exceeded worst-case size"
         );
     }
