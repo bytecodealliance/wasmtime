@@ -16,6 +16,15 @@ fn test_arm32_binemit() {
     // Ret: BX LR = 0x4770, bytes in memory [0x70, 0x47] -> "7047"
     insns.push((Inst::Ret {}, "7047"));
 
+    // ---- Group G: push / pop ----
+    // Push: PUSH {LR} = STMDB sp!, {lr}
+    // emit.rs: first=0xE92D, second=0x4000 -> "2DE90040"
+    insns.push((Inst::Push { rs: 0x4000u16 }, "2DE90040"));
+
+    // Pop: POP {PC} = LDMIA sp!, {pc}
+    // emit.rs: first=0xE8BD, second=0x8000 -> "BDE80080"
+    insns.push((Inst::Pop { rt: 0x8000u16 }, "BDE80080"));
+    
     // ---- Pseudo-instructions (zero bytes) ----
     // Rets: pseudo-instruction, emits no bytes
     insns.push((Inst::Rets { rets: Vec::new() }, ""));
