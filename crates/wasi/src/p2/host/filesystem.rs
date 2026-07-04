@@ -378,7 +378,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         let f = self.table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::READ) {
-            Err(types::ErrorCode::BadDescriptor)?;
+            Err(types::ErrorCode::NotPermitted)?;
         }
 
         // Create a stream view for it.
@@ -399,7 +399,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         let f = self.table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
-            Err(types::ErrorCode::BadDescriptor)?;
+            Err(types::ErrorCode::NotPermitted)?;
         }
 
         // Create a stream view for it.
@@ -420,7 +420,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         let f = self.table.get(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
-            Err(types::ErrorCode::BadDescriptor)?;
+            Err(types::ErrorCode::NotPermitted)?;
         }
 
         // Create a stream view for it.
