@@ -1,9 +1,10 @@
+//! ARM32 ISA: binary code emission.
+
 use cranelift_control::ControlPlane;
 
-use super::Inst;
+use crate::isa::arm32::{self, abi::Arm32MachineDeps, inst::Inst};
 use crate::{
     FrameLayout, MachBuffer, MachInstEmit, MachInstEmitState, ir,
-    isa::arm32::abi::Arm32MachineDeps,
     machinst::{Callee, MachInst},
     settings,
 };
@@ -11,17 +12,14 @@ use crate::{
 pub struct EmitInfo {
     #[expect(dead_code, reason = "will be used in the future")]
     shared_flags: settings::Flags,
-    isa_flags: crate::isa::arm32::settings::Flags,
+    _isa_flags: arm32::settings::Flags,
 }
 
 impl EmitInfo {
-    pub(crate) fn new(
-        shared_flags: settings::Flags,
-        isa_flags: crate::isa::arm32::settings::Flags,
-    ) -> Self {
+    pub(crate) fn new(shared_flags: settings::Flags, isa_flags: arm32::settings::Flags) -> Self {
         EmitInfo {
             shared_flags,
-            isa_flags,
+            _isa_flags: isa_flags,
         }
     }
 }
@@ -86,13 +84,13 @@ impl MachInstEmit for Inst {
 
             // Push registers — wide STMDB.W sp!, {list}: 0xE92D | reg_list.
             Inst::Push { rs } => {
-                sink.put2(0xE92Du16);
+                sink.put2(0xE92D);
                 sink.put2(*rs);
             }
 
             // Pop registers — wide LDMIA.W sp!, {list}: 0xE8BD | reg_list.
             Inst::Pop { rt } => {
-                sink.put2(0xE8BDu16);
+                sink.put2(0xE8BD);
                 sink.put2(*rt);
             }
         }

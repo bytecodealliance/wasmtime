@@ -24,7 +24,7 @@ fn test_arm32_binemit() {
     // Pop: POP {PC} = LDMIA sp!, {pc}
     // emit.rs: first=0xE8BD, second=0x8000 -> "BDE80080"
     insns.push((Inst::Pop { rt: 0x8000u16 }, "BDE80080"));
-    
+
     // ---- Pseudo-instructions (zero bytes) ----
     // Rets: pseudo-instruction, emits no bytes
     insns.push((Inst::Rets { rets: Vec::new() }, ""));

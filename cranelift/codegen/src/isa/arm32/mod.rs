@@ -150,7 +150,7 @@ impl TargetIsa for Arm32Backend {
 
     #[cfg(feature = "unwind")]
     fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
-        inst::unwind::systemv::map_reg(reg)
+        inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
     fn function_alignment(&self) -> FunctionAlignment {

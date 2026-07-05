@@ -2,7 +2,7 @@
 
 use crate::isa::unwind::systemv::{RegisterMapper as SystemVRegisterMapper, RegisterMappingError};
 use crate::machinst::Reg;
-use gimli::{Encoding, Format, write::CommonInformationEntry};
+use gimli::{Encoding, Format, Register, write::CommonInformationEntry};
 
 /// Creates a new ARM32 common information entry (CIE).
 pub fn create_cie() -> CommonInformationEntry {
@@ -12,16 +12,16 @@ pub fn create_cie() -> CommonInformationEntry {
             format: Format::Dwarf32,
             version: 1,
         },
-        1,                   // Code alignment factor
-        -4,                  // Data alignment factor (ARM stack grows down)
-        gimli::Register(14), // Return address register (lr = r14)
+        2,            // Code alignment factor
+        -4,           // Data alignment factor (ARM stack grows down)
+        Register(14), // Return address register (lr = r14)
     );
 
     entry
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct RegisterMapper;
+//#[derive(Clone, Copy, Debug)]
+pub(crate) struct RegisterMapper;
 
 impl SystemVRegisterMapper<Reg> for RegisterMapper {
     fn map(&self, _reg: Reg) -> Result<u16, RegisterMappingError> {
@@ -37,6 +37,6 @@ impl SystemVRegisterMapper<Reg> for RegisterMapper {
     }
 }
 
-pub fn map_reg(_reg: Reg) -> Result<u16, RegisterMappingError> {
+pub fn map_reg(_reg: Reg) -> Result<Register, RegisterMappingError> {
     Err(RegisterMappingError::UnsupportedArchitecture)
 }

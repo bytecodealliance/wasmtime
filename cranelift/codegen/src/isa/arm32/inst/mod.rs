@@ -1,14 +1,12 @@
 //! This module defines arm32-specific machine instruction types.
 
-use crate::alloc::borrow::ToOwned;
+use crate::alloc::{vec::Vec, borrow::ToOwned};
 use crate::binemit::CodeOffset;
-pub use crate::ir::condcodes::FloatCC;
-pub use crate::ir::condcodes::IntCC;
+pub use crate::ir::condcodes::{FloatCC,IntCC};
 use crate::ir::types::{I8, I16, I32, I64, I128, Type};
-use crate::isa::FunctionAlignment;
+use crate::isa::{arm32, FunctionAlignment};
 use crate::machinst::*;
 use crate::{CodegenError, CodegenResult};
-use alloc::vec::Vec;
 
 pub mod emit;
 pub mod regs;
@@ -20,10 +18,10 @@ mod emit_tests;
 // Re-export EmitInfo from emit module (not here, to avoid duplicates).
 pub use self::emit::EmitInfo;
 
-use crate::isa::arm32::abi::Arm32MachineDeps;
+use arm32::abi::Arm32MachineDeps;
 
 /// Re-export the ISLE-generated MInst as Inst, matching riscv64 pattern.
-pub use crate::isa::arm32::lower::isle::generated_code::MInst as Inst;
+pub use arm32::lower::isle::generated_code::MInst as Inst;
 
 impl Inst {
     pub fn function_alignment() -> FunctionAlignment {
@@ -47,8 +45,8 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         // Args — defines incoming argument vregs, each fixed to its arg preg.
         Inst::Args { args } => {
-            for pair in args.iter_mut() {
-                collector.reg_fixed_def(&mut pair.vreg, pair.preg);
+            for ArgPair { vreg, preg } in args {
+                collector.reg_fixed_def(vreg, *preg);
             }
         }
 
@@ -60,8 +58,8 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         // Rets — constrains vregs to specific return registers.
         Inst::Rets { rets } => {
-            for pair in rets.iter_mut() {
-                collector.reg_fixed_use(&mut pair.vreg, pair.preg);
+            for RetPair { vreg, preg } in rets {
+                collector.reg_fixed_use(vreg, *preg);
             }
         }
     }
@@ -99,7 +97,7 @@ impl MachInst for Inst {
         matches!(self, Inst::Args { .. })
     }
 
-    fn call_type(&self) -> crate::machinst::CallType {
+    fn call_type(&self) -> CallType {
         match self {
             Inst::Ret => CallType::Regular,
             _ => CallType::None,
@@ -115,9 +113,9 @@ impl MachInst for Inst {
     }
 
     fn gen_move(
-        _to_reg: crate::Writable<crate::Reg>,
+        _to_reg: Writable<crate::Reg>,
         _from_reg: crate::Reg,
-        _ty: crate::ir::Type,
+        _ty: Type,
     ) -> Self {
         todo!()
     }
@@ -144,7 +142,7 @@ impl MachInst for Inst {
         }
     }
 
-    fn canonical_type_for_rc(_rc: crate::RegClass) -> crate::ir::Type {
+    fn canonical_type_for_rc(_rc: RegClass) -> Type {
         todo!()
     }
 
@@ -170,7 +168,7 @@ impl MachInst for Inst {
         8
     }
 
-    fn ref_type_regclass(_flags: &crate::settings::Flags) -> crate::RegClass {
+    fn ref_type_regclass(_flags: &crate::settings::Flags) -> RegClass {
         todo!()
     }
 
