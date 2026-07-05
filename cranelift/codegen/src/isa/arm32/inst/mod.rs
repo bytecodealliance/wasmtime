@@ -205,15 +205,15 @@ impl MachInstLabelUse for LabelUse {
     }
 
     fn supports_veneer(self) -> bool {
-        todo!()
+        false
     }
 
     fn veneer_size(self) -> CodeOffset {
-        todo!()
+        0
     }
 
     fn worst_case_veneer_size() -> CodeOffset {
-        todo!()
+        0
     }
 
     fn generate_veneer(self, _buffer: &mut [u8], _veneer_offset: CodeOffset) -> (CodeOffset, Self) {
