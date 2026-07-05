@@ -4,11 +4,15 @@
 pub mod generated_code;
 
 use crate::alloc::{boxed::Box, vec::Vec};
+// many of these imports are used by the generated code
 use crate::ir::{
-    BlockCall, ExternalName, Inst, InstructionData, MemFlagsData, Opcode, TrapCode, Value,
-    ValueList, immediates::*, types::*,
+    BlockCall, ExternalName, Inst, InstructionData, MemFlags, MemFlagsData, Opcode, TrapCode,
+    Value, ValueList,
+    condcodes::{FloatCC, IntCC},
+    immediates::*,
+    types::*,
 };
-use crate::isa::arm32::{Arm32Backend, inst::*};
+use crate::isa::arm32::Arm32Backend;
 use crate::machinst::{
     ArgPair, CallArgList, CallRetList, InstOutput, MachInst, Reg, TryCallInfo, VCodeConstant,
     VCodeConstantData, isle::*,

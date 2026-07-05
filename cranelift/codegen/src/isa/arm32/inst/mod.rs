@@ -2,7 +2,6 @@
 
 use crate::alloc::{borrow::ToOwned, vec::Vec};
 use crate::binemit::CodeOffset;
-pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::{I8, I16, I32, I64, I128, Type};
 use crate::isa::{FunctionAlignment, arm32};
 use crate::machinst::{
