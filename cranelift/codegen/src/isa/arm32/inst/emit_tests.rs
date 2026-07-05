@@ -1,9 +1,11 @@
 //! Binary-encoding tests for the arm32 (Thumb-2) backend.
 
 // use crate::ir::types::*;
-use crate::isa::arm32;
-use crate::isa::arm32::inst::{EmitInfo, MachInstEmit};
-use crate::machinst::MachBuffer;
+use crate::isa::arm32::{
+    self,
+    inst::{EmitInfo, Inst},
+};
+use crate::machinst::{MachBuffer, MachInstEmit};
 use crate::settings;
 use alloc::vec::Vec;
 
