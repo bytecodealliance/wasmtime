@@ -6,7 +6,7 @@ pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::{I8, I16, I32, I64, I128, Type};
 use crate::isa::{FunctionAlignment, arm32};
 use crate::machinst::{
-    ArgPair, CallType, MachInst, MachInstLabelUse, MachLabel, MachTerminator, OperandVisitor,
+    ArgPair, CallType, MachInst, MachInstLabelUse, MachTerminator, OperandVisitor,
     OperandVisitorImpl, Reg, RegClass, RetPair, Writable,
 };
 use crate::{CodegenError, CodegenResult};
