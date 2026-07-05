@@ -1,10 +1,10 @@
 //! This module defines arm32-specific machine instruction types.
 
-use crate::alloc::{vec::Vec, borrow::ToOwned};
+use crate::alloc::{borrow::ToOwned, vec::Vec};
 use crate::binemit::CodeOffset;
-pub use crate::ir::condcodes::{FloatCC,IntCC};
+pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::{I8, I16, I32, I64, I128, Type};
-use crate::isa::{arm32, FunctionAlignment};
+use crate::isa::{FunctionAlignment, arm32};
 use crate::machinst::*;
 use crate::{CodegenError, CodegenResult};
 
@@ -112,11 +112,7 @@ impl MachInst for Inst {
         todo!()
     }
 
-    fn gen_move(
-        _to_reg: Writable<crate::Reg>,
-        _from_reg: crate::Reg,
-        _ty: Type,
-    ) -> Self {
+    fn gen_move(_to_reg: Writable<crate::Reg>, _from_reg: crate::Reg, _ty: Type) -> Self {
         todo!()
     }
 
