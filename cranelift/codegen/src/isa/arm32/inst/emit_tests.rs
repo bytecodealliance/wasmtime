@@ -2,7 +2,7 @@
 
 // use crate::ir::types::*;
 use crate::isa::arm32;
-use crate::isa::arm32::inst::*;
+use crate::isa::arm32::inst::{EmitInfo, MachInstEmit};
 use crate::machinst::MachBuffer;
 use crate::settings;
 use alloc::vec::Vec;

@@ -2,7 +2,7 @@
 use crate::ir::Inst as IRInst;
 use crate::isa::arm32::Arm32Backend;
 // Re-export types from inst/ so ISLE generated code can find them via `use super::*`.
-pub use crate::isa::arm32::inst::*;
+pub use crate::isa::arm32::inst::{EmitInfo, FloatCC, Inst, IntCC, LabelUse, emit, regs, unwind};
 use crate::machinst::{Lower, LowerBackend, Reg};
 
 /// Re-export ISLE module for use from mod.rs.
