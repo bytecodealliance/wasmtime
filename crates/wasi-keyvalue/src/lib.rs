@@ -209,7 +209,12 @@ impl keyvalue::store::HostBucket for WasiKeyValue<'_> {
     ) -> Result<keyvalue::store::KeyResponse, Error> {
         let bucket = self.table.get_mut(&bucket)?;
         let keys: Vec<String> = bucket.in_memory_data.keys().cloned().collect();
-        let cursor = cursor.unwrap_or(0) as usize;
+        // `cursor` is guest-controlled, so clamp it to the number of keys before
+        // slicing. `try_from` also guards against a `u64` that does not fit in a
+        // `usize` on 32-bit hosts, which the old `as usize` cast would truncate.
+        let cursor = usize::try_from(cursor.unwrap_or(0))
+            .unwrap_or(usize::MAX)
+            .min(keys.len());
         let keys_slice = &keys[cursor..];
         Ok(keyvalue::store::KeyResponse {
             keys: keys_slice.to_vec(),
@@ -239,7 +244,9 @@ impl keyvalue::atomics::Host for WasiKeyValue<'_> {
             .map_err(|e| Error::Other(e.to_string()))?
             .parse::<u64>()
             .map_err(|e| Error::Other(e.to_string()))?;
-        let new_value = current_value + delta;
+        let new_value = current_value
+            .checked_add(delta)
+            .ok_or_else(|| Error::Other("overflow incrementing value".to_string()))?;
         *value = new_value.to_string().into_bytes();
         Ok(new_value)
     }
@@ -299,4 +306,46 @@ struct HasWasiKeyValue;
 
 impl HasData for HasWasiKeyValue {
     type Data<'a> = WasiKeyValue<'a>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use keyvalue::atomics::Host as _;
+    use keyvalue::store::{Host as _, HostBucket as _};
+    use wasmtime::component::ResourceTable;
+
+    fn ctx_with(data: &[(&str, &str)]) -> WasiKeyValueCtx {
+        WasiKeyValueCtxBuilder::new()
+            .in_memory_data(data.iter().map(|(k, v)| (k.to_string(), v.to_string())))
+            .build()
+    }
+
+    #[test]
+    fn list_keys_cursor_past_end_returns_empty() {
+        let ctx = ctx_with(&[("k", "v")]);
+        let mut table = ResourceTable::new();
+        let mut kv = WasiKeyValue::new(&ctx, &mut table);
+        let bucket = match kv.open(String::new()) {
+            Ok(bucket) => bucket,
+            Err(_) => panic!("open failed"),
+        };
+        // A guest-supplied cursor past the last key must not panic.
+        match kv.list_keys(bucket, Some(1_000)) {
+            Ok(resp) => assert!(resp.keys.is_empty()),
+            Err(_) => panic!("list_keys returned an error"),
+        }
+    }
+
+    #[test]
+    fn increment_overflow_is_reported_as_error() {
+        let ctx = ctx_with(&[("c", "18446744073709551615")]); // u64::MAX
+        let mut table = ResourceTable::new();
+        let mut kv = WasiKeyValue::new(&ctx, &mut table);
+        let bucket = match kv.open(String::new()) {
+            Ok(bucket) => bucket,
+            Err(_) => panic!("open failed"),
+        };
+        assert!(kv.increment(bucket, "c".to_string(), 1).is_err());
+    }
 }
