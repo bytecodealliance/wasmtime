@@ -1,18 +1,17 @@
 //! Implementation of a standard ARM32 ABI (AAPCS).
 
-use crate::alloc::borrow::ToOwned;
-use crate::alloc::vec::Vec;
-use crate::ir::{self, types::I32};
+use crate::alloc::{borrow::ToOwned, vec::Vec};
+use crate::ir::{self, Type, types::I32};
 use crate::isa::{
-    self,
+    self, CallConv,
     arm32::{inst::Inst, lower::regs::x_reg, settings::Flags as Arm32Flags},
 };
 use crate::machinst::{
     ABIArg, ABIArgSlot, ABIArgSlotVec, ABIMachineSpec, ArgPair, ArgsAccumulator, ArgsOrRets,
-    Callee, FrameLayout, FunctionCalls, IsaFlags, MachInst, RealReg, RegClass, RetPair,
-    SmallInstVec, Writable, align_to,
+    Callee, FrameLayout, FunctionCalls, IsaFlags, MachInst, RealReg, Reg, RegClass, RetPair,
+    SmallInstVec, StackAMode, Writable, align_to,
 };
-use crate::settings;
+use crate::{CodegenError, CodegenResult, settings};
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::SmallVec;
 
@@ -26,24 +25,25 @@ impl ABIMachineSpec for Arm32MachineDeps {
     type I = Inst;
     type F = Arm32Flags;
 
-    const STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
+    // Use 1MB as an upper limit for this, although in practice you don't this much on a small system
+    const STACK_ARG_RET_SIZE_LIMIT: u32 = 1 * 1024 * 1024;
 
     fn word_bits() -> u32 {
         32
     }
 
-    fn stack_align(_call_conv: crate::isa::CallConv) -> u32 {
+    fn stack_align(_call_conv: CallConv) -> u32 {
         8
     }
 
     fn compute_arg_locs(
-        call_conv: isa::CallConv,
+        call_conv: CallConv,
         flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
-    ) -> crate::CodegenResult<(u32, Option<usize>)> {
+    ) -> CodegenResult<(u32, Option<usize>)> {
         assert_ne!(
             call_conv,
             isa::CallConv::Winch,
@@ -111,7 +111,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
                             let size = core::cmp::max(reg_ty.bits() / 8, 4);
                             next_stack = align_to(next_stack, size);
                             slots.push(ABIArgSlot::Stack {
-                                offset: next_stack as i64,
+                                offset: i64::from(next_stack),
                                 ty: *reg_ty,
                                 extension: param.extension,
                             });
@@ -125,10 +125,9 @@ impl ABIMachineSpec for Arm32MachineDeps {
                     for (_rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
                         if args_or_rets == ArgsOrRets::Rets
                             && !flags.enable_multi_ret_implicit_sret()
-                            && num_parts > 1
                         {
-                            return Err(crate::CodegenError::Unsupported(
-                                "Multi-part return values not supported on arm32. \
+                            return Err(CodegenError::Unsupported(
+                                "Too many return values to fit in registers. \
                                 Use a StructReturn argument instead. (#9510)"
                                     .to_owned(),
                             ));
@@ -138,7 +137,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
                         debug_assert!(size.is_power_of_two());
                         next_stack = align_to(next_stack, size);
                         slots.push(ABIArgSlot::Stack {
-                            offset: next_stack as i64,
+                            offset: i64::from(next_stack),
                             ty: *reg_ty,
                             extension: param.extension,
                         });
@@ -169,14 +168,14 @@ impl ABIMachineSpec for Arm32MachineDeps {
                     let size = core::cmp::max(reg_tys.first().unwrap().bits() / 8, 4);
                     next_stack = align_to(next_stack, size);
                     slots.push(ABIArgSlot::Stack {
-                        offset: next_stack as i64,
+                        offset: i64::from(next_stack),
                         ty: *reg_tys.first().unwrap(),
                         extension: param.extension,
                     });
                     next_stack += size;
                 }
             } else if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
-                return Err(crate::CodegenError::Unsupported(
+                return Err(CodegenError::Unsupported(
                     "Too many return values to fit in registers. \
                     Use a StructReturn argument instead. (#9510)"
                         .to_owned(),
@@ -186,7 +185,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
                 let size = core::cmp::max(reg_tys.first().unwrap().bits() / 8, 4);
                 next_stack = align_to(next_stack, size);
                 slots.push(ABIArgSlot::Stack {
-                    offset: next_stack as i64,
+                    offset: i64::from(next_stack),
                     ty: *reg_tys.first().unwrap(),
                     extension: param.extension,
                 });
@@ -210,37 +209,25 @@ impl ABIMachineSpec for Arm32MachineDeps {
         Ok((next_stack, pos))
     }
 
-    fn gen_load_stack(
-        _mem: crate::machinst::StackAMode,
-        _into_reg: crate::Writable<crate::Reg>,
-        _ty: crate::ir::Type,
-    ) -> Self::I {
+    fn gen_load_stack(_mem: StackAMode, _into_reg: Writable<Reg>, _ty: Type) -> Inst {
         todo!()
     }
 
-    fn gen_store_stack(
-        _mem: crate::machinst::StackAMode,
-        _from_reg: crate::Reg,
-        _ty: crate::ir::Type,
-    ) -> Self::I {
+    fn gen_store_stack(_mem: StackAMode, _from_reg: Reg, _ty: Type) -> Inst {
         todo!()
     }
 
-    fn gen_move(
-        _to_reg: crate::Writable<crate::Reg>,
-        _from_reg: crate::Reg,
-        _ty: crate::ir::Type,
-    ) -> Self::I {
+    fn gen_move(_to_reg: Writable<Reg>, _from_reg: Reg, _ty: Type) -> Inst {
         todo!()
     }
 
     fn gen_extend(
-        _to_reg: crate::Writable<crate::Reg>,
-        _from_reg: crate::Reg,
+        _to_reg: Writable<Reg>,
+        _from_reg: Reg,
         _is_signed: bool,
         _from_bits: u8,
         _to_bits: u8,
-    ) -> Self::I {
+    ) -> Inst {
         todo!()
     }
 
@@ -253,57 +240,42 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn gen_add_imm(
-        _call_conv: crate::isa::CallConv,
-        _into_reg: crate::Writable<crate::Reg>,
-        _from_reg: crate::Reg,
+        _call_conv: CallConv,
+        _into_reg: Writable<Reg>,
+        _from_reg: Reg,
         _imm: u32,
-    ) -> crate::machinst::SmallInstVec<Self::I> {
+    ) -> SmallInstVec<Inst> {
         todo!()
     }
 
-    fn gen_stack_lower_bound_trap(
-        _limit_reg: crate::Reg,
-    ) -> crate::machinst::SmallInstVec<Self::I> {
+    fn gen_stack_lower_bound_trap(_limit_reg: Reg) -> SmallInstVec<Inst> {
         todo!()
     }
 
-    fn gen_get_stack_addr(
-        _mem: crate::machinst::StackAMode,
-        _into_reg: crate::Writable<crate::Reg>,
-    ) -> Self::I {
+    fn gen_get_stack_addr(_mem: StackAMode, _into_reg: Writable<Reg>) -> Inst {
         todo!()
     }
 
-    fn get_stacklimit_reg(_call_conv: crate::isa::CallConv) -> crate::Reg {
+    fn get_stacklimit_reg(_call_conv: CallConv) -> Reg {
         todo!()
     }
 
-    fn gen_load_base_offset(
-        _into_reg: crate::Writable<crate::Reg>,
-        _base: crate::Reg,
-        _offset: i32,
-        _ty: crate::ir::Type,
-    ) -> Self::I {
+    fn gen_load_base_offset(_into_reg: Writable<Reg>, _base: Reg, _offset: i32, _ty: Type) -> Inst {
         todo!()
     }
 
-    fn gen_store_base_offset(
-        _base: crate::Reg,
-        _offset: i32,
-        _from_reg: crate::Reg,
-        _ty: crate::ir::Type,
-    ) -> Self::I {
+    fn gen_store_base_offset(_base: Reg, _offset: i32, _from_reg: Reg, _ty: Type) -> Inst {
         todo!()
     }
 
-    fn gen_sp_reg_adjust(_amount: i32) -> crate::machinst::SmallInstVec<Self::I> {
+    fn gen_sp_reg_adjust(_amount: i32) -> SmallInstVec<Inst> {
         todo!()
     }
 
     // Compute frame layout.  Follows the aarch64 pattern: compute clobber_size,
     // then determine setup_area_size based on whether we need FP/LR saved.
     fn compute_frame_layout(
-        _call_conv: isa::CallConv,
+        _call_conv: CallConv,
         _flags: &settings::Flags,
         _sig: &ir::Signature,
         regs: &[Writable<RealReg>],
@@ -329,7 +301,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         callee_saved_regs.sort_unstable();
 
         // Each saved register is 4 bytes.
-        let clobber_size: u32 = callee_saved_regs.len() as u32 * 4;
+        let clobber_size: u32 = u32::try_from(callee_saved_regs.len() * 4).unwrap();
 
         // We need a linkage frame (setup area) if there are any clobbers,
         // incoming args on the stack, fixed-frame storage, outgoing args,
@@ -356,7 +328,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn gen_prologue_frame_setup(
-        _call_conv: isa::CallConv,
+        _call_conv: CallConv,
         _flags: &settings::Flags,
         _isa_flags: &Arm32Flags,
         frame_layout: &FrameLayout,
@@ -376,7 +348,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn gen_epilogue_frame_restore(
-        _call_conv: isa::CallConv,
+        _call_conv: CallConv,
         _flags: &settings::Flags,
         _isa_flags: &Arm32Flags,
         frame_layout: &FrameLayout,
@@ -396,10 +368,10 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn gen_return(
-        _call_conv: crate::isa::CallConv,
+        _call_conv: CallConv,
         _isa_flags: &Arm32Flags,
-        frame_layout: &crate::FrameLayout,
-    ) -> crate::machinst::SmallInstVec<Inst> {
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Inst> {
         // If the epilogue already popped PC (direct return), this becomes empty.
         // Otherwise emit BX LR for explicit return.
         if frame_layout.setup_area_size > 0 && frame_layout.clobber_size > 0 {
@@ -412,13 +384,13 @@ impl ABIMachineSpec for Arm32MachineDeps {
         }
     }
 
-    fn gen_probestack(_insts: &mut crate::machinst::SmallInstVec<Self::I>, _frame_size: u32) {
+    fn gen_probestack(_insts: &mut SmallInstVec<Inst>, _frame_size: u32) {
         todo!()
     }
 
     fn gen_inline_probestack(
-        _insts: &mut crate::machinst::SmallInstVec<Self::I>,
-        _call_conv: crate::isa::CallConv,
+        _insts: &mut SmallInstVec<Inst>,
+        _call_conv: CallConv,
         _frame_size: u32,
         _guard_size: u32,
     ) {
@@ -426,7 +398,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn gen_clobber_save(
-        _call_conv: isa::CallConv,
+        _call_conv: CallConv,
         _flags: &settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
@@ -447,7 +419,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn gen_clobber_restore(
-        _call_conv: isa::CallConv,
+        _call_conv: CallConv,
         _flags: &settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
@@ -471,13 +443,13 @@ impl ABIMachineSpec for Arm32MachineDeps {
         insts
     }
 
-    fn gen_memcpy<F: FnMut(crate::ir::Type) -> crate::Writable<crate::Reg>>(
-        _call_conv: crate::isa::CallConv,
-        _dst: crate::Reg,
-        _src: crate::Reg,
+    fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
+        _call_conv: CallConv,
+        _dst: Reg,
+        _src: Reg,
         _size: usize,
         _alloc_tmp: F,
-    ) -> smallvec::SmallVec<[Self::I; 8]> {
+    ) -> smallvec::SmallVec<[Inst; 8]> {
         todo!()
     }
 
@@ -489,7 +461,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         todo!()
     }
 
-    fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
+    fn get_machine_env(_flags: &settings::Flags, _call_conv: CallConv) -> &MachineEnv {
         static DEFAULT_ENV: MachineEnv = create_arm32_reg_environment();
 
         /// Create the ARM32 register environment.
@@ -532,20 +504,20 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn get_regs_clobbered_by_call(
-        _call_conv_of_callee: crate::isa::CallConv,
+        _call_conv_of_callee: CallConv,
         _is_exception: bool,
     ) -> regalloc2::PRegSet {
         todo!()
     }
 
     fn get_ext_mode(
-        _call_conv: crate::isa::CallConv,
+        _call_conv: CallConv,
         specified: crate::ir::ArgumentExtension,
     ) -> crate::ir::ArgumentExtension {
         specified
     }
 
-    fn retval_temp_reg(_call_conv_of_callee: crate::isa::CallConv) -> crate::Writable<crate::Reg> {
+    fn retval_temp_reg(_call_conv_of_callee: CallConv) -> Writable<Reg> {
         todo!()
     }
 }
