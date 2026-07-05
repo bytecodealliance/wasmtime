@@ -1,10 +1,11 @@
 //! ARM 32-bit Instruction Set Architecture (Thumb-2 subset).
 
+use crate::alloc::{boxed::Box, string::String, vec::Vec};
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{self, Function};
-use crate::isa::arm32::settings as arm32_settings;
 use crate::isa::{
     Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey, OwnedTargetIsa, TargetIsa, Type,
+    arm32::settings as arm32_settings,
 };
 use crate::machinst::{
     CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet, TextSectionBuilder,
@@ -12,13 +13,12 @@ use crate::machinst::{
 };
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
-use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
 use target_lexicon::{Architecture, Triple};
 
 mod abi;
-mod inst;
+pub(crate) mod inst;
 mod lower;
 mod settings;
 
