@@ -496,7 +496,10 @@ impl types::HostFutureTrailers for WasiHttpCtxView<'_> {
         let mut fields = match res {
             Ok(Some(fields)) => fields,
             Ok(None) => return Ok(Some(Ok(Ok(None)))),
-            Err(e) => return Ok(Some(Ok(Err(e)))),
+            Err(e) => {
+                let e = self.error_to_p2(e);
+                return Ok(Some(Ok(Err(e))));
+            }
         };
 
         remove_forbidden_headers(self.hooks, &mut fields);
@@ -642,8 +645,7 @@ impl types::HostFutureIncomingResponse for WasiHttpCtxView<'_> {
             match std::mem::replace(resp, HostFutureIncomingResponse::Consumed).unwrap_ready() {
                 Ok(pair) => pair,
                 Err(e) => {
-                    // Trapping if it's not possible to downcast to an wasi-http error
-                    let e = e.downcast()?;
+                    let e = self.error_to_p2(e);
                     return Ok(Some(Ok(Err(e))));
                 }
             };

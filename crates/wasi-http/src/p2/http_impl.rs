@@ -83,7 +83,7 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
             .hooks
             .send_request(request, opts, Box::new(async { Ok(()) }));
         let future = wasmtime_wasi::runtime::spawn(async move {
-            let (res, io) = Pin::from(future).await.map_err(types::ErrorCode::from)?;
+            let (res, io) = Pin::from(future).await?;
             let io = wasmtime_wasi::runtime::spawn(async move {
                 match Pin::from(io).await {
                     Ok(()) => {}
@@ -92,7 +92,7 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
                     Err(e) => tracing::warn!("dropping error {e}"),
                 }
             });
-            let res = res.map(|b| b.map_err(types::ErrorCode::from).boxed_unsync());
+            let res = res.map(|b| b.boxed_unsync());
             Ok((res, io))
         });
 

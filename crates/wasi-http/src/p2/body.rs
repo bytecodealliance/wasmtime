@@ -1,7 +1,7 @@
 //! Implementation of the `wasi:http/types` interface's various body types.
 
-use crate::FieldMap;
 use crate::p2::bindings::http::types;
+use crate::{Error, FieldMap};
 use bytes::Bytes;
 use http_body::{Body, Frame};
 use http_body_util::BodyExt;
@@ -16,10 +16,10 @@ use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamError};
 use wasmtime_wasi::runtime::{AbortOnDropJoinHandle, poll_noop};
 
 /// Common type for incoming bodies.
-pub type HyperIncomingBody = UnsyncBoxBody<Bytes, types::ErrorCode>;
+pub type HyperIncomingBody = UnsyncBoxBody<Bytes, Error>;
 
 /// Common type for outgoing bodies.
-pub type HyperOutgoingBody = UnsyncBoxBody<Bytes, types::ErrorCode>;
+pub type HyperOutgoingBody = UnsyncBoxBody<Bytes, Error>;
 
 /// The concrete type behind a `was:http/types.incoming-body` resource.
 #[derive(Debug)]
@@ -102,11 +102,11 @@ enum StreamEnd {
 pub struct HostIncomingBodyStream {
     state: IncomingBodyStreamState,
     buffer: Bytes,
-    error: Option<wasmtime::Error>,
+    error: Option<Error>,
 }
 
 impl HostIncomingBodyStream {
-    fn record_frame(&mut self, frame: Option<Result<Frame<Bytes>, types::ErrorCode>>) {
+    fn record_frame(&mut self, frame: Option<Result<Frame<Bytes>, Error>>) {
         match frame {
             Some(Ok(frame)) => match frame.into_data() {
                 // A data frame was received, so queue up the buffered data for
@@ -181,7 +181,7 @@ impl InputStream for HostIncomingBodyStream {
             }
 
             if let Some(e) = self.error.take() {
-                return Err(StreamError::LastOperationFailed(e));
+                return Err(StreamError::LastOperationFailed(e.into()));
             }
 
             // Extract the body that we're reading from. If present perform a
@@ -256,7 +256,7 @@ pub enum HostFutureTrailers {
     ///
     /// Note that `Ok(None)` means that there were no trailers for this request
     /// while `Ok(Some(_))` means that trailers were found in the request.
-    Done(Result<Option<http::HeaderMap>, types::ErrorCode>),
+    Done(Result<Option<http::HeaderMap>, Error>),
 
     /// Trailers have been consumed by `future-trailers.get`.
     Consumed,
@@ -377,7 +377,7 @@ impl HostOutgoingBody {
         }
         impl Body for BodyImpl {
             type Data = Bytes;
-            type Error = types::ErrorCode;
+            type Error = Error;
             fn poll_frame(
                 mut self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
@@ -400,7 +400,7 @@ impl HostOutgoingBody {
                                         Poll::Ready(Some(Ok(Frame::trailers(trailers))))
                                     }
                                     FinishMessage::Abort => {
-                                        Poll::Ready(Some(Err(types::ErrorCode::HttpProtocolError)))
+                                        Poll::Ready(Some(Err(Error::HttpProtocolError)))
                                     }
                                 },
                                 Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),

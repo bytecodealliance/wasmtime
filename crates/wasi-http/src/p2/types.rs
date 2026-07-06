@@ -2,11 +2,10 @@
 //! wasi-http API.
 
 use crate::p2::{
-    HttpResult,
-    bindings::http::types::{self, ErrorCode, Method, Scheme},
+    bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
-use crate::{FieldMap, WasiHttpCtxView, WasiHttpHooks};
+use crate::{Error, FieldMap, WasiHttpCtxView, WasiHttpHooks};
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Body;
@@ -99,7 +98,7 @@ impl WasiHttpCtxView<'_> {
     ) -> wasmtime::Result<Resource<HostIncomingRequest>>
     where
         B: Body<Data = Bytes> + Send + 'static,
-        B::Error: Into<ErrorCode>,
+        B::Error: Into<Error>,
     {
         let (mut parts, body) = req.into_parts();
         let body = body.map_err(Into::into).boxed_unsync();
@@ -242,7 +241,8 @@ pub struct IncomingResponse {
     pub worker: Option<AbortOnDropJoinHandle<()>>,
 }
 
-type SendRequestResult = HttpResult<(http::Response<HyperIncomingBody>, AbortOnDropJoinHandle<()>)>;
+type SendRequestResult =
+    crate::Result<(http::Response<HyperIncomingBody>, AbortOnDropJoinHandle<()>)>;
 
 /// The concrete type behind a `wasi:http/types.future-incoming-response` resource.
 pub enum HostFutureIncomingResponse {
