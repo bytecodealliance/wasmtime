@@ -40,6 +40,7 @@ pub unsafe fn commit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
 }
 
 #[allow(non_camel_case_types)] // matching C conventions
+#[cfg(feature = "pooling-allocator")]
 pub struct iovec {
     pub iov_base: *mut u8,
     pub iov_len: usize,
