@@ -1,6 +1,6 @@
 use core::fmt;
 
-/// A helper types that is `Send` if `T` is `Sync`.
+/// A helper type to make `T` become `Sync` if it is `Send`.
 ///
 /// This structure is a newtype wrapper around the `T` type parameter. What
 /// makes this a utility is the fact that it contains an `unsafe impl Sync`
