@@ -9,23 +9,13 @@
 //! immediately get flushed every time we push onto it.
 
 use super::PoolingInstanceAllocator;
+use crate::vm::sys::vm::{decommit_pages, iovec};
 use crate::vm::{MemoryAllocationIndex, MemoryImageSlot, Table, TableAllocationIndex};
 use smallvec::SmallVec;
 use std::io;
 
 #[cfg(feature = "async")]
 use wasmtime_fiber::FiberStack;
-
-#[cfg(unix)]
-#[expect(non_camel_case_types, reason = "matching libc naming")]
-type iovec = libc::iovec;
-
-#[cfg(not(unix))]
-#[expect(non_camel_case_types, reason = "matching libc naming")]
-struct iovec {
-    iov_base: *mut libc::c_void,
-    iov_len: libc::size_t,
-}
 
 #[repr(transparent)]
 struct IoVec(iovec);
@@ -158,11 +148,17 @@ impl DecommitQueue {
 
     /// Returns if any decommit call failed.
     fn decommit_all_raw(&mut self) -> io::Result<()> {
-        for iovec in self.raw.drain(..) {
-            unsafe {
-                crate::vm::sys::vm::decommit_pages(iovec.0.iov_base.cast(), iovec.0.iov_len)?;
-            }
+        let iov: &[IoVec] = self.raw.as_slice();
+        // SAFETY: `IoVec` is `repr(transparent)` over `iovec` so it should be
+        // safe to reinterpret the slice as the same type.
+        let iov = unsafe { &*(iov as *const [IoVec] as *const [iovec]) };
+
+        // SAFETY: the safety of this function depends on the caller of `push_*`
+        // functions, otherwise this is just forwarding its safety requirements.
+        unsafe {
+            decommit_pages(iov)?;
         }
+        self.raw.clear();
         Ok(())
     }
 

@@ -715,7 +715,7 @@ impl MemoryImageSlot {
 mod test {
     use super::*;
     use crate::runtime::vm::mmap::{AlignedLength, Mmap};
-    use crate::runtime::vm::sys::vm::decommit_pages;
+    use crate::runtime::vm::sys::vm::{decommit_pages, iovec};
     use crate::runtime::vm::{HostAlignedByteCount, MmapVec, host_page_size};
     use std::sync::Arc;
     use wasmtime_environ::{IndexType, Limits, Memory, MemoryKind, Tunables};
@@ -752,6 +752,16 @@ mod test {
             fn mmap(&self) -> Option<&MmapVec> {
                 None
             }
+        }
+    }
+
+    fn decommit(base: *mut u8, len: usize) {
+        unsafe {
+            decommit_pages(&[iovec {
+                iov_base: base.cast(),
+                iov_len: len,
+            }])
+            .unwrap();
         }
     }
 
@@ -836,9 +846,7 @@ mod test {
         // instantiate again; we should see zeroes, even as the
         // reuse-anon-mmap-opt kicks in
         memfd
-            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
-                decommit_pages(ptr, len).unwrap()
-            })
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, decommit)
             .unwrap();
         assert!(!memfd.is_dirty());
         memfd
@@ -888,9 +896,7 @@ mod test {
 
         // Clear and re-instantiate same image
         memfd
-            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
-                decommit_pages(ptr, len).unwrap()
-            })
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, decommit)
             .unwrap();
         memfd
             .instantiate(
@@ -905,9 +911,7 @@ mod test {
 
         // Clear and re-instantiate no image
         memfd
-            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
-                decommit_pages(ptr, len).unwrap()
-            })
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, decommit)
             .unwrap();
         memfd
             .instantiate(
@@ -923,9 +927,7 @@ mod test {
 
         // Clear and re-instantiate image again
         memfd
-            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
-                decommit_pages(ptr, len).unwrap()
-            })
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, decommit)
             .unwrap();
         memfd
             .instantiate(
@@ -941,9 +943,7 @@ mod test {
         // Create another image with different data.
         let image2 = Arc::new(create_memfd_with_data(page_size, &[10, 11, 12, 13]).unwrap());
         memfd
-            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
-                decommit_pages(ptr, len).unwrap()
-            })
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, decommit)
             .unwrap();
         memfd
             .instantiate(
@@ -959,9 +959,7 @@ mod test {
         // Instantiate the original image again; we should notice it's
         // a different image and not reuse the mappings.
         memfd
-            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
-                decommit_pages(ptr, len).unwrap()
-            })
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, decommit)
             .unwrap();
         memfd
             .instantiate(
@@ -1016,9 +1014,7 @@ mod test {
                 };
 
                 memfd
-                    .clear_and_remain_ready(None, amt_to_memset, |ptr, len| unsafe {
-                        decommit_pages(ptr, len).unwrap()
-                    })
+                    .clear_and_remain_ready(None, amt_to_memset, decommit)
                     .unwrap();
             }
         }
@@ -1044,9 +1040,7 @@ mod test {
                 });
             }
             memfd
-                .clear_and_remain_ready(None, amt_to_memset, |ptr, len| unsafe {
-                    decommit_pages(ptr, len).unwrap()
-                })
+                .clear_and_remain_ready(None, amt_to_memset, decommit)
                 .unwrap();
         }
     }
@@ -1089,9 +1083,7 @@ mod test {
         }
 
         memfd
-            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
-                decommit_pages(ptr, len).unwrap()
-            })
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, decommit)
             .unwrap();
         let slice = unsafe { mmap.slice(0..(64 << 10) + page_size) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
@@ -1119,9 +1111,7 @@ mod test {
         }
 
         memfd
-            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
-                decommit_pages(ptr, len).unwrap()
-            })
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, decommit)
             .unwrap();
 
         // Test that memory is still accessible, but it's been reset
@@ -1149,9 +1139,7 @@ mod test {
         }
 
         memfd
-            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, |ptr, len| unsafe {
-                decommit_pages(ptr, len).unwrap()
-            })
+            .clear_and_remain_ready(None, HostAlignedByteCount::ZERO, decommit)
             .unwrap();
 
         // Reset the image to none and double-check everything is back to zero
@@ -1204,9 +1192,7 @@ mod test {
         let assert_pristine_after_reset = |memfd: &mut MemoryImageSlot| unsafe {
             // Wipe the image, keeping some bytes resident.
             memfd
-                .clear_and_remain_ready(pagemap, keep_resident, |ptr, len| {
-                    decommit_pages(ptr, len).unwrap()
-                })
+                .clear_and_remain_ready(pagemap, keep_resident, decommit)
                 .unwrap();
 
             // Double check that the contents of memory are as expected after
@@ -1236,9 +1222,7 @@ mod test {
                 )
                 .unwrap();
             memfd
-                .clear_and_remain_ready(pagemap, HostAlignedByteCount::ZERO, |ptr, len| {
-                    decommit_pages(ptr, len).unwrap()
-                })
+                .clear_and_remain_ready(pagemap, HostAlignedByteCount::ZERO, decommit)
                 .unwrap();
 
             // Next re-instantiate a final time to get used for the next test.

@@ -39,9 +39,20 @@ pub unsafe fn commit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     unsafe { expose_existing_mapping(addr, len) }
 }
 
+#[allow(non_camel_case_types)] // matching C conventions
+pub struct iovec {
+    pub iov_base: *mut u8,
+    pub iov_len: usize,
+}
+
 #[cfg(feature = "pooling-allocator")]
-pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
-    unsafe { erase_existing_mapping(addr, len) }
+pub unsafe fn decommit_pages(iov: &[iovec]) -> io::Result<()> {
+    for iov in iov {
+        unsafe {
+            erase_existing_mapping(iov.iov_base, iov.iov_len)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn get_page_size() -> usize {

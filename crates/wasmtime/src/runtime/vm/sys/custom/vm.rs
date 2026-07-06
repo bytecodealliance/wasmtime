@@ -34,18 +34,27 @@ pub unsafe fn commit_pages(_addr: *mut u8, _len: usize) -> Result<()> {
     Ok(())
 }
 
+#[allow(non_camel_case_types)] // matching C conventions
+pub struct iovec {
+    pub iov_base: *mut u8,
+    pub iov_len: usize,
+}
+
 #[cfg(feature = "pooling-allocator")]
 pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> Result<()> {
-    if len == 0 {
-        return Ok(());
-    }
+    for iov in iov {
+        if iov.iov_len == 0 {
+            continue;
+        }
 
-    unsafe {
-        cvt(capi::wasmtime_mmap_remap(
-            addr,
-            len,
-            capi::PROT_READ | capi::PROT_WRITE,
-        ))
+        unsafe {
+            cvt(capi::wasmtime_mmap_remap(
+                iov.iov_addr,
+                iov.iov_len,
+                capi::PROT_READ | capi::PROT_WRITE,
+            ))?;
+        }
+        Ok(())
     }
 }
 
