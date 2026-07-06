@@ -5927,13 +5927,13 @@ impl FuncEnvironment<'_> {
                     let dst = builder
                         .ins()
                         .iadd_imm_s(base, i64::try_from(i.checked_mul(16).unwrap()).unwrap());
+                    let flags = self.element_segment_memflags(builder.func);
                     match ty.heap_type.top() {
                         WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
-                            let ty = WasmStorageType::Val(WasmValType::Ref(*ty));
-                            gc::init_field_at_addr(self, builder, ty, dst, val)?;
+                            gc::gc_compiler(self)?
+                                .translate_init_gc_reference(self, builder, *ty, dst, val, flags)?;
                         }
                         WasmHeapTopType::Func | WasmHeapTopType::Cont => {
-                            let flags = self.element_segment_memflags(builder.func);
                             builder.ins().store(
                                 flags,
                                 val,
