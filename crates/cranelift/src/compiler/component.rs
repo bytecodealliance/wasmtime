@@ -1722,6 +1722,9 @@ impl ComponentCompiler for Compiler {
 
         c.translate(&component.trampolines[trampoline_index]);
         c.builder.finalize(c.isa.frontend_config());
+        crate::alias_region::debug_assert_all_mem_insts_have_alias_regions(
+            &compiler.cx.codegen_context.func,
+        );
         compiler.cx.abi = Some(abi);
 
         Ok(CompiledFunctionBody {
@@ -1809,6 +1812,9 @@ impl ComponentCompiler for Compiler {
         }
 
         c.builder.finalize(c.isa.frontend_config());
+        crate::alias_region::debug_assert_all_mem_insts_have_alias_regions(
+            &compiler.cx.codegen_context.func,
+        );
         compiler.cx.abi = Some(abi);
 
         Ok(CompiledFunctionBody {

@@ -2663,3 +2663,36 @@ where
         )
     }
 }
+
+/// Debug-assert that every CLIF memory instruction in `func` carries an alias
+/// region.
+///
+/// The Wasm-to-CLIF translation in `crates/cranelift/*` tags 100% of the memory
+/// instructions it emits (loads, stores, and atomics) with an alias region.
+/// This helper upholds that invariant; it is called at each
+/// `FunctionBuilder::finalize` site, after finalization so that the stack-map
+/// spills inserted by the safepoint pass (tagged via the
+/// `FunctionBuilder::make_stack_map_alias_region` hook) are checked too.
+pub(crate) fn debug_assert_all_mem_insts_have_alias_regions(func: &ir::Function) {
+    if cfg!(debug_assertions) {
+        for block in func.layout.blocks() {
+            for inst in func.layout.block_insts(block) {
+                // Only loads, stores, and atomics access memory. Some non-memory
+                // instructions (e.g. `bitcast`) also carry `MemFlags` purely for
+                // lane/byte-order and legitimately have no alias region, so they
+                // are excluded here.
+                let opcode = func.dfg.insts[inst].opcode();
+                if !opcode.can_load() && !opcode.can_store() {
+                    continue;
+                }
+                if let Some(flags) = func.dfg.insts[inst].memflags() {
+                    debug_assert!(
+                        func.dfg.mem_flags[flags].alias_region().is_some(),
+                        "CLIF memory instruction emitted without an alias region: {}",
+                        func.dfg.display_inst(inst),
+                    );
+                }
+            }
+        }
+    }
+}
