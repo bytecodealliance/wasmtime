@@ -300,12 +300,14 @@ pub trait WasiHttpHooks: Send {
     /// Number of distinct write calls to the outgoing body's output-stream
     /// that the implementation will buffer.
     /// Default: 1.
+    #[cfg(feature = "p2")]
     fn p2_outgoing_body_buffer_chunks(&mut self) -> usize {
         crate::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS
     }
 
     /// Maximum size allowed in a write call to the outgoing body's
     /// output-stream.  Default: 1024 * 1024.
+    #[cfg(feature = "p2")]
     fn p2_outgoing_body_chunk_size(&mut self) -> usize {
         crate::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE
     }
