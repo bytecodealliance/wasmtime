@@ -218,6 +218,13 @@
 //!     }
 //! }
 //! ```
+//!
+//! [`WasiHttpCtx`]: crate::WasiHttpCtx
+//! [`WasiHttpCtxView`]: crate::WasiHttpCtxView
+//! [`WasiHttpHooks`]: crate::WasiHttpHooks
+//! [`WasiHttpHooks::send_request`]: crate::WasiHttpHooks::send_request
+//! [`ResourceTable`]: wasmtime::component::ResourceTable
+//! [`default_hooks`]: crate::default_hooks
 
 use crate::{WasiHttp, WasiHttpView};
 use wasmtime::component::Linker;
@@ -232,9 +239,13 @@ pub mod types;
 
 pub use self::error::*;
 
-/// The default value configured for [`WasiHttpHooks::outgoing_body_buffer_chunks`] in [`WasiHttpView`].
+/// The default value configured for [`WasiHttpHooks::p2_outgoing_body_buffer_chunks`] in [`WasiHttpView`].
+///
+/// [`WasiHttpHooks::p2_outgoing_body_buffer_chunks`]: crate::WasiHttpHooks::p2_outgoing_body_buffer_chunks
 pub const DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS: usize = 1;
-/// The default value configured for [`WasiHttpHooks::outgoing_body_chunk_size`] in [`WasiHttpView`].
+/// The default value configured for [`WasiHttpHooks::p2_outgoing_body_chunk_size`] in [`WasiHttpView`].
+///
+/// [`WasiHttpHooks::p2_outgoing_body_chunk_size`]: crate::WasiHttpHooks::p2_outgoing_body_chunk_size
 pub const DEFAULT_OUTGOING_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
