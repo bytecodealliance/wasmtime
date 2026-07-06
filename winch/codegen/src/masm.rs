@@ -1080,17 +1080,6 @@ impl OperandSize {
         }
     }
 
-    /// The binary logarithm of the number of bits in the operand.
-    pub fn log2(&self) -> u8 {
-        match self {
-            OperandSize::S8 => 3,
-            OperandSize::S16 => 4,
-            OperandSize::S32 => 5,
-            OperandSize::S64 => 6,
-            OperandSize::S128 => 7,
-        }
-    }
-
     /// Create an [`OperandSize`]  from the given number of bytes.
     pub fn from_bytes(bytes: u8) -> Self {
         use OperandSize::*;

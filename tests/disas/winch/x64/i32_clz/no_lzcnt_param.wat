@@ -14,7 +14,7 @@
 ;;       movq    0x18(%r11), %r11
 ;;       addq    $0x20, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x58
+;;       ja      0x55
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
@@ -22,12 +22,11 @@
 ;;       movl    %edx, 0xc(%rsp)
 ;;       movl    0xc(%rsp), %eax
 ;;       bsrl    %eax, %eax
-;;       movl    $0, %r11d
-;;       setne   %r11b
+;;       movl    $0xffffffff, %r11d
+;;       cmovel  %r11d, %eax
 ;;       negl    %eax
-;;       addl    $0x20, %eax
-;;       subl    %r11d, %eax
+;;       addl    $0x1f, %eax
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   58: ud2
+;;   55: ud2

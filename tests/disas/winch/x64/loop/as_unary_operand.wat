@@ -30,7 +30,7 @@
 ;;       movq    0x18(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0xa1
+;;       ja      0x9a
 ;;   5c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -41,11 +41,9 @@
 ;;       movq    8(%rsp), %r14
 ;;       movl    $0xd, %eax
 ;;       bsfl    %eax, %eax
-;;       movl    $0, %r11d
-;;       sete    %r11b
-;;       shll    $5, %r11d
-;;       addl    %r11d, %eax
+;;       movl    $0x20, %r11d
+;;       cmovel  %r11d, %eax
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   a1: ud2
+;;   9a: ud2
