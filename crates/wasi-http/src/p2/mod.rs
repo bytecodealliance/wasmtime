@@ -219,11 +219,8 @@
 //! }
 //! ```
 
-use self::bindings::http::types::ErrorCode;
-use crate::RequestOptions;
-use crate::{DEFAULT_FORBIDDEN_HEADERS, WasiHttpCtx};
-use http::HeaderName;
-use wasmtime::component::{HasData, Linker, ResourceTable};
+use crate::{WasiHttp, WasiHttpView};
+use wasmtime::component::Linker;
 
 mod error;
 mod http_impl;
