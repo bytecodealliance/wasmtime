@@ -4,7 +4,112 @@ Unreleased.
 
 ### Added
 
+* Wasmtime now has the WebAssembly GC proposal enabled by default.
+  [#13594](https://github.com/bytecodealliance/wasmtime/pull/13594)
+
+* Wasmtime now has the WebAssembly exception-handling proposal enabled by
+  default.
+  [#13603](https://github.com/bytecodealliance/wasmtime/pull/13603)
+
+* Cranelift now supports the compact unwind format on Mach-O platforms.
+  [#13586](https://github.com/bytecodealliance/wasmtime/pull/13586)
+
+* Wasmtime now supports bounds-checked unsafe intrinsics which take spectre
+  mitigations into account.
+  [#13597](https://github.com/bytecodealliance/wasmtime/pull/13597)
+
+* The `wasmtime::Engine` type now supports reflection to determine the value of
+  most `Config` options that were selected during creation.
+  [#13671](https://github.com/bytecodealliance/wasmtime/pull/13671)
+
+* Support for fibers on unsupported architectures is now supported through an
+  opt-in compile time Cargo feature defining a C API embedders can implement.
+  [#13620](https://github.com/bytecodealliance/wasmtime/pull/13620)
+
+* Embedders can now create an `ArrayRef` with a memcpy-style constructor.
+  [#13716](https://github.com/bytecodealliance/wasmtime/pull/13716)
+
+* A new `Accessor::poll_ready_for_concurrent_call` API can be used to detect
+  when backpressure indicates that a function is ready to be invoked.
+  [#13683](https://github.com/bytecodealliance/wasmtime/pull/13683)
+
 ### Changed
+
+* Support for wasi-threads and Wasmtime's `wasi-common` crate have been removed.
+  For more information see the [associated RFC][rfc] in Wasmtime.
+  [#13558](https://github.com/bytecodealliance/wasmtime/pull/13558)
+
+* The `call_indirect` instruction of `final` super types has been optimized when
+  the GC proposal is enabled.
+  [#13572](https://github.com/bytecodealliance/wasmtime/pull/13572)
+
+* Cranelift's `*_imm` builder helpers have been deprecated in favor of
+  `*_imm_{s,u}` helpers.
+  [#13583](https://github.com/bytecodealliance/wasmtime/pull/13583)
+
+* The `wasmtime` CLI's syntax supported for `--invoke` with components now
+  supports fully qualified WIT interface names.
+  [#13564](https://github.com/bytecodealliance/wasmtime/pull/13564)
+
+* Cranelift's `stack_{load,store}` instructions have been removed.
+  [#13580](https://github.com/bytecodealliance/wasmtime/pull/13580)
+
+* Cranelift's `{band,bor,bxor}_not` instructions have been removed.
+  [#13590](https://github.com/bytecodealliance/wasmtime/pull/13590)
+
+* Cranelift's `global_value` instruction has been removed.
+  [#13682](https://github.com/bytecodealliance/wasmtime/pull/13682)
+
+* The `wasmtime wizer` subcommand now supports specifying the initialization
+  function with WAVE for components.
+  [#13582](https://github.com/bytecodealliance/wasmtime/pull/13582)
+
+* Wasmtime's codegen on aarch64 for the `i32x4.relaxed_dot_i8x16_i7x16_add_s`
+  wasm instruction now uses a single `sdot` instruction where possible.
+  [#13640](https://github.com/bytecodealliance/wasmtime/pull/13640)
+
+* Wasmtime's `.wasmtime{traps,addrmap}` sections in `*.cwasm` files are now
+  significantly smaller.
+  [#13628](https://github.com/bytecodealliance/wasmtime/pull/13628)
+
+* Wasmtime now supports removing symbols from `*.cwasm` files and additionally
+  has a documentation page about producing minimally-sized `*.cwasm` outputs.
+  [#13630](https://github.com/bytecodealliance/wasmtime/pull/13630)
+
+* Wasmtime now suports resources in the `named_imports` option of `bindgen!`.
+  [#13666](https://github.com/bytecodealliance/wasmtime/pull/13666)
+
+* Wasmtime now invokes the host's `socket_addr_check` callback for implicit
+  binds performed in WASIp3.
+  [#13677](https://github.com/bytecodealliance/wasmtime/pull/13677)
+
+* Wasmtime's component-to-component sync-to-sync fused adapters have been
+  optimized.
+  [#13695](https://github.com/bytecodealliance/wasmtime/pull/13695)
+
+* Cranelift now supports RISC-V's Zvbb extension.
+  [#13738](https://github.com/bytecodealliance/wasmtime/pull/13738)
+
+[rfc]: https://github.com/bytecodealliance/rfcs/blob/main/accepted/wasmtime-remove-wasi-threads.md
+
+### Fixed
+
+* The `IPV6_V6ONLY` option is now set for UDP sockets.
+  [#13596](https://github.com/bytecodealliance/wasmtime/pull/13596)
+
+* Uncaught wasm exceptions at component boundaries are now turned into traps to
+  prevent components catching exceptions from other components.
+  [#13613](https://github.com/bytecodealliance/wasmtime/pull/13613)
+
+* Addresses being sent do with WASIp3 and UDP are now validated as they are in
+  WASIp2.
+  [#13631](https://github.com/bytecodealliance/wasmtime/pull/13631)
+
+* GC roots on component model fiber stacks are now properly traced.
+  [#13693](https://github.com/bytecodealliance/wasmtime/pull/13693)
+
+* An unaligned load when reading debug state slot values has been fixed.
+  [#13791](https://github.com/bytecodealliance/wasmtime/pull/13791)
 
 --------------------------------------------------------------------------------
 
