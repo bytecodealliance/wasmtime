@@ -209,7 +209,7 @@ impl AliasRegionKey {
             AliasRegionKey::PublicMemory => Self::IMPORTED_MEMORY_KIND,
             AliasRegionKey::DefinedMemory { module, index } => {
                 debug_assert_eq!(
-                    module.as_u32() & !Self::MODULE_MASK >> Self::MODULE_OFFSET,
+                    module.as_u32() & !(Self::MODULE_MASK >> Self::MODULE_OFFSET),
                     0
                 );
                 debug_assert_eq!(index.as_u32() & !Self::INDEX_MASK, 0);
@@ -220,7 +220,7 @@ impl AliasRegionKey {
             AliasRegionKey::PublicTable => Self::IMPORTED_TABLE_KIND,
             AliasRegionKey::DefinedTable { module, index } => {
                 debug_assert_eq!(
-                    module.as_u32() & !Self::MODULE_MASK >> Self::MODULE_OFFSET,
+                    module.as_u32() & !(Self::MODULE_MASK >> Self::MODULE_OFFSET),
                     0
                 );
                 debug_assert_eq!(index.as_u32() & !Self::INDEX_MASK, 0);
@@ -229,7 +229,7 @@ impl AliasRegionKey {
             AliasRegionKey::PublicGlobal => Self::IMPORTED_GLOBAL_KIND,
             AliasRegionKey::DefinedGlobal { module, index } => {
                 debug_assert_eq!(
-                    module.as_u32() & !Self::MODULE_MASK >> Self::MODULE_OFFSET,
+                    module.as_u32() & !(Self::MODULE_MASK >> Self::MODULE_OFFSET),
                     0
                 );
                 debug_assert_eq!(index.as_u32() & !Self::INDEX_MASK, 0);
