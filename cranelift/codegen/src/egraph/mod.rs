@@ -756,7 +756,7 @@ impl<'a> EgraphPass<'a> {
 
     /// Run the process.
     pub fn run(&mut self) {
-        self.remove_pure_and_optimize();
+        let cfg_maybe_changed = self.remove_pure_and_optimize();
 
         trace!("egraph built:\n{}\n", self.func.display());
         if cfg!(feature = "trace-log") {
@@ -773,12 +773,15 @@ impl<'a> EgraphPass<'a> {
 
         // Branch simplification could have mutated the CFG and made some blocks
         // unreachable; recompute the CFG, find which blocks are still
-        // reachable, and remove those that aren't.
-        self.cfg.compute(self.func);
-        let reachable_blocks = self.find_reachable_blocks();
-        crate::unreachable_code::eliminate_unreachable_code(self.func, self.cfg, |block| {
-            reachable_blocks.contains(block)
-        });
+        // reachable, and remove those that aren't. But only do this if we
+        // rewrote a block terminator, because otherwise the CFG is unchanged.
+        if cfg_maybe_changed {
+            self.cfg.compute(self.func);
+            let reachable_blocks = self.find_reachable_blocks();
+            crate::unreachable_code::eliminate_unreachable_code(self.func, self.cfg, |block| {
+                reachable_blocks.contains(block)
+            });
+        }
 
         self.elaborate();
 
@@ -804,8 +807,15 @@ impl<'a> EgraphPass<'a> {
     /// because the eclass can continue to be updated and we need to
     /// only refer to its subset that exists at this stage, to
     /// maintain acyclicity.)
-    fn remove_pure_and_optimize(&mut self) {
+    ///
+    /// Returns whether we may have modified the CFG (i.e. rewrote a
+    /// terminator).
+    fn remove_pure_and_optimize(&mut self) -> bool {
         let mut cursor = FuncCursor::new(self.func);
+
+        // Set to `true` if any skeleton simplification rewrites a terminator and
+        // thus may have made some blocks unreachable. See `run`.
+        let mut cfg_maybe_changed = false;
         let mut value_to_opt_value: SecondaryMap<Value, Value> =
             SecondaryMap::with_default(Value::reserved_value());
 
@@ -957,7 +967,7 @@ impl<'a> EgraphPass<'a> {
                     cursor.remove_inst_and_step_back();
                 } else {
                     if let Some(cmd) = ctx.optimize_skeleton_inst(inst, block) {
-                        Self::execute_skeleton_inst_simplification(
+                        cfg_maybe_changed |= Self::execute_skeleton_inst_simplification(
                             cmd,
                             &mut cursor,
                             &mut value_to_opt_value,
@@ -967,6 +977,7 @@ impl<'a> EgraphPass<'a> {
                 }
             }
         }
+        cfg_maybe_changed
     }
 
     /// Find the set of blocks reachable from the entry block by
@@ -991,12 +1002,20 @@ impl<'a> EgraphPass<'a> {
 
     /// Execute a simplification of an instruction in the side-effectful
     /// skeleton.
+    ///
+    /// Returns whether this simplification may have changed the CFG's topology.
+    /// A block's set of successors can only change if its terminator changes, so
+    /// this is `true` exactly when the old instruction or an instruction we
+    /// replace it with is a terminator. (Non-terminator rewrites such as div/rem
+    /// strength reduction leave the CFG untouched.)
     fn execute_skeleton_inst_simplification(
         simplification: SkeletonInstSimplification,
         cursor: &mut FuncCursor,
         value_to_opt_value: &mut SecondaryMap<Value, Value>,
         old_inst: Inst,
-    ) {
+    ) -> bool {
+        let old_is_terminator = cursor.func.dfg.insts[old_inst].opcode().is_terminator();
+
         // Redirect uses of `old_val` to `new_val`.
         let forward_val = |cursor: &mut FuncCursor<'_>,
                            value_to_opt_value: &mut SecondaryMap<_, _>,
@@ -1044,14 +1063,22 @@ impl<'a> EgraphPass<'a> {
         let (new_inst, new_val) = match simplification {
             SkeletonInstSimplification::Remove => {
                 cursor.remove_inst_and_step_back();
-                return;
+                debug_assert!(
+                    !old_is_terminator,
+                    "cannot remove a block terminator (the block would become invalid)",
+                );
+                return false;
             }
             SkeletonInstSimplification::RemoveWithVal { val } => {
                 cursor.remove_inst_and_step_back();
                 let old_val = cursor.func.dfg.first_result(old_inst);
                 cursor.func.dfg.detach_inst_results(old_inst);
                 forward_val(cursor, value_to_opt_value, old_val, val);
-                return;
+                debug_assert!(
+                    !old_is_terminator,
+                    "cannot remove a block terminator (the block would become invalid)",
+                );
+                return false;
             }
             SkeletonInstSimplification::ReplaceBranchCond { cond } => {
                 // Swap the condition operand (argument 0) of the existing
@@ -1069,7 +1096,9 @@ impl<'a> EgraphPass<'a> {
                 // condition or it can be GVN'd.
                 self_map_operands(&cursor.func.dfg, value_to_opt_value, old_inst);
                 reprocess_from(cursor, old_inst);
-                return;
+                // The opcode and successors are unchanged, so the CFG is
+                // preserved.
+                return false;
             }
             SkeletonInstSimplification::ReplaceWithTwo { first, second } => {
                 // We don't forward result values for `ReplaceWithTwo` -- and it
@@ -1080,12 +1109,13 @@ impl<'a> EgraphPass<'a> {
                 debug_assert!(cursor.func.dfg.inst_results(first).is_empty());
                 debug_assert!(cursor.func.dfg.inst_results(second).is_empty());
 
+                debug_assert!(!cursor.func.dfg.insts[first].opcode().is_terminator());
                 // If the instruction we're replacing is a block terminator,
                 // then the trailing new instruction must also be a terminator,
                 // so the block remains well-formed.
-                debug_assert!(
-                    !cursor.func.dfg.insts[old_inst].opcode().is_terminator()
-                        || cursor.func.dfg.insts[second].opcode().is_terminator()
+                debug_assert_eq!(
+                    old_is_terminator,
+                    cursor.func.dfg.insts[second].opcode().is_terminator()
                 );
 
                 if let Some(old_srcloc) = old_srcloc {
@@ -1098,7 +1128,7 @@ impl<'a> EgraphPass<'a> {
                 self_map_operands(&cursor.func.dfg, value_to_opt_value, first);
                 self_map_operands(&cursor.func.dfg, value_to_opt_value, second);
                 reprocess_from(cursor, first);
-                return;
+                return old_is_terminator;
             }
 
             SkeletonInstSimplification::Replace { inst } => (inst, None),
@@ -1132,6 +1162,12 @@ impl<'a> EgraphPass<'a> {
 
         self_map_operands(&cursor.func.dfg, value_to_opt_value, new_inst);
         reprocess_from(cursor, new_inst);
+
+        debug_assert_eq!(
+            old_is_terminator,
+            cursor.func.dfg.insts[new_inst].opcode().is_terminator()
+        );
+        old_is_terminator
     }
 
     /// Scoped elaboration: compute a final ordering of op computation
