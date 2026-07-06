@@ -222,7 +222,7 @@ impl PartialEq for MemoryImageSource {
 /// this syscall. This is in contrast to a syscall-per-region to madvise which
 /// requires an IPI-per-region. For the pooling allocator it can be much more
 /// beneficial to issue a batched syscall with one IPI overhead.
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "pooling-allocator", target_os = "linux"))]
 mod process_madvise {
     use super::iovec;
     use std::io;
