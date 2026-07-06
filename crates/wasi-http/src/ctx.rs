@@ -1,3 +1,7 @@
+#[cfg(feature = "p2")]
+use crate::p2::bindings::http::types as p2;
+#[cfg(feature = "p3")]
+use crate::p3::bindings::http::types as p3;
 use crate::{DEFAULT_FORBIDDEN_HEADERS, Error, RequestOptions, Result};
 use bytes::Bytes;
 use http::{HeaderName, uri::Scheme};
@@ -310,6 +314,68 @@ pub trait WasiHttpHooks: Send {
     #[cfg(feature = "p2")]
     fn p2_outgoing_body_chunk_size(&mut self) -> usize {
         crate::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE
+    }
+
+    /// Optional hook to configure the error code for hyper errors.
+    #[cfg(feature = "p2")]
+    fn p2_error_from_hyper(&mut self, err: &hyper::Error) -> p2::ErrorCode {
+        tracing::warn!("hyper error: {err:?}");
+        p2::ErrorCode::HttpProtocolError
+    }
+
+    /// Optional hook to configure the error code for connect I/O errors.
+    #[cfg(feature = "p2")]
+    fn p2_error_from_connect(&mut self, err: &std::io::Error) -> p2::ErrorCode {
+        tracing::warn!("connect error: {err:?}");
+        p2::ErrorCode::ConnectionRefused
+    }
+
+    /// Optional hook to configure the error code for TLS I/O errors.
+    #[cfg(feature = "p2")]
+    fn p2_error_from_tls(&mut self, err: &std::io::Error) -> p2::ErrorCode {
+        tracing::warn!("tls error: {err:?}");
+        p2::ErrorCode::TlsProtocolError
+    }
+
+    /// Optional hook to configure the error code for DNS errors.
+    #[cfg(all(feature = "p2", feature = "default-send-request"))]
+    fn p2_error_from_dns(&mut self, err: &rustls::pki_types::InvalidDnsNameError) -> p2::ErrorCode {
+        tracing::warn!("dns lookup error: {err:?}");
+        p2::ErrorCode::DnsError(p2::DnsErrorPayload {
+            rcode: Some("invalid dns name".to_string()),
+            info_code: None,
+        })
+    }
+
+    /// Optional hook to configure the error code for hyper errors.
+    #[cfg(feature = "p3")]
+    fn p3_error_from_hyper(&mut self, err: &hyper::Error) -> p3::ErrorCode {
+        tracing::warn!("hyper error: {err:?}");
+        p3::ErrorCode::HttpProtocolError
+    }
+
+    /// Optional hook to configure the error code for connect I/O errors.
+    #[cfg(feature = "p3")]
+    fn p3_error_from_connect(&mut self, err: &std::io::Error) -> p3::ErrorCode {
+        tracing::warn!("connect error: {err:?}");
+        p3::ErrorCode::ConnectionRefused
+    }
+
+    /// Optional hook to configure the error code for TLS I/O errors.
+    #[cfg(feature = "p3")]
+    fn p3_error_from_tls(&mut self, err: &std::io::Error) -> p3::ErrorCode {
+        tracing::warn!("tls error: {err:?}");
+        p3::ErrorCode::TlsProtocolError
+    }
+
+    /// Optional hook to configure the error code for DNS errors.
+    #[cfg(all(feature = "p3", feature = "default-send-request"))]
+    fn p3_error_from_dns(&mut self, err: &rustls::pki_types::InvalidDnsNameError) -> p3::ErrorCode {
+        tracing::warn!("dns lookup error: {err:?}");
+        p3::ErrorCode::DnsError(p3::DnsErrorPayload {
+            rcode: Some("invalid dns name".to_string()),
+            info_code: None,
+        })
     }
 }
 

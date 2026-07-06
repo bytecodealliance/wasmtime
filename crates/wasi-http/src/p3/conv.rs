@@ -3,7 +3,6 @@ use crate::{Error, WasiHttpCtxView};
 use core::convert::Infallible;
 use core::error::Error as _;
 use std::io::ErrorKind;
-use tracing::warn;
 
 impl From<Infallible> for ErrorCode {
     fn from(x: Infallible) -> Self {
@@ -108,9 +107,7 @@ impl WasiHttpCtxView<'_> {
                     }
                 }
 
-                warn!("hyper error: {err:?}");
-
-                ErrorCode::HttpProtocolError
+                self.hooks.p3_error_from_hyper(err)
             }
             Error::Connect(err) => {
                 if err.kind() == ErrorKind::AddrNotAvailable {
@@ -130,21 +127,11 @@ impl WasiHttpCtxView<'_> {
                     });
                 }
 
-                warn!("connect error: {err:?}");
-                ErrorCode::ConnectionRefused
+                self.hooks.p3_error_from_connect(err)
             }
-            Error::Tls(err) => {
-                warn!("tls protocol error: {err:?}");
-                ErrorCode::TlsProtocolError
-            }
+            Error::Tls(err) => self.hooks.p3_error_from_tls(err),
             #[cfg(feature = "default-send-request")]
-            Error::InvalidDnsNameError(err) => {
-                warn!("dns lookup error: {err:?}");
-                ErrorCode::DnsError(types::DnsErrorPayload {
-                    rcode: Some("invalid dns name".to_string()),
-                    info_code: None,
-                })
-            }
+            Error::InvalidDnsNameError(err) => self.hooks.p3_error_from_dns(err),
             Error::DnsTimeout => ErrorCode::DnsTimeout,
             Error::DnsError { rcode, info_code } => ErrorCode::DnsError(types::DnsErrorPayload {
                 rcode: rcode.clone(),

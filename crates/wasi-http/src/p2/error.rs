@@ -3,7 +3,6 @@ use crate::{Error, FieldMapError, WasiHttpCtxView};
 use std::error::Error as _;
 use std::fmt;
 use std::io::ErrorKind;
-use tracing::warn;
 use wasmtime::component::ResourceTableError;
 
 /// A [`Result`] type where the error type defaults to [`HttpError`].
@@ -282,9 +281,7 @@ impl WasiHttpCtxView<'_> {
                     }
                 }
 
-                warn!("hyper error: {err:?}");
-
-                ErrorCode::HttpProtocolError
+                self.hooks.p2_error_from_hyper(&err)
             }
             Error::Connect(err) => {
                 if err.kind() == ErrorKind::AddrNotAvailable {
@@ -304,21 +301,11 @@ impl WasiHttpCtxView<'_> {
                     });
                 }
 
-                warn!("connect error: {err:?}");
-                ErrorCode::ConnectionRefused
+                self.hooks.p2_error_from_connect(&err)
             }
-            Error::Tls(err) => {
-                warn!("tls protocol error: {err:?}");
-                ErrorCode::TlsProtocolError
-            }
+            Error::Tls(err) => self.hooks.p2_error_from_tls(&err),
             #[cfg(feature = "default-send-request")]
-            Error::InvalidDnsNameError(err) => {
-                warn!("dns lookup error: {err:?}");
-                ErrorCode::DnsError(types::DnsErrorPayload {
-                    rcode: Some("invalid dns name".to_string()),
-                    info_code: None,
-                })
-            }
+            Error::InvalidDnsNameError(err) => self.hooks.p2_error_from_dns(&err),
             Error::DnsTimeout => ErrorCode::DnsTimeout,
             Error::DnsError { rcode, info_code } => {
                 ErrorCode::DnsError(types::DnsErrorPayload { rcode, info_code })
