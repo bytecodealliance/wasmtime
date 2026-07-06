@@ -5,7 +5,7 @@ use clap::Parser;
 use object::read::elf::ElfFile64;
 use object::{Endianness, Object, ObjectSection, ObjectSymbol};
 use smallvec::SmallVec;
-use std::io::{IsTerminal, Read, Write};
+use std::io::{IsTerminal, Read};
 use std::iter::{self, Peekable};
 use std::path::{Path, PathBuf};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
@@ -106,28 +106,39 @@ impl ObjdumpCommand {
 
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
-        // Setup stdout handling color options. Also build some variables used
-        // below to configure colors of certain items.
+        // Setup stdout handling color options.
         let mut choice = self.color;
         if choice == ColorChoice::Auto && !std::io::stdout().is_terminal() {
             choice = ColorChoice::Never;
         }
         let mut stdout = StandardStream::stdout(choice);
 
+        let bytes = self.read_cwasm()?;
+        self.disassemble(&bytes, &mut stdout)
+    }
+
+    /// Disassembles the `*.cwasm` image in `bytes`, rendering a human-readable
+    /// listing to `stdout`.
+    //
+    // XXX: This is only `pub` so it can be shared with the `disas` test runner,
+    // so that that doesn't need to spawn a subprocess per `disas` test, which
+    // is extremely slow on machines with corporate management software that
+    // intercept every process spawn.
+    #[doc(hidden)]
+    pub fn disassemble(&self, bytes: &[u8], stdout: &mut dyn WriteColor) -> Result<()> {
+        // Build some variables used below to configure colors of certain items.
         let mut color_address = ColorSpec::new();
         color_address.set_bold(true).set_fg(Some(Color::Yellow));
         let mut color_bytes = ColorSpec::new();
         color_bytes.set_fg(Some(Color::Magenta));
 
-        let bytes = self.read_cwasm()?;
-
         // Double-check this is a `*.cwasm`
-        if Engine::detect_precompiled(&bytes).is_none() {
+        if Engine::detect_precompiled(bytes).is_none() {
             bail!("not a `*.cwasm` file from wasmtime: {:?}", self.cwasm);
         }
 
         // Parse the input as an ELF file, extract the `.text` section.
-        let elf = ElfFile64::<Endianness>::parse(&bytes)?;
+        let elf = ElfFile64::<Endianness>::parse(bytes)?;
         let text = elf
             .section_by_name(".text")
             .context("missing .text section")?;
@@ -287,7 +298,7 @@ impl ObjdumpCommand {
                 let mut post_decorations = Vec::new();
                 decorator.decorate(address, &mut pre_decorations, &mut post_decorations);
 
-                let print_whitespace_to_decoration = |stdout: &mut StandardStream| -> Result<()> {
+                let print_whitespace_to_decoration = |stdout: &mut dyn WriteColor| -> Result<()> {
                     write!(stdout, "{:width$}  ", "")?;
                     if self.bytes {
                         for _ in 0..inline_bytes + 1 {
@@ -298,7 +309,7 @@ impl ObjdumpCommand {
                 };
 
                 let print_decorations =
-                    |stdout: &mut StandardStream, decorations: Vec<String>| -> Result<()> {
+                    |stdout: &mut dyn WriteColor, decorations: Vec<String>| -> Result<()> {
                         for (i, decoration) in decorations.iter().enumerate() {
                             print_whitespace_to_decoration(stdout)?;
                             let mut color = ColorSpec::new();
@@ -328,7 +339,7 @@ impl ObjdumpCommand {
                         Ok(())
                     };
 
-                print_decorations(&mut stdout, pre_decorations)?;
+                print_decorations(&mut *stdout, pre_decorations)?;
 
                 // Some instructions may disassemble to multiple lines, such as
                 // `br_table` with Pulley. Handle separate lines per-instruction
@@ -395,7 +406,7 @@ impl ObjdumpCommand {
                     }
                 }
 
-                print_decorations(&mut stdout, post_decorations)?;
+                print_decorations(&mut *stdout, post_decorations)?;
             }
         }
         Ok(())

@@ -45,13 +45,13 @@ use libtest_mimic::{Arguments, Trial};
 use serde_derive::Deserialize;
 use similar::TextDiff;
 use std::fmt::Write as _;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use tempfile::TempDir;
+use termcolor::Buffer;
 use wasmtime::{
     CodeBuilder, CodeHint, Engine, OptLevel, Result, Strategy, bail, error::Context as _,
 };
+use wasmtime_cli::commands::ObjdumpCommand;
 use wasmtime_cli_flags::CommonOptions;
 
 fn main() -> Result<()> {
@@ -300,43 +300,28 @@ fn assert_output(test: &Test, output: CompileOutput) -> Result<()> {
             }
         }
         CompileOutput::Elf(bytes) => {
-            let mut cmd = wasmtime_test_util::command(env!("CARGO_BIN_EXE_wasmtime"));
-            cmd.arg("objdump")
-                .arg("--address-width=4")
-                .arg("--address-jumps")
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
+            // XXX: Avoid spawning a `wasmtime objdump` subprocess for every
+            // test, which is very expensive on machines with corporate
+            // management software that inspects each spawned process. Instead,
+            // create an `ObjdumpCommand` within this process directly.
+            let mut args = vec!["objdump", "--address-width=4", "--address-jumps"];
             match &test.config.objdump {
-                Some(args) => {
-                    cmd.args(args.to_vec());
-                }
-                None => {
-                    cmd.arg("--traps=false");
-                }
+                Some(objdump_args) => args.extend(objdump_args.to_vec()),
+                None => args.push("--traps=false"),
             }
             if let Some(filter) = &test.config.filter {
-                cmd.arg("--filter").arg(filter);
+                args.push("--filter");
+                args.push(filter);
             }
+            let command = ObjdumpCommand::try_parse_from(args)
+                .context("failed to parse `wasmtime objdump` flags")?;
 
-            let mut child = cmd.spawn().context("failed to run wasmtime")?;
-            child
-                .stdin
-                .take()
-                .unwrap()
-                .write_all(&bytes)
-                .context("failed to write stdin")?;
-            let output = child
-                .wait_with_output()
-                .context("failed to wait for child")?;
-            if !output.status.success() {
-                bail!(
-                    "objdump failed: {}\nstderr: {}",
-                    output.status,
-                    String::from_utf8_lossy(&output.stderr),
-                );
-            }
-            actual = String::from_utf8(output.stdout).unwrap();
+            let mut output = Buffer::no_color();
+            command
+                .disassemble(&bytes, &mut output)
+                .context("failed to disassemble compiled module")?;
+            actual = String::from_utf8(output.into_inner())
+                .expect("`ObjdumpCommand` always writes valid UTF-8");
         }
     }
     let actual = actual.trim();

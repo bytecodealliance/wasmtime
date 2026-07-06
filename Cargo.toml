@@ -124,6 +124,7 @@ toml = { workspace = true }
 similar = { workspace = true }
 libtest-mimic = { workspace = true }
 capstone = { workspace = true }
+termcolor = { workspace = true }
 object = { workspace = true, features = ['std'] }
 wasmtime-test-macros = { path = "crates/test-macros" }
 pulley-interpreter = { workspace = true, features = ["disas"] }
