@@ -177,7 +177,12 @@ pub struct Lower<'func, I: VCodeInst> {
     /// i.e., the version of global state that exists before an instruction
     /// executes.  For each side-effecting instruction, the *exit* color is its
     /// entry color plus one.
-    side_effect_inst_entry_colors: FxHashMap<Inst, InstColor>,
+    ///
+    /// The current color is incremented to at least 1 before any instruction is
+    /// processed, so every side-effecting instruction has a color `>= 1`, and
+    /// the default `InstColor::new(0)` serves as a "not side-effecting"
+    /// sentinel.
+    side_effect_inst_entry_colors: SecondaryMap<Inst, InstColor>,
 
     /// Current color as we scan during lowering. While we are lowering an
     /// instruction, this is equal to the color *at entry to* the instruction.
@@ -185,9 +190,6 @@ pub struct Lower<'func, I: VCodeInst> {
 
     /// Current instruction as we scan during lowering.
     cur_inst: Option<Inst>,
-
-    /// Instruction constant values, if known.
-    inst_constants: FxHashMap<Inst, u64>,
 
     /// Use-counts per SSA value, as counted in the input IR. These
     /// are "coarsened", in the abstract-interpretation sense: we only
@@ -462,12 +464,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             regs
         });
 
-        // Compute instruction colors, find constant instructions, and find instructions with
-        // side-effects, in one combined pass.
+        // Compute instruction colors and find instructions with side-effects.
         let mut cur_color = 0;
         let mut block_end_colors = SecondaryMap::with_default(InstColor::new(0));
-        let mut side_effect_inst_entry_colors = FxHashMap::default();
-        let mut inst_constants = FxHashMap::default();
+        let mut side_effect_inst_entry_colors = SecondaryMap::with_default(InstColor::new(0));
         for bb in f.layout.blocks() {
             cur_color += 1;
             for inst in f.layout.block_insts(bb) {
@@ -475,15 +475,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
                 trace!("bb {} inst {} has color {}", bb, inst, cur_color);
                 if side_effect {
-                    side_effect_inst_entry_colors.insert(inst, InstColor::new(cur_color));
+                    side_effect_inst_entry_colors[inst] = InstColor::new(cur_color);
                     trace!(" -> side-effecting; incrementing color for next inst");
                     cur_color += 1;
-                }
-
-                // Determine if this is a constant; if so, add to the table.
-                if let Some(c) = is_constant_64bit(f, inst) {
-                    trace!(" -> constant: {}", c);
-                    inst_constants.insert(inst, c);
                 }
             }
 
@@ -500,7 +494,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             sret_reg,
             block_end_colors,
             side_effect_inst_entry_colors,
-            inst_constants,
             value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
             inst_sunk: FxHashSet::default(),
@@ -745,11 +738,16 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // each IR instruction.
         for inst in self.f.layout.block_insts(block).rev() {
             let data = &self.f.dfg.insts[inst];
-            let has_side_effect = has_lowering_side_effect(self.f, inst);
+            // A non-zero entry color marks a side-effecting instruction (see the
+            // field's doc comment).
+            let entry_color = self.side_effect_inst_entry_colors[inst];
+            let has_side_effect = entry_color.get() != 0;
+
             // If  inst has been sunk to another location, skip it.
             if self.is_inst_sunk(inst) {
                 continue;
             }
+
             // Are any outputs used at least once?
             let value_needed = self.is_any_inst_result_needed(inst);
             trace!(
@@ -766,10 +764,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // backward).
             self.cur_inst = Some(inst);
             if has_side_effect {
-                let entry_color = *self
-                    .side_effect_inst_entry_colors
-                    .get(&inst)
-                    .expect("every side-effecting inst should have a color-map entry");
                 self.cur_scan_entry_color = Some(entry_color);
             }
 
@@ -1131,19 +1125,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // Reused vectors for branch lowering.
         let mut targets: SmallVec<[MachLabel; 2]> = SmallVec::new();
 
-        // get a copy of the lowered order; we hold this separately because we
-        // need a mut ref to the vcode to mutate it below.
-        let lowered_order: SmallVec<[LoweredBlock; 64]> = self
-            .vcode
-            .block_order()
-            .lowered_order()
-            .iter()
-            .cloned()
-            .collect();
-
         // Main lowering loop over lowered blocks.
-        for (bindex, lb) in lowered_order.iter().enumerate().rev() {
-            let bindex = BlockIndex::new(bindex);
+        let num_blocks = self.vcode.block_order().lowered_order().len();
+        for i in (0..num_blocks).rev() {
+            // We index into the (immutable) lowered order one block at a time,
+            // copying the block out, so that the immutable borrow of
+            // `self.vcode` ends immediately and leaves `&mut self` free for
+            // lowering below.
+            let bindex = BlockIndex::new(i);
+            let lb = self.vcode.block_order().lowered_order()[i];
 
             // Lower the block body in reverse order (see comment in
             // `lower_clif_block()` for rationale).
@@ -1468,16 +1458,20 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the value of a constant instruction (`iconst`, etc.) as a 64-bit
     /// value, if possible.
     pub fn get_constant(&self, ir_inst: Inst) -> Option<u64> {
-        self.inst_constants.get(&ir_inst).map(|&c| {
-            // The upper bits must be zero, enforced during legalization and by
-            // the CLIF verifier.
-            debug_assert_eq!(c, {
-                let input_size = self.output_ty(ir_inst, 0).bits() as u64;
-                let shift = 64 - input_size;
-                (c << shift) >> shift
-            });
-            c
-        })
+        // NB: We compute this on demand rather than caching it: a match on the
+        // dense, well-predicted `dfg.insts` entry is cheaper than a
+        // random-access hash probe.
+        let c = is_constant_64bit(self.f, ir_inst)?;
+
+        // The upper bits must be zero, enforced during legalization and by
+        // the CLIF verifier.
+        debug_assert_eq!(c, {
+            let input_size = self.output_ty(ir_inst, 0).bits() as u64;
+            let shift = 64 - input_size;
+            (c << shift) >> shift
+        });
+
+        Some(c)
     }
 
     /// Get the input as one of two options other than a direct register:
@@ -1567,7 +1561,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             //   instruction was sunk, we allow other instructions (that came
             //   prior to the sunk instruction) to sink.
             ValueDef::Result(src_inst, result_idx) => {
-                let src_side_effect = has_lowering_side_effect(self.f, src_inst);
+                // A non-zero entry color marks a side-effecting instruction (see
+                // the field's doc comment).
+                let src_entry_color = self.side_effect_inst_entry_colors[src_inst];
+                let src_side_effect = src_entry_color.get() != 0;
                 trace!(" -> src inst {}", self.f.dfg.display_inst(src_inst));
                 trace!(" -> has lowering side effect: {}", src_side_effect);
                 if is_value_use_root(self.f, src_inst) {
@@ -1601,13 +1598,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     if self.cur_scan_entry_color.is_some()
                         && self.value_ir_uses[val] == ValueUseState::Once
                         && self.num_outputs(src_inst) == 1
-                        && self
-                            .side_effect_inst_entry_colors
-                            .get(&src_inst)
-                            .unwrap()
-                            .get()
-                            + 1
-                            == self.cur_scan_entry_color.unwrap().get()
+                        && src_entry_color.get() + 1 == self.cur_scan_entry_color.unwrap().get()
                     {
                         InputSourceInst::UniqueUse(src_inst, 0)
                     } else {
@@ -1686,11 +1677,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             assert!(self.value_lowered_uses[*result] == 0);
         }
 
-        let sunk_inst_entry_color = self
-            .side_effect_inst_entry_colors
-            .get(&ir_inst)
-            .cloned()
-            .unwrap();
+        let sunk_inst_entry_color = self.side_effect_inst_entry_colors[ir_inst];
         let sunk_inst_exit_color = InstColor::new(sunk_inst_entry_color.get() + 1);
         assert!(sunk_inst_exit_color == self.cur_scan_entry_color.unwrap());
         self.cur_scan_entry_color = Some(sunk_inst_entry_color);
