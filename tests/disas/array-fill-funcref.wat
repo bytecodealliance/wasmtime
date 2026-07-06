@@ -22,10 +22,10 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 134217760 "VMStoreContext+0x20"
-;;     region3 = 134217768 "VMStoreContext+0x28"
-;;     region4 = 1073741824 "GcHeap"
+;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region2 = 67108896 "VMStoreContext+0x20"
+;;     region3 = 67108904 "VMStoreContext+0x28"
+;;     region4 = 536870912 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -83,10 +83,10 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 134217760 "VMStoreContext+0x20"
-;;     region3 = 134217768 "VMStoreContext+0x28"
-;;     region4 = 1073741824 "GcHeap"
+;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region2 = 67108896 "VMStoreContext+0x20"
+;;     region3 = 67108904 "VMStoreContext+0x28"
+;;     region4 = 536870912 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -145,11 +145,11 @@
 ;; function u0:2(i64 vmctx, i64, i32, i32, i32) tail {
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 134217760 "VMStoreContext+0x20"
-;;     region3 = 134217768 "VMStoreContext+0x28"
-;;     region4 = 1073741824 "GcHeap"
-;;     region5 = 3087007744 "Stack(ss0)"
+;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region2 = 67108896 "VMStoreContext+0x20"
+;;     region3 = 67108904 "VMStoreContext+0x28"
+;;     region4 = 536870912 "GcHeap"
+;;     region5 = 1543503872 "Stack(ss0)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -214,7 +214,7 @@
 ;;
 ;; function u0:3(i64 vmctx, i64) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 134217752 "VMStoreContext+0x18"
+;;     region1 = 67108888 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

@@ -292,6 +292,9 @@ impl Compiler {
         );
         builder.ins().return_(&results);
         builder.finalize(self.isa().frontend_config());
+        crate::alias_region::debug_assert_all_mem_insts_have_alias_regions(
+            &compiler.cx.codegen_context.func,
+        );
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),
@@ -402,6 +405,9 @@ impl Compiler {
             builder.ins().return_(&[]);
         }
         builder.finalize(self.isa().frontend_config());
+        crate::alias_region::debug_assert_all_mem_insts_have_alias_regions(
+            &compiler.cx.codegen_context.func,
+        );
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),
@@ -1573,6 +1579,9 @@ impl Compiler {
         builder.ins().return_(&[false_return]);
 
         builder.finalize(self.isa().frontend_config());
+        crate::alias_region::debug_assert_all_mem_insts_have_alias_regions(
+            &compiler.cx.codegen_context.func,
+        );
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),
