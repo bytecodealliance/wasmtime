@@ -365,7 +365,7 @@ impl<T: 'static> Linker<T> {
             }
 
             match item_def {
-                TypeDef::ComponentFunc(_) => {
+                TypeDef::ComponentFunc(_func_idx) => {
                     let fully_qualified_name = match parent_instance {
                         Some(parent) => {
                             let mut s = TryString::new();
@@ -380,6 +380,30 @@ impl<T: 'static> Linker<T> {
                             s
                         }
                     };
+
+                    // An `async func`-typed import can never be satisfied by
+                    // `func_new` (only a sync-typed import can) — see
+                    // `typecheck_async`'s doc comment. Stub it with
+                    // `func_new_concurrent` instead so unsatisfied async
+                    // imports can be stubbed-as-traps too, not just sync
+                    // ones; if concurrency support isn't enabled there's no
+                    // way to stub it here, so fall through to `func_new` and
+                    // let instantiation fail with that same explanatory
+                    // error.
+                    #[cfg(feature = "component-model-async")]
+                    if types[*_func_idx].async_ && linker.engine.tunables().concurrency_support {
+                        linker.func_new_concurrent(&item_name, move |_, _, _, _| {
+                            let fully_qualified_name = fully_qualified_name.try_clone();
+                            Box::pin(async move {
+                                let fully_qualified_name = fully_qualified_name?;
+                                bail!(
+                                    "unknown import: `{fully_qualified_name}` has not been defined"
+                                )
+                            })
+                        })?;
+                        return Ok(());
+                    }
+
                     linker.func_new(&item_name, move |_, _, _, _| {
                         bail!("unknown import: `{fully_qualified_name}` has not been defined")
                     })?;

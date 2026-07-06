@@ -157,6 +157,71 @@ async fn require_async_after_linker_with_func_new_concurrent() -> Result<()> {
 }
 
 #[tokio::test]
+async fn func_new_async_cannot_satisfy_async_import() -> Result<()> {
+    // `func_new_async` (like `func_wrap_async`) intentionally implements a
+    // *sync*-WIT-typed function via blocking host code - it can never
+    // satisfy an `async func` import, only `func_new_concurrent` can. The
+    // error message should say so specifically, not just "type mismatch
+    // with async" with no indication of what to do about it.
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(store.engine());
+    linker
+        .root()
+        .func_new_async("hi", |_, _, _, _| Box::new(async { Ok(()) }))?;
+    let component = Component::new(
+        store.engine(),
+        r#"
+            (component
+                (import "hi" (func async))
+                (core func (canon lower (func 0) async))
+            )
+        "#,
+    )?;
+    let err = linker
+        .instantiate_async(&mut store, &component)
+        .await
+        .unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("declared `async func` in WIT"), "{msg}");
+    assert!(msg.contains("func_new_concurrent"), "{msg}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn func_new_concurrent_cannot_satisfy_sync_import() -> Result<()> {
+    // The reverse mismatch: `func_new_concurrent` is only for `async
+    // func`-typed imports, and shouldn't silently satisfy a plain one either.
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(store.engine());
+    linker
+        .root()
+        .func_new_concurrent("hi", |_, _, _, _| Box::pin(async { Ok(()) }))?;
+    let component = Component::new(
+        store.engine(),
+        r#"
+            (component
+                (import "hi" (func))
+                (core func (canon lower (func 0)))
+            )
+        "#,
+    )?;
+    let err = linker
+        .instantiate_async(&mut store, &component)
+        .await
+        .unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("plain (non-`async`) function"), "{msg}");
+    assert!(msg.contains("func_new"), "{msg}");
+    Ok(())
+}
+
+#[tokio::test]
 async fn async_disallows_resource_any_drop() -> Result<()> {
     let mut store = async_store();
     let component = Component::new(

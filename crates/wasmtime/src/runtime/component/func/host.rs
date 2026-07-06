@@ -596,6 +596,40 @@ where
     }
 }
 
+/// Checks that a host function's `ASYNC`-ness (as encoded by which of
+/// `func_new`/`func_new_async`/`func_new_concurrent` — or their `_wrap`
+/// counterparts — constructed it) matches whether the component's WIT type
+/// for this import is declared `async func`.
+///
+/// This isn't a case of one or the other being "correct": `func_new_async`/
+/// `func_wrap_async` intentionally implement a *sync*-WIT-typed function via
+/// blocking/async host code (see their docs), so they can never satisfy an
+/// `async func` import — only `func_new_concurrent`/`func_wrap_concurrent`
+/// can. The error message names which specific mismatch occurred and points
+/// at the API that would work, since "type mismatch with async" alone gives
+/// no indication of *why* or what to use instead.
+fn typecheck_async(host_async: bool, wit_async: bool) -> Result<()> {
+    if host_async == wit_async {
+        return Ok(());
+    }
+    if wit_async {
+        bail!(
+            "type mismatch with async: this import is declared `async func` in WIT, but was \
+             satisfied with a sync-style host function (`func_new`/`func_wrap`, or \
+             `func_new_async`/`func_wrap_async` — despite the name, these implement a \
+             *sync*-WIT-typed function via blocking host code, not an `async func` import); \
+             use `func_new_concurrent`/`func_wrap_concurrent` instead"
+        );
+    } else {
+        bail!(
+            "type mismatch with async: this import's WIT type is a plain (non-`async`) \
+             function, but was satisfied with `func_new_concurrent`/`func_wrap_concurrent`, \
+             which is only for `async func`-typed imports; use `func_new`/`func_wrap` (or \
+             `func_new_async`/`func_wrap_async` for blocking host code) instead"
+        );
+    }
+}
+
 /// Implementation of a "static" host function where the parameters and results
 /// of a function are known at compile time.
 #[repr(transparent)]
@@ -624,9 +658,7 @@ where
 
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()> {
         let ty = &types.types[ty];
-        if ASYNC != ty.async_ {
-            bail!("type mismatch with async");
-        }
+        typecheck_async(ASYNC, ty.async_)?;
         P::typecheck(&InterfaceType::Tuple(ty.params), types)
             .context("type mismatch with parameters")?;
         R::typecheck(&InterfaceType::Tuple(ty.results), types)
@@ -707,11 +739,7 @@ where
     /// checks. However, we _do_ verify async-ness here.
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()> {
         let ty = &types.types[ty];
-        if ASYNC != ty.async_ {
-            bail!("type mismatch with async");
-        }
-
-        Ok(())
+        typecheck_async(ASYNC, ty.async_)
     }
 
     fn run(

@@ -1,7 +1,7 @@
 use wasmtime::Result;
 use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, Linker, ResourceType};
-use wasmtime::{Engine, Store};
+use wasmtime::{Config, Engine, Store};
 
 #[test]
 fn old_import_importing_new_item() -> Result<()> {
@@ -163,6 +163,35 @@ fn linker_defines_unknown_imports_as_traps() -> Result<()> {
     linker.define_unknown_imports_as_traps(&component)?;
     let mut store = Store::new(&engine, ());
     let _ = linker.instantiate(&mut store, &component)?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn linker_defines_unknown_async_imports_as_traps() -> Result<()> {
+    // `define_unknown_imports_as_traps` used to always stub with `func_new`,
+    // which can never satisfy an `async func`-typed import - so a component
+    // with an unsatisfied async import couldn't be stubbed (and thus
+    // couldn't be instantiated) at all, even though nothing in the component
+    // ever calls it. With concurrency support enabled, it should now stub
+    // async imports with `func_new_concurrent` instead.
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut linker = Linker::<()>::new(&engine);
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "foo" (func async))
+            (import "bar" (instance (export "baz" (func async))))
+            (import "qux" (type (sub resource)))
+        )"#,
+    )?;
+    linker.define_unknown_imports_as_traps(&component)?;
+
+    let mut store = Store::new(&engine, ());
+    let _ = linker.instantiate_async(&mut store, &component).await?;
 
     Ok(())
 }
