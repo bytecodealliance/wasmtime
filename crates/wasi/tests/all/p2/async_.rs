@@ -454,6 +454,49 @@ async fn p2_file_rename_across_perms() {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_file_stream_not_permitted() {
+    file_stream_not_permitted(P2_FILE_STREAM_NOT_PERMITTED_COMPONENT).await
+}
+
+async fn file_stream_not_permitted(component_path: &str) {
+    use wasmtime_wasi::{DirPerms, FilePerms};
+
+    let readonly = tempfile::Builder::new()
+        .prefix("wasi_components_stream_np_ro_")
+        .tempdir()
+        .expect("create readonly tempdir");
+    let writeonly = tempfile::Builder::new()
+        .prefix("wasi_components_stream_np_wo_")
+        .tempdir()
+        .expect("create writeonly tempdir");
+
+    const RO_CONTENTS: &[u8] = b"stream permission test\n";
+    std::fs::write(readonly.path().join("stream-perms.txt"), RO_CONTENTS)
+        .expect("write readonly test file");
+    std::fs::write(writeonly.path().join("stream-write.txt"), b"")
+        .expect("create writeonly test file");
+
+    run(component_path, |b| {
+        b.preopened_dir(
+            readonly.path(),
+            "readonly",
+            DirPerms::READ | DirPerms::MUTATE,
+            FilePerms::READ,
+        )
+        .unwrap();
+        b.preopened_dir(
+            writeonly.path(),
+            "writeonly",
+            DirPerms::READ | DirPerms::MUTATE,
+            FilePerms::WRITE,
+        )
+        .unwrap();
+    })
+    .await
+    .expect("run p2_file_stream_not_permitted guest");
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_clocks_zero_wait() {
     run(P2_CLOCKS_ZERO_WAIT_COMPONENT, |_| {}).await.unwrap()
 }
