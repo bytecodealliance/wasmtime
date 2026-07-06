@@ -29,7 +29,7 @@ pub(crate) enum Body {
         /// Future, on which guest will write result and optional trailers
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
         /// Channel, on which transmission result will be written
-        result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
+        result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), Error>> + Send>>,
     },
     /// Body constructed by the host.
     Host {
@@ -40,11 +40,11 @@ pub(crate) enum Body {
     },
 }
 
-async fn guest_body_result<E: Into<ErrorCode>>(
+async fn guest_body_result<E>(
     rx: oneshot::Receiver<Box<dyn Future<Output = Result<(), E>> + Send>>,
-) -> wasmtime::Result<Result<(), ErrorCode>> {
+) -> wasmtime::Result<Result<(), E>> {
     match rx.await {
-        Ok(fut) => Ok(Pin::from(fut).await.map_err(|e| e.into())),
+        Ok(fut) => Ok(Pin::from(fut).await),
         // oneshot sender dropped, treat as success
         Err(..) => Ok(Ok(())),
     }
@@ -56,25 +56,31 @@ impl Body {
         contents: Option<StreamReader<u8>>,
         mut trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     ) -> wasmtime::Result<(Self, FutureReader<Result<(), ErrorCode>>)> {
+        let getter = store.getter();
         // Attempt to unwrap this guest-specified body stream as a host-owned
         // stream. That helps bypass a layer of indirection where possible.
-        let contents =
-            match contents.map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(&mut *store)) {
-                Some(Ok(mut producer)) => {
-                    trailers.close(&mut *store)?;
-                    let (result_tx, result_rx) = oneshot::channel();
-                    let body = Body::Host {
-                        body: mem::take(&mut producer.body),
-                        result_tx,
-                    };
-                    return Ok((
-                        body,
-                        FutureReader::new(&mut *store, guest_body_result(result_rx))?,
-                    ));
-                }
-                Some(Err(rx)) => Some(rx),
-                None => None,
-            };
+        let contents = match contents
+            .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(&mut *store))
+        {
+            Some(Ok(mut producer)) => {
+                trailers.close(&mut *store)?;
+                let (result_tx, result_rx) = oneshot::channel();
+                let body = Body::Host {
+                    body: mem::take(&mut producer.body),
+                    result_tx,
+                };
+                return Ok((
+                    body,
+                    FutureReader::new_cb(
+                        &mut *store,
+                        guest_body_result(result_rx),
+                        move |d, res: Result<_, Error>| res.map_err(|e| getter(d).error_to_p3(&e)),
+                    )?,
+                ));
+            }
+            Some(Err(rx)) => Some(rx),
+            None => None,
+        };
         let (result_tx, result_rx) = oneshot::channel();
         let body = Body::Guest {
             contents_rx: contents,
@@ -83,7 +89,11 @@ impl Body {
         };
         Ok((
             body,
-            FutureReader::new(&mut *store, guest_body_result(result_rx))?,
+            FutureReader::new_cb(
+                &mut *store,
+                guest_body_result(result_rx),
+                move |d, res: Result<_, Error>| res.map_err(|e| getter(d).error_to_p3(&e)),
+            )?,
         ))
     }
 
@@ -108,7 +118,7 @@ impl Body {
                     None => StreamReader::new(&mut store, iter::empty())?,
                 };
                 fut.pipe_cb(&mut store, |_, res| {
-                    _ = result_tx.send(Box::new(async { res }));
+                    _ = result_tx.send(Box::new(async { res.map_err(|e| e.into()) }));
                     Ok(())
                 })?;
                 (body, trailers_rx)
@@ -128,9 +138,11 @@ impl Body {
                             getter,
                         },
                     )?,
-                    FutureReader::new(&mut store, async {
-                        trailers_rx.await.map(|e| e.map_err(|e| e.into()))
-                    })?,
+                    FutureReader::new_cb(
+                        &mut store,
+                        trailers_rx,
+                        move |d, res: Result<_, Error>| res.map_err(|e| getter(d).error_to_p3(&e)),
+                    )?,
                 )
             }
         };
@@ -294,13 +306,12 @@ impl GuestBody {
         mut store: impl AsContextMut<Data = T>,
         contents_rx: Option<StreamReader<u8>>,
         trailers_rx: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-        result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>,
+        result_tx: oneshot::Sender<Box<dyn Future<Output = Result<(), Error>> + Send>>,
         result_fut: impl Future<Output = Result<(), Error>> + Send + 'static,
         content_length: Option<u64>,
         make_error: fn(Option<u64>) -> ErrorCode,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
     ) -> wasmtime::Result<Self> {
-        let result_fut = async { result_fut.await.map_err(ErrorCode::from) };
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
         trailers_rx.pipe_cb(&mut store, move |data, res| {
             let res = match res {
@@ -325,7 +336,7 @@ impl GuestBody {
                 let (error_tx, error_rx) = oneshot::channel();
                 _ = result_tx.send(Box::new(async move {
                     if let Ok(err) = error_rx.await {
-                        return Err(err);
+                        return Err(Error::from(err));
                     };
                     result_fut.await
                 }));

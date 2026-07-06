@@ -72,7 +72,9 @@ impl<T> HostWithStore<T> for WasiHttp {
                 }),
             ))
         })?;
-        let (res, io) = Box::into_pin(fut).await?;
+        let (res, io) = Box::into_pin(fut)
+            .await
+            .map_err(|e| store.with(|mut store| store.get().error_to_p3(&e)))?;
         let (
             http::response::Parts {
                 status, headers, ..
@@ -81,8 +83,11 @@ impl<T> HostWithStore<T> for WasiHttp {
         ) = res.into_parts();
 
         let mut io = Box::into_pin(io);
-        let body = match io.as_mut().poll(&mut Context::from_waker(Waker::noop()))? {
-            Poll::Ready(()) => body,
+        let body = match io.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+            Poll::Ready(Ok(())) => body,
+            Poll::Ready(Err(e)) => {
+                return Err(store.with(|mut store| store.get().error_to_p3(&e)).into());
+            }
             Poll::Pending => {
                 // I/O driver still needs to be polled, spawn a task and send handles to it
                 let (tx, rx) = oneshot::channel();

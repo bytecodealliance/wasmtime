@@ -13,7 +13,6 @@ use futures::{
     future::{Either, FutureExt},
     stream::{FuturesUnordered, Stream},
 };
-use http_body_util::BodyExt;
 #[cfg(feature = "p3")]
 use p3::bindings::http::types as p3_types;
 use std::collections::VecDeque;
@@ -997,7 +996,6 @@ impl<'a, T: Send> Prepared<'a, T> {
             #[cfg(feature = "p3")]
             Proxy::P3(guest) => {
                 let (request, body) = request.into_parts();
-                let body = body.map_err(p3_types::ErrorCode::from);
                 let request = http::Request::from_parts(request, body);
                 let (request, request_io_result) = p3::Request::from_http(request);
                 let request = view(store.data_mut()).table.push(request)?;
@@ -1028,13 +1026,7 @@ impl<'a, T: Send> Prepared<'a, T> {
                     let tx = tx.clone();
                     move |value| {
                         if let Some(tx) = tx.lock().unwrap().take() {
-                            _ = tx.send(
-                                value
-                                    .map(|v| {
-                                        v.map(move |body| body.map_err(|e| e.into()).boxed_unsync())
-                                    })
-                                    .map_err(|e| e.into()),
-                            );
+                            _ = tx.send(value.map_err(|e| e.into()));
                         }
                     }
                 })?;

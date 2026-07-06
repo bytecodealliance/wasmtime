@@ -136,7 +136,7 @@ impl HostIncomingBodyStream {
             // Destroy the body to terminate the stream while enqueueing the
             // error to get returned from the next call to `read`.
             Some(Err(e)) => {
-                self.error = Some(e.into());
+                self.error = Some(e);
                 self.state = IncomingBodyStreamState::Closed;
             }
 

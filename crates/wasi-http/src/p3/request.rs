@@ -234,8 +234,7 @@ impl Request {
             .uri(uri)
             .body(body)
             .map_err(|err| ErrorCode::InternalError(Some(err.to_string())))?;
-        let (req, body) = req.into_parts();
-        Ok((http::Request::from_parts(req, body), options))
+        Ok((req, options))
     }
 }
 

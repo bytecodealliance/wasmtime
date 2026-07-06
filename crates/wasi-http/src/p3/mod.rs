@@ -20,8 +20,7 @@ mod response;
 pub use request::Request;
 pub use response::Response;
 
-use crate::p3::bindings::http::types::ErrorCode;
-use crate::{Error, FieldMapError, WasiHttp, WasiHttpView};
+use crate::{FieldMapError, WasiHttp, WasiHttpView};
 use bindings::http::{client, types};
 use core::ops::Deref;
 use std::sync::Arc;
@@ -43,12 +42,6 @@ impl From<FieldMapError> for HeaderError {
                 types::HeaderError::SizeExceeded.into()
             }
         }
-    }
-}
-
-impl From<Error> for HttpError {
-    fn from(e: Error) -> Self {
-        HttpError::from(ErrorCode::from(e))
     }
 }
 

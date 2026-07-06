@@ -1,5 +1,5 @@
-use crate::Error;
 use crate::p3::bindings::http::types::{self, ErrorCode, Method, Scheme};
+use crate::{Error, WasiHttpCtxView};
 use core::convert::Infallible;
 use core::error::Error as _;
 use std::io::ErrorKind;
@@ -93,34 +93,28 @@ impl From<ErrorCode> for Error {
     }
 }
 
-impl From<Error> for ErrorCode {
-    fn from(e: Error) -> Self {
-        Self::from(&e)
-    }
-}
-
-impl From<&Error> for ErrorCode {
-    fn from(e: &Error) -> Self {
+impl WasiHttpCtxView<'_> {
+    pub(crate) fn error_to_p3(&mut self, e: &Error) -> ErrorCode {
         match e {
             Error::Hyper(err) => {
                 // If there's a source, we might be able to extract a wasi-http
                 // error from it.
                 if let Some(cause) = err.source() {
-                    if let Some(err) = cause.downcast_ref::<Self>() {
+                    if let Some(err) = cause.downcast_ref::<ErrorCode>() {
                         return err.clone();
                     }
                     if let Some(err) = cause.downcast_ref::<Error>() {
-                        return err.into();
+                        return self.error_to_p3(err);
                     }
                 }
 
                 warn!("hyper error: {err:?}");
 
-                Self::HttpProtocolError
+                ErrorCode::HttpProtocolError
             }
             Error::Connect(err) => {
                 if err.kind() == ErrorKind::AddrNotAvailable {
-                    return Self::DnsError(types::DnsErrorPayload {
+                    return ErrorCode::DnsError(types::DnsErrorPayload {
                         rcode: Some("address not available".to_string()),
                         info_code: None,
                     });
@@ -130,110 +124,111 @@ impl From<&Error> for ErrorCode {
                     .to_string()
                     .starts_with("failed to lookup address information")
                 {
-                    return Self::DnsError(types::DnsErrorPayload {
+                    return ErrorCode::DnsError(types::DnsErrorPayload {
                         rcode: Some("address not available".to_string()),
                         info_code: None,
                     });
                 }
 
                 warn!("connect error: {err:?}");
-                Self::ConnectionRefused
+                ErrorCode::ConnectionRefused
             }
             Error::Tls(err) => {
                 warn!("tls protocol error: {err:?}");
-                Self::TlsProtocolError
+                ErrorCode::TlsProtocolError
             }
+            #[cfg(feature = "default-send-request")]
             Error::InvalidDnsNameError(err) => {
                 warn!("dns lookup error: {err:?}");
-                Self::DnsError(types::DnsErrorPayload {
+                ErrorCode::DnsError(types::DnsErrorPayload {
                     rcode: Some("invalid dns name".to_string()),
                     info_code: None,
                 })
             }
-            Error::DnsTimeout => Self::DnsTimeout,
-            Error::DnsError { rcode, info_code } => Self::DnsError(types::DnsErrorPayload {
+            Error::DnsTimeout => ErrorCode::DnsTimeout,
+            Error::DnsError { rcode, info_code } => ErrorCode::DnsError(types::DnsErrorPayload {
                 rcode: rcode.clone(),
                 info_code: *info_code,
             }),
-            Error::DestinationNotFound => Self::DestinationNotFound,
-            Error::DestinationUnavailable => Self::DestinationUnavailable,
-            Error::DestinationIpProhibited => Self::DestinationIpProhibited,
-            Error::DestinationIpUnroutable => Self::DestinationIpUnroutable,
-            Error::ConnectionRefused => Self::ConnectionRefused,
-            Error::ConnectionTerminated => Self::ConnectionTerminated,
-            Error::ConnectionTimeout => Self::ConnectionTimeout,
-            Error::ConnectionReadTimeout => Self::ConnectionReadTimeout,
-            Error::ConnectionWriteTimeout => Self::ConnectionWriteTimeout,
-            Error::ConnectionLimitReached => Self::ConnectionLimitReached,
-            Error::TlsProtocolError => Self::TlsProtocolError,
-            Error::TlsCertificateError => Self::TlsCertificateError,
+            Error::DestinationNotFound => ErrorCode::DestinationNotFound,
+            Error::DestinationUnavailable => ErrorCode::DestinationUnavailable,
+            Error::DestinationIpProhibited => ErrorCode::DestinationIpProhibited,
+            Error::DestinationIpUnroutable => ErrorCode::DestinationIpUnroutable,
+            Error::ConnectionRefused => ErrorCode::ConnectionRefused,
+            Error::ConnectionTerminated => ErrorCode::ConnectionTerminated,
+            Error::ConnectionTimeout => ErrorCode::ConnectionTimeout,
+            Error::ConnectionReadTimeout => ErrorCode::ConnectionReadTimeout,
+            Error::ConnectionWriteTimeout => ErrorCode::ConnectionWriteTimeout,
+            Error::ConnectionLimitReached => ErrorCode::ConnectionLimitReached,
+            Error::TlsProtocolError => ErrorCode::TlsProtocolError,
+            Error::TlsCertificateError => ErrorCode::TlsCertificateError,
             Error::TlsAlertReceived {
                 alert_id,
                 alert_message,
-            } => Self::TlsAlertReceived(types::TlsAlertReceivedPayload {
+            } => ErrorCode::TlsAlertReceived(types::TlsAlertReceivedPayload {
                 alert_id: *alert_id,
                 alert_message: alert_message.clone(),
             }),
-            Error::HttpRequestDenied => Self::HttpRequestDenied,
-            Error::HttpRequestLengthRequired => Self::HttpRequestLengthRequired,
-            Error::HttpRequestBodySize(payload) => Self::HttpRequestBodySize(*payload),
-            Error::HttpRequestMethodInvalid => Self::HttpRequestMethodInvalid,
-            Error::HttpRequestUriInvalid => Self::HttpRequestUriInvalid,
-            Error::HttpRequestUriTooLong => Self::HttpRequestUriTooLong,
+            Error::HttpRequestDenied => ErrorCode::HttpRequestDenied,
+            Error::HttpRequestLengthRequired => ErrorCode::HttpRequestLengthRequired,
+            Error::HttpRequestBodySize(payload) => ErrorCode::HttpRequestBodySize(*payload),
+            Error::HttpRequestMethodInvalid => ErrorCode::HttpRequestMethodInvalid,
+            Error::HttpRequestUriInvalid => ErrorCode::HttpRequestUriInvalid,
+            Error::HttpRequestUriTooLong => ErrorCode::HttpRequestUriTooLong,
             Error::HttpRequestHeaderSectionSize(payload) => {
-                Self::HttpRequestHeaderSectionSize(*payload)
+                ErrorCode::HttpRequestHeaderSectionSize(*payload)
             }
             Error::HttpRequestHeaderSize {
                 field_name,
                 field_size,
-            } => Self::HttpRequestHeaderSize(Some(types::FieldSizePayload {
+            } => ErrorCode::HttpRequestHeaderSize(Some(types::FieldSizePayload {
                 field_name: field_name.clone(),
                 field_size: *field_size,
             })),
             Error::HttpRequestTrailerSectionSize(payload) => {
-                Self::HttpRequestTrailerSectionSize(*payload)
+                ErrorCode::HttpRequestTrailerSectionSize(*payload)
             }
             Error::HttpRequestTrailerSize {
                 field_name,
                 field_size,
-            } => Self::HttpRequestTrailerSize(types::FieldSizePayload {
+            } => ErrorCode::HttpRequestTrailerSize(types::FieldSizePayload {
                 field_name: field_name.clone(),
                 field_size: *field_size,
             }),
-            Error::HttpResponseIncomplete => Self::HttpResponseIncomplete,
+            Error::HttpResponseIncomplete => ErrorCode::HttpResponseIncomplete,
             Error::HttpResponseHeaderSectionSize(payload) => {
-                Self::HttpResponseHeaderSectionSize(*payload)
+                ErrorCode::HttpResponseHeaderSectionSize(*payload)
             }
             Error::HttpResponseHeaderSize {
                 field_name,
                 field_size,
-            } => Self::HttpResponseHeaderSize(types::FieldSizePayload {
+            } => ErrorCode::HttpResponseHeaderSize(types::FieldSizePayload {
                 field_name: field_name.clone(),
                 field_size: *field_size,
             }),
-            Error::HttpResponseBodySize(payload) => Self::HttpResponseBodySize(*payload),
+            Error::HttpResponseBodySize(payload) => ErrorCode::HttpResponseBodySize(*payload),
             Error::HttpResponseTrailerSectionSize(payload) => {
-                Self::HttpResponseTrailerSectionSize(*payload)
+                ErrorCode::HttpResponseTrailerSectionSize(*payload)
             }
             Error::HttpResponseTrailerSize {
                 field_name,
                 field_size,
-            } => Self::HttpResponseTrailerSize(types::FieldSizePayload {
+            } => ErrorCode::HttpResponseTrailerSize(types::FieldSizePayload {
                 field_name: field_name.clone(),
                 field_size: *field_size,
             }),
             Error::HttpResponseTransferCoding(payload) => {
-                Self::HttpResponseTransferCoding(payload.clone())
+                ErrorCode::HttpResponseTransferCoding(payload.clone())
             }
             Error::HttpResponseContentCoding(payload) => {
-                Self::HttpResponseContentCoding(payload.clone())
+                ErrorCode::HttpResponseContentCoding(payload.clone())
             }
-            Error::HttpResponseTimeout => Self::HttpResponseTimeout,
-            Error::HttpUpgradeFailed => Self::HttpUpgradeFailed,
-            Error::HttpProtocolError => Self::HttpProtocolError,
-            Error::LoopDetected => Self::LoopDetected,
-            Error::ConfigurationError => Self::ConfigurationError,
-            Error::InternalError(payload) => Self::InternalError(payload.clone()),
+            Error::HttpResponseTimeout => ErrorCode::HttpResponseTimeout,
+            Error::HttpUpgradeFailed => ErrorCode::HttpUpgradeFailed,
+            Error::HttpProtocolError => ErrorCode::HttpProtocolError,
+            Error::LoopDetected => ErrorCode::LoopDetected,
+            Error::ConfigurationError => ErrorCode::ConfigurationError,
+            Error::InternalError(payload) => ErrorCode::InternalError(payload.clone()),
         }
     }
 }
