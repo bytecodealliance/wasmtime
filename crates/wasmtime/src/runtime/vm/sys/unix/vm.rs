@@ -47,6 +47,16 @@ pub unsafe fn commit_pages(_addr: *mut u8, _len: usize) -> io::Result<()> {
 
 #[cfg(feature = "pooling-allocator")]
 pub unsafe fn decommit_pages(iov: &[iovec]) -> io::Result<()> {
+    // Attempt to use `process_madvise` as it batches everything into a singl
+    // syscall instead of requiring `madvise`-per-rgion like below. This is only
+    // supported on Linux with (as of the time of this writing) a relatively
+    // recent kernel.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        if iov.len() > 1 && process_madvise::run_self(iov, libc::MADV_DONTNEED, 0)? {
+            return Ok(());
+        }
+    }
     for iov in iov {
         if iov.iov_len == 0 {
             continue;
@@ -187,5 +197,85 @@ impl MemoryImageSource {
 impl PartialEq for MemoryImageSource {
     fn eq(&self, other: &MemoryImageSource) -> bool {
         self.as_file().as_raw_fd() == other.as_file().as_raw_fd()
+    }
+}
+
+/// Wrapper around Linux's `process_madvise` syscall.
+///
+/// This module is a wrapper around the ability to use `process_madvise` as an
+/// implementation detail of the `decommit_pages` function above. This is only
+/// available on Linux and additionally has kernel requirements:
+///
+/// * `process_madvise` itself is available from Linux 5.10+
+/// * `MADV_DONTNEED` on the self-process is only available in Linux 6.13+
+/// * `PIDFD_SELF` on the self-process is only available in Linux 6.14+
+///
+/// This module uses `libc::syscall` to make the call to avoid glibc
+/// requirements, and it additionally attempts to handle syscall failures to
+/// indicate that this isn't supported at all (e.g. prior to 6.14).
+///
+/// # Why?
+///
+/// With `process_madvise` it's possible to inform the kernel all-at-once of a
+/// list of regions to `MADV_DONTNEED`. This primarily empowers the kernel to
+/// issue a single IPI for invalidating page tables on other cores as part of
+/// this syscall. This is in contrast to a syscall-per-region to madvise which
+/// requires an IPI-per-region. For the pooling allocator it can be much more
+/// beneficial to issue a batched syscall with one IPI overhead.
+#[cfg(target_os = "linux")]
+mod process_madvise {
+    use super::iovec;
+    use std::io;
+    use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+
+    static SUPPORTED: AtomicBool = AtomicBool::new(true);
+    const PIDFD_SELF: libc::c_int = -10000;
+
+    pub unsafe fn run_self(
+        raw: &[iovec],
+        advice: libc::c_int,
+        flags: libc::c_int,
+    ) -> io::Result<bool> {
+        if !SUPPORTED.load(Relaxed) {
+            return Ok(false);
+        }
+        for chunk in raw.chunks(usize::try_from(libc::UIO_MAXIOV).unwrap()) {
+            let expected: usize = chunk.iter().map(|iovec| iovec.iov_len).sum();
+            let ret = unsafe {
+                libc::syscall(
+                    libc::SYS_process_madvise,
+                    PIDFD_SELF,
+                    chunk.as_ptr(),
+                    chunk.len(),
+                    advice,
+                    flags,
+                )
+            };
+
+            if ret < 0 {
+                let err = io::Error::last_os_error();
+                // All of these are permanent failure conditions that we can't
+                // recover here, for example too old a kernel for the syscall
+                // (ENOSYS), too old a kernel for MADV_DONTNEED (EINVAL), too
+                // old a kernel for PIDFD_SELF (EINVAL), or we're not allowed to
+                // use this syscall (EPERM).
+                match err.raw_os_error() {
+                    Some(libc::ENOSYS) | Some(libc::EINVAL) | Some(libc::EPERM) => {
+                        SUPPORTED.store(false, Relaxed);
+                        return Ok(false);
+                    }
+                    _ => {}
+                }
+                return Err(err);
+            }
+
+            // If the kernel didn't actually reset everything for us then that's
+            // considered a failure and this needs to be done one-by-one.
+            if usize::try_from(ret).unwrap() != expected {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 }
