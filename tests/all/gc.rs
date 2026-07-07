@@ -3774,3 +3774,17 @@ fn pooling_gc_heap_failure_does_not_leak_memory_slot() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn initial_size_larger_than_reservation() -> Result<()> {
+    // This shouldn't panic/corrupt/etc, it should just allocate a larger heap.
+    let mut config = Config::new();
+    config.gc_heap_initial_size(4096 * 20);
+    config.gc_heap_reservation(4096);
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+    ExternRef::new(&mut store, 1)?;
+
+    Ok(())
+}

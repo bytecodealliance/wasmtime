@@ -929,6 +929,7 @@ fn should_collect_first(
 #[cfg(test)]
 mod tests {
     use super::should_collect_first;
+    use crate::{AsContextMut, Config, Engine, ExternRef, Result, Store};
 
     #[test]
     fn test_should_collect_first() {
@@ -965,5 +966,18 @@ mod tests {
         // enough space, and we want to amortize the cost of collections, so
         // grow first.
         assert_eq!(should_collect_first(16, 1024, 512), false);
+    }
+
+    #[test]
+    fn gc_heap_initial_size() -> Result<()> {
+        let mut config = Config::new();
+        config.gc_heap_initial_size(1 << 20);
+        let engine = Engine::new(&config)?;
+        let mut store = Store::new(&engine, ());
+        ExternRef::new(&mut store, 1)?;
+
+        let gc_store = store.as_context_mut().0.unwrap_gc_store();
+        assert_eq!(gc_store.gc_heap_capacity(), 1 << 20);
+        Ok(())
     }
 }

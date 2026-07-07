@@ -1414,6 +1414,38 @@ impl Config {
         self
     }
 
+    /// Configures the initial size, in bytes, of each store's GC heap.
+    ///
+    /// By default all GC heaps start out at 0 bytes in size and must grow
+    /// upwards from there. Growth happens incrementally as GC pressure happens
+    /// and memory runs out. The amount being grown by is additionally a
+    /// heuristic of the size of the failed allocation. By providing an initial
+    /// size of a store's GC heap embedders can more tightly control initial
+    /// parameters to optimize workloads that might have a predictable pattern.
+    /// For example if workloads frequently have less than a certain threshold
+    /// of size then that could be configured as the initial size here to avoid
+    /// growths happening over time.
+    ///
+    /// Note that like WebAssembly linear memories the GC heap does not start
+    /// with committed memory equal to this size. Instead memory is reserved,
+    /// but then lazily allocated by the OS on access. In other words it should
+    /// be relatively cheap to increase this value to help amortize initial
+    /// startup cost of wasm modules.
+    ///
+    /// The `bytes` size is rounded up to the GC heap's page size.
+    ///
+    /// This only configures the initially-allocated size of the GC heap; the
+    /// heap can still grow beyond it on demand. It is separate from
+    /// [`Config::gc_heap_reservation`], which configures the size of the
+    /// virtual-memory reservation (and therefore how far the heap can grow
+    /// in place).
+    ///
+    /// The default value for this is 0.
+    pub fn gc_heap_initial_size(&mut self, bytes: u64) -> &mut Self {
+        self.tunables.gc_heap_initial_size = Some(bytes);
+        self
+    }
+
     /// Creates a default profiler based on the profiling strategy chosen.
     ///
     /// Profiler creation calls the type's default initializer where the purpose is
@@ -4755,6 +4787,11 @@ impl Engine {
     /// Returns the configured [`Config::gc_heap_reservation`] value.
     pub fn get_gc_heap_reservation(&self) -> u64 {
         self.tunables().gc_heap_reservation
+    }
+
+    /// Returns the configured [`Config::gc_heap_initial_size`] value.
+    pub fn get_gc_heap_initial_size(&self) -> u64 {
+        self.tunables().gc_heap_initial_size
     }
 
     /// Returns the configured [`Config::gc_heap_reservation_for_growth`] value.

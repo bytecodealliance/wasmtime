@@ -1842,6 +1842,7 @@ impl StoreOpaque {
 
             let engine = store.engine();
             let mem_ty = engine.tunables().gc_heap_memory_type();
+
             ensure!(
                 engine.features().gc_types(),
                 "cannot allocate a GC store when GC is disabled at configuration time"
