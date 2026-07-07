@@ -5,7 +5,7 @@ use core::mem::MaybeUninit;
 // See https://doc.rust-lang.org/core/array/fn.try_from_fn.html for the not yet stable original
 //
 /// Creates an array `[T; N]` where each fallible array element `T` is returned by the `cb` call.
-/// Unlike [`from_fn`], where the element creation can't fail, this version will return an error
+/// Unlike [`core::array::from_fn`], where the element creation can't fail, this version will return an error
 /// if any element creation was unsuccessful.
 ///
 /// The return type of this function depends on the return type of the closure.
