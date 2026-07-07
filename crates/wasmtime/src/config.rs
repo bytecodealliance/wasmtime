@@ -1432,10 +1432,7 @@ impl Config {
     /// be relatively cheap to increase this value to help amortize initial
     /// startup cost of wasm modules.
     ///
-    /// The `bytse` size is rounded up to the GC heap's page size. Also note
-    /// that the copying collector divides its heap into two semi-spaces, so
-    /// only half of the configured size is available for allocation under that
-    /// collector.
+    /// The `bytes` size is rounded up to the GC heap's page size.
     ///
     /// This only configures the initially-allocated size of the GC heap; the
     /// heap can still grow beyond it on demand. It is separate from
