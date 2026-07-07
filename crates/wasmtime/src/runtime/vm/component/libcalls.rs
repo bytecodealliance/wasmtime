@@ -802,24 +802,6 @@ fn waitable_join(
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_yield(
-    store: &mut dyn VMStore,
-    instance: Instance,
-    caller_instance: u32,
-    cancellable: u8,
-) -> Result<bool> {
-    instance
-        .suspension_intrinsic(
-            store,
-            RuntimeComponentInstanceIndex::from_u32(caller_instance),
-            cancellable != 0,
-            true,
-            SuspensionTarget::None,
-        )
-        .map(|r| r == WaitResult::Cancelled)
-}
-
-#[cfg(feature = "component-model-async")]
 fn subtask_drop(
     store: &mut dyn VMStore,
     instance: Instance,
@@ -1342,41 +1324,19 @@ fn thread_new_indirect(
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_suspend_to_suspended(
+fn thread_resume_later(
     store: &mut dyn VMStore,
     instance: Instance,
-    caller: u32,
-    cancellable: u8,
+    caller_instance: u32,
     thread_idx: u32,
-) -> Result<bool> {
-    instance
-        .suspension_intrinsic(
-            store,
-            RuntimeComponentInstanceIndex::from_u32(caller),
-            cancellable != 0,
-            false,
-            SuspensionTarget::SomeSuspended(thread_idx),
-        )
-        .map(|r| r == WaitResult::Cancelled)
-}
-
-#[cfg(feature = "component-model-async")]
-fn thread_suspend_to(
-    store: &mut dyn VMStore,
-    instance: Instance,
-    caller: u32,
-    cancellable: u8,
-    thread_idx: u32,
-) -> Result<bool> {
-    instance
-        .suspension_intrinsic(
-            store,
-            RuntimeComponentInstanceIndex::from_u32(caller),
-            cancellable != 0,
-            false,
-            SuspensionTarget::Some(thread_idx),
-        )
-        .map(|r| r == WaitResult::Cancelled)
+) -> Result<()> {
+    instance.resume_thread(
+        store,
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
+        thread_idx,
+        false,
+        false,
+    )
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1398,23 +1358,44 @@ fn thread_suspend(
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_unsuspend(
+fn thread_yield(
     store: &mut dyn VMStore,
     instance: Instance,
     caller_instance: u32,
-    thread_idx: u32,
-) -> Result<()> {
-    instance.resume_thread(
-        store,
-        RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        thread_idx,
-        false,
-        false,
-    )
+    cancellable: u8,
+) -> Result<bool> {
+    instance
+        .suspension_intrinsic(
+            store,
+            RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            cancellable != 0,
+            true,
+            SuspensionTarget::None,
+        )
+        .map(|r| r == WaitResult::Cancelled)
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_yield_to_suspended(
+fn thread_suspend_then_resume(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    caller: u32,
+    cancellable: u8,
+    thread_idx: u32,
+) -> Result<bool> {
+    instance
+        .suspension_intrinsic(
+            store,
+            RuntimeComponentInstanceIndex::from_u32(caller),
+            cancellable != 0,
+            false,
+            SuspensionTarget::SomeSuspended(thread_idx),
+        )
+        .map(|r| r == WaitResult::Cancelled)
+}
+
+#[cfg(feature = "component-model-async")]
+fn thread_yield_then_resume(
     store: &mut dyn VMStore,
     instance: Instance,
     caller_instance: u32,
@@ -1428,6 +1409,44 @@ fn thread_yield_to_suspended(
             cancellable != 0,
             true,
             SuspensionTarget::SomeSuspended(thread_idx),
+        )
+        .map(|r| r == WaitResult::Cancelled)
+}
+
+#[cfg(feature = "component-model-async")]
+fn thread_suspend_then_promote(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    caller: u32,
+    cancellable: u8,
+    thread_idx: u32,
+) -> Result<bool> {
+    instance
+        .suspension_intrinsic(
+            store,
+            RuntimeComponentInstanceIndex::from_u32(caller),
+            cancellable != 0,
+            false,
+            SuspensionTarget::Some(thread_idx),
+        )
+        .map(|r| r == WaitResult::Cancelled)
+}
+
+#[cfg(feature = "component-model-async")]
+fn thread_yield_then_promote(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    caller: u32,
+    cancellable: u8,
+    thread_idx: u32,
+) -> Result<bool> {
+    instance
+        .suspension_intrinsic(
+            store,
+            RuntimeComponentInstanceIndex::from_u32(caller),
+            cancellable != 0,
+            true,
+            SuspensionTarget::Some(thread_idx),
         )
         .map(|r| r == WaitResult::Cancelled)
 }

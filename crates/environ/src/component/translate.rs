@@ -223,10 +223,6 @@ enum LocalInitializer<'data> {
     WaitableJoin {
         func: ModuleInternedTypeIndex,
     },
-    ThreadYield {
-        func: ModuleInternedTypeIndex,
-        cancellable: bool,
-    },
     SubtaskDrop {
         func: ModuleInternedTypeIndex,
     },
@@ -319,22 +315,30 @@ enum LocalInitializer<'data> {
         start_func_ty: ComponentTypeIndex,
         start_func_table_index: TableIndex,
     },
-    ThreadSuspendToSuspended {
+    ThreadResumeLater {
         func: ModuleInternedTypeIndex,
-        cancellable: bool,
     },
     ThreadSuspend {
         func: ModuleInternedTypeIndex,
         cancellable: bool,
     },
-    ThreadSuspendTo {
+    ThreadYield {
         func: ModuleInternedTypeIndex,
         cancellable: bool,
     },
-    ThreadUnsuspend {
+    ThreadSuspendThenResume {
         func: ModuleInternedTypeIndex,
+        cancellable: bool,
     },
-    ThreadYieldToSuspended {
+    ThreadYieldThenResume {
+        func: ModuleInternedTypeIndex,
+        cancellable: bool,
+    },
+    ThreadSuspendThenPromote {
+        func: ModuleInternedTypeIndex,
+        cancellable: bool,
+    },
+    ThreadYieldThenPromote {
         func: ModuleInternedTypeIndex,
         cancellable: bool,
     },
@@ -861,10 +865,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ResourceDrop(resource, ty)
                         }
-                        wasmparser::CanonicalFunction::ResourceDropAsync { resource } => {
-                            let _ = resource;
-                            bail!("support for `resource.drop async` not implemented yet")
-                        }
                         wasmparser::CanonicalFunction::ResourceRep { resource } => {
                             let resource = self
                                 .validator
@@ -969,11 +969,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::WaitableJoin { func }
-                        }
-                        wasmparser::CanonicalFunction::ThreadYield { cancellable } => {
-                            let func = self.core_func_signature(core_func_index)?;
-                            core_func_index += 1;
-                            LocalInitializer::ThreadYield { func, cancellable }
                         }
                         wasmparser::CanonicalFunction::SubtaskDrop => {
                             let func = self.core_func_signature(core_func_index)?;
@@ -1173,30 +1168,40 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 start_func_table_index: TableIndex::from_u32(table_index),
                             }
                         }
-                        wasmparser::CanonicalFunction::ThreadSuspendToSuspended { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadResumeLater => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadSuspendToSuspended { func, cancellable }
+                            LocalInitializer::ThreadResumeLater { func }
                         }
                         wasmparser::CanonicalFunction::ThreadSuspend { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ThreadSuspend { func, cancellable }
                         }
-                        wasmparser::CanonicalFunction::ThreadSuspendTo { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadYield { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadSuspendTo { func, cancellable }
+                            LocalInitializer::ThreadYield { func, cancellable }
                         }
-                        wasmparser::CanonicalFunction::ThreadUnsuspend => {
+                        wasmparser::CanonicalFunction::ThreadSuspendThenResume { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadUnsuspend { func }
+                            LocalInitializer::ThreadSuspendThenResume { func, cancellable }
                         }
-                        wasmparser::CanonicalFunction::ThreadYieldToSuspended { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadYieldThenResume { cancellable } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadYieldToSuspended { func, cancellable }
+                            LocalInitializer::ThreadYieldThenResume { func, cancellable }
+                        }
+                        wasmparser::CanonicalFunction::ThreadSuspendThenPromote { cancellable } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadSuspendThenPromote { func, cancellable }
+                        }
+                        wasmparser::CanonicalFunction::ThreadYieldThenPromote { cancellable } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ThreadYieldThenPromote { func, cancellable }
                         }
                     };
                     self.result.initializers.push(init);

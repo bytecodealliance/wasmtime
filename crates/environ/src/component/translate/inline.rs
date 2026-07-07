@@ -775,16 +775,6 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYield { func, cancellable } => {
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::ThreadYield {
-                        instance: frame.instance,
-                        cancellable: *cancellable,
-                    },
-                ));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
-            }
             SubtaskDrop { func } => {
                 let index = self.result.trampolines.push((
                     *func,
@@ -1131,22 +1121,11 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSuspendToSuspended { func, cancellable } => {
+            ThreadResumeLater { func } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadSuspendToSuspended {
+                    dfg::Trampoline::ThreadResumeLater {
                         instance: frame.instance,
-                        cancellable: *cancellable,
-                    },
-                ));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
-            }
-            ThreadSuspendTo { func, cancellable } => {
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::ThreadSuspendTo {
-                        instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
@@ -1161,19 +1140,50 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadUnsuspend { func } => {
+            ThreadYield { func, cancellable } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadUnsuspend {
+                    dfg::Trampoline::ThreadYield {
                         instance: frame.instance,
+                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYieldToSuspended { func, cancellable } => {
+            ThreadSuspendThenResume { func, cancellable } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::ThreadYieldToSuspended {
+                    dfg::Trampoline::ThreadSuspendThenResume {
+                        instance: frame.instance,
+                        cancellable: *cancellable,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadYieldThenResume { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadYieldThenResume {
+                        instance: frame.instance,
+                        cancellable: *cancellable,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadSuspendThenPromote { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadSuspendThenPromote {
+                        instance: frame.instance,
+                        cancellable: *cancellable,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
+            ThreadYieldThenPromote { func, cancellable } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadYieldThenPromote {
                         instance: frame.instance,
                         cancellable: *cancellable,
                     },

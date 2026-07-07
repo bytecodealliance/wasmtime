@@ -8,14 +8,14 @@
   (core type $start-func-ty (func (param i32)))
   (core func $thread.new-indirect
     (canon thread.new-indirect $start-func-ty (table $libc "t")))
-  (core func $thread.unsuspend (canon thread.unsuspend))
+  (core func $thread.resume-later (canon thread.resume-later))
   (core func $thread.index (canon thread.index))
   (core func $thread.yield-cancellable (canon thread.yield cancellable))
   (core func $task.return (canon task.return))
 
   (core module $m
     (import "" "thread.new-indirect" (func $thread.new-indirect (param i32 i32) (result i32)))
-    (import "" "thread.unsuspend" (func $thread.unsuspend (param i32)))
+    (import "" "thread.resume-later" (func $thread.resume-later (param i32)))
     (import "" "thread.index" (func $thread.index (result i32)))
     (import "" "thread.yield-cancellable" (func $thread.yield-cancellable (result i32)))
     (import "" "task.return" (func $task.return))
@@ -25,7 +25,7 @@
     (func (export "run") (result i32)
       (local $tid i32)
       (local.set $tid (call $thread.new-indirect (i32.const 0) (call $thread.index)))
-      (call $thread.unsuspend (local.get $tid))
+      (call $thread.resume-later (local.get $tid))
       i32.const 1 ;; CALLBACK_CODE_YIELD
     )
 
@@ -46,7 +46,7 @@
 
   (core instance $i (instantiate $m (with "" (instance
     (export "thread.new-indirect" (func $thread.new-indirect))
-    (export "thread.unsuspend" (func $thread.unsuspend))
+    (export "thread.resume-later" (func $thread.resume-later))
     (export "thread.index" (func $thread.index))
     (export "thread.yield-cancellable" (func $thread.yield-cancellable))
     (export "task.return" (func $task.return))

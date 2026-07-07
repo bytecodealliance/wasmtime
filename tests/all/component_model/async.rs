@@ -853,14 +853,14 @@ async fn concurrent_sync_calls_to_async_host() -> Result<()> {
             (core module $m
                 (import "" "await-three-calls" (func $await-three-calls))
                 (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
-                (import "" "thread.unsuspend" (func $thread-unsuspend (param i32)))
+                (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
                 (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
 
                 (func (export "run")
                     (call $thread-new-indirect (i32.const 0) (i32.const 0))
-                    (call $thread-unsuspend)
+                    (call $thread-resume-later)
                     (call $thread-new-indirect (i32.const 0) (i32.const 0))
-                    (call $thread-unsuspend)
+                    (call $thread-resume-later)
                     (call $await-three-calls)
                 )
                 (func $thread-entry (param i32)
@@ -875,14 +875,14 @@ async fn concurrent_sync_calls_to_async_host() -> Result<()> {
             (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
             (core func $thread-new-indirect
                 (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
-            (core func $thread-unsuspend (canon thread.unsuspend))
+            (core func $thread-resume-later (canon thread.resume-later))
 
             (core func $await-three-calls (canon lower (func $await-three-calls) ))
             (core instance $i (instantiate $m
                 (with "" (instance
                     (export "await-three-calls" (func $await-three-calls))
                     (export "thread.new-indirect" (func $thread-new-indirect))
-                    (export "thread.unsuspend" (func $thread-unsuspend))
+                    (export "thread.resume-later" (func $thread-resume-later))
                 ))
                 (with "libc" (instance $libc))
             ))

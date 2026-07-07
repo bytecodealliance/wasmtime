@@ -14,7 +14,7 @@
 ;;      The caller cancels the subtask during the first yield, and ensures that the cancellation only takes effect
 ;;      on the second yield.
 
-;; `run-yield-to-suspended`: Yields twice to a spawned thread, first with an uncancellable yield, then with a cancellable yield.
+;; `run-yield-then-resume`: Yields twice to a spawned thread, first with an uncancellable yield, then with a cancellable yield.
 ;;      A complication is that we can't guarantee that if the spawned thread yields, the supertask will be scheduled to
 ;;      cancel the subtask before the subtask's implicit thread is rescheduled. To handle this, the subtask's implicit
 ;;      thread first waits on a future to be written by the supertask, then yields to the spawned thread.
@@ -26,7 +26,7 @@
 ;;      The caller cancels the subtask during the first suspend, writes to the future to make the spawned thread
 ;;      resume the implicit thread, and ensures that the cancellation only takes effect on the second suspend.
 
-;; `run-suspend-to-suspended`: Similar to `run-suspend`, but uses `thread.suspend-to-suspended` instead of `thread.suspend`.
+;; `run-suspend-then-resume`: Similar to `run-suspend`, but uses `thread.suspend-then-resume` instead of `thread.suspend`.
 
 ;; -- Component D --
 
@@ -49,14 +49,14 @@
             (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
             (import "" "thread.suspend" (func $thread-suspend (result i32)))
             (import "" "thread.suspend-cancellable" (func $thread-suspend-cancellable (result i32)))
-            (import "" "thread.yield-to-suspended" (func $thread-yield-to-suspended (param i32) (result i32)))
-            (import "" "thread.yield-to-suspended-cancellable" (func $thread-yield-to-suspended-cancellable (param i32) (result i32)))
-            (import "" "thread.suspend-to-suspended" (func $thread-suspend-to-suspended (param i32) (result i32)))
-            (import "" "thread.suspend-to-suspended-cancellable" (func $thread-suspend-to-suspended-cancellable (param i32) (result i32)))
+            (import "" "thread.yield-then-resume" (func $thread-yield-then-resume (param i32) (result i32)))
+            (import "" "thread.yield-then-resume-cancellable" (func $thread-yield-then-resume-cancellable (param i32) (result i32)))
+            (import "" "thread.suspend-then-resume" (func $thread-suspend-then-resume (param i32) (result i32)))
+            (import "" "thread.suspend-then-resume-cancellable" (func $thread-suspend-then-resume-cancellable (param i32) (result i32)))
             (import "" "thread.yield" (func $thread-yield (result i32)))
             (import "" "thread.yield-cancellable" (func $thread-yield-cancellable (result i32)))
             (import "" "thread.index" (func $thread-index (result i32)))
-            (import "" "thread.unsuspend" (func $thread-unsuspend (param i32)))
+            (import "" "thread.resume-later" (func $thread-resume-later (param i32)))
             (import "" "future.read" (func $future.read (param i32 i32) (result i32)))
             (import "" "waitable.join" (func $waitable.join (param i32 i32)))
             (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
@@ -93,7 +93,7 @@
                 ;; Wait for the supertask to signal us to wake up suspended thread.
                 (call $wait-for-future-write (local.get $future))
                 ;; Resume the main thread, which is suspended in an uncancellable suspend
-                (call $thread-unsuspend (local.get $thread-index))
+                (call $thread-resume-later (local.get $thread-index))
             )
 
             (func $just-yield (param $explicit-thread-idx i32)
@@ -106,7 +106,7 @@
             (elem (table $indirect-function-table) (i32.const 0 (; wake-from-suspend-ftbl-idx ;)) func $wake-from-suspend)
             (elem (table $indirect-function-table) (i32.const 1 (; just-yield-ftbl-idx ;)) func $just-yield)
 
-            (func (export "run-yield-to-suspended") (param $futr i32)
+            (func (export "run-yield-then-resume") (param $futr i32)
                 (local $thread-index i32)
                 ;; Spawn a new thread that will wake us up from our uncancellable suspend; we'll switch to it next
                 (local.set $thread-index
@@ -121,9 +121,9 @@
 
                 ;; Yield to the spawned thread uncancellably. We should eventually be rescheduled without being notified
                 ;; of the pending cancellation.
-                (if (i32.ne (call $thread-yield-to-suspended (local.get $thread-index)) (i32.const 0)) (then unreachable))
+                (if (i32.ne (call $thread-yield-then-resume (local.get $thread-index)) (i32.const 0)) (then unreachable))
                 ;; Yield to the spawned thread again. This time we should see the cancellation immediately.
-                (if (i32.ne (call $thread-yield-to-suspended-cancellable (local.get $thread-index)) (i32.const 1)) (then unreachable))
+                (if (i32.ne (call $thread-yield-then-resume-cancellable (local.get $thread-index)) (i32.const 1)) (then unreachable))
                 (call $task-cancel)
             )
 
@@ -138,7 +138,7 @@
 
                 ;; Spawn a new thread that will wake us up from our uncancellable suspend and schedule
                 ;; it to resume after we suspend.
-                (call $thread-unsuspend
+                (call $thread-resume-later
                     (call $thread-new-indirect (global.get $wake-from-suspend-ftbl-idx) (local.get $wake-from-suspend-argp)))
 
                 ;; Request suspension. We will not be woken up by cancellation, because this is an uncancellable
@@ -150,7 +150,7 @@
                 (call $task-cancel)
             )
 
-            (func (export "run-suspend-to-suspended") (param $futr i32)
+            (func (export "run-suspend-then-resume") (param $futr i32)
                 (local $thread-index i32)
                 ;; Set up the arguments for the wake-for-suspend thread start function.
                 ;; It expects a pointer to a structure containing the thread index to resume
@@ -168,9 +168,9 @@
                 ;; We will not be woken up by cancellation, because this is an uncancellable suspend.
                 ;; We will be woken up by the other thread we spawned above, which will be resumed after
                 ;; the supertask cancels our subtask.
-                (if (i32.ne (call $thread-suspend-to-suspended (local.get $thread-index)) (i32.const 0)) (then unreachable))
+                (if (i32.ne (call $thread-suspend-then-resume (local.get $thread-index)) (i32.const 0)) (then unreachable))
                 ;; Request suspension again. This time we should see the cancellation immediately.
-                (if (i32.ne (call $thread-suspend-to-suspended-cancellable (local.get $thread-index)) (i32.const 1)) (then unreachable))
+                (if (i32.ne (call $thread-suspend-then-resume-cancellable (local.get $thread-index)) (i32.const 1)) (then unreachable))
                 (call $task-cancel)
             )
         )
@@ -187,11 +187,11 @@
         (core func $thread-yield (canon thread.yield))
         (core func $thread-yield-cancellable (canon thread.yield cancellable))
         (core func $thread-index (canon thread.index))
-        (core func $thread-yield-to-suspended (canon thread.yield-to-suspended))
-        (core func $thread-yield-to-suspended-cancellable (canon thread.yield-to-suspended cancellable))
-        (core func $thread-unsuspend (canon thread.unsuspend))
-        (core func $thread-suspend-to-suspended (canon thread.suspend-to-suspended))
-        (core func $thread-suspend-to-suspended-cancellable (canon thread.suspend-to-suspended cancellable))
+        (core func $thread-yield-then-resume (canon thread.yield-then-resume))
+        (core func $thread-yield-then-resume-cancellable (canon thread.yield-then-resume cancellable))
+        (core func $thread-resume-later (canon thread.resume-later))
+        (core func $thread-suspend-then-resume (canon thread.suspend-then-resume))
+        (core func $thread-suspend-then-resume-cancellable (canon thread.suspend-then-resume cancellable))
         (core func $thread-suspend (canon thread.suspend))
         (core func $thread-suspend-cancellable (canon thread.suspend cancellable))
         (core func $future.read (canon future.read $FT (memory $memory "mem")))
@@ -207,15 +207,15 @@
                     (export "task.cancel" (func $task-cancel))
                     (export "thread.new-indirect" (func $thread-new-indirect))
                     (export "thread.index" (func $thread-index))
-                    (export "thread.yield-to-suspended" (func $thread-yield-to-suspended))
-                    (export "thread.yield-to-suspended-cancellable" (func $thread-yield-to-suspended-cancellable))
+                    (export "thread.yield-then-resume" (func $thread-yield-then-resume))
+                    (export "thread.yield-then-resume-cancellable" (func $thread-yield-then-resume-cancellable))
                     (export "thread.yield" (func $thread-yield))
                     (export "thread.yield-cancellable" (func $thread-yield-cancellable))
-                    (export "thread.suspend-to-suspended" (func $thread-suspend-to-suspended))
-                    (export "thread.suspend-to-suspended-cancellable" (func $thread-suspend-to-suspended-cancellable))
+                    (export "thread.suspend-then-resume" (func $thread-suspend-then-resume))
+                    (export "thread.suspend-then-resume-cancellable" (func $thread-suspend-then-resume-cancellable))
                     (export "thread.suspend" (func $thread-suspend))
                     (export "thread.suspend-cancellable" (func $thread-suspend-cancellable))
-                    (export "thread.unsuspend" (func $thread-unsuspend))
+                    (export "thread.resume-later" (func $thread-resume-later))
                     (export "future.read" (func $future.read))
                     (export "waitable.join" (func $waitable.join))
                     (export "waitable-set.wait" (func $waitable-set.wait))
@@ -223,17 +223,17 @@
                 (with "libc" (instance $libc))))
 
         (func (export "run-yield") async (result u32) (canon lift (core func $cm "run-yield") async))
-        (func (export "run-yield-to-suspended") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-yield-to-suspended") async))
+        (func (export "run-yield-then-resume") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-yield-then-resume") async))
         (func (export "run-suspend") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-suspend") async))
-        (func (export "run-suspend-to-suspended") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-suspend-to-suspended") async))
+        (func (export "run-suspend-then-resume") async (param "fut" $FT) (result u32) (canon lift (core func $cm "run-suspend-then-resume") async))
     )
 
     (component $D
         (type $FT (future))
         (import "run-yield" (func $run-yield async (result u32)))
-        (import "run-yield-to-suspended" (func $run-yield-to-suspended async (param "fut" $FT) (result u32)))
+        (import "run-yield-then-resume" (func $run-yield-then-resume async (param "fut" $FT) (result u32)))
         (import "run-suspend" (func $run-suspend async (param "fut" $FT) (result u32)))
-        (import "run-suspend-to-suspended" (func $run-suspend-to-suspended async (param "fut" $FT) (result u32)))
+        (import "run-suspend-then-resume" (func $run-suspend-then-resume async (param "fut" $FT) (result u32)))
 
         (core module $Memory (memory (export "mem") 1))
         (core instance $memory (instantiate $Memory))
@@ -241,9 +241,9 @@
             (import "" "mem" (memory 1))
             (import "" "subtask.cancel" (func $subtask.cancel (param i32) (result i32)))
             (import "" "run-yield" (func $run-yield (param i32) (result i32)))
-            (import "" "run-yield-to-suspended" (func $run-yield-to-suspended (param i32 i32) (result i32)))
+            (import "" "run-yield-then-resume" (func $run-yield-then-resume (param i32 i32) (result i32)))
             (import "" "run-suspend" (func $run-suspend (param i32 i32) (result i32)))
-            (import "" "run-suspend-to-suspended" (func $run-suspend-to-suspended (param i32 i32) (result i32)))
+            (import "" "run-suspend-then-resume" (func $run-suspend-then-resume (param i32 i32) (result i32)))
             (import "" "waitable.join" (func $waitable.join (param i32 i32)))
             (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
             (import "" "waitable-set.wait" (func $waitable-set.wait (param i32 i32) (result i32)))
@@ -257,7 +257,7 @@
                 (local $run-retp i32) (local $wait-retp i32)
                 (local $ret64 i64) (local $futr i32) (local $futw i32)
 
-                ;; Set up return value storage for run-suspend/suspend-to-suspended and waitable-set.wait
+                ;; Set up return value storage for run-suspend/suspend-then-resume and waitable-set.wait
                 (local.set $run-retp (i32.const 4))
                 (local.set $wait-retp (i32.const 8))
                 (i32.store (local.get $run-retp) (i32.const 0xbad0bad0))
@@ -268,20 +268,20 @@
                 (local.set $futr (i32.wrap_i64 (local.get $ret64)))
                 (local.set $futw (i32.wrap_i64 (i64.shr_u (local.get $ret64) (i64.const 32))))
 
-                ;; Calling run-suspend/suspend-to-suspended will start the thread, which will suspend.
+                ;; Calling run-suspend/suspend-then-resume will start the thread, which will suspend.
                 ;; This is basically a switch statement:
                 ;; 0: run-yield
-                ;; 1: run-yield-to-suspended
+                ;; 1: run-yield-then-resume
                 ;; 2: run-suspend
-                ;; 3: run-suspend-to-suspended
+                ;; 3: run-suspend-then-resume
                 (if (i32.eq (local.get $test-id) (i32.const 0))
                     (then (local.set $ret (call $run-yield (local.get $run-retp))))
                     (else (if (i32.eq (local.get $test-id) (i32.const 1))
-                        (then (local.set $ret (call $run-yield-to-suspended (local.get $futr) (local.get $run-retp))))
+                        (then (local.set $ret (call $run-yield-then-resume (local.get $futr) (local.get $run-retp))))
                         (else (if (i32.eq (local.get $test-id) (i32.const 2))
                             (then (local.set $ret (call $run-suspend (local.get $futr) (local.get $run-retp))))
                             (else (if (i32.eq (local.get $test-id) (i32.const 3))
-                                (then (local.set $ret (call $run-suspend-to-suspended (local.get $futr) (local.get $run-retp))))
+                                (then (local.set $ret (call $run-suspend-then-resume (local.get $futr) (local.get $run-retp))))
                                 (else unreachable))))))))
 
                 ;; Ensure that the thread started
@@ -327,7 +327,7 @@
                 (if (i32.ne (call $run-test (i32.const 0)) (i32.const 42))
                     (then unreachable))
 
-                ;; test-id 1: run-yield-to-suspended
+                ;; test-id 1: run-yield-then-resume
                 (if (i32.ne (call $run-test (i32.const 1)) (i32.const 42))
                     (then unreachable))
 
@@ -335,7 +335,7 @@
                 (if (i32.ne (call $run-test (i32.const 2)) (i32.const 42))
                     (then unreachable))
 
-                ;; test-id 3: run-suspend-to-suspended
+                ;; test-id 3: run-suspend-then-resume
                 (if (i32.ne (call $run-test (i32.const 3)) (i32.const 42))
                     (then unreachable))
 
@@ -353,14 +353,14 @@
         (core func $thread.yield (canon thread.yield))
         (canon lower (func $run-yield) async (memory $memory "mem") (core func $run-yield'))
         (canon lower (func $run-suspend) async (memory $memory "mem") (core func $run-suspend'))
-        (canon lower (func $run-suspend-to-suspended) async (memory $memory "mem") (core func $run-suspend-to-suspended'))
-        (canon lower (func $run-yield-to-suspended) async (memory $memory "mem") (core func $run-yield-to-suspended'))
+        (canon lower (func $run-suspend-then-resume) async (memory $memory "mem") (core func $run-suspend-then-resume'))
+        (canon lower (func $run-yield-then-resume) async (memory $memory "mem") (core func $run-yield-then-resume'))
         (core instance $dm (instantiate $DM (with "" (instance
             (export "mem" (memory $memory "mem"))
             (export "run-yield" (func $run-yield'))
             (export "run-suspend" (func $run-suspend'))
-            (export "run-suspend-to-suspended" (func $run-suspend-to-suspended'))
-            (export "run-yield-to-suspended" (func $run-yield-to-suspended'))
+            (export "run-suspend-then-resume" (func $run-suspend-then-resume'))
+            (export "run-yield-then-resume" (func $run-yield-then-resume'))
             (export "waitable.join" (func $waitable.join))
             (export "waitable-set.new" (func $waitable-set.new))
             (export "waitable-set.wait" (func $waitable-set.wait))
@@ -375,9 +375,9 @@
     (instance $c (instantiate $C))
     (instance $d (instantiate $D
         (with "run-yield" (func $c "run-yield"))
-        (with "run-yield-to-suspended" (func $c "run-yield-to-suspended"))
+        (with "run-yield-then-resume" (func $c "run-yield-then-resume"))
         (with "run-suspend" (func $c "run-suspend"))
-        (with "run-suspend-to-suspended" (func $c "run-suspend-to-suspended"))
+        (with "run-suspend-then-resume" (func $c "run-suspend-then-resume"))
     ))
   (func (export "run") (alias export $d "run"))
 )

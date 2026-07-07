@@ -10,7 +10,7 @@ use syn::{Token, braced, token};
 use wasmtime_wit_bindgen::{
     FunctionConfig, FunctionFilter, FunctionFlags, Opts, Ownership, TrappableError,
 };
-use wit_parser::{PackageId, Resolve, UnresolvedPackageGroup, WorldId};
+use wit_parser::{PackageId, Resolve, WorldId};
 
 pub struct Config {
     opts: Opts,
@@ -237,7 +237,7 @@ fn parse_source(
 
     if let Some(inline) = inline {
         pkgs.truncate(0);
-        pkgs.push(resolve.push_group(UnresolvedPackageGroup::parse("macro-input", inline)?)?);
+        pkgs.push(resolve.push_str("macro-input", inline)?);
     }
 
     Ok((resolve, pkgs, files))
