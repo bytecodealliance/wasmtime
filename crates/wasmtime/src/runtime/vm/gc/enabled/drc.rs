@@ -275,10 +275,12 @@ impl DrcHeap {
         Ok(())
     }
 
-    /// Decrement the ref count for the associated object.
+    /// Decrement the ref count for the associated object and process this
+    /// heap's pending `dec_ref_stack`.
     ///
-    /// If the ref count reached zero, then deallocate the object and remove its
-    /// associated entry from the `host_data_table` if necessary.
+    /// If the `gc_ref` object is specified, and if the ref count reached zero,
+    /// then deallocate the object and remove its associated entry from the
+    /// `host_data_table` if necessary.
     ///
     /// This uses an explicit stack, rather than recursion, for the scenario
     /// where dropping one object means that the ref count for another object
@@ -286,9 +288,11 @@ impl DrcHeap {
     fn dec_ref_and_maybe_dealloc(
         &mut self,
         host_data_table: &mut ExternRefHostDataTable,
-        gc_ref: &VMGcRef,
+        gc_ref: Option<&VMGcRef>,
     ) -> Result<()> {
-        if gc_ref.is_i31() {
+        if let Some(gc_ref) = gc_ref
+            && gc_ref.is_i31()
+        {
             return Ok(());
         }
 
@@ -305,11 +309,15 @@ impl DrcHeap {
         let large_array_stack = &mut allocs.large_array_dec_ref_stack;
         let to_dealloc = &mut allocs.to_dealloc;
 
-        debug_assert!(stack.is_empty());
+        // Assert that our temporary stacks are all empty, but note that
+        // `dec_ref_stack`, our `stack` local variable, may not be empty as it
+        // might have dangling references inserted by `write_gc_ref`.
         debug_assert!(large_array_stack.is_empty());
         debug_assert!(to_dealloc.is_empty());
 
-        stack.push(gc_ref.unchecked_copy());
+        if let Some(gc_ref) = gc_ref {
+            stack.push(gc_ref.unchecked_copy());
+        }
 
         while !stack.is_empty() || !large_array_stack.is_empty() {
             while let Some(gc_ref) = stack.pop() {
@@ -673,7 +681,17 @@ impl DrcHeap {
             }
             self.vmctx_data
                 .decrement_current_over_approximated_stack_roots_len();
-            self.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref)?;
+            self.dec_ref_and_maybe_dealloc(host_data_table, Some(&gc_ref))?;
+        }
+
+        // If the `dec_ref_stack` at this point still has items on it then that
+        // means a host-initiated `write_gc_ref` overwrote something and
+        // decremented it to 0. Clear that out here has it otherwise has not yet
+        // been processed.
+        if let Some(allocs) = &self.tracing_allocs
+            && !allocs.dec_ref_stack.is_empty()
+        {
+            self.dec_ref_and_maybe_dealloc(host_data_table, None)?;
         }
 
         self.vmctx_data
@@ -905,11 +923,12 @@ unsafe impl GcHeap for DrcHeap {
         *allocated_bytes = 0;
         trace_infos.clear();
 
-        debug_assert!(tracing_allocs.as_ref().is_some_and(|allocs| {
-            allocs.dec_ref_stack.is_empty()
-                && allocs.large_array_dec_ref_stack.is_empty()
-                && allocs.to_dealloc.is_empty()
-        }));
+        debug_assert!(tracing_allocs.is_some());
+        if let Some(allocs) = tracing_allocs {
+            allocs.dec_ref_stack.clear();
+            debug_assert!(allocs.large_array_dec_ref_stack.is_empty());
+            debug_assert!(allocs.to_dealloc.is_empty());
+        }
 
         memory.take().unwrap()
     }
@@ -952,7 +971,6 @@ unsafe impl GcHeap for DrcHeap {
 
     fn write_gc_ref(
         &mut self,
-        host_data_table: &mut ExternRefHostDataTable,
         destination: &mut Option<VMGcRef>,
         source: Option<&VMGcRef>,
     ) -> Result<()> {
@@ -961,10 +979,22 @@ unsafe impl GcHeap for DrcHeap {
             self.inc_ref(src)?;
         }
 
-        // Decrement the ref count of the value being overwritten and, if
-        // necessary, deallocate the GC object.
+        // Decrement the ref count of the value being overwritten. If the
+        // reference count reaches 0 then re-increment it back to one and queue
+        // this up to get deallocated later on during a GC cycle.
         if let Some(dest) = destination {
-            self.dec_ref_and_maybe_dealloc(host_data_table, dest)?;
+            let drc_header = self.index_mut(drc_ref(dest))?;
+            log::trace!(
+                "decrement {dest:#p} ref count -> {}",
+                drc_header.ref_count - 1
+            );
+            if drc_header.dec_ref() {
+                drc_header.ref_count = 1;
+                match &mut self.tracing_allocs {
+                    Some(allocs) => allocs.dec_ref_stack.push(dest.unchecked_copy()),
+                    None => bail_bug!("expected allocations to be present"),
+                }
+            }
         }
 
         // Do the actual write.

@@ -203,8 +203,7 @@ impl GcStore {
         // (that is, they are both either null or `i31ref`s) then we can skip
         // the GC barrier.
         if Self::needs_write_barrier(destination, source) {
-            self.gc_heap
-                .write_gc_ref(&mut self.host_data_table, destination, source)?;
+            self.gc_heap.write_gc_ref(destination, source)?;
         } else {
             *destination = source.map(|s| s.copy_i31());
         }
@@ -214,7 +213,7 @@ impl GcStore {
     /// Drop the given GC reference, performing drop barriers as necessary.
     pub fn drop_gc_ref(&mut self, gc_ref: VMGcRef) {
         if !gc_ref.is_i31() {
-            self.gc_heap.drop_gc_ref(&mut self.host_data_table, gc_ref);
+            self.gc_heap.drop_gc_ref(gc_ref);
         }
     }
 
