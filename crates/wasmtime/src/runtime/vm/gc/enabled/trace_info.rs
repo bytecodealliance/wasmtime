@@ -11,7 +11,8 @@ use core::hash::BuildHasher;
 use wasmtime_environ::{GcLayout, VMSharedTypeIndex};
 
 /// How to trace a GC object.
-pub(super) enum TraceInfo {
+#[derive(Debug)]
+pub(crate) enum TraceInfo {
     /// How to trace an array.
     Array {
         /// Whether this array type's elements are GC references, and need
@@ -90,19 +91,17 @@ impl core::hash::Hasher for NopHasher {
 pub(super) struct TraceInfos {
     engine: EngineWeak,
     map: HashMap<VMSharedTypeIndex, TraceInfo, NopHasher>,
-    gc_ref_array_elems_offset: u32,
 }
 
 impl TraceInfos {
     /// Create a new `TraceInfos` with the given engine and expected array
     /// element offset for GC-ref arrays.
-    pub fn new(engine: &Engine, gc_ref_array_elems_offset: u32) -> Self {
+    pub fn new(engine: &Engine) -> Self {
         let mut map = HashMap::default();
         map.reserve(1);
         Self {
             engine: engine.weak(),
             map,
-            gc_ref_array_elems_offset,
         }
     }
 
@@ -142,15 +141,18 @@ impl TraceInfos {
             return;
         };
 
-        let info = match gc_layout {
-            GcLayout::Array(l) => {
-                if l.elems_are_gc_refs {
-                    debug_assert_eq!(l.elem_offset(0), Some(self.gc_ref_array_elems_offset));
-                }
-                TraceInfo::Array {
-                    gc_ref_elems: l.elems_are_gc_refs,
-                }
-            }
+        let info = TraceInfo::new(&gc_layout);
+        let old_entry = self.map.insert(ty, info);
+        debug_assert!(old_entry.is_none());
+    }
+}
+
+impl TraceInfo {
+    pub(crate) fn new(gc_layout: &GcLayout) -> Self {
+        match gc_layout {
+            GcLayout::Array(l) => TraceInfo::Array {
+                gc_ref_elems: l.elems_are_gc_refs,
+            },
             GcLayout::Struct(l) => TraceInfo::Struct {
                 gc_ref_offsets: l
                     .fields
@@ -158,9 +160,6 @@ impl TraceInfos {
                     .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
                     .collect(),
             },
-        };
-
-        let old_entry = self.map.insert(ty, info);
-        debug_assert!(old_entry.is_none());
+        }
     }
 }

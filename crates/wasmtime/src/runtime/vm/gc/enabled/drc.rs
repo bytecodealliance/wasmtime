@@ -223,7 +223,7 @@ impl DrcHeap {
     fn new(engine: &Engine) -> Result<Self> {
         log::trace!("allocating new DRC heap");
         Ok(Self {
-            trace_infos: TraceInfos::new(engine, GC_REF_ARRAY_ELEMS_OFFSET),
+            trace_infos: TraceInfos::new(engine),
             no_gc_count: 0,
             vmctx_data: Box::default(),
             memory: None,

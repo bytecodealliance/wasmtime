@@ -13,6 +13,7 @@ pub use arrayref::*;
 pub use exnref::*;
 pub use externref::*;
 pub use structref::*;
+pub(crate) use trace_info::TraceInfo;
 
 #[cfg(feature = "gc-drc")]
 mod drc;

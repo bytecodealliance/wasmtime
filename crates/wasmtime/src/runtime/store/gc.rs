@@ -2,13 +2,15 @@
 
 use crate::RootSet;
 use crate::error::{Context, ensure};
+use crate::hash_map::HashMap;
 use crate::module::ModuleRegistry;
 use crate::store::{
     Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
 };
 use crate::type_registry::RegisteredType;
 use crate::vm::{
-    self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, SendSyncPtr, VMGcRef,
+    self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, SendSyncPtr,
+    TraceInfo, VMGcRef,
 };
 use crate::{
     ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, ThrownException, bail,
@@ -18,15 +20,15 @@ use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-use wasmtime_environ::DefinedTagIndex;
 use wasmtime_environ::packed_option::ReservedValue;
+use wasmtime_environ::{DefinedTagIndex, VMSharedTypeIndex};
 
 #[derive(Default)]
 pub(crate) struct StoreGcData {
     gc_roots: RootSet,
     gc_roots_list: GcRootsList,
     // Types for which the embedder has created an allocator for.
-    gc_host_alloc_types: crate::hash_set::HashSet<crate::type_registry::RegisteredType>,
+    gc_host_alloc_types: HashMap<VMSharedTypeIndex, (RegisteredType, Option<TraceInfo>)>,
     /// Pending exception, if any. This is also a GC root, because it
     /// needs to be rooted somewhere between the time that a pending
     /// exception is set and the time that the handling code takes the
@@ -856,7 +858,10 @@ impl StoreOpaque {
         if let Some(gc_store) = self.optional_gc_store_mut() {
             gc_store.ensure_trace_info(ty.index());
         }
-        self.gc_data.gc_host_alloc_types.insert(ty);
+        let trace_info = ty.layout().map(TraceInfo::new);
+        self.gc_data
+            .gc_host_alloc_types
+            .insert(ty.index(), (ty, trace_info));
     }
 
     /// Performs a lazy allocation of the `GcStore` within this store, returning
@@ -942,8 +947,8 @@ impl StoreOpaque {
         // Eagerly register trace info for any host-created types (via
         // StructRefPre/ArrayRefPre) that were created before this GC
         // store was allocated.
-        for ty in &self.gc_data.gc_host_alloc_types {
-            gc_store.ensure_trace_info(ty.index());
+        for (index, _) in &self.gc_data.gc_host_alloc_types {
+            gc_store.ensure_trace_info(*index);
         }
 
         *self.vm_store_context.gc_heap.get_mut() = gc_store.vmmemory_definition();
