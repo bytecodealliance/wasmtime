@@ -8,7 +8,6 @@ use crate::p3::bindings::http::types::{
 use crate::p3::body::Body;
 use crate::p3::{HeaderResult, HttpError, RequestOptionsResult};
 use crate::{WasiHttp, WasiHttpCtxView};
-use http::header::CONTENT_LENGTH;
 use std::sync::Arc;
 use wasmtime::component::{Access, FutureReader, Resource, ResourceTable, StreamReader};
 use wasmtime::error::Context as _;
@@ -136,25 +135,6 @@ fn parse_authority(authority: String) -> Result<http::uri::Authority, ()> {
     Ok(authority)
 }
 
-fn parse_header_value(
-    name: &http::HeaderName,
-    value: impl AsRef<[u8]>,
-) -> Result<http::HeaderValue, HeaderError> {
-    if name == CONTENT_LENGTH {
-        let s = str::from_utf8(value.as_ref()).or(Err(HeaderError::InvalidSyntax))?;
-        // RFC 9110 defines `Content-Length` as `1*DIGIT`. `u64`'s `FromStr` is
-        // more lenient and also accepts a leading `+`, so reject anything that
-        // isn't a non-empty run of decimal digits.
-        if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
-            return Err(HeaderError::InvalidSyntax);
-        }
-        let v: u64 = s.parse().or(Err(HeaderError::InvalidSyntax))?;
-        Ok(v.into())
-    } else {
-        http::HeaderValue::from_bytes(value.as_ref()).or(Err(HeaderError::InvalidSyntax))
-    }
-}
-
 impl HostFields for WasiHttpCtxView<'_> {
     fn new(&mut self) -> wasmtime::Result<Resource<Fields>> {
         push_fields(self.table, FieldMap::new_mutable(self.ctx.field_size_limit))
@@ -166,12 +146,7 @@ impl HostFields for WasiHttpCtxView<'_> {
     ) -> HeaderResult<Resource<Fields>> {
         let mut fields = FieldMap::new_mutable(self.ctx.field_size_limit);
         for (name, value) in entries {
-            let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-            if self.hooks.is_forbidden_header(&name) {
-                return Err(HeaderError::Forbidden.into());
-            }
-            let value = parse_header_value(&name, value)?;
-            fields.append(name, value)?;
+            fields.append(self.hooks, name, value)?;
         }
         let fields = push_fields(self.table, fields).map_err(crate::p3::HeaderError::trap)?;
         Ok(fields)
@@ -199,27 +174,14 @@ impl HostFields for WasiHttpCtxView<'_> {
         &mut self,
         fields: Resource<Fields>,
         name: FieldName,
-        value: Vec<FieldValue>,
+        values: Vec<FieldValue>,
     ) -> HeaderResult<()> {
-        let name = name.parse().map_err(|_| HeaderError::InvalidSyntax)?;
-        if self.hooks.is_forbidden_header(&name) {
-            return Err(HeaderError::Forbidden.into());
-        }
-        let mut values = Vec::with_capacity(value.len());
-        for value in value {
-            let value = parse_header_value(&name, value)?;
-            values.push(value);
-        }
-        get_fields_mut(self.table, &fields)?.set(name, values)?;
+        get_fields_mut(self.table, &fields)?.set(self.hooks, name, values)?;
         Ok(())
     }
 
     fn delete(&mut self, fields: Resource<Fields>, name: FieldName) -> HeaderResult<()> {
-        let name = name.parse().map_err(|_| HeaderError::InvalidSyntax)?;
-        if self.hooks.is_forbidden_header(&name) {
-            return Err(HeaderError::Forbidden.into());
-        }
-        get_fields_mut(self.table, &fields)?.remove_all(name)?;
+        get_fields_mut(self.table, &fields)?.remove_all(self.hooks, name)?;
         Ok(())
     }
 
@@ -229,11 +191,8 @@ impl HostFields for WasiHttpCtxView<'_> {
         name: FieldName,
     ) -> HeaderResult<Vec<FieldValue>> {
         let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.hooks.is_forbidden_header(&name) {
-            return Err(HeaderError::Forbidden.into());
-        }
         let values = get_fields_mut(self.table, &fields)?
-            .remove_all(name)?
+            .remove_all(self.hooks, name)?
             .into_iter();
         Ok(values.map(|value| value.as_bytes().into()).collect())
     }
@@ -244,12 +203,7 @@ impl HostFields for WasiHttpCtxView<'_> {
         name: FieldName,
         value: FieldValue,
     ) -> HeaderResult<()> {
-        let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        if self.hooks.is_forbidden_header(&name) {
-            return Err(HeaderError::Forbidden.into());
-        }
-        let value = parse_header_value(&name, value)?;
-        get_fields_mut(self.table, &fields)?.append(name, value)?;
+        get_fields_mut(self.table, &fields)?.append(self.hooks, name, value)?;
         Ok(())
     }
 
@@ -633,24 +587,6 @@ impl Host for WasiHttpCtxView<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_header_value;
-    use http::header::{CONTENT_LENGTH, CONTENT_TYPE};
-
-    #[test]
-    fn content_length_rejects_non_digits() {
-        assert!(parse_header_value(&CONTENT_LENGTH, "0").is_ok());
-        assert!(parse_header_value(&CONTENT_LENGTH, "1234").is_ok());
-
-        // `u64::from_str` accepts these but they are not `1*DIGIT` per RFC 9110.
-        assert!(parse_header_value(&CONTENT_LENGTH, "+5").is_err());
-        assert!(parse_header_value(&CONTENT_LENGTH, "-5").is_err());
-        assert!(parse_header_value(&CONTENT_LENGTH, " 5").is_err());
-        assert!(parse_header_value(&CONTENT_LENGTH, "").is_err());
-
-        // other header names are unaffected
-        assert!(parse_header_value(&CONTENT_TYPE, "text/plain").is_ok());
-    }
-
     #[test]
     fn authority_accepts_ipv6_and_validates_ports() {
         use super::parse_authority;

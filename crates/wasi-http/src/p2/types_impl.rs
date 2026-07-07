@@ -4,11 +4,11 @@ use crate::p2::bindings::http::types::{self, Method, Scheme, StatusCode, Trailer
 use crate::p2::body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext};
 use crate::p2::types::{
     HostFutureIncomingResponse, HostIncomingRequest, HostIncomingResponse, HostOutgoingRequest,
-    HostOutgoingResponse, HostResponseOutparam, remove_forbidden_headers,
+    HostOutgoingResponse, HostResponseOutparam,
 };
 use crate::p2::{HeaderError, HeaderResult, HttpError, HttpResult};
 use crate::{FieldMap, WasiHttpCtxView, get_content_length};
-use http::{HeaderName, HeaderValue};
+use http::HeaderName;
 use std::str::FromStr;
 use wasmtime::component::Resource;
 use wasmtime::{error::Context as _, format_err};
@@ -47,12 +47,7 @@ impl types::HostFields for WasiHttpCtxView<'_> {
         let mut fields = FieldMap::new_mutable(self.ctx.field_size_limit);
 
         for (header, value) in entries {
-            let header = HeaderName::from_bytes(header.as_bytes())?;
-            if self.hooks.is_forbidden_header(&header) {
-                return Err(types::HeaderError::Forbidden.into());
-            }
-            let value = HeaderValue::from_bytes(&value)?;
-            fields.append(header, value)?;
+            fields.append(self.hooks, header, value)?;
         }
 
         Ok(self.table.push(fields)?)
@@ -98,33 +93,16 @@ impl types::HostFields for WasiHttpCtxView<'_> {
         &mut self,
         fields: Resource<FieldMap>,
         name: String,
-        byte_values: Vec<Vec<u8>>,
+        values: Vec<Vec<u8>>,
     ) -> HeaderResult<()> {
-        let header = HeaderName::from_bytes(name.as_bytes())?;
-
-        if self.hooks.is_forbidden_header(&header) {
-            return Err(types::HeaderError::Forbidden.into());
-        }
-
-        let mut values = Vec::with_capacity(byte_values.len());
-        for value in byte_values {
-            values.push(HeaderValue::from_bytes(&value)?);
-        }
-
         let fields = self.table.get_mut(&fields)?;
-        fields.set(header, values)?;
+        fields.set(self.hooks, name, values)?;
         Ok(())
     }
 
     fn delete(&mut self, fields: Resource<FieldMap>, name: String) -> HeaderResult<()> {
-        let header = HeaderName::from_bytes(name.as_bytes())?;
-
-        if self.hooks.is_forbidden_header(&header) {
-            return Err(types::HeaderError::Forbidden.into());
-        }
-
         let fields = self.table.get_mut(&fields)?;
-        fields.remove_all(header)?;
+        fields.remove_all(self.hooks, name)?;
         Ok(())
     }
 
@@ -134,16 +112,8 @@ impl types::HostFields for WasiHttpCtxView<'_> {
         name: String,
         value: Vec<u8>,
     ) -> HeaderResult<()> {
-        let header = HeaderName::from_bytes(name.as_bytes())?;
-
-        if self.hooks.is_forbidden_header(&header) {
-            return Err(types::HeaderError::Forbidden.into());
-        }
-
-        let value = HeaderValue::from_bytes(&value)?;
-
         let fields = self.table.get_mut(&fields)?;
-        fields.append(header, value)?;
+        fields.append(self.hooks, name, value)?;
         Ok(())
     }
 
@@ -493,7 +463,7 @@ impl types::HostFutureTrailers for WasiHttpCtxView<'_> {
             _ => unreachable!(),
         };
 
-        let mut fields = match res {
+        let fields = match res {
             Ok(Some(fields)) => fields,
             Ok(None) => return Ok(Some(Ok(Ok(None)))),
             Err(e) => {
@@ -502,9 +472,9 @@ impl types::HostFutureTrailers for WasiHttpCtxView<'_> {
             }
         };
 
-        remove_forbidden_headers(self.hooks, &mut fields);
-
-        let ts = self.table.push(FieldMap::new_immutable(fields))?;
+        let ts = self
+            .table
+            .push(FieldMap::new_immutable(self.hooks, fields))?;
 
         Ok(Some(Ok(Ok(Some(ts)))))
     }
@@ -650,9 +620,8 @@ impl types::HostFutureIncomingResponse for WasiHttpCtxView<'_> {
                 }
             };
 
-        let (mut parts, body) = resp.into_parts();
-        remove_forbidden_headers(self.hooks, &mut parts.headers);
-        let headers = FieldMap::new_immutable(parts.headers);
+        let (parts, body) = resp.into_parts();
+        let headers = FieldMap::new_immutable(self.hooks, parts.headers);
 
         let resp = self.table.push(HostIncomingResponse {
             status: parts.status.as_u16(),

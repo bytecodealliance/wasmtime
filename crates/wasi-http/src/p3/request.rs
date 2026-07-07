@@ -1,7 +1,10 @@
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, BodyExt as _, GuestBody};
 use crate::p3::{HttpError, HttpResult};
-use crate::{Error, FieldMap, RequestOptions, WasiHttpCtxView, WasiHttpView, get_content_length};
+use crate::{
+    Error, FieldMap, RequestOptions, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
+    get_content_length,
+};
 use bytes::Bytes;
 use http::header::HOST;
 use http::uri::{Authority, PathAndQuery, Scheme};
@@ -82,6 +85,7 @@ impl Request {
     ///
     /// Requests constructed this way will not perform any `Content-Length` validation.
     pub fn from_http<T>(
+        hooks: &mut dyn WasiHttpHooks,
         req: http::Request<T>,
     ) -> (
         Self,
@@ -111,7 +115,7 @@ impl Request {
             scheme,
             authority,
             path_and_query,
-            FieldMap::new_immutable(headers),
+            FieldMap::new_immutable(hooks, headers),
             None,
             body,
         )
@@ -209,7 +213,7 @@ impl Request {
             } else {
                 HeaderValue::from_static("")
             };
-            headers.append(HOST, host).map_err(HttpError::trap)?;
+            headers.append_raw(HOST, host).map_err(HttpError::trap)?;
         }
         let scheme = match scheme {
             None => hooks.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,

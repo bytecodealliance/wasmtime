@@ -5,7 +5,7 @@ use crate::p2::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
-use crate::{Error, FieldMap, WasiHttpCtxView, WasiHttpHooks};
+use crate::{Error, FieldMap, WasiHttpCtxView};
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Body;
@@ -13,24 +13,6 @@ use wasmtime::component::Resource;
 use wasmtime::{Result, bail};
 use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
-
-/// Removes forbidden headers from a [`FieldMap`].
-pub(crate) fn remove_forbidden_headers(
-    hooks: &mut dyn WasiHttpHooks,
-    headers: &mut http::HeaderMap,
-) {
-    let forbidden_keys = Vec::from_iter(headers.keys().filter_map(|name| {
-        if hooks.is_forbidden_header(name) {
-            Some(name.clone())
-        } else {
-            None
-        }
-    }));
-
-    for name in forbidden_keys {
-        headers.remove(&name);
-    }
-}
 
 impl From<http::Method> for types::Method {
     fn from(method: http::Method) -> Self {
@@ -100,7 +82,7 @@ impl WasiHttpCtxView<'_> {
         B: Body<Data = Bytes> + Send + 'static,
         B::Error: Into<Error>,
     {
-        let (mut parts, body) = req.into_parts();
+        let (parts, body) = req.into_parts();
         let body = body.map_err(Into::into).boxed_unsync();
         let body = HostIncomingBody::new(body);
         let authority = match parts.uri.authority() {
@@ -111,8 +93,7 @@ impl WasiHttpCtxView<'_> {
             },
         };
 
-        remove_forbidden_headers(self.hooks, &mut parts.headers);
-        let headers = FieldMap::new_immutable(parts.headers);
+        let headers = FieldMap::new_immutable(self.hooks, parts.headers);
 
         let req = HostIncomingRequest {
             method: parts.method,

@@ -1,6 +1,6 @@
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, GuestBody};
-use crate::{Error, FieldMap, WasiHttpCtxView, WasiHttpView, get_content_length};
+use crate::{Error, FieldMap, WasiHttpCtxView, WasiHttpHooks, WasiHttpView, get_content_length};
 use bytes::Bytes;
 use http::StatusCode;
 use http_body_util::BodyExt as _;
@@ -90,6 +90,7 @@ impl Response {
 
     /// Convert [http::Response] into [Response].
     pub fn from_http<T>(
+        hooks: &mut dyn WasiHttpHooks,
         res: http::Response<T>,
     ) -> (
         Self,
@@ -104,7 +105,7 @@ impl Response {
 
         let wasi_response = Response {
             status: parts.status,
-            headers: FieldMap::new_immutable(parts.headers),
+            headers: FieldMap::new_immutable(hooks, parts.headers),
             body: Body::Host {
                 body: body.map_err(Into::into).boxed_unsync(),
                 result_tx,
@@ -125,6 +126,7 @@ impl Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::default_hooks;
     use core::future::Future;
     use core::pin::pin;
     use core::task::{Context, Poll, Waker};
@@ -138,7 +140,7 @@ mod tests {
             .body(Full::new(Bytes::from_static(b"hello wasm")))
             .unwrap();
 
-        let (wasi_resp, io_future) = Response::from_http(http_response);
+        let (wasi_resp, io_future) = Response::from_http(default_hooks(), http_response);
         assert_eq!(wasi_resp.status, StatusCode::OK);
         assert_eq!(
             wasi_resp.headers.get("x-custom-header").unwrap(),

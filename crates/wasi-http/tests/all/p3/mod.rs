@@ -30,7 +30,7 @@ use wasmtime_wasi_http::{
 foreach_p3_http!(assert_test_exists);
 
 struct TestHooks {
-    request_body_tx: Option<oneshot::Sender<WasiBody>>,
+    request_tx: Option<oneshot::Sender<http::Request<WasiBody>>>,
 }
 
 impl WasiHttpHooks for TestHooks {
@@ -56,11 +56,7 @@ impl WasiHttpHooks for TestHooks {
     > {
         _ = fut;
         if let Some("p3-test") = request.uri().authority().map(|v| v.as_str()) {
-            _ = self
-                .request_body_tx
-                .take()
-                .unwrap()
-                .send(request.into_body());
+            _ = self.request_tx.take().unwrap().send(request);
             Box::new(async {
                 Ok((
                     http::Response::new(Default::default()),
@@ -89,13 +85,13 @@ struct Ctx {
 }
 
 impl Ctx {
-    fn new(request_body_tx: oneshot::Sender<WasiBody>) -> Self {
+    fn new(request_tx: oneshot::Sender<http::Request<WasiBody>>) -> Self {
         Self {
             table: ResourceTable::default(),
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             http: WasiHttpCtx::new(),
             hooks: TestHooks {
-                request_body_tx: Some(request_body_tx),
+                request_tx: Some(request_tx),
             },
         }
     }
@@ -153,7 +149,7 @@ async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
 async fn run_http<E: Into<Error> + 'static>(
     component_filename: &str,
     req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
-    request_body_tx: oneshot::Sender<WasiBody>,
+    request_tx: oneshot::Sender<http::Request<WasiBody>>,
 ) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
@@ -161,7 +157,7 @@ async fn run_http<E: Into<Error> + 'static>(
     });
     let component = Component::from_file(&engine, component_filename)?;
 
-    let mut store = Store::new(&engine, Ctx::new(request_body_tx));
+    let mut store = Store::new(&engine, Ctx::new(request_tx));
 
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
@@ -170,7 +166,7 @@ async fn run_http<E: Into<Error> + 'static>(
     wasmtime_wasi_http::p3::add_to_linker(&mut linker)
         .context("failed to link `wasi:http@0.3.x`")?;
     let service = Service::instantiate_async(&mut store, &component, &linker).await?;
-    let (req, io) = Request::from_http(req);
+    let (req, io) = Request::from_http(&mut store.data_mut().hooks, req);
     store
         .run_concurrent(async |store| {
             let (res, ()) = try_join!(
@@ -575,6 +571,7 @@ async fn p3_http_proxy() -> Result<()> {
             request_body_rx
                 .await
                 .unwrap()
+                .into_body()
                 .collect()
                 .await
                 .unwrap()
@@ -583,6 +580,57 @@ async fn p3_http_proxy() -> Result<()> {
     );
 
     assert_eq!(request_body, body.as_slice());
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_forbidden_headers() -> Result<()> {
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET)
+        .header("host", "victim.internal")
+        .header("connection", "close")
+        .header("custom-forbidden-header", "yes")
+        .header("foo", "bar");
+
+    let (request_tx, request_rx) = oneshot::channel();
+    let response = run_http(
+        P3_HTTP_FORBIDDEN_HEADERS_COMPONENT,
+        request.body(Empty::new())?,
+        request_tx,
+    )
+    .await?
+    .unwrap();
+    assert_eq!(response.status().as_u16(), 200);
+
+    // Grab the headers that actually reached the backend and assert that none
+    // of the forbidden inbound headers leaked across the trust boundary.
+    let outbound = request_rx.await.unwrap();
+    let headers = outbound.headers();
+
+    // Forbidden headers shouldn't have gotten forwarded.
+    assert!(
+        !headers
+            .get_all("host")
+            .iter()
+            .any(|v| v == "victim.internal"),
+        "inbound `host` leaked to backend: {headers:?}",
+    );
+    assert!(
+        headers.get("connection").is_none(),
+        "inbound `connection` leaked to backend: {headers:?}",
+    );
+    assert!(
+        headers.get("custom-forbidden-header").is_none(),
+        "inbound `custom-forbidden-header` leaked to backend: {headers:?}",
+    );
+
+    // Other headers, however, get forwarded.
+    assert_eq!(
+        headers.get("foo").map(|v| v.as_bytes()),
+        Some(b"bar".as_slice()),
+    );
+
     Ok(())
 }
 

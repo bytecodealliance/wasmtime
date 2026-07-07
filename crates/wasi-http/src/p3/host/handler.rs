@@ -102,15 +102,15 @@ impl<T> HostWithStore<T> for WasiHttp {
                 body.with_state(io).boxed_unsync()
             }
         };
-        let res = Response {
-            status,
-            headers: FieldMap::new_immutable(headers),
-            body: Body::Host {
-                body,
-                result_tx: res_result_tx,
-            },
-        };
         store.with(|mut store| {
+            let res = Response {
+                status,
+                headers: FieldMap::new_immutable(store.get().hooks, headers),
+                body: Body::Host {
+                    body,
+                    result_tx: res_result_tx,
+                },
+            };
             store
                 .get()
                 .table

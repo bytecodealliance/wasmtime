@@ -117,8 +117,11 @@ impl From<FieldMapError> for HeaderError {
     fn from(err: FieldMapError) -> Self {
         match err {
             FieldMapError::Immutable => types::HeaderError::Immutable.into(),
-            FieldMapError::InvalidHeaderName => types::HeaderError::InvalidSyntax.into(),
+            FieldMapError::InvalidHeaderName | FieldMapError::InvalidHeaderValue => {
+                types::HeaderError::InvalidSyntax.into()
+            }
             FieldMapError::TooManyFields | FieldMapError::TotalSizeTooBig => HeaderError::trap(err),
+            FieldMapError::Forbidden => types::HeaderError::Forbidden.into(),
         }
     }
 }

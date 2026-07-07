@@ -537,7 +537,7 @@ where
                             }
                             Err(Ok(trailers)) => {
                                 let view = (self.getter)(store.data_mut());
-                                let trailers = FieldMap::new_immutable(trailers);
+                                let trailers = FieldMap::new_immutable(view.hooks, trailers);
                                 let trailers = view
                                     .table
                                     .push(trailers)

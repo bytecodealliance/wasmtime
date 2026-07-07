@@ -997,7 +997,8 @@ impl<'a, T: Send> Prepared<'a, T> {
             Proxy::P3(guest) => {
                 let (request, body) = request.into_parts();
                 let request = http::Request::from_parts(request, body);
-                let (request, request_io_result) = p3::Request::from_http(request);
+                let hooks = view(store.data_mut()).hooks;
+                let (request, request_io_result) = p3::Request::from_http(hooks, request);
                 let request = view(store.data_mut()).table.push(request)?;
 
                 Ok(Prepared::P3 {
