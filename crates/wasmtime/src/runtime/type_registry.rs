@@ -5,6 +5,7 @@
 
 use crate::Engine;
 use crate::error::OutOfMemory;
+use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::sync::RwLock;
 use crate::vm::{GcRuntime, TraceInfo};
@@ -92,6 +93,7 @@ pub struct TypeCollection {
     types: TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
     trampolines: TrySecondaryMap<VMSharedTypeIndex, PackedOption<ModuleInternedTypeIndex>>,
     trace_info: TryPrimaryMap<ModuleInternedTypeIndex, Option<TraceInfo>>,
+    types_with_trace_info: HashMap<VMSharedTypeIndex, ModuleInternedTypeIndex>,
 }
 
 impl Debug for TypeCollection {
@@ -102,6 +104,7 @@ impl Debug for TypeCollection {
             types,
             trampolines,
             trace_info,
+            types_with_trace_info: _,
         } = self;
         f.debug_struct("TypeCollection")
             .field("rec_groups", rec_groups)
@@ -158,6 +161,15 @@ impl Engine {
             }
         });
 
+        // Build up the map of vm indices to module indices for when types have
+        // trace info associated with them.
+        let mut types_with_trace_info = TryHashMap::new();
+        for (module_ty, info) in trace_info.iter() {
+            if info.is_some() {
+                types_with_trace_info.insert(types[module_ty], module_ty)?;
+            }
+        }
+
         // Then build our map from each function type's engine index to the
         // module-index of its trampoline. Trampoline functions are queried by
         // module-index in a compiled module, and doing this engine-to-module
@@ -191,6 +203,7 @@ impl Engine {
             types,
             trampolines,
             trace_info,
+            types_with_trace_info: types_with_trace_info.into(),
         })
     }
 }
@@ -226,6 +239,23 @@ impl TypeCollection {
         let trampoline_ty = self.trampolines[ty].expand();
         log::trace!("TypeCollection::trampoline_type({ty:?}) -> {trampoline_ty:?}");
         trampoline_ty
+    }
+
+    /// Returns the `TraceInfo`, if any, for the `index` provided.
+    #[inline]
+    #[cfg(feature = "gc")]
+    pub fn trace_info(&self, index: ModuleInternedTypeIndex) -> Option<&TraceInfo> {
+        self.trace_info.get(index).and_then(|s| s.as_ref())
+    }
+
+    /// If `index` has `TraceInfo` associated with it then the corresponding
+    /// `ModuleInternedTypeIndex` for `index` is returned.
+    #[inline]
+    pub fn shared_type_with_trace_info(
+        &self,
+        index: VMSharedTypeIndex,
+    ) -> Option<ModuleInternedTypeIndex> {
+        self.types_with_trace_info.get(&index).copied()
     }
 }
 

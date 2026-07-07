@@ -22,9 +22,12 @@ pub use gc_runtime::*;
 pub use host_data::*;
 pub use i31::*;
 
+use crate::hash_map::HashMap;
+use crate::module::ModuleRegistry;
 use crate::prelude::*;
 use crate::runtime::vm::{GcHeapAllocationIndex, VMMemoryDefinition};
 use crate::store::Asyncness;
+use crate::type_registry::RegisteredType;
 use core::any::Any;
 use core::mem::MaybeUninit;
 use core::{alloc::Layout, num::NonZeroU32};
@@ -68,6 +71,22 @@ pub struct GcStore {
     gc_zeal_alloc_counter_init: Option<NonZeroU32>,
 }
 
+/// Convenience type definition for the storage, within a `Store`, of
+/// host-allocated types that are one-off used for host allocation.
+pub type StoreGcHostAllocTypes = HashMap<VMSharedTypeIndex, (RegisteredType, Option<TraceInfo>)>;
+
+/// Contextual information used when performing a GC to trace GC references as
+/// necesary.
+pub struct GcStoreTraceState<'a> {
+    /// The backing data of `externref`s, deleted from when a GC reference is
+    /// reclaimed, for example.
+    pub host_data_table: &'a mut ExternRefHostDataTable,
+    /// All known modules in this store.
+    pub modules: &'a ModuleRegistry,
+    /// All known host-registered types in this store.
+    pub gc_host_alloc_types: &'a StoreGcHostAllocTypes,
+}
+
 impl GcStore {
     /// Create a new `GcStore`.
     pub fn new(
@@ -108,9 +127,16 @@ impl GcStore {
         &mut self,
         asyncness: Asyncness,
         roots: GcRootsIter<'_>,
+        modules: &ModuleRegistry,
+        gc_host_alloc_types: &StoreGcHostAllocTypes,
         yield_fn: impl AsyncFn(),
     ) -> Result<()> {
-        let collection = self.gc_heap.gc(roots, &mut self.host_data_table);
+        let mut trace_state = GcStoreTraceState {
+            host_data_table: &mut self.host_data_table,
+            modules,
+            gc_host_alloc_types,
+        };
+        let collection = self.gc_heap.gc(roots, &mut trace_state);
         collect_async(collection, asyncness, yield_fn).await?;
         self.last_post_gc_allocated_bytes = Some({
             let size = self.gc_heap.allocated_bytes();
@@ -297,11 +323,6 @@ impl GcStore {
         }
 
         self.gc_heap.alloc_raw(header, layout)
-    }
-
-    /// Eagerly ensure tracing info is registered for the given type.
-    pub fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
-        self.gc_heap.ensure_trace_info(ty)
     }
 
     /// Allocate an uninitialized struct with the given type index and layout.

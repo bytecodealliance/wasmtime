@@ -4,15 +4,16 @@
 //! find outgoing GC-reference edges. This module provides a shared `TraceInfos`
 //! type that both collectors use.
 
-use crate::hash_map::HashMap;
-use crate::{Engine, EngineWeak};
+use crate::hash_map::{Entry, HashMap};
+use crate::module::RegisteredModuleId;
+use crate::vm::GcStoreTraceState;
 use alloc::boxed::Box;
 use core::hash::BuildHasher;
-use wasmtime_environ::{GcLayout, VMSharedTypeIndex};
+use wasmtime_environ::{GcLayout, ModuleInternedTypeIndex, VMSharedTypeIndex};
 
 /// How to trace a GC object.
 #[derive(Debug)]
-pub(crate) enum TraceInfo {
+pub enum TraceInfo {
     /// How to trace an array.
     Array {
         /// Whether this array type's elements are GC references, and need
@@ -86,27 +87,25 @@ impl core::hash::Hasher for NopHasher {
     }
 }
 
-/// A map from GC type indices to their tracing information.
+#[derive(Clone, Copy)]
+enum TraceInfoLoc {
+    HostType(VMSharedTypeIndex),
+    Module(RegisteredModuleId, ModuleInternedTypeIndex),
+}
+
+/// A map from GC type indices to where their tracing information can be found.
 #[derive(Default)]
 pub(super) struct TraceInfos {
-    engine: EngineWeak,
-    map: HashMap<VMSharedTypeIndex, TraceInfo, NopHasher>,
+    map: HashMap<VMSharedTypeIndex, TraceInfoLoc, NopHasher>,
 }
 
 impl TraceInfos {
     /// Create a new `TraceInfos` with the given engine and expected array
     /// element offset for GC-ref arrays.
-    pub fn new(engine: &Engine) -> Self {
-        let mut map = HashMap::default();
-        map.reserve(1);
+    pub fn new() -> Self {
         Self {
-            engine: engine.weak(),
-            map,
+            map: HashMap::default(),
         }
-    }
-
-    fn engine(&self) -> Engine {
-        self.engine.upgrade().unwrap()
     }
 
     /// Remove all trace info from this collection.
@@ -114,37 +113,62 @@ impl TraceInfos {
         self.map.clear();
     }
 
-    /// Index into the trace infos, panicking if the type is not present.
-    pub fn trace_info(&self, ty: &VMSharedTypeIndex) -> &TraceInfo {
-        &self.map[ty]
+    /// Lookup trace information for `ty`, panicking if it can't be found.
+    pub fn trace_info<'a>(
+        &mut self,
+        ty: &VMSharedTypeIndex,
+        state: &'a GcStoreTraceState<'_>,
+    ) -> &'a TraceInfo {
+        self.trace_info_(ty, state)
+            .unwrap_or_else(|| panic!("failed to find trace information for {ty:?}"))
     }
 
-    /// Returns whether we already have tracing information for the given type.
-    pub fn contains(&self, ty: &VMSharedTypeIndex) -> bool {
-        self.map.contains_key(ty)
-    }
-
-    /// Ensure that we have tracing information for the given type.
-    pub fn ensure(&mut self, ty: VMSharedTypeIndex) {
-        if self.map.contains_key(&ty) {
-            return;
-        }
-        self.insert_new(ty);
-    }
-
-    fn insert_new(&mut self, ty: VMSharedTypeIndex) {
-        debug_assert!(!self.map.contains_key(&ty));
-
-        let engine = self.engine();
-        let Some(gc_layout) = engine.signatures().layout(ty) else {
-            // Not a GC type (e.g. a function type); no trace info needed.
-            return;
+    fn trace_info_<'a>(
+        &mut self,
+        ty: &VMSharedTypeIndex,
+        state: &'a GcStoreTraceState<'_>,
+    ) -> Option<&'a TraceInfo> {
+        // Determine where the trace information for `ty` is stored. This lookup
+        // is cached within `self.map` to avoid hitting `find_trace_info` too
+        // often.
+        let loc = match self.map.entry(*ty) {
+            Entry::Occupied(e) => e.into_mut(),
+            Entry::Vacant(e) => e.insert(find_trace_info(ty, state)?),
         };
 
-        let info = TraceInfo::new(&gc_layout);
-        let old_entry = self.map.insert(ty, info);
-        debug_assert!(old_entry.is_none());
+        // Use `loc` to, relatively quickly, go to the trace information as
+        // stored within `state`.
+        Some(match loc {
+            TraceInfoLoc::HostType(ty) => state.gc_host_alloc_types[ty].1.as_ref()?,
+            TraceInfoLoc::Module(module_id, ty) => state
+                .modules
+                .module_by_id(*module_id)?
+                .signatures()
+                .trace_info(*ty)?,
+        })
     }
+}
+
+/// Locates the trace information for `ty` within `state`.
+///
+/// This is a one-time operation per-store which is used to determine where
+/// exactly trace information can be found. This is structured to notably be
+/// relatively cheap to compute but additionally require zero up-front compute
+/// in terms of instantiation or when a store is created.
+fn find_trace_info(ty: &VMSharedTypeIndex, state: &GcStoreTraceState<'_>) -> Option<TraceInfoLoc> {
+    if state.gc_host_alloc_types.contains_key(ty) {
+        return Some(TraceInfoLoc::HostType(*ty));
+    }
+
+    // It's expected that most stores have a small number of modules, hence the
+    // linear iteration here.
+    for (id, module) in state.modules.all_modules() {
+        if let Some(module_ty) = module.signatures().shared_type_with_trace_info(*ty) {
+            return Some(TraceInfoLoc::Module(id, module_ty));
+        }
+    }
+
+    None
 }
 
 impl TraceInfo {

@@ -2,7 +2,6 @@
 
 use crate::RootSet;
 use crate::error::{Context, ensure};
-use crate::hash_map::HashMap;
 use crate::module::ModuleRegistry;
 use crate::store::{
     Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
@@ -10,7 +9,7 @@ use crate::store::{
 use crate::type_registry::RegisteredType;
 use crate::vm::{
     self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, SendSyncPtr,
-    TraceInfo, VMGcRef,
+    StoreGcHostAllocTypes, TraceInfo, VMGcRef,
 };
 use crate::{
     ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, ThrownException, bail,
@@ -20,15 +19,15 @@ use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
+use wasmtime_environ::DefinedTagIndex;
 use wasmtime_environ::packed_option::ReservedValue;
-use wasmtime_environ::{DefinedTagIndex, VMSharedTypeIndex};
 
 #[derive(Default)]
 pub(crate) struct StoreGcData {
     gc_roots: RootSet,
     gc_roots_list: GcRootsList,
     // Types for which the embedder has created an allocator for.
-    gc_host_alloc_types: HashMap<VMSharedTypeIndex, (RegisteredType, Option<TraceInfo>)>,
+    gc_host_alloc_types: StoreGcHostAllocTypes,
     /// Pending exception, if any. This is also a GC root, because it
     /// needs to be rooted somewhere between the time that a pending
     /// exception is set and the time that the handling code takes the
@@ -612,10 +611,14 @@ impl StoreOpaque {
         let mut roots = core::mem::take(&mut self.gc_data.gc_roots_list);
 
         self.trace_roots(&mut roots, asyncness).await;
-        self.unwrap_gc_store_mut()
+        self.gc_store
+            .as_mut()
+            .unwrap()
             .gc(
                 asyncness,
                 unsafe { roots.iter() },
+                &self.modules,
+                &self.gc_data.gc_host_alloc_types,
                 // TODO: Once `Config` has an optional `AsyncFn` field for
                 // yielding to the current async runtime
                 // (e.g. `tokio::task::yield_now`), use that if set; otherwise
@@ -852,12 +855,6 @@ impl StoreOpaque {
     /// reclaimed (since it is possible that none of the Wasm modules in this
     /// store are holding it alive).
     pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: RegisteredType) {
-        // If a GC heap is already allocated, eagerly register trace info
-        // now. Otherwise, trace info will be registered when the GC heap
-        // is allocated in `StoreOpaque::allocate_gc_store`.
-        if let Some(gc_store) = self.optional_gc_store_mut() {
-            gc_store.ensure_trace_info(ty.index());
-        }
         let trace_info = ty.layout().map(TraceInfo::new);
         self.gc_data
             .gc_host_alloc_types
@@ -942,15 +939,7 @@ impl StoreOpaque {
             };
         heap.attach(mem);
 
-        let mut gc_store = GcStore::new(index, heap, engine.tunables().gc_zeal_alloc_counter);
-
-        // Eagerly register trace info for any host-created types (via
-        // StructRefPre/ArrayRefPre) that were created before this GC
-        // store was allocated.
-        for (index, _) in &self.gc_data.gc_host_alloc_types {
-            gc_store.ensure_trace_info(*index);
-        }
-
+        let gc_store = GcStore::new(index, heap, engine.tunables().gc_zeal_alloc_counter);
         *self.vm_store_context.gc_heap.get_mut() = gc_store.vmmemory_definition();
         Ok(self.gc_store.insert(gc_store))
     }
