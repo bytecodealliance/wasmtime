@@ -1,5 +1,6 @@
 //! Index/slot allocator policies for the pooling allocator.
 
+use super::ShardId;
 use crate::hash_map::{Entry, HashMap};
 use crate::prelude::*;
 use crate::runtime::vm::CompiledModuleId;
@@ -206,30 +207,37 @@ enum AllocMode {
     AnySlot,
 }
 
-impl ModuleAffinityIndexAllocator {
-    /// Create the default state for this strategy.
-    pub fn new(capacity: u32, max_unused_warm_slots: u32) -> Self {
-        // N.B. we limit the pool sharding to 16 regardless of CPU count to balance
-        // reduced lock-contention with the downsides of slot sharding. In particular,
-        // on many-core systems, scaling with the number of cores can lead to:
-        // - very small shards, increasing the likelihood of running out of slots
-        //   in a shard and falling off the fast path.
-        // - warm-slot budget dilution, where `max_unused_warm_slots` is low enough
-        //   that many shards don't get warm slots at all.
-        // - affinity dilution, where some threads may have slots with the right
-        //   instance type affinity available, but the thread handling the request
-        //   doesn't, so the slower instantiation path has to be taken.
+/// The division of an allocator's slot space and unused-warm-slot budget
+/// into shards.
+#[derive(Debug, PartialEq, Eq)]
+struct ShardLayout {
+    /// Number of slots in each shard except possibly the last, which may be
+    /// smaller when `requested_shards` doesn't evenly divide the capacity.
+    slots_per_shard: u32,
+    /// Per-shard `(capacity, max_unused_warm_slots)`.
+    shards: Vec<(u32, u32)>,
+}
+
+impl ShardLayout {
+    fn new(capacity: u32, max_unused_warm_slots: u32, requested_shards: u32) -> ShardLayout {
+        // N.B. we limit the pool sharding (via `default_shard_count`, whose
+        // cap `requested_shards` reflects) regardless of CPU count to
+        // balance reduced lock-contention with the downsides of slot
+        // sharding. In particular, on many-core systems, scaling with the
+        // number of cores can lead to:
+        // - very small shards, increasing the likelihood of running out of
+        //   slots in a shard and falling off the fast path.
+        // - warm-slot budget dilution, where `max_unused_warm_slots` is low
+        //   enough that many shards don't get warm slots at all.
+        // - affinity dilution, where some threads may have slots with the
+        //   right instance type affinity available, but the thread handling
+        //   the request doesn't, so the slower instantiation path has to be
+        //   taken.
         //
-        // Additionally, we don't shard at all for small pools, as the downsides of
-        // sharding are too pronounced.
+        // Additionally, we don't shard at all for small pools, as the
+        // downsides of sharding are too pronounced.
         let nshards = if capacity >= 128 {
-            u32::try_from(
-                std::thread::available_parallelism()
-                    .map(|n| n.get())
-                    .unwrap_or(1)
-                    .min(16),
-            )
-            .unwrap()
+            requested_shards.max(1)
         } else {
             1
         };
@@ -244,6 +252,39 @@ impl ModuleAffinityIndexAllocator {
                 // spreading the remainder over the leading shards.
                 let shard_warm = max_unused_warm_slots / nshards
                     + u32::from(i < max_unused_warm_slots % nshards);
+                (shard_capacity, shard_warm)
+            })
+            .collect();
+
+        ShardLayout {
+            slots_per_shard,
+            shards,
+        }
+    }
+}
+
+impl ModuleAffinityIndexAllocator {
+    /// Create the default state for this strategy.
+    pub fn new(capacity: u32, max_unused_warm_slots: u32) -> Self {
+        Self::new_with_shard_count(
+            capacity,
+            max_unused_warm_slots,
+            super::default_shard_count(),
+        )
+    }
+
+    /// Same as [`Self::new`], but with an explicit shard count (which is
+    /// capped as described in [`ShardLayout::new`]).
+    fn new_with_shard_count(
+        capacity: u32,
+        max_unused_warm_slots: u32,
+        requested_shards: u32,
+    ) -> Self {
+        let layout = ShardLayout::new(capacity, max_unused_warm_slots, requested_shards);
+        let shards = layout
+            .shards
+            .iter()
+            .map(|&(shard_capacity, shard_warm)| {
                 super::CachePadded(Mutex::new(Inner {
                     last_cold: 0,
                     max_unused_warm_slots: shard_warm,
@@ -258,19 +299,29 @@ impl ModuleAffinityIndexAllocator {
 
         ModuleAffinityIndexAllocator {
             shards,
-            slots_per_shard,
+            slots_per_shard: layout.slots_per_shard,
         }
     }
 
     /// Translate a shard-local slot index to a global `SlotId`.
-    fn global_id(&self, shard: usize, local: SlotId) -> SlotId {
-        SlotId(u32::try_from(shard).unwrap() * self.slots_per_shard + local.0)
+    fn global_id(&self, shard: ShardId, local: SlotId) -> SlotId {
+        SlotId(u32::try_from(shard.index()).unwrap() * self.slots_per_shard + local.0)
     }
 
     /// Translate a global `SlotId` to its shard and shard-local index.
-    fn shard_of(&self, global: SlotId) -> (usize, SlotId) {
-        let shard = (global.0 / self.slots_per_shard) as usize;
+    fn shard_of(&self, global: SlotId) -> (ShardId, SlotId) {
+        let shard = ShardId::from_index((global.0 / self.slots_per_shard) as usize);
         (shard, SlotId(global.0 % self.slots_per_shard))
+    }
+
+    /// Returns the [`Inner`] state of the given shard.
+    fn shard(&self, shard: ShardId) -> &Mutex<Inner> {
+        &self.shards[shard.index()].0
+    }
+
+    /// Enumerate all shard ids of this allocator.
+    fn shard_ids(&self) -> impl Iterator<Item = ShardId> + use<> {
+        (0..self.shards.len()).map(ShardId::from_index)
     }
 
     /// How many slots can this allocator allocate?
@@ -301,10 +352,10 @@ impl ModuleAffinityIndexAllocator {
         // it's fully allocated. In steady state this means each thread
         // stays on its own shard.
         let n = self.shards.len();
-        let home = super::thread_shard(n);
+        let home = super::thread_shard(n).index();
         for i in 0..n {
-            let shard = (home + i) % n;
-            let mut inner = self.shards[shard].0.lock().unwrap();
+            let shard = ShardId::from_index((home + i) % n);
+            let mut inner = self.shard(shard).lock().unwrap();
             if let Some(local) = Self::alloc_within(&mut inner, for_memory, AllocMode::AnySlot) {
                 return Some(self.global_id(shard, local));
             }
@@ -326,8 +377,8 @@ impl ModuleAffinityIndexAllocator {
     ) -> Option<SlotId> {
         // Affine slots for this module may live in any shard, so consult
         // them all. This is a module-teardown path, not a hot path.
-        for (shard, mutex) in self.shards.iter().enumerate() {
-            let mut inner = mutex.0.lock().unwrap();
+        for shard in self.shard_ids() {
+            let mut inner = self.shard(shard).lock().unwrap();
             if let Some(local) = Self::alloc_within(
                 &mut inner,
                 Some(MemoryInModule(module_id, memory_index)),
@@ -402,7 +453,7 @@ impl ModuleAffinityIndexAllocator {
 
     pub(crate) fn free(&self, index: SlotId, bytes_resident: usize) {
         let (shard, local) = self.shard_of(index);
-        let mut inner = self.shards[shard].0.lock().unwrap();
+        let mut inner = self.shard(shard).lock().unwrap();
         Self::free_locked(&mut inner, local, bytes_resident);
     }
 
@@ -414,13 +465,13 @@ impl ModuleAffinityIndexAllocator {
             (0..self.shards.len()).map(|_| Default::default()).collect();
         for (index, bytes_resident) in items {
             let (shard, local) = self.shard_of(index);
-            per_shard[shard].push((local, bytes_resident));
+            per_shard[shard.index()].push((local, bytes_resident));
         }
         for (shard, items) in per_shard.into_iter().enumerate() {
             if items.is_empty() {
                 continue;
             }
-            let mut inner = self.shards[shard].0.lock().unwrap();
+            let mut inner = self.shard(ShardId::from_index(shard)).lock().unwrap();
             for (local, bytes_resident) in items {
                 Self::free_locked(&mut inner, local, bytes_resident);
             }
@@ -485,11 +536,9 @@ impl ModuleAffinityIndexAllocator {
     /// freelist, for the policies that keep just one.
     #[cfg(test)]
     pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
-        self.shards
-            .iter()
-            .enumerate()
-            .flat_map(|(shard, s)| {
-                let inner = s.0.lock().unwrap();
+        self.shard_ids()
+            .flat_map(|shard| {
+                let inner = self.shard(shard).lock().unwrap();
                 inner
                     .warm
                     .iter(&inner.slot_state, |s| &s.unused_list_link)
@@ -922,5 +971,83 @@ mod test {
         assert_eq!(allocator.testing_freelist(), [b]);
         allocator.free(a, 0);
         assert_eq!(allocator.testing_freelist(), [b, a]);
+    }
+
+    #[test]
+    fn shard_layout_is_exhaustive_and_exact() {
+        use proptest::prelude::*;
+
+        proptest!(|(
+            capacity in 0u32..100_000,
+            max_unused_warm_slots in 0u32..10_000,
+            requested_shards in 1u32..64,
+        )| {
+            let layout = ShardLayout::new(capacity, max_unused_warm_slots, requested_shards);
+
+            // Shard capacities partition the whole slot space, and the
+            // warm-slot budgets sum to the configured total, no matter how
+            // unevenly the capacity divides.
+            prop_assert_eq!(
+                layout.shards.iter().map(|(c, _)| *c).sum::<u32>(),
+                capacity
+            );
+            prop_assert_eq!(
+                layout.shards.iter().map(|(_, w)| *w).sum::<u32>(),
+                max_unused_warm_slots
+            );
+
+            // Every shard except possibly the last is exactly
+            // `slots_per_shard` large, which the global<->local `SlotId`
+            // translation relies on.
+            let (last, rest) = layout.shards.split_last().unwrap();
+            for (c, _) in rest {
+                prop_assert_eq!(*c, layout.slots_per_shard);
+            }
+            prop_assert!(last.0 <= layout.slots_per_shard);
+
+            // The requested shard count is an upper bound, and small pools
+            // are never sharded.
+            prop_assert!(layout.shards.len() <= requested_shards as usize);
+            if capacity < 128 {
+                prop_assert_eq!(layout.shards.len(), 1);
+            }
+        });
+    }
+
+    #[test]
+    fn sharded_alloc_is_exhaustive_and_unique() {
+        use proptest::prelude::*;
+
+        proptest!(|(
+            capacity in 0u32..2048,
+            max_unused_warm_slots in 0u32..100,
+            requested_shards in 1u32..64,
+        )| {
+            let allocator = ModuleAffinityIndexAllocator::new_with_shard_count(
+                capacity,
+                max_unused_warm_slots,
+                requested_shards,
+            );
+
+            // Regardless of shard layout, we can allocate exactly
+            // `capacity` slots, all distinct and in-bounds, ...
+            let mut ids = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+            for _ in 0..capacity {
+                let id = allocator.alloc(None).unwrap();
+                prop_assert!(id.0 < capacity);
+                prop_assert!(seen.insert(id.0));
+                ids.push(id);
+            }
+            // ... after which the pool reports exhaustion, ...
+            prop_assert!(allocator.alloc(None).is_none());
+
+            // ... and freeing everything makes it all allocatable again.
+            allocator.free_many(ids.into_iter().map(|id| (id, 0)));
+            for _ in 0..capacity {
+                prop_assert!(allocator.alloc(None).is_some());
+            }
+            prop_assert!(allocator.alloc(None).is_none());
+        });
     }
 }

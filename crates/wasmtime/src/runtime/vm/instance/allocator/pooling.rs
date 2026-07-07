@@ -84,23 +84,54 @@ use gc_heap_pool::GcHeapPool;
 #[derive(Debug)]
 struct CachePadded<T>(T);
 
+/// Identifier of one shard of the pooling allocator's sharded data
+/// structures (the decommit queues and each pool's index allocator).
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ShardId(u32);
+
+impl ShardId {
+    pub(crate) fn from_index(index: usize) -> ShardId {
+        ShardId(u32::try_from(index).unwrap())
+    }
+
+    pub(crate) fn index(self) -> usize {
+        usize::try_from(self.0).unwrap()
+    }
+}
+
+/// The number of shards used for the pooling allocator's sharded data
+/// structures: one per available CPU, capped to 16.
+///
+/// The cap bounds worst-case probing when pools run near-full, the
+/// dilution of per-shard warm-slot budgets, and per-shard memory
+/// overhead, while still being enough shards to make lock collisions
+/// rare given the very short critical sections involved.
+pub(crate) fn default_shard_count() -> u32 {
+    let n = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .min(16);
+    u32::try_from(n).unwrap()
+}
+
 /// Pick this thread's shard (used for both the sharded decommit queue and
 /// the sharded index allocators): assigned round-robin at first use per
 /// thread, cached in a thread-local.
-pub(super) fn thread_shard(nshards: usize) -> usize {
+pub(crate) fn thread_shard(nshards: usize) -> ShardId {
     use core::cell::Cell;
     static NEXT_SHARD: AtomicUsize = AtomicUsize::new(0);
     std::thread_local! {
         static SHARD: Cell<usize> = const { Cell::new(usize::MAX) };
     }
-    SHARD.with(|s| {
+    let assigned = SHARD.with(|s| {
         let mut shard = s.get();
         if shard == usize::MAX {
             shard = NEXT_SHARD.fetch_add(1, Ordering::Relaxed);
             s.set(shard);
         }
-        shard % nshards
-    })
+        shard
+    });
+    ShardId::from_index(assigned % nshards)
 }
 
 #[cfg(feature = "async")]
@@ -243,15 +274,9 @@ impl PoolingInstanceAllocator {
         Ok(Self {
             live_component_instances: AtomicU64::new(0),
             live_core_instances: AtomicU64::new(0),
-            decommit_queues: {
-                let nshards = std::thread::available_parallelism()
-                    .map(|n| n.get())
-                    .unwrap_or(1)
-                    .min(16);
-                (0..nshards)
-                    .map(|_| CachePadded(Mutex::new(DecommitQueue::default())))
-                    .collect()
-            },
+            decommit_queues: (0..default_shard_count())
+                .map(|_| CachePadded(Mutex::new(DecommitQueue::default())))
+                .collect(),
             memories: MemoryPool::new(config, tunables)?,
             live_memories: AtomicUsize::new(0),
             tables: TablePool::new(config)?,
@@ -377,6 +402,19 @@ impl PoolingInstanceAllocator {
         )
     }
 
+    /// Returns the decommit-queue shard for `shard`.
+    fn decommit_queue(&self, shard: ShardId) -> &Mutex<DecommitQueue> {
+        &self.decommit_queues[shard.index()].0
+    }
+
+    /// Enumerate all decommit-queue shard ids, starting with the current
+    /// thread's home shard.
+    fn decommit_shard_ids(&self) -> impl Iterator<Item = ShardId> + '_ {
+        let n = self.decommit_queues.len();
+        let home = thread_shard(n).index();
+        (0..n).map(move |i| ShardId::from_index((home + i) % n))
+    }
+
     fn flush_decommit_queue(&self, mut locked_queue: MutexGuard<'_, DecommitQueue>) -> bool {
         // Take the queue out of the mutex and drop the lock, to minimize
         // contention.
@@ -385,12 +423,12 @@ impl PoolingInstanceAllocator {
         queue.flush(self)
     }
 
-    /// Flush every shard of the decommit queue, e.g. when a pool has run out
-    /// of slots. Returns whether any slot was returned to any pool.
+    /// Flush every shard of the decommit queue, e.g. on allocator drop.
+    /// Returns whether any slot was returned to any pool.
     fn flush_all_decommit_queues(&self) -> bool {
         let mut any = false;
-        for shard in self.decommit_queues.iter() {
-            let queue = shard.0.lock().unwrap();
+        for shard in self.decommit_shard_ids() {
+            let queue = self.decommit_queue(shard).lock().unwrap();
             any |= self.flush_decommit_queue(queue);
         }
         any
@@ -399,17 +437,27 @@ impl PoolingInstanceAllocator {
     /// Execute `f` and if it returns `Err(PoolConcurrencyLimitError)`, then try
     /// flushing the decommit queue. If flushing the queue freed up slots, then
     /// try running `f` again.
+    ///
+    /// Queue shards are flushed one at a time, retrying `f` after each flush
+    /// that returned slots to a pool, rather than eagerly flushing all
+    /// shards: one flushed shard is often enough to satisfy the allocation,
+    /// and this avoids acquiring every shard's lock (at the cost of raising
+    /// the chances that another thread steals the freshly-flushed slots
+    /// before we get a chance to grab one, in which case we keep flushing).
     #[cfg(feature = "async")]
     fn with_flush_and_retry<T>(&self, mut f: impl FnMut() -> Result<T>) -> Result<T> {
-        f().or_else(|e| {
-            if e.is::<PoolConcurrencyLimitError>() {
-                if self.flush_all_decommit_queues() {
-                    return f();
-                }
+        let mut result = f();
+        for shard in self.decommit_shard_ids() {
+            match &result {
+                Err(e) if e.is::<PoolConcurrencyLimitError>() => {}
+                _ => break,
             }
-
-            Err(e)
-        })
+            let queue = self.decommit_queue(shard).lock().unwrap();
+            if self.flush_decommit_queue(queue) {
+                result = f();
+            }
+        }
+        result
     }
 
     fn merge_or_flush(&self, mut local_queue: DecommitQueue) {
@@ -435,7 +483,7 @@ impl PoolingInstanceAllocator {
             n => {
                 debug_assert!(n < self.config.decommit_batch_size);
                 let shard = thread_shard(self.decommit_queues.len());
-                let mut shared_queue = self.decommit_queues[shard].0.lock().unwrap();
+                let mut shared_queue = self.decommit_queue(shard).lock().unwrap();
                 shared_queue.append(&mut local_queue);
                 // And if this shard now has at least as many regions enqueued
                 // for decommit as our batch size, then we can flush it.
@@ -588,14 +636,21 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 // `with_flush_and_retry` but adapted for async closures instead of only
                 // sync closures. Right now that won't compile though so this is the
                 // manually expanded version of the method.
-                let e = match self.memories.allocate(request, ty, memory_index).await {
+                let mut e = match self.memories.allocate(request, ty, memory_index).await {
                     Ok(result) => return Ok(result),
                     Err(e) => e,
                 };
 
-                if e.is::<PoolConcurrencyLimitError>() {
-                    if self.flush_all_decommit_queues() {
-                        return self.memories.allocate(request, ty, memory_index).await;
+                for shard in self.decommit_shard_ids() {
+                    if !e.is::<PoolConcurrencyLimitError>() {
+                        break;
+                    }
+                    let queue = self.decommit_queue(shard).lock().unwrap();
+                    if self.flush_decommit_queue(queue) {
+                        match self.memories.allocate(request, ty, memory_index).await {
+                            Ok(result) => return Ok(result),
+                            Err(err) => e = err,
+                        }
                     }
                 }
 
@@ -676,14 +731,21 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             async {
                 // FIXME: see `allocate_memory` above for comments about duplication
                 // with `with_flush_and_retry`.
-                let e = match self.tables.allocate(request, ty).await {
+                let mut e = match self.tables.allocate(request, ty).await {
                     Ok(result) => return Ok(result),
                     Err(e) => e,
                 };
 
-                if e.is::<PoolConcurrencyLimitError>() {
-                    if self.flush_all_decommit_queues() {
-                        return self.tables.allocate(request, ty).await;
+                for shard in self.decommit_shard_ids() {
+                    if !e.is::<PoolConcurrencyLimitError>() {
+                        break;
+                    }
+                    let queue = self.decommit_queue(shard).lock().unwrap();
+                    if self.flush_decommit_queue(queue) {
+                        match self.tables.allocate(request, ty).await {
+                            Ok(result) => return Ok(result),
+                            Err(err) => e = err,
+                        }
                     }
                 }
 
