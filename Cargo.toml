@@ -354,8 +354,8 @@ cap-fs-ext = "4.0.2"
 io-lifetimes = { version = "3.0.1", default-features = false }
 rustix = "1.1.4"
 # wit-bindgen:
-wit-bindgen = { version = "0.58.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.58.0", default-features = false }
+wit-bindgen = { version = "0.59.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.59.0", default-features = false }
 
 # wasm-tools family:
 wasmparser = { version = "0.253.0", default-features = false, features = ['simd'] }
