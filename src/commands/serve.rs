@@ -1018,6 +1018,7 @@ fn setup_epoch_handler(
     // Profiling disabled but there's a global request timeout
     if cmd.run.common.wasm.timeout.is_some() || cmd.run.common.debug.debugger.is_some() {
         store.epoch_deadline_async_yield_and_update(1);
+        store.set_epoch_deadline(1);
     }
 
     Ok(Box::new(|_store| {}))
