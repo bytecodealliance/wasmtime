@@ -981,7 +981,6 @@ impl CommonOptions {
             config.gc_heap_reservation_for_growth(size);
         }
 
-        #[cfg(feature = "gc")]
         if let Some(size) = self.opts.gc_heap_initial_size {
             config.gc_heap_initial_size(size);
         }
@@ -1338,7 +1337,7 @@ impl CommonOptions {
                 gc_heap_reservation: Some(engine.get_gc_heap_reservation()),
                 gc_heap_reservation_for_growth: Some(engine.get_gc_heap_reservation_for_growth()),
                 gc_heap_guard_size: Some(engine.get_gc_heap_guard_size()),
-                gc_heap_initial_size: engine.get_gc_heap_initial_size(),
+                gc_heap_initial_size: Some(engine.get_gc_heap_initial_size()),
                 guard_before_linear_memory: Some(engine.get_guard_before_linear_memory()),
                 table_lazy_init: Some(engine.get_table_lazy_init()),
                 memory_init_cow: Some(engine.get_memory_init_cow()),
