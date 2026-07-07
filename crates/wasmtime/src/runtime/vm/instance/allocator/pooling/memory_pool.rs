@@ -487,6 +487,33 @@ impl MemoryPool {
             .free(SlotId(striped_allocation_index.0), bytes_resident);
     }
 
+    /// Same as [`Self::deallocate`], but for many memories at once, returning
+    /// slot indices to each stripe's index allocator under a single lock
+    /// acquisition per stripe.
+    ///
+    /// # Safety
+    ///
+    /// Same as [`Self::deallocate`].
+    pub unsafe fn deallocate_many(
+        &self,
+        items: impl Iterator<Item = (MemoryAllocationIndex, Option<MemoryImageSlot>, usize)>,
+    ) {
+        let mut per_stripe: Vec<Vec<(SlotId, usize)>> =
+            (0..self.stripes.len()).map(|_| Vec::new()).collect();
+        for (allocation_index, image, bytes_resident) in items {
+            self.return_memory_image_slot(allocation_index, image);
+            let (stripe_index, striped_allocation_index) =
+                StripedAllocationIndex::from_unstriped_slot_index(
+                    allocation_index,
+                    self.stripes.len(),
+                );
+            per_stripe[stripe_index].push((SlotId(striped_allocation_index.0), bytes_resident));
+        }
+        for (stripe, items) in self.stripes.iter().zip(per_stripe) {
+            stripe.allocator.free_many(items);
+        }
+    }
+
     /// Purging everything related to `module`.
     pub fn purge_module(&self, module: CompiledModuleId) {
         // This primarily means clearing out all of its memory images present in

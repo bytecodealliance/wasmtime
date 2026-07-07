@@ -210,6 +210,10 @@ impl StackPool {
 
     /// Deallocate a previously-allocated fiber.
     ///
+    /// Note: production deallocation goes through [`Self::deallocate_many`]
+    /// via the decommit queue; this single-stack variant is only used by
+    /// tests.
+    ///
     /// # Safety
     ///
     /// The fiber must have been allocated by this pool, must be in an allocated
@@ -217,7 +221,32 @@ impl StackPool {
     ///
     /// The caller must have already called `zero_stack` on the fiber stack and
     /// flushed any enqueued decommits for this stack's memory.
+    #[cfg(test)]
     pub unsafe fn deallocate(&self, stack: wasmtime_fiber::FiberStack, bytes_resident: usize) {
+        let index = self.stack_index(&stack);
+        self.index_allocator.free(SlotId(index), bytes_resident);
+    }
+
+    /// Deallocate the previously-allocated fibers produced by `items`.
+    ///
+    /// # Safety
+    ///
+    /// The fibers must have been previously-allocated by this pool, must be
+    /// in an allocated state, and must never be used again.
+    ///
+    /// The caller must have already called `zero_stack` on the fiber stacks
+    /// and flushed any enqueued decommits for these stacks' memories.
+    pub unsafe fn deallocate_many(
+        &self,
+        stacks: impl Iterator<Item = (wasmtime_fiber::FiberStack, usize)>,
+    ) {
+        let items = stacks
+            .map(|(stack, bytes_resident)| (SlotId(self.stack_index(&stack)), bytes_resident))
+            .collect::<Vec<_>>();
+        self.index_allocator.free_many(items);
+    }
+
+    fn stack_index(&self, stack: &wasmtime_fiber::FiberStack) -> u32 {
         assert!(stack.is_from_raw_parts());
 
         let top = stack
@@ -240,9 +269,7 @@ impl StackPool {
 
         let index = (start_of_stack - base) / self.stack_size.byte_count();
         assert!(index < self.max_stacks);
-        let index = u32::try_from(index).unwrap();
-
-        self.index_allocator.free(SlotId(index), bytes_resident);
+        u32::try_from(index).unwrap()
     }
 
     pub fn unused_warm_slots(&self) -> u32 {

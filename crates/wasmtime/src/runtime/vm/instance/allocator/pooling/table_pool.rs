@@ -186,26 +186,28 @@ impl TablePool {
         }
     }
 
-    /// Deallocate a previously-allocated table.
+    /// Deallocate the previously-allocated tables produced by `items`.
     ///
     /// # Safety
     ///
-    /// The table must have been previously-allocated by this pool and assigned
-    /// the given allocation index, it must currently be allocated, and it must
-    /// never be used again.
+    /// The tables must have been previously-allocated by this pool and assigned
+    /// their given allocation indices, they must currently be allocated, and
+    /// they must never be used again.
     ///
     /// The caller must have already called `reset_table_pages_to_zero` on the
-    /// memory and flushed any enqueued decommits for this table's memory.
-    pub unsafe fn deallocate(
+    /// memories and flushed any enqueued decommits for these tables' memories.
+    pub unsafe fn deallocate_many(
         &self,
-        allocation_index: TableAllocationIndex,
-        table: Table,
-        bytes_resident: usize,
+        items: impl Iterator<Item = (TableAllocationIndex, Table, usize)>,
     ) {
-        assert!(table.is_static());
-        drop(table);
-        self.index_allocator
-            .free(SlotId(allocation_index.0), bytes_resident);
+        let items = items
+            .map(|(allocation_index, table, bytes_resident)| {
+                assert!(table.is_static());
+                drop(table);
+                (SlotId(allocation_index.0), bytes_resident)
+            })
+            .collect::<Vec<_>>();
+        self.index_allocator.free_many(items);
     }
 
     /// Reset the given table's memory to zero.

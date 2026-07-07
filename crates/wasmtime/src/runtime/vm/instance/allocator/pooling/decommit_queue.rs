@@ -172,46 +172,60 @@ impl DecommitQueue {
 
         // Second, restore the various entities to their associated pools' free
         // lists. This is safe, and they are ready for reuse, now that their
-        // memory regions have been decommitted.
+        // memory regions have been decommitted. Each pool's slots are returned
+        // in batch so its index-allocator lock is only acquired once per
+        // flush.
         let mut deallocated_any = false;
-        for (allocation_index, image, bytes_resident) in self.memories {
+        if !self.memories.is_empty() {
             deallocated_any = true;
-            // Note that for memory images the images are all dropped here and
-            // ignored if any decommits failed. This signifies how the state of the
-            // slot is unknown and needs to be paved over in the future. Also note
-            // that `bytes_resident` is probably too low, but there's no other
-            // precise way to know, so it's left here as-is and it'll get reset when
-            // the slot is reused.
-            let image = if decommit_succeeded {
-                Some(image)
-            } else {
-                None
-            };
             unsafe {
-                pool.memories
-                    .deallocate(allocation_index, image, bytes_resident);
+                pool.memories.deallocate_many(self.memories.into_iter().map(
+                    |(allocation_index, image, bytes_resident)| {
+                        // Note that for memory images the images are all dropped
+                        // here and ignored if any decommits failed. This signifies
+                        // how the state of the slot is unknown and needs to be
+                        // paved over in the future. Also note that
+                        // `bytes_resident` is probably too low, but there's no
+                        // other precise way to know, so it's left here as-is and
+                        // it'll get reset when the slot is reused.
+                        let image = if decommit_succeeded {
+                            Some(image)
+                        } else {
+                            None
+                        };
+                        (allocation_index, image, bytes_resident)
+                    },
+                ));
             }
         }
-        for (allocation_index, mut table, bytes_resident) in self.tables {
+        if !self.tables.is_empty() {
             deallocated_any = true;
-            // Like with memories,  if any decommit failed then we need to
-            // ensure that tables are still in a defined state. Unlike memories
-            // which track this via images tables are always assumed to be
-            // all-null on returning to the allocator. If the OS couldn't do it
-            // then manually do it ourselves here.
-            if !decommit_succeeded {
-                table.manually_memset_zeros();
-            }
             unsafe {
-                pool.tables
-                    .deallocate(allocation_index, table, bytes_resident);
+                pool.tables.deallocate_many(self.tables.into_iter().map(
+                    |(allocation_index, mut table, bytes_resident)| {
+                        // Like with memories, if any decommit failed then we need
+                        // to ensure that tables are still in a defined state.
+                        // Unlike memories which track this via images tables are
+                        // always assumed to be all-null on returning to the
+                        // allocator. If the OS couldn't do it then manually do it
+                        // ourselves here.
+                        if !decommit_succeeded {
+                            table.manually_memset_zeros();
+                        }
+                        (allocation_index, table, bytes_resident)
+                    },
+                ));
             }
         }
         #[cfg(feature = "async")]
-        for (stack, bytes_resident) in self.stacks {
+        if !self.stacks.is_empty() {
             deallocated_any = true;
             unsafe {
-                pool.stacks.deallocate(stack.0, bytes_resident);
+                pool.stacks.deallocate_many(
+                    self.stacks
+                        .into_iter()
+                        .map(|(stack, bytes_resident)| (stack.0, bytes_resident)),
+                );
             }
         }
 

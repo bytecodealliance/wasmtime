@@ -94,6 +94,18 @@ impl StackPool {
         let _ = stack;
     }
 
+    /// Safety: see the unix implementation.
+    pub unsafe fn deallocate_many(
+        &self,
+        stacks: impl Iterator<Item = (wasmtime_fiber::FiberStack, usize)>,
+    ) {
+        for (stack, bytes_resident) in stacks {
+            unsafe {
+                self.deallocate(stack, bytes_resident);
+            }
+        }
+    }
+
     pub fn unused_warm_slots(&self) -> u32 {
         0
     }

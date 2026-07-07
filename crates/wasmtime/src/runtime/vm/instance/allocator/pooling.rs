@@ -78,6 +78,31 @@ use crate::runtime::vm::{GcHeap, GcRuntime};
 #[cfg(feature = "gc")]
 use gc_heap_pool::GcHeapPool;
 
+/// Pad a value out to a full cache line (or two, on aarch64 prefetch
+/// granularity) so neighboring shards don't false-share.
+#[repr(align(128))]
+#[derive(Debug)]
+struct CachePadded<T>(T);
+
+/// Pick this thread's shard (used for both the sharded decommit queue and
+/// the sharded index allocators): assigned round-robin at first use per
+/// thread, cached in a thread-local.
+pub(super) fn thread_shard(nshards: usize) -> usize {
+    use core::cell::Cell;
+    static NEXT_SHARD: AtomicUsize = AtomicUsize::new(0);
+    std::thread_local! {
+        static SHARD: Cell<usize> = const { Cell::new(usize::MAX) };
+    }
+    SHARD.with(|s| {
+        let mut shard = s.get();
+        if shard == usize::MAX {
+            shard = NEXT_SHARD.fetch_add(1, Ordering::Relaxed);
+            s.set(shard);
+        }
+        shard % nshards
+    })
+}
+
 #[cfg(feature = "async")]
 use stack_pool::StackPool;
 
@@ -148,7 +173,12 @@ pub struct PoolingInstanceAllocator {
     live_core_instances: AtomicU64,
     live_component_instances: AtomicU64,
 
-    decommit_queue: Mutex<DecommitQueue>,
+    /// Sharded to avoid a single global mutex on every deallocation when
+    /// decommit batching is enabled: each thread appends to its own shard
+    /// (assigned round-robin at first use) and flushes that shard when it
+    /// reaches the configured batch size. Slot-exhaustion paths flush all
+    /// shards.
+    decommit_queues: Box<[CachePadded<Mutex<DecommitQueue>>]>,
 
     memories: MemoryPool,
     live_memories: AtomicUsize,
@@ -183,8 +213,7 @@ impl Drop for PoolingInstanceAllocator {
         // entities get returned to their associated sub-pools and we can
         // differentiate between a leaking slot and an enqueued-for-decommit
         // slot.
-        let queue = self.decommit_queue.lock().unwrap();
-        self.flush_decommit_queue(queue);
+        self.flush_all_decommit_queues();
 
         debug_assert_eq!(self.live_component_instances.load(Ordering::Acquire), 0);
         debug_assert_eq!(self.live_core_instances.load(Ordering::Acquire), 0);
@@ -214,7 +243,15 @@ impl PoolingInstanceAllocator {
         Ok(Self {
             live_component_instances: AtomicU64::new(0),
             live_core_instances: AtomicU64::new(0),
-            decommit_queue: Mutex::new(DecommitQueue::default()),
+            decommit_queues: {
+                let nshards = std::thread::available_parallelism()
+                    .map(|n| n.get())
+                    .unwrap_or(1)
+                    .min(16);
+                (0..nshards)
+                    .map(|_| CachePadded(Mutex::new(DecommitQueue::default())))
+                    .collect()
+            },
             memories: MemoryPool::new(config, tunables)?,
             live_memories: AtomicUsize::new(0),
             tables: TablePool::new(config)?,
@@ -348,6 +385,17 @@ impl PoolingInstanceAllocator {
         queue.flush(self)
     }
 
+    /// Flush every shard of the decommit queue, e.g. when a pool has run out
+    /// of slots. Returns whether any slot was returned to any pool.
+    fn flush_all_decommit_queues(&self) -> bool {
+        let mut any = false;
+        for shard in self.decommit_queues.iter() {
+            let queue = shard.0.lock().unwrap();
+            any |= self.flush_decommit_queue(queue);
+        }
+        any
+    }
+
     /// Execute `f` and if it returns `Err(PoolConcurrencyLimitError)`, then try
     /// flushing the decommit queue. If flushing the queue freed up slots, then
     /// try running `f` again.
@@ -355,8 +403,7 @@ impl PoolingInstanceAllocator {
     fn with_flush_and_retry<T>(&self, mut f: impl FnMut() -> Result<T>) -> Result<T> {
         f().or_else(|e| {
             if e.is::<PoolConcurrencyLimitError>() {
-                let queue = self.decommit_queue.lock().unwrap();
-                if self.flush_decommit_queue(queue) {
+                if self.flush_all_decommit_queues() {
                     return f();
                 }
             }
@@ -384,14 +431,14 @@ impl PoolingInstanceAllocator {
 
             // If we enqueued some regions for decommit, but did not reach our
             // batch size, so we don't want to flush it yet, then merge the
-            // local queue into the shared queue.
+            // local queue into this thread's shard of the shared queue.
             n => {
                 debug_assert!(n < self.config.decommit_batch_size);
-                let mut shared_queue = self.decommit_queue.lock().unwrap();
+                let shard = thread_shard(self.decommit_queues.len());
+                let mut shared_queue = self.decommit_queues[shard].0.lock().unwrap();
                 shared_queue.append(&mut local_queue);
-                // And if the shared queue now has at least as many regions
-                // enqueued for decommit as our batch size, then we can flush
-                // it.
+                // And if this shard now has at least as many regions enqueued
+                // for decommit as our batch size, then we can flush it.
                 if shared_queue.raw_len() >= self.config.decommit_batch_size {
                     self.flush_decommit_queue(shared_queue);
                 }
@@ -547,8 +594,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 };
 
                 if e.is::<PoolConcurrencyLimitError>() {
-                    let queue = self.decommit_queue.lock().unwrap();
-                    if self.flush_decommit_queue(queue) {
+                    if self.flush_all_decommit_queues() {
                         return self.memories.allocate(request, ty, memory_index).await;
                     }
                 }
@@ -636,8 +682,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 };
 
                 if e.is::<PoolConcurrencyLimitError>() {
-                    let queue = self.decommit_queue.lock().unwrap();
-                    if self.flush_decommit_queue(queue) {
+                    if self.flush_all_decommit_queues() {
                         return self.tables.allocate(request, ty).await;
                     }
                 }
