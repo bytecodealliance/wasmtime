@@ -1,7 +1,6 @@
 //! Dummy GC types for when the `gc` cargo feature is disabled.
 
 use super::VMGcRef;
-use wasmtime_environ::GcLayout;
 
 pub enum VMExternRef {}
 
@@ -30,14 +29,5 @@ impl From<VMStructRef> for VMGcRef {
 impl From<VMExnRef> for VMGcRef {
     fn from(e: VMExnRef) -> VMGcRef {
         match e {}
-    }
-}
-
-#[derive(Debug)]
-pub enum TraceInfo {}
-
-impl TraceInfo {
-    pub fn new(_layout: &GcLayout) -> Self {
-        unreachable!()
     }
 }

@@ -31,7 +31,7 @@ use crate::type_registry::RegisteredType;
 use core::any::Any;
 use core::mem::MaybeUninit;
 use core::{alloc::Layout, num::NonZeroU32};
-use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcArrayLayout, GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
 ///
@@ -412,6 +412,45 @@ impl GcStore {
         {
             let _ = new_value;
             return None;
+        }
+    }
+}
+
+/// How to trace a GC object.
+#[derive(Debug)]
+pub enum TraceInfo {
+    /// How to trace an array.
+    Array {
+        /// Whether this array type's elements are GC references, and need
+        /// tracing.
+        #[cfg_attr(
+            not(feature = "gc-drc"),
+            allow(dead_code, reason = "easier not to cfg on/off")
+        )]
+        gc_ref_elems: bool,
+    },
+
+    /// How to trace a struct.
+    Struct {
+        /// The offsets of each GC reference field that needs tracing in
+        /// instances of this struct type.
+        gc_ref_offsets: Box<[u32]>,
+    },
+}
+
+impl TraceInfo {
+    pub(crate) fn new(gc_layout: &GcLayout) -> Self {
+        match gc_layout {
+            GcLayout::Array(l) => TraceInfo::Array {
+                gc_ref_elems: l.elems_are_gc_refs,
+            },
+            GcLayout::Struct(l) => TraceInfo::Struct {
+                gc_ref_offsets: l
+                    .fields
+                    .iter()
+                    .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
+                    .collect(),
+            },
         }
     }
 }

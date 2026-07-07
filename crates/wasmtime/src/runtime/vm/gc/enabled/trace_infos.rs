@@ -6,32 +6,9 @@
 
 use crate::hash_map::{Entry, HashMap};
 use crate::module::RegisteredModuleId;
-use crate::vm::GcStoreTraceState;
-use alloc::boxed::Box;
+use crate::vm::{GcStoreTraceState, TraceInfo};
 use core::hash::BuildHasher;
-use wasmtime_environ::{GcLayout, ModuleInternedTypeIndex, VMSharedTypeIndex};
-
-/// How to trace a GC object.
-#[derive(Debug)]
-pub enum TraceInfo {
-    /// How to trace an array.
-    Array {
-        /// Whether this array type's elements are GC references, and need
-        /// tracing.
-        #[cfg_attr(
-            not(feature = "gc-drc"),
-            allow(dead_code, reason = "easier not to cfg on/off")
-        )]
-        gc_ref_elems: bool,
-    },
-
-    /// How to trace a struct.
-    Struct {
-        /// The offsets of each GC reference field that needs tracing in
-        /// instances of this struct type.
-        gc_ref_offsets: Box<[u32]>,
-    },
-}
+use wasmtime_environ::{ModuleInternedTypeIndex, VMSharedTypeIndex};
 
 /// A hasher that doesn't hash, for use in the trace-info hash map, where we are
 /// just using scalar keys and aren't overly concerned with collision-based DoS.
@@ -169,21 +146,4 @@ fn find_trace_info(ty: &VMSharedTypeIndex, state: &GcStoreTraceState<'_>) -> Opt
     }
 
     None
-}
-
-impl TraceInfo {
-    pub(crate) fn new(gc_layout: &GcLayout) -> Self {
-        match gc_layout {
-            GcLayout::Array(l) => TraceInfo::Array {
-                gc_ref_elems: l.elems_are_gc_refs,
-            },
-            GcLayout::Struct(l) => TraceInfo::Struct {
-                gc_ref_offsets: l
-                    .fields
-                    .iter()
-                    .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
-                    .collect(),
-            },
-        }
-    }
 }

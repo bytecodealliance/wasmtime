@@ -11,11 +11,11 @@
 //! This collector does not require any read or write barriers.
 
 use super::VMArrayRef;
-use super::trace_info::{TraceInfo, TraceInfos};
+use super::trace_infos::TraceInfos;
 use crate::runtime::vm::{
     ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
-    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
-    VMMemoryDefinition,
+    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMExternRef,
+    VMGcHeader, VMGcRef, VMMemoryDefinition,
 };
 use crate::{Engine, bail_bug, prelude::*};
 use core::{

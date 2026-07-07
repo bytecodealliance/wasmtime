@@ -46,12 +46,12 @@
 
 use super::VMArrayRef;
 use super::free_list::FreeList;
-use super::trace_info::{TraceInfo, TraceInfos};
+use super::trace_infos::TraceInfos;
 use crate::hash_set::HashSet;
 use crate::runtime::vm::{
     ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
-    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TypedGcRef, VMExternRef, VMGcHeader,
-    VMGcObjectData, VMGcRef,
+    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMExternRef,
+    VMGcHeader, VMGcObjectData, VMGcRef,
 };
 use crate::vm::VMMemoryDefinition;
 use crate::{Engine, Trap, bail_bug, prelude::*};
