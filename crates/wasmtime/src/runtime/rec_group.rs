@@ -394,10 +394,7 @@ impl<'a> StructTypeBuilder<'a> {
         let field_index = self.struct_mut().fields.len() - 1;
         ForwardRefFieldBuilder {
             parent: self,
-            target: ty,
             field_index,
-            mutability: Mutability::Const,
-            nullable: true,
         }
     }
 
@@ -418,35 +415,24 @@ impl<'a> StructTypeBuilder<'a> {
 /// Call [`build`][Self::build] to return to the struct builder.
 pub struct ForwardRefFieldBuilder<'p, 'a> {
     parent: &'p mut StructTypeBuilder<'a>,
-    target: PendingType,
     field_index: usize,
-    mutability: Mutability,
-    nullable: bool,
 }
 
 impl<'p, 'a> ForwardRefFieldBuilder<'p, 'a> {
     /// Set the field's mutability. Defaults to [`Mutability::Const`].
-    pub fn mutability(mut self, mutability: Mutability) -> Self {
-        self.mutability = mutability;
-        self.update();
+    pub fn mutability(self, mutability: Mutability) -> Self {
+        self.parent.struct_mut().fields[self.field_index].mutable = mutability.is_var();
         self
     }
 
     /// Set whether the reference is nullable. Defaults to `true`.
-    pub fn nullable(mut self, is_nullable: bool) -> Self {
-        self.nullable = is_nullable;
-        self.update();
+    pub fn nullable(self, is_nullable: bool) -> Self {
+        if let WasmStorageType::Val(WasmValType::Ref(r)) =
+            &mut self.parent.struct_mut().fields[self.field_index].element_type
+        {
+            r.nullable = is_nullable;
+        }
         self
-    }
-
-    fn update(&mut self) {
-        let field = forward_field(
-            &self.parent.rec.members,
-            self.target.index,
-            self.nullable,
-            self.mutability.is_var(),
-        );
-        self.parent.struct_mut().fields[self.field_index] = field;
     }
 
     /// Return to the struct builder.
@@ -471,8 +457,12 @@ pub struct ArrayTypeBuilder<'a> {
 
 impl<'a> ArrayTypeBuilder<'a> {
     fn set_element(&mut self, field: WasmFieldType) {
+        *self.element_mut() = field;
+    }
+
+    fn element_mut(&mut self) -> &mut WasmFieldType {
         match &mut self.rec.members[self.index as usize].composite_type.inner {
-            WasmCompositeInnerType::Array(a) => a.0 = field,
+            WasmCompositeInnerType::Array(a) => &mut a.0,
             _ => unreachable!("array builder on a non-array member"),
         }
     }
@@ -521,12 +511,7 @@ impl<'a> ArrayTypeBuilder<'a> {
         self.rec.check_owns(ty);
         let field = forward_field(&self.rec.members, ty.index, true, false);
         self.set_element(field);
-        ForwardRefElementBuilder {
-            parent: self,
-            target: ty,
-            mutability: Mutability::Const,
-            nullable: true,
-        }
+        ForwardRefElementBuilder { parent: self }
     }
 
     /// Commit this array definition and return the [`RecGroupBuilder`] so that
@@ -546,34 +531,23 @@ impl<'a> ArrayTypeBuilder<'a> {
 /// Call [`build`][Self::build] to return to the array builder.
 pub struct ForwardRefElementBuilder<'p, 'a> {
     parent: &'p mut ArrayTypeBuilder<'a>,
-    target: PendingType,
-    mutability: Mutability,
-    nullable: bool,
 }
 
 impl<'p, 'a> ForwardRefElementBuilder<'p, 'a> {
     /// Set the element's mutability. Defaults to [`Mutability::Const`].
-    pub fn mutability(mut self, mutability: Mutability) -> Self {
-        self.mutability = mutability;
-        self.update();
+    pub fn mutability(self, mutability: Mutability) -> Self {
+        self.parent.element_mut().mutable = mutability.is_var();
         self
     }
 
     /// Set whether the reference is nullable. Defaults to `true`.
-    pub fn nullable(mut self, is_nullable: bool) -> Self {
-        self.nullable = is_nullable;
-        self.update();
+    pub fn nullable(self, is_nullable: bool) -> Self {
+        if let WasmStorageType::Val(WasmValType::Ref(r)) =
+            &mut self.parent.element_mut().element_type
+        {
+            r.nullable = is_nullable;
+        }
         self
-    }
-
-    fn update(&mut self) {
-        let field = forward_field(
-            &self.parent.rec.members,
-            self.target.index,
-            self.nullable,
-            self.mutability.is_var(),
-        );
-        self.parent.set_element(field);
     }
 
     /// Return to the array builder.
@@ -664,9 +638,7 @@ impl<'a> FuncTypeBuilder<'a> {
         };
         ForwardRefFuncValBuilder {
             parent: self,
-            target: ty,
             val_index,
-            nullable: true,
             is_result: false,
         }
     }
@@ -691,9 +663,7 @@ impl<'a> FuncTypeBuilder<'a> {
         };
         ForwardRefFuncValBuilder {
             parent: self,
-            target: ty,
             val_index,
-            nullable: true,
             is_result: true,
         }
     }
@@ -717,32 +687,28 @@ impl<'a> FuncTypeBuilder<'a> {
 /// in place. Call [`build`][Self::build] to return to the function builder.
 pub struct ForwardRefFuncValBuilder<'p, 'a> {
     parent: &'p mut FuncTypeBuilder<'a>,
-    target: PendingType,
     val_index: usize,
-    nullable: bool,
     is_result: bool,
 }
 
 impl<'p, 'a> ForwardRefFuncValBuilder<'p, 'a> {
     /// Set whether the reference is nullable. Defaults to `true`.
-    pub fn nullable(mut self, is_nullable: bool) -> Self {
-        self.nullable = is_nullable;
-        self.update();
-        self
-    }
-
-    fn update(&mut self) {
-        let val = WasmValType::Ref(WasmRefType {
-            nullable: self.nullable,
-            heap_type: forward_heap(&self.parent.rec.members, self.target.index),
-        });
-        let (is_result, val_index) = (self.is_result, self.val_index);
+    pub fn nullable(self, is_nullable: bool) -> Self {
         let func = self.parent.func_mut();
-        if is_result {
-            func.set_result(val_index, val);
+        let mut val = if self.is_result {
+            func.results()[self.val_index]
         } else {
-            func.set_param(val_index, val);
+            func.params()[self.val_index]
+        };
+        if let WasmValType::Ref(r) = &mut val {
+            r.nullable = is_nullable;
         }
+        if self.is_result {
+            func.set_result(self.val_index, val);
+        } else {
+            func.set_param(self.val_index, val);
+        }
+        self
     }
 
     /// Return to the function builder.
