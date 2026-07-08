@@ -955,6 +955,19 @@ impl MachInstEmit for Inst {
                 put_u32(sink, enc_blx(rm));
                 emit_call_epilogue(sink, emit_info, state, info);
             }
+            Inst::LoadExtName { rd, name, offset } => {
+                let rd = machreg_to_gpr(rd.to_reg());
+                // `ldr rd, [pc]` reads `pc` as this instruction's address + 8,
+                // i.e. the inline literal placed two slots ahead.
+                put_u32(sink, enc_ldr_str_imm(true, false, rd, 15, 0));
+                // `b .+8` branches over the literal (its `pc` is already the
+                // instruction just past the `.word`, so the offset is 0).
+                put_u32(sink, enc_b(0));
+                // The literal: the symbol's absolute address plus `offset`,
+                // supplied by the linker via an `Abs4` (32-bit absolute) reloc.
+                sink.add_reloc(Reloc::Abs4, name.as_ref(), *offset);
+                put_u32(sink, 0);
+            }
 
             Inst::Jump { dest } => {
                 sink.use_label_at_offset(sink.cur_offset(), *dest, LabelUse::Branch26);
@@ -1023,6 +1036,7 @@ impl MachInstEmit for Inst {
                 | Inst::CallInd { .. }
                 | Inst::AtomicRmw { .. }
                 | Inst::AtomicCas { .. }
+                | Inst::LoadExtName { .. }
         );
         let end = sink.cur_offset();
         debug_assert!(

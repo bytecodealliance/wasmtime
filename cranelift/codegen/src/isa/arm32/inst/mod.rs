@@ -331,6 +331,9 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             collector.reg_clobbers(info.clobbers);
         }
+        Inst::LoadExtName { rd, .. } => {
+            collector.reg_def(rd);
+        }
         Inst::CallInd { info } => {
             let CallInfo {
                 dest, uses, defs, ..
@@ -911,6 +914,9 @@ impl Inst {
             Inst::Pop { reg_list } => alloc::format!("pop {}", reglist(*reg_list)),
             Inst::Call { info } => alloc::format!("bl {}", info.dest.display(None)),
             Inst::CallInd { info } => alloc::format!("blx {}", r(info.dest)),
+            Inst::LoadExtName { rd, name, offset } => {
+                alloc::format!("load_ext_name {}, {:?} + {}", r(rd.to_reg()), name, offset)
+            }
             Inst::Jump { dest } => alloc::format!("b {}", dest.to_string()),
             Inst::BrTable { index, targets, .. } => {
                 let (default, entries) = targets.split_first().unwrap();

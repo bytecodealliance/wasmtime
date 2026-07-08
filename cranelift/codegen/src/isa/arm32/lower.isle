@@ -368,13 +368,25 @@
 ;;;; Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to an in-range function (`bl`).
-(rule (lower (call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args))
+(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args))
   (let ((output ValueRegsVec (gen_call_output sig_ref))
         (abi Sig (abi_sig sig_ref))
         (uses CallArgList (gen_call_args abi args))
         (defs CallRetList (gen_call_rets abi output))
         (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none) patchable))
         (_ Unit (emit_side_effect (call_impl info))))
+    output))
+
+;; Direct call to a far/non-colocated function: materialize the callee's
+;; absolute address, then call it indirectly (`blx`).
+(rule 0 (lower (call (func_ref_data sig_ref name _dist _patchable) args))
+  (let ((output ValueRegsVec (gen_call_output sig_ref))
+        (abi Sig (abi_sig sig_ref))
+        (target Reg (load_ext_name name 0))
+        (uses CallArgList (gen_call_args abi args))
+        (defs CallRetList (gen_call_rets abi output))
+        (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
+        (_ Unit (emit_side_effect (call_ind_impl info))))
     output))
 
 ;; Indirect call through a register (`blx`).
@@ -387,6 +399,14 @@
         (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
         (_ Unit (emit_side_effect (call_ind_impl info))))
     output))
+
+;; Address of a function symbol.
+(rule (lower (func_addr _ (func_ref_data _ name _dist _)))
+  (load_ext_name name 0))
+
+;; Address of a data/global symbol (plus a constant byte offset).
+(rule (lower (symbol_value _ (symbol_value_data name _dist offset)))
+  (load_ext_name name offset))
 
 ;;;; Branches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

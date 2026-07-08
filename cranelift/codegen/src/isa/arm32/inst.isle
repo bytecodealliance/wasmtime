@@ -375,6 +375,13 @@
     ;; An indirect call (`blx rm`).
     (CallInd (info BoxCallIndInfo))
 
+    ;; Load the absolute address of an external symbol into `rd` via an
+    ;; inline literal: `ldr rd, [pc]; b .+8; .word <name+offset>` where the
+    ;; `.word` carries an `Abs4` relocation resolved by the linker.
+    (LoadExtName (rd WritableReg)
+                 (name BoxExternalName)
+                 (offset i64))
+
     ;; An unconditional branch to a label (`b`).
     (Jump (dest MachLabel))
 
@@ -841,6 +848,16 @@
 (decl call_impl (BoxCallInfo) SideEffectNoResult)
 (rule (call_impl info)
   (SideEffectNoResult.Inst (MInst.Call info)))
+
+;; Load the absolute address of an external symbol (plus a byte offset) into a
+;; fresh register. Used for far/non-colocated calls and symbol addresses.
+;; (`box_external_name` is applied implicitly by the `ExternalName ->
+;; BoxExternalName` conversion in the prelude.)
+(decl load_ext_name (ExternalName i64) Reg)
+(rule (load_ext_name name offset)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.LoadExtName rd name offset))))
+    rd))
 
 (decl call_ind_impl (BoxCallIndInfo) SideEffectNoResult)
 (rule (call_ind_impl info)
