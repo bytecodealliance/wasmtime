@@ -8,9 +8,9 @@
 //! defining other types, and the whole group is validated and registered
 //! together when [`RecGroupBuilder::build`] is called.
 //!
-//! Each type is defined via a builder (e.g. [`RecGroupBuilder::define_struct`])
-//! and committed to the group by calling `finish` on that builder; a definition
-//! that is never finished is treated as though the type was never defined.
+//! Each declared type is defined via a builder (e.g.
+//! [`RecGroupBuilder::define_struct`]) and committed by calling `build` on that
+//! builder.
 //!
 //! Already-registered types (and abstract heap types) are used directly via the
 //! normal [`FieldType`]/[`ValType`] APIs; the `forward_ref_*` builder methods
@@ -28,8 +28,8 @@
 //! let mut builder = RecGroupBuilder::new(&engine);
 //! let a = builder.declare_struct();
 //! let b = builder.declare_struct();
-//! builder.define_struct(a).forward_ref_field(b).nullable(true).finish().finish();
-//! builder.define_struct(b).forward_ref_field(a).nullable(false).finish().finish();
+//! builder.define_struct(a).forward_ref_field(b).nullable(true).build().build();
+//! builder.define_struct(b).forward_ref_field(a).nullable(false).build().build();
 //! let group = builder.build()?;
 //!
 //! let a: StructType = group.get_struct(a).unwrap();
@@ -69,29 +69,16 @@ fn module_index(index: u32) -> EngineOrModuleTypeIndex {
     EngineOrModuleTypeIndex::Module(ModuleInternedTypeIndex::new(index as usize))
 }
 
-/// The composite kind a member was declared as, carried by [`PendingType`] so
-/// that forward references can be lowered into the correct `WasmHeapType`
-/// variant before the referenced member's body is defined.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-enum MemberKind {
-    Struct,
-    Array,
-    Func,
-}
-
 /// A handle to a type being defined in a [`RecGroupBuilder`].
 ///
 /// Obtained from [`RecGroupBuilder::declare_struct`] and friends. It is used
 /// both to define the type (via [`RecGroupBuilder::define_struct`] and friends)
 /// and to forward-reference it from other types in the same group (via the
-/// `forward_ref_*` builder methods). It records the kind it was declared as, so
-/// that a forward reference can be lowered into the correct `WasmHeapType`
-/// variant.
+/// `forward_ref_*` builder methods).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct PendingType {
     builder_id: usize,
     index: u32,
-    kind: MemberKind,
 }
 
 /// A builder for defining a recursion group of Wasm types, including types that
@@ -118,7 +105,7 @@ pub struct PendingType {
 /// ```
 ///
 /// It is the order of the `declare_*` calls that determines this, not the order
-/// in which the types are subsequently defined and finished.
+/// in which the types are subsequently defined and built.
 pub struct RecGroupBuilder {
     engine: Engine,
     builder_id: usize,
@@ -126,9 +113,9 @@ pub struct RecGroupBuilder {
     /// example, referencing a type from a different engine). Surfaced by
     /// [`build`][Self::build]; the chaining builder methods stay infallible.
     error: Option<Error>,
-    /// The finished definition of each member, or `None` if it was declared but
-    /// its builder's `finish` was never called.
-    members: Vec<Option<WasmSubType>>,
+    /// Each declared member, initialized to a default of its declared kind and
+    /// mutated in place as it is defined.
+    members: Vec<WasmSubType>,
 }
 
 impl RecGroupBuilder {
@@ -142,13 +129,19 @@ impl RecGroupBuilder {
         }
     }
 
-    fn declare(&mut self, kind: MemberKind) -> PendingType {
+    fn declare(&mut self, inner: WasmCompositeInnerType) -> PendingType {
         let index = u32::try_from(self.members.len()).expect("too many types in a rec group");
-        self.members.push(None);
+        self.members.push(WasmSubType {
+            is_final: Finality::Final.is_final(),
+            supertype: None,
+            composite_type: WasmCompositeType {
+                shared: false,
+                inner,
+            },
+        });
         PendingType {
             builder_id: self.builder_id,
             index,
-            kind,
         }
     }
 
@@ -156,33 +149,39 @@ impl RecGroupBuilder {
     /// be used as a forward reference before the type is defined.
     ///
     /// The order of `declare_*` calls fixes the types' order within the rec
-    /// group, which is semantically significant; see the [module
-    /// documentation](crate::RecGroupBuilder#declaration-order-is-significant)
-    /// for details.
+    /// group, which is semantically significant; see the
+    /// [type documentation][Self#declaration-order-is-significant] for details.
     pub fn declare_struct(&mut self) -> PendingType {
-        self.declare(MemberKind::Struct)
+        self.declare(WasmCompositeInnerType::Struct(WasmStructType {
+            fields: Vec::new(),
+        }))
     }
 
     /// Declare a new array type in this rec group, returning a handle that can
     /// be used as a forward reference before the type is defined.
     ///
     /// The order of `declare_*` calls fixes the types' order within the rec
-    /// group, which is semantically significant; see the [module
-    /// documentation](crate::RecGroupBuilder#declaration-order-is-significant)
-    /// for details.
+    /// group, which is semantically significant; see the
+    /// [type documentation][Self#declaration-order-is-significant] for details.
     pub fn declare_array(&mut self) -> PendingType {
-        self.declare(MemberKind::Array)
+        // An array requires an element type; use a placeholder here that the
+        // caller is expected to overwrite via the array builder.
+        self.declare(WasmCompositeInnerType::Array(WasmArrayType(
+            WasmFieldType {
+                element_type: WasmStorageType::Val(WasmValType::I32),
+                mutable: false,
+            },
+        )))
     }
 
     /// Declare a new function type in this rec group, returning a handle that
     /// can be used as a forward reference before the type is defined.
     ///
     /// The order of `declare_*` calls fixes the types' order within the rec
-    /// group, which is semantically significant; see the [module
-    /// documentation](crate::RecGroupBuilder#declaration-order-is-significant)
-    /// for details.
+    /// group, which is semantically significant; see the
+    /// [type documentation][Self#declaration-order-is-significant] for details.
     pub fn declare_func(&mut self) -> PendingType {
-        self.declare(MemberKind::Func)
+        self.declare(WasmCompositeInnerType::Func(WasmFuncType::empty()))
     }
 
     #[track_caller]
@@ -210,8 +209,7 @@ impl RecGroupBuilder {
     /// Begin defining the given handle as a struct type.
     ///
     /// The definition is committed to the group by calling
-    /// [`finish`][StructTypeBuilder::finish]; committing replaces any previous
-    /// definition of this handle.
+    /// [`build`][StructTypeBuilder::build].
     ///
     /// # Panics
     ///
@@ -221,23 +219,22 @@ impl RecGroupBuilder {
     pub fn define_struct(&mut self, ty: PendingType) -> StructTypeBuilder<'_> {
         self.check_owns(ty);
         assert!(
-            matches!(ty.kind, MemberKind::Struct),
+            matches!(
+                self.members[ty.index as usize].composite_type.inner,
+                WasmCompositeInnerType::Struct(_)
+            ),
             "handle was not declared as a struct type"
         );
         StructTypeBuilder {
             rec: self,
             index: ty.index,
-            finality: Finality::Final,
-            supertype: None,
-            fields: Vec::new(),
         }
     }
 
     /// Begin defining the given handle as an array type.
     ///
     /// The definition is committed to the group by calling
-    /// [`finish`][ArrayTypeBuilder::finish]; committing replaces any previous
-    /// definition of this handle.
+    /// [`build`][ArrayTypeBuilder::build].
     ///
     /// # Panics
     ///
@@ -247,23 +244,22 @@ impl RecGroupBuilder {
     pub fn define_array(&mut self, ty: PendingType) -> ArrayTypeBuilder<'_> {
         self.check_owns(ty);
         assert!(
-            matches!(ty.kind, MemberKind::Array),
+            matches!(
+                self.members[ty.index as usize].composite_type.inner,
+                WasmCompositeInnerType::Array(_)
+            ),
             "handle was not declared as an array type"
         );
         ArrayTypeBuilder {
             rec: self,
             index: ty.index,
-            finality: Finality::Final,
-            supertype: None,
-            element: None,
         }
     }
 
     /// Begin defining the given handle as a function type.
     ///
     /// The definition is committed to the group by calling
-    /// [`finish`][FuncTypeBuilder::finish]; committing replaces any previous
-    /// definition of this handle.
+    /// [`build`][FuncTypeBuilder::build].
     ///
     /// # Panics
     ///
@@ -273,16 +269,15 @@ impl RecGroupBuilder {
     pub fn define_func(&mut self, ty: PendingType) -> FuncTypeBuilder<'_> {
         self.check_owns(ty);
         assert!(
-            matches!(ty.kind, MemberKind::Func),
+            matches!(
+                self.members[ty.index as usize].composite_type.inner,
+                WasmCompositeInnerType::Func(_)
+            ),
             "handle was not declared as a function type"
         );
         FuncTypeBuilder {
             rec: self,
             index: ty.index,
-            finality: Finality::Final,
-            supertype: None,
-            params: Vec::new(),
-            results: Vec::new(),
         }
     }
 
@@ -291,10 +286,8 @@ impl RecGroupBuilder {
     ///
     /// An empty group is allowed and produces an empty [`RecGroup`].
     ///
-    /// Returns an error if any declared type was never defined (i.e. its
-    /// builder's `finish` was never called), if any type references a type from
-    /// a different engine, or if a struct exceeds the implementation's
-    /// field-count limit.
+    /// Returns an error if any type references a type from a different engine,
+    /// or if a struct exceeds the implementation's field-count limit.
     pub fn build(self) -> Result<RecGroup> {
         let RecGroupBuilder {
             engine,
@@ -307,20 +300,23 @@ impl RecGroupBuilder {
             return Err(error);
         }
 
-        let mut sub_types = Vec::with_capacity(members.len());
-        for (i, member) in members.into_iter().enumerate() {
-            match member {
-                Some(sub_type) => sub_types.push(sub_type),
-                None => bail!("type {i} was declared but never defined"),
+        for (i, member) in members.iter().enumerate() {
+            if let WasmCompositeInnerType::Struct(s) = &member.composite_type.inner {
+                ensure!(
+                    s.fields.len() <= MAX_FIELDS,
+                    "attempted to define struct type {i} with {} fields, but that is more than \
+                     the maximum supported number of fields ({MAX_FIELDS})",
+                    s.fields.len(),
+                );
             }
         }
 
         // Keep each member's declared supertype so we can structurally validate
         // it after registration, once forward references resolve to registered
         // types. (`register_rec_group_types` does not itself check subtyping.)
-        let supertypes: Vec<_> = sub_types.iter().map(|s| s.supertype).collect();
+        let supertypes: Vec<_> = members.iter().map(|m| m.supertype).collect();
 
-        let registered = engine.register_rec_group_types(sub_types.into_iter())?;
+        let registered = engine.register_rec_group_types(members.into_iter())?;
         let group = RecGroup {
             builder_id,
             types: registered,
@@ -337,20 +333,24 @@ impl RecGroupBuilder {
 
 /// Builder for a struct type within a [`RecGroupBuilder`].
 ///
-/// Returned by [`RecGroupBuilder::define_struct`]. Call [`finish`][Self::finish]
+/// Returned by [`RecGroupBuilder::define_struct`]. Call [`build`][Self::build]
 /// to commit the type to the group.
 pub struct StructTypeBuilder<'a> {
     rec: &'a mut RecGroupBuilder,
     index: u32,
-    finality: Finality,
-    supertype: Option<EngineOrModuleTypeIndex>,
-    fields: Vec<WasmFieldType>,
 }
 
 impl<'a> StructTypeBuilder<'a> {
+    fn struct_mut(&mut self) -> &mut WasmStructType {
+        match &mut self.rec.members[self.index as usize].composite_type.inner {
+            WasmCompositeInnerType::Struct(s) => s,
+            _ => unreachable!("struct builder on a non-struct member"),
+        }
+    }
+
     /// Set this struct type's finality. Defaults to [`Finality::Final`].
     pub fn finality(&mut self, finality: Finality) -> &mut Self {
-        self.finality = finality;
+        self.rec.members[self.index as usize].is_final = finality.is_final();
         self
     }
 
@@ -358,7 +358,8 @@ impl<'a> StructTypeBuilder<'a> {
     pub fn supertype(&mut self, supertype: StructType) -> &mut Self {
         let same = supertype.comes_from_same_engine(&self.rec.engine);
         self.rec.check_engine(same, "supertype");
-        self.supertype = Some(EngineOrModuleTypeIndex::Engine(supertype.type_index()));
+        self.rec.members[self.index as usize].supertype =
+            Some(EngineOrModuleTypeIndex::Engine(supertype.type_index()));
         self
     }
 
@@ -367,7 +368,7 @@ impl<'a> StructTypeBuilder<'a> {
     #[track_caller]
     pub fn forward_supertype(&mut self, supertype: PendingType) -> &mut Self {
         self.rec.check_owns(supertype);
-        self.supertype = Some(module_index(supertype.index));
+        self.rec.members[self.index as usize].supertype = Some(module_index(supertype.index));
         self
     }
 
@@ -376,59 +377,51 @@ impl<'a> StructTypeBuilder<'a> {
     pub fn field(&mut self, ty: FieldType) -> &mut Self {
         let same = ty.comes_from_same_engine(&self.rec.engine);
         self.rec.check_engine(same, "field type");
-        self.fields.push(ty.to_wasm_field_type());
+        let field = ty.to_wasm_field_type();
+        self.struct_mut().fields.push(field);
         self
     }
 
     /// Append a field that is a reference to another type being defined in the
     /// same rec group.
     ///
-    /// Returns a builder for configuring the reference; call
-    /// [`finish`][ForwardRefFieldBuilder::finish] to commit the field. The field
-    /// defaults to immutable and nullable.
+    /// The field is added immediately (immutable and nullable by default) and the
+    /// returned builder tweaks it in place, so nothing is lost if its
+    /// [`build`][ForwardRefFieldBuilder::build] is never called.
     #[track_caller]
     pub fn forward_ref_field(&mut self, ty: PendingType) -> ForwardRefFieldBuilder<'_, 'a> {
         self.rec.check_owns(ty);
+        let field = forward_field(&self.rec.members, ty.index, true, false);
+        self.struct_mut().fields.push(field);
+        let field_index = self.struct_mut().fields.len() - 1;
         ForwardRefFieldBuilder {
             parent: self,
             target: ty,
+            field_index,
             mutability: Mutability::Const,
             nullable: true,
         }
     }
 
-    /// Commit this struct definition to the rec group.
-    pub fn finish(&mut self) {
-        let index = self.index as usize;
-        let fields = core::mem::take(&mut self.fields);
-        if fields.len() > MAX_FIELDS {
-            self.rec.record_error(format_err!(
-                "attempted to define a struct type with {} fields, but that is more than the \
-                 maximum supported number of fields ({MAX_FIELDS})",
-                fields.len(),
-            ));
-            return;
-        }
-        let sub_type = WasmSubType {
-            is_final: self.finality.is_final(),
-            supertype: self.supertype,
-            composite_type: WasmCompositeType {
-                shared: false,
-                inner: WasmCompositeInnerType::Struct(WasmStructType { fields }),
-            },
-        };
-        self.rec.members[index] = Some(sub_type);
+    /// Commit this struct definition and return the [`RecGroupBuilder`] so that
+    /// further types can be defined.
+    ///
+    /// Fields are written to the group as they are added, so this currently only
+    /// serves to mark the end of the definition.
+    pub fn build(&mut self) -> &mut RecGroupBuilder {
+        &mut *self.rec
     }
 }
 
 /// Builder for a struct field that forward-references another type in the same
 /// rec group. Created by [`StructTypeBuilder::forward_ref_field`].
 ///
-/// Configure the reference, then call [`finish`][Self::finish] to commit the
-/// field and return to the struct builder.
+/// The field is already part of the struct; this builder tweaks it in place.
+/// Call [`build`][Self::build] to return to the struct builder.
 pub struct ForwardRefFieldBuilder<'p, 'a> {
     parent: &'p mut StructTypeBuilder<'a>,
     target: PendingType,
+    field_index: usize,
     mutability: Mutability,
     nullable: bool,
 }
@@ -437,27 +430,33 @@ impl<'p, 'a> ForwardRefFieldBuilder<'p, 'a> {
     /// Set the field's mutability. Defaults to [`Mutability::Const`].
     pub fn mutability(mut self, mutability: Mutability) -> Self {
         self.mutability = mutability;
+        self.update();
         self
     }
 
     /// Set whether the reference is nullable. Defaults to `true`.
     pub fn nullable(mut self, is_nullable: bool) -> Self {
         self.nullable = is_nullable;
+        self.update();
         self
     }
 
-    /// Commit this field and return to the struct builder.
-    pub fn finish(self) -> &'p mut StructTypeBuilder<'a> {
-        let ForwardRefFieldBuilder {
-            parent,
-            target,
-            mutability,
-            nullable,
-        } = self;
-        parent
-            .fields
-            .push(forward_field(target, nullable, mutability.is_var()));
-        parent
+    fn update(&mut self) {
+        let field = forward_field(
+            &self.parent.rec.members,
+            self.target.index,
+            self.nullable,
+            self.mutability.is_var(),
+        );
+        self.parent.struct_mut().fields[self.field_index] = field;
+    }
+
+    /// Return to the struct builder.
+    ///
+    /// The field is written as it is configured, so this only returns control to
+    /// the struct builder and never loses anything.
+    pub fn build(self) -> &'p mut StructTypeBuilder<'a> {
+        self.parent
     }
 }
 
@@ -466,19 +465,23 @@ impl<'p, 'a> ForwardRefFieldBuilder<'p, 'a> {
 /// Returned by [`RecGroupBuilder::define_array`]. An array has exactly one
 /// element type, which must be set via [`element`][Self::element] or
 /// [`forward_ref_element`][Self::forward_ref_element]. Call
-/// [`finish`][Self::finish] to commit the type to the group.
+/// [`build`][Self::build] to commit the type to the group.
 pub struct ArrayTypeBuilder<'a> {
     rec: &'a mut RecGroupBuilder,
     index: u32,
-    finality: Finality,
-    supertype: Option<EngineOrModuleTypeIndex>,
-    element: Option<WasmFieldType>,
 }
 
 impl<'a> ArrayTypeBuilder<'a> {
+    fn set_element(&mut self, field: WasmFieldType) {
+        match &mut self.rec.members[self.index as usize].composite_type.inner {
+            WasmCompositeInnerType::Array(a) => a.0 = field,
+            _ => unreachable!("array builder on a non-array member"),
+        }
+    }
+
     /// Set this array type's finality. Defaults to [`Finality::Final`].
     pub fn finality(&mut self, finality: Finality) -> &mut Self {
-        self.finality = finality;
+        self.rec.members[self.index as usize].is_final = finality.is_final();
         self
     }
 
@@ -486,7 +489,8 @@ impl<'a> ArrayTypeBuilder<'a> {
     pub fn supertype(&mut self, supertype: ArrayType) -> &mut Self {
         let same = supertype.comes_from_same_engine(&self.rec.engine);
         self.rec.check_engine(same, "supertype");
-        self.supertype = Some(EngineOrModuleTypeIndex::Engine(supertype.type_index()));
+        self.rec.members[self.index as usize].supertype =
+            Some(EngineOrModuleTypeIndex::Engine(supertype.type_index()));
         self
     }
 
@@ -495,7 +499,7 @@ impl<'a> ArrayTypeBuilder<'a> {
     #[track_caller]
     pub fn forward_supertype(&mut self, supertype: PendingType) -> &mut Self {
         self.rec.check_owns(supertype);
-        self.supertype = Some(module_index(supertype.index));
+        self.rec.members[self.index as usize].supertype = Some(module_index(supertype.index));
         self
     }
 
@@ -503,19 +507,22 @@ impl<'a> ArrayTypeBuilder<'a> {
     pub fn element(&mut self, ty: FieldType) -> &mut Self {
         let same = ty.comes_from_same_engine(&self.rec.engine);
         self.rec.check_engine(same, "element type");
-        self.element = Some(ty.to_wasm_field_type());
+        let field = ty.to_wasm_field_type();
+        self.set_element(field);
         self
     }
 
     /// Set the array's element type to a reference to another type being defined
     /// in the same rec group.
     ///
-    /// Returns a builder for configuring the reference; call
-    /// [`finish`][ForwardRefElementBuilder::finish] to commit the element. The
-    /// element defaults to immutable and nullable.
+    /// The element is set immediately (immutable and nullable by default) and the
+    /// returned builder tweaks it in place, so nothing is lost if its
+    /// [`build`][ForwardRefElementBuilder::build] is never called.
     #[track_caller]
     pub fn forward_ref_element(&mut self, ty: PendingType) -> ForwardRefElementBuilder<'_, 'a> {
         self.rec.check_owns(ty);
+        let field = forward_field(&self.rec.members, ty.index, true, false);
+        self.set_element(field);
         ForwardRefElementBuilder {
             parent: self,
             target: ty,
@@ -524,32 +531,21 @@ impl<'a> ArrayTypeBuilder<'a> {
         }
     }
 
-    /// Commit this array definition to the rec group.
-    pub fn finish(&mut self) {
-        let index = self.index as usize;
-        let Some(element) = self.element else {
-            self.rec.record_error(format_err!(
-                "array type {index} was declared but its element type was never set"
-            ));
-            return;
-        };
-        let sub_type = WasmSubType {
-            is_final: self.finality.is_final(),
-            supertype: self.supertype,
-            composite_type: WasmCompositeType {
-                shared: false,
-                inner: WasmCompositeInnerType::Array(WasmArrayType(element)),
-            },
-        };
-        self.rec.members[index] = Some(sub_type);
+    /// Commit this array definition and return the [`RecGroupBuilder`] so that
+    /// further types can be defined.
+    ///
+    /// The element type is written to the group as it is set, so this currently
+    /// only serves to mark the end of the definition.
+    pub fn build(&mut self) -> &mut RecGroupBuilder {
+        &mut *self.rec
     }
 }
 
 /// Builder for an array element that forward-references another type in the same
 /// rec group. Created by [`ArrayTypeBuilder::forward_ref_element`].
 ///
-/// Configure the reference, then call [`finish`][Self::finish] to commit the
-/// element and return to the array builder.
+/// The element is already set on the array; this builder tweaks it in place.
+/// Call [`build`][Self::build] to return to the array builder.
 pub struct ForwardRefElementBuilder<'p, 'a> {
     parent: &'p mut ArrayTypeBuilder<'a>,
     target: PendingType,
@@ -561,45 +557,56 @@ impl<'p, 'a> ForwardRefElementBuilder<'p, 'a> {
     /// Set the element's mutability. Defaults to [`Mutability::Const`].
     pub fn mutability(mut self, mutability: Mutability) -> Self {
         self.mutability = mutability;
+        self.update();
         self
     }
 
     /// Set whether the reference is nullable. Defaults to `true`.
     pub fn nullable(mut self, is_nullable: bool) -> Self {
         self.nullable = is_nullable;
+        self.update();
         self
     }
 
-    /// Commit this element and return to the array builder.
-    pub fn finish(self) -> &'p mut ArrayTypeBuilder<'a> {
-        let ForwardRefElementBuilder {
-            parent,
-            target,
-            mutability,
-            nullable,
-        } = self;
-        parent.element = Some(forward_field(target, nullable, mutability.is_var()));
-        parent
+    fn update(&mut self) {
+        let field = forward_field(
+            &self.parent.rec.members,
+            self.target.index,
+            self.nullable,
+            self.mutability.is_var(),
+        );
+        self.parent.set_element(field);
+    }
+
+    /// Return to the array builder.
+    ///
+    /// The element is written as it is configured, so this only returns control
+    /// to the array builder and never loses anything.
+    pub fn build(self) -> &'p mut ArrayTypeBuilder<'a> {
+        self.parent
     }
 }
 
 /// Builder for a function type within a [`RecGroupBuilder`].
 ///
-/// Returned by [`RecGroupBuilder::define_func`]. Call [`finish`][Self::finish]
+/// Returned by [`RecGroupBuilder::define_func`]. Call [`build`][Self::build]
 /// to commit the type to the group.
 pub struct FuncTypeBuilder<'a> {
     rec: &'a mut RecGroupBuilder,
     index: u32,
-    finality: Finality,
-    supertype: Option<EngineOrModuleTypeIndex>,
-    params: Vec<WasmValType>,
-    results: Vec<WasmValType>,
 }
 
 impl<'a> FuncTypeBuilder<'a> {
+    fn func_mut(&mut self) -> &mut WasmFuncType {
+        match &mut self.rec.members[self.index as usize].composite_type.inner {
+            WasmCompositeInnerType::Func(f) => f,
+            _ => unreachable!("func builder on a non-func member"),
+        }
+    }
+
     /// Set this function type's finality. Defaults to [`Finality::Final`].
     pub fn finality(&mut self, finality: Finality) -> &mut Self {
-        self.finality = finality;
+        self.rec.members[self.index as usize].is_final = finality.is_final();
         self
     }
 
@@ -607,7 +614,8 @@ impl<'a> FuncTypeBuilder<'a> {
     pub fn supertype(&mut self, supertype: FuncType) -> &mut Self {
         let same = supertype.comes_from_same_engine(&self.rec.engine);
         self.rec.check_engine(same, "supertype");
-        self.supertype = Some(EngineOrModuleTypeIndex::Engine(supertype.type_index()));
+        self.rec.members[self.index as usize].supertype =
+            Some(EngineOrModuleTypeIndex::Engine(supertype.type_index()));
         self
     }
 
@@ -616,7 +624,7 @@ impl<'a> FuncTypeBuilder<'a> {
     #[track_caller]
     pub fn forward_supertype(&mut self, supertype: PendingType) -> &mut Self {
         self.rec.check_owns(supertype);
-        self.supertype = Some(module_index(supertype.index));
+        self.rec.members[self.index as usize].supertype = Some(module_index(supertype.index));
         self
     }
 
@@ -624,7 +632,8 @@ impl<'a> FuncTypeBuilder<'a> {
     pub fn param(&mut self, ty: ValType) -> &mut Self {
         let same = ty.comes_from_same_engine(&self.rec.engine);
         self.rec.check_engine(same, "type");
-        self.params.push(ty.to_wasm_type());
+        let val = ty.to_wasm_type();
+        self.func_mut().push_param(val);
         self
     }
 
@@ -632,22 +641,33 @@ impl<'a> FuncTypeBuilder<'a> {
     pub fn result(&mut self, ty: ValType) -> &mut Self {
         let same = ty.comes_from_same_engine(&self.rec.engine);
         self.rec.check_engine(same, "type");
-        self.results.push(ty.to_wasm_type());
+        let val = ty.to_wasm_type();
+        self.func_mut().push_result(val);
         self
     }
 
     /// Append a parameter that is a reference to another type being defined in
     /// the same rec group.
     ///
-    /// Returns a builder for configuring the reference; call
-    /// [`finish`][ForwardRefFuncValBuilder::finish] to commit it. Defaults to
-    /// nullable.
+    /// The parameter is added immediately (nullable by default) and the returned
+    /// builder tweaks it in place, so nothing is lost if its
+    /// [`build`][ForwardRefFuncValBuilder::build] is never called.
     #[track_caller]
     pub fn forward_ref_param(&mut self, ty: PendingType) -> ForwardRefFuncValBuilder<'_, 'a> {
         self.rec.check_owns(ty);
+        let val = WasmValType::Ref(WasmRefType {
+            nullable: true,
+            heap_type: forward_heap(&self.rec.members, ty.index),
+        });
+        let val_index = {
+            let func = self.func_mut();
+            func.push_param(val);
+            func.params().len() - 1
+        };
         ForwardRefFuncValBuilder {
             parent: self,
             target: ty,
+            val_index,
             nullable: true,
             is_result: false,
         }
@@ -656,41 +676,37 @@ impl<'a> FuncTypeBuilder<'a> {
     /// Append a result that is a reference to another type being defined in the
     /// same rec group.
     ///
-    /// Returns a builder for configuring the reference; call
-    /// [`finish`][ForwardRefFuncValBuilder::finish] to commit it. Defaults to
-    /// nullable.
+    /// The result is added immediately (nullable by default) and the returned
+    /// builder tweaks it in place, so nothing is lost if its
+    /// [`build`][ForwardRefFuncValBuilder::build] is never called.
     #[track_caller]
     pub fn forward_ref_result(&mut self, ty: PendingType) -> ForwardRefFuncValBuilder<'_, 'a> {
         self.rec.check_owns(ty);
+        let val = WasmValType::Ref(WasmRefType {
+            nullable: true,
+            heap_type: forward_heap(&self.rec.members, ty.index),
+        });
+        let val_index = {
+            let func = self.func_mut();
+            func.push_result(val);
+            func.results().len() - 1
+        };
         ForwardRefFuncValBuilder {
             parent: self,
             target: ty,
+            val_index,
             nullable: true,
             is_result: true,
         }
     }
 
-    /// Commit this function definition to the rec group.
-    pub fn finish(&mut self) {
-        let index = self.index as usize;
-        let params = core::mem::take(&mut self.params);
-        let results = core::mem::take(&mut self.results);
-        let func = match WasmFuncType::new(params, results) {
-            Ok(func) => func,
-            Err(e) => {
-                self.rec.record_error(e.into());
-                return;
-            }
-        };
-        let sub_type = WasmSubType {
-            is_final: self.finality.is_final(),
-            supertype: self.supertype,
-            composite_type: WasmCompositeType {
-                shared: false,
-                inner: WasmCompositeInnerType::Func(func),
-            },
-        };
-        self.rec.members[index] = Some(sub_type);
+    /// Commit this function definition and return the [`RecGroupBuilder`] so
+    /// that further types can be defined.
+    ///
+    /// Params and results are written to the group as they are added, so this
+    /// currently only serves to mark the end of the definition.
+    pub fn build(&mut self) -> &mut RecGroupBuilder {
+        &mut *self.rec
     }
 }
 
@@ -699,11 +715,12 @@ impl<'a> FuncTypeBuilder<'a> {
 /// [`FuncTypeBuilder::forward_ref_param`] and
 /// [`FuncTypeBuilder::forward_ref_result`].
 ///
-/// Configure the reference, then call [`finish`][Self::finish] to commit it and
-/// return to the function builder.
+/// The parameter/result is already part of the function; this builder tweaks it
+/// in place. Call [`build`][Self::build] to return to the function builder.
 pub struct ForwardRefFuncValBuilder<'p, 'a> {
     parent: &'p mut FuncTypeBuilder<'a>,
     target: PendingType,
+    val_index: usize,
     nullable: bool,
     is_result: bool,
 }
@@ -712,27 +729,30 @@ impl<'p, 'a> ForwardRefFuncValBuilder<'p, 'a> {
     /// Set whether the reference is nullable. Defaults to `true`.
     pub fn nullable(mut self, is_nullable: bool) -> Self {
         self.nullable = is_nullable;
+        self.update();
         self
     }
 
-    /// Commit this parameter/result and return to the function builder.
-    pub fn finish(self) -> &'p mut FuncTypeBuilder<'a> {
-        let ForwardRefFuncValBuilder {
-            parent,
-            target,
-            nullable,
-            is_result,
-        } = self;
+    fn update(&mut self) {
         let val = WasmValType::Ref(WasmRefType {
-            nullable,
-            heap_type: forward_heap(target),
+            nullable: self.nullable,
+            heap_type: forward_heap(&self.parent.rec.members, self.target.index),
         });
+        let (is_result, val_index) = (self.is_result, self.val_index);
+        let func = self.parent.func_mut();
         if is_result {
-            parent.results.push(val);
+            func.set_result(val_index, val);
         } else {
-            parent.params.push(val);
+            func.set_param(val_index, val);
         }
-        parent
+    }
+
+    /// Return to the function builder.
+    ///
+    /// The parameter/result is written as it is configured, so this only returns
+    /// control to the function builder and never loses anything.
+    pub fn build(self) -> &'p mut FuncTypeBuilder<'a> {
+        self.parent
     }
 }
 
@@ -822,23 +842,32 @@ impl RecGroup {
     }
 }
 
-/// The `WasmHeapType` for a forward reference to the `target` member, choosing
-/// the concrete variant based on the target's declared kind.
-fn forward_heap(target: PendingType) -> WasmHeapType {
-    match target.kind {
-        MemberKind::Struct => WasmHeapType::ConcreteStruct(module_index(target.index)),
-        MemberKind::Array => WasmHeapType::ConcreteArray(module_index(target.index)),
-        MemberKind::Func => WasmHeapType::ConcreteFunc(module_index(target.index)),
+/// The `WasmHeapType` for a forward reference to the member at `target`,
+/// choosing the concrete variant based on the target's declared kind.
+fn forward_heap(members: &[WasmSubType], target: u32) -> WasmHeapType {
+    let index = module_index(target);
+    match members[target as usize].composite_type.inner {
+        WasmCompositeInnerType::Struct(_) => WasmHeapType::ConcreteStruct(index),
+        WasmCompositeInnerType::Array(_) => WasmHeapType::ConcreteArray(index),
+        WasmCompositeInnerType::Func(_) => WasmHeapType::ConcreteFunc(index),
+        WasmCompositeInnerType::Cont(_) | WasmCompositeInnerType::Exn(_) => {
+            unreachable!("rec group builder never declares cont or exn types")
+        }
     }
 }
 
 /// The `WasmFieldType` for a struct field or array element that forward-references
-/// the `target` member.
-fn forward_field(target: PendingType, nullable: bool, mutable: bool) -> WasmFieldType {
+/// the member at `target`.
+fn forward_field(
+    members: &[WasmSubType],
+    target: u32,
+    nullable: bool,
+    mutable: bool,
+) -> WasmFieldType {
     WasmFieldType {
         element_type: WasmStorageType::Val(WasmValType::Ref(WasmRefType {
             nullable,
-            heap_type: forward_heap(target),
+            heap_type: forward_heap(members, target),
         })),
         mutable,
     }

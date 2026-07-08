@@ -729,8 +729,8 @@ fn rec_group_self_reference() -> Result<()> {
         .define_struct(node)
         .forward_ref_field(node)
         .nullable(true)
-        .finish()
-        .finish();
+        .build()
+        .build();
     let group = builder.build()?;
 
     assert_eq!(group.len(), 1);
@@ -754,14 +754,14 @@ fn rec_group_mutual_recursion() -> Result<()> {
         .forward_ref_field(s2)
         .mutability(Mutability::Var)
         .nullable(true)
-        .finish()
-        .finish();
+        .build()
+        .build();
     builder
         .define_struct(s2)
         .forward_ref_field(s1)
         .nullable(false)
-        .finish()
-        .finish();
+        .build()
+        .build();
     let group = builder.build()?;
 
     assert_eq!(group.len(), 2);
@@ -805,7 +805,7 @@ fn rec_group_mixed_concrete_and_local() -> Result<()> {
         .forward_ref_field(node)
         .mutability(Mutability::Var)
         .nullable(true)
-        .finish()
+        .build()
         // ref to an already-registered type
         .field(FieldType::new(
             Mutability::Const,
@@ -818,7 +818,7 @@ fn rec_group_mixed_concrete_and_local() -> Result<()> {
             Mutability::Var,
             StorageType::ValType(ValType::I64),
         ))
-        .finish();
+        .build();
     let group = builder.build()?;
     let node = group.get_struct(node).unwrap();
 
@@ -847,14 +847,14 @@ fn rec_group_dedup() -> Result<()> {
             .define_struct(s1)
             .forward_ref_field(s2)
             .nullable(true)
-            .finish()
-            .finish();
+            .build()
+            .build();
         builder
             .define_struct(s2)
             .forward_ref_field(s1)
             .nullable(false)
-            .finish()
-            .finish();
+            .build()
+            .build();
         Ok(builder.build()?.get_struct(s1).unwrap())
     };
 
@@ -878,24 +878,24 @@ fn rec_group_array_and_func_recursive() -> Result<()> {
         .define_struct(node)
         .forward_ref_field(arr)
         .mutability(Mutability::Var)
-        .finish()
+        .build()
         .forward_ref_field(func)
         .mutability(Mutability::Var)
-        .finish()
-        .finish();
+        .build()
+        .build();
     builder
         .define_array(arr)
         .forward_ref_element(node)
         .mutability(Mutability::Var)
-        .finish()
-        .finish();
+        .build()
+        .build();
     builder
         .define_func(func)
         .forward_ref_param(node)
-        .finish()
+        .build()
         .forward_ref_result(node)
-        .finish()
-        .finish();
+        .build()
+        .build();
 
     let group = builder.build()?;
     assert_eq!(group.len(), 3);
@@ -909,15 +909,39 @@ fn rec_group_array_and_func_recursive() -> Result<()> {
 }
 
 #[test]
-fn rec_group_declared_but_undefined_errors() {
+fn rec_group_forward_ref_without_build_is_kept() -> Result<()> {
+    // The `forward_ref_*` sub-builders commit in place, so forgetting to call
+    // `build` on them (and on the type builders) still keeps the configured
+    // field / parameter.
     let engine = Engine::default();
     let mut builder = RecGroupBuilder::new(&engine);
-    let _s = builder.declare_struct();
-    let err = builder.build().unwrap_err();
-    assert!(
-        err.to_string().contains("declared but never defined"),
-        "unexpected error: {err}"
-    );
+    let s = builder.declare_struct();
+    let f = builder.declare_func();
+
+    // No `.build()` on the field sub-builder nor the struct builder.
+    builder
+        .define_struct(s)
+        .forward_ref_field(f)
+        .mutability(Mutability::Var)
+        .nullable(false);
+    // No `.build()` on the result sub-builder nor the func builder.
+    builder.define_func(f).forward_ref_result(s).nullable(false);
+
+    let group = builder.build()?;
+
+    let s = group.get_struct(s).unwrap();
+    assert_eq!(s.fields().len(), 1);
+    let field = s.field(0).unwrap();
+    assert_eq!(field.mutability(), Mutability::Var);
+    match field.element_type() {
+        StorageType::ValType(ValType::Ref(r)) => assert!(!r.is_nullable()),
+        other => panic!("unexpected {other:?}"),
+    }
+
+    let f = group.get_func(f).unwrap();
+    assert_eq!(f.results().len(), 1);
+    assert!(!f.result(0).unwrap().unwrap_ref().is_nullable());
+    Ok(())
 }
 
 #[test]
@@ -932,19 +956,6 @@ fn rec_group_empty_ok() -> Result<()> {
 }
 
 #[test]
-fn rec_group_array_missing_element_errors() {
-    let engine = Engine::default();
-    let mut builder = RecGroupBuilder::new(&engine);
-    let a = builder.declare_array();
-    builder.define_array(a).finish();
-    let err = builder.build().unwrap_err();
-    assert!(
-        err.to_string().contains("element type was never set"),
-        "unexpected error: {err}"
-    );
-}
-
-#[test]
 fn rec_group_types_iter() -> Result<()> {
     let engine = Engine::default();
     let mut builder = RecGroupBuilder::new(&engine);
@@ -956,11 +967,11 @@ fn rec_group_types_iter() -> Result<()> {
             Mutability::Const,
             StorageType::ValType(ValType::I32),
         ))
-        .finish();
+        .build();
     builder
         .define_array(a)
         .element(FieldType::new(Mutability::Var, StorageType::I8))
-        .finish();
+        .build();
     let group = builder.build()?;
 
     let kinds: Vec<_> = group
@@ -990,7 +1001,7 @@ fn rec_group_subtyping_via_forward_supertype() -> Result<()> {
             Mutability::Const,
             StorageType::ValType(ValType::I32),
         ))
-        .finish();
+        .build();
     builder
         .define_struct(derived)
         .forward_supertype(base)
@@ -1003,7 +1014,7 @@ fn rec_group_subtyping_via_forward_supertype() -> Result<()> {
             Mutability::Const,
             StorageType::ValType(ValType::I64),
         ))
-        .finish();
+        .build();
     let group = builder.build()?;
 
     let base = group.get_struct(base).unwrap();
@@ -1037,7 +1048,7 @@ fn rec_group_subtyping_via_known_supertype() -> Result<()> {
             Mutability::Const,
             StorageType::ValType(ValType::I32),
         ))
-        .finish();
+        .build();
     let group = builder.build()?;
 
     assert!(group.get_struct(derived).unwrap().matches(&base));
@@ -1057,7 +1068,7 @@ fn rec_group_final_supertype_errors() {
             Mutability::Const,
             StorageType::ValType(ValType::I32),
         ))
-        .finish();
+        .build();
     builder
         .define_struct(derived)
         .forward_supertype(base)
@@ -1065,7 +1076,7 @@ fn rec_group_final_supertype_errors() {
             Mutability::Const,
             StorageType::ValType(ValType::I32),
         ))
-        .finish();
+        .build();
     let err = builder.build().unwrap_err();
     assert!(
         err.to_string().contains("final supertype"),
@@ -1087,7 +1098,7 @@ fn rec_group_supertype_mismatch_errors() {
             Mutability::Var,
             StorageType::ValType(ValType::I32),
         ))
-        .finish();
+        .build();
     builder
         .define_struct(derived)
         .forward_supertype(base)
@@ -1095,7 +1106,7 @@ fn rec_group_supertype_mismatch_errors() {
             // i64 != i32 -> mismatch
             FieldType::new(Mutability::Var, StorageType::ValType(ValType::I64)),
         )
-        .finish();
+        .build();
     let err = builder.build().unwrap_err();
     assert!(
         err.to_string().contains("must match their supertype"),
@@ -1114,7 +1125,7 @@ fn rec_group_wrong_kind_supertype_errors() {
         .define_array(base)
         .finality(Finality::NonFinal)
         .element(FieldType::new(Mutability::Const, StorageType::I8))
-        .finish();
+        .build();
     builder
         .define_struct(derived)
         .forward_supertype(base)
@@ -1122,7 +1133,7 @@ fn rec_group_wrong_kind_supertype_errors() {
             Mutability::Const,
             StorageType::ValType(ValType::I32),
         ))
-        .finish();
+        .build();
     let err = builder.build().unwrap_err();
     assert!(
         err.to_string().contains("supertype must be a struct"),
@@ -1142,7 +1153,7 @@ fn rec_group_nonfinal_root_without_supertype() -> Result<()> {
             Mutability::Const,
             StorageType::ValType(ValType::I32),
         ))
-        .finish();
+        .build();
     let group = builder.build()?;
     assert_eq!(
         group.get_struct(root).unwrap().finality(),
