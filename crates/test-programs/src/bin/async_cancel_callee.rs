@@ -181,14 +181,14 @@ unsafe extern "C" fn callback_yield_with_options_yield_times(
 
                 assert_eq!(result, STATUS_RETURN_CANCELLED);
 
+                waitable_join(*waitable, 0);
+
                 if params.mode == MODE_TRAP_CANCEL_HOST_AFTER_RETURN_CANCELLED {
                     // This should trap, since `waitable` has already been
                     // cancelled:
                     subtask_cancel(*waitable);
                     unreachable!()
                 }
-
-                waitable_join(*waitable, 0);
 
                 if params.mode != MODE_LEAK_TASK_AFTER_CANCEL {
                     subtask_drop(*waitable);
@@ -243,13 +243,14 @@ unsafe extern "C" fn callback_yield_with_options_yield_times(
                 assert_eq!(event1, *waitable);
                 assert_eq!(event2, STATUS_RETURNED);
 
+                waitable_join(*waitable, 0);
+
                 if params.mode == MODE_TRAP_CANCEL_HOST_AFTER_RETURN {
                     // This should trap, since `waitable` has already returned:
                     subtask_cancel(*waitable);
                     unreachable!()
                 }
 
-                waitable_join(*waitable, 0);
                 subtask_drop(*waitable);
                 waitable_set_drop(*set);
 
