@@ -4021,6 +4021,12 @@ impl PoolingAllocationConfig {
     /// aren't prepared to immediately flush them, and so we may go over this
     /// target size occasionally.
     ///
+    /// Note additionally that the queue of not-yet-decommitted entities is
+    /// sharded to reduce lock contention: one shard per available CPU, capped
+    /// at 16. Each shard batches up to this many decommits independently,
+    /// meaning that up to `min(available_parallelism, 16) * (batch_size - 1)`
+    /// decommits may be queued and not yet flushed at any given time.
+    ///
     /// A batch size of one effectively disables batching.
     ///
     /// Defaults to `1`.

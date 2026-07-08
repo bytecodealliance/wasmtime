@@ -263,15 +263,17 @@ impl MemoryPool {
             let allocator = ModuleAffinityIndexAllocator::new(
                 num_slots.try_into().unwrap(),
                 config.max_unused_warm_slots,
-            );
-            Stripe {
+            )?;
+            Ok(Stripe {
                 allocator,
                 pkey: pkeys.get(i).cloned(),
-            }
+            })
         };
 
         debug_assert!(layout.num_stripes > 0);
-        let stripes: Vec<_> = (0..layout.num_stripes).map(create_stripe).collect();
+        let stripes: Vec<_> = (0..layout.num_stripes)
+            .map(create_stripe)
+            .collect::<Result<_, OutOfMemory>>()?;
 
         let pool = Self {
             stripes,
@@ -478,13 +480,10 @@ impl MemoryPool {
         image: Option<MemoryImageSlot>,
         bytes_resident: usize,
     ) {
-        self.return_memory_image_slot(allocation_index, image);
-
-        let (stripe_index, striped_allocation_index) =
-            StripedAllocationIndex::from_unstriped_slot_index(allocation_index, self.stripes.len());
+        let (stripe_index, slot_id) = self.return_slot(allocation_index, image);
         self.stripes[stripe_index]
             .allocator
-            .free(SlotId(striped_allocation_index.0), bytes_resident);
+            .free(slot_id, bytes_resident);
     }
 
     /// Same as [`Self::deallocate`], but for many memories at once, returning
@@ -498,20 +497,33 @@ impl MemoryPool {
         &self,
         items: impl Iterator<Item = (MemoryAllocationIndex, Option<MemoryImageSlot>, usize)>,
     ) {
-        let mut per_stripe: Vec<Vec<(SlotId, usize)>> =
-            (0..self.stripes.len()).map(|_| Vec::new()).collect();
+        let mut per_stripe: smallvec::SmallVec<[smallvec::SmallVec<[(SlotId, usize); 8]>; 16]> = (0
+            ..self.stripes.len())
+            .map(|_| Default::default())
+            .collect();
         for (allocation_index, image, bytes_resident) in items {
-            self.return_memory_image_slot(allocation_index, image);
-            let (stripe_index, striped_allocation_index) =
-                StripedAllocationIndex::from_unstriped_slot_index(
-                    allocation_index,
-                    self.stripes.len(),
-                );
-            per_stripe[stripe_index].push((SlotId(striped_allocation_index.0), bytes_resident));
+            let (stripe_index, slot_id) = self.return_slot(allocation_index, image);
+            per_stripe[stripe_index].push((slot_id, bytes_resident));
         }
         for (stripe, items) in self.stripes.iter().zip(per_stripe) {
-            stripe.allocator.free_many(items);
+            if !items.is_empty() {
+                stripe.allocator.free_many(items);
+            }
         }
+    }
+
+    /// Return `allocation_index`'s image slot to the pool and translate the
+    /// index to its stripe and stripe-local slot id, on behalf of
+    /// [`Self::deallocate`] and [`Self::deallocate_many`].
+    fn return_slot(
+        &self,
+        allocation_index: MemoryAllocationIndex,
+        image: Option<MemoryImageSlot>,
+    ) -> (usize, SlotId) {
+        self.return_memory_image_slot(allocation_index, image);
+        let (stripe_index, striped_allocation_index) =
+            StripedAllocationIndex::from_unstriped_slot_index(allocation_index, self.stripes.len());
+        (stripe_index, SlotId(striped_allocation_index.0))
     }
 
     /// Purging everything related to `module`.

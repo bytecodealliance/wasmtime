@@ -79,7 +79,7 @@ impl GcHeapPool {
             "pooling allocator requires memory_may_move == gc_heap_may_move"
         );
 
-        let index_allocator = SimpleIndexAllocator::new(config.limits.total_gc_heaps);
+        let index_allocator = SimpleIndexAllocator::new(config.limits.total_gc_heaps)?;
         let max_gc_heaps = usize::try_from(config.limits.total_gc_heaps).unwrap();
 
         // Each individual GC heap in the pool is lazily allocated. See the

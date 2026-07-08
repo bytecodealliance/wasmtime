@@ -83,7 +83,7 @@ impl StackPool {
             async_stack_keep_resident: HostAlignedByteCount::new_rounded_up(
                 config.async_stack_keep_resident,
             )?,
-            index_allocator: SimpleIndexAllocator::new(config.limits.total_stacks),
+            index_allocator: SimpleIndexAllocator::new(config.limits.total_stacks)?,
         })
     }
 
@@ -208,25 +208,6 @@ impl StackPool {
         size_to_memset.byte_count()
     }
 
-    /// Deallocate a previously-allocated fiber.
-    ///
-    /// Note: production deallocation goes through [`Self::deallocate_many`]
-    /// via the decommit queue; this single-stack variant is only used by
-    /// tests.
-    ///
-    /// # Safety
-    ///
-    /// The fiber must have been allocated by this pool, must be in an allocated
-    /// state, and must never be used again.
-    ///
-    /// The caller must have already called `zero_stack` on the fiber stack and
-    /// flushed any enqueued decommits for this stack's memory.
-    #[cfg(test)]
-    pub unsafe fn deallocate(&self, stack: wasmtime_fiber::FiberStack, bytes_resident: usize) {
-        let index = self.stack_index(&stack);
-        self.index_allocator.free(SlotId(index), bytes_resident);
-    }
-
     /// Deallocate the previously-allocated fibers produced by `items`.
     ///
     /// # Safety
@@ -240,10 +221,10 @@ impl StackPool {
         &self,
         stacks: impl Iterator<Item = (wasmtime_fiber::FiberStack, usize)>,
     ) {
-        let items = stacks
-            .map(|(stack, bytes_resident)| (SlotId(self.stack_index(&stack)), bytes_resident))
-            .collect::<Vec<_>>();
-        self.index_allocator.free_many(items);
+        self.index_allocator.free_many(
+            stacks
+                .map(|(stack, bytes_resident)| (SlotId(self.stack_index(&stack)), bytes_resident)),
+        );
     }
 
     fn stack_index(&self, stack: &wasmtime_fiber::FiberStack) -> u32 {
@@ -326,10 +307,8 @@ mod tests {
 
         assert!(pool.allocate().is_err(), "allocation should fail");
 
-        for stack in stacks {
-            unsafe {
-                pool.deallocate(stack, 0);
-            }
+        unsafe {
+            pool.deallocate_many(stacks.into_iter().map(|stack| (stack, 0)));
         }
 
         assert_eq!(

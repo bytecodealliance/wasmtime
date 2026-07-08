@@ -118,20 +118,18 @@ pub(crate) fn default_shard_count() -> u32 {
 /// the sharded index allocators): assigned round-robin at first use per
 /// thread, cached in a thread-local.
 pub(crate) fn thread_shard(nshards: usize) -> ShardId {
-    use core::cell::Cell;
     static NEXT_SHARD: AtomicUsize = AtomicUsize::new(0);
     std::thread_local! {
-        static SHARD: Cell<usize> = const { Cell::new(usize::MAX) };
+        static SHARD: usize = NEXT_SHARD.fetch_add(1, Ordering::Relaxed);
     }
-    let assigned = SHARD.with(|s| {
-        let mut shard = s.get();
-        if shard == usize::MAX {
-            shard = NEXT_SHARD.fetch_add(1, Ordering::Relaxed);
-            s.set(shard);
-        }
-        shard
-    });
-    ShardId::from_index(assigned % nshards)
+    ShardId::from_index(SHARD.with(|s| *s) % nshards)
+}
+
+/// Enumerate all shard ids for a sharded structure with `nshards` shards,
+/// starting with the current thread's home shard and wrapping around.
+pub(crate) fn shard_ids_from_home(nshards: usize) -> impl Iterator<Item = ShardId> {
+    let home = thread_shard(nshards).index();
+    (0..nshards).map(move |i| ShardId::from_index((home + i) % nshards))
 }
 
 #[cfg(feature = "async")]
@@ -276,7 +274,7 @@ impl PoolingInstanceAllocator {
             live_core_instances: AtomicU64::new(0),
             decommit_queues: (0..default_shard_count())
                 .map(|_| CachePadded(Mutex::new(DecommitQueue::default())))
-                .collect(),
+                .try_collect::<Box<[_]>, OutOfMemory>()?,
             memories: MemoryPool::new(config, tunables)?,
             live_memories: AtomicUsize::new(0),
             tables: TablePool::new(config)?,
@@ -409,10 +407,8 @@ impl PoolingInstanceAllocator {
 
     /// Enumerate all decommit-queue shard ids, starting with the current
     /// thread's home shard.
-    fn decommit_shard_ids(&self) -> impl Iterator<Item = ShardId> + '_ {
-        let n = self.decommit_queues.len();
-        let home = thread_shard(n).index();
-        (0..n).map(move |i| ShardId::from_index((home + i) % n))
+    fn decommit_shard_ids(&self) -> impl Iterator<Item = ShardId> {
+        shard_ids_from_home(self.decommit_queues.len())
     }
 
     fn flush_decommit_queue(&self, mut locked_queue: MutexGuard<'_, DecommitQueue>) -> bool {
@@ -444,6 +440,10 @@ impl PoolingInstanceAllocator {
     /// and this avoids acquiring every shard's lock (at the cost of raising
     /// the chances that another thread steals the freshly-flushed slots
     /// before we get a chance to grab one, in which case we keep flushing).
+    ///
+    /// Note that [`Self::flush_decommit_queue`] takes the shard's queue out
+    /// of its mutex and drops the lock immediately, so no queue lock is held
+    /// while decommitting or while `f` runs.
     #[cfg(feature = "async")]
     fn with_flush_and_retry<T>(&self, mut f: impl FnMut() -> Result<T>) -> Result<T> {
         let mut result = f();

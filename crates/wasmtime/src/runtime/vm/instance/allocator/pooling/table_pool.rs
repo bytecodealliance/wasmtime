@@ -48,7 +48,7 @@ impl TablePool {
         let keep_resident = HostAlignedByteCount::new_rounded_up(config.table_keep_resident)?;
 
         Ok(Self {
-            index_allocator: SimpleIndexAllocator::new(config.limits.total_tables),
+            index_allocator: SimpleIndexAllocator::new(config.limits.total_tables)?,
             mapping,
             table_size,
             max_total_tables,
@@ -200,14 +200,12 @@ impl TablePool {
         &self,
         items: impl Iterator<Item = (TableAllocationIndex, Table, usize)>,
     ) {
-        let items = items
-            .map(|(allocation_index, table, bytes_resident)| {
+        self.index_allocator
+            .free_many(items.map(|(allocation_index, table, bytes_resident)| {
                 assert!(table.is_static());
                 drop(table);
                 (SlotId(allocation_index.0), bytes_resident)
-            })
-            .collect::<Vec<_>>();
-        self.index_allocator.free_many(items);
+            }));
     }
 
     /// Reset the given table's memory to zero.
