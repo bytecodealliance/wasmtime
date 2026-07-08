@@ -1,7 +1,6 @@
 ;;! component_model_async = true
 ;;! component_model_more_async_builtins = true
 ;;! reference_types = true
-;;! gc_types = true
 
 ;; This test calls sync stream.write in $C.get and sync stream.read in $C.set.
 ;; Both of these calls block because $C is first to the rendezvous. But since

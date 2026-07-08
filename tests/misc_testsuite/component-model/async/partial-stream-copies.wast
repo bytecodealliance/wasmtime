@@ -1,7 +1,6 @@
 ;;! component_model_async = true
 ;;! reference_types = true
 ;;! multi_memory = true
-;;! gc_types = true
 
 ;; This test has two components $C and $D, where $D imports and calls $C.transform
 ;;  $C.transform takes and returns a stream<u8>

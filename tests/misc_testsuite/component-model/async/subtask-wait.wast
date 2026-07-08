@@ -1,6 +1,5 @@
 ;;! component_model_async = true
 ;;! reference_types = true
-;;! gc_types = true
 
 ;; This test previously caused Wasmtime to panic while handling a trap due to an
 ;; improperly disposed fiber.  That bug is fixed now, and this test helps ensure

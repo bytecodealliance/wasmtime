@@ -1,6 +1,5 @@
 ;;! component_model_async = true
 ;;! reference_types = true
-;;! gc_types = true
 ;;! multi_memory = true
 
 (component
@@ -39,11 +38,11 @@
     (import "child" (instance $child
       (export "run" (func async))
     ))
-             
+
     (core func $child-run (canon lower (func $child "run")))
     (core module $m
       (import "" "child-run" (func $child-run))
-  
+
       (func (export "run")
         (call $child-run))
     )
@@ -52,7 +51,7 @@
         (export "child-run" (func $child-run))
       ))
     ))
-  
+
     (func (export "run") async
       (canon lift (core func $i "run")))
   )

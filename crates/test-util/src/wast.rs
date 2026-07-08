@@ -410,7 +410,6 @@ impl Compiler {
                     || config.legacy_exceptions()
                     || config.stack_switching()
                     || config.legacy_exceptions()
-                    || config.component_model_async()
                 {
                     return true;
                 }
