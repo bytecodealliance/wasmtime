@@ -414,9 +414,7 @@ impl<'a> StructTypeBuilder<'a> {
             supertype: self.supertype,
             composite_type: WasmCompositeType {
                 shared: false,
-                inner: WasmCompositeInnerType::Struct(WasmStructType {
-                    fields: fields.into(),
-                }),
+                inner: WasmCompositeInnerType::Struct(WasmStructType { fields }),
             },
         };
         self.rec.members[index] = Some(sub_type);

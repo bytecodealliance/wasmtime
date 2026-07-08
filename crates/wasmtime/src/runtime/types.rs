@@ -1941,7 +1941,9 @@ impl StructType {
             finality.is_final(),
             false,
             supertype.map(|ty| ty.type_index().into()),
-            WasmStructType { fields },
+            WasmStructType {
+                fields: fields.into(),
+            },
         )
     }
 
