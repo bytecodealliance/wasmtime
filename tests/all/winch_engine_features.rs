@@ -1,7 +1,3 @@
-// Skip entirely on unsupported architectures as different error messages will
-// be reported.
-#![cfg(target_arch = "x86_64")]
-
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
