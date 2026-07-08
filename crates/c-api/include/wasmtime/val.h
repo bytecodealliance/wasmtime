@@ -343,6 +343,20 @@ typedef union wasmtime_val_raw {
   void *funcref;
 } wasmtime_val_raw_t;
 
+/**
+ * Portable ABI alignment operator.
+ *
+ * Uses `alignof` (C11/C++11) which returns the ABI alignment, unlike
+ * the GCC extension `__alignof` which returns the preferred alignment.
+ * Falls back to `__alignof` on MSVC which does not support `alignof`
+ * in C mode. Undef'd after use.
+ */
+#if defined(__cplusplus) || !defined(_MSC_VER)
+#define WASMTIME_ALIGNOF(t) alignof(t)
+#else
+#define WASMTIME_ALIGNOF(t) __alignof(t)
+#endif
+
 // Assert that the shape of this type is as expected since it needs to match
 // Rust.
 static inline void __wasmtime_val_assertions() {
@@ -350,12 +364,16 @@ static inline void __wasmtime_val_assertions() {
                     sizeof(wasmtime_valunion_t) <= 24,
                 "should be 16 bytes plus a pointer large (plus alignment on "
                 "some platforms)");
-  static_assert(__alignof(wasmtime_valunion_t) == __alignof(uint64_t),
+  static_assert(WASMTIME_ALIGNOF(wasmtime_valunion_t) ==
+                    WASMTIME_ALIGNOF(uint64_t),
                 "should be aligned to u64");
   static_assert(sizeof(wasmtime_val_raw_t) == 16, "should be 16 bytes large");
-  static_assert(__alignof(wasmtime_val_raw_t) == __alignof(uint64_t),
+  static_assert(WASMTIME_ALIGNOF(wasmtime_val_raw_t) ==
+                    WASMTIME_ALIGNOF(uint64_t),
                 "should be aligned to u64");
 }
+
+#undef WASMTIME_ALIGNOF
 
 /**
  * \typedef wasmtime_val_t
