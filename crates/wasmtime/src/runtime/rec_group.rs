@@ -51,9 +51,6 @@ use wasmtime_environ::{
     WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
 };
 
-/// Maximum number of fields in a struct, mirroring `StructType::from_wasm_struct_type`.
-const MAX_FIELDS: usize = 10_000;
-
 /// A process-global counter used to give each [`RecGroupBuilder`] a distinct id
 /// so that handles from one builder cannot be accidentally used with another.
 static NEXT_BUILDER_ID: AtomicUsize = AtomicUsize::new(0);
@@ -303,10 +300,11 @@ impl RecGroupBuilder {
         for (i, member) in members.iter().enumerate() {
             if let WasmCompositeInnerType::Struct(s) = &member.composite_type.inner {
                 ensure!(
-                    s.fields.len() <= MAX_FIELDS,
+                    s.fields.len() <= StructType::MAX_FIELDS,
                     "attempted to define struct type {i} with {} fields, but that is more than \
-                     the maximum supported number of fields ({MAX_FIELDS})",
+                     the maximum supported number of fields ({})",
                     s.fields.len(),
+                    StructType::MAX_FIELDS,
                 );
             }
         }

@@ -1853,6 +1853,9 @@ impl fmt::Display for StructType {
 }
 
 impl StructType {
+    /// Maximum number of fields supported in a struct type.
+    pub(crate) const MAX_FIELDS: usize = 10_000;
+
     /// Construct a new `StructType` with the given field types.
     ///
     /// This `StructType` will be final and without a supertype.
@@ -2058,13 +2061,13 @@ impl StructType {
         supertype: Option<EngineOrModuleTypeIndex>,
         ty: WasmStructType,
     ) -> Result<StructType> {
-        const MAX_FIELDS: usize = 10_000;
         let fields_len = ty.fields.len();
         ensure!(
-            fields_len <= MAX_FIELDS,
+            fields_len <= Self::MAX_FIELDS,
             "attempted to define a struct type with {fields_len} fields, but \
              that is more than the maximum supported number of fields \
-             ({MAX_FIELDS})",
+             ({})",
+            Self::MAX_FIELDS,
         );
 
         let ty = RegisteredType::new(
