@@ -130,16 +130,27 @@
 (rule (lower (fence))
   (side_effect (dmb)))
 
-;;;; Atomics (32-bit) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Atomics (8/16/32-bit) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (atomic_rmw $I32 _flags op addr x))
-  (atomic_rmw_i32 op (put_in_reg addr) (put_in_reg x)))
-(rule (lower (atomic_cas $I32 _flags addr e x))
-  (atomic_cas_i32 (put_in_reg addr) (put_in_reg e) (put_in_reg x)))
-(rule (lower (atomic_load $I32 _flags addr))
-  (atomic_load_i32 (put_in_reg addr)))
-(rule (lower (atomic_store _flags src @ (value_type $I32) addr))
-  (atomic_store_i32 (put_in_reg src) (put_in_reg addr)))
+(rule (lower (atomic_rmw (fits_in_32 ty) _flags op addr x))
+  (atomic_rmw_size ty op (put_in_reg addr) (put_in_reg x)))
+(rule (lower (atomic_cas (fits_in_32 ty) _flags addr e x))
+  (atomic_cas_size ty (put_in_reg addr) (put_in_reg e) (put_in_reg x)))
+(rule (lower (atomic_load (fits_in_32 ty) _flags addr))
+  (atomic_load_size ty (put_in_reg addr)))
+(rule (lower (atomic_store _flags src @ (value_type (fits_in_32 ty)) addr))
+  (atomic_store_size ty (put_in_reg src) (put_in_reg addr)))
+
+;; 64-bit atomics use the paired exclusive instructions (priority 4 so `$I64`
+;; wins over the `fits_in_32` rules, which ISLE can't prove disjoint).
+(rule 4 (lower (atomic_rmw $I64 _flags op addr x))
+  (atomic_rmw_i64 op (put_in_reg addr) (put_in_regs x)))
+(rule 4 (lower (atomic_cas $I64 _flags addr e x))
+  (atomic_cas_i64 (put_in_reg addr) (put_in_regs e) (put_in_regs x)))
+(rule 4 (lower (atomic_load $I64 _flags addr))
+  (atomic_load_i64 (put_in_reg addr)))
+(rule 4 (lower (atomic_store _flags src @ (value_type $I64) addr))
+  (atomic_store_i64 (put_in_regs src) (put_in_reg addr)))
 
 ;;;; Floating point ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

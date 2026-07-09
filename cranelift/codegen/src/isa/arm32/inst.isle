@@ -133,6 +133,16 @@
     (Isb)
     (Clrex)))
 
+;; Access width for exclusive / acquire-release memory operations. `DWord`
+;; (64-bit) uses an even/odd register pair and is only valid on the paired
+;; exclusive instructions.
+(type AtomicSize
+  (enum
+    (Byte)
+    (Half)
+    (Word)
+    (DWord)))
+
 ;; The precision of a VFP floating-point operation.
 (type FpuSize
   (enum
@@ -297,28 +307,50 @@
     ;; Load/store multiple, increment-after (`ldmia`/`stmia rn{!}, {list}`).
     (LdmStm (load bool) (rn Reg) (writeback bool) (reg_list u32))
 
-    ;; Load-exclusive (`ldrex`) or load-acquire-exclusive (`ldaex`).
-    (LoadEx (acquire bool) (rt WritableReg) (rn Reg))
-    ;; Store-exclusive (`strex`) or store-release-exclusive (`stlex`); `rd`
-    ;; receives the success flag.
-    (StoreEx (acquire bool) (rd WritableReg) (rt Reg) (rn Reg))
-    ;; Load-acquire (`lda rt, [rn]`).
-    (LoadAcq (rt WritableReg) (rn Reg))
-    ;; Store-release (`stl rt, [rn]`).
-    (StoreRel (rt Reg) (rn Reg))
+    ;; Load-exclusive (`ldrex{b,h}`) or load-acquire-exclusive (`ldaex{b,h}`).
+    (LoadEx (acquire bool) (size AtomicSize) (rt WritableReg) (rn Reg))
+    ;; Store-exclusive (`strex{b,h}`) or store-release-exclusive
+    ;; (`stlex{b,h}`); `rd` receives the success flag.
+    (StoreEx (acquire bool) (size AtomicSize) (rd WritableReg) (rt Reg) (rn Reg))
+    ;; Load-acquire (`lda{b,h} rt, [rn]`).
+    (LoadAcq (size AtomicSize) (rt WritableReg) (rn Reg))
+    ;; Store-release (`stl{b,h} rt, [rn]`).
+    (StoreRel (size AtomicSize) (rt Reg) (rn Reg))
 
     ;; A memory barrier / clear-exclusive.
     (Barrier (op BarrierOp))
 
-    ;; An atomic read-modify-write loop over a 32-bit word:
-    ;;   loop: ldaex rd, [addr]; <op> tmp1, rd, operand;
-    ;;         stlex tmp2, tmp1, [addr]; cmp tmp2, #0; bne loop
-    ;; `rd` receives the old value.
-    (AtomicRmw (op AtomicRmwOp) (rd WritableReg) (addr Reg) (operand Reg)
-               (tmp1 WritableReg) (tmp2 WritableReg))
-    ;; An atomic compare-and-swap loop over a 32-bit word; `rd` receives the
-    ;; old value.
-    (AtomicCas (rd WritableReg) (addr Reg) (expected Reg) (new Reg) (tmp WritableReg))
+    ;; An atomic read-modify-write loop over a `size`-wide location:
+    ;;   loop: ldaex{,b,h} rd, [addr]; <op> tmp1, rd, operand;
+    ;;         stlex{,b,h} tmp2, tmp1, [addr]; cmp tmp2, #0; bne loop
+    ;; `rd` receives the (zero-extended) old value.
+    (AtomicRmw (op AtomicRmwOp) (size AtomicSize) (rd WritableReg) (addr Reg)
+               (operand Reg) (tmp1 WritableReg) (tmp2 WritableReg))
+    ;; An atomic compare-and-swap loop over a `size`-wide location; `rd`
+    ;; receives the (zero-extended) old value.
+    (AtomicCas (size AtomicSize) (rd WritableReg) (addr Reg) (expected Reg)
+               (new Reg) (tmp WritableReg))
+
+    ;; A 64-bit atomic read-modify-write loop using the paired exclusive
+    ;; instructions (`ldaexd`/`stlexd`). The old value is returned in
+    ;; (rd_lo, rd_hi). All registers are pinned to a fixed even/odd layout in
+    ;; the operand collector because A32 exclusive-pair instructions require
+    ;; consecutive even/odd register pairs, which regalloc2 cannot model.
+    (AtomicRmw64 (op AtomicRmwOp) (rd_lo WritableReg) (rd_hi WritableReg)
+                 (addr Reg) (operand_lo Reg) (operand_hi Reg)
+                 (tmp_new_lo WritableReg) (tmp_new_hi WritableReg)
+                 (tmp_res WritableReg))
+    ;; A 64-bit atomic compare-and-swap loop; the old value is in (rd_lo, rd_hi).
+    (AtomicCas64 (rd_lo WritableReg) (rd_hi WritableReg) (addr Reg)
+                 (expected_lo Reg) (expected_hi Reg) (new_lo Reg) (new_hi Reg)
+                 (tmp_res WritableReg))
+    ;; A 64-bit sequentially-consistent atomic load (`ldaexd` + `clrex`).
+    (AtomicLoad64 (rd_lo WritableReg) (rd_hi WritableReg) (addr Reg))
+    ;; A 64-bit sequentially-consistent atomic store via an `ldaexd`/`stlexd`
+    ;; retry loop; the loaded value is discarded into (scratch_lo, scratch_hi).
+    (AtomicStore64 (addr Reg) (src_lo Reg) (src_hi Reg)
+                   (scratch_lo WritableReg) (scratch_hi WritableReg)
+                   (tmp_res WritableReg))
 
     ;; A three-register VFP op (`vadd`/`vsub`/`vmul`/`vdiv`).
     (FpuRRR (op FpuOp3) (size FpuSize) (rd WritableReg) (rn Reg) (rm Reg))
@@ -550,33 +582,77 @@
 (rule (dmb)
   (SideEffectNoResult.Inst (MInst.Barrier (BarrierOp.Dmb))))
 
-;;;; Atomics (32-bit) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Atomics (8/16/32-bit) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl atomic_rmw_i32 (AtomicRmwOp Reg Reg) Reg)
-(rule (atomic_rmw_i32 op addr operand)
+;; Map a scalar integer type to the exclusive-access width.
+(decl atomic_size (Type) AtomicSize)
+(rule (atomic_size $I8) (AtomicSize.Byte))
+(rule (atomic_size $I16) (AtomicSize.Half))
+(rule (atomic_size $I32) (AtomicSize.Word))
+
+(decl atomic_rmw_size (Type AtomicRmwOp Reg Reg) Reg)
+(rule (atomic_rmw_size ty op addr operand)
   (let ((rd WritableReg (temp_writable_reg $I32))
         (tmp1 WritableReg (temp_writable_reg $I32))
         (tmp2 WritableReg (temp_writable_reg $I32))
-        (_ Unit (emit (MInst.AtomicRmw op rd addr operand tmp1 tmp2))))
+        (_ Unit (emit (MInst.AtomicRmw op (atomic_size ty) rd addr operand tmp1 tmp2))))
     rd))
 
-(decl atomic_cas_i32 (Reg Reg Reg) Reg)
-(rule (atomic_cas_i32 addr expected new)
+(decl atomic_cas_size (Type Reg Reg Reg) Reg)
+(rule (atomic_cas_size ty addr expected new)
   (let ((rd WritableReg (temp_writable_reg $I32))
         (tmp WritableReg (temp_writable_reg $I32))
-        (_ Unit (emit (MInst.AtomicCas rd addr expected new tmp))))
+        (_ Unit (emit (MInst.AtomicCas (atomic_size ty) rd addr expected new tmp))))
     rd))
 
 ;; Sequentially-consistent load/store via load-acquire / store-release.
-(decl atomic_load_i32 (Reg) Reg)
-(rule (atomic_load_i32 addr)
+(decl atomic_load_size (Type Reg) Reg)
+(rule (atomic_load_size ty addr)
   (let ((rd WritableReg (temp_writable_reg $I32))
-        (_ Unit (emit (MInst.LoadAcq rd addr))))
+        (_ Unit (emit (MInst.LoadAcq (atomic_size ty) rd addr))))
     rd))
 
-(decl atomic_store_i32 (Reg Reg) InstOutput)
-(rule (atomic_store_i32 src addr)
-  (side_effect (SideEffectNoResult.Inst (MInst.StoreRel src addr))))
+(decl atomic_store_size (Type Reg Reg) InstOutput)
+(rule (atomic_store_size ty src addr)
+  (side_effect (SideEffectNoResult.Inst (MInst.StoreRel (atomic_size ty) src addr))))
+
+;;;; Atomics (64-bit) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl atomic_rmw_i64 (AtomicRmwOp Reg ValueRegs) ValueRegs)
+(rule (atomic_rmw_i64 op addr operand)
+  (let ((rd_lo WritableReg (temp_writable_reg $I32))
+        (rd_hi WritableReg (temp_writable_reg $I32))
+        (nl WritableReg (temp_writable_reg $I32))
+        (nh WritableReg (temp_writable_reg $I32))
+        (res WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicRmw64 op rd_lo rd_hi addr
+                        (vr_lo operand) (vr_hi operand) nl nh res))))
+    (value_regs (writable_reg_to_reg rd_lo) (writable_reg_to_reg rd_hi))))
+
+(decl atomic_cas_i64 (Reg ValueRegs ValueRegs) ValueRegs)
+(rule (atomic_cas_i64 addr expected new)
+  (let ((rd_lo WritableReg (temp_writable_reg $I32))
+        (rd_hi WritableReg (temp_writable_reg $I32))
+        (res WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicCas64 rd_lo rd_hi addr
+                        (vr_lo expected) (vr_hi expected)
+                        (vr_lo new) (vr_hi new) res))))
+    (value_regs (writable_reg_to_reg rd_lo) (writable_reg_to_reg rd_hi))))
+
+(decl atomic_load_i64 (Reg) ValueRegs)
+(rule (atomic_load_i64 addr)
+  (let ((rd_lo WritableReg (temp_writable_reg $I32))
+        (rd_hi WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicLoad64 rd_lo rd_hi addr))))
+    (value_regs (writable_reg_to_reg rd_lo) (writable_reg_to_reg rd_hi))))
+
+(decl atomic_store_i64 (ValueRegs Reg) InstOutput)
+(rule (atomic_store_i64 src addr)
+  (let ((sl WritableReg (temp_writable_reg $I32))
+        (sh WritableReg (temp_writable_reg $I32))
+        (res WritableReg (temp_writable_reg $I32)))
+    (side_effect (SideEffectNoResult.Inst
+      (MInst.AtomicStore64 addr (vr_lo src) (vr_hi src) sl sh res)))))
 
 ;;;; Floating point ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

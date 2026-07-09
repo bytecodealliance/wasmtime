@@ -177,6 +177,7 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             expected,
             new,
             tmp,
+            ..
         } => {
             use_if_virtual(collector, addr);
             use_if_virtual(collector, expected);
@@ -186,6 +187,72 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                     collector.reg_early_def(d);
                 }
             }
+        }
+
+        // The 64-bit atomics pin every operand to a fixed even/odd register
+        // layout: r0/r1 (old value), r2/r3 (new/store value), r4 (addr),
+        // r5/r6 (operand/expected), r7 (store-exclusive result). A32's paired
+        // exclusive instructions require consecutive even/odd pairs, which
+        // regalloc2 cannot express, so the pairs must be fixed physical
+        // registers.
+        Inst::AtomicRmw64 {
+            rd_lo,
+            rd_hi,
+            addr,
+            operand_lo,
+            operand_hi,
+            tmp_new_lo,
+            tmp_new_hi,
+            tmp_res,
+            ..
+        } => {
+            collector.reg_fixed_use(addr, xreg(4));
+            collector.reg_fixed_use(operand_lo, xreg(5));
+            collector.reg_fixed_use(operand_hi, xreg(6));
+            collector.reg_fixed_def(rd_lo, xreg(0));
+            collector.reg_fixed_def(rd_hi, xreg(1));
+            collector.reg_fixed_def(tmp_new_lo, xreg(2));
+            collector.reg_fixed_def(tmp_new_hi, xreg(3));
+            collector.reg_fixed_def(tmp_res, xreg(7));
+        }
+        Inst::AtomicCas64 {
+            rd_lo,
+            rd_hi,
+            addr,
+            expected_lo,
+            expected_hi,
+            new_lo,
+            new_hi,
+            tmp_res,
+        } => {
+            collector.reg_fixed_use(addr, xreg(4));
+            collector.reg_fixed_use(expected_lo, xreg(5));
+            collector.reg_fixed_use(expected_hi, xreg(6));
+            collector.reg_fixed_use(new_lo, xreg(2));
+            collector.reg_fixed_use(new_hi, xreg(3));
+            collector.reg_fixed_def(rd_lo, xreg(0));
+            collector.reg_fixed_def(rd_hi, xreg(1));
+            collector.reg_fixed_def(tmp_res, xreg(7));
+        }
+        Inst::AtomicLoad64 { rd_lo, rd_hi, addr } => {
+            collector.reg_fixed_use(addr, xreg(4));
+            collector.reg_fixed_def(rd_lo, xreg(0));
+            collector.reg_fixed_def(rd_hi, xreg(1));
+        }
+        Inst::AtomicStore64 {
+            addr,
+            src_lo,
+            src_hi,
+            scratch_lo,
+            scratch_hi,
+            tmp_res,
+        } => {
+            collector.reg_fixed_use(addr, xreg(4));
+            collector.reg_fixed_use(src_lo, xreg(2));
+            collector.reg_fixed_use(src_hi, xreg(3));
+            collector.reg_fixed_def(scratch_lo, xreg(0));
+            collector.reg_fixed_def(scratch_hi, xreg(1));
+            collector.reg_fixed_def(tmp_res, xreg(7));
         }
 
         Inst::FpuRRR { rd, rn, rm, .. } => {
@@ -246,7 +313,7 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
         }
         Inst::LdmStm { rn, .. } => use_if_virtual(collector, rn),
-        Inst::LoadEx { rt, rn, .. } | Inst::LoadAcq { rt, rn } => {
+        Inst::LoadEx { rt, rn, .. } | Inst::LoadAcq { rt, rn, .. } => {
             use_if_virtual(collector, rn);
             def_if_virtual(collector, rt);
         }
@@ -255,7 +322,7 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             use_if_virtual(collector, rn);
             def_if_virtual(collector, rd);
         }
-        Inst::StoreRel { rt, rn } => {
+        Inst::StoreRel { rt, rn, .. } => {
             use_if_virtual(collector, rt);
             use_if_virtual(collector, rn);
         }
@@ -559,43 +626,20 @@ impl Inst {
             Inst::AluRRRFlags { op, rd, rn, rm } => {
                 alloc::format!("{}s {}, {}, {}", op.name(), r(rd.to_reg()), r(*rn), r(*rm))
             }
-            Inst::ShiftImm {
-                op,
-                rd,
-                rm,
-                amount,
-            } => {
+            Inst::ShiftImm { op, rd, rm, amount } => {
                 alloc::format!("{} {}, {}, #{}", op.name(), r(rd.to_reg()), r(*rm), amount)
             }
             Inst::ShiftReg { op, rd, rm, rs } => {
-                alloc::format!(
-                    "{} {}, {}, {}",
-                    op.name(),
-                    r(rd.to_reg()),
-                    r(*rm),
-                    r(*rs)
-                )
+                alloc::format!("{} {}, {}, {}", op.name(), r(rd.to_reg()), r(*rm), r(*rs))
             }
             Inst::Mul { rd, rn, rm } => {
                 alloc::format!("mul {}, {}, {}", r(rd.to_reg()), r(*rn), r(*rm))
             }
             Inst::Mla { rd, rn, rm, ra } => {
-                alloc::format!(
-                    "mla {}, {}, {}, {}",
-                    r(rd.to_reg()),
-                    r(*rn),
-                    r(*rm),
-                    r(*ra)
-                )
+                alloc::format!("mla {}, {}, {}, {}", r(rd.to_reg()), r(*rn), r(*rm), r(*ra))
             }
             Inst::Mls { rd, rn, rm, ra } => {
-                alloc::format!(
-                    "mls {}, {}, {}, {}",
-                    r(rd.to_reg()),
-                    r(*rn),
-                    r(*rm),
-                    r(*ra)
-                )
+                alloc::format!("mls {}, {}, {}, {}", r(rd.to_reg()), r(*rn), r(*rm), r(*ra))
             }
             Inst::Umull {
                 rd_lo,
@@ -745,53 +789,119 @@ impl Inst {
                     names.join(", ")
                 )
             }
-            Inst::LoadEx { acquire, rt, rn } => alloc::format!(
-                "{} {}, [{}]",
+            Inst::LoadEx {
+                acquire,
+                size,
+                rt,
+                rn,
+            } => alloc::format!(
+                "{}{} {}, [{}]",
                 if *acquire { "ldaex" } else { "ldrex" },
+                size.suffix(),
                 r(rt.to_reg()),
                 r(*rn)
             ),
             Inst::StoreEx {
                 acquire,
+                size,
                 rd,
                 rt,
                 rn,
             } => alloc::format!(
-                "{} {}, {}, [{}]",
+                "{}{} {}, {}, [{}]",
                 if *acquire { "stlex" } else { "strex" },
+                size.suffix(),
                 r(rd.to_reg()),
                 r(*rt),
                 r(*rn)
             ),
-            Inst::LoadAcq { rt, rn } => {
-                alloc::format!("lda {}, [{}]", r(rt.to_reg()), r(*rn))
+            Inst::LoadAcq { size, rt, rn } => {
+                alloc::format!("lda{} {}, [{}]", size.suffix(), r(rt.to_reg()), r(*rn))
             }
-            Inst::StoreRel { rt, rn } => alloc::format!("stl {}, [{}]", r(*rt), r(*rn)),
+            Inst::StoreRel { size, rt, rn } => {
+                alloc::format!("stl{} {}, [{}]", size.suffix(), r(*rt), r(*rn))
+            }
             Inst::Barrier { op } => op.name().to_string(),
             Inst::AtomicRmw {
                 op,
+                size,
                 rd,
                 addr,
                 operand,
                 ..
             } => alloc::format!(
-                "atomic_rmw.{op:?} {}, [{}], {}",
+                "atomic_rmw.{op:?}{} {}, [{}], {}",
+                size.suffix(),
                 r(rd.to_reg()),
                 r(*addr),
                 r(*operand)
             ),
             Inst::AtomicCas {
+                size,
                 rd,
                 addr,
                 expected,
                 new,
                 ..
             } => alloc::format!(
-                "atomic_cas {}, [{}], {}, {}",
+                "atomic_cas{} {}, [{}], {}, {}",
+                size.suffix(),
                 r(rd.to_reg()),
                 r(*addr),
                 r(*expected),
                 r(*new)
+            ),
+            Inst::AtomicRmw64 {
+                op,
+                rd_lo,
+                rd_hi,
+                addr,
+                operand_lo,
+                operand_hi,
+                ..
+            } => alloc::format!(
+                "atomic_rmw.{op:?}.i64 {}, {}, [{}], {}, {}",
+                r(rd_lo.to_reg()),
+                r(rd_hi.to_reg()),
+                r(*addr),
+                r(*operand_lo),
+                r(*operand_hi)
+            ),
+            Inst::AtomicCas64 {
+                rd_lo,
+                rd_hi,
+                addr,
+                expected_lo,
+                expected_hi,
+                new_lo,
+                new_hi,
+                ..
+            } => alloc::format!(
+                "atomic_cas.i64 {}, {}, [{}], {}, {}, {}, {}",
+                r(rd_lo.to_reg()),
+                r(rd_hi.to_reg()),
+                r(*addr),
+                r(*expected_lo),
+                r(*expected_hi),
+                r(*new_lo),
+                r(*new_hi)
+            ),
+            Inst::AtomicLoad64 { rd_lo, rd_hi, addr } => alloc::format!(
+                "atomic_load.i64 {}, {}, [{}]",
+                r(rd_lo.to_reg()),
+                r(rd_hi.to_reg()),
+                r(*addr)
+            ),
+            Inst::AtomicStore64 {
+                addr,
+                src_lo,
+                src_hi,
+                ..
+            } => alloc::format!(
+                "atomic_store.i64 {}, {}, [{}]",
+                r(*src_lo),
+                r(*src_hi),
+                r(*addr)
             ),
 
             Inst::FpuRRR {
@@ -831,13 +941,22 @@ impl Inst {
                 alloc::format!("vmov {}, {}", r(rt.to_reg()), r(*rm))
             }
             Inst::MovFromFpu64 { rt_lo, rt_hi, rm } => {
-                alloc::format!("vmov {}, {}, {}", r(rt_lo.to_reg()), r(rt_hi.to_reg()), r(*rm))
+                alloc::format!(
+                    "vmov {}, {}, {}",
+                    r(rt_lo.to_reg()),
+                    r(rt_hi.to_reg()),
+                    r(*rm)
+                )
             }
             Inst::VcmpMrs { size, rn, rm } => {
                 alloc::format!("vcmp.{} {}, {}; vmrs", size.suffix(), r(*rn), r(*rm))
             }
             Inst::VcvtFF { to_f64, rd, rm } => {
-                let (dst, src) = if *to_f64 { ("f64", "f32") } else { ("f32", "f64") };
+                let (dst, src) = if *to_f64 {
+                    ("f64", "f32")
+                } else {
+                    ("f32", "f64")
+                };
                 alloc::format!("vcvt.{dst}.{src} {}, {}", r(rd.to_reg()), r(*rm))
             }
             Inst::VcvtToInt {
@@ -870,7 +989,12 @@ impl Inst {
             }
             Inst::FpuCSel { cond, rd, rn, rm } => {
                 let rd = r(rd.to_reg());
-                alloc::format!("vmov {rd}, {}; vmov{} {rd}, {}", r(*rm), cond.name(), r(*rn))
+                alloc::format!(
+                    "vmov {rd}, {}; vmov{} {rd}, {}",
+                    r(*rm),
+                    cond.name(),
+                    r(*rn)
+                )
             }
             Inst::FpuMinMax {
                 max,

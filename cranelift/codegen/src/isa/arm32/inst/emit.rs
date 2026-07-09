@@ -173,7 +173,8 @@ fn enc_sp_adjust(amount: i32) -> u32 {
     } else {
         (ALUOp::Add, amount as u32)
     };
-    let imm12 = encode_rotated_imm(mag).expect("arm32 sp adjust not encodable as a single immediate");
+    let imm12 =
+        encode_rotated_imm(mag).expect("arm32 sp adjust not encodable as a single immediate");
     enc_dp_imm(op.opcode(), 0, 13, 13, imm12)
 }
 
@@ -365,26 +366,26 @@ fn enc_ldm_stm(load: bool, rn: u32, writeback: bool, reg_list: u32) -> u32 {
     COND_AL | base | wb | (rn << 16) | (reg_list & 0xffff)
 }
 
-/// `ldrex`/`ldaex rt, [rn]`.
-fn enc_load_ex(acquire: bool, rt: u32, rn: u32) -> u32 {
+/// `ldrex{b,h,d}`/`ldaex{b,h,d} rt, [rn]` (the size field selects the width).
+fn enc_load_ex(acquire: bool, size: AtomicSize, rt: u32, rn: u32) -> u32 {
     let base = if acquire { 0x0190_0e9f } else { 0x0190_0f9f };
-    COND_AL | base | (rn << 16) | (rt << 12)
+    COND_AL | base | size.enc_bits() | (rn << 16) | (rt << 12)
 }
 
-/// `strex`/`stlex rd, rt, [rn]`.
-fn enc_store_ex(acquire: bool, rd: u32, rt: u32, rn: u32) -> u32 {
+/// `strex{b,h,d}`/`stlex{b,h,d} rd, rt, [rn]`.
+fn enc_store_ex(acquire: bool, size: AtomicSize, rd: u32, rt: u32, rn: u32) -> u32 {
     let base = if acquire { 0x0180_0e90 } else { 0x0180_0f90 };
-    COND_AL | base | (rn << 16) | (rd << 12) | rt
+    COND_AL | base | size.enc_bits() | (rn << 16) | (rd << 12) | rt
 }
 
-/// `lda rt, [rn]`.
-fn enc_lda(rt: u32, rn: u32) -> u32 {
-    COND_AL | 0x0190_0c9f | (rn << 16) | (rt << 12)
+/// `lda{b,h} rt, [rn]`.
+fn enc_lda(size: AtomicSize, rt: u32, rn: u32) -> u32 {
+    COND_AL | 0x0190_0c9f | size.enc_bits() | (rn << 16) | (rt << 12)
 }
 
-/// `stl rt, [rn]`.
-fn enc_stl(rt: u32, rn: u32) -> u32 {
-    COND_AL | 0x0180_fc90 | (rn << 16) | rt
+/// `stl{b,h} rt, [rn]`.
+fn enc_stl(size: AtomicSize, rt: u32, rn: u32) -> u32 {
+    COND_AL | 0x0180_fc90 | size.enc_bits() | (rn << 16) | rt
 }
 
 /// The hardware encoding number (0-15) of a VFP register. An f32 uses the low
@@ -540,12 +541,7 @@ impl MachInstEmit for Inst {
                 let rm = machreg_to_gpr(*rm);
                 put_u32(sink, enc_dp_reg(op.opcode(), 1, rd, rn, rm));
             }
-            Inst::ShiftImm {
-                op,
-                rd,
-                rm,
-                amount,
-            } => {
+            Inst::ShiftImm { op, rd, rm, amount } => {
                 let rd = machreg_to_gpr(rd.to_reg());
                 let rm = machreg_to_gpr(*rm);
                 put_u32(sink, enc_shift_imm(*op, rd, rm, u32::from(*amount)));
@@ -761,13 +757,19 @@ impl MachInstEmit for Inst {
                 let rn = machreg_to_gpr(*rn);
                 put_u32(sink, enc_ldm_stm(*load, rn, *writeback, *reg_list));
             }
-            Inst::LoadEx { acquire, rt, rn } => {
+            Inst::LoadEx {
+                acquire,
+                size,
+                rt,
+                rn,
+            } => {
                 let rt = machreg_to_gpr(rt.to_reg());
                 let rn = machreg_to_gpr(*rn);
-                put_u32(sink, enc_load_ex(*acquire, rt, rn));
+                put_u32(sink, enc_load_ex(*acquire, *size, rt, rn));
             }
             Inst::StoreEx {
                 acquire,
+                size,
                 rd,
                 rt,
                 rn,
@@ -775,21 +777,22 @@ impl MachInstEmit for Inst {
                 let rd = machreg_to_gpr(rd.to_reg());
                 let rt = machreg_to_gpr(*rt);
                 let rn = machreg_to_gpr(*rn);
-                put_u32(sink, enc_store_ex(*acquire, rd, rt, rn));
+                put_u32(sink, enc_store_ex(*acquire, *size, rd, rt, rn));
             }
-            Inst::LoadAcq { rt, rn } => {
+            Inst::LoadAcq { size, rt, rn } => {
                 let rt = machreg_to_gpr(rt.to_reg());
                 let rn = machreg_to_gpr(*rn);
-                put_u32(sink, enc_lda(rt, rn));
+                put_u32(sink, enc_lda(*size, rt, rn));
             }
-            Inst::StoreRel { rt, rn } => {
+            Inst::StoreRel { size, rt, rn } => {
                 let rt = machreg_to_gpr(*rt);
                 let rn = machreg_to_gpr(*rn);
-                put_u32(sink, enc_stl(rt, rn));
+                put_u32(sink, enc_stl(*size, rt, rn));
             }
             Inst::Barrier { op } => put_u32(sink, op.encoding()),
             Inst::AtomicRmw {
                 op,
+                size,
                 rd,
                 addr,
                 operand,
@@ -799,6 +802,7 @@ impl MachInstEmit for Inst {
                 sink,
                 state,
                 *op,
+                *size,
                 machreg_to_gpr(rd.to_reg()),
                 machreg_to_gpr(*addr),
                 machreg_to_gpr(*operand),
@@ -806,6 +810,7 @@ impl MachInstEmit for Inst {
                 machreg_to_gpr(tmp2.to_reg()),
             ),
             Inst::AtomicCas {
+                size,
                 rd,
                 addr,
                 expected,
@@ -814,11 +819,81 @@ impl MachInstEmit for Inst {
             } => emit_atomic_cas(
                 sink,
                 state,
+                *size,
                 machreg_to_gpr(rd.to_reg()),
                 machreg_to_gpr(*addr),
                 machreg_to_gpr(*expected),
                 machreg_to_gpr(*new),
                 machreg_to_gpr(tmp.to_reg()),
+            ),
+            Inst::AtomicRmw64 {
+                op,
+                rd_lo,
+                rd_hi,
+                addr,
+                operand_lo,
+                operand_hi,
+                tmp_new_lo,
+                tmp_new_hi,
+                tmp_res,
+            } => emit_atomic_rmw64(
+                sink,
+                state,
+                *op,
+                machreg_to_gpr(rd_lo.to_reg()),
+                machreg_to_gpr(rd_hi.to_reg()),
+                machreg_to_gpr(*addr),
+                machreg_to_gpr(*operand_lo),
+                machreg_to_gpr(*operand_hi),
+                machreg_to_gpr(tmp_new_lo.to_reg()),
+                machreg_to_gpr(tmp_new_hi.to_reg()),
+                machreg_to_gpr(tmp_res.to_reg()),
+            ),
+            Inst::AtomicCas64 {
+                rd_lo,
+                rd_hi,
+                addr,
+                expected_lo,
+                expected_hi,
+                new_lo,
+                new_hi,
+                tmp_res,
+            } => emit_atomic_cas64(
+                sink,
+                state,
+                machreg_to_gpr(rd_lo.to_reg()),
+                machreg_to_gpr(rd_hi.to_reg()),
+                machreg_to_gpr(*addr),
+                machreg_to_gpr(*expected_lo),
+                machreg_to_gpr(*expected_hi),
+                machreg_to_gpr(*new_lo),
+                machreg_to_gpr(*new_hi),
+                machreg_to_gpr(tmp_res.to_reg()),
+            ),
+            Inst::AtomicLoad64 { rd_lo, rd_hi, addr } => {
+                let rd_lo = machreg_to_gpr(rd_lo.to_reg());
+                debug_assert_eq!(machreg_to_gpr(rd_hi.to_reg()), rd_lo + 1);
+                let addr = machreg_to_gpr(*addr);
+                // ldaexd rd_lo, rd_hi, [addr]; clrex
+                put_u32(sink, enc_load_ex(true, AtomicSize::DWord, rd_lo, addr));
+                put_u32(sink, BarrierOp::Clrex.encoding());
+            }
+            Inst::AtomicStore64 {
+                addr,
+                src_lo,
+                src_hi,
+                scratch_lo,
+                scratch_hi,
+                tmp_res,
+            } => emit_atomic_store64(
+                sink,
+                state,
+                machreg_to_gpr(*addr),
+                machreg_to_gpr(*src_lo),
+                machreg_to_gpr(*src_hi),
+                machreg_to_gpr(scratch_lo.to_reg()),
+                machreg_to_gpr(scratch_hi.to_reg()),
+                machreg_to_gpr(tmp_res.to_reg()),
             ),
 
             Inst::FpuRRR {
@@ -1036,6 +1111,9 @@ impl MachInstEmit for Inst {
                 | Inst::CallInd { .. }
                 | Inst::AtomicRmw { .. }
                 | Inst::AtomicCas { .. }
+                | Inst::AtomicRmw64 { .. }
+                | Inst::AtomicCas64 { .. }
+                | Inst::AtomicStore64 { .. }
                 | Inst::LoadExtName { .. }
         );
         let end = sink.cur_offset();
@@ -1062,10 +1140,16 @@ fn resolve_fpu_amode(mem: &AMode, state: &EmitState) -> (u32, i32) {
 }
 
 /// Emit the LDAEX/op/STLEX retry loop for an atomic read-modify-write.
+///
+/// The load zero-extends a sub-word value into `rd`; the store truncates. For
+/// add/sub/and/or/xor/nand/xchg the low byte/halfword of the arithmetic is
+/// correct regardless of the operand's upper bits, so no extension is needed.
+/// The min/max comparisons do extend both inputs to the access width.
 fn emit_atomic_rmw(
     sink: &mut MachBuffer<Inst>,
     state: &mut EmitState,
     op: AtomicRmwOp,
+    size: AtomicSize,
     rd: u32,
     addr: u32,
     operand: u32,
@@ -1074,7 +1158,7 @@ fn emit_atomic_rmw(
 ) {
     let loop_lbl = sink.get_label();
     sink.bind_label(loop_lbl, state.ctrl_plane_mut());
-    put_u32(sink, enc_load_ex(true, rd, addr)); // ldaex rd, [addr]
+    put_u32(sink, enc_load_ex(true, size, rd, addr)); // ldaex{,b,h} rd, [addr]
 
     // Compute the new value into tmp1.
     let alu = |sink: &mut MachBuffer<Inst>, op: ALUOp| {
@@ -1094,20 +1178,32 @@ fn emit_atomic_rmw(
             put_u32(sink, enc_dp_reg(0b1101, 0, tmp1, 0, operand)); // mov tmp1, operand
         }
         AtomicRmwOp::Umin | AtomicRmwOp::Umax | AtomicRmwOp::Smin | AtomicRmwOp::Smax => {
+            let signed = matches!(op, AtomicRmwOp::Smin | AtomicRmwOp::Smax);
             let cond = match op {
                 AtomicRmwOp::Umin => Cond::Lo,
                 AtomicRmwOp::Umax => Cond::Hi,
                 AtomicRmwOp::Smin => Cond::Lt,
                 _ => Cond::Gt,
             };
-            // tmp1 = operand; cmp rd, operand; tmp1 = rd if `cond`.
-            put_u32(sink, enc_dp_reg(0b1101, 0, tmp1, 0, operand));
-            put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, rd, operand));
-            put_u32(sink, enc_mov_cond(cond, tmp1, rd));
+            if size.is_subword() {
+                // Extend both inputs to 32 bits so the comparison is correct,
+                // using tmp1/tmp2 as scratch before selecting the result.
+                let ext = size.extend_op(signed).template();
+                put_u32(sink, enc_op_rd_rm(ext, tmp1, rd)); // ext tmp1, rd
+                put_u32(sink, enc_op_rd_rm(ext, tmp2, operand)); // ext tmp2, operand
+                put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, tmp1, tmp2));
+                put_u32(sink, enc_dp_reg(0b1101, 0, tmp1, 0, operand)); // mov tmp1, operand
+                put_u32(sink, enc_mov_cond(cond, tmp1, rd)); // tmp1 = rd if cond
+            } else {
+                // tmp1 = operand; cmp rd, operand; tmp1 = rd if `cond`.
+                put_u32(sink, enc_dp_reg(0b1101, 0, tmp1, 0, operand));
+                put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, rd, operand));
+                put_u32(sink, enc_mov_cond(cond, tmp1, rd));
+            }
         }
     }
 
-    put_u32(sink, enc_store_ex(true, tmp2, tmp1, addr)); // stlex tmp2, tmp1, [addr]
+    put_u32(sink, enc_store_ex(true, size, tmp2, tmp1, addr)); // stlex{,b,h} tmp2, tmp1, [addr]
     put_u32(sink, enc_dp_imm(CmpOp::Cmp.opcode(), 1, 0, tmp2, 0)); // cmp tmp2, #0
     sink.use_label_at_offset(sink.cur_offset(), loop_lbl, LabelUse::Branch26);
     put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne loop
@@ -1117,6 +1213,7 @@ fn emit_atomic_rmw(
 fn emit_atomic_cas(
     sink: &mut MachBuffer<Inst>,
     state: &mut EmitState,
+    size: AtomicSize,
     rd: u32,
     addr: u32,
     expected: u32,
@@ -1126,15 +1223,173 @@ fn emit_atomic_cas(
     let loop_lbl = sink.get_label();
     let done_lbl = sink.get_label();
     sink.bind_label(loop_lbl, state.ctrl_plane_mut());
-    put_u32(sink, enc_load_ex(true, rd, addr)); // ldaex rd, [addr]
-    put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, rd, expected)); // cmp rd, expected
+    put_u32(sink, enc_load_ex(true, size, rd, addr)); // ldaex{,b,h} rd, [addr]
+    // `rd` is zero-extended; compare it against a zero-extended `expected` so
+    // only the accessed byte/halfword participates.
+    if size.is_subword() {
+        let ext = size.extend_op(false).template();
+        put_u32(sink, enc_op_rd_rm(ext, tmp, expected)); // uxt tmp, expected
+        put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, rd, tmp)); // cmp rd, tmp
+    } else {
+        put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, rd, expected)); // cmp rd, expected
+    }
     sink.use_label_at_offset(sink.cur_offset(), done_lbl, LabelUse::Branch26);
     put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne done
-    put_u32(sink, enc_store_ex(true, tmp, new, addr)); // stlex tmp, new, [addr]
+    put_u32(sink, enc_store_ex(true, size, tmp, new, addr)); // stlex{,b,h} tmp, new, [addr]
     put_u32(sink, enc_dp_imm(CmpOp::Cmp.opcode(), 1, 0, tmp, 0)); // cmp tmp, #0
     sink.use_label_at_offset(sink.cur_offset(), loop_lbl, LabelUse::Branch26);
     put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne loop
     sink.bind_label(done_lbl, state.ctrl_plane_mut());
+}
+
+/// Emit the LDAEXD/op/STLEXD retry loop for a 64-bit atomic read-modify-write.
+/// The old value is loaded into (rd_lo, rd_hi) and the new value computed into
+/// (nl, nh) before the paired store-exclusive.
+fn emit_atomic_rmw64(
+    sink: &mut MachBuffer<Inst>,
+    state: &mut EmitState,
+    op: AtomicRmwOp,
+    rd_lo: u32,
+    rd_hi: u32,
+    addr: u32,
+    op_lo: u32,
+    op_hi: u32,
+    nl: u32,
+    nh: u32,
+    res: u32,
+) {
+    debug_assert_eq!(rd_hi, rd_lo + 1, "ldaexd needs a consecutive pair");
+    debug_assert_eq!(nh, nl + 1, "stlexd needs a consecutive pair");
+    const MOV: u32 = 0b1101;
+    const MVN: u32 = 0b1111;
+    let loop_lbl = sink.get_label();
+    sink.bind_label(loop_lbl, state.ctrl_plane_mut());
+    put_u32(sink, enc_load_ex(true, AtomicSize::DWord, rd_lo, addr)); // ldaexd rd_lo,rd_hi,[addr]
+
+    // Compute the new 64-bit value into (nl, nh).
+    let dp = |sink: &mut MachBuffer<Inst>, opcode: u32, s: u32, rd: u32, rn: u32, rm: u32| {
+        put_u32(sink, enc_dp_reg(opcode, s, rd, rn, rm));
+    };
+    match op {
+        AtomicRmwOp::Add => {
+            dp(sink, ALUOp::Add.opcode(), 1, nl, rd_lo, op_lo); // adds nl, rd_lo, op_lo
+            dp(sink, ALUOp::Adc.opcode(), 0, nh, rd_hi, op_hi); // adc  nh, rd_hi, op_hi
+        }
+        AtomicRmwOp::Sub => {
+            dp(sink, ALUOp::Sub.opcode(), 1, nl, rd_lo, op_lo); // subs nl, rd_lo, op_lo
+            dp(sink, ALUOp::Sbc.opcode(), 0, nh, rd_hi, op_hi); // sbc  nh, rd_hi, op_hi
+        }
+        AtomicRmwOp::And | AtomicRmwOp::Nand => {
+            dp(sink, ALUOp::And.opcode(), 0, nl, rd_lo, op_lo);
+            dp(sink, ALUOp::And.opcode(), 0, nh, rd_hi, op_hi);
+            if let AtomicRmwOp::Nand = op {
+                dp(sink, MVN, 0, nl, 0, nl); // mvn nl, nl
+                dp(sink, MVN, 0, nh, 0, nh); // mvn nh, nh
+            }
+        }
+        AtomicRmwOp::Or => {
+            dp(sink, ALUOp::Orr.opcode(), 0, nl, rd_lo, op_lo);
+            dp(sink, ALUOp::Orr.opcode(), 0, nh, rd_hi, op_hi);
+        }
+        AtomicRmwOp::Xor => {
+            dp(sink, ALUOp::Eor.opcode(), 0, nl, rd_lo, op_lo);
+            dp(sink, ALUOp::Eor.opcode(), 0, nh, rd_hi, op_hi);
+        }
+        AtomicRmwOp::Xchg => {
+            dp(sink, MOV, 0, nl, 0, op_lo); // mov nl, op_lo
+            dp(sink, MOV, 0, nh, 0, op_hi); // mov nh, op_hi
+        }
+        AtomicRmwOp::Umin | AtomicRmwOp::Umax | AtomicRmwOp::Smin | AtomicRmwOp::Smax => {
+            // Set flags for `old - operand` (64-bit) via subs/sbcs, using
+            // (nl, nh) as scratch. The chosen condition is Z-independent (the
+            // sbcs Z flag reflects only the high word), so equality never
+            // affects the result — which is correct, since min/max of equal
+            // values is that value either way.
+            let cond = match op {
+                AtomicRmwOp::Umin => Cond::Lo, // old <u operand
+                AtomicRmwOp::Umax => Cond::Hs, // old >=u operand
+                AtomicRmwOp::Smin => Cond::Lt, // old <s operand
+                _ => Cond::Ge,                 // old >=s operand
+            };
+            dp(sink, ALUOp::Sub.opcode(), 1, nl, rd_lo, op_lo); // subs nl, rd_lo, op_lo
+            dp(sink, ALUOp::Sbc.opcode(), 1, nh, rd_hi, op_hi); // sbcs nh, rd_hi, op_hi
+            dp(sink, MOV, 0, nl, 0, op_lo); // nl = operand (default)
+            dp(sink, MOV, 0, nh, 0, op_hi);
+            put_u32(sink, enc_mov_cond(cond, nl, rd_lo)); // nl = rd_lo if cond
+            put_u32(sink, enc_mov_cond(cond, nh, rd_hi)); // nh = rd_hi if cond
+        }
+    }
+
+    put_u32(sink, enc_store_ex(true, AtomicSize::DWord, res, nl, addr)); // stlexd res, nl,nh,[addr]
+    put_u32(sink, enc_dp_imm(CmpOp::Cmp.opcode(), 1, 0, res, 0)); // cmp res, #0
+    sink.use_label_at_offset(sink.cur_offset(), loop_lbl, LabelUse::Branch26);
+    put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne loop
+}
+
+/// Emit the LDAEXD/compare/STLEXD retry loop for a 64-bit compare-and-swap.
+fn emit_atomic_cas64(
+    sink: &mut MachBuffer<Inst>,
+    state: &mut EmitState,
+    rd_lo: u32,
+    rd_hi: u32,
+    addr: u32,
+    exp_lo: u32,
+    exp_hi: u32,
+    new_lo: u32,
+    new_hi: u32,
+    res: u32,
+) {
+    debug_assert_eq!(rd_hi, rd_lo + 1, "ldaexd needs a consecutive pair");
+    debug_assert_eq!(new_hi, new_lo + 1, "stlexd needs a consecutive pair");
+    let loop_lbl = sink.get_label();
+    let done_lbl = sink.get_label();
+    sink.bind_label(loop_lbl, state.ctrl_plane_mut());
+    put_u32(sink, enc_load_ex(true, AtomicSize::DWord, rd_lo, addr)); // ldaexd rd_lo,rd_hi,[addr]
+    // Both halves must match `expected`.
+    put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, rd_lo, exp_lo)); // cmp rd_lo, exp_lo
+    sink.use_label_at_offset(sink.cur_offset(), done_lbl, LabelUse::Branch26);
+    put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne done
+    put_u32(sink, enc_dp_reg(CmpOp::Cmp.opcode(), 1, 0, rd_hi, exp_hi)); // cmp rd_hi, exp_hi
+    sink.use_label_at_offset(sink.cur_offset(), done_lbl, LabelUse::Branch26);
+    put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne done
+    put_u32(
+        sink,
+        enc_store_ex(true, AtomicSize::DWord, res, new_lo, addr),
+    ); // stlexd res,new_lo,new_hi
+    put_u32(sink, enc_dp_imm(CmpOp::Cmp.opcode(), 1, 0, res, 0)); // cmp res, #0
+    sink.use_label_at_offset(sink.cur_offset(), loop_lbl, LabelUse::Branch26);
+    put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne loop
+    sink.bind_label(done_lbl, state.ctrl_plane_mut());
+}
+
+/// Emit the LDAEXD/STLEXD retry loop for a 64-bit atomic store. The load is
+/// required to arm the exclusive monitor; its result is discarded.
+fn emit_atomic_store64(
+    sink: &mut MachBuffer<Inst>,
+    state: &mut EmitState,
+    addr: u32,
+    src_lo: u32,
+    src_hi: u32,
+    scratch_lo: u32,
+    scratch_hi: u32,
+    res: u32,
+) {
+    debug_assert_eq!(
+        scratch_hi,
+        scratch_lo + 1,
+        "ldaexd needs a consecutive pair"
+    );
+    debug_assert_eq!(src_hi, src_lo + 1, "stlexd needs a consecutive pair");
+    let loop_lbl = sink.get_label();
+    sink.bind_label(loop_lbl, state.ctrl_plane_mut());
+    put_u32(sink, enc_load_ex(true, AtomicSize::DWord, scratch_lo, addr)); // ldaexd scratch,[addr]
+    put_u32(
+        sink,
+        enc_store_ex(true, AtomicSize::DWord, res, src_lo, addr),
+    ); // stlexd res, src,[addr]
+    put_u32(sink, enc_dp_imm(CmpOp::Cmp.opcode(), 1, 0, res, 0)); // cmp res, #0
+    sink.use_label_at_offset(sink.cur_offset(), loop_lbl, LabelUse::Branch26);
+    put_u32(sink, enc_bcond(Cond::Ne, 0)); // bne loop
 }
 
 enum LoadStore {
@@ -1155,16 +1410,12 @@ fn emit_load_store(
             let word = match op {
                 LoadStore::Load(LoadKind::Word) => enc_ldr_str_imm(true, false, rt, base, offset),
                 LoadStore::Load(LoadKind::UByte) => enc_ldr_str_imm(true, true, rt, base, offset),
-                LoadStore::Load(LoadKind::SByte) => {
-                    enc_ldrh_strh_imm(true, 1, 0, rt, base, offset)
+                LoadStore::Load(LoadKind::SByte) => enc_ldrh_strh_imm(true, 1, 0, rt, base, offset),
+                LoadStore::Load(LoadKind::UHalf) => enc_ldrh_strh_imm(true, 0, 1, rt, base, offset),
+                LoadStore::Load(LoadKind::SHalf) => enc_ldrh_strh_imm(true, 1, 1, rt, base, offset),
+                LoadStore::Store(StoreKind::Word) => {
+                    enc_ldr_str_imm(false, false, rt, base, offset)
                 }
-                LoadStore::Load(LoadKind::UHalf) => {
-                    enc_ldrh_strh_imm(true, 0, 1, rt, base, offset)
-                }
-                LoadStore::Load(LoadKind::SHalf) => {
-                    enc_ldrh_strh_imm(true, 1, 1, rt, base, offset)
-                }
-                LoadStore::Store(StoreKind::Word) => enc_ldr_str_imm(false, false, rt, base, offset),
                 LoadStore::Store(StoreKind::Byte) => enc_ldr_str_imm(false, true, rt, base, offset),
                 LoadStore::Store(StoreKind::Half) => {
                     enc_ldrh_strh_imm(false, 0, 1, rt, base, offset)

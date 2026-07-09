@@ -114,7 +114,6 @@ impl<'a, 'b> Arm32IsleContext<'a, 'b, MInst, Arm32Backend> {
         self.lower_ctx.emit(inst);
         rd.to_reg()
     }
-
 }
 
 impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
@@ -181,10 +180,7 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
         } else if let Some(imm12) = encode_rotated_imm(!val) {
             MInst::MvnRotImm { rd, imm12 }
         } else if val >> 16 == 0 {
-            MInst::Movw {
-                rd,
-                imm16: val,
-            }
+            MInst::Movw { rd, imm16: val }
         } else {
             MInst::MovImm {
                 rd,

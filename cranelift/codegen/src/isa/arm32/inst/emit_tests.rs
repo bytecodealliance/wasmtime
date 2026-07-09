@@ -547,15 +547,42 @@ fn parallel_add_sub() {
     // All 36 members must encode to distinct, well-formed words that share the
     // parallel add/sub encoding skeleton.
     let all = [
-        ParAluOp::Sadd8, ParAluOp::Sadd16, ParAluOp::Ssub8, ParAluOp::Ssub16,
-        ParAluOp::Sasx, ParAluOp::Ssax, ParAluOp::Qadd8, ParAluOp::Qadd16,
-        ParAluOp::Qsub8, ParAluOp::Qsub16, ParAluOp::Qasx, ParAluOp::Qsax,
-        ParAluOp::Shadd8, ParAluOp::Shadd16, ParAluOp::Shsub8, ParAluOp::Shsub16,
-        ParAluOp::Shasx, ParAluOp::Shsax, ParAluOp::Uadd8, ParAluOp::Uadd16,
-        ParAluOp::Usub8, ParAluOp::Usub16, ParAluOp::Uasx, ParAluOp::Usax,
-        ParAluOp::Uqadd8, ParAluOp::Uqadd16, ParAluOp::Uqsub8, ParAluOp::Uqsub16,
-        ParAluOp::Uqasx, ParAluOp::Uqsax, ParAluOp::Uhadd8, ParAluOp::Uhadd16,
-        ParAluOp::Uhsub8, ParAluOp::Uhsub16, ParAluOp::Uhasx, ParAluOp::Uhsax,
+        ParAluOp::Sadd8,
+        ParAluOp::Sadd16,
+        ParAluOp::Ssub8,
+        ParAluOp::Ssub16,
+        ParAluOp::Sasx,
+        ParAluOp::Ssax,
+        ParAluOp::Qadd8,
+        ParAluOp::Qadd16,
+        ParAluOp::Qsub8,
+        ParAluOp::Qsub16,
+        ParAluOp::Qasx,
+        ParAluOp::Qsax,
+        ParAluOp::Shadd8,
+        ParAluOp::Shadd16,
+        ParAluOp::Shsub8,
+        ParAluOp::Shsub16,
+        ParAluOp::Shasx,
+        ParAluOp::Shsax,
+        ParAluOp::Uadd8,
+        ParAluOp::Uadd16,
+        ParAluOp::Usub8,
+        ParAluOp::Usub16,
+        ParAluOp::Uasx,
+        ParAluOp::Usax,
+        ParAluOp::Uqadd8,
+        ParAluOp::Uqadd16,
+        ParAluOp::Uqsub8,
+        ParAluOp::Uqsub16,
+        ParAluOp::Uqasx,
+        ParAluOp::Uqsax,
+        ParAluOp::Uhadd8,
+        ParAluOp::Uhadd16,
+        ParAluOp::Uhsub8,
+        ParAluOp::Uhsub16,
+        ParAluOp::Uhasx,
+        ParAluOp::Uhsax,
     ];
     let mut seen = alloc::collections::BTreeSet::new();
     for op in all {
@@ -654,6 +681,7 @@ fn memory_multiple_and_exclusive() {
     assert_eq!(
         u32_le(Inst::LoadEx {
             acquire: false,
+            size: AtomicSize::Word,
             rt: writable_xreg(1),
             rn: xreg(0),
         }),
@@ -662,14 +690,34 @@ fn memory_multiple_and_exclusive() {
     assert_eq!(
         u32_le(Inst::LoadEx {
             acquire: true,
+            size: AtomicSize::Word,
             rt: writable_xreg(1),
             rn: xreg(0),
         }),
         0xe190_1e9f // ldaex r1, [r0]
     );
     assert_eq!(
+        u32_le(Inst::LoadEx {
+            acquire: true,
+            size: AtomicSize::Byte,
+            rt: writable_xreg(1),
+            rn: xreg(0),
+        }),
+        0xe1d0_1e9f // ldaexb r1, [r0]
+    );
+    assert_eq!(
+        u32_le(Inst::LoadEx {
+            acquire: true,
+            size: AtomicSize::Half,
+            rt: writable_xreg(1),
+            rn: xreg(0),
+        }),
+        0xe1f0_1e9f // ldaexh r1, [r0]
+    );
+    assert_eq!(
         u32_le(Inst::StoreEx {
             acquire: false,
+            size: AtomicSize::Word,
             rd: writable_xreg(0),
             rt: xreg(1),
             rn: xreg(2),
@@ -679,6 +727,7 @@ fn memory_multiple_and_exclusive() {
     assert_eq!(
         u32_le(Inst::StoreEx {
             acquire: true,
+            size: AtomicSize::Word,
             rd: writable_xreg(0),
             rt: xreg(1),
             rn: xreg(2),
@@ -686,18 +735,72 @@ fn memory_multiple_and_exclusive() {
         0xe182_0e91 // stlex r0, r1, [r2]
     );
     assert_eq!(
+        u32_le(Inst::StoreEx {
+            acquire: true,
+            size: AtomicSize::Byte,
+            rd: writable_xreg(0),
+            rt: xreg(1),
+            rn: xreg(2),
+        }),
+        0xe1c2_0e91 // stlexb r0, r1, [r2]
+    );
+    assert_eq!(
+        u32_le(Inst::StoreEx {
+            acquire: true,
+            size: AtomicSize::Half,
+            rd: writable_xreg(0),
+            rt: xreg(1),
+            rn: xreg(2),
+        }),
+        0xe1e2_0e91 // stlexh r0, r1, [r2]
+    );
+    assert_eq!(
         u32_le(Inst::LoadAcq {
+            size: AtomicSize::Word,
             rt: writable_xreg(1),
             rn: xreg(0),
         }),
         0xe190_1c9f // lda r1, [r0]
     );
     assert_eq!(
+        u32_le(Inst::LoadAcq {
+            size: AtomicSize::Byte,
+            rt: writable_xreg(1),
+            rn: xreg(0),
+        }),
+        0xe1d0_1c9f // ldab r1, [r0]
+    );
+    assert_eq!(
+        u32_le(Inst::LoadAcq {
+            size: AtomicSize::Half,
+            rt: writable_xreg(1),
+            rn: xreg(0),
+        }),
+        0xe1f0_1c9f // ldah r1, [r0]
+    );
+    assert_eq!(
         u32_le(Inst::StoreRel {
+            size: AtomicSize::Word,
             rt: xreg(1),
             rn: xreg(0),
         }),
         0xe180_fc91 // stl r1, [r0]
+    );
+    assert_eq!(
+        u32_le(Inst::StoreRel {
+            size: AtomicSize::Byte,
+            rt: xreg(1),
+            rn: xreg(0),
+        }),
+        0xe1c0_fc91 // stlb r1, [r0]
+    );
+    assert_eq!(
+        u32_le(Inst::StoreRel {
+            size: AtomicSize::Half,
+            rt: xreg(1),
+            rn: xreg(0),
+        }),
+        0xe1e0_fc91 // stlh r1, [r0]
     );
 }
 
@@ -739,7 +842,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Load {
             rt: writable_xreg(0),
-            mem: AMode::RegOffset { rn: xreg(1), offset: 4 },
+            mem: AMode::RegOffset {
+                rn: xreg(1),
+                offset: 4
+            },
             kind: LoadKind::Word,
         }),
         0xe591_0004 // ldr r0, [r1, #4]
@@ -747,7 +853,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Store {
             rt: xreg(0),
-            mem: AMode::RegOffset { rn: xreg(1), offset: 4 },
+            mem: AMode::RegOffset {
+                rn: xreg(1),
+                offset: 4
+            },
             kind: StoreKind::Word,
         }),
         0xe581_0004 // str r0, [r1, #4]
@@ -755,7 +864,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Load {
             rt: writable_xreg(0),
-            mem: AMode::RegOffset { rn: xreg(1), offset: 4 },
+            mem: AMode::RegOffset {
+                rn: xreg(1),
+                offset: 4
+            },
             kind: LoadKind::UByte,
         }),
         0xe5d1_0004 // ldrb r0, [r1, #4]
@@ -763,7 +875,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Store {
             rt: xreg(0),
-            mem: AMode::RegOffset { rn: xreg(1), offset: 4 },
+            mem: AMode::RegOffset {
+                rn: xreg(1),
+                offset: 4
+            },
             kind: StoreKind::Byte,
         }),
         0xe5c1_0004 // strb r0, [r1, #4]
@@ -771,7 +886,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Load {
             rt: writable_xreg(0),
-            mem: AMode::RegOffset { rn: xreg(1), offset: 4 },
+            mem: AMode::RegOffset {
+                rn: xreg(1),
+                offset: 4
+            },
             kind: LoadKind::UHalf,
         }),
         0xe1d1_00b4 // ldrh r0, [r1, #4]
@@ -779,7 +897,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Store {
             rt: xreg(0),
-            mem: AMode::RegOffset { rn: xreg(1), offset: 4 },
+            mem: AMode::RegOffset {
+                rn: xreg(1),
+                offset: 4
+            },
             kind: StoreKind::Half,
         }),
         0xe1c1_00b4 // strh r0, [r1, #4]
@@ -787,7 +908,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Load {
             rt: writable_xreg(0),
-            mem: AMode::RegOffset { rn: xreg(1), offset: 4 },
+            mem: AMode::RegOffset {
+                rn: xreg(1),
+                offset: 4
+            },
             kind: LoadKind::SByte,
         }),
         0xe1d1_00d4 // ldrsb r0, [r1, #4]
@@ -795,7 +919,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Load {
             rt: writable_xreg(0),
-            mem: AMode::RegOffset { rn: xreg(1), offset: 4 },
+            mem: AMode::RegOffset {
+                rn: xreg(1),
+                offset: 4
+            },
             kind: LoadKind::SHalf,
         }),
         0xe1d1_00f4 // ldrsh r0, [r1, #4]
@@ -804,7 +931,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Load {
             rt: writable_xreg(0),
-            mem: AMode::RegReg { rn: xreg(1), rm: xreg(2) },
+            mem: AMode::RegReg {
+                rn: xreg(1),
+                rm: xreg(2)
+            },
             kind: LoadKind::Word,
         }),
         0xe791_0002 // ldr r0, [r1, r2]
@@ -812,7 +942,10 @@ fn memory() {
     assert_eq!(
         u32_le(Inst::Store {
             rt: xreg(0),
-            mem: AMode::RegReg { rn: xreg(1), rm: xreg(2) },
+            mem: AMode::RegReg {
+                rn: xreg(1),
+                rm: xreg(2)
+            },
             kind: StoreKind::Word,
         }),
         0xe781_0002 // str r0, [r1, r2]

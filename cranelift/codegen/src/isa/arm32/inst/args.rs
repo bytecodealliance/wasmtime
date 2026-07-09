@@ -4,9 +4,52 @@ use crate::isa::arm32::inst::*;
 use crate::machinst::{OperandVisitor, Reg};
 
 pub use crate::isa::arm32::lower::isle::generated_code::{
-    ALUOp, AMode, BarrierOp, BfxOp, BitOp, CmpOp, Cond, DspMul3Op, DspMul4Op, DspMulLOp, ExtAddOp,
-    ExtOp, FpuOp2, FpuOp3, FpuSize, LoadKind, ParAluOp, PkhOp, QAluOp, SatOp, ShiftOp, StoreKind,
+    ALUOp, AMode, AtomicSize, BarrierOp, BfxOp, BitOp, CmpOp, Cond, DspMul3Op, DspMul4Op,
+    DspMulLOp, ExtAddOp, ExtOp, FpuOp2, FpuOp3, FpuSize, LoadKind, ParAluOp, PkhOp, QAluOp, SatOp,
+    ShiftOp, StoreKind,
 };
+
+impl AtomicSize {
+    /// The instruction-mnemonic suffix for this access width (`ldrex`,
+    /// `ldrexb`, `ldrexh`, `ldrexd`).
+    pub(crate) fn suffix(self) -> &'static str {
+        match self {
+            AtomicSize::Byte => "b",
+            AtomicSize::Half => "h",
+            AtomicSize::Word => "",
+            AtomicSize::DWord => "d",
+        }
+    }
+
+    /// The size field (bits 22:21) of an A32 exclusive/acquire-release
+    /// instruction encoding.
+    pub(crate) fn enc_bits(self) -> u32 {
+        let sz = match self {
+            AtomicSize::Word => 0b00,
+            AtomicSize::DWord => 0b01,
+            AtomicSize::Byte => 0b10,
+            AtomicSize::Half => 0b11,
+        };
+        sz << 21
+    }
+
+    /// True for a sub-word (byte or halfword) access.
+    pub(crate) fn is_subword(self) -> bool {
+        matches!(self, AtomicSize::Byte | AtomicSize::Half)
+    }
+
+    /// The sign/zero-extend op that widens a sub-word value of this size to a
+    /// full 32-bit register.
+    pub(crate) fn extend_op(self, signed: bool) -> ExtOp {
+        match (self, signed) {
+            (AtomicSize::Byte, false) => ExtOp::Uxtb,
+            (AtomicSize::Byte, true) => ExtOp::Sxtb,
+            (AtomicSize::Half, false) => ExtOp::Uxth,
+            (AtomicSize::Half, true) => ExtOp::Sxth,
+            _ => unreachable!("extend_op is only valid for sub-word sizes"),
+        }
+    }
+}
 
 /// A memory address resolved to a concrete base register and either an
 /// immediate or register offset, ready for encoding.

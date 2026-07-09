@@ -46,7 +46,10 @@ pub const fn pdreg(enc: u8) -> PReg {
 
 /// Get a writable reference to `D<enc>`.
 #[inline]
-#[allow(dead_code, reason = "part of the register API, used as the backend grows")]
+#[allow(
+    dead_code,
+    reason = "part of the register API, used as the backend grows"
+)]
 pub fn writable_dreg(enc: u8) -> Writable<Reg> {
     Writable::from_reg(dreg(enc))
 }
@@ -93,14 +96,20 @@ pub fn writable_stack_reg() -> Writable<Reg> {
 
 /// Link register (r14).
 #[inline]
-#[allow(dead_code, reason = "part of the register API, used as the backend grows")]
+#[allow(
+    dead_code,
+    reason = "part of the register API, used as the backend grows"
+)]
 pub fn link_reg() -> Reg {
     xreg(14)
 }
 
 /// Writable link register.
 #[inline]
-#[allow(dead_code, reason = "part of the register API, used as the backend grows")]
+#[allow(
+    dead_code,
+    reason = "part of the register API, used as the backend grows"
+)]
 pub fn writable_link_reg() -> Writable<Reg> {
     Writable::from_reg(link_reg())
 }
