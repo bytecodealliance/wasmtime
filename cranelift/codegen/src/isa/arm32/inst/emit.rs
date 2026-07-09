@@ -748,6 +748,15 @@ impl MachInstEmit for Inst {
                 sink.add_trap(*code);
                 put_u32(sink, enc_udf());
             }
+            Inst::TrapIf { cond, code } => {
+                // Branch over the trap when the condition does not hold.
+                let skip = sink.get_label();
+                sink.use_label_at_offset(sink.cur_offset(), skip, LabelUse::Branch26);
+                put_u32(sink, enc_bcond(cond.invert(), 0));
+                sink.add_trap(*code);
+                put_u32(sink, enc_udf());
+                sink.bind_label(skip, state.ctrl_plane_mut());
+            }
             Inst::LdmStm {
                 load,
                 rn,

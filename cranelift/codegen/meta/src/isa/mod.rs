@@ -34,7 +34,11 @@ impl Isa {
     pub fn from_arch(arch: &str) -> Option<Self> {
         match arch {
             "aarch64" => Some(Isa::Arm64),
-            x if x.starts_with("arm") || x.starts_with("thumb") => Some(Isa::Arm32),
+            // 32-bit ARM / Thumb, but not the 64-bit `arm64*` spellings
+            // (e.g. `arm64ec`), which are AArch64.
+            x if (x.starts_with("arm") || x.starts_with("thumb")) && !x.starts_with("arm64") => {
+                Some(Isa::Arm32)
+            }
             "s390x" => Some(Isa::S390x),
             x if ["x86_64", "i386", "i586", "i686"].contains(&x) => Some(Isa::X86),
             "riscv64" | "riscv64gc" | "riscv64imac" => Some(Isa::Riscv64),

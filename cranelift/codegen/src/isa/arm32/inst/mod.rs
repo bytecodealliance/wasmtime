@@ -153,7 +153,7 @@ fn arm32_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             use_if_virtual(collector, rm);
             def_if_virtual(collector, rd);
         }
-        Inst::Udf { .. } | Inst::Barrier { .. } => {}
+        Inst::Udf { .. } | Inst::TrapIf { .. } | Inst::Barrier { .. } => {}
 
         Inst::AtomicRmw {
             rd,
@@ -551,9 +551,12 @@ impl MachInst for Inst {
     }
 
     fn worst_case_size() -> CodeOffset {
-        // The largest instruction is `MovImm`, which expands to a `movw` plus a
-        // `movt`: 8 bytes.
-        8
+        // Must be an upper bound on the number of bytes any single (non
+        // jump-table) instruction emits, since the buffer uses it as the
+        // per-instruction island lookahead. The largest such sequence is the
+        // 64-bit atomic min/max RMW loop, which expands to 10 words (40 bytes).
+        // Inline jump tables manage their own islands and are exempt.
+        44
     }
 
     fn worst_case_island_growth() -> CodeOffset {
@@ -771,6 +774,9 @@ impl Inst {
                 alloc::format!("rrx {}, {}", r(rd.to_reg()), r(*rm))
             }
             Inst::Udf { code } => alloc::format!("udf ; {code}"),
+            Inst::TrapIf { cond, code } => {
+                alloc::format!("b{} 1f ; udf ; 1: ; {code}", cond.invert().name())
+            }
             Inst::LdmStm {
                 load,
                 rn,

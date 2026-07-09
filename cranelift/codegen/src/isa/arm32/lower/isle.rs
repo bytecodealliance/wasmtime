@@ -12,7 +12,7 @@ use crate::ir::{
     BlockCall, ExternalName, Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
 };
 use crate::isa::arm32::Arm32Backend;
-use crate::isa::arm32::inst::{ALUOp, Cond, ShiftOp, encode_rotated_imm};
+use crate::isa::arm32::inst::{ALUOp, CmpOp, Cond, ExtOp, ShiftOp, encode_rotated_imm};
 use crate::machinst::isle::*;
 use crate::machinst::{
     ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, Lower, MachInst, MachLabel, RetPair,
@@ -113,6 +113,35 @@ impl<'a, 'b> Arm32IsleContext<'a, 'b, MInst, Arm32Backend> {
         };
         self.lower_ctx.emit(inst);
         rd.to_reg()
+    }
+
+    /// Widen a narrow (i8/i16) comparison operand to a full 32-bit register,
+    /// sign- or zero-extending per `signed`. i32 (and anything wider) is
+    /// returned unchanged.
+    fn extend_for_cmp(&mut self, ty: Type, signed: bool, r: Reg) -> Reg {
+        let op = match (ty, signed) {
+            (I8, true) => ExtOp::Sxtb,
+            (I8, false) => ExtOp::Uxtb,
+            (I16, true) => ExtOp::Sxth,
+            (I16, false) => ExtOp::Uxth,
+            _ => return r,
+        };
+        let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::ExtRR { op, rd, rm: r });
+        rd.to_reg()
+    }
+
+    /// Emit `cmp divisor, #0; trapif eq, int_divz`.
+    fn emit_divz_check(&mut self, divisor: Reg) {
+        self.lower_ctx.emit(MInst::CmpRImm {
+            op: CmpOp::Cmp,
+            rn: divisor,
+            imm12: 0,
+        });
+        self.lower_ctx.emit(MInst::TrapIf {
+            cond: Cond::Eq,
+            code: TrapCode::INTEGER_DIVISION_BY_ZERO,
+        });
     }
 }
 
@@ -362,9 +391,11 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
             FloatCC::UnorderedOrLessThanOrEqual => Cond::Le,
             FloatCC::UnorderedOrGreaterThan => Cond::Hi,
             FloatCC::UnorderedOrGreaterThanOrEqual => Cond::Hs,
-            // These need a two-condition sequence and aren't handled yet.
+            // These need a two-condition sequence and are handled by dedicated
+            // lowering rules (`gen_fcmp_one` / `gen_fcmp_ueq`) before reaching
+            // this single-condition mapping.
             FloatCC::OrderedNotEqual | FloatCC::UnorderedOrEqual => {
-                unimplemented!("arm32: fcmp condition {cc:?} not yet implemented")
+                unreachable!("arm32: fcmp {cc:?} is lowered via a two-condition sequence")
             }
         }
     }
@@ -390,6 +421,57 @@ impl generated_code::Context for Arm32IsleContext<'_, '_, MInst, Arm32Backend> {
         let cleared = self.alu_imm_raw(ALUOp::Bic, a_hi, sign_mask);
         let res_hi = self.alu_raw(ALUOp::Orr, false, cleared, sign);
         self.mov_to_d_raw(a_lo, res_hi)
+    }
+
+    /// Emit the compare for an `icmp` (widening narrow operands per the
+    /// comparison's signedness) and return the ARM condition that tests it.
+    fn emit_icmp_cmp(&mut self, cc: &IntCC, a: Value, b: Value) -> Cond {
+        let ty = self.value_type(a);
+        let signed = matches!(
+            cc,
+            IntCC::SignedLessThan
+                | IntCC::SignedGreaterThanOrEqual
+                | IntCC::SignedGreaterThan
+                | IntCC::SignedLessThanOrEqual
+        );
+        let ra = self.put_in_reg(a);
+        let ra = self.extend_for_cmp(ty, signed, ra);
+        let rb = self.put_in_reg(b);
+        let rb = self.extend_for_cmp(ty, signed, rb);
+        self.lower_ctx.emit(MInst::CmpRR {
+            op: CmpOp::Cmp,
+            rn: ra,
+            rm: rb,
+        });
+        self.cond_from_intcc(cc)
+    }
+
+    /// `udiv` with a divide-by-zero trap check.
+    fn gen_udiv(&mut self, x: Reg, y: Reg) -> Reg {
+        self.emit_divz_check(y);
+        let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::UDiv { rd, rn: x, rm: y });
+        rd.to_reg()
+    }
+
+    /// `sdiv` with divide-by-zero and `INT_MIN / -1` overflow trap checks.
+    fn gen_sdiv(&mut self, x: Reg, y: Reg) -> Reg {
+        self.emit_divz_check(y);
+        // Overflow occurs only for `INT_MIN / -1`, i.e. when both
+        // `x ^ INT_MIN == 0` and `y + 1 == 0`; OR the two together and trap when
+        // the result is zero.
+        let int_min = encode_rotated_imm(0x8000_0000).unwrap();
+        let t1 = self.alu_imm_raw(ALUOp::Eor, x, int_min);
+        let one = encode_rotated_imm(1).unwrap();
+        let t2 = self.alu_imm_raw(ALUOp::Add, y, one);
+        let _ = self.alu_raw(ALUOp::Orr, true, t1, t2); // orrs (sets Z on overflow)
+        self.lower_ctx.emit(MInst::TrapIf {
+            cond: Cond::Eq,
+            code: TrapCode::INTEGER_OVERFLOW,
+        });
+        let rd = self.lower_ctx.alloc_tmp(I32).only_reg().unwrap();
+        self.lower_ctx.emit(MInst::SDiv { rd, rn: x, rm: y });
+        rd.to_reg()
     }
 
     fn cond_from_intcc(&mut self, cc: &IntCC) -> Cond {

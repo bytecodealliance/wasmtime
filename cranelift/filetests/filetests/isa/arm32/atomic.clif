@@ -11,13 +11,13 @@ block0(v0: i32, v1: i32):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp, #0]
+;   str r7, [sp, #4]
 ; block0:
 ;   mov r2, r0
 ;   mov r7, r1
 ;   atomic_rmw.Add r3, [r2], r7
 ;   mov r0, r3
-;   ldr r7, [sp, #0]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -27,7 +27,7 @@ block0(v0: i32, v1: i32):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp]
+;   str r7, [sp, #4]
 ; block1: ; offset 0x10
 ;   mov r2, r0
 ;   mov r7, r1
@@ -37,7 +37,7 @@ block0(v0: i32, v1: i32):
 ;   cmp r0, #0
 ;   bne #0x18
 ;   mov r0, r3
-;   ldr r7, [sp]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -52,13 +52,13 @@ block0(v0: i32, v1: i32):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp, #0]
+;   str r7, [sp, #4]
 ; block0:
 ;   mov r2, r0
 ;   mov r7, r1
 ;   atomic_rmw.Umax r3, [r2], r7
 ;   mov r0, r3
-;   ldr r7, [sp, #0]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -68,7 +68,7 @@ block0(v0: i32, v1: i32):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp]
+;   str r7, [sp, #4]
 ; block1: ; offset 0x10
 ;   mov r2, r0
 ;   mov r7, r1
@@ -80,7 +80,7 @@ block0(v0: i32, v1: i32):
 ;   cmp r0, #0
 ;   bne #0x18
 ;   mov r0, r3
-;   ldr r7, [sp]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -95,13 +95,13 @@ block0(v0: i32, v1: i32, v2: i32):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp, #0]
+;   str r7, [sp, #4]
 ; block0:
 ;   mov r3, r0
 ;   mov r7, r1
 ;   atomic_cas r1, [r3], r7, r2
 ;   mov r0, r1
-;   ldr r7, [sp, #0]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -111,7 +111,7 @@ block0(v0: i32, v1: i32, v2: i32):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp]
+;   str r7, [sp, #4]
 ; block1: ; offset 0x10
 ;   mov r3, r0
 ;   mov r7, r1
@@ -122,7 +122,7 @@ block0(v0: i32, v1: i32, v2: i32):
 ;   cmp r0, #0
 ;   bne #0x18
 ;   mov r0, r1
-;   ldr r7, [sp]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -170,13 +170,13 @@ block0(v0: i32, v1: i8):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp, #0]
+;   str r7, [sp, #4]
 ; block0:
 ;   mov r2, r0
 ;   mov r7, r1
 ;   atomic_rmw.Addb r3, [r2], r7
 ;   mov r0, r3
-;   ldr r7, [sp, #0]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -186,7 +186,7 @@ block0(v0: i32, v1: i8):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp]
+;   str r7, [sp, #4]
 ; block1: ; offset 0x10
 ;   mov r2, r0
 ;   mov r7, r1
@@ -196,7 +196,7 @@ block0(v0: i32, v1: i8):
 ;   cmp r0, #0
 ;   bne #0x18
 ;   mov r0, r3
-;   ldr r7, [sp]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -212,13 +212,13 @@ block0(v0: i32, v1: i8):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp, #0]
+;   str r7, [sp, #4]
 ; block0:
 ;   mov r2, r0
 ;   mov r7, r1
 ;   atomic_rmw.Smaxb r3, [r2], r7
 ;   mov r0, r3
-;   ldr r7, [sp, #0]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -228,7 +228,7 @@ block0(v0: i32, v1: i8):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp]
+;   str r7, [sp, #4]
 ; block1: ; offset 0x10
 ;   mov r2, r0
 ;   mov r7, r1
@@ -242,7 +242,7 @@ block0(v0: i32, v1: i8):
 ;   cmp r0, #0
 ;   bne #0x18
 ;   mov r0, r3
-;   ldr r7, [sp]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -258,13 +258,13 @@ block0(v0: i32, v1: i16):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp, #0]
+;   str r7, [sp, #4]
 ; block0:
 ;   mov r2, r0
 ;   mov r7, r1
 ;   atomic_rmw.Uminh r3, [r2], r7
 ;   mov r0, r3
-;   ldr r7, [sp, #0]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -274,7 +274,7 @@ block0(v0: i32, v1: i16):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp]
+;   str r7, [sp, #4]
 ; block1: ; offset 0x10
 ;   mov r2, r0
 ;   mov r7, r1
@@ -288,7 +288,7 @@ block0(v0: i32, v1: i16):
 ;   cmp r0, #0
 ;   bne #0x18
 ;   mov r0, r3
-;   ldr r7, [sp]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -304,13 +304,13 @@ block0(v0: i32, v1: i16, v2: i16):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp, #0]
+;   str r7, [sp, #4]
 ; block0:
 ;   mov r3, r0
 ;   mov r7, r1
 ;   atomic_cash r1, [r3], r7, r2
 ;   mov r0, r1
-;   ldr r7, [sp, #0]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -320,7 +320,7 @@ block0(v0: i32, v1: i16, v2: i16):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r7, [sp]
+;   str r7, [sp, #4]
 ; block1: ; offset 0x10
 ;   mov r3, r0
 ;   mov r7, r1
@@ -332,7 +332,7 @@ block0(v0: i32, v1: i16, v2: i16):
 ;   cmp r0, #0
 ;   bne #0x18
 ;   mov r0, r1
-;   ldr r7, [sp]
+;   ldr r7, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -382,19 +382,19 @@ block0(v0: i32, v1: i64):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #16
-;   str r4, [sp, #0]
-;   str r5, [sp, #4]
-;   str r6, [sp, #8]
-;   str r7, [sp, #12]
+;   str r4, [sp, #12]
+;   str r5, [sp, #8]
+;   str r6, [sp, #4]
+;   str r7, [sp, #0]
 ; block0:
 ;   mov r4, r0
 ;   mov r5, r2
 ;   mov r6, r3
 ;   atomic_rmw.Add.i64 r0, r1, [r4], r5, r6
-;   ldr r4, [sp, #0]
-;   ldr r5, [sp, #4]
-;   ldr r6, [sp, #8]
-;   ldr r7, [sp, #12]
+;   ldr r4, [sp, #12]
+;   ldr r5, [sp, #8]
+;   ldr r6, [sp, #4]
+;   ldr r7, [sp, #0]
 ;   add sp, sp, #16
 ;   pop {fp, lr}
 ;   bx lr
@@ -404,10 +404,10 @@ block0(v0: i32, v1: i64):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #0x10
-;   str r4, [sp]
-;   str r5, [sp, #4]
-;   str r6, [sp, #8]
-;   str r7, [sp, #0xc]
+;   str r4, [sp, #0xc]
+;   str r5, [sp, #8]
+;   str r6, [sp, #4]
+;   str r7, [sp]
 ; block1: ; offset 0x1c
 ;   mov r4, r0
 ;   mov r5, r2
@@ -418,10 +418,10 @@ block0(v0: i32, v1: i64):
 ;   stlexd r7, r2, r3, [r4]
 ;   cmp r7, #0
 ;   bne #0x28
-;   ldr r4, [sp]
-;   ldr r5, [sp, #4]
-;   ldr r6, [sp, #8]
-;   ldr r7, [sp, #0xc]
+;   ldr r4, [sp, #0xc]
+;   ldr r5, [sp, #8]
+;   ldr r6, [sp, #4]
+;   ldr r7, [sp]
 ;   add sp, sp, #0x10
 ;   pop {fp, lr}
 ;   bx lr
@@ -438,19 +438,19 @@ block0(v0: i32, v1: i64):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #16
-;   str r4, [sp, #0]
-;   str r5, [sp, #4]
-;   str r6, [sp, #8]
-;   str r7, [sp, #12]
+;   str r4, [sp, #12]
+;   str r5, [sp, #8]
+;   str r6, [sp, #4]
+;   str r7, [sp, #0]
 ; block0:
 ;   mov r4, r0
 ;   mov r5, r2
 ;   mov r6, r3
 ;   atomic_rmw.Smax.i64 r0, r1, [r4], r5, r6
-;   ldr r4, [sp, #0]
-;   ldr r5, [sp, #4]
-;   ldr r6, [sp, #8]
-;   ldr r7, [sp, #12]
+;   ldr r4, [sp, #12]
+;   ldr r5, [sp, #8]
+;   ldr r6, [sp, #4]
+;   ldr r7, [sp, #0]
 ;   add sp, sp, #16
 ;   pop {fp, lr}
 ;   bx lr
@@ -460,10 +460,10 @@ block0(v0: i32, v1: i64):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #0x10
-;   str r4, [sp]
-;   str r5, [sp, #4]
-;   str r6, [sp, #8]
-;   str r7, [sp, #0xc]
+;   str r4, [sp, #0xc]
+;   str r5, [sp, #8]
+;   str r6, [sp, #4]
+;   str r7, [sp]
 ; block1: ; offset 0x1c
 ;   mov r4, r0
 ;   mov r5, r2
@@ -478,10 +478,10 @@ block0(v0: i32, v1: i64):
 ;   stlexd r7, r2, r3, [r4]
 ;   cmp r7, #0
 ;   bne #0x28
-;   ldr r4, [sp]
-;   ldr r5, [sp, #4]
-;   ldr r6, [sp, #8]
-;   ldr r7, [sp, #0xc]
+;   ldr r4, [sp, #0xc]
+;   ldr r5, [sp, #8]
+;   ldr r6, [sp, #4]
+;   ldr r7, [sp]
 ;   add sp, sp, #0x10
 ;   pop {fp, lr}
 ;   bx lr
@@ -496,10 +496,10 @@ block0(v0: i32, v1: i64, v2: i64):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #16
-;   str r4, [sp, #0]
-;   str r5, [sp, #4]
-;   str r6, [sp, #8]
-;   str r7, [sp, #12]
+;   str r4, [sp, #12]
+;   str r5, [sp, #8]
+;   str r6, [sp, #4]
+;   str r7, [sp, #0]
 ; block0:
 ;   mov r5, r2
 ;   mov r6, r3
@@ -507,10 +507,10 @@ block0(v0: i32, v1: i64, v2: i64):
 ;   ldr r3, [incoming_arg, #4]
 ;   mov r4, r0
 ;   atomic_cas.i64 r0, r1, [r4], r5, r6, r2, r3
-;   ldr r4, [sp, #0]
-;   ldr r5, [sp, #4]
-;   ldr r6, [sp, #8]
-;   ldr r7, [sp, #12]
+;   ldr r4, [sp, #12]
+;   ldr r5, [sp, #8]
+;   ldr r6, [sp, #4]
+;   ldr r7, [sp, #0]
 ;   add sp, sp, #16
 ;   pop {fp, lr}
 ;   bx lr
@@ -520,10 +520,10 @@ block0(v0: i32, v1: i64, v2: i64):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #0x10
-;   str r4, [sp]
-;   str r5, [sp, #4]
-;   str r6, [sp, #8]
-;   str r7, [sp, #0xc]
+;   str r4, [sp, #0xc]
+;   str r5, [sp, #8]
+;   str r6, [sp, #4]
+;   str r7, [sp]
 ; block1: ; offset 0x1c
 ;   mov r5, r2
 ;   mov r6, r3
@@ -538,10 +538,10 @@ block0(v0: i32, v1: i64, v2: i64):
 ;   stlexd r7, r2, r3, [r4]
 ;   cmp r7, #0
 ;   bne #0x30
-;   ldr r4, [sp]
-;   ldr r5, [sp, #4]
-;   ldr r6, [sp, #8]
-;   ldr r7, [sp, #0xc]
+;   ldr r4, [sp, #0xc]
+;   ldr r5, [sp, #8]
+;   ldr r6, [sp, #4]
+;   ldr r7, [sp]
 ;   add sp, sp, #0x10
 ;   pop {fp, lr}
 ;   bx lr
@@ -556,11 +556,11 @@ block0(v0: i32):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r4, [sp, #0]
+;   str r4, [sp, #4]
 ; block0:
 ;   mov r4, r0
 ;   atomic_load.i64 r0, r1, [r4]
-;   ldr r4, [sp, #0]
+;   ldr r4, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -570,12 +570,12 @@ block0(v0: i32):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r4, [sp]
+;   str r4, [sp, #4]
 ; block1: ; offset 0x10
 ;   mov r4, r0
 ;   ldaexd r0, r1, [r4]
 ;   clrex
-;   ldr r4, [sp]
+;   ldr r4, [sp, #4]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -590,13 +590,13 @@ block0(v0: i32, v1: i64):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r4, [sp, #0]
-;   str r7, [sp, #4]
+;   str r4, [sp, #4]
+;   str r7, [sp, #0]
 ; block0:
 ;   mov r4, r0
 ;   atomic_store.i64 r2, r3, [r4]
-;   ldr r4, [sp, #0]
-;   ldr r7, [sp, #4]
+;   ldr r4, [sp, #4]
+;   ldr r7, [sp, #0]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr
@@ -606,16 +606,16 @@ block0(v0: i32, v1: i64):
 ;   push {fp, lr}
 ;   mov fp, sp
 ;   sub sp, sp, #8
-;   str r4, [sp]
-;   str r7, [sp, #4]
+;   str r4, [sp, #4]
+;   str r7, [sp]
 ; block1: ; offset 0x14
 ;   mov r4, r0
 ;   ldaexd r0, r1, [r4]
 ;   stlexd r7, r2, r3, [r4]
 ;   cmp r7, #0
 ;   bne #0x18
-;   ldr r4, [sp]
-;   ldr r7, [sp, #4]
+;   ldr r4, [sp, #4]
+;   ldr r7, [sp]
 ;   add sp, sp, #8
 ;   pop {fp, lr}
 ;   bx lr

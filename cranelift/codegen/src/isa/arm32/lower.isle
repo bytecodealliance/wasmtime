@@ -208,6 +208,17 @@
   (let ((_ Unit (emit_side_effect (vcmp (FpuSize.F64) (put_in_reg a) (put_in_reg b)))))
     (csetv (cond_from_floatcc cc))))
 
+;; `one` (ordered and not-equal) and `ueq` (unordered or equal) can't be
+;; expressed as a single ARM condition, so they get a two-condition sequence.
+(rule 1 (lower (fcmp _ (FloatCC.OrderedNotEqual) a @ (value_type $F32) b))
+  (gen_fcmp_one (FpuSize.F32) (put_in_reg a) (put_in_reg b)))
+(rule 1 (lower (fcmp _ (FloatCC.OrderedNotEqual) a @ (value_type $F64) b))
+  (gen_fcmp_one (FpuSize.F64) (put_in_reg a) (put_in_reg b)))
+(rule 1 (lower (fcmp _ (FloatCC.UnorderedOrEqual) a @ (value_type $F32) b))
+  (gen_fcmp_ueq (FpuSize.F32) (put_in_reg a) (put_in_reg b)))
+(rule 1 (lower (fcmp _ (FloatCC.UnorderedOrEqual) a @ (value_type $F64) b))
+  (gen_fcmp_ueq (FpuSize.F64) (put_in_reg a) (put_in_reg b)))
+
 ;; f32 <-> f64.
 (rule (lower (fpromote $F64 x))
   (vcvt_ff true (put_in_reg x)))
@@ -266,14 +277,15 @@
   (mov_to_fpu64 (put_in_regs x)))
 
 ;;;; Divides (only when hardware `sdiv`/`udiv` is available) ;;;;;;;;;;;;;;;;;;;
-;; NOTE: trap-on-zero / INT_MIN overflow checks are not yet emitted.
+;; `gen_sdiv`/`gen_udiv` emit the trap-on-zero check (and, for `sdiv`, the
+;; `INT_MIN / -1` overflow check) before the divide.
 
 (rule (lower (sdiv $I32 x y))
   (if-let true (use_idiv))
-  (sdiv_reg (put_in_reg x) (put_in_reg y)))
+  (gen_sdiv (put_in_reg x) (put_in_reg y)))
 (rule (lower (udiv $I32 x y))
   (if-let true (use_idiv))
-  (udiv_reg (put_in_reg x) (put_in_reg y)))
+  (gen_udiv (put_in_reg x) (put_in_reg y)))
 
 ;;;; Counting / byte-swap / bit-reverse ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -304,10 +316,11 @@
 
 ;;;; `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; 32-bit comparison producing a 0/1 boolean.
+;; 32-bit comparison producing a 0/1 boolean. `emit_icmp_cmp` widens narrow
+;; (i8/i16) operands to 32 bits per the comparison's signedness before the
+;; `cmp`, since Cranelift leaves the high bits of narrow values undefined.
 (rule (lower (icmp _ cc a @ (value_type (fits_in_32 _)) b))
-  (let ((_ Unit (emit_side_effect (cmp_rr (put_in_reg a) (put_in_reg b)))))
-    (csetv (cond_from_intcc cc))))
+  (csetv (emit_icmp_cmp cc a b)))
 
 ;; 64-bit comparison producing a 0/1 boolean.
 (rule 4 (lower (icmp _ cc a @ (value_type $I64) b))
@@ -317,13 +330,22 @@
 
 ;; Fuse an `icmp` condition into the compare that precedes the select.
 (rule 1 (lower (select (fits_in_32 _) (icmp _ cc x @ (value_type (fits_in_32 _)) y) a b))
-  (let ((_ Unit (emit_side_effect (cmp_rr (put_in_reg x) (put_in_reg y)))))
-    (csel (cond_from_intcc cc) (put_in_reg a) (put_in_reg b))))
+  (let ((cond Cond (emit_icmp_cmp cc x y)))
+    (csel cond (put_in_reg a) (put_in_reg b))))
 
 ;; Generic select: branch on whether the condition value is non-zero.
 (rule (lower (select (fits_in_32 _) c a b))
   (let ((_ Unit (emit_side_effect (cmp_imm (put_in_reg c) 0))))
     (csel (Cond.Ne) (put_in_reg a) (put_in_reg b))))
+
+;; 64-bit select: pick each half of the pair. The operands are materialized
+;; before the compare so nothing clobbers the flags in between.
+(rule 4 (lower (select $I64 c a b))
+  (let ((av ValueRegs (put_in_regs a))
+        (bv ValueRegs (put_in_regs b))
+        (_ Unit (emit_side_effect (cmp_imm (put_in_reg c) 0))))
+    (value_regs (csel (Cond.Ne) (vr_lo av) (vr_lo bv))
+                (csel (Cond.Ne) (vr_hi av) (vr_hi bv)))))
 
 ;;;; Shifts: `ishl` / `ushr` / `sshr` / `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -349,6 +371,12 @@
 
 ;;;; Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; A plain `load` reads exactly `sizeof(ty)` bytes; narrow types zero-extend
+;; into the 32-bit result register.
+(rule 1 (lower (load $I8 flags addr offset))
+  (arm_load (amode addr offset) (LoadKind.UByte)))
+(rule 1 (lower (load $I16 flags addr offset))
+  (arm_load (amode addr offset) (LoadKind.UHalf)))
 (rule (lower (load (fits_in_32 _) flags addr offset))
   (arm_load (amode addr offset) (LoadKind.Word)))
 
@@ -363,6 +391,11 @@
 
 ;;;; Stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; A plain `store` writes exactly `sizeof(ty)` bytes.
+(rule 1 (lower (store flags val @ (value_type $I8) addr offset))
+  (arm_store (put_in_reg val) (amode addr offset) (StoreKind.Byte)))
+(rule 1 (lower (store flags val @ (value_type $I16) addr offset))
+  (arm_store (put_in_reg val) (amode addr offset) (StoreKind.Half)))
 (rule (lower (store flags val @ (value_type (fits_in_32 _)) addr offset))
   (arm_store (put_in_reg val) (amode addr offset) (StoreKind.Word)))
 
@@ -431,15 +464,32 @@
 
 ;; Fuse a 32-bit `icmp` feeding a `brif` into a compare plus conditional branch.
 (rule 1 (lower_branch (brif (icmp _ cc a @ (value_type (fits_in_32 _)) b) _ _) (two_targets taken not_taken))
-  (emit_side_effect
-    (side_effect_concat
-      (cmp_rr (put_in_reg a) (put_in_reg b))
-      (cond_br (cond_from_intcc cc) taken not_taken))))
+  (emit_side_effect (cond_br (emit_icmp_cmp cc a b) taken not_taken)))
 
 ;; Fuse a 64-bit `icmp` feeding a `brif`.
 (rule 2 (lower_branch (brif (icmp _ cc a @ (value_type $I64) b) _ _) (two_targets taken not_taken))
   (emit_side_effect
     (cond_br (lower_icmp_i64 cc (put_in_regs a) (put_in_regs b)) taken not_taken)))
+
+;; `one`/`ueq` feeding a `brif`: materialize the two-condition boolean, then
+;; branch on whether it is non-zero (priority 2 beats the generic fused rule,
+;; whose single-condition mapping can't represent these).
+(rule 2 (lower_branch (brif (fcmp _ (FloatCC.OrderedNotEqual) a @ (value_type $F32) b) _ _) (two_targets taken not_taken))
+  (emit_side_effect (side_effect_concat
+    (cmp_imm (gen_fcmp_one (FpuSize.F32) (put_in_reg a) (put_in_reg b)) 0)
+    (cond_br (Cond.Ne) taken not_taken))))
+(rule 2 (lower_branch (brif (fcmp _ (FloatCC.OrderedNotEqual) a @ (value_type $F64) b) _ _) (two_targets taken not_taken))
+  (emit_side_effect (side_effect_concat
+    (cmp_imm (gen_fcmp_one (FpuSize.F64) (put_in_reg a) (put_in_reg b)) 0)
+    (cond_br (Cond.Ne) taken not_taken))))
+(rule 2 (lower_branch (brif (fcmp _ (FloatCC.UnorderedOrEqual) a @ (value_type $F32) b) _ _) (two_targets taken not_taken))
+  (emit_side_effect (side_effect_concat
+    (cmp_imm (gen_fcmp_ueq (FpuSize.F32) (put_in_reg a) (put_in_reg b)) 0)
+    (cond_br (Cond.Ne) taken not_taken))))
+(rule 2 (lower_branch (brif (fcmp _ (FloatCC.UnorderedOrEqual) a @ (value_type $F64) b) _ _) (two_targets taken not_taken))
+  (emit_side_effect (side_effect_concat
+    (cmp_imm (gen_fcmp_ueq (FpuSize.F64) (put_in_reg a) (put_in_reg b)) 0)
+    (cond_br (Cond.Ne) taken not_taken))))
 
 ;; Fuse an `fcmp` feeding a `brif`.
 (rule 1 (lower_branch (brif (fcmp _ cc a @ (value_type $F32) b) _ _) (two_targets taken not_taken))

@@ -81,3 +81,51 @@ block0(v0: i32):
 ;   ldrsh r0, [r0, #2]
 ;   bx lr
 
+function %load_i8(i32) -> i8 {
+block0(v0: i32):
+    v1 = load.i8 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ldrb r0, [r0, #0]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrb r0, [r0]
+;   bx lr
+
+function %store_i8(i8, i32) {
+block0(v0: i8, v1: i32):
+    store.i8 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   strb r0, [r1, #0]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   strb r0, [r1]
+;   bx lr
+
+function %load_i16(i32) -> i16 {
+block0(v0: i32):
+    v1 = load.i16 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ldrh r0, [r0, #0]
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrh r0, [r0]
+;   bx lr
+

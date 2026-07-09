@@ -40,3 +40,44 @@ block0(v0: i32, v1: i32, v2: i32):
 ;   movne r0, r1
 ;   bx lr
 
+function %select_i64(i32, i64, i64) -> i64 {
+block0(v0: i32, v1: i64, v2: i64):
+    v3 = select v0, v1, v2
+    return v3
+}
+
+; VCode:
+;   push {fp, lr}
+;   mov fp, sp
+;   sub sp, sp, #8
+;   str r6, [sp, #4]
+; block0:
+;   ldr r1, [incoming_arg, #8]
+;   ldr r6, [incoming_arg, #4]
+;   cmp r0, #0
+;   mov r0, r1; movne r0, r2
+;   mov r1, r6; movne r1, r3
+;   ldr r6, [sp, #4]
+;   add sp, sp, #8
+;   pop {fp, lr}
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   push {fp, lr}
+;   mov fp, sp
+;   sub sp, sp, #8
+;   str r6, [sp, #4]
+; block1: ; offset 0x10
+;   ldr r1, [sp, #0x10]
+;   ldr r6, [sp, #0x14]
+;   cmp r0, #0
+;   mov r0, r1
+;   movne r0, r2
+;   mov r1, r6
+;   movne r1, r3
+;   ldr r6, [sp, #4]
+;   add sp, sp, #8
+;   pop {fp, lr}
+;   bx lr
+

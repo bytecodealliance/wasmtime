@@ -231,18 +231,36 @@ impl ABIMachineSpec for Arm32MachineDeps {
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, _ty: Type) -> Inst {
-        Inst::Load {
-            rt: into_reg,
-            mem: AMode::RegOffset { rn: base, offset },
-            kind: LoadKind::Word,
+        let mem = AMode::RegOffset { rn: base, offset };
+        if into_reg.to_reg().class() == RegClass::Float {
+            Inst::FpuLoad {
+                size: FpuSize::F64,
+                rd: into_reg,
+                mem,
+            }
+        } else {
+            Inst::Load {
+                rt: into_reg,
+                mem,
+                kind: LoadKind::Word,
+            }
         }
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, _ty: Type) -> Inst {
-        Inst::Store {
-            rt: from_reg,
-            mem: AMode::RegOffset { rn: base, offset },
-            kind: StoreKind::Word,
+        let mem = AMode::RegOffset { rn: base, offset };
+        if from_reg.class() == RegClass::Float {
+            Inst::FpuStore {
+                size: FpuSize::F64,
+                rt: from_reg,
+                mem,
+            }
+        } else {
+            Inst::Store {
+                rt: from_reg,
+                mem,
+                kind: StoreKind::Word,
+            }
         }
     }
 
@@ -322,11 +340,17 @@ impl ABIMachineSpec for Arm32MachineDeps {
             + frame_layout.outgoing_args_size;
         if stack_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
-            let mut cur_offset = 0i32;
+            // Callee-saved registers are saved at the *top* of the frame, above
+            // the fixed stack-slot and outgoing-argument regions (which resolve
+            // from sp upward). Placing them from sp=0 would alias those regions
+            // and corrupt saved registers.
+            let mut cur_offset = 0u32;
             for reg in &frame_layout.clobbered_callee_saves {
                 let r = Reg::from(reg.to_reg());
+                let bytes = if r.class() == RegClass::Float { 8 } else { 4 };
+                cur_offset = align_to(cur_offset, bytes);
                 let mem = AMode::SPOffset {
-                    offset: i64::from(cur_offset),
+                    offset: i64::from(stack_size - cur_offset - bytes),
                 };
                 if r.class() == RegClass::Float {
                     insts.push(Inst::FpuStore {
@@ -334,15 +358,14 @@ impl ABIMachineSpec for Arm32MachineDeps {
                         rt: r,
                         mem,
                     });
-                    cur_offset += 8;
                 } else {
                     insts.push(Inst::Store {
                         rt: r,
                         mem,
                         kind: StoreKind::Word,
                     });
-                    cur_offset += 4;
                 }
+                cur_offset += bytes;
             }
         }
         insts
@@ -357,26 +380,29 @@ impl ABIMachineSpec for Arm32MachineDeps {
         let stack_size = frame_layout.clobber_size
             + frame_layout.fixed_frame_storage_size
             + frame_layout.outgoing_args_size;
-        let mut cur_offset = 0i32;
+        // Mirror the top-of-frame placement used by `gen_clobber_save`.
+        let mut cur_offset = 0u32;
         for reg in &frame_layout.clobbered_callee_saves {
+            let is_float = reg.to_reg().class() == RegClass::Float;
+            let bytes = if is_float { 8 } else { 4 };
+            cur_offset = align_to(cur_offset, bytes);
             let mem = AMode::SPOffset {
-                offset: i64::from(cur_offset),
+                offset: i64::from(stack_size - cur_offset - bytes),
             };
-            if reg.to_reg().class() == RegClass::Float {
+            if is_float {
                 insts.push(Inst::FpuLoad {
                     size: FpuSize::F64,
                     rd: reg.map(Reg::from),
                     mem,
                 });
-                cur_offset += 8;
             } else {
                 insts.push(Inst::Load {
                     rt: reg.map(Reg::from),
                     mem,
                     kind: LoadKind::Word,
                 });
-                cur_offset += 4;
             }
+            cur_offset += bytes;
         }
         if stack_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));

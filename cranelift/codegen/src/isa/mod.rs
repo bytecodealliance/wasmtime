@@ -114,7 +114,11 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
             isa_builder!(x64, (feature = "x86"), triple)
         }
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
-        Architecture::Arm(..) => isa_builder!(arm32, (feature = "arm32"), triple),
+        // The arm32 backend only emits A32 encodings, so Thumb-only targets are
+        // not supported.
+        Architecture::Arm(arm) if !arm.is_thumb() => {
+            isa_builder!(arm32, (feature = "arm32"), triple)
+        }
         Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),
         Architecture::Riscv64 { .. } => isa_builder!(riscv64, (feature = "riscv64"), triple),
         Architecture::Pulley32 | Architecture::Pulley32be => {

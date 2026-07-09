@@ -9,11 +9,25 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
+;   cmp r1, #0
+;   bne 1f ; udf ; 1: ; int_divz
+;   eor r2, r0, #2147483648
+;   add r3, r1, #1
+;   orrs r2, r2, r3
+;   bne 1f ; udf ; 1: ; int_ovf
 ;   sdiv r0, r0, r1
 ;   bx lr
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   cmp r1, #0
+;   bne #0xc
+;   udf #0 ; trap: int_divz
+;   eor r2, r0, #0x80000000
+;   add r3, r1, #1
+;   orrs r2, r2, r3
+;   bne #0x20
+;   udf #0 ; trap: int_ovf
 ;   sdiv r0, r0, r1
 ;   bx lr
 
@@ -25,11 +39,16 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
+;   cmp r1, #0
+;   bne 1f ; udf ; 1: ; int_divz
 ;   udiv r0, r0, r1
 ;   bx lr
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   cmp r1, #0
+;   bne #0xc
+;   udf #0 ; trap: int_divz
 ;   udiv r0, r0, r1
 ;   bx lr
 

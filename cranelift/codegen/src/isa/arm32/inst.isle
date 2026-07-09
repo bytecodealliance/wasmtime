@@ -304,6 +304,10 @@
     ;; A permanently-undefined instruction used to encode a trap.
     (Udf (code TrapCode))
 
+    ;; Conditionally trap on the current flags: emitted as
+    ;; `b<!cond> 1f; udf <code>; 1:`.
+    (TrapIf (cond Cond) (code TrapCode))
+
     ;; Load/store multiple, increment-after (`ldmia`/`stmia rn{!}, {list}`).
     (LdmStm (load bool) (rn Reg) (writeback bool) (reg_list u32))
 
@@ -534,17 +538,12 @@
 (decl pure use_idiv () bool)
 (extern constructor use_idiv use_idiv)
 
-(decl sdiv_reg (Reg Reg) Reg)
-(rule (sdiv_reg rn rm)
-  (let ((rd WritableReg (temp_writable_reg $I32))
-        (_ Unit (emit (MInst.SDiv rd rn rm))))
-    rd))
-
-(decl udiv_reg (Reg Reg) Reg)
-(rule (udiv_reg rn rm)
-  (let ((rd WritableReg (temp_writable_reg $I32))
-        (_ Unit (emit (MInst.UDiv rd rn rm))))
-    rd))
+;; Signed/unsigned divide with the Cranelift-mandated trap checks (divide by
+;; zero, and `INT_MIN / -1` overflow for `sdiv`) emitted before the divide.
+(decl gen_sdiv (Reg Reg) Reg)
+(extern constructor gen_sdiv gen_sdiv)
+(decl gen_udiv (Reg Reg) Reg)
+(extern constructor gen_udiv gen_udiv)
 
 ;;;; Bit operations and extends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -698,6 +697,19 @@
 ;; Map a Cranelift `FloatCC` to the ARM condition testing the VFP flags.
 (decl cond_from_floatcc (FloatCC) Cond)
 (extern constructor cond_from_floatcc cond_from_floatcc)
+
+;; The two float conditions that a single ARM condition can't express, built as
+;; a 0/1 boolean from the flags left by a `vcmp`. `one` (ordered and not-equal)
+;; keeps the not-equal result only when ordered (`vc`); `ueq` (unordered or
+;; equal) forces the equal result to 1 when unordered (`vs`).
+(decl gen_fcmp_one (FpuSize Reg Reg) Reg)
+(rule (gen_fcmp_one size a b)
+  (let ((_ Unit (emit_side_effect (vcmp size a b))))
+    (csel (Cond.Vc) (csetv (Cond.Ne)) (gen_constant 0))))
+(decl gen_fcmp_ueq (FpuSize Reg Reg) Reg)
+(rule (gen_fcmp_ueq size a b)
+  (let ((_ Unit (emit_side_effect (vcmp size a b))))
+    (csel (Cond.Vs) (gen_constant 1) (csetv (Cond.Eq)))))
 
 ;; `fcopysign` via GPR bit manipulation (clear the sign of `a`, OR in `b`'s).
 (decl gen_copysign_f32 (Reg Reg) Reg)
@@ -942,6 +954,12 @@
 ;; Map an `IntCC` to the corresponding ARM condition code.
 (decl cond_from_intcc (IntCC) Cond)
 (extern constructor cond_from_intcc cond_from_intcc)
+
+;; Emit a `cmp` of two (possibly narrow) integer values as a side effect,
+;; widening i8/i16 operands to 32 bits per the comparison's signedness, and
+;; return the ARM condition that then tests the result.
+(decl emit_icmp_cmp (IntCC Value Value) Cond)
+(extern constructor emit_icmp_cmp emit_icmp_cmp)
 
 ;; Emit the compare sequence for a 64-bit `icmp` and return the ARM condition
 ;; that then tests it (the compare itself is emitted as a side effect).
