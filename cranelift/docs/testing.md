@@ -43,7 +43,7 @@ isa_spec      : "isa" isa_name { option } "\n"
 ```
 
 The options given on the `isa` line modify the ISA-specific settings defined in
-`cranelift/codegen/src/isa/<arch>/settings.rs`.
+`cranelift/codegen/meta/src/isa/<arch>.rs`.
 
 All types of tests allow shared Cranelift settings to be modified:
 
