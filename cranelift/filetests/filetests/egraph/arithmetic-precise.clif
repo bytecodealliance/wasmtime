@@ -247,8 +247,8 @@ block0(v0: i32x4, v1: i32x4):
 ;     const0 = 0xffffffffffffffffffffffffffffffff
 ;
 ; block0(v0: i32x4, v1: i32x4):
-;     v9 = icmp eq v0, v0
-;     return v9
+;     v7 = vconst.i32x4 const0
+;     return v7  ; v7 = const0
 ; }
 
 ;; (x - y) != x --> y != 0
