@@ -127,7 +127,7 @@ impl StoreLimits {
         if self
             .0
             .remaining_copy_allowance
-            .fetch_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(prev_size))
+            .try_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(prev_size))
             .is_err()
         {
             self.0.oom.store(true, SeqCst);
@@ -140,7 +140,7 @@ impl StoreLimits {
         match self
             .0
             .remaining_memory
-            .fetch_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(amt))
+            .try_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(amt))
         {
             Ok(_) => true,
             Err(_) => {

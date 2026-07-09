@@ -12,7 +12,6 @@ use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::{Opcode, Value};
 use crate::isa::aarch64::AArch64Backend;
 use crate::isa::aarch64::inst::*;
-use crate::machinst::lower::*;
 use crate::machinst::*;
 
 pub mod isle;

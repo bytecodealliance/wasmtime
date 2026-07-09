@@ -7,7 +7,6 @@ use crate::ir::{ExternalName, types::*};
 use crate::isa;
 use crate::isa::winch;
 use crate::isa::{CallConv, unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings};
-use crate::machinst::abi::*;
 use crate::machinst::*;
 use crate::settings;
 use alloc::borrow::ToOwned;

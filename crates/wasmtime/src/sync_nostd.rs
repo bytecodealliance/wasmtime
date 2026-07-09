@@ -268,7 +268,7 @@ mod panic_on_contention {
             const READER_LIMIT: u32 = u32::MAX / 2;
             match self
                 .state
-                .fetch_update(Ordering::Acquire, Ordering::Acquire, |x| match x {
+                .try_update(Ordering::Acquire, Ordering::Acquire, |x| match x {
                     u32::MAX => None,
                     n => {
                         let next = n + 1;
