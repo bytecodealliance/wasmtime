@@ -275,27 +275,46 @@ impl DrcHeap {
         Ok(())
     }
 
-    /// Decrement the ref count for the associated object and process this
-    /// heap's pending `dec_ref_stack`.
+    /// Decrements the reference count of `gc_ref`, if applicable (e.g. not an
+    /// i31).
     ///
-    /// If the `gc_ref` object is specified, and if the ref count reached zero,
-    /// then deallocate the object and remove its associated entry from the
-    /// `host_data_table` if necessary.
-    ///
-    /// This uses an explicit stack, rather than recursion, for the scenario
-    /// where dropping one object means that the ref count for another object
-    /// that it referenced reaches zero.
-    fn dec_ref_and_maybe_dealloc(
-        &mut self,
-        host_data_table: &mut ExternRefHostDataTable,
-        gc_ref: Option<&VMGcRef>,
-    ) -> Result<()> {
-        if let Some(gc_ref) = gc_ref
-            && gc_ref.is_i31()
-        {
+    /// If the reference count reaches 0 then this will enqueue the reference to
+    /// get deallocated at a later time within
+    /// `self.tracing_allocs.dec_ref_stack`.
+    fn dec_ref_and_maybe_enqueue_dealloc(&mut self, gc_ref: &VMGcRef) -> Result<()> {
+        if gc_ref.is_i31() {
             return Ok(());
         }
 
+        let drc_header = self.index_mut(drc_ref(gc_ref))?;
+        log::trace!(
+            "decrement {gc_ref:#p} ref count -> {}",
+            drc_header.ref_count - 1
+        );
+        if drc_header.dec_ref() {
+            // The `process_dec_ref_stack` loop below always starts out with a
+            // decrement, so reset the reference count back to 1 so that knows
+            // it has an exclusive copy.
+            drc_header.ref_count = 1;
+            match &mut self.tracing_allocs {
+                Some(allocs) => allocs.dec_ref_stack.push(gc_ref.unchecked_copy()),
+                None => bail_bug!("expected allocations to be present"),
+            }
+        }
+        Ok(())
+    }
+
+    /// Process all elements on `self.tracing_allocs.dec_ref_stack` and
+    /// deallocate them.
+    ///
+    /// This will `dec_ref` all elements on the stack and recursively deallocate
+    /// any that have reached a reference count of 0. Note that this is modeled
+    /// with an explicit stack rather than a recursive function to ensure that
+    /// this cannot overflow the host stack.
+    fn process_dec_ref_stack(
+        &mut self,
+        host_data_table: &mut ExternRefHostDataTable,
+    ) -> Result<()> {
         let allocs = match self.tracing_allocs.take() {
             Some(allocs) => allocs,
             None => bail_bug!("allocs missing during tracing"),
@@ -314,10 +333,6 @@ impl DrcHeap {
         // might have dangling references inserted by `write_gc_ref`.
         debug_assert!(large_array_stack.is_empty());
         debug_assert!(to_dealloc.is_empty());
-
-        if let Some(gc_ref) = gc_ref {
-            stack.push(gc_ref.unchecked_copy());
-        }
 
         while !stack.is_empty() || !large_array_stack.is_empty() {
             while let Some(gc_ref) = stack.pop() {
@@ -681,17 +696,15 @@ impl DrcHeap {
             }
             self.vmctx_data
                 .decrement_current_over_approximated_stack_roots_len();
-            self.dec_ref_and_maybe_dealloc(host_data_table, Some(&gc_ref))?;
+            self.dec_ref_and_maybe_enqueue_dealloc(&gc_ref)?;
         }
 
-        // If the `dec_ref_stack` at this point still has items on it then that
-        // means a host-initiated `write_gc_ref` overwrote something and
-        // decremented it to 0. Clear that out here has it otherwise has not yet
-        // been processed.
+        // If some references have reached a 0 reference count then now's the
+        // time to clear them all out.
         if let Some(allocs) = &self.tracing_allocs
             && !allocs.dec_ref_stack.is_empty()
         {
-            self.dec_ref_and_maybe_dealloc(host_data_table, None)?;
+            self.process_dec_ref_stack(host_data_table)?;
         }
 
         self.vmctx_data
@@ -983,18 +996,7 @@ unsafe impl GcHeap for DrcHeap {
         // reference count reaches 0 then re-increment it back to one and queue
         // this up to get deallocated later on during a GC cycle.
         if let Some(dest) = destination {
-            let drc_header = self.index_mut(drc_ref(dest))?;
-            log::trace!(
-                "decrement {dest:#p} ref count -> {}",
-                drc_header.ref_count - 1
-            );
-            if drc_header.dec_ref() {
-                drc_header.ref_count = 1;
-                match &mut self.tracing_allocs {
-                    Some(allocs) => allocs.dec_ref_stack.push(dest.unchecked_copy()),
-                    None => bail_bug!("expected allocations to be present"),
-                }
-            }
+            self.dec_ref_and_maybe_enqueue_dealloc(dest)?;
         }
 
         // Do the actual write.
