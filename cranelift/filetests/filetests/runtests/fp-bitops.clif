@@ -72,6 +72,15 @@ block0(v0: f32, v1: f32):
 
 ; run: %test_bxor_f32(0x1.ff, 0x1.0ff) == 0x0.f0fp-126
 
+function %test_bxor_x_x_f32(f32) -> f32 fast {
+block0(v0: f32):
+    v1 = bxor v0, v0
+    return v1
+}
+
+; run: %test_bxor_x_x_f32(0x1.ff) == 0x0.0
+; run: %test_bxor_x_x_f32(-NaN:0x3fffff) == 0x0.0
+
 function %test_bxor_f64(f64, f64) -> f64 fast {
 block0(v0: f64, v1: f64):
     v2 = bxor v0, v1
@@ -79,6 +88,15 @@ block0(v0: f64, v1: f64):
 }
 
 ; run: %test_bxor_f64(0x1.ff, 0x1.0ff) == 0x0.f0fp-1022
+
+function %test_bxor_x_x_f64(f64) -> f64 fast {
+block0(v0: f64):
+    v1 = bxor v0, v0
+    return v1
+}
+
+; run: %test_bxor_x_x_f64(0x1.ff) == 0x0.0
+; run: %test_bxor_x_x_f64(-0x0.0) == 0x0.0
 
 function %test_bnot_bxor_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):

@@ -2,16 +2,16 @@
 
 ;; `x == x` is always true for integers; `x != x` is false. Strict
 ;; inequalities are false, and loose inequalities are true.
-(rule (simplify (eq  (ty_int ty) x x)) (subsume (iconst_u ty 1)))
-(rule (simplify (ne  (ty_int ty) x x)) (subsume (iconst_u ty 0)))
-(rule (simplify (ugt (ty_int ty) x x)) (subsume (iconst_u ty 0)))
-(rule (simplify (uge (ty_int ty) x x)) (subsume (iconst_u ty 1)))
-(rule (simplify (sgt (ty_int ty) x x)) (subsume (iconst_u ty 0)))
-(rule (simplify (sge (ty_int ty) x x)) (subsume (iconst_u ty 1)))
-(rule (simplify (ult (ty_int ty) x x)) (subsume (iconst_u ty 0)))
-(rule (simplify (ule (ty_int ty) x x)) (subsume (iconst_u ty 1)))
-(rule (simplify (slt (ty_int ty) x x)) (subsume (iconst_u ty 0)))
-(rule (simplify (sle (ty_int ty) x x)) (subsume (iconst_u ty 1)))
+(rule (simplify (eq ty x x)) (subsume (cmp_true ty)))
+(rule (simplify (ne ty x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (ugt ty x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (uge ty x x)) (subsume (cmp_true ty)))
+(rule (simplify (sgt ty x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (sge ty x x)) (subsume (cmp_true ty)))
+(rule (simplify (ult ty x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (ule ty x x)) (subsume (cmp_true ty)))
+(rule (simplify (slt ty x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (sle ty x x)) (subsume (cmp_true ty)))
 
 ;; For integers, adding the same thing on both sides of an equality check
 ;; (or an inequality check) doesn't change the result.
@@ -474,3 +474,9 @@
 
 (rule (simplify_skeleton (brif (ireduce _ (clz x_ty x)) _ _))
       (replace_branch_cond (sge $I8 x (iconst_u x_ty 0))))
+
+;; ~x == x --> 0
+(rule (simplify (eq ty (bnot cty x) x)) (subsume (iconst_u ty 0)))
+
+;; ~x != x --> 1
+(rule (simplify (ne ty (bnot cty x) x)) (subsume (cmp_true ty)))

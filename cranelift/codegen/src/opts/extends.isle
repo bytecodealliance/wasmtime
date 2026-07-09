@@ -93,3 +93,6 @@
 ;; Try to transform an `iconcat` into an i128 into either an sextend or uextend
 (rule (simplify (iconcat $I128 x (iconst_u _ 0))) (uextend $I128 x))
 (rule (simplify (iconcat $I128 x (sshr _ x (iconst_u _ 63)))) (sextend $I128 x))
+
+;; Select narrowest type
+(rule (simplify (ireduce ty (ireduce cty x))) (ireduce ty x))

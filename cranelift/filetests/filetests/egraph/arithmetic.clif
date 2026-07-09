@@ -219,6 +219,17 @@ block0(v0: i32):
 ; check: v6 = ineg v0
 ; check: return v6
 
+function %ineg_bnot_to_iadd_one(i32) -> i32 {
+block0(v0: i32):
+    v1 = bnot v0
+    v2 = ineg v1
+    return v2
+}
+
+; check: v3 = iconst.i32 1
+; check: v4 = iadd v0, v3  ; v3 = 1
+; check: return v4
+
 function %byte_sub_smax_twice(i8) -> i8 {
 block0(v0: i8):
     v1 = iconst.i8 127
@@ -463,4 +474,14 @@ block0(v0: i64):
     ; check: v5 = iconst.i64 7
     ; check: v6 = iadd v4, v5
     ; check: return v6
+}
+
+;; -1 - x --> ~x
+function %isub_minus_one_lhs_to_bnot(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -1
+    v2 = isub v1, v0
+    return v2
+    ; check: v12 = bnot v0
+    ; check: return v12
 }

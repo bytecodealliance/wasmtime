@@ -265,3 +265,12 @@ block0(v0: i64):
 ; run: %rotl_i64_const4(0xe000000000000000) == 0xe
 ; run: %rotl_i64_const4(0) == 0
 ; run: %rotl_i64_const4(0xa00000000000000a) == 0xaa
+
+function %rotl_i64_const128(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 128
+    v2 = rotl v0, v1
+    return v2
+}
+; run: %rotl_i64_const128(0xe000000000000004) == 0xe000000000000004
+; run: %rotl_i64_const128(0xa00000000000000a) == 0xa00000000000000a

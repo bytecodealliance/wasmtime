@@ -138,6 +138,54 @@ block0(v1: i64):
 ; check: v5 = bnot v1
 ; check: return v5
 
+function %bxor_x_x_f32(f32) -> f32 {
+block0(v0: f32):
+    v1 = bxor v0, v0
+    return v1
+}
+
+; check: v2 = f32const 0.0
+; check: return v2
+
+function %bxor_x_x_f64(f64) -> f64 {
+block0(v0: f64):
+    v1 = bxor v0, v0
+    return v1
+}
+
+; check: v2 = f64const 0.0
+; check: return v2
+
+function %vector_bxor_x_x_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+    v1 = bxor v0, v0
+    return v1
+}
+
+; check: const0 = 0x00000000000000000000000000000000
+; check: v4 = vconst.f32x4 const0
+; check: return v4
+
+function %vector_bxor_x_x_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+    v1 = bxor v0, v0
+    return v1
+}
+
+; check: const0 = 0x00000000000000000000000000000000
+; check: v4 = vconst.f64x2 const0
+; check: return v4
+
+function %vector_bxor_x_x_f32x2(f32x2) -> f32x2 {
+block0(v0: f32x2):
+    v1 = bxor v0, v0
+    return v1
+}
+
+; check: f32const 0.0
+; check: splat.f32x2
+; check: return
+
 function %vector_bxor_x_bnot_x(i32x4) -> i32x4 {
 block0(v0: i32x4):
     v1 = bnot v0
@@ -157,6 +205,17 @@ block0(v0: i32x4):
 }
 
 ; check: const0 = 0xffffffffffffffffffffffffffffffff
+; check: v5 = vconst.i32x4 const0
+; check: return v5
+
+function %vector_bxor_bnot_x_bnot_x(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = bnot v0
+    v2 = bxor v1, v1
+    return v2
+}
+
+; check: const0 = 0x00000000000000000000000000000000
 ; check: v5 = vconst.i32x4 const0
 ; check: return v5
 
@@ -801,6 +860,21 @@ block0(v0: i32, v1: i32):
 ; block0(v0: i32, v1: i32):
 ;     v5 = isub v0, v1
 ;     return v5
+; }
+
+;; (bnot ty (ineg ty x)) -> (isub ty x (iconst_u ty 1))
+function %test_bnot_ineg_to_isub_one(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = bnot v1
+    return v2
+}
+
+; function %test_bnot_ineg_to_isub_one(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 1
+;     v4 = isub v0, v3
+;     return v4
 ; }
 
 ;; (bor ty (bxor ty x z) (bor ty y x)) -> (bor ty (bor ty y x) z)

@@ -1,0 +1,24 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse42
+target x86_64 sse42 has_avx
+set enable_multi_ret_implicit_sret
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
+function %test_bxor_x_x_i64x2(i64x2) -> i64x2 fast {
+block0(v0: i64x2):
+    v1 = bxor v0, v0
+    return v1
+}
+
+; run: %test_bxor_x_x_i64x2([0 0]) == [0 0]
+; run: %test_bxor_x_x_i64x2([0x123456789abcdef0 0xffffffffffffffff]) == [0 0]

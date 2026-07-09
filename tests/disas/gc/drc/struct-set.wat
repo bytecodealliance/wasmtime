@@ -113,25 +113,25 @@
 ;; @004a                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v67 = iadd.i64 v7, v8  ; v8 = 32
-;; @004a                               store.i32 user2 little region4 v3, v67
-;;                                     v68 = iconst.i32 1
-;;                                     v69 = band.i32 v10, v68  ; v68 = 1
-;;                                     v70 = iconst.i32 0
-;;                                     v71 = icmp.i32 eq v10, v70  ; v70 = 0
-;; @004a                               v36 = uextend.i32 v71
-;; @004a                               v37 = bor v69, v36
+;;                                     v68 = iadd.i64 v7, v8  ; v8 = 32
+;; @004a                               store.i32 user2 little region4 v3, v68
+;;                                     v69 = iconst.i32 1
+;;                                     v70 = band.i32 v10, v69  ; v69 = 1
+;;                                     v71 = iconst.i32 0
+;;                                     v72 = icmp.i32 eq v10, v71  ; v71 = 0
+;; @004a                               v36 = uextend.i32 v72
+;; @004a                               v37 = bor v70, v36
 ;; @004a                               brif v37, block7, block4
 ;;
 ;;                                 block4:
 ;; @004a                               v38 = uextend.i64 v10
 ;; @004a                               v41 = iadd.i64 v6, v38
-;;                                     v72 = iconst.i64 8
-;; @004a                               v43 = iadd v41, v72  ; v72 = 8
+;;                                     v73 = iconst.i64 8
+;; @004a                               v43 = iadd v41, v73  ; v73 = 8
 ;; @004a                               v44 = load.i64 user2 region4 v43
-;;                                     v73 = iconst.i64 1
-;;                                     v65 = icmp eq v44, v73  ; v73 = 1
-;; @004a                               brif v65, block5, block6
+;;                                     v74 = iconst.i64 1
+;;                                     v66 = icmp eq v44, v74  ; v74 = 1
+;; @004a                               brif v66, block5, block6
 ;;
 ;;                                 block5 cold:
 ;; @004a                               call fn0(v0, v10)
@@ -140,8 +140,8 @@
 ;;                                 block6:
 ;; @004a                               v45 = iconst.i64 -1
 ;; @004a                               v46 = iadd.i64 v44, v45  ; v45 = -1
-;;                                     v74 = iadd.i64 v41, v72  ; v72 = 8
-;; @004a                               store user2 region4 v46, v74
+;;                                     v75 = iadd.i64 v41, v73  ; v73 = 8
+;; @004a                               store user2 region4 v46, v75
 ;; @004a                               jump block7
 ;;
 ;;                                 block7:

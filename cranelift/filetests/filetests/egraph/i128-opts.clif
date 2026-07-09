@@ -74,16 +74,18 @@ function %eq_self_v128(i8x16) -> i8x16 {
 block0(v0: i8x16):
     v1 = icmp eq v0, v0
     return v1
-    ; check: v1 = icmp eq v0, v0
-    ; check: return v1
+    ; check: const0 = 0xffffffffffffffffffffffffffffffff
+    ; check: v4 = vconst.i8x16 const0
+    ; check: return v4  ; v4 = const0
 }
 
 function %ne_self_v128(i8x16) -> i8x16 {
 block0(v0: i8x16):
     v1 = icmp ne v0, v0
     return v1
-    ; check: v1 = icmp ne v0, v0
-    ; check: return v1
+    ; check: const0 = 0x00000000000000000000000000000000
+    ; check: v4 = vconst.i8x16 const0
+    ; check: return v4  ; v4 = const0
 }
 
 function %bor_extended_constants_i128() -> i128 {

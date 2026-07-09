@@ -134,6 +134,16 @@ block0(v1: i16):
 ; check: v4 = uextend.i32 v1
 ; check: return v4
 
+function %nested_ireduce(i64) -> i8 {
+block0(v1: i64):
+    v2 = ireduce.i32 v1
+    v3 = ireduce.i8 v2
+    return v3
+}
+
+; check: v4 = ireduce.i8 v1
+; check: return v4
+
 function %sextend_then_slt_zero(i8) -> i8 {
 block0(v0: i8):
     v1 = sextend.i16 v0

@@ -14,9 +14,17 @@
                      (iconst_u ty 0)))
       (subsume x))
 
+;; Create an all-zero bit pattern for integer, float, and vector types.
+(decl rec all_zero (Type) Value)
+(rule 0 (all_zero (ty_int ty)) (iconst_u ty 0))
+(rule 1 (all_zero $F32) (f32const $F32 (f32_from_uint 0)))
+(rule 2 (all_zero $F64) (f64const $F64 (f64_from_uint 0)))
+(rule 3 (all_zero (ty_vec64 ty)) (splat ty (all_zero (lane_type ty))))
+(rule 4 (all_zero (ty_vec128 ty)) (splat ty (all_zero (lane_type ty))))
+
 ;; x ^ x == 0.
-(rule (simplify (bxor (ty_int ty) x x))
-      (subsume (iconst_u ty 0)))
+(rule (simplify (bxor ty x x))
+      (subsume (all_zero ty)))
 
 ;; x ^ not(x) == not(x) ^ x == x | not(x) == not(x) | x == -1.
 ;; This identity also holds for non-integer types, vectors, and wider types.

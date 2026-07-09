@@ -19,6 +19,7 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -33,6 +34,6 @@
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:
-;; @002c                               v17 = bxor.i8x16 v9, v9
-;; @002e                               return v17
+;;                                     v20 = vconst.i8x16 const0
+;; @002e                               return v20  ; v20 = const0
 ;; }

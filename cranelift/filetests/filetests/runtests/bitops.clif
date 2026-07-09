@@ -554,6 +554,17 @@ block0(v0: i32, v1: i32):
 ; run: %test_bnot_iadd_bnot_to_isub_rt(4, 5) == -1
 ; run: %test_bnot_iadd_bnot_to_isub_rt(0x12345678, 0x11111111) == 0x01234567
 
+function %test_bnot_ineg_to_isub_one_rt(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = bnot v1
+    return v2
+}
+
+; run: %test_bnot_ineg_to_isub_one_rt(0) == -1
+; run: %test_bnot_ineg_to_isub_one_rt(1) == 0
+; run: %test_bnot_ineg_to_isub_one_rt(0x12345678) == 0x12345677
+
 function %test_bor_bxor_bor(i32, i32, i32) -> i32 fast {
 block0(v0: i32, v1: i32, v2: i32):
     v3 = bxor v0, v2

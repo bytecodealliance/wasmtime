@@ -606,3 +606,66 @@ block0(v0: i64):
     v2 = ishl v0, v1
     return v2
 }
+function %ishl_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = ishl v1, v0
+    return v2
+    ; check: return v1
+}
+function %ushr_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = ushr v1, v0
+    return v2
+    ; check: return v1
+}
+function %rotl_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = rotl v1, v0
+    return v2
+    ; check: return v1
+}
+function %rotr_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = rotr v1, v0
+    return v2
+    ; check: return v1
+}
+function %rotl_const_multiple_of_64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 128
+    v2 = rotl v0, v1
+    return v2
+    ; check: return v0
+}
+function %sshr_all_ones_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1
+    v2 = sshr v1, v0
+    return v2
+    ; check: return v1
+}
+function %rotl_all_ones_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1
+    v2 = rotl v1, v0
+    return v2
+    ; check: return v1
+}
+function %rotr_all_ones_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1
+    v2 = rotr v1, v0
+    return v2
+    ; check: return v1
+}
+function %sshr_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = sshr v1, v0
+    return v2
+    ; check: return v1
+}
