@@ -240,7 +240,6 @@ unsafe impl GcHeap for NullHeap {
 
     fn write_gc_ref(
         &mut self,
-        _host_data_table: &mut ExternRefHostDataTable,
         destination: &mut Option<VMGcRef>,
         source: Option<&VMGcRef>,
     ) -> Result<()> {

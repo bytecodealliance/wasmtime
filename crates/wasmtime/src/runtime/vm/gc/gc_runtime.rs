@@ -169,7 +169,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// failures such as panics or incorrect results.
     ///
     /// The given `gc_ref` should not be used again.
-    fn drop_gc_ref(&mut self, host_data_table: &mut ExternRefHostDataTable, gc_ref: VMGcRef) {
+    fn drop_gc_ref(&mut self, gc_ref: VMGcRef) {
         let mut dest = Some(gc_ref);
 
         // Similar to `clone_gc_ref` not being fallible this method,
@@ -178,7 +178,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
         // corrupted at this point it'll get a ltitle more corrupted from this
         // operation, but that's the tradeoff we're making ignoring the error
         // here.
-        if let Err(e) = self.write_gc_ref(host_data_table, &mut dest, None) {
+        if let Err(e) = self.write_gc_ref(&mut dest, None) {
             if cfg!(debug_assertions) {
                 panic!("heap corruption detected: {e}");
             }
@@ -199,7 +199,6 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// but may result in general failures such as panics or incorrect results.
     fn write_gc_ref(
         &mut self,
-        host_data_table: &mut ExternRefHostDataTable,
         destination: &mut Option<VMGcRef>,
         source: Option<&VMGcRef>,
     ) -> Result<()>;
