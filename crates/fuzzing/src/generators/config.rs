@@ -882,9 +882,14 @@ impl WasmtimeConfig {
             mcfg.gc_heap_may_move = None;
 
             // Don't let the initial size of a GC heap exceed the maximum
-            // allowed by the pooling allocator.
+            // allowed by the pooling allocator. Note that these sizes are
+            // rounded up to the wasm page size used by GC at this time as
+            // that's what happens internally.
             if let Some(amt) = mcfg.gc_heap_initial_size {
-                mcfg.gc_heap_initial_size = Some(amt.min(pcfg.max_memory_size as u64));
+                let page_size = 64 * 1024;
+                let amt = amt.next_multiple_of(page_size);
+                let max = (pcfg.max_memory_size as u64).next_multiple_of(page_size);
+                mcfg.gc_heap_initial_size = Some(amt.min(max));
             }
         }
 
