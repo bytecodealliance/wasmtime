@@ -1344,6 +1344,18 @@ impl Config {
         self
     }
 
+    /// Configures whether the component model memory64 support is enabled
+    ///
+    /// This corresponds to the 🐘 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_memory64(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM64, enable);
+        self
+    }
+
     /// This corresponds to the 🔧 emoji in the component model specification.
     ///
     /// Please note that Wasmtime's support for this feature is _very_
@@ -2396,6 +2408,7 @@ impl Config {
             | WasmFeatures::CM_ERROR_CONTEXT
             | WasmFeatures::CM_GC
             | WasmFeatures::CM_MAP
+            | WasmFeatures::CM64
             | WasmFeatures::CM_FIXED_LENGTH_LISTS
             | WasmFeatures::CM_IMPLEMENTS;
 

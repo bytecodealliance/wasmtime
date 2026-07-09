@@ -146,6 +146,7 @@ impl Config {
             component_model_error_context,
             component_model_gc,
             component_model_map,
+            component_model_memory64,
             component_model_fixed_length_lists,
             component_model_implements,
             simd,
@@ -174,6 +175,7 @@ impl Config {
             component_model_error_context.unwrap_or(false);
         self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
         self.module_config.component_model_map = component_model_map.unwrap_or(false);
+        self.module_config.component_model_memory64 = component_model_memory64.unwrap_or(false);
         self.module_config.component_model_fixed_length_lists =
             component_model_fixed_length_lists.unwrap_or(false);
         self.module_config.component_model_implements = component_model_implements.unwrap_or(false);
@@ -329,6 +331,7 @@ impl Config {
             Some(self.module_config.component_model_error_context);
         cfg.wasm.component_model_gc = Some(self.module_config.component_model_gc);
         cfg.wasm.component_model_map = Some(self.module_config.component_model_map);
+        cfg.wasm.component_model_memory64 = Some(self.module_config.component_model_memory64);
         cfg.wasm.component_model_fixed_length_lists =
             Some(self.module_config.component_model_fixed_length_lists);
         cfg.wasm.component_model_implements = Some(self.module_config.component_model_implements);

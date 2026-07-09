@@ -47,6 +47,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         component_model_error_context,
         component_model_gc,
         component_model_map,
+        component_model_memory64,
         component_model_fixed_length_lists,
         component_model_implements,
         nan_canonicalization,
@@ -81,6 +82,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let component_model_error_context = component_model_error_context.unwrap_or(false);
     let component_model_gc = component_model_gc.unwrap_or(false);
     let component_model_map = component_model_map.unwrap_or(false);
+    let component_model_memory64 = component_model_memory64.unwrap_or(false);
     let component_model_fixed_length_lists = component_model_fixed_length_lists.unwrap_or(false);
     let component_model_implements = component_model_implements.unwrap_or(false);
     let nan_canonicalization = nan_canonicalization.unwrap_or(false);
@@ -125,6 +127,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_component_model_error_context(component_model_error_context)
         .wasm_component_model_gc(component_model_gc)
         .wasm_component_model_map(component_model_map)
+        .wasm_component_model_memory64(component_model_memory64)
         .wasm_component_model_fixed_length_lists(component_model_fixed_length_lists)
         .wasm_component_model_implements(component_model_implements)
         .wasm_exceptions(exceptions)
