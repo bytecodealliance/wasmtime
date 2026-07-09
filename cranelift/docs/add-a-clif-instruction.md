@@ -85,7 +85,8 @@ should support them.
 ## 4. Add a lowering rule per backend
 
 A CLIF instruction with no backend that can lower it will hit ISLE's "no rule
-matched" panic the moment it's used. At a minimum, you should add a (rule (lower (your_instr ...)) ...) definition to each cranelift/codegen/src/isa/<arch>/lower.isle backend you intend to support. If support for an architecture is not yet implemented, consider adding an explicit "unsupported" case instead.
+matched" panic the moment it's used. At a minimum, you should add a (rule (lower (your_instr ...)) ...) definition to each cranelift/codegen/src/isa/<arch>/lower.isle backend you intend to support. 
+
 ## 5. Test it
 
 Add file tests under `cranelift/filetests/filetests/`. Use `test interpret` and
