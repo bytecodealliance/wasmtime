@@ -373,8 +373,8 @@ fn enc_load_ex(acquire: bool, size: AtomicSize, rt: u32, rn: u32) -> u32 {
 }
 
 /// `strex{b,h,d}`/`stlex{b,h,d} rd, rt, [rn]`.
-fn enc_store_ex(acquire: bool, size: AtomicSize, rd: u32, rt: u32, rn: u32) -> u32 {
-    let base = if acquire { 0x0180_0e90 } else { 0x0180_0f90 };
+fn enc_store_ex(release: bool, size: AtomicSize, rd: u32, rt: u32, rn: u32) -> u32 {
+    let base = if release { 0x0180_0e90 } else { 0x0180_0f90 };
     COND_AL | base | size.enc_bits() | (rn << 16) | (rd << 12) | rt
 }
 
@@ -768,7 +768,7 @@ impl MachInstEmit for Inst {
                 put_u32(sink, enc_load_ex(*acquire, *size, rt, rn));
             }
             Inst::StoreEx {
-                acquire,
+                release,
                 size,
                 rd,
                 rt,
@@ -777,7 +777,7 @@ impl MachInstEmit for Inst {
                 let rd = machreg_to_gpr(rd.to_reg());
                 let rt = machreg_to_gpr(*rt);
                 let rn = machreg_to_gpr(*rn);
-                put_u32(sink, enc_store_ex(*acquire, *size, rd, rt, rn));
+                put_u32(sink, enc_store_ex(*release, *size, rd, rt, rn));
             }
             Inst::LoadAcq { size, rt, rn } => {
                 let rt = machreg_to_gpr(rt.to_reg());

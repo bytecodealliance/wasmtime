@@ -802,14 +802,14 @@ impl Inst {
                 r(*rn)
             ),
             Inst::StoreEx {
-                acquire,
+                release,
                 size,
                 rd,
                 rt,
                 rn,
             } => alloc::format!(
                 "{}{} {}, {}, [{}]",
-                if *acquire { "stlex" } else { "strex" },
+                if *release { "stlex" } else { "strex" },
                 size.suffix(),
                 r(rd.to_reg()),
                 r(*rt),

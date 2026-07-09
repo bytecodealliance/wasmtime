@@ -716,7 +716,7 @@ fn memory_multiple_and_exclusive() {
     );
     assert_eq!(
         u32_le(Inst::StoreEx {
-            acquire: false,
+            release: false,
             size: AtomicSize::Word,
             rd: writable_xreg(0),
             rt: xreg(1),
@@ -726,7 +726,7 @@ fn memory_multiple_and_exclusive() {
     );
     assert_eq!(
         u32_le(Inst::StoreEx {
-            acquire: true,
+            release: true,
             size: AtomicSize::Word,
             rd: writable_xreg(0),
             rt: xreg(1),
@@ -736,7 +736,7 @@ fn memory_multiple_and_exclusive() {
     );
     assert_eq!(
         u32_le(Inst::StoreEx {
-            acquire: true,
+            release: true,
             size: AtomicSize::Byte,
             rd: writable_xreg(0),
             rt: xreg(1),
@@ -746,7 +746,7 @@ fn memory_multiple_and_exclusive() {
     );
     assert_eq!(
         u32_le(Inst::StoreEx {
-            acquire: true,
+            release: true,
             size: AtomicSize::Half,
             rd: writable_xreg(0),
             rt: xreg(1),

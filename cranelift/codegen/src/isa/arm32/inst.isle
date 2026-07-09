@@ -311,7 +311,7 @@
     (LoadEx (acquire bool) (size AtomicSize) (rt WritableReg) (rn Reg))
     ;; Store-exclusive (`strex{b,h}`) or store-release-exclusive
     ;; (`stlex{b,h}`); `rd` receives the success flag.
-    (StoreEx (acquire bool) (size AtomicSize) (rd WritableReg) (rt Reg) (rn Reg))
+    (StoreEx (release bool) (size AtomicSize) (rd WritableReg) (rt Reg) (rn Reg))
     ;; Load-acquire (`lda{b,h} rt, [rn]`).
     (LoadAcq (size AtomicSize) (rt WritableReg) (rn Reg))
     ;; Store-release (`stl{b,h} rt, [rn]`).
