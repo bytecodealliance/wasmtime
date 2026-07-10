@@ -39,7 +39,11 @@ pub struct WasmCoreDump {
 
 impl WasmCoreDump {
     pub(crate) fn new(store: &mut StoreOpaque, backtrace: WasmBacktrace) -> WasmCoreDump {
-        let modules: Vec<_> = store.modules().all_modules().cloned().collect();
+        let modules = store
+            .modules()
+            .all_modules()
+            .map(|(_, m)| m.clone())
+            .collect::<Vec<_>>();
         let instances: Vec<Instance> = store.all_instances().collect();
         let store_memories: Vec<Memory> =
             store.all_memories().filter_map(|m| m.unshared()).collect();

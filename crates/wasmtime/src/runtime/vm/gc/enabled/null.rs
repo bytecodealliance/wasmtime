@@ -9,8 +9,8 @@ use crate::{
     Engine, Trap,
     prelude::*,
     vm::{
-        ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
-        GcProgress, GcRootsIter, GcRuntime, SendSyncUnsafeCell, TypedGcRef, VMGcHeader, VMGcRef,
+        ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
+        GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TypedGcRef, VMGcHeader, VMGcRef,
         VMMemoryDefinition,
     },
 };
@@ -240,7 +240,6 @@ unsafe impl GcHeap for NullHeap {
 
     fn write_gc_ref(
         &mut self,
-        _host_data_table: &mut ExternRefHostDataTable,
         destination: &mut Option<VMGcRef>,
         source: Option<&VMGcRef>,
     ) -> Result<()> {
@@ -342,11 +341,14 @@ unsafe impl GcHeap for NullHeap {
         usize::try_from(next.get()).unwrap() - 1
     }
 
-    fn gc<'a>(
+    fn gc<'a, 'b>(
         &'a mut self,
         _roots: GcRootsIter<'a>,
-        _host_data_table: &'a mut ExternRefHostDataTable,
-    ) -> Box<dyn GarbageCollection<'a> + 'a> {
+        _trace_state: &'a mut GcStoreTraceState<'b>,
+    ) -> Box<dyn GarbageCollection + 'a>
+    where
+        'b: 'a,
+    {
         assert_eq!(self.no_gc_count, 0, "Cannot GC inside a no-GC scope!");
         Box::new(NullCollection {})
     }
@@ -359,7 +361,7 @@ unsafe impl GcHeap for NullHeap {
 
 struct NullCollection {}
 
-impl<'a> GarbageCollection<'a> for NullCollection {
+impl GarbageCollection for NullCollection {
     fn collect_increment(&mut self) -> Result<GcProgress> {
         Ok(GcProgress::Complete)
     }

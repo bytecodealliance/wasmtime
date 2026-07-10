@@ -615,11 +615,10 @@ fn is_subtype(
 
     let actual = VMSharedTypeIndex::from_u32(actual_engine_type);
     let expected = VMSharedTypeIndex::from_u32(expected_engine_type);
-
-    let is_subtype: bool = store.engine().signatures().is_subtype(actual, expected);
+    let is_subtype = store.is_subtype_cached(actual, expected);
 
     log::trace!("is_subtype(actual={actual:?}, expected={expected:?}) -> {is_subtype}",);
-    is_subtype as u32
+    u32::from(is_subtype)
 }
 
 // Implementation of `memory.atomic.notify` for locally defined memories.

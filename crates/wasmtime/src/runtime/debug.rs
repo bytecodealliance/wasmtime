@@ -170,7 +170,10 @@ impl StoreOpaque {
             return vec![];
         }
 
-        self.modules().all_modules().cloned().collect()
+        self.modules()
+            .all_modules()
+            .map(|(_, m)| m.clone())
+            .collect()
     }
 }
 
@@ -1182,7 +1185,11 @@ impl<'a> BreakpointEdit<'a> {
             // re-publishing code.
             return Ok(());
         }
-        let modules = self.registry.all_modules().cloned().collect::<Vec<_>>();
+        let modules = self
+            .registry
+            .all_modules()
+            .map(|(_, m)| m.clone())
+            .collect::<Vec<_>>();
         for module in modules {
             let mem =
                 Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, &module)?;

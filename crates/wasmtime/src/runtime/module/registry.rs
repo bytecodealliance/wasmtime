@@ -210,9 +210,9 @@ impl ModuleRegistry {
     }
 
     /// Gets an iterator over all modules in the registry.
-    #[cfg(any(feature = "coredump", feature = "debug"))]
-    pub fn all_modules(&self) -> impl Iterator<Item = &'_ Module> + '_ {
-        self.modules.values()
+    #[cfg(any(feature = "coredump", feature = "debug", feature = "gc"))]
+    pub fn all_modules(&self) -> impl Iterator<Item = (RegisteredModuleId, &'_ Module)> + '_ {
+        self.modules.iter()
     }
 
     /// Registers a new module with the registry.

@@ -86,6 +86,9 @@ wasmtime_option_group! {
         /// Size, in bytes, of guard pages for the GC heap.
         pub gc_heap_guard_size: Option<u64>,
 
+        /// Initial allocated size for the GC heap.
+        pub gc_heap_initial_size: Option<u64>,
+
         /// Indicates whether an unmapped region of memory is placed before all
         /// linear memories.
         pub guard_before_linear_memory: Option<bool>,
@@ -977,6 +980,11 @@ impl CommonOptions {
         if let Some(size) = self.opts.gc_heap_reservation_for_growth {
             config.gc_heap_reservation_for_growth(size);
         }
+
+        if let Some(size) = self.opts.gc_heap_initial_size {
+            config.gc_heap_initial_size(size);
+        }
+
         if let Some(enable) = self.opts.table_lazy_init {
             config.table_lazy_init(enable);
         }
@@ -1329,6 +1337,7 @@ impl CommonOptions {
                 gc_heap_reservation: Some(engine.get_gc_heap_reservation()),
                 gc_heap_reservation_for_growth: Some(engine.get_gc_heap_reservation_for_growth()),
                 gc_heap_guard_size: Some(engine.get_gc_heap_guard_size()),
+                gc_heap_initial_size: Some(engine.get_gc_heap_initial_size()),
                 guard_before_linear_memory: Some(engine.get_guard_before_linear_memory()),
                 table_lazy_init: Some(engine.get_table_lazy_init()),
                 memory_init_cow: Some(engine.get_memory_init_cow()),

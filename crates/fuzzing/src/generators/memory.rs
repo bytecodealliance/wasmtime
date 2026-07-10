@@ -128,6 +128,7 @@ pub struct MemoryConfig {
     pub gc_heap_guard_size: Option<u64>,
     pub gc_heap_reservation_for_growth: Option<u64>,
     pub gc_heap_may_move: Option<bool>,
+    pub gc_heap_initial_size: Option<u64>,
 }
 
 impl<'a> Arbitrary<'a> for MemoryConfig {
@@ -152,6 +153,7 @@ impl<'a> Arbitrary<'a> for MemoryConfig {
             gc_heap_guard_size: interesting_virtual_memory_size(u, 32)?,
             gc_heap_reservation_for_growth: interesting_virtual_memory_size(u, 30)?,
             gc_heap_may_move: u.arbitrary()?,
+            gc_heap_initial_size: interesting_virtual_memory_size(u, 22)?,
         })
     }
 }
@@ -195,6 +197,7 @@ impl MemoryConfig {
         cfg.opts.gc_heap_guard_size = self.gc_heap_guard_size;
         cfg.opts.gc_heap_reservation_for_growth = self.gc_heap_reservation_for_growth;
         cfg.opts.gc_heap_may_move = self.gc_heap_may_move;
+        cfg.opts.gc_heap_initial_size = self.gc_heap_initial_size;
 
         if let Some(enable) = self.cranelift_enable_heap_access_spectre_mitigations {
             cfg.codegen.cranelift.push((

@@ -862,7 +862,7 @@ impl WasmtimeConfig {
 
         // When using the pooling allocator, GC heap tunables must match memory
         // tunables.
-        if let InstanceAllocationStrategy::Pooling(_) = &self.strategy {
+        if let InstanceAllocationStrategy::Pooling(pcfg) = &self.strategy {
             let reservation = mcfg.gc_heap_reservation.max(mcfg.memory_reservation);
             mcfg.gc_heap_reservation = reservation;
             mcfg.memory_reservation = reservation;
@@ -880,6 +880,17 @@ impl WasmtimeConfig {
             // memory_may_move is not in MemoryConfig, but gc_heap_may_move
             // must not conflict. Set it to None so the default matches.
             mcfg.gc_heap_may_move = None;
+
+            // Don't let the initial size of a GC heap exceed the maximum
+            // allowed by the pooling allocator. Note that these sizes are
+            // rounded up to the wasm page size used by GC at this time as
+            // that's what happens internally.
+            if let Some(amt) = mcfg.gc_heap_initial_size {
+                let page_size = 64 * 1024;
+                let amt = amt.next_multiple_of(page_size);
+                let max = (pcfg.max_memory_size as u64).next_multiple_of(page_size);
+                mcfg.gc_heap_initial_size = Some(amt.min(max));
+            }
         }
 
         if !self.debug_symbols {

@@ -179,6 +179,9 @@ define_tunables! {
         /// heaps.
         pub gc_heap_reservation_for_growth: u64,
 
+        /// The size, in bytes, to set as the minimum for GC heaps.
+        pub gc_heap_initial_size: u64,
+
         /// Whether or not GC heaps are allowed to be reallocated after initial
         /// allocation at runtime.
         ///
@@ -279,6 +282,7 @@ impl Tunables {
             gc_heap_guard_size: 0,
             gc_heap_reservation_for_growth: 0,
             gc_heap_may_move: true,
+            gc_heap_initial_size: 0,
             metadata_for_internal_asserts: false,
             metadata_for_gc_heap_corruption: true,
             branch_hinting: false,
@@ -341,15 +345,17 @@ impl Tunables {
 
     /// Get the GC heap's memory type, given our configured tunables.
     pub fn gc_heap_memory_type(&self) -> Memory {
+        // We *could* try to match the target architecture's page size, but that
+        // would require exercising a page size for memories that we don't
+        // otherwise support for Wasm; we conservatively avoid that, and just
+        // use the default Wasm page size, for now.
+        let page_size_log2 = 16;
+        let min = self.gc_heap_initial_size.div_ceil(1 << page_size_log2);
         Memory {
             idx_type: IndexType::I32,
-            limits: Limits { min: 0, max: None },
+            limits: Limits { min, max: None },
             shared: false,
-            // We *could* try to match the target architecture's page size, but that
-            // would require exercising a page size for memories that we don't
-            // otherwise support for Wasm; we conservatively avoid that, and just
-            // use the default Wasm page size, for now.
-            page_size_log2: 16,
+            page_size_log2,
         }
     }
 }

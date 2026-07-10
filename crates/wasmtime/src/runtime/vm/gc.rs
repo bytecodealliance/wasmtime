@@ -22,13 +22,16 @@ pub use gc_runtime::*;
 pub use host_data::*;
 pub use i31::*;
 
+use crate::hash_map::HashMap;
+use crate::module::ModuleRegistry;
 use crate::prelude::*;
 use crate::runtime::vm::{GcHeapAllocationIndex, VMMemoryDefinition};
 use crate::store::Asyncness;
+use crate::type_registry::RegisteredType;
 use core::any::Any;
 use core::mem::MaybeUninit;
 use core::{alloc::Layout, num::NonZeroU32};
-use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcArrayLayout, GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
 ///
@@ -66,6 +69,22 @@ pub struct GcStore {
     /// The initial value to reset the counter to after it triggers.
     #[cfg(gc_zeal)]
     gc_zeal_alloc_counter_init: Option<NonZeroU32>,
+}
+
+/// Convenience type definition for the storage, within a `Store`, of
+/// host-allocated types that are one-off used for host allocation.
+pub type StoreGcHostAllocTypes = HashMap<VMSharedTypeIndex, (RegisteredType, Option<TraceInfo>)>;
+
+/// Contextual information used when performing a GC to trace GC references as
+/// necesary.
+pub struct GcStoreTraceState<'a> {
+    /// The backing data of `externref`s, deleted from when a GC reference is
+    /// reclaimed, for example.
+    pub host_data_table: &'a mut ExternRefHostDataTable,
+    /// All known modules in this store.
+    pub modules: &'a ModuleRegistry,
+    /// All known host-registered types in this store.
+    pub gc_host_alloc_types: &'a StoreGcHostAllocTypes,
 }
 
 impl GcStore {
@@ -108,9 +127,16 @@ impl GcStore {
         &mut self,
         asyncness: Asyncness,
         roots: GcRootsIter<'_>,
+        modules: &ModuleRegistry,
+        gc_host_alloc_types: &StoreGcHostAllocTypes,
         yield_fn: impl AsyncFn(),
     ) -> Result<()> {
-        let collection = self.gc_heap.gc(roots, &mut self.host_data_table);
+        let mut trace_state = GcStoreTraceState {
+            host_data_table: &mut self.host_data_table,
+            modules,
+            gc_host_alloc_types,
+        };
+        let collection = self.gc_heap.gc(roots, &mut trace_state);
         collect_async(collection, asyncness, yield_fn).await?;
         self.last_post_gc_allocated_bytes = Some({
             let size = self.gc_heap.allocated_bytes();
@@ -203,8 +229,7 @@ impl GcStore {
         // (that is, they are both either null or `i31ref`s) then we can skip
         // the GC barrier.
         if Self::needs_write_barrier(destination, source) {
-            self.gc_heap
-                .write_gc_ref(&mut self.host_data_table, destination, source)?;
+            self.gc_heap.write_gc_ref(destination, source)?;
         } else {
             *destination = source.map(|s| s.copy_i31());
         }
@@ -214,7 +239,7 @@ impl GcStore {
     /// Drop the given GC reference, performing drop barriers as necessary.
     pub fn drop_gc_ref(&mut self, gc_ref: VMGcRef) {
         if !gc_ref.is_i31() {
-            self.gc_heap.drop_gc_ref(&mut self.host_data_table, gc_ref);
+            self.gc_heap.drop_gc_ref(gc_ref);
         }
     }
 
@@ -298,11 +323,6 @@ impl GcStore {
         }
 
         self.gc_heap.alloc_raw(header, layout)
-    }
-
-    /// Eagerly ensure tracing info is registered for the given type.
-    pub fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
-        self.gc_heap.ensure_trace_info(ty)
     }
 
     /// Allocate an uninitialized struct with the given type index and layout.
@@ -392,6 +412,45 @@ impl GcStore {
         {
             let _ = new_value;
             return None;
+        }
+    }
+}
+
+/// How to trace a GC object.
+#[derive(Debug)]
+pub enum TraceInfo {
+    /// How to trace an array.
+    Array {
+        /// Whether this array type's elements are GC references, and need
+        /// tracing.
+        #[cfg_attr(
+            not(feature = "gc-drc"),
+            allow(dead_code, reason = "easier not to cfg on/off")
+        )]
+        gc_ref_elems: bool,
+    },
+
+    /// How to trace a struct.
+    Struct {
+        /// The offsets of each GC reference field that needs tracing in
+        /// instances of this struct type.
+        gc_ref_offsets: Box<[u32]>,
+    },
+}
+
+impl TraceInfo {
+    pub(crate) fn new(gc_layout: &GcLayout) -> Self {
+        match gc_layout {
+            GcLayout::Array(l) => TraceInfo::Array {
+                gc_ref_elems: l.elems_are_gc_refs,
+            },
+            GcLayout::Struct(l) => TraceInfo::Struct {
+                gc_ref_offsets: l
+                    .fields
+                    .iter()
+                    .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
+                    .collect(),
+            },
         }
     }
 }
