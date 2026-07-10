@@ -739,7 +739,7 @@ impl<I: VCodeInst> VCode<I> {
         want_disasm: bool,
         flags: &settings::Flags,
         ctrl_plane: &mut ControlPlane,
-    ) -> EmitResult
+    ) -> CodegenResult<EmitResult>
     where
         I: VCodeInst,
     {
@@ -783,7 +783,7 @@ impl<I: VCodeInst> VCode<I> {
             regalloc.num_spillslots,
             clobbers,
             function_calls,
-        );
+        )?;
 
         // Emit blocks.
         let mut cur_srcloc = None;
@@ -1164,13 +1164,13 @@ impl<I: VCodeInst> VCode<I> {
         // Store metadata about frame layout in the MachBuffer.
         buffer.set_frame_layout(self.abi.frame_slot_metadata());
 
-        EmitResult {
+        Ok(EmitResult {
             buffer: buffer.finish(&self.constants, ctrl_plane),
             bb_offsets,
             bb_edges,
             disasm: if want_disasm { Some(disasm) } else { None },
             value_labels_ranges,
-        }
+        })
     }
 
     fn monotonize_inst_offsets(&self, inst_offsets: &mut [CodeOffset], func_body_len: u32) {

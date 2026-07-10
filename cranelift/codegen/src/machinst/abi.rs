@@ -498,6 +498,12 @@ pub trait ABIMachineSpec {
         outgoing_args_size: u32,
     ) -> FrameLayout;
 
+    /// Defaults to a conservative 1GiB
+    /// across all backends.
+    fn maximum_frame_size() -> u32 {
+        1 << 30 // 1 GiB
+    }
+
     /// Generate the usual frame-setup sequence for this architecture: e.g.,
     /// `push rbp / mov rbp, rsp` on x86-64, or `stp fp, lr, [sp, #-16]!` on
     /// AArch64.
@@ -2204,12 +2210,12 @@ impl<M: ABIMachineSpec> Callee<M> {
         spillslots: usize,
         clobbered: Vec<Writable<RealReg>>,
         function_calls: FunctionCalls,
-    ) {
+    ) -> CodegenResult<()> {
         let bytes = M::word_bytes();
         let total_stacksize = self.stackslots_size + bytes * spillslots as u32;
         let mask = M::stack_align(self.call_conv) - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
-        self.frame_layout = Some(M::compute_frame_layout(
+        let frame_layout = M::compute_frame_layout(
             self.call_conv,
             &self.flags,
             self.signature(),
@@ -2220,7 +2226,28 @@ impl<M: ABIMachineSpec> Callee<M> {
             self.stackslots_size,
             total_stacksize,
             self.outgoing_args_size,
-        ));
+        );
+
+        if Self::frame_layout_exceeds_limit(&frame_layout, M::maximum_frame_size()) {
+            return Err(CodegenError::ImplLimitExceeded);
+        }
+
+        self.frame_layout = Some(frame_layout);
+        Ok(())
+    }
+
+    /// Pulled out so that it can be used directly in tests without constructing a full `Callee`.
+    pub(crate) fn frame_layout_exceeds_limit(
+        frame_layout: &FrameLayout,
+        max_frame_size: u32,
+    ) -> bool {
+        let total: u64 = frame_layout.incoming_args_size as u64
+            + frame_layout.tail_args_size as u64
+            + frame_layout.setup_area_size as u64
+            + frame_layout.clobber_size as u64
+            + frame_layout.fixed_frame_storage_size as u64
+            + frame_layout.outgoing_args_size as u64;
+        total > max_frame_size as u64
     }
 
     /// Generate a prologue, post-regalloc.

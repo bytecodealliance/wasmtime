@@ -1343,3 +1343,51 @@ const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
 
     env
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::machinst::abi::Callee;
+    use alloc::vec::Vec;
+
+    fn make_frame_layout(total_relevant_fields_sum: u32) -> FrameLayout {
+        FrameLayout {
+            word_bytes: 8,
+            incoming_args_size: 0,
+            tail_args_size: 0,
+            setup_area_size: 0,
+            clobber_size: 0,
+            fixed_frame_storage_size: total_relevant_fields_sum,
+            stackslots_size: 0,
+            outgoing_args_size: 0,
+            clobbered_callee_saves: Vec::new(),
+            function_calls: crate::machinst::FunctionCalls::None,
+        }
+    }
+
+    const ONE_GIB: u32 = 1 << 30;
+
+    #[test]
+    fn frame_layout_under_limit_is_accepted() {
+        let layout = make_frame_layout(ONE_GIB - 1);
+        assert!(!Callee::<X64ABIMachineSpec>::frame_layout_exceeds_limit(
+            &layout, ONE_GIB
+        ));
+    }
+
+    #[test]
+    fn frame_layout_at_exact_limit_is_accepted() {
+        let layout = make_frame_layout(ONE_GIB);
+        assert!(!Callee::<X64ABIMachineSpec>::frame_layout_exceeds_limit(
+            &layout, ONE_GIB
+        ));
+    }
+
+    #[test]
+    fn frame_layout_over_limit_is_rejected() {
+        let layout = make_frame_layout(ONE_GIB + 1);
+        assert!(Callee::<X64ABIMachineSpec>::frame_layout_exceeds_limit(
+            &layout, ONE_GIB
+        ));
+    }
+}
