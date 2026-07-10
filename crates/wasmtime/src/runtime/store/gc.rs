@@ -999,7 +999,6 @@ impl StoreOpaque {
     /// caches results store-locally to avoid contention on the engine's type
     /// registry lock. See the documentation of the `subtype_check_cache` field
     /// for details.
-    #[cfg(feature = "gc")]
     pub(crate) fn is_subtype_cached(
         &mut self,
         sub: wasmtime_environ::VMSharedTypeIndex,
