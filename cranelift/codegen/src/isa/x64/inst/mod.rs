@@ -1467,10 +1467,6 @@ impl MachInst for Inst {
         0
     }
 
-    fn ref_type_regclass(_: &settings::Flags) -> RegClass {
-        RegClass::Int
-    }
-
     fn is_safepoint(&self) -> bool {
         match self {
             Inst::CallKnown { .. } | Inst::CallUnknown { .. } => true,

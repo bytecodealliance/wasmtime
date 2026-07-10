@@ -599,10 +599,6 @@ where
         32
     }
 
-    fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
-        RegClass::Int
-    }
-
     fn function_alignment() -> FunctionAlignment {
         FunctionAlignment {
             minimum: 1,

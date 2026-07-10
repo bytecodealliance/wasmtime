@@ -867,10 +867,6 @@ impl MachInst for Inst {
         128
     }
 
-    fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
-        RegClass::Int
-    }
-
     fn function_alignment() -> FunctionAlignment {
         FunctionAlignment {
             minimum: 2,

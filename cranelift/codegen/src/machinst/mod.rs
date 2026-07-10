@@ -52,7 +52,6 @@ use crate::ir::{
 use crate::isa::FunctionAlignment;
 use crate::result::CodegenResult;
 use crate::settings;
-use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -384,10 +383,6 @@ pub trait MachInst: Clone + Debug {
     /// label-use kinds always have wide enough range that islands are
     /// never required may leave this at zero.
     fn worst_case_island_growth() -> CodeOffset;
-
-    /// What is the register class used for reference types (GC-observable pointers)? Can
-    /// be dependent on compilation flags.
-    fn ref_type_regclass(_flags: &Flags) -> RegClass;
 
     /// Is this a safepoint?
     fn is_safepoint(&self) -> bool;

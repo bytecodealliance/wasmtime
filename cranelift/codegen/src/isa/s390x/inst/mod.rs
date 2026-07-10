@@ -5,7 +5,7 @@ use crate::ir::{ExternalName, MemFlagsData, Type, types};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-use crate::{CodegenError, CodegenResult, settings};
+use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -1267,10 +1267,6 @@ impl MachInst for Inst {
 
     fn worst_case_island_growth() -> CodeOffset {
         0
-    }
-
-    fn ref_type_regclass(_: &settings::Flags) -> RegClass {
-        RegClass::Int
     }
 
     fn gen_dummy_use(reg: Reg) -> Inst {

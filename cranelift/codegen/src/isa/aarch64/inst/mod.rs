@@ -1179,10 +1179,6 @@ impl MachInst for Inst {
         128
     }
 
-    fn ref_type_regclass(_: &settings::Flags) -> RegClass {
-        RegClass::Int
-    }
-
     fn gen_block_start(
         is_indirect_branch_target: bool,
         is_forward_edge_cfi_enabled: bool,

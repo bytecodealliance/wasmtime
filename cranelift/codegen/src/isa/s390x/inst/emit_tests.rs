@@ -1,6 +1,7 @@
 use crate::ir::{MachMemFlags, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
+use crate::settings;
 
 #[cfg(test)]
 fn simm20_zero() -> SImm20 {
