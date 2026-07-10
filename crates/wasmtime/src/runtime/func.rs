@@ -2394,7 +2394,7 @@ impl HostFunc {
             };
 
             let (gc_lifo_scope, ret) = {
-                let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
+                let gc_lifo_scope = store.0.enter_gc_lifo_scope();
 
                 let mut args = NonNull::slice_from_raw_parts(args.cast(), args_len);
                 // SAFETY: it's a contract of this function itself that the values

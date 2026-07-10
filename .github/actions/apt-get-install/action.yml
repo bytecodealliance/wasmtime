@@ -33,8 +33,18 @@ runs:
 
     - name: Update apt-get
       shell: bash
-      run: sudo apt-get update
+      run: |
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          sudo apt-get update && break
+          sleep 5
+        done
 
     - name: Install packages
       shell: bash
-      run: sudo apt-get install -y ${{ inputs.packages }}
+      run: |
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          sudo apt-get install -y ${{ inputs.packages }} && break
+          sleep 5
+        done

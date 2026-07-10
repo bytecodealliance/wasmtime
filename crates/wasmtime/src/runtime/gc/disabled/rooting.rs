@@ -1,4 +1,4 @@
-use crate::runtime::vm::{GcStore, VMGcRef};
+use crate::runtime::vm::VMGcRef;
 use crate::{
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
     store::{AutoAssertNoGc, StoreOpaque},
@@ -33,17 +33,6 @@ mod sealed {
     }
 }
 pub(crate) use sealed::*;
-
-#[derive(Debug, Default)]
-pub(crate) struct RootSet {}
-
-impl RootSet {
-    pub(crate) fn enter_lifo_scope(&self) -> usize {
-        usize::MAX
-    }
-
-    pub(crate) fn exit_lifo_scope(&mut self, _gc_store: Option<&mut GcStore>, _scope: usize) {}
-}
 
 /// This type is disabled because the `gc` cargo feature was not enabled at
 /// compile time.

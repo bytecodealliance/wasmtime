@@ -11,11 +11,11 @@
 //! This collector does not require any read or write barriers.
 
 use super::VMArrayRef;
-use super::trace_info::{TraceInfo, TraceInfos};
+use super::trace_infos::TraceInfos;
 use crate::runtime::vm::{
-    ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
-    GcProgress, GcRootsIter, GcRuntime, SendSyncUnsafeCell, TypedGcRef, VMExternRef, VMGcHeader,
-    VMGcRef, VMMemoryDefinition,
+    ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
+    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMExternRef,
+    VMGcHeader, VMGcRef, VMMemoryDefinition,
 };
 use crate::{Engine, bail_bug, prelude::*};
 use core::{
@@ -42,8 +42,8 @@ unsafe impl GcRuntime for CopyingCollector {
         &self.layouts
     }
 
-    fn new_gc_heap(&self, engine: &Engine) -> Result<Box<dyn GcHeap>> {
-        let heap = CopyingHeap::new(engine)?;
+    fn new_gc_heap(&self, _engine: &Engine) -> Result<Box<dyn GcHeap>> {
+        let heap = CopyingHeap::new()?;
         Ok(Box::new(heap) as _)
     }
 }
@@ -300,10 +300,10 @@ struct CopyingHeap {
 }
 
 impl CopyingHeap {
-    fn new(engine: &Engine) -> Result<Self> {
+    fn new() -> Result<Self> {
         log::trace!("allocating new copying heap");
         Ok(Self {
-            trace_infos: TraceInfos::new(engine, GC_REF_ARRAY_ELEMS_OFFSET),
+            trace_infos: TraceInfos::new(),
             no_gc_count: 0,
             memory: None,
             vmmemory: None,
@@ -594,7 +594,12 @@ survived collection, since the active space is the same size as the idle space",
     /// Trace a grey object's outgoing edges, copying their referents into the
     /// new semi-space if necessary, and updating the object's references with
     /// their forwarded locations in the new semi-space.
-    fn scan(&mut self, gc_ref: &VMGcRef, trace_infos: &TraceInfos) -> Result<()> {
+    fn scan(
+        &mut self,
+        gc_ref: &VMGcRef,
+        trace_infos: &mut TraceInfos,
+        trace_state: &mut GcStoreTraceState<'_>,
+    ) -> Result<()> {
         debug_assert!(!gc_ref.is_i31());
         let index = gc_ref.heap_index()?.get();
         debug_assert!(self.is_in_active_space(index));
@@ -633,7 +638,7 @@ survived collection, since the active space is the same size as the idle space",
                 let Some(ty) = ty else {
                     bail_bug!("out-of-line trace info but no type index");
                 };
-                match trace_infos.trace_info(&ty) {
+                match trace_infos.trace_info(&ty, trace_state) {
                     TraceInfo::Struct { gc_ref_offsets } => {
                         for &offset in gc_ref_offsets {
                             self.scan_field(object_start, offset)?;
@@ -730,10 +735,6 @@ unsafe impl GcHeap for CopyingHeap {
         trace_infos.clear();
 
         memory.take().unwrap()
-    }
-
-    fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
-        self.trace_infos.ensure(ty);
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -849,18 +850,6 @@ unsafe impl GcHeap for CopyingHeap {
         );
         debug_assert_eq!(header.reserved_u26() & HEADER_COPIED_BIT, 0);
 
-        // We must have trace info for every GC type that we allocate in this
-        // heap. Trace info is eagerly registered during module instantiation
-        // and `StructRefPre`/`ArrayRefPre` construction.
-        if let Some(ty) = header.ty() {
-            debug_assert!(
-                self.trace_infos.contains(&ty),
-                "trace info for {ty:?} should have been eagerly registered",
-            );
-        } else {
-            debug_assert_eq!(header.kind(), VMGcKind::ExternRef);
-        }
-
         let size = u32::try_from(layout.size()).unwrap();
         // Round up the allocation size to ALIGN so that the next bump-pointer
         // allocation is also aligned.
@@ -966,15 +955,18 @@ unsafe impl GcHeap for CopyingHeap {
         usize::try_from(self.bump_ptr() - self.active_space_start).unwrap()
     }
 
-    fn gc<'a>(
+    fn gc<'a, 'b>(
         &'a mut self,
         roots: GcRootsIter<'a>,
-        host_data_table: &'a mut ExternRefHostDataTable,
-    ) -> Box<dyn GarbageCollection<'a> + 'a> {
+        trace_state: &'a mut GcStoreTraceState<'b>,
+    ) -> Box<dyn GarbageCollection + 'a>
+    where
+        'b: 'a,
+    {
         assert_eq!(self.no_gc_count, 0, "Cannot GC inside a no-GC scope!");
         Box::new(CopyingCollection {
             roots: Some(roots),
-            host_data_table,
+            trace_state,
             heap: self,
             phase: CopyingCollectionPhase::ProcessRoots,
         })
@@ -1036,9 +1028,9 @@ unsafe impl GcHeap for CopyingHeap {
 
 const OBJECTS_PER_INCREMENT: usize = 16_384;
 
-struct CopyingCollection<'a> {
+struct CopyingCollection<'a, 'b> {
     roots: Option<GcRootsIter<'a>>,
-    host_data_table: &'a mut ExternRefHostDataTable,
+    trace_state: &'a mut GcStoreTraceState<'b>,
     heap: &'a mut CopyingHeap,
     phase: CopyingCollectionPhase,
 }
@@ -1050,7 +1042,7 @@ enum CopyingCollectionPhase {
     Done,
 }
 
-impl CopyingCollection<'_> {
+impl CopyingCollection<'_, '_> {
     /// Forward all GC roots from the idle space to the active space.
     fn process_roots(&mut self) -> Result<()> {
         log::trace!("Begin processing GC roots");
@@ -1098,7 +1090,7 @@ impl CopyingCollection<'_> {
     /// increment regardless of whether the worklist still has items.
     fn process_worklist_increment(&mut self) -> Result<GcProgress> {
         log::trace!("Begin processing worklist increment");
-        let trace_infos = mem::take(&mut self.heap.trace_infos);
+        let mut trace_infos = mem::take(&mut self.heap.trace_infos);
         let mut count = 0;
         let has_more = loop {
             if count >= OBJECTS_PER_INCREMENT {
@@ -1107,7 +1099,8 @@ impl CopyingCollection<'_> {
             match self.heap.worklist_pop()? {
                 Some(gc_ref) => {
                     debug_assert!(self.heap.is_in_active_space(gc_ref.heap_index()?.get()));
-                    self.heap.scan(&gc_ref, &trace_infos)?;
+                    self.heap
+                        .scan(&gc_ref, &mut trace_infos, self.trace_state)?;
                     count += 1;
                 }
                 None => break false,
@@ -1133,7 +1126,7 @@ impl CopyingCollection<'_> {
             if !header.copied() {
                 let typed: &TypedGcRef<VMCopyingExternRef> = gc_ref.as_typed_unchecked();
                 let host_data_id = self.heap.index(typed)?.host_data;
-                self.host_data_table.dealloc(host_data_id)?;
+                self.trace_state.host_data_table.dealloc(host_data_id)?;
             }
             link = self
                 .heap
@@ -1180,7 +1173,7 @@ impl CopyingCollection<'_> {
     }
 }
 
-impl GarbageCollection<'_> for CopyingCollection<'_> {
+impl GarbageCollection for CopyingCollection<'_, '_> {
     fn collect_increment(&mut self) -> Result<GcProgress> {
         match self.phase {
             CopyingCollectionPhase::ProcessRoots => self.begin_collection(),
@@ -1191,7 +1184,7 @@ impl GarbageCollection<'_> for CopyingCollection<'_> {
     }
 }
 
-impl Drop for CopyingCollection<'_> {
+impl Drop for CopyingCollection<'_, '_> {
     fn drop(&mut self) {
         // A collection is logically atomic with respect to the mutator: the
         // mutator must never run while the heap is in a half-collected

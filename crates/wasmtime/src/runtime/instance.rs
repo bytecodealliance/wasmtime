@@ -311,13 +311,6 @@ impl Instance {
         // Allocate the GC heap, if necessary.
         if module.env_module().needs_gc_heap {
             store.ensure_gc_store(limiter.as_deref_mut()).await?;
-
-            // Eagerly register trace info for all types in this module.
-            if let Some(gc_store) = store.optional_gc_store_mut() {
-                for (_, ty) in module.signatures().as_module_map().iter() {
-                    gc_store.ensure_trace_info(*ty);
-                }
-            }
         }
 
         // Register the module just before instantiation to ensure we keep the module

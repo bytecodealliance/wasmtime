@@ -1,12 +1,16 @@
 //! GC-related methods for stores.
 
-use crate::error::Context;
+use crate::RootSet;
+use crate::error::{Context, ensure};
 use crate::module::ModuleRegistry;
 use crate::store::{
     Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
 };
 use crate::type_registry::RegisteredType;
-use crate::vm::{self, Backtrace, Frame, GcRootsList, GcStore, SendSyncPtr, VMGcRef};
+use crate::vm::{
+    self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, SendSyncPtr,
+    StoreGcHostAllocTypes, TraceInfo, VMGcRef,
+};
 use crate::{
     ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, ThrownException, bail,
 };
@@ -16,6 +20,29 @@ use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 use wasmtime_environ::DefinedTagIndex;
+use wasmtime_environ::packed_option::ReservedValue;
+
+#[derive(Default)]
+pub(crate) struct StoreGcData {
+    gc_roots: RootSet,
+    gc_roots_list: GcRootsList,
+    // Types for which the embedder has created an allocator for.
+    gc_host_alloc_types: StoreGcHostAllocTypes,
+    /// Pending exception, if any. This is also a GC root, because it
+    /// needs to be rooted somewhere between the time that a pending
+    /// exception is set and the time that the handling code takes the
+    /// exception object. We use this rooting strategy rather than a
+    /// root in an `Err` branch of a `Result` on the host side because
+    /// it is less error-prone with respect to rooting behavior. See
+    /// `throw()`, `take_pending_exception()`,
+    /// `peek_pending_exception()`, `has_pending_exception()`, and
+    /// `catch()`.
+    ///
+    /// Also note that the underlying reference here is a `VMExnRef`, a
+    /// refinement of `VMGcRef`, but rooting APIs right now make it difficult to
+    /// work with that directly so this is stored as `VMGcRef` instead.
+    pending_exception: Option<VMGcRef>,
+}
 
 impl<T> Store<T> {
     /// Perform garbage collection.
@@ -188,7 +215,7 @@ impl StoreOpaque {
     // borrows.
     pub(crate) fn trim_gc_liveness_flags(&mut self, eager: bool) {
         if let Some(gc_store) = self.gc_store.as_mut() {
-            self.gc_roots.trim_liveness_flags(gc_store, eager);
+            self.gc_data.gc_roots.trim_liveness_flags(gc_store, eager);
         }
     }
 
@@ -455,7 +482,7 @@ impl StoreOpaque {
     pub(crate) fn set_pending_exception(&mut self, exnref: &VMGcRef) -> crate::Error {
         debug_assert!(exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
         let gc_store = self.gc_store.as_mut().unwrap();
-        match gc_store.write_gc_ref(&mut self.pending_exception, Some(exnref)) {
+        match gc_store.write_gc_ref(&mut self.gc_data.pending_exception, Some(exnref)) {
             Ok(()) => ThrownException.into(),
             Err(e) => e,
         }
@@ -464,7 +491,7 @@ impl StoreOpaque {
     /// Takes the pending exception from this store, if any, and exposes it to
     /// WebAssembly, returning the raw representation.
     pub(crate) fn expose_pending_exception_to_wasm(&mut self) -> Option<NonZeroU32> {
-        let exnref = self.pending_exception.take()?;
+        let exnref = self.gc_data.pending_exception.take()?;
         let gc_store = self.unwrap_gc_store_mut();
         debug_assert!(exnref.is_exnref(&*gc_store.gc_heap));
         Some(gc_store.expose_gc_ref_to_wasm(exnref).unwrap())
@@ -473,7 +500,7 @@ impl StoreOpaque {
     /// Takes the pending exception of the store, yielding ownership of its
     /// reference to the `Rooted` that's returned.
     fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
-        let vmexnref = self.pending_exception.take()?;
+        let vmexnref = self.gc_data.pending_exception.take()?;
         debug_assert!(vmexnref.is_exnref(&*self.unwrap_gc_store().gc_heap));
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref))
@@ -484,7 +511,7 @@ impl StoreOpaque {
     pub(crate) fn pending_exception_tag_and_instance(
         &mut self,
     ) -> Option<(InstanceId, DefinedTagIndex)> {
-        let pending_exnref = self.pending_exception.as_ref()?.unchecked_copy();
+        let pending_exnref = self.gc_data.pending_exception.as_ref()?.unchecked_copy();
         debug_assert!(pending_exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
         let mut store = AutoAssertNoGc::new(self);
 
@@ -503,7 +530,7 @@ impl StoreOpaque {
     pub(crate) fn pending_exception_owned_rooted(
         &mut self,
     ) -> Result<Option<crate::OwnedRooted<ExnRef>>, crate::OutOfMemory> {
-        let pending = match &self.pending_exception {
+        let pending = match &self.gc_data.pending_exception {
             Some(r) => r,
             None => return Ok(None),
         };
@@ -581,13 +608,17 @@ impl StoreOpaque {
 
         // Take the GC roots out of `self` so we can borrow it mutably but still
         // call mutable methods on `self`.
-        let mut roots = core::mem::take(&mut self.gc_roots_list);
+        let mut roots = core::mem::take(&mut self.gc_data.gc_roots_list);
 
         self.trace_roots(&mut roots, asyncness).await;
-        self.unwrap_gc_store_mut()
+        self.gc_store
+            .as_mut()
+            .unwrap()
             .gc(
                 asyncness,
                 unsafe { roots.iter() },
+                &self.modules,
+                &self.gc_data.gc_host_alloc_types,
                 // TODO: Once `Config` has an optional `AsyncFn` field for
                 // yielding to the current async runtime
                 // (e.g. `tokio::task::yield_now`), use that if set; otherwise
@@ -598,7 +629,7 @@ impl StoreOpaque {
 
         // Restore the GC roots for the next GC.
         roots.clear();
-        self.gc_roots_list = roots;
+        self.gc_data.gc_roots_list = roots;
 
         if log::log_enabled!(log::Level::Trace) {
             let gc_store = self.gc_store.as_ref().unwrap();
@@ -803,13 +834,13 @@ impl StoreOpaque {
 
     fn trace_user_roots(&mut self, gc_roots_list: &mut GcRootsList) {
         log::trace!("Begin trace GC roots :: user");
-        self.gc_roots.trace_roots(gc_roots_list);
+        self.gc_data.gc_roots.trace_roots(gc_roots_list);
         log::trace!("End trace GC roots :: user");
     }
 
     fn trace_pending_exception_roots(&mut self, gc_roots_list: &mut GcRootsList) {
         log::trace!("Begin trace GC roots :: pending exception");
-        if let Some(pending_exception) = self.pending_exception.as_mut() {
+        if let Some(pending_exception) = self.gc_data.pending_exception.as_mut() {
             unsafe {
                 gc_roots_list.add_vmgcref_root(pending_exception.into(), "Pending exception");
             }
@@ -824,13 +855,120 @@ impl StoreOpaque {
     /// reclaimed (since it is possible that none of the Wasm modules in this
     /// store are holding it alive).
     pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: RegisteredType) {
-        // If a GC heap is already allocated, eagerly register trace info
-        // now. Otherwise, trace info will be registered when the GC heap
-        // is allocated in `StoreOpaque::allocate_gc_store`.
-        if let Some(gc_store) = self.optional_gc_store_mut() {
-            gc_store.ensure_trace_info(ty.index());
+        let trace_info = ty.layout().map(TraceInfo::new);
+        self.gc_data
+            .gc_host_alloc_types
+            .insert(ty.index(), (ty, trace_info));
+    }
+
+    /// Performs a lazy allocation of the `GcStore` within this store, returning
+    /// the previous allocation if it's already present.
+    ///
+    /// This method will, if necessary, allocate a new `GcStore` -- linear
+    /// memory and all. This is a blocking operation due to
+    /// `ResourceLimiterAsync` which means that this should only be executed
+    /// in a fiber context at this time.
+    #[inline]
+    pub(crate) async fn ensure_gc_store(
+        &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+    ) -> Result<&mut GcStore> {
+        if self.gc_store.is_some() {
+            return Ok(self.gc_store.as_mut().unwrap());
         }
-        self.gc_host_alloc_types.insert(ty);
+        self.allocate_gc_store(limiter).await
+    }
+
+    #[inline(never)]
+    async fn allocate_gc_store(
+        &mut self,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+    ) -> Result<&mut GcStore> {
+        log::trace!("allocating GC heap for store {:?}", self.id());
+
+        assert!(self.gc_store.is_none());
+        assert_eq!(
+            self.vm_store_context.gc_heap.get_mut().base.as_non_null(),
+            NonNull::dangling(),
+        );
+        assert_eq!(self.vm_store_context.gc_heap.get_mut().current_length(), 0);
+
+        let engine = self.engine();
+        let mem_ty = engine.tunables().gc_heap_memory_type();
+        ensure!(
+            engine.features().gc_types(),
+            "cannot allocate a GC store when GC is disabled at configuration time"
+        );
+        let gc_runtime = engine
+            .gc_runtime()
+            .context("no GC runtime: GC disabled at compile time or configuration time")?;
+
+        // First, allocate the memory that will be our GC heap's storage.
+        let mut request = InstanceAllocationRequest {
+            id: InstanceId::reserved_value(),
+            runtime_info: engine.empty_module_runtime_info(),
+            imports: vm::Imports::default(),
+            store: self,
+            limiter,
+        };
+
+        let (mem_alloc_index, mem) = engine
+            .allocator()
+            .allocate_memory(
+                &mut request,
+                &mem_ty,
+                None,
+                wasmtime_environ::MemoryKind::GcHeap,
+            )
+            .await?;
+
+        // Then, allocate the actual GC heap, passing in that memory
+        // storage.
+        let (index, mut heap) =
+            match engine
+                .allocator()
+                .allocate_gc_heap(engine, &**gc_runtime, mem_alloc_index)
+            {
+                Ok(pair) => pair,
+                Err(e) => unsafe {
+                    engine
+                        .allocator()
+                        .deallocate_memory(None, mem_alloc_index, mem);
+                    return Err(e);
+                },
+            };
+        heap.attach(mem);
+
+        let gc_store = GcStore::new(index, heap, engine.tunables().gc_zeal_alloc_counter);
+        *self.vm_store_context.gc_heap.get_mut() = gc_store.vmmemory_definition();
+        Ok(self.gc_store.insert(gc_store))
+    }
+
+    /// Tests whether there is a pending exception.
+    pub fn has_pending_exception(&self) -> bool {
+        self.gc_data.pending_exception.is_some()
+    }
+
+    #[inline]
+    pub(crate) fn gc_roots(&self) -> &RootSet {
+        &self.gc_data.gc_roots
+    }
+
+    #[inline]
+    pub(crate) fn gc_roots_mut(&mut self) -> &mut RootSet {
+        &mut self.gc_data.gc_roots
+    }
+
+    #[inline]
+    pub(crate) fn enter_gc_lifo_scope(&self) -> usize {
+        self.gc_data.gc_roots.enter_lifo_scope()
+    }
+
+    #[inline]
+    pub(crate) fn exit_gc_lifo_scope(&mut self, scope: usize) {
+        self.gc_data
+            .gc_roots
+            .exit_lifo_scope(self.gc_store.as_mut(), scope);
     }
 }
 

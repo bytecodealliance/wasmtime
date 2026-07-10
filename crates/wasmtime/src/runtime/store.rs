@@ -76,14 +76,11 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-use crate::RootSet;
 use crate::error::OutOfMemory;
 #[cfg(feature = "async")]
 use crate::fiber;
 use crate::module::{RegisterBreakpointState, RegisteredModuleId};
 use crate::prelude::*;
-#[cfg(feature = "gc")]
-use crate::runtime::vm::GcRootsList;
 #[cfg(feature = "stack-switching")]
 use crate::runtime::vm::VMContRef;
 use crate::runtime::vm::mpk::ProtectionKey;
@@ -129,6 +126,8 @@ pub use self::async_::CallHookHandler;
 
 #[cfg(feature = "gc")]
 mod gc;
+#[cfg(not(feature = "gc"))]
+mod gc_disabled;
 
 /// A [`Store`] is a collection of WebAssembly instances and host-defined state.
 ///
@@ -477,27 +476,8 @@ pub struct StoreOpaque {
     host_globals: TryPrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>>,
     // GC-related fields.
     gc_store: Option<GcStore>,
-    gc_roots: RootSet,
     #[cfg(feature = "gc")]
-    gc_roots_list: GcRootsList,
-    // Types for which the embedder has created an allocator for.
-    #[cfg(feature = "gc")]
-    gc_host_alloc_types: crate::hash_set::HashSet<crate::type_registry::RegisteredType>,
-    /// Pending exception, if any. This is also a GC root, because it
-    /// needs to be rooted somewhere between the time that a pending
-    /// exception is set and the time that the handling code takes the
-    /// exception object. We use this rooting strategy rather than a
-    /// root in an `Err` branch of a `Result` on the host side because
-    /// it is less error-prone with respect to rooting behavior. See
-    /// `throw()`, `take_pending_exception()`,
-    /// `peek_pending_exception()`, `has_pending_exception()`, and
-    /// `catch()`.
-    ///
-    /// Also note that the underlying reference here is a `VMExnRef`, a
-    /// refinement of `VMGcRef`, but rooting APIs right now make it difficult to
-    /// work with that directly so this is stored as `VMGcRef` instead.
-    #[cfg(feature = "gc")]
-    pending_exception: Option<VMGcRef>,
+    gc_data: gc::StoreGcData,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
@@ -753,13 +733,8 @@ impl<T> Store<T> {
             instances: TryPrimaryMap::new(),
             signal_handler: None,
             gc_store: None,
-            gc_roots: RootSet::default(),
             #[cfg(feature = "gc")]
-            gc_roots_list: GcRootsList::default(),
-            #[cfg(feature = "gc")]
-            gc_host_alloc_types: Default::default(),
-            #[cfg(feature = "gc")]
-            pending_exception: None,
+            gc_data: Default::default(),
             modules: ModuleRegistry::default(),
             func_refs: FuncRefs::default(),
             host_globals: TryPrimaryMap::new(),
@@ -1797,117 +1772,6 @@ impl StoreOpaque {
         &mut self.vm_store_context
     }
 
-    /// Performs a lazy allocation of the `GcStore` within this store, returning
-    /// the previous allocation if it's already present.
-    ///
-    /// This method will, if necessary, allocate a new `GcStore` -- linear
-    /// memory and all. This is a blocking operation due to
-    /// `ResourceLimiterAsync` which means that this should only be executed
-    /// in a fiber context at this time.
-    #[inline]
-    pub(crate) async fn ensure_gc_store(
-        &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
-    ) -> Result<&mut GcStore> {
-        if self.gc_store.is_some() {
-            return Ok(self.gc_store.as_mut().unwrap());
-        }
-        self.allocate_gc_store(limiter).await
-    }
-
-    #[inline(never)]
-    async fn allocate_gc_store(
-        &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
-    ) -> Result<&mut GcStore> {
-        log::trace!("allocating GC heap for store {:?}", self.id());
-
-        assert!(self.gc_store.is_none());
-        assert_eq!(
-            self.vm_store_context.gc_heap.get_mut().base.as_non_null(),
-            NonNull::dangling(),
-        );
-        assert_eq!(self.vm_store_context.gc_heap.get_mut().current_length(), 0);
-
-        let gc_store = allocate_gc_store(self, limiter).await?;
-        *self.vm_store_context.gc_heap.get_mut() = gc_store.vmmemory_definition();
-        return Ok(self.gc_store.insert(gc_store));
-
-        #[cfg(feature = "gc")]
-        async fn allocate_gc_store(
-            store: &mut StoreOpaque,
-            limiter: Option<&mut StoreResourceLimiter<'_>>,
-        ) -> Result<GcStore> {
-            use wasmtime_environ::packed_option::ReservedValue;
-
-            let engine = store.engine();
-            let mem_ty = engine.tunables().gc_heap_memory_type();
-
-            ensure!(
-                engine.features().gc_types(),
-                "cannot allocate a GC store when GC is disabled at configuration time"
-            );
-            let gc_runtime = engine
-                .gc_runtime()
-                .context("no GC runtime: GC disabled at compile time or configuration time")?;
-
-            // First, allocate the memory that will be our GC heap's storage.
-            let mut request = InstanceAllocationRequest {
-                id: InstanceId::reserved_value(),
-                runtime_info: engine.empty_module_runtime_info(),
-                imports: vm::Imports::default(),
-                store,
-                limiter,
-            };
-
-            let (mem_alloc_index, mem) = engine
-                .allocator()
-                .allocate_memory(
-                    &mut request,
-                    &mem_ty,
-                    None,
-                    wasmtime_environ::MemoryKind::GcHeap,
-                )
-                .await?;
-
-            // Then, allocate the actual GC heap, passing in that memory
-            // storage.
-            let (index, mut heap) =
-                match engine
-                    .allocator()
-                    .allocate_gc_heap(engine, &**gc_runtime, mem_alloc_index)
-                {
-                    Ok(pair) => pair,
-                    Err(e) => unsafe {
-                        engine
-                            .allocator()
-                            .deallocate_memory(None, mem_alloc_index, mem);
-                        return Err(e);
-                    },
-                };
-            heap.attach(mem);
-
-            let mut gc_store = GcStore::new(index, heap, engine.tunables().gc_zeal_alloc_counter);
-
-            // Eagerly register trace info for any host-created types (via
-            // StructRefPre/ArrayRefPre) that were created before this GC
-            // store was allocated.
-            for ty in &store.gc_host_alloc_types {
-                gc_store.ensure_trace_info(ty.index());
-            }
-
-            Ok(gc_store)
-        }
-
-        #[cfg(not(feature = "gc"))]
-        async fn allocate_gc_store(
-            _: &mut StoreOpaque,
-            _: Option<&mut StoreResourceLimiter<'_>>,
-        ) -> Result<GcStore> {
-            bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
-        }
-    }
-
     /// Attempts to access the GC store that has been previously allocated.
     ///
     /// This method will return `Some` if the GC store was previously allocated.
@@ -1955,22 +1819,6 @@ impl StoreOpaque {
     #[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
     pub(crate) fn try_gc_store_mut(&mut self) -> Option<&mut GcStore> {
         self.gc_store.as_mut()
-    }
-
-    #[inline]
-    pub(crate) fn gc_roots(&self) -> &RootSet {
-        &self.gc_roots
-    }
-
-    #[inline]
-    #[cfg(feature = "gc")]
-    pub(crate) fn gc_roots_mut(&mut self) -> &mut RootSet {
-        &mut self.gc_roots
-    }
-
-    #[inline]
-    pub(crate) fn exit_gc_lifo_scope(&mut self, scope: usize) {
-        self.gc_roots.exit_lifo_scope(self.gc_store.as_mut(), scope);
     }
 
     /// Helper function execute a `init_gc_ref` when placing `gc_ref` in `dest`.
@@ -2361,18 +2209,6 @@ at https://bytecodealliance.org/security.
         Ok(id)
     }
 
-    /// Tests whether there is a pending exception.
-    pub fn has_pending_exception(&self) -> bool {
-        #[cfg(feature = "gc")]
-        {
-            self.pending_exception.is_some()
-        }
-        #[cfg(not(feature = "gc"))]
-        {
-            false
-        }
-    }
-
     #[cfg(target_has_atomic = "64")]
     pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
         // Set a new deadline based on the "epoch deadline delta".
@@ -2422,11 +2258,6 @@ at https://bytecodealliance.org/security.
         // current async runtime (e.g. `tokio::task::yield_now`), use that if set;
         // otherwise fall back to the runtime-agnostic code.
         yield_now().await
-    }
-
-    #[cfg(not(feature = "gc"))]
-    pub(crate) fn require_gc_store_mut(&mut self) -> Result<&mut GcStore> {
-        bail!("GC is disabled")
     }
 }
 
