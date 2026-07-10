@@ -205,3 +205,49 @@ package test:fixed-length-lists {
     assert_eq!(result, ([[1, 2], [3, 4]], [[-1, -2], [-3, -4]]));
     Ok(())
 }
+
+#[test]
+fn fixed_length_list_length_mismatch_rejected() -> Result<()> {
+    let wat = r#"
+(component
+  (core module $m
+    (func (export "run")
+      (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)
+      (result i32)
+      local.get 15)
+    (memory (export "memory") 1)
+  )
+  (core instance $i (instantiate $m))
+  (type $lst (list u32 16))
+  (type $ft (func (param "x" $lst) (result u32)))
+  (alias core export $i "run" (core func $run))
+  (func (export "run") (type $ft)
+    (canon lift (core func $run) (memory $i "memory")))
+)
+"#;
+    let mut config = Config::new();
+    config.wasm_component_model_fixed_length_lists(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+
+    assert!(
+        instance
+            .get_typed_func::<([u32; 2],), (u32,)>(&mut store, "run")
+            .is_err()
+    );
+    assert!(
+        instance
+            .get_typed_func::<([u32; 32],), (u32,)>(&mut store, "run")
+            .is_err(),
+    );
+
+    let func = instance.get_typed_func::<([u32; 16],), (u32,)>(&mut store, "run")?;
+    let mut input = [0u32; 16];
+    input[15] = 0x1234_5678;
+    let (out,) = func.call(&mut store, (input,))?;
+    assert_eq!(out, 0x1234_5678);
+    Ok(())
+}
