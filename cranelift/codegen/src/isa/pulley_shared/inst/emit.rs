@@ -152,18 +152,18 @@ fn pulley_emit<P>(
         }
 
         Inst::LoadExtNameFar { dst, name, offset } => {
-            let size = match P::pointer_width() {
+            let (reloc, size) = match P::pointer_width() {
                 PointerWidth::PointerWidth32 => {
                     enc::xconst32(sink, dst, 0);
-                    4
+                    (Reloc::Abs4, 4)
                 }
                 PointerWidth::PointerWidth64 => {
                     enc::xconst64(sink, dst, 0);
-                    8
+                    (Reloc::Abs8, 8)
                 }
             };
             let end = sink.cur_offset();
-            sink.add_reloc_at_offset(end - size, Reloc::Abs8, &**name, *offset);
+            sink.add_reloc_at_offset(end - size, reloc, &**name, *offset);
         }
 
         Inst::Call { info } => {
