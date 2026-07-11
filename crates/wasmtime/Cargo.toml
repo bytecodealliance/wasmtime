@@ -327,7 +327,6 @@ std = [
   'once_cell',
   'wasmtime-fiber?/std',
   'pulley-interpreter/std',
-  'wasmtime-core/std',
   'addr2line?/std',
   "dep:rustix",
   "wasmtime-jit-icache-coherence",
