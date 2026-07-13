@@ -1821,9 +1821,14 @@ impl StoreOpaque {
     /// relatively expensive table manipulations. This would ideally be
     /// optimized to avoid the full allocation of a `HostTask` in at least some
     /// situations.
-    pub(crate) fn host_task_create(&mut self) -> Result<Option<TableId<HostTask>>> {
+    pub(crate) fn host_task_create(&mut self, track_scope: bool) -> Result<Option<TableId<HostTask>>> {
         if !self.concurrency_support() {
-            self.enter_call_not_concurrent()?;
+            // Resource-borrow scope tracking is only needed when the
+            // function's parameters can actually contain `borrow` handles;
+            // this is precomputed per function type.
+            if track_scope {
+                self.enter_call_not_concurrent()?;
+            }
             return Ok(None);
         }
         let caller = self.current_guest_thread()?;
@@ -1855,14 +1860,20 @@ impl StoreOpaque {
     /// Note that this isn't invoked when the host is invoked asynchronously and
     /// the host isn't complete yet. In that situation the host task persists
     /// and will be cleaned up separately in `subtask_drop`
-    pub(crate) fn host_task_delete(&mut self, task: Option<TableId<HostTask>>) -> Result<()> {
+    pub(crate) fn host_task_delete(
+        &mut self,
+        task: Option<TableId<HostTask>>,
+        track_scope: bool,
+    ) -> Result<()> {
         match task {
             Some(task) => {
                 log::trace!("delete host task {task:?}");
                 self.concurrent_state_mut()?.delete(task)?;
             }
             None => {
-                self.exit_call_not_concurrent();
+                if track_scope {
+                    self.exit_call_not_concurrent();
+                }
             }
         }
         Ok(())
