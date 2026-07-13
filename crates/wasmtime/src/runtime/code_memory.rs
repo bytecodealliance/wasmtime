@@ -13,7 +13,9 @@ use object::{
     read::elf::{FileHeader as _, SectionHeader as _},
 };
 use wasmtime_environ::StaticModuleIndex;
-use wasmtime_environ::{CompiledTrap, lookup_trap_code, obj};
+use wasmtime_environ::{
+    CompiledTrap, lookup_trap_code, obj, return_offset_for_mmu_interrupt_check,
+};
 use wasmtime_unwinder::ExceptionTable;
 
 /// Management of executable memory within a `MmapVec`
@@ -38,6 +40,7 @@ pub struct CodeMemory {
     text: Range<usize>,
     unwind: Range<usize>,
     trap_data: Range<usize>,
+    mmu_interrupt_check_data: Range<usize>,
     wasm_data: Range<usize>,
     address_map_data: Range<usize>,
     stack_map_data: Range<usize>,
@@ -148,6 +151,7 @@ impl CodeMemory {
         #[cfg(feature = "debug-builtins")]
         let mut has_native_debug_info = false;
         let mut trap_data = 0..0;
+        let mut mmu_interrupt_check_data = 0..0;
         let mut exception_data = 0..0;
         let mut frame_tables_data = 0..0;
         let mut wasm_data = 0..0;
@@ -212,6 +216,7 @@ impl CodeMemory {
                 obj::ELF_WASMTIME_ADDRMAP => address_map_data = range,
                 obj::ELF_WASMTIME_STACK_MAP => stack_map_data = range,
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
+                obj::ELF_WASMTIME_MMU_INTERRUPT_CHECKS => mmu_interrupt_check_data = range,
                 obj::ELF_WASMTIME_EXCEPTIONS => exception_data = range,
                 obj::ELF_WASMTIME_FRAMES => frame_tables_data = range,
                 obj::ELF_NAME_DATA => func_name_data = range,
@@ -268,6 +273,7 @@ impl CodeMemory {
             text,
             unwind,
             trap_data,
+            mmu_interrupt_check_data,
             address_map_data,
             stack_map_data,
             exception_data,
@@ -394,6 +400,24 @@ impl CodeMemory {
         };
         let end = self.wasm_bytecode_end_for_module(index)?;
         Some(&self.wasm_bytecode()[start..end])
+    }
+
+    /// Returns the address at which to resume after the given MMU-interrupt
+    /// check.
+    pub fn return_address_for_mmu_interrupt_check(&self, check_offset: u32) -> Option<*const ()> {
+        // SAFETY: `self.mmu_interrupt_check_data` is a range into `self.mmap`
+        // established when the ELF was parsed in the constructor, and
+        // `self.mmap` hasn't mutated since then. `self.mmap` outlives
+        // `section`. We're quickly done with the latter and return a
+        // disembodied pointer for some also-unsafe naked asm to jmp to.
+        let section = unsafe {
+            std::slice::from_raw_parts(
+                self.mmap[self.mmu_interrupt_check_data.clone()].as_ptr(),
+                self.mmu_interrupt_check_data.len(),
+            )
+        };
+        return_offset_for_mmu_interrupt_check(section, check_offset)
+            .map(|offset| (self.text().as_ptr().addr() + offset as usize) as *const ())
     }
 
     /// Publishes the internal ELF image to be ready for execution.

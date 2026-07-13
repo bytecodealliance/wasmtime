@@ -65,6 +65,32 @@ pub const ELF_WASMTIME_STACK_MAP: &str = ".wasmtime.stackmap";
 /// the text section.
 pub const ELF_WASMTIME_TRAPS: &str = ".wasmtime.traps";
 
+/// A custom section through which we can locate instructions which
+/// check for an MMU-triggered interruption when using `mmu-interruption`.
+///
+/// The section allows for finding both the beginnings and ends of such
+/// instructions so the signal handler can identify segfault which caused by
+/// them (vs. ordinary crashes) and also find the address at which to resume
+/// afterward.
+///
+/// The format is architecture-dependent. Because the only forseen need to read
+/// it is on the platform where the binary will be executed and performance is
+/// sensitive, endianness follows whatever is native for the target. For x64,
+/// the only currently supported platform, the section comprises these data:
+/// * A u32 stating how many MMU-interruption checks are in each of the
+///   following 2 items
+/// * A sorted array of u32s which represent offsets from the beginning of the
+///   text section to the load instruction triggering the interruption
+/// * A parallel array of bits representing the length of those load
+///   instructions: 0 meaning 3 bytes, 1 meaning 4. These are the only lengths
+///   possible on x64. Resumption should happen directly after the load
+///   instruction. There is no danger of this location pointing beyond the end
+///   of the function; even if a function is empty, there's at least a return
+///   (or, in case of an infinite loop, a jmp) after its prologue.
+///
+/// The 32-bit encodings herein mean >=4gb text sections are not supported.
+pub const ELF_WASMTIME_MMU_INTERRUPT_CHECKS: &str = ".wasmtime.mmu_interrupt_checks";
+
 /// A custom binary-encoded section of the wasmtime compilation
 /// artifacts which encodes exception tables.
 ///

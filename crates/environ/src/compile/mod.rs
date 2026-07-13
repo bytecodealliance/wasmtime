@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 mod address_map;
 mod frame_table;
+mod mmu_interrupt_checks;
 mod module_artifacts;
 mod module_environ;
 mod module_types;
@@ -25,6 +26,7 @@ mod trap_encoding;
 
 pub use self::address_map::*;
 pub use self::frame_table::*;
+pub use self::mmu_interrupt_checks::*;
 pub use self::module_artifacts::*;
 pub use self::module_environ::*;
 pub use self::module_types::*;
