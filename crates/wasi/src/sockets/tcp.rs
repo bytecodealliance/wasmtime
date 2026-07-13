@@ -7,8 +7,6 @@ use crate::sockets::util::{
     set_send_buffer_size, set_unicast_hop_limit, tcp_bind,
 };
 use crate::sockets::{DEFAULT_TCP_BACKLOG, SocketAddressFamily, WasiSocketsCtx};
-use io_lifetimes::AsSocketlike as _;
-use io_lifetimes::views::SocketlikeView;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::fmt::Debug;
@@ -236,14 +234,14 @@ impl TcpSocket {
         }
     }
 
-    pub(crate) fn as_std_view(&self) -> Result<SocketlikeView<'_, std::net::TcpStream>, ErrorCode> {
+    fn as_std_view(&self) -> Result<StdView<'_>, ErrorCode> {
         match &self.tcp_state {
             TcpState::Default(socket)
             | TcpState::BindStarted(socket)
             | TcpState::Bound(socket)
-            | TcpState::ListenStarted(socket) => Ok(socket.as_socketlike_view()),
-            TcpState::Connected { stream, .. } => Ok(stream.as_socketlike_view()),
-            TcpState::Listening { listener, .. } => Ok(listener.as_socketlike_view()),
+            | TcpState::ListenStarted(socket) => Ok(StdView::Socket(socket)),
+            TcpState::Connected { stream, .. } => Ok(StdView::Stream(stream)),
+            TcpState::Listening { listener, .. } => Ok(StdView::Listener(listener)),
             TcpState::Connecting(..) | TcpState::ConnectReady(_) | TcpState::Closed => {
                 Err(ErrorCode::InvalidState)
             }
@@ -533,19 +531,19 @@ impl TcpSocket {
     }
 
     pub(crate) fn keep_alive_enabled(&self) -> Result<bool, ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         let v = sockopt::socket_keepalive(fd)?;
         Ok(v)
     }
 
     pub(crate) fn set_keep_alive_enabled(&self, value: bool) -> Result<(), ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         sockopt::set_socket_keepalive(fd, value)?;
         Ok(())
     }
 
     pub(crate) fn keep_alive_idle_time(&self) -> Result<u64, ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         let v = sockopt::tcp_keepidle(fd)?;
         Ok(v.as_nanos().try_into().unwrap_or(u64::MAX))
     }
@@ -553,45 +551,45 @@ impl TcpSocket {
     pub(crate) fn set_keep_alive_idle_time(&mut self, value: u64) -> Result<(), ErrorCode> {
         let value = {
             let fd = self.as_std_view()?;
-            set_keep_alive_idle_time(&*fd, value)?
+            set_keep_alive_idle_time(fd, value)?
         };
         self.options.set_keep_alive_idle_time(value);
         Ok(())
     }
 
     pub(crate) fn keep_alive_interval(&self) -> Result<u64, ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         let v = sockopt::tcp_keepintvl(fd)?;
         Ok(v.as_nanos().try_into().unwrap_or(u64::MAX))
     }
 
     pub(crate) fn set_keep_alive_interval(&self, value: u64) -> Result<(), ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         set_keep_alive_interval(fd, Duration::from_nanos(value))?;
         Ok(())
     }
 
     pub(crate) fn keep_alive_count(&self) -> Result<u32, ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         let v = sockopt::tcp_keepcnt(fd)?;
         Ok(v)
     }
 
     pub(crate) fn set_keep_alive_count(&self, value: u32) -> Result<(), ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         set_keep_alive_count(fd, value)?;
         Ok(())
     }
 
     pub(crate) fn hop_limit(&self) -> Result<u8, ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         let n = get_unicast_hop_limit(fd, self.family)?;
         Ok(n)
     }
 
     pub(crate) fn set_hop_limit(&mut self, value: u8) -> Result<(), ErrorCode> {
         {
-            let fd = &*self.as_std_view()?;
+            let fd = self.as_std_view()?;
             set_unicast_hop_limit(fd, self.family, value)?;
         }
         self.options.set_hop_limit(value);
@@ -599,14 +597,14 @@ impl TcpSocket {
     }
 
     pub(crate) fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         let n = receive_buffer_size(fd)?;
         Ok(n)
     }
 
     pub(crate) fn set_receive_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
         let res = {
-            let fd = &*self.as_std_view()?;
+            let fd = self.as_std_view()?;
             set_receive_buffer_size(fd, value)?
         };
         self.options.set_receive_buffer_size(res);
@@ -614,14 +612,14 @@ impl TcpSocket {
     }
 
     pub(crate) fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
-        let fd = &*self.as_std_view()?;
+        let fd = self.as_std_view()?;
         let n = send_buffer_size(fd)?;
         Ok(n)
     }
 
     pub(crate) fn set_send_buffer_size(&mut self, value: u64) -> Result<(), ErrorCode> {
         let res = {
-            let fd = &*self.as_std_view()?;
+            let fd = self.as_std_view()?;
             set_send_buffer_size(fd, value)?
         };
         self.options.set_send_buffer_size(res);
@@ -835,6 +833,21 @@ mod does_not_inherit_options {
                 // Ignore potential error.
                 _ = sockopt::set_tcp_keepidle(&stream, Duration::from_nanos(keep_alive_idle_time));
             }
+        }
+    }
+}
+enum StdView<'a> {
+    Socket(&'a tokio::net::TcpSocket),
+    Stream(&'a tokio::net::TcpStream),
+    Listener(&'a tokio::net::TcpListener),
+}
+
+impl rustix::fd::AsFd for StdView<'_> {
+    fn as_fd(&self) -> rustix::fd::BorrowedFd<'_> {
+        match self {
+            StdView::Socket(socket) => socket.as_fd(),
+            StdView::Stream(stream) => stream.as_fd(),
+            StdView::Listener(listener) => listener.as_fd(),
         }
     }
 }

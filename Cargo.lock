@@ -4625,7 +4625,6 @@ dependencies = [
 name = "wasmtime-bench-api"
 version = "48.0.0"
 dependencies = [
- "cap-std",
  "clap",
  "shuffling-allocator",
  "target-lexicon",
@@ -4649,7 +4648,6 @@ version = "48.0.0"
 dependencies = [
  "async-trait",
  "bytes",
- "cap-std",
  "env_logger 0.11.5",
  "futures",
  "log",
@@ -5133,11 +5131,10 @@ dependencies = [
  "bitflags 2.11.1",
  "bytes",
  "cap-fs-ext",
- "cap-std",
+ "cap-primitives",
  "cfg-if",
  "env_logger 0.11.5",
  "futures",
- "io-lifetimes 3.0.1",
  "rand 0.10.1",
  "rustix 1.1.4",
  "tempfile",
@@ -5223,7 +5220,6 @@ dependencies = [
 name = "wasmtime-wasi-nn"
 version = "48.0.0"
 dependencies = [
- "cap-std",
  "libtest-mimic",
  "openvino",
  "ort",

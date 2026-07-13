@@ -4,7 +4,7 @@ use crate::p2::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
 };
-use cap_std::time::SystemTime;
+use std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::{Pollable, subscribe};

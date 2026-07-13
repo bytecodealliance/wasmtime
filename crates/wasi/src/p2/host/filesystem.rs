@@ -178,7 +178,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
                 // within this `block` call, rather than delay calculating the metadata
                 // for entries when they're demanded later in the iterator chain.
                 Ok::<_, std::io::Error>(
-                    d.entries()?
+                    cap_primitives::fs::read_base_dir(d)?
                         .map(|entry| {
                             let entry = entry?;
                             let meta = entry.metadata()?;
@@ -718,22 +718,8 @@ impl From<std::num::TryFromIntError> for ErrorCode {
     }
 }
 
-fn descriptortype_from(ft: cap_std::fs::FileType) -> types::DescriptorType {
-    use cap_fs_ext::FileTypeExt;
-    use types::DescriptorType;
-    if ft.is_dir() {
-        DescriptorType::Directory
-    } else if ft.is_symlink() {
-        DescriptorType::SymbolicLink
-    } else if ft.is_block_device() {
-        DescriptorType::BlockDevice
-    } else if ft.is_char_device() {
-        DescriptorType::CharacterDevice
-    } else if ft.is_file() {
-        DescriptorType::RegularFile
-    } else {
-        DescriptorType::Unknown
-    }
+fn descriptortype_from(ft: cap_primitives::fs::FileType) -> types::DescriptorType {
+    crate::filesystem::DescriptorType::from(ft).into()
 }
 
 fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, ErrorCode> {

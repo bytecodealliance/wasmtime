@@ -4,7 +4,7 @@ use crate::filesystem::{Dir, WasiFilesystemCtx};
 use crate::random::WasiRandomCtx;
 use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
 use crate::{DirPerms, FilePerms, OpenMode};
-use cap_std::ambient_authority;
+use cap_primitives::ambient_authority;
 use rand::Rng;
 use std::future::Future;
 use std::mem;
@@ -304,7 +304,7 @@ impl WasiCtxBuilder {
         dir_perms: DirPerms,
         file_perms: FilePerms,
     ) -> Result<&mut Self> {
-        let dir = cap_std::fs::Dir::open_ambient_dir(host_path.as_ref(), ambient_authority())?;
+        let dir = cap_primitives::fs::open_ambient_dir(host_path.as_ref(), ambient_authority())?;
         let mut open_mode = OpenMode::empty();
         if dir_perms.contains(DirPerms::READ) {
             open_mode |= OpenMode::READ;

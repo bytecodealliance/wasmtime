@@ -10,7 +10,6 @@ use bytes::BytesMut;
 use core::iter;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use io_lifetimes::AsSocketlike as _;
 use std::net::{Shutdown, SocketAddr};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -103,10 +102,7 @@ impl Drop for ReceiveStreamProducer {
 impl ReceiveStreamProducer {
     fn close(&mut self, res: Result<(), ErrorCode>) {
         if let Some(tx) = self.result.take() {
-            _ = self
-                .stream
-                .as_socketlike_view::<std::net::TcpStream>()
-                .shutdown(Shutdown::Read);
+            _ = crate::sockets::util::shutdown(&self.stream, Shutdown::Read);
             _ = tx.send(res);
         }
     }
@@ -177,10 +173,7 @@ impl Drop for SendStreamConsumer {
 impl SendStreamConsumer {
     fn close(&mut self, res: Result<(), ErrorCode>) {
         if let Some(tx) = self.result.take() {
-            _ = self
-                .stream
-                .as_socketlike_view::<std::net::TcpStream>()
-                .shutdown(Shutdown::Write);
+            _ = crate::sockets::util::shutdown(&self.stream, Shutdown::Write);
             _ = tx.send(res);
         }
     }

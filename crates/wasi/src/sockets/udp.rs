@@ -5,8 +5,6 @@ use crate::sockets::util::{
     set_unicast_hop_limit, udp_bind, udp_connect, udp_disconnect, udp_socket,
 };
 use crate::sockets::{SocketAddrCheck, SocketAddressFamily, WasiSocketsCtx};
-use io_lifetimes::AsSocketlike as _;
-use io_lifetimes::raw::{FromRawSocketlike as _, IntoRawSocketlike as _};
 use rustix::io::Errno;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -66,9 +64,7 @@ impl UdpSocket {
         }
 
         let socket = with_ambient_tokio_runtime(|| {
-            tokio::net::UdpSocket::try_from(unsafe {
-                std::net::UdpSocket::from_raw_socketlike(fd.into_raw_socketlike())
-            })
+            tokio::net::UdpSocket::try_from(std::net::UdpSocket::from(fd))
         })?;
 
         Ok(Self {
@@ -244,10 +240,7 @@ impl UdpSocket {
         if matches!(self.udp_state, UdpState::Default | UdpState::BindStarted) {
             return Err(ErrorCode::InvalidState);
         }
-        let addr = self
-            .socket
-            .as_socketlike_view::<std::net::UdpSocket>()
-            .local_addr()?;
+        let addr = self.socket.local_addr()?;
         Ok(addr)
     }
 
@@ -255,10 +248,7 @@ impl UdpSocket {
         if !matches!(self.udp_state, UdpState::Connected(..)) {
             return Err(ErrorCode::InvalidState);
         }
-        let addr = self
-            .socket
-            .as_socketlike_view::<std::net::UdpSocket>()
-            .peer_addr()?;
+        let addr = self.socket.peer_addr()?;
         Ok(addr)
     }
 

@@ -486,3 +486,14 @@ pub fn implicit_bind_addr(family: SocketAddressFamily) -> SocketAddr {
     };
     SocketAddr::new(ip, 0)
 }
+
+pub fn shutdown(socket: &tokio::net::TcpStream, how: std::net::Shutdown) -> Result<(), Errno> {
+    rustix::net::shutdown(
+        socket,
+        match how {
+            std::net::Shutdown::Read => rustix::net::Shutdown::Read,
+            std::net::Shutdown::Write => rustix::net::Shutdown::Write,
+            std::net::Shutdown::Both => rustix::net::Shutdown::Both,
+        },
+    )
+}

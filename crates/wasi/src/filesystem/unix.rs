@@ -1,13 +1,20 @@
-use crate::filesystem::{Advice, DescriptorFlags};
-use io_lifetimes::AsFilelike;
+use crate::filesystem::{
+    Advice, DescriptorFlags, DescriptorStat, DescriptorType, MetadataHashValue,
+};
+use cap_primitives::fs::{
+    FileType, FileTypeExt, FollowSymlinks, Metadata, MetadataExt, OpenOptions,
+};
 use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
 use rustix::io::write;
 use std::fs::File;
 use std::io;
-use std::os::fd::AsFd;
 use std::os::unix::fs::FileExt;
+use std::path::Path;
 
-pub(crate) fn get_flags(file: impl AsFd) -> io::Result<DescriptorFlags> {
+pub use cap_primitives::fs::remove_file as remove_file_or_symlink;
+pub use cap_primitives::fs::symlink;
+
+pub(crate) fn get_flags(file: &File) -> io::Result<DescriptorFlags> {
     let flags = fcntl_getfl(file)?;
     let mut ret = DescriptorFlags::empty();
     ret.set(
@@ -26,7 +33,7 @@ pub(crate) fn get_flags(file: impl AsFd) -> io::Result<DescriptorFlags> {
     Ok(ret)
 }
 
-pub(crate) fn advise(file: impl AsFd, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
+pub(crate) fn advise(file: &File, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
     cfg_if::cfg_if! {
         if #[cfg(target_vendor = "apple")] {
             match advice {
@@ -58,7 +65,7 @@ pub(crate) fn advise(file: impl AsFd, offset: u64, len: u64, advice: Advice) -> 
     Ok(())
 }
 
-pub(crate) fn append_cursor_unspecified(file: impl AsFd, data: &[u8]) -> io::Result<usize> {
+pub(crate) fn append_cursor_unspecified(file: &File, data: &[u8]) -> io::Result<usize> {
     // On Linux, use `pwritev2`.
     #[cfg(target_os = "linux")]
     {
@@ -83,18 +90,68 @@ pub(crate) fn append_cursor_unspecified(file: impl AsFd, data: &[u8]) -> io::Res
     Ok(result?)
 }
 
-pub(crate) fn write_at_cursor_unspecified(
-    file: impl AsFd,
-    data: &[u8],
-    pos: u64,
-) -> io::Result<usize> {
-    file.as_filelike_view::<File>().write_at(data, pos)
+pub(crate) fn write_at_cursor_unspecified(file: &File, data: &[u8], pos: u64) -> io::Result<usize> {
+    file.write_at(data, pos)
 }
 
 pub(crate) fn read_at_cursor_unspecified(
-    file: impl AsFd,
+    file: &File,
     buf: &mut [u8],
     pos: u64,
 ) -> io::Result<usize> {
-    file.as_filelike_view::<File>().read_at(buf, pos)
+    file.read_at(buf, pos)
+}
+
+fn meta_identity(meta: &Metadata) -> (u64, u64) {
+    (meta.dev(), meta.ino())
+}
+
+fn file_identity(file: &File) -> io::Result<(u64, u64)> {
+    let meta = Metadata::from_file(file)?;
+    Ok(meta_identity(&meta))
+}
+
+pub(crate) fn metadata_hash(file: &File) -> io::Result<MetadataHashValue> {
+    Ok(MetadataHashValue::new(file_identity(file)?))
+}
+
+pub(crate) fn metadata_hash_at(
+    start: &File,
+    path: &Path,
+    follow: FollowSymlinks,
+) -> io::Result<MetadataHashValue> {
+    let meta = cap_primitives::fs::stat(start, path, follow)?;
+    Ok(MetadataHashValue::new(meta_identity(&meta)))
+}
+
+pub(crate) fn is_same_file(a: &File, b: &File) -> io::Result<bool> {
+    Ok(file_identity(a)? == file_identity(b)?)
+}
+
+pub(crate) fn stat(f: &std::fs::File) -> io::Result<DescriptorStat> {
+    let meta = Metadata::from_file(f)?;
+    Ok(DescriptorStat::new(&meta, meta.nlink()))
+}
+
+pub(crate) fn stat_at(
+    start: &File,
+    path: &Path,
+    follow: FollowSymlinks,
+) -> io::Result<DescriptorStat> {
+    let meta = cap_primitives::fs::stat(start, path, follow)?;
+    Ok(DescriptorStat::new(&meta, meta.nlink()))
+}
+
+pub(crate) fn maybe_dir(opts: &mut OpenOptions) {
+    let _ = opts;
+}
+
+pub(crate) fn descriptor_type(ft: FileType) -> DescriptorType {
+    if ft.is_block_device() {
+        DescriptorType::BlockDevice
+    } else if ft.is_char_device() {
+        DescriptorType::CharacterDevice
+    } else {
+        DescriptorType::Unknown
+    }
 }
