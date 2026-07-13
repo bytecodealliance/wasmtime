@@ -823,13 +823,27 @@ pub(crate) enum WaitResult {
     Completed,
 }
 
+/// Poll `future` once with a no-op waker in the store's tls context,
+/// before any task machinery exists. For pending futures,
+/// `Instance::continue_polling` should be used to add them to
+/// `ConcurrentState::futures` and have them polled by the event loop.
+#[inline]
+pub(crate) fn poll_once<F>(store: &mut dyn VMStore, future: &mut F) -> Poll<F::Output>
+where
+    F: Future + Unpin,
+{
+    tls::set(store, || {
+        Pin::new(future).poll(&mut Context::from_waker(&Waker::noop()))
+    })
+}
+
 /// Poll the specified future until it completes on behalf of a guest->host call
 /// using a sync-lowered import.
 ///
-/// This is similar to `Instance::first_poll` except it's for sync-lowered
-/// imports, meaning we don't need to handle cancellation and we can block the
-/// caller until the task completes, at which point the caller can handle
-/// lowering the result to the guest's stack and linear memory.
+/// This is similar to `poll_once` + `Instance::continue_polling` except it's
+/// for sync-lowered imports, meaning we don't need to handle cancellation and
+/// we can block the caller until the task completes, at which point the caller
+/// can handle lowering the result to the guest's stack and linear memory.
 pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     store: &mut dyn VMStore,
     future: impl Future<Output = Result<R>> + Send + 'static,
@@ -3246,19 +3260,12 @@ impl Instance {
         Ok(status.pack(waitable))
     }
 
-    /// Poll the specified future once on behalf of a guest->host call using an
-    /// async-lowered import.
-    ///
-    /// If it returns `Ready`, return `Ok(None)`.  Otherwise, if it returns
-    /// `Pending`, add it to the set of futures to be polled as part of this
-    /// instance's event loop until it completes, and then return
-    /// `Ok(Some(handle))` where `handle` is the waitable handle to return.
-    ///
-    /// Whether the future returns `Ready` immediately or later, the `lower`
-    /// function will be used to lower the result, if any, into the guest caller's
-    /// stack and linear memory. The `lower` function is invoked with `None` if
-    /// the future is cancelled.
-    pub(crate) fn first_poll<T: 'static, R: Send + 'static>(
+    /// Continue an async-lowered host call whose future was already given
+    /// its first poll (see `poll_once`) and is pending: wrap it in an
+    /// abortable `JoinHandle` (for cancellation), materialize the `HostTask`
+    /// if the entrypoint deferred it, and register the future with the event
+    /// loop, returning the waitable handle for the guest.
+    pub(crate) fn continue_polling<T: 'static, R: Send + 'static>(
         self,
         mut store: StoreContextMut<'_, T>,
         future: impl Future<Output = Result<R>> + Send + 'static,
@@ -3266,37 +3273,7 @@ impl Instance {
     ) -> Result<Option<u32>> {
         let token = StoreToken::new(store.as_context_mut());
 
-        // Poll the raw future once before creating anything. Note that no
-        // `HostTask` (and no abortable `JoinHandle` wrapper) exists yet for
-        // deferred (borrow-free) calls: the common case is that the future
-        // completes right here, in which case no task is ever created and
-        // the guest simply observes `Status::Returned` with no waitable
-        // handle. We can use a dummy `Waker` because a pending future is
-        // added to `ConcurrentState::futures` below and polled from the
-        // event loop.
-        let mut inner = Box::pin(future);
-        let poll = tls::set(store.0, || {
-            inner
-                .as_mut()
-                .poll(&mut Context::from_waker(&Waker::noop()))
-        });
-
-        match poll {
-            // It finished immediately; lower the result.
-            Poll::Ready(result) => {
-                let result = result?;
-                lower(store.as_context_mut(), Some(result))?;
-                return Ok(None);
-            }
-
-            // Future isn't ready yet, so fall through.
-            Poll::Pending => {}
-        }
-
-        // The future is genuinely pending: wrap it in an abortable
-        // `JoinHandle` (for cancellation) and materialize the `HostTask` now
-        // if the entrypoint deferred it, or use the already-current one.
-        let (join_handle, future) = JoinHandle::run(inner);
+        let (join_handle, future) = JoinHandle::run(future);
         let future = Box::pin(future);
         let task = match store.0.current_thread()? {
             CurrentThread::Host(task) => task,
@@ -3307,10 +3284,6 @@ impl Instance {
             assert!(matches!(state, HostTaskState::CalleeStarted));
             *state = HostTaskState::CalleeRunning(join_handle);
         }
-
-        // It hasn't finished yet; add the future to
-        // `ConcurrentState::futures` so it will be polled by the event
-        // loop and allocate a waitable handle to return to the guest.
 
         // Wrap the future in a closure responsible for lowering the result into
         // the guest's stack and memory, as well as notifying any waiters that

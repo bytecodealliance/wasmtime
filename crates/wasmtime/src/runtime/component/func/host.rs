@@ -22,6 +22,7 @@ use core::mem::{self, MaybeUninit};
 #[cfg(feature = "async")]
 use core::pin::Pin;
 use core::ptr::NonNull;
+use core::task::Poll;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex, TypeFuncIndex,
 };
@@ -531,8 +532,24 @@ where
                 None
             }
             #[cfg(feature = "component-model-async")]
-            HostResult::Future(future) => {
-                instance.first_poll(store, future, move |store, ret| {
+            HostResult::Future(mut future) => {
+                // Ready results are lowered exactly like the `Done` arm
+                // above, with no task, no `JoinHandle`, and no re-boxing
+                // (the future is already heap-pinned, hence `Unpin`).
+                match concurrent::poll_once(store.0, &mut future) {
+                    Poll::Ready(result) => {
+                        Self::lower_result_and_exit_call(
+                            &mut LowerContext::new(store, options, instance),
+                            ty,
+                            Some(result?),
+                            Destination::Memory(retptr),
+                        )?;
+                        storage[0].write(ValRaw::u32(Status::Returned.pack(None)));
+                        return Ok(true);
+                    }
+                    Poll::Pending => {}
+                }
+                instance.continue_polling(store, future, move |store, ret| {
                     Self::lower_result_and_exit_call(
                         &mut LowerContext::new(store, options, instance),
                         ty,
