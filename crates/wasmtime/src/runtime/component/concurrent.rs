@@ -1601,6 +1601,7 @@ impl<T> StoreContextMut<'_, T> {
 impl StoreOpaque {
     /// Returns the currently-running thread, promoting any deferred lazy thread
     /// into a fully-materialized `CurrentThread`.
+    #[inline]
     pub(crate) fn current_thread(&mut self) -> Result<CurrentThread> {
         // Without concurrency support there is nothing to force.
         if !self.concurrency_support() {
@@ -1619,6 +1620,13 @@ impl StoreOpaque {
                 .unforced_current_thread);
         }
 
+        self.force_deferred_current_thread()
+    }
+
+    /// Slow path of [`Self::current_thread`]: promote the deferred lazy
+    /// thread into a fully-materialized `CurrentThread`.
+    #[cold]
+    fn force_deferred_current_thread(&mut self) -> Result<CurrentThread> {
         // The component instance whose adapters pushed the deferred frames; all
         // frames in a guest-to-guest, sync-to-sync call chain of fused adapters
         // live within a single `wasmtime::component::Instance` (because
