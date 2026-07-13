@@ -250,6 +250,56 @@ fn implements_shows_up() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn external_id_shows_up() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_implements(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "a" (implements "a1:b1/c1") (external-id "user-db-prod:region-a") (instance $a))
+                (import "b" (external-id "user-db-prod:region-b") (instance $b
+                    (export "f" (external-id "func-b-f") (func))
+                ))
+                (import "c" (instance $c))
+                (export "d" (external-id "queue-1") (instance $a))
+            )
+        "#,
+    )?;
+
+    let assert_reflection = |component: &Component| {
+        let ty = component.component_type();
+        let mut imports = ty.imports(&engine);
+        let (_, a) = imports.next().unwrap();
+        assert_eq!(a.implements.as_deref(), Some("a1:b1/c1"));
+        assert_eq!(a.external_id.as_deref(), Some("user-db-prod:region-a"));
+        let (_, b) = imports.next().unwrap();
+        assert_eq!(b.implements.as_deref(), None);
+        assert_eq!(b.external_id.as_deref(), Some("user-db-prod:region-b"));
+        let ComponentItem::ComponentInstance(instance) = &b.ty else {
+            panic!("expected an instance import");
+        };
+        let (name, f) = instance.exports(&engine).next().unwrap();
+        assert_eq!(name, "f");
+        assert_eq!(f.external_id.as_deref(), Some("func-b-f"));
+        let (_, c) = imports.next().unwrap();
+        assert_eq!(c.external_id.as_deref(), None);
+        let mut exports = ty.exports(&engine);
+        let (_, d) = exports.next().unwrap();
+        assert_eq!(d.external_id.as_deref(), Some("queue-1"));
+    };
+
+    assert_reflection(&component);
+    let bytes = component.serialize()?;
+    let component = unsafe { Component::deserialize(&engine, &bytes)? };
+    assert_reflection(&component);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn issue_13540_resources_in_adapter_no_concurrency() -> Result<()> {
     let mut config = Config::new();
     config.concurrency_support(false);

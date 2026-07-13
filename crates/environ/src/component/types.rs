@@ -449,20 +449,29 @@ where
     }
 }
 
-/// TODO
+/// An import or an export of a component or a component instance.
+///
+/// This records the type of the item that is being imported or exported along
+/// with any metadata associated with the item.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentExtern {
-    /// TODO
+    /// Metadata associated with this item's name, such as
+    /// `(implements "...")`.
     pub data: ComponentExternData,
-    /// TODO
+    /// The type of this item.
     pub ty: TypeDef,
 }
 
-/// TODO
+/// Metadata associated with the name of a component import or export.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentExternData {
-    /// TODO
+    /// The `(implements "...")` annotation, if present: the name of the
+    /// interface that this item implements, used when matching this item
+    /// against imports by interface name rather than by import name.
     pub implements: Option<String>,
+    /// The `(external-id "...")` annotation, if present: a free-form
+    /// host-defined identifier which is ignored by type checking.
+    pub external_id: Option<String>,
 }
 
 /// Types of imports and exports in the component model.

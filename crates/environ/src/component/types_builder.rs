@@ -258,6 +258,7 @@ impl ComponentTypesBuilder {
             ty: self.convert_component_entity_type(types, ty.ty)?,
             data: ComponentExternData {
                 implements: ty.implements.clone(),
+                external_id: ty.external_id.clone(),
             },
         })
     }
