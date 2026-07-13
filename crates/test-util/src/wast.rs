@@ -193,7 +193,6 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.reference_types = Some(true);
     ret.multi_memory = Some(true);
     ret.component_model_implements = Some(true);
-    ret.component_model_memory64 = Some(true);
 
     if let Some(parent) = test.parent() {
         if parent.ends_with("async")
