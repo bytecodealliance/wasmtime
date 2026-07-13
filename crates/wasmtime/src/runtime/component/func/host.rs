@@ -359,6 +359,7 @@ where
 
     /// "Rust" entrypoint after panic-handling infrastructure is set up and raw
     /// arguments are translated to Rust types.
+    #[inline]
     fn entrypoint(
         &self,
         mut store: StoreContextMut<'_, T>,
@@ -399,7 +400,7 @@ where
                  when `component-model-async` feature disabled"
             );
         } else {
-            self.call_sync_lower(store.as_context_mut(), instance, ty, options, storage)?;
+            self.call_sync_lower(store.as_context_mut(), instance, ty, options, storage, track_scope)?;
             true
         };
 
@@ -422,6 +423,7 @@ where
     /// the `async` option when lowered. Note that the host function itself
     /// can still be async, in which case this will block here waiting for it
     /// to finish.
+    #[inline]
     fn call_sync_lower(
         &self,
         mut store: StoreContextMut<'_, T>,
@@ -429,8 +431,13 @@ where
         ty: TypeFuncIndex,
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
+        track_scope: bool,
     ) -> Result<()> {
-        let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
+        let mut lift = if track_scope {
+            LiftContext::new(store.0.store_opaque_mut(), options, instance)?
+        } else {
+            LiftContext::new_without_scope(store.0.store_opaque_mut(), options, instance)?
+        };
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_PARAMS, storage)?;
 
         let ret = match self.run(store.as_context_mut(), params) {
@@ -538,6 +545,7 @@ where
     ///
     /// This will internally decide the ABI source of the parameters and use
     /// `storage` appropriately.
+    #[inline]
     fn load_params<'a>(
         &self,
         lift: &mut LiftContext<'_>,
@@ -573,6 +581,7 @@ where
     }
 
     /// Stores the result `ret` into `dst` which is calculated per the ABI.
+    #[inline]
     fn lower_result_and_exit_call(
         lower: &mut LowerContext<'_, T>,
         ty: TypeFuncIndex,
