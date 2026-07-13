@@ -356,6 +356,12 @@
 (decl mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
+(spec (mem_flags_aligned_read_only)
+      (provide (:aligned result)))
+      ;; There is no readonly field defined in MemFlags yet.
+(decl mem_flags_aligned_read_only () MemFlags)
+(extern constructor mem_flags_aligned_read_only mem_flags_aligned_read_only)
+
 ;; Resolve a MemFlags entity to its MemFlagsData.
 (decl mem_flags_data (MemFlagsData) MemFlags)
 (extern extractor mem_flags_data mem_flags_data)

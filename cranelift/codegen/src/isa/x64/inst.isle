@@ -194,6 +194,10 @@
                     (offset i64)
                     (distance RelocDistance))
 
+       (DeadLoadWithContext (dst WritableGpr)
+                            (load_ptr Gpr)
+                            (context Gpr))
+
        ;; =========================================
        ;; Instructions pertaining to atomic memory accesses.
 

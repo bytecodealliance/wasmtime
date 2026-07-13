@@ -280,6 +280,8 @@ pub struct MachBuffer<I: VCodeInst> {
     call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any patchable call site locations.
     patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
+    /// Any locations which trigger MMU-based interruptions.
+    mmu_interrupt_checks: SmallVec<[Range<CodeOffset>; 16]>,
     /// Any exception-handler records referred to at call sites.
     exception_handlers: SmallVec<[MachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
@@ -371,6 +373,7 @@ impl MachBufferFinalized<Stencil> {
             traps: self.traps,
             call_sites: self.call_sites,
             patchable_call_sites: self.patchable_call_sites,
+            mmu_interrupt_checks: self.mmu_interrupt_checks,
             exception_handlers: self.exception_handlers,
             srclocs: self
                 .srclocs
@@ -408,6 +411,8 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any patchable call site locations referring to this code.
     pub(crate) patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
+    /// Any locations which trigger MMU-based interruptions.
+    pub mmu_interrupt_checks: SmallVec<[Range<CodeOffset>; 16]>,
     /// Any exception-handler records referred to at call sites.
     pub(crate) exception_handlers: SmallVec<[FinalizedMachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
@@ -508,6 +513,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             traps: SmallVec::new(),
             call_sites: SmallVec::new(),
             patchable_call_sites: SmallVec::new(),
+            mmu_interrupt_checks: SmallVec::new(),
             exception_handlers: SmallVec::new(),
             srclocs: SmallVec::new(),
             debug_tags: vec![],
@@ -1669,6 +1675,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             traps: self.traps,
             call_sites: self.call_sites,
             patchable_call_sites: self.patchable_call_sites,
+            mmu_interrupt_checks: self.mmu_interrupt_checks,
             exception_handlers: finalized_exception_handlers,
             srclocs,
             debug_tags: self.debug_tags,
@@ -1782,6 +1789,16 @@ impl<I: VCodeInst> MachBuffer<I> {
             ret_addr: self.cur_offset(),
             len,
         });
+    }
+
+    /// Record that an MMU-based interruption check occurs at the current
+    /// offset. A signal handler may use these annotations to distinguish that a
+    /// segfault is actually an MMU-triggered interruption in disguise. The
+    /// DeadLoadWithContext instruction is assumed to have already been emitted.
+    /// `start` is the offset of the emitted instruction, and `end` is the
+    /// offset of the immediately following instruction.
+    pub fn add_mmu_interrupt_check(&mut self, start: CodeOffset, end: CodeOffset) {
+        self.mmu_interrupt_checks.push(start..end);
     }
 
     /// Add an unwind record at the current offset.
