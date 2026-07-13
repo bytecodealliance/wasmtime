@@ -1,7 +1,13 @@
 #![cfg(not(miri))]
 
 use object::{LittleEndian, Object, ObjectSection, U32};
-use wasmtime::{Config, Engine, Result};
+use std::future::Future;
+use std::pin::Pin;
+use std::ptr::null;
+use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use wasmtime::{Config, Engine, Module, Result};
+#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+use wasmtime::{Instance, Store};
 use wasmtime_environ::obj::ELF_WASMTIME_MMU_INTERRUPT_CHECKS;
 use wasmtime_test_macros::wasmtime_test;
 
@@ -61,3 +67,141 @@ fn mmu_interrupt_check_offsets(config: &mut Config) -> Result<()> {
     );
     Ok(())
 }
+
+// Runs two Wasm functions, interleaved, with MMU interruption enabled and
+// interruptions triggered. Shows that the functions return happily after
+// interruption. Loops several times to test multiple interrupts switching
+// between Wasm modules in a single `Store`.
+#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[wasmtime_test(strategies(only(CraneliftNative)))]
+async fn mmu_interruption_signal_handler_trapping_and_switching(config: &mut Config) -> Result<()> {
+    config.mmu_interruption(true);
+    let engine = Engine::new(config).unwrap();
+
+    let module_one = Module::new(
+        &engine,
+        r#"(module
+             (memory 0)
+             (func (export "one") (result i32)
+                i32.const 1
+             )
+           )"#,
+    )
+    .unwrap();
+    let module_two = Module::new(
+        &engine,
+        r#"(module
+             (memory 0)
+             (func (export "two") (result i32)
+                i32.const 2
+             )
+           )"#,
+    )
+    .unwrap();
+
+    let mut store = Store::new(&engine, ());
+    store.epoch_deadline_trap();
+    let interrupter = store.mmu_interrupter().unwrap();
+
+    let instance_one = Instance::new_async(&mut store, &module_one, &[])
+        .await
+        .unwrap();
+    let instance_two = Instance::new_async(&mut store, &module_two, &[])
+        .await
+        .unwrap();
+    let func_one = instance_one
+        .get_typed_func::<(), i32>(&mut store, "one")
+        .unwrap();
+    let func_two = instance_two
+        .get_typed_func::<(), i32>(&mut store, "two")
+        .unwrap();
+
+    for _ in 0..5 {
+        // Trap as soon as the first MMU-interrupt check is encountered, in the
+        // function prologue. Recall that MMU interruption doesn't operate based
+        // on a numeric deadline but on an external entity protecting the memory
+        // page, typically on a timer.
+        interrupter.interrupt();
+        assert_eq!(func_one.call_async(&mut store, ()).await.unwrap(), 1);
+        interrupter.interrupt();
+        assert_eq!(func_two.call_async(&mut store, ()).await.unwrap(), 2);
+    }
+    Ok(())
+}
+
+// Runs a Wasm function to an MMU-interrupt check point, lets it yield, then
+// drops the future driving it. This exercises the cancellation path of
+// `yield_current_fiber()`, which should unwind the stack cleanly.
+#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[wasmtime_test(strategies(only(CraneliftNative)))]
+fn mmu_interruption_cancellation_during_yield(config: &mut Config) -> Result<()> {
+    // Returns a no-op waker that lets nothing re-poll our future after it
+    // yields the first time. This keeps the fiber parked inside the yield until
+    // we explicitly drop its future.
+    fn null_waker() -> Waker {
+        const VTABLE: RawWakerVTable = RawWakerVTable::new(|_| RAW, |_| {}, |_| {}, |_| {});
+        const RAW: RawWaker = RawWaker::new(null(), &VTABLE);
+        unsafe { Waker::from_raw(RAW) }
+    }
+
+    /// Polls a future continually until it is complete, returning its result.
+    fn busy_poll_until_complete<F: Future>(mut future: F) -> F::Output {
+        let waker = null_waker();
+        let mut ctx = Context::from_waker(&waker);
+        // SAFETY: `future` lives until function returns, and we never move it.
+        let mut future = unsafe { Pin::new_unchecked(&mut future) };
+        loop {
+            if let Poll::Ready(r) = future.as_mut().poll(&mut ctx) {
+                return r;
+            }
+        }
+    }
+
+    config.mmu_interruption(true);
+    let engine = Engine::new(config).unwrap();
+    let module = Module::new(
+        &engine,
+        r#"(module
+             (memory 0)
+             (func (export "loop") (loop (br 0)))
+           )"#,
+    )
+    .unwrap();
+
+    let mut store = Store::new(&engine, ());
+    store.epoch_deadline_trap();
+    store.mmu_interrupter().unwrap().interrupt();
+
+    let instance = busy_poll_until_complete(Instance::new_async(&mut store, &module, &[])).unwrap();
+    let func = instance
+        .get_typed_func::<(), ()>(&mut store, "loop")
+        .unwrap();
+
+    let waker = null_waker();
+    let mut ctx = Context::from_waker(&waker);
+
+    // Pin future so we're allowed to poll it.
+    let mut future = Box::pin(func.call_async(&mut store, ()));
+
+    // Poll once to run into the MMU-interrupt check.
+    match future.as_mut().poll(&mut ctx) {
+        // When `yield_current_fiber()` switches fibers, the old fiber's
+        // `Pending` should percolate up via `block_on()`.
+        Poll::Pending => {}
+        Poll::Ready(r) => panic!(
+            "the fiber should have suspended itself, returning Pending, but it returned Ready({r:?}) instead"
+        ),
+    }
+
+    // Drop the suspended future. This triggers `FiberFuture::Drop` →
+    // `StoreFiber::dispose()`, which gets cranky that we're dropping a fiber
+    // that isn't done and resumes the fiber with an `Err`. This triggers the
+    // `yield_current_fiber` path we're interested in: stack unwinding.
+    drop(future);
+
+    // If the unwinding went wrong, the above drop would have spun forever (in a
+    // release build) or hit the `debug_assert!(result.is_ok())` (in debug) in
+    // `StoreFiber::dispose()`. Thus, getting here means success.
+    Ok(())
+}
+

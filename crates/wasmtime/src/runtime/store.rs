@@ -2452,7 +2452,7 @@ at https://bytecodealliance.org/security.
 }
 
 #[cfg(any(feature = "async", feature = "gc"))]
-async fn yield_now() {
+pub(crate) async fn yield_now() {
     let mut yielded = false;
     future::poll_fn(move |cx| {
         if yielded {
