@@ -12,8 +12,8 @@
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108912 "VMStoreContext+0x30"
-;;     region2 = 67108920 "VMStoreContext+0x38"
+;;     region1 = 67108920 "VMStoreContext+0x38"
+;;     region2 = 67108928 "VMStoreContext+0x40"
 ;;     region3 = 738197536 "VMComponentContext+0x20"
 ;;     region4 = 738197512 "VMComponentContext+0x8"
 ;;     region5 = 1879048208 "ComponentBuiltinFunctionsArray+0x10"
@@ -25,9 +25,9 @@
 ;; block0(v0: i64, v1: i64, v2: i32):
 ;;     v4 = get_frame_pointer.i64 
 ;;     v3 = load.i64 notrap aligned readonly can_move region0 v1+8
-;;     store notrap aligned region1 v4, v3+48
+;;     store notrap aligned region1 v4, v3+56
 ;;     v5 = get_return_address.i64 
-;;     store notrap aligned region2 v5, v3+56
+;;     store notrap aligned region2 v5, v3+64
 ;;     v6 = load.i32 notrap aligned region3 v0+32
 ;;     trapz v6, user26
 ;;     v9 = load.i64 notrap aligned readonly region4 v0+8

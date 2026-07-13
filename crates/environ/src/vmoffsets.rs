@@ -202,11 +202,17 @@ pub trait PtrSize {
         self.vmstore_context_fuel_consumed() + 8
     }
 
+    /// Return the offset of the `mmu_interrupt_page_ptr` field of `VMStoreContext`.
+    #[inline]
+    fn vmstore_context_mmu_interrupt_page_ptr(&self) -> u8 {
+        self.vmstore_context_epoch_deadline() + 8
+    }
+
     /// Return the offset of the `execution_version` field of
     /// `VMStoreContext`
     #[inline]
     fn vmstore_context_execution_version(&self) -> u8 {
-        self.vmstore_context_epoch_deadline() + 8
+        self.vmstore_context_mmu_interrupt_page_ptr() + self.size()
     }
 
     /// Return the offset of the `stack_limit` field of `VMStoreContext`

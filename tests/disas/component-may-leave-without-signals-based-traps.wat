@@ -20,10 +20,10 @@
 ;;       movq    %rbp, %rcx
 ;;       movq    8(%rsi), %rax
 ;;       movq    %rsi, %rbx
-;;       movq    %rcx, 0x30(%rax)
+;;       movq    %rcx, 0x38(%rax)
 ;;       movq    %rbp, %rcx
 ;;       movq    8(%rcx), %rcx
-;;       movq    %rcx, 0x38(%rax)
+;;       movq    %rcx, 0x40(%rax)
 ;;       movl    0x20(%rdi), %eax
 ;;       testl   %eax, %eax
 ;;       je      0x13b

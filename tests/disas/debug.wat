@@ -16,7 +16,7 @@
 ;;       movl    %edx, 8(%rsp)
 ;;       movl    %ecx, 0xc(%rsp)
 ;;       movq    8(%rdi), %r11
-;;       movq    0x18(%r11), %r11
+;;       movq    0x20(%r11), %r11
 ;;       movq    %rsp, %rax
 ;;       cmpq    %r11, %rax
 ;;       jb      0x62
@@ -65,11 +65,11 @@
 ;;       movq    %rdx, (%rsp)
 ;;       movq    %rbp, %r9
 ;;       movq    8(%rdi), %r10
-;;       movq    %r9, 0x48(%r10)
-;;       movq    %rsp, %r9
-;;       movq    %r9, 0x40(%r10)
-;;       leaq    0x3e(%rip), %r9
 ;;       movq    %r9, 0x50(%r10)
+;;       movq    %rsp, %r9
+;;       movq    %r9, 0x48(%r10)
+;;       leaq    0x3e(%rip), %r9
+;;       movq    %r9, 0x58(%r10)
 ;;       movq    %r8, %rdx
 ;;       movq    %r10, 8(%rsp)
 ;;       callq   0
@@ -88,7 +88,7 @@
 ;;       popq    %rbp
 ;;       retq
 ;;   f8: movq    8(%rsp), %r10
-;;   fd: movq    $1, 0x88(%r10)
+;;   fd: movq    $1, 0x90(%r10)
 ;;  108: xorl    %eax, %eax
 ;;  10a: movq    0x10(%rsp), %rbx
 ;;  10f: movq    0x18(%rsp), %r12
@@ -109,10 +109,10 @@
 ;;       movq    %rdx, %r8
 ;;       movq    %rbp, %rdx
 ;;       movq    8(%rsi), %r15
-;;       movq    %rdx, 0x30(%r15)
+;;       movq    %rdx, 0x38(%r15)
 ;;       movq    %rbp, %rax
 ;;       movq    8(%rax), %rax
-;;       movq    %rax, 0x38(%r15)
+;;       movq    %rax, 0x40(%r15)
 ;;       leaq    (%rsp), %rdx
 ;;       movq    %r8, %rax
 ;;       movl    %eax, (%rsp)
@@ -121,7 +121,7 @@
 ;;       movl    $2, %ecx
 ;;       movq    %rsi, %rbx
 ;;       callq   *%rax
-;;       addq    $1, 0x10(%r15)
+;;       addq    $1, 0x18(%r15)
 ;;       testb   %al, %al
 ;;       je      0x196
 ;;  180: movl    (%rsp), %eax
@@ -142,10 +142,10 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    %rbp, %r10
 ;;       movq    8(%rdi), %r9
-;;       movq    %r10, 0x30(%r9)
+;;       movq    %r10, 0x38(%r9)
 ;;       movq    %rbp, %r10
 ;;       movq    8(%r10), %r11
-;;       movq    %r11, 0x38(%r9)
+;;       movq    %r11, 0x40(%r9)
 ;;       movq    0x10(%rdi), %r11
 ;;       movq    0x140(%r11), %r11
 ;;       movzbq  %sil, %rsi
@@ -159,10 +159,10 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    %rbp, %r9
 ;;       movq    8(%rdi), %r8
-;;       movq    %r9, 0x30(%r8)
+;;       movq    %r9, 0x38(%r8)
 ;;       movq    %rbp, %r9
 ;;       movq    8(%r9), %r9
-;;       movq    %r9, 0x38(%r8)
+;;       movq    %r9, 0x40(%r8)
 ;;       movq    0x10(%rdi), %r9
 ;;       movq    0x148(%r9), %r9
 ;;       callq   *%r9
@@ -203,10 +203,10 @@
 ;;       movdqu  %xmm15, 0x150(%rsp)
 ;;       movq    %rbp, %r10
 ;;       movq    8(%rdi), %r9
-;;       movq    %r10, 0x30(%r9)
+;;       movq    %r10, 0x38(%r9)
 ;;       movq    %rbp, %r10
 ;;       movq    8(%r10), %r11
-;;       movq    %r11, 0x38(%r9)
+;;       movq    %r11, 0x40(%r9)
 ;;       movq    0x10(%rdi), %r12
 ;;       movq    %rdi, %r13
 ;;       movq    0x170(%r12), %r11

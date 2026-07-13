@@ -20,7 +20,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
-;;       movq    0x18(%r10), %r10
+;;       movq    0x20(%r10), %r10
 ;;       addq    $0x50, %r10
 ;;       cmpq    %rsp, %r10
 ;;       ja      0xec
@@ -45,7 +45,7 @@
 ;;   5f: leal    0x30(%rsi), %eax
 ;;       movl    %eax, (%rdx)
 ;;       movq    8(%rbx), %rax
-;;       movq    0x20(%rax), %rdi
+;;       movq    0x28(%rax), %rdi
 ;;       leaq    (%rdi, %rcx), %rdx
 ;;       movl    $0x4000002, (%rdi, %rcx)
 ;;       movq    0x28(%rbx), %rax
@@ -73,7 +73,7 @@
 ;;       callq   0x398
 ;;       movq    8(%rbx), %rcx
 ;;       movl    %eax, %edx
-;;       addq    0x20(%rcx), %rdx
+;;       addq    0x28(%rcx), %rdx
 ;;       movq    %rax, %rsi
 ;;       movq    %r14, %rdi
 ;;       jmp     0x8e
@@ -84,7 +84,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
-;;       movq    0x18(%r10), %r10
+;;       movq    0x20(%r10), %r10
 ;;       addq    $0x50, %r10
 ;;       cmpq    %rsp, %r10
 ;;       ja      0x195
@@ -106,7 +106,7 @@
 ;;  156: movq    %rax, %rdx
 ;;       movq    (%rsp), %rsi
 ;;       movq    8(%rsi), %rax
-;;       movq    0x20(%rax), %rcx
+;;       movq    0x28(%rax), %rcx
 ;;       movq    %rdx, %rax
 ;;       movl    %eax, %edx
 ;;       movl    0x18(%rcx, %rdx), %eax

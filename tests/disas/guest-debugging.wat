@@ -21,7 +21,7 @@
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 28, key = 0
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 1543503872 "Stack(ss0)"
 ;;     sig0 = (i64 vmctx, i8) tail
 ;;     sig1 = (i64 vmctx) tail
@@ -39,7 +39,7 @@
 ;; @0019                               v6 = stack_addr.i64 ss0+16
 ;; @0019                               store notrap region2 v4, v6  ; v4 = 0
 ;; @0019                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0019                               v8 = load.i64 notrap aligned region1 v7+24
+;; @0019                               v8 = load.i64 notrap aligned region1 v7+32
 ;; @0019                               v9 = get_stack_pointer.i64 
 ;; @0019                               v10 = icmp ult v9, v8
 ;; @0019                               brif v10, block2, block3

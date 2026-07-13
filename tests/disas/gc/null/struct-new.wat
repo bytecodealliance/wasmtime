@@ -14,18 +14,18 @@
 ;; function u0:0(i64 vmctx, i64, f32, i32, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 32 "VMContext+0x20"
 ;;     region3 = 939524096 "VMNullHeapData+0x0"
-;;     region4 = 67108904 "VMStoreContext+0x28"
-;;     region5 = 67108896 "VMStoreContext+0x20"
+;;     region4 = 67108912 "VMStoreContext+0x30"
+;;     region5 = 67108904 "VMStoreContext+0x28"
 ;;     region6 = 40 "VMContext+0x28"
 ;;     region7 = 1677721600 "TypeIdsArray+0x0"
 ;;     region8 = 536870912 "GcHeap"
 ;;     region9 = 1543503872 "Stack(ss0)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64) -> i8 tail
 ;;     fn0 = colocated u805306368:23 sig0
 ;;     stack_limit = gv2
@@ -42,14 +42,14 @@
 ;; @002a                               v5 = iconst.i32 24
 ;; @002a                               v16 = uadd_overflow_trap v15, v5, user18  ; v5 = 24
 ;; @002a                               v18 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @002a                               v19 = load.i64 notrap aligned region4 v18+40
+;; @002a                               v19 = load.i64 notrap aligned region4 v18+48
 ;; @002a                               v17 = uextend.i64 v16
 ;; @002a                               v20 = icmp ule v17, v19
 ;; @002a                               brif v20, block2, block3
 ;;
 ;;                                 block2:
 ;;                                     v53 = iconst.i32 -1342177256
-;; @002a                               v24 = load.i64 notrap aligned readonly can_move region5 v18+32
+;; @002a                               v24 = load.i64 notrap aligned readonly can_move region5 v18+40
 ;;                                     v59 = band.i32 v13, v52  ; v52 = -8
 ;;                                     v60 = uextend.i64 v59
 ;; @002a                               v26 = iadd v24, v60

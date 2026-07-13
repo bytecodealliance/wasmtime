@@ -52,10 +52,10 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -70,29 +70,29 @@
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
 ;;     ss0 = explicit_slot 32, align = 8
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 1207959576 "VMFunctionImport+0x18"
 ;;     region3 = 1476395008 "VMGlobalImport+0x0"
 ;;     region4 = 402653184 "PublicGlobal"
-;;     region5 = 67109000 "VMStoreContext+0x88"
+;;     region5 = 67109008 "VMStoreContext+0x90"
 ;;     region6 = 1006632960 "VMDeferredThread+0x0"
 ;;     region7 = 1006632968 "VMDeferredThread+0x8"
 ;;     region8 = 1006632972 "VMDeferredThread+0xc"
 ;;     region9 = 1006632976 "VMDeferredThread+0x10"
-;;     region10 = 67108992 "VMStoreContext+0x80"
+;;     region10 = 67109000 "VMStoreContext+0x88"
 ;;     region11 = 1006632980 "VMDeferredThread+0x14"
-;;     region12 = 67108996 "VMStoreContext+0x84"
+;;     region12 = 67109004 "VMStoreContext+0x8c"
 ;;     region13 = 1006632984 "VMDeferredThread+0x18"
 ;;     region14 = 1207959560 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
-;;     gv5 = load.i64 notrap aligned region1 gv4+24
+;;     gv5 = load.i64 notrap aligned region1 gv4+32
 ;;     gv6 = vmctx
 ;;     gv7 = load.i64 notrap aligned readonly can_move region0 gv6+8
-;;     gv8 = load.i64 notrap aligned region1 gv7+24
+;;     gv8 = load.i64 notrap aligned region1 gv7+32
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64, i32) tail
 ;;     sig2 = (i64 vmctx, i64, i32, i32, i32) tail
@@ -132,7 +132,7 @@
 ;;                                     v8 = iconst.i32 0
 ;;                                     store notrap aligned region4 v8, v11  ; v8 = 0
 ;;                                     v20 = load.i64 notrap aligned readonly can_move region0 v3+8
-;;                                     v21 = load.i64 notrap aligned region5 v20+136
+;;                                     v21 = load.i64 notrap aligned region5 v20+144
 ;;                                     v19 = stack_addr.i64 ss0
 ;;                                     store notrap aligned region6 v21, v19
 ;;                                     v15 = iconst.i32 2
@@ -140,13 +140,13 @@
 ;;                                     store notrap aligned region8 v8, v19+12  ; v8 = 0
 ;;                                     v17 = iconst.i32 1
 ;;                                     store notrap aligned region9 v17, v19+16  ; v17 = 1
-;;                                     v22 = load.i32 notrap aligned region10 v20+128
+;;                                     v22 = load.i32 notrap aligned region10 v20+136
 ;;                                     store notrap aligned region11 v22, v19+20
-;;                                     store notrap aligned region10 v8, v20+128  ; v8 = 0
-;;                                     v24 = load.i32 notrap aligned region12 v20+132
+;;                                     store notrap aligned region10 v8, v20+136  ; v8 = 0
+;;                                     v24 = load.i32 notrap aligned region12 v20+140
 ;;                                     store notrap aligned region13 v24, v19+24
-;;                                     store notrap aligned region12 v8, v20+132  ; v8 = 0
-;;                                     store notrap aligned region5 v19, v20+136
+;;                                     store notrap aligned region12 v8, v20+140  ; v8 = 0
+;;                                     store notrap aligned region5 v19, v20+144
 ;;                                     v26 = load.i64 notrap aligned readonly can_move region3 v3+176
 ;;                                     v27 = load.i32 notrap aligned region4 v26
 ;;                                     store notrap aligned region4 v8, v26  ; v8 = 0
@@ -163,9 +163,9 @@
 ;;                                     jump block13
 ;;
 ;;                                 block13:
-;;                                     store.i64 notrap aligned region5 v21, v20+136
-;;                                     store.i32 notrap aligned region10 v22, v20+128
-;;                                     store.i32 notrap aligned region12 v24, v20+132
+;;                                     store.i64 notrap aligned region5 v21, v20+144
+;;                                     store.i32 notrap aligned region10 v22, v20+136
+;;                                     store.i32 notrap aligned region12 v24, v20+140
 ;;                                     jump block15
 ;;
 ;;                                 block15:
@@ -202,26 +202,26 @@
 ;; function u2:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 32, align = 8
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 1476395008 "VMGlobalImport+0x0"
 ;;     region3 = 402653184 "PublicGlobal"
 ;;     region4 = 1207959576 "VMFunctionImport+0x18"
 ;;     region5 = 1207959560 "VMFunctionImport+0x8"
-;;     region6 = 67109000 "VMStoreContext+0x88"
+;;     region6 = 67109008 "VMStoreContext+0x90"
 ;;     region7 = 1006632960 "VMDeferredThread+0x0"
 ;;     region8 = 1006632968 "VMDeferredThread+0x8"
 ;;     region9 = 1006632972 "VMDeferredThread+0xc"
 ;;     region10 = 1006632976 "VMDeferredThread+0x10"
-;;     region11 = 67108992 "VMStoreContext+0x80"
+;;     region11 = 67109000 "VMStoreContext+0x88"
 ;;     region12 = 1006632980 "VMDeferredThread+0x14"
-;;     region13 = 67108996 "VMStoreContext+0x84"
+;;     region13 = 67109004 "VMStoreContext+0x8c"
 ;;     region14 = 1006632984 "VMDeferredThread+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
-;;     gv5 = load.i64 notrap aligned region1 gv4+24
+;;     gv5 = load.i64 notrap aligned region1 gv4+32
 ;;     sig0 = (i64 vmctx, i64, i32) tail
 ;;     sig1 = (i64 vmctx, i64, i32, i32, i32) tail
 ;;     sig2 = (i64 vmctx, i64, i32) -> i32 tail
@@ -255,7 +255,7 @@
 ;; @00c9                               v3 = iconst.i32 0
 ;; @00e8                               store notrap aligned region3 v3, v11  ; v3 = 0
 ;; @00f0                               v20 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @00f0                               v21 = load.i64 notrap aligned region6 v20+136
+;; @00f0                               v21 = load.i64 notrap aligned region6 v20+144
 ;; @00f0                               v19 = stack_addr.i64 ss0
 ;; @00f0                               store notrap aligned region7 v21, v19
 ;; @00ea                               v15 = iconst.i32 2
@@ -263,13 +263,13 @@
 ;; @00f0                               store notrap aligned region9 v3, v19+12  ; v3 = 0
 ;; @00ee                               v17 = iconst.i32 1
 ;; @00f0                               store notrap aligned region10 v17, v19+16  ; v17 = 1
-;; @00f0                               v22 = load.i32 notrap aligned region11 v20+128
+;; @00f0                               v22 = load.i32 notrap aligned region11 v20+136
 ;; @00f0                               store notrap aligned region12 v22, v19+20
-;; @00f0                               store notrap aligned region11 v3, v20+128  ; v3 = 0
-;; @00f0                               v24 = load.i32 notrap aligned region13 v20+132
+;; @00f0                               store notrap aligned region11 v3, v20+136  ; v3 = 0
+;; @00f0                               v24 = load.i32 notrap aligned region13 v20+140
 ;; @00f0                               store notrap aligned region14 v24, v19+24
-;; @00f0                               store notrap aligned region13 v3, v20+132  ; v3 = 0
-;; @00f0                               store notrap aligned region6 v19, v20+136
+;; @00f0                               store notrap aligned region13 v3, v20+140  ; v3 = 0
+;; @00f0                               store notrap aligned region6 v19, v20+144
 ;; @00f2                               v26 = load.i64 notrap aligned readonly can_move region2 v0+176
 ;; @00f2                               v27 = load.i32 notrap aligned region3 v26
 ;; @00f8                               store notrap aligned region3 v3, v26  ; v3 = 0
@@ -286,9 +286,9 @@
 ;; @0104                               jump block11
 ;;
 ;;                                 block11:
-;; @0104                               store.i64 notrap aligned region6 v21, v20+136
-;; @0104                               store.i32 notrap aligned region11 v22, v20+128
-;; @0104                               store.i32 notrap aligned region13 v24, v20+132
+;; @0104                               store.i64 notrap aligned region6 v21, v20+144
+;; @0104                               store.i32 notrap aligned region11 v22, v20+136
+;; @0104                               store.i32 notrap aligned region13 v24, v20+140
 ;; @0104                               jump block13
 ;;
 ;;                                 block13:

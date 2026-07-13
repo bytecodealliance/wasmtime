@@ -15,7 +15,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
-;;       movq    0x18(%r10), %r10
+;;       movq    0x20(%r10), %r10
 ;;       addq    $0x40, %r10
 ;;       cmpq    %rsp, %r10
 ;;       ja      0xd7
@@ -36,7 +36,7 @@
 ;;       leal    0x20(%rax), %esi
 ;;       movl    %esi, (%rdx)
 ;;       movq    8(%rbx), %rdx
-;;       movq    0x20(%rdx), %rsi
+;;       movq    0x28(%rdx), %rsi
 ;;       leaq    (%rsi, %rcx), %rdx
 ;;       movl    $0xb0000022, (%rsi, %rcx)
 ;;       movq    0x28(%rbx), %rdi
@@ -66,7 +66,7 @@
 ;;   c2: movq    8(%rbx), %rcx
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[0]
 ;;   c6: movl    %eax, %edx
-;;   c8: addq    0x20(%rcx), %rdx
+;;   c8: addq    0x28(%rcx), %rdx
 ;;   cc: movdqu  8(%rsp), %xmm0
 ;;   d2: jmp     0x80
 ;;   d7: ud2

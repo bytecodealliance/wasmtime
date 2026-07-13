@@ -15,7 +15,7 @@
 ;;       movdqu  %xmm0, (%rsp)
 ;;       movq    8(%rdi), %rax
 ;;       movq    %rdi, %rbx
-;;       movq    0x18(%rax), %rax
+;;       movq    0x20(%rax), %rax
 ;;       movq    %rsp, %rcx
 ;;       cmpq    %rax, %rcx
 ;;       jb      0x10d

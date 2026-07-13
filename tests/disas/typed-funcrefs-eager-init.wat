@@ -115,10 +115,10 @@
 
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
@@ -130,14 +130,14 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 671088640 "VMTableDefinition+0x0"
 ;;     region3 = 335544320 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     region4 = 1610612744 "VMFuncRef+0x8"
 ;;     region5 = 1610612760 "VMFuncRef+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     stack_limit = gv2
 ;;
@@ -164,14 +164,14 @@
 ;;
 ;; function u0:2(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 671088640 "VMTableDefinition+0x0"
 ;;     region3 = 335544320 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     region4 = 1610612744 "VMFuncRef+0x8"
 ;;     region5 = 1610612760 "VMFuncRef+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     stack_limit = gv2
 ;;
@@ -198,14 +198,14 @@
 ;;
 ;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 469762048 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
 ;;     region3 = 1610612744 "VMFuncRef+0x8"
 ;;     region4 = 1610612760 "VMFuncRef+0x18"
 ;;     region5 = 469762049 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(1))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     stack_limit = gv2
 ;;

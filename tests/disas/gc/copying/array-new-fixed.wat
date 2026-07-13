@@ -10,18 +10,18 @@
 )
 ;; function u0:0(i64 vmctx, i64, i64, i64, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 32 "VMContext+0x20"
 ;;     region3 = 872415232 "VMCopyingHeapData+0x0"
 ;;     region4 = 872415236 "VMCopyingHeapData+0x4"
 ;;     region5 = 40 "VMContext+0x28"
 ;;     region6 = 1677721600 "TypeIdsArray+0x0"
-;;     region7 = 67108896 "VMStoreContext+0x20"
+;;     region7 = 67108904 "VMStoreContext+0x28"
 ;;     region8 = 536870912 "GcHeap"
-;;     region9 = 67108904 "VMStoreContext+0x28"
+;;     region9 = 67108912 "VMStoreContext+0x30"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:24 sig0
 ;;     stack_limit = gv2
@@ -43,7 +43,7 @@
 ;; @0025                               store notrap aligned region3 v155, v14
 ;;                                     v242 = iconst.i32 -1476395002
 ;;                                     v243 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v244 = load.i64 notrap aligned readonly can_move region7 v243+32
+;;                                     v244 = load.i64 notrap aligned readonly can_move region7 v243+40
 ;; @0025                               v39 = iadd v244, v22
 ;; @0025                               store user2 region8 v242, v39  ; v242 = -1476395002
 ;;                                     v245 = load.i64 notrap aligned readonly can_move region5 v0+40
@@ -61,7 +61,7 @@
 ;; @0025                               v29 = iconst.i32 16
 ;; @0025                               v30 = call fn0(v0, v26, v28, v140, v29)  ; v26 = -1476395002, v140 = 48, v29 = 16
 ;; @0025                               v31 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0025                               v32 = load.i64 notrap aligned readonly can_move region7 v31+32
+;; @0025                               v32 = load.i64 notrap aligned readonly can_move region7 v31+40
 ;; @0025                               v33 = uextend.i64 v30
 ;; @0025                               v34 = iadd v32, v33
 ;; @0025                               jump block4(v30, v34)
@@ -73,7 +73,7 @@
 ;; @0025                               store user2 region8 v5, v46  ; v5 = 3
 ;; @0025                               trapz v43, user16
 ;;                                     v248 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v249 = load.i64 notrap aligned readonly can_move region7 v248+32
+;;                                     v249 = load.i64 notrap aligned readonly can_move region7 v248+40
 ;; @0025                               v48 = uextend.i64 v43
 ;; @0025                               v51 = iadd v249, v48
 ;; @0025                               v53 = iadd v51, v45  ; v45 = 16

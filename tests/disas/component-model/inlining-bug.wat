@@ -36,17 +36,17 @@
 
 ;; function u2:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 1207959576 "VMFunctionImport+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
-;;     gv5 = load.i64 notrap aligned region1 gv4+24
+;;     gv5 = load.i64 notrap aligned region1 gv4+32
 ;;     gv6 = vmctx
 ;;     gv7 = load.i64 notrap aligned readonly can_move region0 gv6+8
-;;     gv8 = load.i64 notrap aligned region1 gv7+24
+;;     gv8 = load.i64 notrap aligned region1 gv7+32
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) -> i32 tail
 ;;     sig2 = (i64 vmctx, i64) tail

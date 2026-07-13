@@ -747,7 +747,11 @@ impl<T> Store<T> {
         let inner = StoreOpaque {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
-            vm_store_context: Default::default(),
+            vm_store_context: if engine.tunables().mmu_interruption {
+                VMStoreContext::with_interrupt_page()
+            } else {
+                Default::default()
+            },
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: TryPrimaryMap::new(),
@@ -795,6 +799,12 @@ impl<T> Store<T> {
             #[cfg(feature = "debug")]
             debug_handler: None,
         })?;
+
+        // MMU interruption traps in Wasm and unwinds via a fiber, so every
+        // Store built from an Engine with this option needs async.
+        if engine.tunables().mmu_interruption {
+            inner.set_async_required(Asyncness::Yes);
+        }
 
         let store_data =
             <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
@@ -1170,6 +1180,17 @@ impl<T> Store<T> {
         callback: impl FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync + 'static,
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
+    }
+
+    /// Returns an [`MmuEpochInterrupter`] iff MMU-based interruption is enabled
+    /// for this store.
+    ///
+    /// The returned handle is `Send + Sync` and can be used from any thread
+    /// to trigger an epoch interruption, like
+    /// [`Engine::increment_epoch`](crate::Engine::increment_epoch) can for
+    /// deadline-based epochs.
+    pub fn mmu_interrupter(&self) -> Option<vm::MmuInterrupter> {
+        self.inner.vm_store_context().mmu_interrupter()
     }
 
     /// Tests whether there is a pending exception.
