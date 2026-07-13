@@ -144,6 +144,60 @@ fn run_wasmtime_simple_wat() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn run_wasmtime_mmu_interruption_requires_signals_based_traps() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/empty-module.wat")?;
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "-Ccache=n",
+            "-Wmmu-interruption=y",
+            "-Osignals-based-traps=n",
+            wasm.path().to_str().unwrap(),
+        ],
+        None,
+    )?;
+    assert!(
+        !output.status.success(),
+        "expected wasmtime to fail; stdout: {}, stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("requires signals-based traps"),
+        "unexpected stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg(not(all(target_arch = "x86_64", target_os = "linux")))]
+fn run_wasmtime_mmu_interruption_unsupported_host() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/empty-module.wat")?;
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "-Ccache=n",
+            "-Wmmu-interruption=y",
+            wasm.path().to_str().unwrap(),
+        ],
+        None,
+    )?;
+    assert!(
+        !output.status.success(),
+        "expected wasmtime to fail; stdout: {}, stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("only supported on x86_64"),
+        "unexpected stderr: {stderr}"
+    );
+    Ok(())
+}
+
 // Running a wat that traps.
 #[test]
 fn run_wasmtime_unreachable_wat() -> Result<()> {

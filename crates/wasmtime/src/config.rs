@@ -2735,6 +2735,22 @@ impl Config {
             );
         }
 
+        if tunables.mmu_interruption {
+            // Disabling `signals_based_traps` is not compatible with MMU
+            // interruption. If `signals_based_traps` is disabled, the signal
+            // handlers will not be installed when creating the engine.
+            //
+            // If no target is explicitly requested and the host target does
+            // not support native signals, `signals_based_traps` will be set to
+            // false above, so we can skip that check here.
+            // When a explicit target is requested, a compatibility check will
+            // be triggered when creating the engine.
+            ensure!(
+                tunables.signals_based_traps,
+                "MMU interruption requires signals-based traps"
+            );
+        }
+
         // Concurrency support is required for some component model features.
         let requires_concurrency = WasmFeatures::CM_ASYNC
             | WasmFeatures::CM_MORE_ASYNC_BUILTINS
