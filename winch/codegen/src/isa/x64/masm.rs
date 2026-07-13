@@ -1043,14 +1043,21 @@ impl Masm for MacroAssembler {
             self.asm.lzcnt(src, dst, size);
         } else {
             self.with_scratch::<IntScratch, _>(|masm, scratch| {
-                // Use the following approach:
-                // dst = size.num_bits() - bsr(src) - is_not_zero
-                //     = size.num.bits() + -bsr(src) - is_not_zero.
+                // For a non-zero input, BSR returns the index of the
+                // most-significant set bit, so clz is:
+                //     dst = (num_bits - 1) - bsr(src)
+                // which is emitted as a negate followed by an add:
+                //     dst = -bsr(src) + (num_bits - 1)
+                //
+                // BSR leaves the destination undefined when the source is 0
+                //
+                // A conditional move substitutes -1 for the undefined index
+                // in the zero case.
                 masm.asm.bsr(src, dst, size);
-                masm.asm.setcc(IntCmpKind::Ne, scratch.writable());
+                masm.asm.mov_ir((-1i64) as u64, scratch.writable(), size);
+                masm.asm.cmov(scratch.inner(), dst, IntCmpKind::Eq, size);
                 masm.asm.neg(dst.to_reg(), dst, size);
-                masm.asm.add_ir(size.num_bits() as i32, dst, size);
-                masm.asm.sub_rr(scratch.inner(), dst, size);
+                masm.asm.add_ir((size.num_bits() - 1) as i32, dst, size);
             });
         }
 
@@ -1062,17 +1069,18 @@ impl Masm for MacroAssembler {
             self.asm.tzcnt(src, dst, size);
         } else {
             self.with_scratch::<IntScratch, _>(|masm, scratch| {
-                // Use the following approach:
-                // dst = bsf(src) + (is_zero * size.num_bits())
-                //     = bsf(src) + (is_zero << size.log2()).
-                // BSF outputs the correct value for every value except 0.
-                // When the value is 0, BSF outputs 0, correct output for ctz is
-                // the number of bits.
+                // BSF returns the index of the least-significant set bit, which
+                // is the correct output of ctz for any non-zero input.
+                //
+                // However, it leaves the destination undefined when the source
+                // is 0.
+                //
+                // Perform a conditional move to ensure that the destination
+                // register is always correctly defined.
                 masm.asm.bsf(src, dst, size);
-                masm.asm.setcc(IntCmpKind::Eq, scratch.writable());
                 masm.asm
-                    .shift_ir(size.log2(), scratch.writable(), ShiftKind::Shl, size);
-                masm.asm.add_rr(scratch.inner(), dst, size);
+                    .mov_ir(size.num_bits() as u64, scratch.writable(), size);
+                masm.asm.cmov(scratch.inner(), dst, IntCmpKind::Eq, size);
             });
         }
 
