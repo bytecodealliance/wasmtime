@@ -407,7 +407,14 @@ where
                  when `component-model-async` feature disabled"
             );
         } else {
-            self.call_sync_lower(store.as_context_mut(), instance, ty, options, storage, track_scope)?;
+            self.call_sync_lower(
+                store.as_context_mut(),
+                instance,
+                ty,
+                options,
+                storage,
+                track_scope,
+            )?;
             true
         };
 

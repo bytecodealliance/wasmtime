@@ -236,9 +236,7 @@ impl ComponentTypesBuilder {
             .iter()
             .map(|ty| self.valtype(types, ty))
             .collect::<Result<_>>()?;
-        let contains_borrow = params
-            .iter()
-            .any(|ty| self.ty_contains_borrow_resource(ty));
+        let contains_borrow = params.iter().any(|ty| self.ty_contains_borrow_resource(ty));
         let params = self.new_tuple_type(params.into());
         let results = self.new_tuple_type(results);
         let ty = TypeFunc {

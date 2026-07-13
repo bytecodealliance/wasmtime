@@ -1669,7 +1669,6 @@ impl StoreOpaque {
     /// thread into a fully-materialized `CurrentThread`.
     #[cold]
     fn force_deferred_current_thread(&mut self) -> Result<CurrentThread> {
-
         // The component instance whose adapters pushed the deferred frames; all
         // frames in a guest-to-guest, sync-to-sync call chain of fused adapters
         // live within a single `wasmtime::component::Instance` (because
