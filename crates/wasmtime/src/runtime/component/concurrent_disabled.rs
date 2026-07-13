@@ -162,7 +162,7 @@ impl StoreOpaque {
         Ok(self.exit_call_not_concurrent())
     }
 
-    pub(crate) fn host_task_create(&mut self, track_scope: bool) -> Result<()> {
+    pub(crate) fn host_task_create(&mut self, track_scope: bool, _defer: bool) -> Result<()> {
         if track_scope {
             self.enter_call_not_concurrent()?;
         }

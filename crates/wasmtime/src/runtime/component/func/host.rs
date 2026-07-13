@@ -381,7 +381,12 @@ where
         }
 
         // Enter the host by pushing a `HostTask` into the concurrent state.
-        let host_task = store.0.host_task_create(track_scope)?;
+        // Sync-lowered borrow-free calls defer task creation entirely (see
+        // `host_task_create`); async-lowered calls need the task for subtask
+        // status/cancellation semantics, and borrow-ful calls need it as the
+        // resource scope identity.
+        let defer_task = !async_ && !track_scope;
+        let host_task = store.0.host_task_create(track_scope, defer_task)?;
 
         let host_task_complete = if async_ {
             #[cfg(feature = "component-model-async")]

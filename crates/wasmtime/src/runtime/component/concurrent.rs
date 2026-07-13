@@ -834,7 +834,27 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     store: &mut dyn VMStore,
     future: impl Future<Output = Result<R>> + Send + 'static,
 ) -> Result<R> {
-    let task = store.current_host_thread()?;
+    // Fast path: poll the future once before materializing any `HostTask`.
+    // Most host implementations complete immediately, in which case the
+    // result is returned without any task-table traffic or result boxing.
+    let mut inner = Box::pin(future);
+    let poll = tls::set(store, || {
+        inner
+            .as_mut()
+            .poll(&mut Context::from_waker(&Waker::noop()))
+    });
+    if let Poll::Ready(result) = poll {
+        return result;
+    }
+
+    // Slow path: the future is genuinely pending. Materialize the host task
+    // now if the entrypoint deferred it (in which case this function also
+    // owns its cleanup below); otherwise use the already-current task.
+    let (task, materialized) = match store.current_thread()? {
+        CurrentThread::Host(task) => (task, false),
+        _ => (store.materialize_host_task()?, true),
+    };
+    let future = inner;
 
     // Wrap the future in a closure which will take care of stashing the result
     // in `GuestTask::result` and resuming this fiber when the host task
@@ -898,13 +918,21 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
 
     // Retrieve and return the result.
     let host_state = &mut store.concurrent_state_mut()?.get_mut(task)?.state;
-    match mem::replace(host_state, HostTaskState::CalleeDone { cancelled: false }) {
+    let result = match mem::replace(host_state, HostTaskState::CalleeDone { cancelled: false }) {
         HostTaskState::CalleeFinished(result) => Ok(match result.downcast() {
             Ok(result) => *result,
             Err(_) => bail_bug!("host task finished with wrong type of result"),
         }),
         _ => bail_bug!("unexpected host task state after completion"),
+    };
+
+    // A task materialized here (rather than by the entrypoint) is also
+    // cleaned up here, mirroring `host_task_delete` for the eager case.
+    if materialized {
+        store.host_task_reenter_caller()?;
+        store.concurrent_state_mut()?.delete(task)?;
     }
+    result
 }
 
 /// Execute the specified guest call.
@@ -1821,7 +1849,11 @@ impl StoreOpaque {
     /// relatively expensive table manipulations. This would ideally be
     /// optimized to avoid the full allocation of a `HostTask` in at least some
     /// situations.
-    pub(crate) fn host_task_create(&mut self, track_scope: bool) -> Result<Option<TableId<HostTask>>> {
+    pub(crate) fn host_task_create(
+        &mut self,
+        track_scope: bool,
+        defer: bool,
+    ) -> Result<Option<TableId<HostTask>>> {
         if !self.concurrency_support() {
             // Resource-borrow scope tracking is only needed when the
             // function's parameters can actually contain `borrow` handles;
@@ -1831,12 +1863,25 @@ impl StoreOpaque {
             }
             return Ok(None);
         }
+        // Sync-lowered, borrow-free host calls don't need a `HostTask` unless
+        // the host implementation actually suspends: they run as the caller's
+        // thread and `poll_and_block` materializes (and cleans up) a task
+        // on-demand via `materialize_host_task` if the future is pending.
+        if defer {
+            return Ok(None);
+        }
+        Ok(Some(self.materialize_host_task()?))
+    }
+
+    /// Push a new `HostTask` for a host call made by the current guest
+    /// thread, and make it the current thread.
+    pub(crate) fn materialize_host_task(&mut self) -> Result<TableId<HostTask>> {
         let caller = self.current_guest_thread()?;
         let state = self.concurrent_state_mut()?;
         let task = state.push(HostTask::new(caller, HostTaskState::CalleeStarted))?;
         log::trace!("new host task {task:?}");
         self.set_thread(task)?;
-        Ok(Some(task))
+        Ok(task)
     }
 
     /// Invoked before lowering the results of a host task to the guest.
@@ -1848,7 +1893,11 @@ impl StoreOpaque {
         if !self.concurrency_support() {
             return Ok(());
         }
-        let task = self.current_host_thread()?;
+        // For deferred (task-less) host calls the current thread already is
+        // the caller; nothing to restore.
+        let CurrentThread::Host(task) = self.current_thread()? else {
+            return Ok(());
+        };
         let caller = self.concurrent_state_mut()?.get_mut(task)?.caller;
         self.set_thread(caller)?;
         Ok(())
