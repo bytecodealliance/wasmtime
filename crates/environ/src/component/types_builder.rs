@@ -230,16 +230,18 @@ impl ComponentTypesBuilder {
             .params
             .iter()
             .map(|(_name, ty)| self.valtype(types, ty))
-            .collect::<Result<_>>()?;
+            .collect::<Result<Vec<_>>>()?;
         let results = ty
             .result
             .iter()
             .map(|ty| self.valtype(types, ty))
             .collect::<Result<_>>()?;
-        let params = self.new_tuple_type(params);
+        let contains_borrow = params.iter().any(|ty| self.ty_contains_borrow_resource(ty));
+        let params = self.new_tuple_type(params.into());
         let results = self.new_tuple_type(results);
         let ty = TypeFunc {
             async_: ty.async_,
+            contains_borrow,
             param_names,
             params,
             results,
