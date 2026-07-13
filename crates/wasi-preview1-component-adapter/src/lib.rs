@@ -457,7 +457,7 @@ impl ImportAlloc {
 #[derive(Clone)]
 struct BumpAlloc {
     base: *mut u8,
-    len: usize,
+    len: usize, // remaining size available for allocation
 }
 
 impl BumpAlloc {
