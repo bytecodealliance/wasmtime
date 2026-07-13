@@ -767,6 +767,14 @@ impl Config {
         self
     }
 
+    /// Enables a faster-than-epochs interruption mechanism based on memory-page
+    /// permissions
+    #[cfg(feature = "async")]
+    pub fn mmu_interruption(&mut self, enable: bool) -> &mut Self {
+        self.tunables.mmu_interruption = Some(enable);
+        self
+    }
+
     /// XXX: For internal fuzzing and debugging use only!
     #[doc(hidden)]
     pub fn gc_zeal_alloc_counter(&mut self, counter: Option<NonZeroU32>) -> Result<&mut Self> {
@@ -4980,6 +4988,11 @@ impl Engine {
     /// Returns the configured [`Config::epoch_interruption`] value.
     pub fn get_epoch_interruption(&self) -> bool {
         self.tunables().epoch_interruption
+    }
+
+    /// Returns the configured [`Config::mmu_interruption`] value.
+    pub fn get_mmu_interruption(&self) -> bool {
+        self.tunables().mmu_interruption
     }
 
     /// Returns the configured [`Config::consume_fuel`] value.
