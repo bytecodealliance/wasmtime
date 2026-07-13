@@ -15,7 +15,7 @@ use crate::runtime::vm::component::{
 };
 use crate::runtime::vm::{VMOpaqueContext, VMStore};
 use crate::store::Asyncness;
-use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
+use crate::{AsContextMut, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
 use core::mem::{self, MaybeUninit};
@@ -347,12 +347,7 @@ where
                 let options = OptionsIndex::from_u32(options);
                 let storage = NonNull::slice_from_raw_parts(storage, storage_len).as_mut();
                 let data = data.cast::<Self>().as_ref();
-
-                store.0.call_hook(CallHook::CallingHost)?;
-                let res = data.entrypoint(store.as_context_mut(), instance, ty, options, storage);
-                store.0.call_hook(CallHook::ReturningFromHost)?;
-
-                res
+                data.entrypoint(store.as_context_mut(), instance, ty, options, storage)
             })
         }
     }

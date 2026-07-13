@@ -2373,10 +2373,6 @@ impl HostFunc {
             // this up.
             let mut store = unsafe { store.unchecked_context_mut() };
 
-            // Handle the entry call hook, with a corresponding exit call hook
-            // below.
-            store.0.call_hook(CallHook::CallingHost)?;
-
             // SAFETY: this function itself requires that the `vmctx` is
             // valid to use here.
             let state = unsafe {
@@ -2413,10 +2409,6 @@ impl HostFunc {
             };
 
             store.0.exit_gc_lifo_scope(gc_lifo_scope);
-
-            // Note that if this returns a trap then `ret` is discarded
-            // entirely.
-            store.0.call_hook(CallHook::ReturningFromHost)?;
 
             ret
         };

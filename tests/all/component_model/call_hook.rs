@@ -618,3 +618,105 @@ async fn drop_suspended_async_hook() -> Result<()> {
         }
     }
 }
+
+#[tokio::test]
+async fn concurrent_behavior_balanced() -> Result<()> {
+    let engine = Engine::default();
+
+    let mut store = Store::new(&engine, State::default());
+    store.call_hook(sync_call_hook);
+
+    // A composition of two components where `$lowerer.run` makes an
+    // async-lowered call to the async-lifted (with callback) `$lifter.foo`.
+    // Starting `foo` forces the fiber running `run` to suspend while it waits
+    // for `foo` to start, and `foo`'s `task.return` call reenters wasm to run
+    // the fused adapter's `return_` function, both of which must be reflected
+    // in the call hooks fired in order to keep the embedder-visible
+    // transitions balanced.
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (component $lifter
+                (core module $m
+                    (import "" "task.return" (func $task-return (param i32)))
+                    (func (export "callback") (param i32 i32 i32) (result i32)
+                        unreachable)
+                    (func (export "foo") (param i32) (result i32)
+                        (call $task-return (i32.add (local.get 0) (i32.const 1)))
+                        i32.const 0 (; EXIT ;)
+                    )
+                )
+                (core func $task-return (canon task.return (result u32)))
+                (core instance $i (instantiate $m
+                    (with "" (instance (export "task.return" (func $task-return))))
+                ))
+                (func (export "foo") async (param "p1" u32) (result u32)
+                    (canon lift (core func $i "foo") async (callback (func $i "callback")))
+                )
+            )
+
+            (component $lowerer
+                (import "a" (func $foo async (param "p1" u32) (result u32)))
+                (core module $libc (memory (export "memory") 1))
+                (core instance $libc (instantiate $libc))
+                (core func $foo (canon lower (func $foo) async (memory $libc "memory")))
+                (core module $m
+                    (import "libc" "memory" (memory 1))
+                    (import "" "foo" (func $foo (param i32 i32) (result i32)))
+                    (func (export "run") (result i32)
+                        ;; call `foo`, asserting that it returned immediately
+                        block
+                            (call $foo (i32.const 41) (i32.const 1204))
+                            i32.const 0xf
+                            i32.and
+                            i32.const 2 (; RETURNED ;)
+                            i32.eq
+                            br_if 0
+                            unreachable
+                        end
+                        (i32.load offset=0 (i32.const 1204))
+                    )
+                )
+                (core instance $i (instantiate $m
+                    (with "libc" (instance $libc))
+                    (with "" (instance (export "foo" (func $foo))))
+                ))
+                (func (export "run") (result u32) (canon lift (core func $i "run")))
+            )
+
+            (instance $lifter (instantiate $lifter))
+            (instance $lowerer (instantiate $lowerer (with "a" (func $lifter "foo"))))
+            (export "run" (func $lowerer "run"))
+        )"#,
+    )?;
+
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(), (u32,)>(&mut store, "run")?;
+    let (result,) = store
+        .run_concurrent(async |store| run.call_concurrent(store, ()).await)
+        .await??;
+    assert_eq!(result, 42);
+
+    // There are three guest exits (currently) in the above component:
+    //
+    // 1. Guest-to-guest async transitions pay an exit to prepare a task to be
+    //    run.
+    // 2. Guest-to-guest async transitions pay an exit to then run the initial
+    //    turn of the task created.
+    // 3. The `task.return` call exits the guest component.
+    assert_eq!(store.data().calls_into_host, 3);
+    assert_eq!(store.data().returns_from_host, 3);
+
+    // There are four guest entries (currently) in the above component:
+    //
+    // 1. The root invocation of `run`.
+    // 2. The synthesized adapter which translates arguments to `foo`.
+    // 3. The initial invocation of `foo` in `$lifter`.
+    // 4. The synthesized adapter which translates `task.return` values.
+    assert_eq!(store.data().calls_into_wasm, 4);
+    assert_eq!(store.data().returns_from_wasm, 4);
+
+    Ok(())
+}
