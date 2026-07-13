@@ -1727,13 +1727,6 @@ impl StoreOpaque {
         }
     }
 
-    fn current_host_thread(&mut self) -> Result<TableId<HostTask>> {
-        match self.current_thread()?.host() {
-            Some(id) => Ok(id),
-            None => bail_bug!("current thread is not a host thread"),
-        }
-    }
-
     /// Returns whether there's a pending cancellation on the current guest thread,
     /// consuming the event if so.
     fn take_pending_cancellation(&mut self) -> Result<bool> {
@@ -1864,10 +1857,8 @@ impl StoreOpaque {
             }
             return Ok(None);
         }
-        // Sync-lowered, borrow-free host calls don't need a `HostTask` unless
-        // the host implementation actually suspends: they run as the caller's
-        // thread and `poll_and_block` materializes (and cleans up) a task
-        // on-demand via `materialize_host_task` if the future is pending.
+        // Deferred (borrow-free) calls run as the caller's thread; a task is
+        // only materialized if the host future actually suspends.
         if defer {
             return Ok(None);
         }
@@ -3274,40 +3265,47 @@ impl Instance {
         lower: impl FnOnce(StoreContextMut<T>, Option<R>) -> Result<()> + Send + 'static,
     ) -> Result<Option<u32>> {
         let token = StoreToken::new(store.as_context_mut());
-        let task = store.0.current_host_thread()?;
-        let state = store.0.concurrent_state_mut()?;
 
-        // Create an abortable future which hooks calls to poll and manages call
-        // context state for the future.
-        let (join_handle, future) = JoinHandle::run(future);
-        {
-            let state = &mut state.get_mut(task)?.state;
-            assert!(matches!(state, HostTaskState::CalleeStarted));
-            *state = HostTaskState::CalleeRunning(join_handle);
-        }
-
-        let mut future = Box::pin(future);
-
-        // Finally, poll the future.  We can use a dummy `Waker` here because
-        // we'll add the future to `ConcurrentState::futures` and poll it
-        // automatically from the event loop if it doesn't complete immediately
-        // here.
+        // Poll the raw future once before creating anything. Note that no
+        // `HostTask` (and no abortable `JoinHandle` wrapper) exists yet for
+        // deferred (borrow-free) calls: the common case is that the future
+        // completes right here, in which case no task is ever created and
+        // the guest simply observes `Status::Returned` with no waitable
+        // handle. We can use a dummy `Waker` because a pending future is
+        // added to `ConcurrentState::futures` below and polled from the
+        // event loop.
+        let mut inner = Box::pin(future);
         let poll = tls::set(store.0, || {
-            future
+            inner
                 .as_mut()
                 .poll(&mut Context::from_waker(&Waker::noop()))
         });
 
         match poll {
-            // It finished immediately; lower the result and delete the task.
+            // It finished immediately; lower the result.
             Poll::Ready(result) => {
-                let result = result.transpose()?;
-                lower(store.as_context_mut(), result)?;
+                let result = result?;
+                lower(store.as_context_mut(), Some(result))?;
                 return Ok(None);
             }
 
             // Future isn't ready yet, so fall through.
             Poll::Pending => {}
+        }
+
+        // The future is genuinely pending: wrap it in an abortable
+        // `JoinHandle` (for cancellation) and materialize the `HostTask` now
+        // if the entrypoint deferred it, or use the already-current one.
+        let (join_handle, future) = JoinHandle::run(inner);
+        let future = Box::pin(future);
+        let task = match store.0.current_thread()? {
+            CurrentThread::Host(task) => task,
+            _ => store.0.materialize_host_task()?,
+        };
+        {
+            let state = &mut store.0.concurrent_state_mut()?.get_mut(task)?.state;
+            assert!(matches!(state, HostTaskState::CalleeStarted));
+            *state = HostTaskState::CalleeRunning(join_handle);
         }
 
         // It hasn't finished yet; add the future to
@@ -5299,13 +5297,6 @@ impl CurrentThread {
     fn guest(&self) -> Option<&QualifiedThreadId> {
         match self {
             Self::Guest(id) => Some(id),
-            _ => None,
-        }
-    }
-
-    fn host(&self) -> Option<TableId<HostTask>> {
-        match self {
-            Self::Host(id) => Some(*id),
             _ => None,
         }
     }

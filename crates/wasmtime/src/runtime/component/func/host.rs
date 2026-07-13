@@ -382,17 +382,23 @@ where
         }
 
         // Enter the host by pushing a `HostTask` into the concurrent state.
-        // Sync-lowered borrow-free calls defer task creation entirely (see
-        // `host_task_create`); async-lowered calls need the task for subtask
-        // status/cancellation semantics, and borrow-ful calls need it as the
+        // Borrow-free calls defer task creation entirely (see
+        // `host_task_create`); borrow-ful calls keep the eager task as their
         // resource scope identity.
-        let defer_task = !async_ && !track_scope;
+        let defer_task = !track_scope;
         let host_task = store.0.host_task_create(track_scope, defer_task)?;
 
         let host_task_complete = if async_ {
             #[cfg(feature = "component-model-async")]
             {
-                self.call_async_lower(store.as_context_mut(), instance, ty, options, storage)?
+                self.call_async_lower(
+                    store.as_context_mut(),
+                    instance,
+                    ty,
+                    options,
+                    storage,
+                    track_scope,
+                )?
             }
             #[cfg(not(feature = "component-model-async"))]
             unreachable!(
@@ -478,6 +484,7 @@ where
         ty: TypeFuncIndex,
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
+        track_scope: bool,
     ) -> Result<bool> {
         use wasmtime_environ::component::MAX_FLAT_ASYNC_PARAMS;
 
@@ -488,7 +495,11 @@ where
 
         // Lift the parameters, either from flat storage or from linear
         // memory.
-        let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
+        let mut lift = if track_scope {
+            LiftContext::new(store.0.store_opaque_mut(), options, instance)?
+        } else {
+            LiftContext::new_without_scope(store.0.store_opaque_mut(), options, instance)?
+        };
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_ASYNC_PARAMS, storage)?;
 
         // Load/validate the return pointer, if present.
