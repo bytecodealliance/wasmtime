@@ -472,6 +472,15 @@ impl WastTest {
             return true;
         }
 
+        let unsupported = [
+            // Can be re-enabled once the tests/component-model submodule has been bumped to a commit that includes
+            // https://github.com/WebAssembly/component-model/pull/676
+            "test/wasm-tools/memory64.wast",
+        ];
+        if unsupported.iter().any(|part| self.path.ends_with(part)) {
+            return true;
+        }
+
         // Some tests are known to fail with the pooling allocator
         if config.pooling {
             // allocates too much memory for the pooling configuration here
