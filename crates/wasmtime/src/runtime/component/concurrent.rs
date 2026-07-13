@@ -1812,6 +1812,7 @@ impl StoreOpaque {
     /// relatively expensive table manipulations. This would ideally be
     /// optimized to avoid the full allocation of a `HostTask` in at least some
     /// situations.
+    #[inline]
     pub(crate) fn host_task_create(
         &mut self,
         track_scope: bool,
@@ -1838,6 +1839,7 @@ impl StoreOpaque {
     /// This is used to update the current thread annotations within the store
     /// to ensure that it reflects the guest task, not the host task, since
     /// lowering may execute guest code.
+    #[inline]
     pub fn host_task_reenter_caller(&mut self) -> Result<()> {
         if !self.concurrency_support() {
             return Ok(());
@@ -1854,6 +1856,7 @@ impl StoreOpaque {
     /// Note that this isn't invoked when the host is invoked asynchronously and
     /// the host isn't complete yet. In that situation the host task persists
     /// and will be cleaned up separately in `subtask_drop`
+    #[inline]
     pub(crate) fn host_task_delete(
         &mut self,
         task: Option<TableId<HostTask>>,
@@ -2355,6 +2358,7 @@ impl StoreOpaque {
 
     /// Used by `ResourceTables` to record the scope of a borrow to get undone
     /// in the future.
+    #[inline]
     pub(crate) fn current_scope_id(&mut self) -> Result<Option<u32>> {
         if !self.concurrency_support() {
             return self.current_scope_id_not_concurrent();

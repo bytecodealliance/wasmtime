@@ -339,9 +339,35 @@ impl<'a> LiftContext<'a> {
         options: OptionsIndex,
         instance_handle: Instance,
     ) -> Result<LiftContext<'a>> {
+        Self::new_impl(store, options, instance_handle, true)
+    }
+
+    /// Same as [`Self::new`] but without resolving the current resource
+    /// scope, for calls whose signature statically cannot contain `borrow`
+    /// handles (the only consumers of the scope id).
+    #[inline]
+    pub(crate) fn new_without_scope(
+        store: &'a mut StoreOpaque,
+        options: OptionsIndex,
+        instance_handle: Instance,
+    ) -> Result<LiftContext<'a>> {
+        Self::new_impl(store, options, instance_handle, false)
+    }
+
+    #[inline]
+    fn new_impl(
+        store: &'a mut StoreOpaque,
+        options: OptionsIndex,
+        instance_handle: Instance,
+        want_scope: bool,
+    ) -> Result<LiftContext<'a>> {
         let store_id = store.id();
         let hostcall_fuel = store.hostcall_fuel();
-        let current_scope_id = store.current_scope_id()?;
+        let current_scope_id = if want_scope {
+            store.current_scope_id()?
+        } else {
+            None
+        };
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
         // `CallContexts`, and `HandleTable`. There's no native API for that

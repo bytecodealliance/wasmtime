@@ -218,6 +218,7 @@ impl StoreComponentInstanceId {
     /// # Panics
     ///
     /// Panics if `self` does not belong to `store`.
+    #[inline]
     pub(crate) fn get<'a>(&self, store: &'a StoreOpaque) -> &'a ComponentInstance {
         self.assert_belongs_to(store.id());
         store.component_instance(self.instance)
@@ -228,6 +229,7 @@ impl StoreComponentInstanceId {
     /// # Panics
     ///
     /// Panics if `self` does not belong to `store`.
+    #[inline]
     pub(crate) fn get_mut<'a>(&self, store: &'a mut StoreOpaque) -> Pin<&'a mut ComponentInstance> {
         self.from_data_get_mut(store.store_data_mut())
     }
@@ -356,6 +358,7 @@ impl StoreOpaque {
         support
     }
 
+    #[inline]
     pub(crate) fn lift_context_parts(
         &mut self,
         instance: Instance,
@@ -420,6 +423,7 @@ impl StoreOpaque {
         ))
     }
 
+    #[inline]
     pub(crate) fn enter_call_not_concurrent(&mut self) -> Result<()> {
         let state = match &mut self.component_data_mut().task_state {
             ComponentTaskState::NotConcurrent(state) => state,
@@ -430,6 +434,7 @@ impl StoreOpaque {
         Ok(())
     }
 
+    #[inline]
     pub(crate) fn exit_call_not_concurrent(&mut self) {
         let state = match &mut self.component_data_mut().task_state {
             ComponentTaskState::NotConcurrent(state) => state,
@@ -459,6 +464,7 @@ impl StoreOpaque {
         }
     }
 
+    #[inline]
     pub(crate) fn current_scope_id_not_concurrent(&mut self) -> Result<Option<u32>> {
         match &mut self.component_data_mut().task_state {
             ComponentTaskState::NotConcurrent(state) => match state.scopes.len().checked_sub(1) {
