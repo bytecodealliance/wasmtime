@@ -1,15 +1,23 @@
 //! Trap handling on Unix based on POSIX signals.
 
 use crate::prelude::*;
+#[cfg(has_mmu_interruption)]
+use crate::runtime;
+#[cfg(has_mmu_interruption)]
 use crate::runtime::module::lookup_code;
-use crate::runtime::store::yield_now;
-use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, raise_preexisting_trap, tls};
+#[cfg(has_mmu_interruption)]
+use crate::runtime::vm::traphandlers::raise_preexisting_trap;
+use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, tls};
+#[cfg(has_mmu_interruption)]
 use crate::runtime::vm::{Instance, VMContext};
+#[cfg(has_mmu_interruption)]
 use core::arch::naked_asm;
 use std::cell::RefCell;
 use std::io;
 use std::mem;
-use std::ptr::{self, NonNull, null_mut};
+#[cfg(has_mmu_interruption)]
+use std::ptr::NonNull;
+use std::ptr::{self, null_mut};
 use wasmtime_unwinder::Handler;
 
 /// Function which may handle custom signals while processing traps.
@@ -24,7 +32,7 @@ static mut PREV_SIGFPE: libc::sigaction = UNINIT_SIGACTION;
 
 // From signal.h. Not yet exposed in libc. Value is valid for Linux and Mac; not
 // sure about elsewhere.
-#[cfg(all(target_os = "linux"))]
+#[cfg(has_mmu_interruption)]
 const SEGV_ACCERR: libc::c_int = 2;
 pub struct TrapHandler;
 
@@ -156,7 +164,7 @@ now.
 /// `vmctx` must be a currently-entered `VMContext`. In current use,
 /// `task_switch_trampoline` ensures RDI still holds the Wasm caller's vmctx and
 /// sets up the other two argument registers as well.
-#[cfg(feature = "async")]
+#[cfg(has_mmu_interruption)]
 unsafe extern "C" fn yield_current_fiber(
     vmctx: NonNull<VMContext>,
     wasm_resume_pc: usize,
@@ -188,7 +196,7 @@ unsafe extern "C" fn yield_current_fiber(
             store_ctx.unprotect_interrupt_page();
 
             // And actually switch fibers.
-            let result = store.with_blocking(|_store, cx| cx.block_on(yield_now()));
+            let result = store.with_blocking(|_store, cx| cx.block_on(runtime::store::yield_now()));
 
             if result.is_ok() {
                 // Clear the exit state again so it doesn't appear stale once we
@@ -241,6 +249,7 @@ unsafe extern "C" fn yield_current_fiber(
 /// 2MiB, of which only 512KiB is reserved for the Wasm stack, and (3) the fiber
 /// stack has a 4KiB guard page at the bottom, which causes
 /// `abort_stack_overflow()` to run if we do crash into it.
+#[cfg(has_mmu_interruption)]
 #[unsafe(naked)]
 unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
     naked_asm!(
@@ -381,7 +390,7 @@ unsafe extern "C" fn trap_handler(
         };
 
         // Check for segfaults meant as cues to end an epoch.
-        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        #[cfg(has_mmu_interruption)]
         // SAFETY: `si_code` field is always initialized for SIGSEGV.
         if signum == libc::SIGSEGV && unsafe { (*siginfo).si_code } == SEGV_ACCERR {
             // Compare it with the offsets of MMU-interrupt-check instructions

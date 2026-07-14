@@ -5,6 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
+#[cfg(has_mmu_interruption)]
 use crate::runtime::vm::SendSyncPtr;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
@@ -17,7 +18,9 @@ use core::mem::{self, MaybeUninit};
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(has_mmu_interruption)]
 use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect, munmap};
+#[cfg(has_mmu_interruption)]
 use rustix::param::page_size;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
@@ -1350,6 +1353,8 @@ impl Default for VMStoreContext {
     }
 }
 
+/// Methods related to the special memory page that supports MMU interrupts
+#[cfg(has_mmu_interruption)]
 impl VMStoreContext {
     /// Returns a new instance that has a page of memory allocated for use with
     /// `mmu-interruption`.
@@ -1442,11 +1447,13 @@ impl VMStoreContext {
 }
 
 /// A thread-safe handle that can trigger an MMU interruption
+#[cfg(has_mmu_interruption)]
 #[derive(Clone)]
 pub struct MmuInterrupter {
     vm_store_context: SendSyncPtr<VMStoreContext>,
 }
 
+#[cfg(has_mmu_interruption)]
 impl MmuInterrupter {
     /// Twiddles MMU access control bits such that reads from the interrupt page
     /// will cause a segfault. This soon interrupts the running Wasm, as it will

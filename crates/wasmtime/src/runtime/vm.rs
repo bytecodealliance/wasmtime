@@ -124,14 +124,16 @@ pub use crate::runtime::vm::table::{Table, TableElementType};
 #[cfg(feature = "gc")]
 pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
+#[cfg(has_mmu_interruption)]
+pub use crate::runtime::vm::vmcontext::MmuInterrupter;
 #[cfg(feature = "component-model")]
 pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
 #[cfg(feature = "component-model-async")]
 pub use crate::runtime::vm::vmcontext::VMLazyThread;
 pub use crate::runtime::vm::vmcontext::{
-    MmuInterrupter, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport,
-    VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
+    VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
+    VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;

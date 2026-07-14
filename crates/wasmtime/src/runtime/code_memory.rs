@@ -13,9 +13,9 @@ use object::{
     read::elf::{FileHeader as _, SectionHeader as _},
 };
 use wasmtime_environ::StaticModuleIndex;
-use wasmtime_environ::{
-    CompiledTrap, lookup_trap_code, obj, return_offset_for_mmu_interrupt_check,
-};
+#[cfg(has_mmu_interruption)]
+use wasmtime_environ::return_offset_for_mmu_interrupt_check;
+use wasmtime_environ::{CompiledTrap, lookup_trap_code, obj};
 use wasmtime_unwinder::ExceptionTable;
 
 /// Management of executable memory within a `MmapVec`
@@ -40,6 +40,7 @@ pub struct CodeMemory {
     text: Range<usize>,
     unwind: Range<usize>,
     trap_data: Range<usize>,
+    #[cfg(has_mmu_interruption)]
     mmu_interrupt_check_data: Range<usize>,
     wasm_data: Range<usize>,
     address_map_data: Range<usize>,
@@ -151,6 +152,7 @@ impl CodeMemory {
         #[cfg(feature = "debug-builtins")]
         let mut has_native_debug_info = false;
         let mut trap_data = 0..0;
+        #[cfg(has_mmu_interruption)]
         let mut mmu_interrupt_check_data = 0..0;
         let mut exception_data = 0..0;
         let mut frame_tables_data = 0..0;
@@ -216,7 +218,12 @@ impl CodeMemory {
                 obj::ELF_WASMTIME_ADDRMAP => address_map_data = range,
                 obj::ELF_WASMTIME_STACK_MAP => stack_map_data = range,
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
-                obj::ELF_WASMTIME_MMU_INTERRUPT_CHECKS => mmu_interrupt_check_data = range,
+                obj::ELF_WASMTIME_MMU_INTERRUPT_CHECKS => {
+                    #[cfg(has_mmu_interruption)]
+                    {
+                        mmu_interrupt_check_data = range;
+                    }
+                }
                 obj::ELF_WASMTIME_EXCEPTIONS => exception_data = range,
                 obj::ELF_WASMTIME_FRAMES => frame_tables_data = range,
                 obj::ELF_NAME_DATA => func_name_data = range,
@@ -273,6 +280,7 @@ impl CodeMemory {
             text,
             unwind,
             trap_data,
+            #[cfg(has_mmu_interruption)]
             mmu_interrupt_check_data,
             address_map_data,
             stack_map_data,
@@ -404,6 +412,7 @@ impl CodeMemory {
 
     /// Returns the address at which to resume after the given MMU-interrupt
     /// check.
+    #[cfg(has_mmu_interruption)]
     pub fn return_address_for_mmu_interrupt_check(&self, check_offset: u32) -> Option<*const ()> {
         // SAFETY: `self.mmu_interrupt_check_data` is a range into `self.mmap`
         // established when the ELF was parsed in the constructor, and
