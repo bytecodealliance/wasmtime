@@ -363,11 +363,12 @@ unsafe extern "C" fn fiber_start(
     }
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "x86_64")] {
+cfg_select! {
+    target_arch = "x86_64" => {
         mod x86_64;
         use x86_64::*;
-    } else {
+    }
+    _ => {
         // Note that this should be unreachable: In stack.rs, we currently select
         // the module defined in the current file only if we are on unix AND
         // x86_64.

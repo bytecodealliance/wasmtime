@@ -9,7 +9,7 @@ pub struct UnwindRegistration {
     registrations: TryVec<SendSyncPtr<u8>>,
 }
 
-cfg_if::cfg_if! {
+cfg_select! {
     // FIXME: at least on the `gcc-arm-linux-gnueabihf` toolchain on Ubuntu
     // these symbols are not provided by default like they are on other targets.
     // I'm not ARM expert so I don't know why. For now though consider this an
@@ -17,13 +17,14 @@ cfg_if::cfg_if! {
     // to do nothing which won't break any tests it just means that
     // runtime-generated backtraces won't have the same level of fidelity they
     // do on other targets.
-    if #[cfg(target_arch = "arm")] {
+    target_arch = "arm" => {
         unsafe extern "C" fn __register_frame(_: *const u8) {}
         unsafe extern "C" fn __deregister_frame(_: *const u8) {}
         unsafe extern "C" fn wasmtime_using_libunwind() -> bool {
             false
         }
-    } else {
+    }
+    _ => {
         unsafe extern "C" {
             // libunwind import
             fn __register_frame(fde: *const u8);

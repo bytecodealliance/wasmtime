@@ -15,14 +15,17 @@ mod nativetls;
 #[cfg(feature = "nativetls")]
 pub use nativetls::NativeTlsProvider;
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "rustls")] {
+cfg_select! {
+    feature = "rustls" => {
         pub use RustlsProvider as DefaultProvider;
-    } else if #[cfg(feature = "openssl")] {
+    }
+    feature = "openssl" => {
         pub use OpenSslProvider as DefaultProvider;
-    } else if #[cfg(feature = "nativetls")] {
+    }
+    feature = "nativetls" => {
         pub use NativeTlsProvider as DefaultProvider;
-    } else {
+    }
+    _ => {
         pub use UnsupportedProvider as DefaultProvider;
     }
 }

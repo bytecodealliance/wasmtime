@@ -1,5 +1,4 @@
 use anyhow::Result;
-use cfg_if::cfg_if;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::ir::function::FunctionParameters;
 use cranelift_codegen::isa::TargetIsa;
@@ -36,8 +35,8 @@ pub fn print_traps(traps: &[MachTrap]) -> String {
     text
 }
 
-cfg_if! {
-    if #[cfg(feature = "disas")] {
+cfg_select! {
+    feature = "disas" => {
         pub fn print_disassembly(func: &Function, isa: &dyn TargetIsa, mem: &[u8]) -> Result<()> {
             #[cfg(feature = "pulley")]
             let is_pulley = match isa.triple().architecture {
@@ -89,7 +88,8 @@ cfg_if! {
             }
             Ok(())
         }
-    } else {
+    }
+    _ => {
         pub fn print_disassembly(_: &Function, _: &dyn TargetIsa, _: &[u8]) -> Result<()> {
             println!("\nNo disassembly available.");
             Ok(())

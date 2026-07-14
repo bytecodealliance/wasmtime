@@ -7,11 +7,12 @@ use core::ops::Range;
 use crate::runtime::vm::stack_switching::VMHostArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
-cfg_if::cfg_if! {
-    if #[cfg(all(feature = "stack-switching", unix, target_arch = "x86_64"))] {
+cfg_select! {
+    all(feature = "stack-switching", unix, target_arch = "x86_64") => {
         mod unix;
         use unix as imp;
-    } else {
+    }
+    _ => {
         mod dummy;
         use dummy as imp;
     }

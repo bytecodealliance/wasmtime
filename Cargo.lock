@@ -1027,7 +1027,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "capstone",
- "cfg-if",
  "clap",
  "cranelift",
  "cranelift-codegen",
@@ -4569,7 +4568,6 @@ dependencies = [
  "bumpalo",
  "bytes",
  "cc",
- "cfg-if",
  "cranelift-native",
  "encoding_rs",
  "env_logger 0.11.5",
@@ -4671,7 +4669,6 @@ dependencies = [
  "bytes",
  "bytesize",
  "capstone",
- "cfg-if",
  "clap",
  "clap_complete",
  "cranelift-codegen",
@@ -4937,7 +4934,6 @@ dependencies = [
 name = "wasmtime-internal-cranelift"
 version = "48.0.0"
 dependencies = [
- "cfg-if",
  "cranelift-codegen",
  "cranelift-control",
  "cranelift-entity",
@@ -4991,7 +4987,6 @@ version = "48.0.0"
 dependencies = [
  "backtrace",
  "cc",
- "cfg-if",
  "libc",
  "rustix 1.1.4",
  "wasmtime-environ",
@@ -5033,7 +5028,6 @@ dependencies = [
 name = "wasmtime-internal-jit-icache-coherence"
 version = "48.0.0"
 dependencies = [
- "cfg-if",
  "libc",
  "wasmtime-internal-core",
  "windows-sys 0.61.2",
@@ -5043,7 +5037,6 @@ dependencies = [
 name = "wasmtime-internal-unwinder"
 version = "48.0.0"
 dependencies = [
- "cfg-if",
  "cranelift-codegen",
  "log",
  "object 0.39.0",
@@ -5132,7 +5125,6 @@ dependencies = [
  "bytes",
  "cap-fs-ext",
  "cap-primitives",
- "cfg-if",
  "env_logger 0.11.5",
  "futures",
  "rand 0.10.1",
@@ -5240,7 +5232,6 @@ name = "wasmtime-wasi-tls"
 version = "48.0.0"
 dependencies = [
  "bytes",
- "cfg-if",
  "futures",
  "native-tls",
  "openssl",

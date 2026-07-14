@@ -159,12 +159,13 @@ mod send_sync_unsafe_cell;
 #[allow(unused, reason = "hard to cfg on/off, weird feature interactions")]
 pub use send_sync_unsafe_cell::SendSyncUnsafeCell;
 
-cfg_if::cfg_if! {
-    if #[cfg(has_virtual_memory)] {
+cfg_select! {
+    has_virtual_memory => {
         pub use crate::runtime::vm::byte_count::*;
         pub use crate::runtime::vm::mmap::{Mmap, MmapOffset};
         pub use self::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
-    } else {
+    }
+    _ => {
         pub use self::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
     }
 }

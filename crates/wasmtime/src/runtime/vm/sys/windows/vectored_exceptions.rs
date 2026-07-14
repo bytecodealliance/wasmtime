@@ -206,18 +206,20 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             None => return EXCEPTION_CONTINUE_SEARCH,
         };
         let context = unsafe { exception_info.ContextRecord.as_ref().unwrap() };
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "x86_64")] {
+        cfg_select! {
+            target_arch = "x86_64" => {
                 let regs = TrapRegisters {
                     pc: context.Rip as usize,
                     fp: context.Rbp as usize,
                 };
-            } else if #[cfg(target_arch = "aarch64")] {
+            }
+            target_arch = "aarch64" => {
                 let regs = TrapRegisters {
                     pc: context.Pc as usize,
                     fp: unsafe { context.Anonymous.Anonymous.Fp as usize },
                 };
-            } else {
+            }
+            _ => {
                 compile_error!("unsupported platform");
             }
         }
@@ -237,20 +239,22 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
             TrapTest::Trap(handler) => {
                 let context = unsafe { exception_info.ContextRecord.as_mut().unwrap() };
                 LAST_EXCEPTION_PC.with(|s| s.set(handler.pc));
-                cfg_if::cfg_if! {
-                    if #[cfg(target_arch = "x86_64")] {
+                cfg_select! {
+                    target_arch = "x86_64" => {
                         context.Rip = handler.pc as _;
                         context.Rbp = handler.fp as _;
                         context.Rsp = handler.sp as _;
                         context.Rax = 0;
                         context.Rdx = 0;
-                    } else if #[cfg(target_arch = "aarch64")] {
+                    }
+                    target_arch = "aarch64" => {
                         context.Pc = handler.pc as _;
                         context.Sp = handler.sp as _;
                         context.Anonymous.Anonymous.Fp = handler.fp as _;
                         context.Anonymous.Anonymous.X0 = 0;
                         context.Anonymous.Anonymous.X1 = 0;
-                    } else {
+                    }
+                    _ => {
                         compile_error!("unsupported platform");
                     }
                 }
@@ -271,12 +275,14 @@ unsafe extern "system" fn continue_handler(exception_info: *mut EXCEPTION_POINTE
     let context = unsafe { &(*(*exception_info).ContextRecord) };
     let last_exception_pc = LAST_EXCEPTION_PC.with(|s| s.replace(0));
 
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "x86_64")] {
+    cfg_select! {
+        target_arch = "x86_64" => {
             let context_pc = context.Rip as usize;
-        } else if #[cfg(target_arch = "aarch64")] {
+        }
+        target_arch = "aarch64" => {
             let context_pc = context.Pc as usize;
-        } else {
+        }
+        _ => {
             compile_error!("unsupported platform");
         }
     }

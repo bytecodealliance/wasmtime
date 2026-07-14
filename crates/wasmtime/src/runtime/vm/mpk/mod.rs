@@ -29,18 +29,19 @@
 //! On any other kind of machine, this module exposes noop implementations of
 //! the public interface.
 
-cfg_if::cfg_if! {
-    if #[cfg(all(
+cfg_select! {
+    all(
         target_arch = "x86_64",
         target_os = "linux",
         feature = "memory-protection-keys",
         not(miri),
-    ))] {
+    ) => {
         mod enabled;
         mod pkru;
         mod sys;
         pub use enabled::*;
-    } else {
+    }
+    _ => {
         mod disabled;
         pub use disabled::*;
     }

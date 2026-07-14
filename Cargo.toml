@@ -82,7 +82,6 @@ smallvec = { workspace = true }
 
 async-trait = { workspace = true }
 bytes = { workspace = true }
-cfg-if = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
@@ -415,7 +414,6 @@ serde_json = "1.0.80"
 glob = "0.3.3"
 libfuzzer-sys = "0.4.10"
 walkdir = "2.5.0"
-cfg-if = "1.0"
 tempfile = "3.27.0"
 filecheck = "0.5.0"
 libc = { version = "0.2.185", default-features = true }

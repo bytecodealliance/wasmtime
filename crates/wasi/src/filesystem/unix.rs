@@ -34,8 +34,8 @@ pub(crate) fn get_flags(file: &File) -> io::Result<DescriptorFlags> {
 }
 
 pub(crate) fn advise(file: &File, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
-    cfg_if::cfg_if! {
-        if #[cfg(target_vendor = "apple")] {
+    cfg_select! {
+        target_vendor = "apple" => {
             match advice {
                 Advice::WillNeed => {
                     rustix::fs::fcntl_rdadvise(file, offset, len)?;
@@ -46,7 +46,8 @@ pub(crate) fn advise(file: &File, offset: u64, len: u64, advice: Advice) -> io::
                 Advice::DontNeed |
                 Advice::NoReuse => {}
             }
-        } else if #[cfg(any(target_os = "linux", target_os = "android"))] {
+        }
+        any(target_os = "linux", target_os = "android") => {
             use std::num::NonZeroU64;
             let advice = match advice {
                 Advice::Normal => rustix::fs::Advice::Normal,
@@ -57,7 +58,8 @@ pub(crate) fn advise(file: &File, offset: u64, len: u64, advice: Advice) -> io::
                 Advice::NoReuse => rustix::fs::Advice::NoReuse,
             };
             rustix::fs::fadvise(file, offset, NonZeroU64::new(len), advice)?;
-        } else {
+        }
+        _ => {
             // noop on other platforms
             let _ = (file, offset, len, advice);
         }

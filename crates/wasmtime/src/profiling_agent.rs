@@ -1,10 +1,11 @@
 use crate::prelude::*;
 
-cfg_if::cfg_if! {
-    if #[cfg(all(feature = "profiling", target_os = "linux"))] {
+cfg_select! {
+    all(feature = "profiling", target_os = "linux") => {
         mod jitdump;
         pub use jitdump::new as new_jitdump;
-    } else {
+    }
+    _ => {
         pub fn new_jitdump() -> Result<Box<dyn ProfilingAgent>> {
             if cfg!(feature = "profiling") {
                 bail!("jitdump is not supported on this platform");
@@ -15,21 +16,22 @@ cfg_if::cfg_if! {
     }
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(all(unix, feature = "std"))] {
+cfg_select! {
+    all(unix, feature = "std") => {
         mod perfmap;
         pub use perfmap::new as new_perfmap;
-    } else {
+    }
+    _ => {
         pub fn new_perfmap() -> Result<Box<dyn ProfilingAgent>> {
             bail!("perfmap support not supported on this platform");
         }
     }
 }
 
-cfg_if::cfg_if! {
+cfg_select! {
     // Note that the `#[cfg]` here should be kept in sync with the
     // corresponding dependency directive on `ittapi` in `Cargo.toml`.
-    if #[cfg(all(
+    all(
         feature = "profiling",
         target_arch = "x86_64",
         any(
@@ -37,10 +39,11 @@ cfg_if::cfg_if! {
             target_os = "macos",
             target_os = "linux",
         ),
-    ))] {
+    ) => {
         mod vtune;
         pub use vtune::new as new_vtune;
-    } else {
+    }
+    _ => {
         pub fn new_vtune() -> Result<Box<dyn ProfilingAgent>> {
             if cfg!(feature = "profiling") {
                 bail!("VTune is not supported on this platform.");
@@ -51,11 +54,12 @@ cfg_if::cfg_if! {
     }
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "profile-pulley")] {
+cfg_select! {
+    feature = "profile-pulley" => {
         mod pulley;
         pub use pulley::new as new_pulley;
-    } else {
+    }
+    _ => {
         pub fn new_pulley() -> Result<Box<dyn ProfilingAgent>> {
             bail!("pulley profiling support disabled at compile time.");
         }
