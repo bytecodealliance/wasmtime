@@ -22,6 +22,7 @@ use core::mem::{self, MaybeUninit};
 #[cfg(feature = "async")]
 use core::pin::Pin;
 use core::ptr::NonNull;
+#[cfg(feature = "component-model-async")]
 use core::task::Poll;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, OptionsIndex, TypeFuncIndex,
