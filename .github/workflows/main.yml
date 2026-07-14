@@ -850,7 +850,12 @@ jobs:
       if: matrix.target == 'x86_64-pc-windows-gnu'
 
     # Update binutils if MinGW due to https://github.com/rust-lang/rust/issues/112368
-    - run: C:/msys64/usr/bin/pacman.exe -S --needed mingw-w64-x86_64-gcc --noconfirm
+    - run: |
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          C:/msys64/usr/bin/pacman.exe -S --needed mingw-w64-x86_64-gcc --noconfirm && break
+          sleep 5
+        done
       if: matrix.target == 'x86_64-pc-windows-gnu'
     - shell: pwsh
       run: echo "C:\msys64\mingw64\bin" >> $Env:GITHUB_PATH
