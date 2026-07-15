@@ -584,7 +584,7 @@ impl Module for JITModule {
             data_decls: _,
             function_relocs: _,
             data_relocs: _,
-            custom_segment_section: _,
+            custom_section: _,
             align,
             used: _,
         } = data;

@@ -4,44 +4,53 @@
 // included modules below; their symbols are visible in the binary and
 // accessed via the `extern "C"` declarations below that.
 
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "aarch64")] {
+cfg_select! {
+    target_arch = "aarch64" => {
         mod aarch64;
         pub(crate) use supported::*;
         pub(crate) use aarch64::*;
-    } else if #[cfg(target_arch = "x86_64")] {
+    }
+    target_arch = "x86_64" => {
         mod x86_64;
         pub(crate) use supported::*;
         pub(crate) use x86_64::*;
-    } else if #[cfg(target_arch = "x86")] {
+    }
+    target_arch = "x86" => {
         mod x86;
         pub(crate) use supported::*;
         pub(crate) use x86::*;
-    } else if #[cfg(target_arch = "arm")] {
+    }
+    target_arch = "arm" => {
         mod arm;
         pub(crate) use supported::*;
         pub(crate) use arm::*;
-    } else if #[cfg(target_arch = "s390x")] {
+    }
+    target_arch = "s390x" => {
         mod s390x;
         pub(crate) use supported::*;
         pub(crate) use s390x::*;
-    } else if #[cfg(target_arch = "riscv64")]  {
+    }
+    target_arch = "riscv64" => {
         mod riscv64;
         pub(crate) use supported::*;
         pub(crate) use riscv64::*;
-    } else if #[cfg(all(target_arch = "riscv32", not(target_feature = "f"), not(target_feature = "v")))] {
+    }
+    all(target_arch = "riscv32", not(target_feature = "f"), not(target_feature = "v")) => {
         mod riscv32imac;
         pub(crate) use supported::*;
         pub(crate) use riscv32imac::*;
-    } else if #[cfg(target_arch = "loongarch64")]  {
+    }
+    target_arch = "loongarch64" => {
         mod loongarch64;
         pub(crate) use supported::*;
         pub(crate) use loongarch64::*;
-    } else if #[cfg(feature = "custom")] {
+    }
+    feature = "custom" => {
         mod custom;
         pub(crate) use supported::*;
         pub(crate) use custom::*;
-    } else {
+    }
+    _ => {
         // No support for this platform. Don't fail compilation though and
         // instead defer the error to happen at runtime when a fiber is created.
         // Should help keep compiles working and narrows the failure to only

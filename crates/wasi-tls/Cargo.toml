@@ -33,7 +33,6 @@ tokio = { workspace = true, features = [
 wasmtime = { workspace = true, features = ["runtime", "component-model"] }
 wasmtime-wasi = { workspace = true }
 tracing = { workspace = true, optional = true }
-cfg-if = { workspace = true }
 tokio-rustls = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 webpki-roots = { workspace = true, optional = true }

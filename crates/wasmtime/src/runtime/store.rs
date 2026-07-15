@@ -2020,8 +2020,8 @@ impl StoreOpaque {
             return fault;
         }
 
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {
+        cfg_select! {
+            feature = "std" => {
                 // With the standard library a rich error can be printed here
                 // to stderr and the native abort path is used.
                 eprintln!(
@@ -2045,14 +2045,16 @@ at https://bytecodealliance.org/security.
 "
                 );
                 std::process::abort();
-            } else if #[cfg(panic = "abort")] {
+            }
+            panic = "abort" => {
                 // Without the standard library but with `panic=abort` then
                 // it's safe to panic as that's known to halt execution. For
                 // now avoid the above error message as well since without
                 // `std` it's probably best to be a bit more size-conscious.
                 let _ = pc;
                 panic!("invalid fault");
-            } else {
+            }
+            _ => {
                 // Without `std` and with `panic = "unwind"` there's no
                 // dedicated API to abort the process portably, so manufacture
                 // this with a double-panic.

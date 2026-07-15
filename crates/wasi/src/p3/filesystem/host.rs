@@ -198,7 +198,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
             let file = Arc::clone(me.file.as_file());
             let offset = me.offset;
             spawn_blocking(move || {
-                sys::read_at_cursor_unspecified(file, &mut buf, offset).map(|n| {
+                sys::read_at_cursor_unspecified(&file, &mut buf, offset).map(|n| {
                     buf.truncate(n);
                     buf
                 })
@@ -244,7 +244,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
 }
 
 fn map_dir_entry(
-    entry: std::io::Result<cap_std::fs::DirEntry>,
+    entry: std::io::Result<cap_primitives::fs::DirEntry>,
 ) -> Result<Option<DirectoryEntry>, ErrorCode> {
     match entry {
         Ok(entry) => {
@@ -284,13 +284,13 @@ struct ReadDirStream {
 
 impl ReadDirStream {
     fn new(
-        dir: Arc<cap_std::fs::Dir>,
+        dir: Arc<std::fs::File>,
         result: oneshot::Sender<Result<(), ErrorCode>>,
     ) -> ReadDirStream {
         let (tx, rx) = mpsc::channel(1);
         ReadDirStream {
             task: spawn_blocking(move || {
-                let entries = dir.entries()?;
+                let entries = cap_primitives::fs::read_base_dir(&dir)?;
                 for entry in entries {
                     if let Some(entry) = map_dir_entry(entry)? {
                         if let Err(_) = tx.blocking_send(entry) {
@@ -428,7 +428,7 @@ impl WriteStreamConsumer {
 }
 
 impl WriteLocation {
-    fn write(&self, file: &cap_std::fs::File, bytes: &[u8]) -> io::Result<usize> {
+    fn write(&self, file: &std::fs::File, bytes: &[u8]) -> io::Result<usize> {
         match *self {
             WriteLocation::End => sys::append_cursor_unspecified(file, bytes),
             WriteLocation::Offset(at) => sys::write_at_cursor_unspecified(file, bytes, at),
@@ -681,7 +681,7 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
                 let allow_blocking_current_thread = dir.allow_blocking_current_thread;
                 let dir = Arc::clone(dir.as_dir());
                 if allow_blocking_current_thread {
-                    match dir.entries() {
+                    match cap_primitives::fs::read_base_dir(&dir) {
                         Ok(readdir) => StreamReader::new(
                             &mut store,
                             FallibleIteratorProducer::new(

@@ -653,7 +653,7 @@ impl WasiP1Ctx {
                 drop(t);
                 let f = self.table.get(&fd)?.file()?;
 
-                let do_write = move |f: &cap_std::fs::File, buf: &[u8]| match (append, write) {
+                let do_write = move |f: &std::fs::File, buf: &[u8]| match (append, write) {
                     // Note that this is implementing Linux semantics of
                     // `pwrite` where the offset is ignored if the file was
                     // opened in append mode.

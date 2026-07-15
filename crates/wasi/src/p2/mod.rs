@@ -3,7 +3,7 @@
 //!
 //! This module provides a Wasmtime host implementation of WASI 0.2 (aka WASIp2
 //! aka Preview 2) and WASI 0.1 (aka WASIp1 aka Preview 1). WASI is implemented
-//! with the Rust crates [`tokio`] and [`cap-std`] primarily, meaning that
+//! with the Rust crates [`tokio`] and [`cap-primitives`] primarily, meaning that
 //! operations are implemented in terms of their native platform equivalents by
 //! default.
 //!
@@ -187,7 +187,7 @@
 //!
 //! [`wasmtime::component::bindgen!`]: https://docs.rs/wasmtime/latest/wasmtime/component/macro.bindgen.html
 //! [`tokio`]: https://crates.io/crates/tokio
-//! [`cap-std`]: https://crates.io/crates/cap-std
+//! [`cap-primitives`]: https://crates.io/crates/cap-primitives
 //! [`wasmtime-wasi-io`]: https://crates.io/crates/wasmtime-wasi-io
 //! [`wasi:cli/environment`]: bindings::cli::environment::Host
 //! [`wasi:cli/exit`]: bindings::cli::exit::Host

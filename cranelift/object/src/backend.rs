@@ -15,11 +15,12 @@ use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
 };
 use object::{
-    RelocationEncoding, RelocationFlags, RelocationKind, SectionFlags, SectionKind, SymbolFlags,
-    SymbolKind, SymbolScope, elf,
+    BinaryFormat, RelocationEncoding, RelocationFlags, RelocationKind, SectionFlags, SectionKind,
+    SymbolFlags, SymbolKind, SymbolScope, elf,
 };
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::fmt::Write as _;
 use std::mem;
 use target_lexicon::{PointerWidth, Triple};
 
@@ -514,7 +515,7 @@ impl Module for ObjectModule {
             data_decls: _,
             function_relocs: _,
             data_relocs: _,
-            ref custom_segment_section,
+            ref custom_section,
             align,
             used,
         } = data;
@@ -529,7 +530,7 @@ impl Module for ObjectModule {
             .map(|record| self.process_reloc(&record))
             .collect::<Vec<_>>();
 
-        let section = if custom_segment_section.is_none() {
+        let section = if custom_section.is_none() {
             let section_kind = if let Init::Zeros { .. } = *init {
                 if decl.tls {
                     StandardSection::UninitializedTls
@@ -560,10 +561,12 @@ impl Module for ObjectModule {
                     "Custom section not supported for TLS"
                 )));
             }
-            let (seg, sec, macho_flags) = &custom_segment_section.as_ref().unwrap();
+            let (segment, section, macho_flags) =
+                parse_section(custom_section.as_ref().unwrap(), self.object.format())
+                    .map_err(ModuleError::Backend)?;
             let section = self.object.add_section(
-                seg.clone().into_bytes(),
-                sec.clone().into_bytes(),
+                segment.to_string().into_bytes(),
+                section.to_string().into_bytes(),
                 if decl.writable {
                     SectionKind::Data
                 } else if relocs.is_empty() {
@@ -582,13 +585,11 @@ impl Module for ObjectModule {
                     // with how we set these, to ensure we set the section
                     // type properly).
                     assert_eq!(*flags, 0);
-                    *flags = *macho_flags;
+                    *flags = macho_flags;
                 }
                 _ => {
-                    if *macho_flags != 0 {
-                        return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!(
-                            "unsupported Mach-O flags for this platform: {macho_flags:?}"
-                        )));
+                    if macho_flags != 0 {
+                        unreachable!("unsupported Mach-O flags for this platform: {macho_flags:?}");
                     }
                 }
             }
@@ -1175,4 +1176,198 @@ struct ObjectRelocRecord {
     name: ModuleRelocTarget,
     flags: RelocationFlags,
     addend: Addend,
+}
+
+fn parse_section(
+    section: &str,
+    binary_format: BinaryFormat,
+) -> Result<(&str, &str, u32), anyhow::Error> {
+    match binary_format {
+        // See https://github.com/llvm/llvm-project/blob/main/llvm/lib/MC/MCSectionMachO.cpp
+        BinaryFormat::MachO => {
+            let mut parts = section.split(',');
+
+            let section_err = |msg| {
+                Err(anyhow!(
+                    "section `{section}` is not valid for Mach-O target: {msg}"
+                ))
+            };
+
+            let segment_name = parts.next().unwrap();
+            if segment_name.len() > 16 {
+                return section_err("segment name larger than 16 bytes");
+            }
+
+            let Some(section_name) = parts.next() else {
+                return section_err("must be segment and section separated by comma");
+            };
+            if section_name.len() > 16 {
+                return section_err("section name larger than 16 bytes");
+            }
+
+            let section_type = parts.next().unwrap_or("regular");
+
+            // The custom Mach-O section flags. This is the section type
+            // (8 bits) packed together with the attributes (24 bits).
+            let mut macho_flags = if let Some((_, val)) = MACHO_SECTION_TYPES
+                .iter()
+                .find(|(name, _)| *name == section_type)
+            {
+                *val
+            } else {
+                let types = list_valid_values(MACHO_SECTION_TYPES);
+                return section_err(&format!(
+                    "unsupported section type `{section_type}`, valid values are {types}"
+                ));
+            };
+
+            if let Some(section_attributes) = parts.next() {
+                for attr in section_attributes.split('+') {
+                    macho_flags |= if let Some((_, val)) = MACHO_SECTION_ATTRIBUTES
+                        .iter()
+                        .find(|(name, _)| *name == attr)
+                    {
+                        *val
+                    } else {
+                        let attributes = list_valid_values(MACHO_SECTION_ATTRIBUTES);
+                        return section_err(&format!(
+                            "unsupported section attribute `{attr}`, valid values are {attributes}"
+                        ));
+                    };
+                }
+            }
+
+            if parts.next().is_some() {
+                return section_err("too many components");
+            }
+
+            Ok((segment_name, section_name, macho_flags))
+        }
+        // Otherwise, assume no segment and flags.
+        _ => Ok(("", section, 0)),
+    }
+}
+
+// We support the same custom section type / attrs naming as LLVM:
+// <https://github.com/llvm/llvm-project/blob/llvmorg-22.1.3/llvm/lib/MC/MCSectionMachO.cpp#L23-L91>
+// <https://github.com/llvm/llvm-project/blob/llvmorg-22.1.3/llvm/include/llvm/BinaryFormat/MachO.h#L120-L223>
+//
+// See also the Mac OS X Assembler Reference:
+// <https://leopard-adc.pepas.com/documentation/DeveloperTools/Reference/Assembler/040-Assembler_Directives/asm_directives.html#//apple_ref/doc/uid/TP30000823-TPXREF102>
+#[rustfmt::skip]
+const MACHO_SECTION_TYPES: &[(&str, u32)] = {
+    use object::macho::*;
+    &[
+        ("regular", S_REGULAR),
+        ("zerofill", S_ZEROFILL),
+        ("cstring_literals", S_CSTRING_LITERALS),
+        ("4byte_literals", S_4BYTE_LITERALS),
+        ("8byte_literals", S_8BYTE_LITERALS),
+        ("literal_pointers", S_LITERAL_POINTERS),
+        ("non_lazy_symbol_pointers", S_NON_LAZY_SYMBOL_POINTERS),
+        ("lazy_symbol_pointers", S_LAZY_SYMBOL_POINTERS),
+        // ("symbol_stubs", S_SYMBOL_STUBS) (requires extra param stub size)
+        ("mod_init_funcs", S_MOD_INIT_FUNC_POINTERS),
+        ("mod_term_funcs", S_MOD_TERM_FUNC_POINTERS),
+        ("coalesced", S_COALESCED),
+        // S_GB_ZEROFILL (not supported by LLVM)
+        ("interposing", S_INTERPOSING),
+        ("16byte_literals", S_16BYTE_LITERALS),
+        // S_DTRACE_DOF (not supported by LLVM)
+        // S_LAZY_DYLIB_SYMBOL_POINTERS (not supported by LLVM)
+        ("thread_local_regular", S_THREAD_LOCAL_REGULAR),
+        ("thread_local_zerofill", S_THREAD_LOCAL_ZEROFILL),
+        ("thread_local_variables", S_THREAD_LOCAL_VARIABLES),
+        ("thread_local_variable_pointers", S_THREAD_LOCAL_VARIABLE_POINTERS),
+        ("thread_local_init_function_pointers", S_THREAD_LOCAL_INIT_FUNCTION_POINTERS),
+        // S_INIT_FUNC_OFFSETS (not supported by LLVM)
+    ]
+};
+
+const MACHO_SECTION_ATTRIBUTES: &[(&str, u32)] = {
+    use object::macho::*;
+    &[
+        ("pure_instructions", S_ATTR_PURE_INSTRUCTIONS),
+        ("no_toc", S_ATTR_NO_TOC),
+        ("strip_static_syms", S_ATTR_STRIP_STATIC_SYMS),
+        ("no_dead_strip", S_ATTR_NO_DEAD_STRIP),
+        ("live_support", S_ATTR_LIVE_SUPPORT),
+        ("self_modifying_code", S_ATTR_SELF_MODIFYING_CODE),
+        ("debug", S_ATTR_DEBUG),
+        // System settable attributes are not supported by LLVM:
+        // S_ATTR_SOME_INSTRUCTIONS
+        // S_ATTR_EXT_RELOC
+        // S_ATTR_LOC_RELOC
+    ]
+};
+
+fn list_valid_values(items: &[(&str, u32)]) -> String {
+    let mut items = items.iter().peekable();
+    let mut result = String::new();
+    if let Some((item, _)) = items.next() {
+        write!(&mut result, "`{item}`").unwrap();
+    }
+    while let Some((item, _)) = items.next() {
+        if items.peek().is_none() {
+            write!(&mut result, " and `{item}`").unwrap();
+        } else {
+            write!(&mut result, ", `{item}`").unwrap();
+        }
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use object::macho::*;
+
+    #[test]
+    fn section() {
+        assert_eq!(
+            parse_section("__DATA,__mod_init_func,mod_init_funcs", BinaryFormat::MachO).unwrap(),
+            ("__DATA", "__mod_init_func", S_MOD_INIT_FUNC_POINTERS),
+        );
+        assert_eq!(
+            parse_section(
+                "__OBJC,__module_info,regular,no_dead_strip",
+                BinaryFormat::MachO,
+            )
+            .unwrap(),
+            ("__OBJC", "__module_info", S_REGULAR | S_ATTR_NO_DEAD_STRIP),
+        );
+
+        assert_eq!(
+            parse_section("__TEXT,__text", BinaryFormat::MachO).unwrap(),
+            ("__TEXT", "__text", S_REGULAR),
+        );
+        assert_eq!(
+            parse_section("__TEXT,__text,regular", BinaryFormat::MachO).unwrap(),
+            ("__TEXT", "__text", S_REGULAR),
+        );
+        assert_eq!(
+            parse_section(
+                "foo,bar,literal_pointers,no_toc+no_dead_strip",
+                BinaryFormat::MachO
+            )
+            .unwrap(),
+            (
+                "foo",
+                "bar",
+                S_LITERAL_POINTERS | S_ATTR_NO_TOC | S_ATTR_NO_DEAD_STRIP
+            ),
+        );
+
+        assert!(parse_section("foo", BinaryFormat::MachO).is_err());
+        assert!(parse_section("12345678901234567,bar", BinaryFormat::MachO).is_err());
+        assert!(parse_section("foo,12345678901234567", BinaryFormat::MachO).is_err());
+        assert!(parse_section("foo,bar,unknown", BinaryFormat::MachO).is_err());
+        assert!(parse_section("foo,bar,regular,unknown", BinaryFormat::MachO).is_err());
+        assert!(
+            parse_section("foo,bar,regular,no_dead_strip+unknown", BinaryFormat::MachO).is_err()
+        );
+        assert!(
+            parse_section("foo,bar,regular,no_dead_strip,unknown", BinaryFormat::MachO).is_err()
+        );
+    }
 }

@@ -18,7 +18,6 @@ name = "clif-util"
 path = "src/clif-util.rs"
 
 [dependencies]
-cfg-if = { workspace = true }
 cranelift-codegen = { workspace = true, features = [
     "disas",
     "trace-log",

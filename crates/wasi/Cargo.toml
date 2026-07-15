@@ -26,15 +26,13 @@ tokio = { workspace = true,  features = ["time", "sync", "io-std", "io-util", "r
 bytes = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true, features = ["std", "attributes"] }
-cap-std = { workspace = true }
-cap-fs-ext = { workspace = true }
-io-lifetimes = { workspace = true }
+cap-primitives = { workspace = true }
+cap-fs-ext-avoid-using-this = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 url = { workspace = true }
 rand = { workspace = true, features = ['std_rng', 'thread_rng'] }
-cfg-if = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros", "fs"] }

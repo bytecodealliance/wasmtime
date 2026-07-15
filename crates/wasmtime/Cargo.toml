@@ -39,7 +39,6 @@ wasm-compose = { workspace = true, optional = true }
 wit-parser = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 libc = { workspace = true }
-cfg-if = { workspace = true }
 log = { workspace = true }
 wat = { workspace = true, optional = true }
 serde = { workspace = true }

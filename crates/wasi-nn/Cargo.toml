@@ -55,7 +55,6 @@ optional = true
 walkdir = { workspace = true }
 
 [dev-dependencies]
-cap-std = { workspace = true }
 libtest-mimic = { workspace = true }
 test-programs-artifacts = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["p1"] }

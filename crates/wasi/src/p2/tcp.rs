@@ -4,7 +4,6 @@ use crate::p2::{
 };
 use crate::runtime::AbortOnDropJoinHandle;
 use crate::sockets::TcpSocket;
-use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use std::io;
 use std::mem;
@@ -338,9 +337,7 @@ impl Pollable for TcpWriteStream {
 }
 
 fn native_shutdown(stream: &tokio::net::TcpStream, how: Shutdown) {
-    _ = stream
-        .as_socketlike_view::<std::net::TcpStream>()
-        .shutdown(how);
+    _ = crate::sockets::util::shutdown(stream, how);
 }
 
 fn try_lock_for_stream<T>(mutex: &Mutex<T>) -> Result<tokio::sync::MutexGuard<'_, T>, StreamError> {

@@ -84,7 +84,7 @@ impl FileInputStream {
         }
     }
 
-    fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> ReadState {
+    fn blocking_read(file: &std::fs::File, offset: u64, size: usize) -> ReadState {
         let mut buf = BytesMut::zeroed(size.min(crate::MAX_READ_SIZE_ALLOC));
         loop {
             match sys::read_at_cursor_unspecified(file, &mut buf, offset) {
@@ -238,7 +238,7 @@ impl FileOutputStream {
     }
 
     fn blocking_write(
-        file: &cap_std::fs::File,
+        file: &std::fs::File,
         mut buf: Bytes,
         mode: FileOutputMode,
     ) -> io::Result<usize> {

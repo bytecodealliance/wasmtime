@@ -76,14 +76,16 @@
 
 use std::ffi::c_void;
 
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "windows")] {
+cfg_select! {
+    target_os = "windows" => {
         mod win;
         use win as imp;
-    } else if #[cfg(miri)] {
+    }
+    miri => {
         mod miri;
         use crate::miri as imp;
-    } else {
+    }
+    _ => {
         mod libc;
         use crate::libc as imp;
     }

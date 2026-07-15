@@ -1,7 +1,6 @@
-use cap_std::time::{Duration, Instant, SystemClock, SystemTime};
-use cap_std::{AmbientAuthority, ambient_authority};
 use std::error::Error;
 use std::fmt;
+use std::time::{Duration, Instant, SystemTime};
 use wasmtime::component::{HasData, ResourceTable};
 
 /// A helper struct which implements [`HasData`] for the `wasi:clocks` APIs.
@@ -81,22 +80,12 @@ pub trait HostMonotonicClock: Send {
     fn now(&self) -> u64;
 }
 
-pub struct WallClock {
-    /// The underlying system clock.
-    clock: cap_std::time::SystemClock,
-}
-
-impl Default for WallClock {
-    fn default() -> Self {
-        Self::new(ambient_authority())
-    }
-}
+#[derive(Default)]
+pub struct WallClock;
 
 impl WallClock {
-    pub fn new(ambient_authority: AmbientAuthority) -> Self {
-        Self {
-            clock: cap_std::time::SystemClock::new(ambient_authority),
-        }
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -122,17 +111,13 @@ impl HostWallClock for WallClock {
 
     fn now(&self) -> Duration {
         // WASI defines wall clocks to return "Unix time".
-        self.clock
-            .now()
-            .duration_since(SystemClock::UNIX_EPOCH)
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
     }
 }
 
 pub struct MonotonicClock {
-    /// The underlying system clock.
-    clock: cap_std::time::MonotonicClock,
-
     /// The `Instant` this clock was created. All returned times are
     /// durations since that time.
     initial: Instant,
@@ -140,15 +125,15 @@ pub struct MonotonicClock {
 
 impl Default for MonotonicClock {
     fn default() -> Self {
-        Self::new(ambient_authority())
+        Self::new()
     }
 }
 
 impl MonotonicClock {
-    pub fn new(ambient_authority: AmbientAuthority) -> Self {
-        let clock = cap_std::time::MonotonicClock::new(ambient_authority);
-        let initial = clock.now();
-        Self { clock, initial }
+    pub fn new() -> Self {
+        Self {
+            initial: Instant::now(),
+        }
     }
 }
 
@@ -179,8 +164,7 @@ impl HostMonotonicClock for MonotonicClock {
     fn now(&self) -> u64 {
         // Unwrap here and in `resolution` above; a `u64` is wide enough to
         // hold over 584 years of nanoseconds.
-        self.clock
-            .now()
+        Instant::now()
             .duration_since(self.initial)
             .as_nanos()
             .try_into()
@@ -205,7 +189,7 @@ impl TryFrom<SystemTime> for Datetime {
     type Error = DatetimeError;
 
     fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
-        let epoch = SystemTime::from_std(std::time::SystemTime::UNIX_EPOCH);
+        let epoch = SystemTime::UNIX_EPOCH;
 
         if time >= epoch {
             let duration = time.duration_since(epoch)?;

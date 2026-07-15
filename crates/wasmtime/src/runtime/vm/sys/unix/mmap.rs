@@ -18,8 +18,8 @@ pub struct Mmap {
     memory: SendSyncPtr<[u8]>,
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(any(target_os = "illumos", target_os = "linux"))] {
+cfg_select! {
+    any(target_os = "illumos", target_os = "linux") => {
         // On illumos, by default, mmap reserves what it calls "swap space" ahead of time, so that
         // memory accesses a`re guaranteed not to fail once mmap succeeds. NORESERVE is for cases
         // where that memory is never meant to be accessed -- e.g. memory that's used as guard
@@ -30,7 +30,8 @@ cfg_if::cfg_if! {
         // physical memory.
         pub(super) const MMAP_NORESERVE_FLAG: rustix::mm::MapFlags =
             rustix::mm::MapFlags::NORESERVE;
-    } else {
+    }
+    _ => {
         pub(super) const MMAP_NORESERVE_FLAG: rustix::mm::MapFlags = rustix::mm::MapFlags::empty();
     }
 }

@@ -51,11 +51,7 @@ pub fn array_try_from_fn<E, T, const N: usize>(
             }
         }
         let mut guard = DropGuard {
-            // Note .as_mut() would be ideal but requires 1.95, so we work around it
-            // SAFETY: We cast from an uninitialized ptr to an array of T to an array of uninitialized T
-            // The bit pattern is identical, and unstable provides the safe function transpose for this
-            // Turning a pointer to uninitialized memory into a mutable reference to uninitialized memory is a valid op
-            slice: unsafe { &mut *(result.as_mut_ptr().cast::<[MaybeUninit<T>; N]>()) },
+            slice: result.as_mut(),
             initialized: 0,
         };
         for (i, slot) in guard.slice.iter_mut().enumerate() {

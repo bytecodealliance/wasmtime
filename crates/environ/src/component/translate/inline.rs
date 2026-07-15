@@ -1971,6 +1971,7 @@ impl ComponentExternData {
     fn new(data: wasmparser::ComponentExternName<'_>) -> Self {
         ComponentExternData {
             implements: data.implements.map(|s| s.to_string()),
+            external_id: data.external_id.map(|s| s.to_string()),
         }
     }
 }
