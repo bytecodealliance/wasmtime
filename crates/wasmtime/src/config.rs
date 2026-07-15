@@ -769,7 +769,6 @@ impl Config {
 
     /// Enables a faster-than-epochs interruption mechanism based on memory-page
     /// permissions
-    #[cfg(feature = "async")]
     pub fn mmu_interruption(&mut self, enable: bool) -> &mut Self {
         self.tunables.mmu_interruption = Some(enable);
         self
