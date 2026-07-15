@@ -10,6 +10,7 @@ use std::{
     process::Command,
     sync::Mutex,
 };
+use wasmtime::bail;
 
 #[cfg(any(feature = "onnx", all(feature = "winml", target_os = "windows")))]
 pub mod onnx;
@@ -35,9 +36,9 @@ fn download(from: &str, to: &Path) -> wasmtime::Result<()> {
     let mut curl = Command::new("curl");
     curl.arg("--location").arg(from).arg("--output").arg(to);
     println!("> downloading: {:?}", &curl);
-    let result = curl.output().unwrap();
+    let result = curl.output()?;
     if !result.status.success() {
-        panic!(
+        bail!(
             "curl failed: {}\n{}",
             result.status,
             String::from_utf8_lossy(&result.stderr)

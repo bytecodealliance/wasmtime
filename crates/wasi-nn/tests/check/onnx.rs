@@ -5,7 +5,7 @@ use wasmtime::{Result, error::Context as _};
 /// Return `Ok` if we find the cached MobileNet test artifacts; this will
 /// download the artifacts if necessary.
 pub fn are_artifacts_available() -> Result<()> {
-    let _exclusively_retrieve_artifacts = DOWNLOAD_LOCK.lock().unwrap();
+    let _exclusively_retrieve_artifacts = DOWNLOAD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
     const ONNX_BASE_URL: &str = "https://github.com/onnx/models/raw/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/mobilenet/model/mobilenetv2-10.onnx?download=";
 

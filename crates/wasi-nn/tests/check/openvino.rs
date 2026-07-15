@@ -21,7 +21,7 @@ pub fn is_installed() -> Result<()> {
 /// Return `Ok` if we find the cached MobileNet test artifacts; this will
 /// download the artifacts if necessary.
 pub fn are_artifacts_available() -> Result<()> {
-    let _exclusively_retrieve_artifacts = DOWNLOAD_LOCK.lock().unwrap();
+    let _exclusively_retrieve_artifacts = DOWNLOAD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     const BASE_URL: &str = "https://download.01.org/openvinotoolkit/fixtures/mobilenet";
     let artifacts_dir = artifacts_dir();
     if !artifacts_dir.is_dir() {
