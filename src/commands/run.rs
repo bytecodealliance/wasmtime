@@ -590,14 +590,17 @@ impl RunCommand {
             if let Some(timeout) = self.run.common.wasm.timeout {
                 store.set_epoch_deadline(1);
                 let engine = store.engine().clone();
+                // Store isn't Send, so we can't move it to the thread.
+                #[cfg(has_mmu_interruption)]
                 let mmu_interrupter = store.mmu_interrupter();
                 thread::spawn(move || {
                     thread::sleep(timeout);
+                    #[cfg(has_mmu_interruption)]
                     if let Some(interrupter) = mmu_interrupter {
                         interrupter.interrupt();
-                    } else {
-                        engine.increment_epoch();
+                        return;
                     }
+                    engine.increment_epoch();
                 });
             }
         }

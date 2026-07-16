@@ -14,6 +14,21 @@ fn main() {
         }
         _ => {}
     }
+
+    // Mirror the `has_mmu_interruption` cfg in `crates/wasmtime/build.rs`.
+    //
+    // We can omit the `std` check here, because `wasmtiem` is always built with
+    // `std` from this crate.
+    println!("cargo:rustc-check-cfg=cfg(has_mmu_interruption)");
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    if target_os == "linux"
+        && target_arch == "x86_64"
+        && cfg!(feature = "cranelift")
+        && cfg!(feature = "async")
+    {
+        println!("cargo:rustc-cfg=has_mmu_interruption");
+    }
 }
 
 fn set_commit_info_for_rustc() {

@@ -532,6 +532,11 @@ default = [
 #
 # These features are off-by-default but may optionally be enabled.
 all-arch = ["wasmtime/all-arch"]
+# Internal feature ensuring async runtime support is compiled in. Features that
+# require async (like `run`, `wizer`, and `serve`) forward to this, giving
+# `build.rs` a single, stable feature to check rather than chasing which
+# top-level features happen to pull in async support.
+async = ["wasmtime-cli-flags/async"]
 winch = ["wasmtime/winch"]
 wmemcheck = ["wasmtime/wmemcheck"]
 trace-log = ["wasmtime/trace-log"]
@@ -604,7 +609,7 @@ serve = [
   "dep:http-body-util",
   "dep:http",
   "dep:pin-project-lite",
-  "wasmtime-cli-flags/async",
+  "async",
   "wasmtime-wasi-http?/p2",
 ]
 explore = ["dep:wasmtime-explorer", "dep:tempfile"]
@@ -616,7 +621,7 @@ run = [
   "wasmtime/runtime",
   "wasmtime/wave",
   "dep:tokio",
-  "wasmtime-cli-flags/async",
+  "async",
   "wasmtime-wasi-http?/p2",
   "dep:wasmtime-debugger",
 ]
@@ -639,6 +644,10 @@ wizer = [
   "dep:wasmtime-wasi",
   "dep:tokio",
   "wasmtime/wave",
+  # dep:wasmtime-wasi transitively enables wasmtime-cli-flags/async, but making
+  # it explicit here makes the expression determining the has_mmu_interruption
+  # cfg flag's value clear.
+  "async",
 ]
 
 [[test]]
