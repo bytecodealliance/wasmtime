@@ -3158,11 +3158,16 @@ impl Instance {
 
         Ok(match poll {
             Poll::Ready(state) => {
+                let state = state?;
                 let transmit = store.concurrent_state_mut()?.get_mut(transmit_id)?;
                 let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
                     bail_bug!("expected ReadState::HostReady")
                 };
-                let code = return_code(kind, state?, mem::replace(guest_offset, ItemCount::ZERO))?;
+                let code = return_code(kind, state, mem::replace(guest_offset, ItemCount::ZERO))?;
+                match state {
+                    StreamResult::Dropped => transmit.read = ReadState::Dropped,
+                    _ => {}
+                }
                 transmit.write = WriteState::Open;
                 code
             }
@@ -3201,11 +3206,16 @@ impl Instance {
 
         Ok(match poll {
             Poll::Ready(state) => {
+                let state = state?;
                 let transmit = store.concurrent_state_mut()?.get_mut(transmit_id)?;
                 let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
                     bail_bug!("expected WriteState::HostReady")
                 };
-                let code = return_code(kind, state?, mem::replace(guest_offset, ItemCount::ZERO))?;
+                let code = return_code(kind, state, mem::replace(guest_offset, ItemCount::ZERO))?;
+                match state {
+                    StreamResult::Dropped => transmit.write = WriteState::Dropped,
+                    _ => {}
+                }
                 transmit.read = ReadState::Open;
                 code
             }

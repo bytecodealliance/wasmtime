@@ -23,6 +23,7 @@ mod missing_async;
 mod nested;
 mod post_return;
 mod resources;
+mod stream_sync_dropped;
 mod strings;
 mod sync_call_inline;
 
