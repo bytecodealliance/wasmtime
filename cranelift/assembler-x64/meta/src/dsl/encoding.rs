@@ -57,6 +57,9 @@ pub fn evex(length: Length, tuple_type: TupleType) -> Evex {
         modrm: None,
         imm: Imm::None,
         tuple_type,
+        apx: None,
+        nd: None,
+        nf: None,
     }
 }
 
@@ -841,6 +844,10 @@ pub enum VexEscape {
     _0F,
     _0F3A,
     _0F38,
+    /// APX "opcode map 4"; only valid for APX legacy-GPR (Extended EVEX)
+    /// encodings, never for VEX. This is the map that enables promoting legacy
+    /// general-purpose-register instructions into the EVEX space.
+    _MAP4,
 }
 
 impl VexEscape {
@@ -851,6 +858,7 @@ impl VexEscape {
             Self::_0F => 0b01,
             Self::_0F38 => 0b10,
             Self::_0F3A => 0b11,
+            Self::_MAP4 => 0b100,
         }
     }
 }
@@ -861,6 +869,7 @@ impl fmt::Display for VexEscape {
             Self::_0F => write!(f, "0F"),
             Self::_0F3A => write!(f, "0F3A"),
             Self::_0F38 => write!(f, "0F38"),
+            Self::_MAP4 => write!(f, "MAP4"),
         }
     }
 }
@@ -1247,6 +1256,30 @@ pub struct Evex {
     /// The "Tuple Type" corresponding to scaling of the 8-bit displacement
     /// parameter for memory operands. See [`TupleType`] for more information.
     pub tuple_type: TupleType,
+    /// The APX "Extended EVEX" class, when this instruction is an APX
+    /// promotion.
+    ///
+    /// Intel APX (Advanced Performance Extensions) reuses the `0x62` EVEX
+    /// identifier but does *not* define a single static payload layout.
+    /// Instead, the meaning of the payload bytes (`P0`, `P1`, `P2`) is
+    /// re-mapped depending on which class of instruction is being promoted (see
+    /// [`ApxClass`]). `None` denotes a standard (AVX-512) EVEX encoding;
+    /// `Some(_)` selects one of the APX layouts and enables addressing of the
+    /// extended general-purpose registers `R16`–`R31` ("EGPR").
+    pub apx: Option<ApxClass>,
+    /// The APX `ND` (New Data destination) bit.
+    ///
+    /// When set, a legacy destructive two-operand instruction is promoted into
+    /// a non-destructive three-operand form (the extra destination is encoded
+    /// in the `EVEX.vvvv` field). `None` when the bit is not part of this
+    /// encoding; only valid for [`ApxClass::LegacyGpr`].
+    pub nd: Option<bool>,
+    /// The APX `NF` (No Flags) bit.
+    ///
+    /// When set, the status-flag writes that a legacy integer instruction would
+    /// otherwise perform are suppressed. `None` when the bit is not part of
+    /// this encoding; only valid for [`ApxClass::LegacyGpr`].
+    pub nf: Option<bool>,
 }
 
 impl Evex {
@@ -1310,6 +1343,27 @@ impl Evex {
         }
     }
 
+    /// Select the APX "opcode map 4", promoting a legacy general-purpose-register
+    /// instruction into the Extended EVEX space; equivalent to `.MAP4` in the
+    /// manual.
+    ///
+    /// This both sets the `mmm` map bits and marks the encoding as
+    /// [`ApxClass::LegacyGpr`], which in turn enables addressing of the extended
+    /// GPRs `R16`–`R31` ("EGPR") and permits the `ND`/`NF` bits.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the map (`mmm`) or APX class has already been set.
+    pub fn map4(self) -> Self {
+        assert!(self.mmm.is_none());
+        assert!(self.apx.is_none());
+        Self {
+            mmm: Some(VexEscape::_MAP4),
+            apx: Some(ApxClass::LegacyGpr),
+            ..self
+        }
+    }
+
     /// Set the `W` bit to `0`; equivalent to `.W0` in the manual.
     pub fn w0(self) -> Self {
         assert!(self.w.is_ignored());
@@ -1352,9 +1406,72 @@ impl Evex {
         }
     }
 
+    /// Mark this as an APX "Extended EVEX" encoding of the given [`ApxClass`].
+    ///
+    /// This selects the APX payload layout to emit and enables addressing of
+    /// the extended general-purpose registers `R16`–`R31` ("EGPR").
+    ///
+    /// # Panics
+    ///
+    /// Panics if an APX class has already been set.
+    pub fn apx(self, class: ApxClass) -> Self {
+        assert!(self.apx.is_none());
+        Self {
+            apx: Some(class),
+            ..self
+        }
+    }
+
+    /// Set the APX `ND` (New Data destination) bit; equivalent to `.ND` in the
+    /// manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not an [`ApxClass::LegacyGpr`] encoding, or if the bit
+    /// has already been set.
+    pub fn nd(self) -> Self {
+        assert_eq!(
+            self.apx,
+            Some(ApxClass::LegacyGpr),
+            "the ND bit is only valid for APX legacy-GPR promotions"
+        );
+        assert!(self.nd.is_none());
+        Self {
+            nd: Some(true),
+            ..self
+        }
+    }
+
+    /// Set the APX `NF` (No Flags) bit; equivalent to `.NF` in the manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not an [`ApxClass::LegacyGpr`] encoding, or if the bit
+    /// has already been set.
+    pub fn nf(self) -> Self {
+        assert_eq!(
+            self.apx,
+            Some(ApxClass::LegacyGpr),
+            "the NF bit is only valid for APX legacy-GPR promotions"
+        );
+        assert!(self.nf.is_none());
+        Self {
+            nf: Some(true),
+            ..self
+        }
+    }
+
     fn validate(&self, _operands: &[Operand]) {
         assert!(self.opcode != u8::MAX);
         assert!(self.mmm.is_some());
+        // The `ND`/`NF` bits are only defined for APX legacy-GPR promotions.
+        if self.nd.is_some() || self.nf.is_some() {
+            assert_eq!(
+                self.apx,
+                Some(ApxClass::LegacyGpr),
+                "the ND/NF bits require an APX legacy-GPR encoding"
+            );
+        }
     }
 
     /// Retrieve the digit extending the opcode, if available.
@@ -1412,7 +1529,14 @@ impl fmt::Display for Evex {
         if let Some(mmmmm) = self.mmm {
             write!(f, ".{mmmmm}")?;
         }
-        write!(f, ".{} {:#04X}", self.w, self.opcode)?;
+        write!(f, ".{}", self.w)?;
+        if self.nd == Some(true) {
+            write!(f, ".ND")?;
+        }
+        if self.nf == Some(true) {
+            write!(f, ".NF")?;
+        }
+        write!(f, " {:#04X}", self.opcode)?;
         if let Some(modrm) = self.modrm {
             write!(f, " {modrm}")?;
         }
@@ -1420,6 +1544,35 @@ impl fmt::Display for Evex {
             write!(f, " {}", self.imm)?;
         }
         Ok(())
+    }
+}
+
+/// The class of an APX "Extended EVEX" encoding.
+///
+/// Intel APX does not define a single static Extended-EVEX layout. Although
+/// every APX instruction still begins with the `0x62` EVEX identifier, the
+/// meaning of the payload bytes (`P0`, `P1`, `P2`) is re-mapped depending on
+/// the class of instruction being promoted. This enum selects which layout the
+/// assembler should emit; all classes gain access to the extended
+/// general-purpose registers `R16`–`R31` ("EGPR").
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ApxClass {
+    /// Promotion of a legacy general-purpose-register (GPR) instruction using
+    /// extended opcode map 4. Only this class may set the `ND` and `NF` bits.
+    LegacyGpr,
+    /// Promotion of a legacy SSE / VEX vector instruction into the EVEX space.
+    Vector,
+    /// An existing AVX-512 (EVEX) instruction extended with APX register bits.
+    Avx512,
+}
+
+impl fmt::Display for ApxClass {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::LegacyGpr => write!(f, "LegacyGpr"),
+            Self::Vector => write!(f, "Vector"),
+            Self::Avx512 => write!(f, "Avx512"),
+        }
     }
 }
 

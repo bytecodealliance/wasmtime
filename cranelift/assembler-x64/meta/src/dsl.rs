@@ -10,8 +10,8 @@ mod features;
 pub mod format;
 
 pub use custom::{Custom, Customization};
+pub use encoding::{ApxClass, Evex, Length, Vex, VexEscape, VexPrefix, evex, vex};
 pub use encoding::{Encoding, ModRmKind, OpcodeMod};
-pub use encoding::{Evex, Length, Vex, VexEscape, VexPrefix, evex, vex};
 pub use encoding::{
     Group1Prefix, Group2Prefix, Group3Prefix, Group4Prefix, Opcodes, Prefixes, Rex, TupleType, rex,
 };
