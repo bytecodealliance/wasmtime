@@ -4159,6 +4159,12 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.0 -> 0.9.0"
 
+[[audits.openvino]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.0 -> 0.11.0"
+notes = "Unsafe bindings, but comes with the territory. Nothing awry."
+
 [[audits.openvino-finder]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -4193,6 +4199,12 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.0 -> 0.9.0"
 
+[[audits.openvino-finder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.0 -> 0.11.0"
+notes = "Just some paths changing here, nothing major"
+
 [[audits.openvino-sys]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -4226,6 +4238,12 @@ notes = "This diff simply re-generates slightly newer C headers with a slightly 
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.0 -> 0.9.0"
+
+[[audits.openvino-sys]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.0 -> 0.11.0"
+notes = "Nothing unexpected for a sys crate update"
 
 [[audits.ort]]
 who = "Andrew Brown <andrew.brown@intel.com>"
