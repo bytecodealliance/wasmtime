@@ -310,13 +310,6 @@ impl DescriptorStat {
     /// Creates a `DescriptorStat` from a `Metadata` plus the hard link
     /// count.
     fn new(meta: &Metadata, link_count: u64) -> Self {
-        // Extreme SystemTime values can overflow Datetime's i64 seconds range.
-        // Treat those as missing timestamps instead of panicking the host
-        // when a guest stats a preopened path after set_times.
-        fn datetime_from(t: std::time::SystemTime) -> Option<Datetime> {
-            Datetime::try_from(t).ok()
-        }
-
         Self {
             type_: meta.file_type().into(),
             link_count,
@@ -324,15 +317,15 @@ impl DescriptorStat {
             data_access_timestamp: meta
                 .accessed()
                 .ok()
-                .and_then(|t| datetime_from(t.into_std())),
+                .and_then(|t| Datetime::try_from(t.into_std()).ok()),
             data_modification_timestamp: meta
                 .modified()
                 .ok()
-                .and_then(|t| datetime_from(t.into_std())),
+                .and_then(|t| Datetime::try_from(t.into_std()).ok()),
             status_change_timestamp: meta
                 .created()
                 .ok()
-                .and_then(|t| datetime_from(t.into_std())),
+                .and_then(|t| Datetime::try_from(t.into_std()).ok()),
         }
     }
 }
@@ -1180,20 +1173,12 @@ impl WasiFilesystemCtxView<'_> {
 }
 
 #[cfg(test)]
-mod datetime_from_tests {
+mod test {
     use crate::clocks::Datetime;
     use std::time::{Duration, SystemTime};
 
-    /// Extreme SystemTime values can fail `Datetime::try_from`. The old
-    /// `datetime_from` path used `.unwrap()`, which would panic the host
-    /// during `DescriptorStat` construction. Mapping with `.ok()` must
-    /// yield `None` instead.
     #[test]
-    fn extreme_system_time_is_none_not_panic() {
-        // A wall time far enough before the Unix epoch that the absolute
-        // second count does not fit in i64. Representable as SystemTime on
-        // common platforms, but `Datetime::try_from` returns Err. The old
-        // host path used `.unwrap()` and would panic during DescriptorStat.
+    fn datetime_try_from_extreme_system_time() {
         let extreme = SystemTime::UNIX_EPOCH
             .checked_sub(Duration::from_secs((i64::MAX as u64) + 1))
             .expect("construct far-past SystemTime");
