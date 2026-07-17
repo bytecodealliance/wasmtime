@@ -666,7 +666,7 @@ impl Config {
     /// compiled form of the Wasm code so that it maintains a precise
     /// instruction count, frequently checking this count against the
     /// remaining fuel. If one does not need this precise count or
-    /// deterministic interruptions, and only needs a periodic
+    /// deterministic interruptions and needs only a periodic
     /// interrupt of some form, then It would be better to have a more
     /// lightweight mechanism.
     ///
@@ -692,7 +692,7 @@ impl Config {
     /// to use epoch deadlines to limit the execution time of untrusted
     /// code.
     ///
-    /// The [`Store`](crate::Store) tracks the deadline, and controls
+    /// The [`Store`](crate::Store) tracks the deadline and controls
     /// what happens when the deadline is reached during
     /// execution. Several behaviors are possible:
     ///
@@ -767,8 +767,69 @@ impl Config {
         self
     }
 
-    /// Enables a faster-than-epochs interruption mechanism based on memory-page
-    /// permissions
+    /// Enables MMU-based interruption, a lower-overhead alternative to
+    /// [`Config::epoch_interruption`]. It uses memory-protection faults instead
+    /// of epoch deadline comparisons to prod a running Wasm guest to yield.
+    ///
+    /// # How it works
+    ///
+    /// Cranelift emits, at each loop backedge and function prologue, a load
+    /// from a per-store "interrupt page". To trigger an interruption, the
+    /// embedder marks that page as inaccessible; the resulting SIGSEGV is
+    /// caught by Wasmtime's signal handler, which distinguishes an
+    /// interrupt-check load from an actual crash by consulting a table of
+    /// check offsets stored in the compiled artifact
+    /// (`.wasmtime.mmu_interrupt_checks`). The signal handler then causes the
+    /// active fiber to yield.
+    ///
+    /// # Compared to `epoch_interruption`
+    ///
+    /// - Faster. Whereas epoch interruption needs to compare, branch, and keep
+    ///   a deadline register coherent, MMU interruption does only a single
+    ///   (dead) load from a per-store memory page. In the no-interrupt case,
+    ///   the load completes successfully, and overhead (versus doing nothing)
+    ///   is ≈2.8% on the SpiderMonkey Sightglass benchmark, compared to 14.4%
+    ///   for epoch interruption. Benchmarking of the interruption path remains
+    ///   to be done.
+    /// - Also non-deterministic. The same guidance in
+    ///   [`Config::epoch_interruption`] about fuel vs. epochs applies here.
+    /// - Equally fine-grained. Checks for MMU interruption happen at the same
+    ///   points in the compiled Wasm as checks for epoch interruption.
+    /// - Less flexible. Unlike epochs, there is, at of yet, no configurable
+    ///   per-store interrupt behavior. When triggered, interruption always
+    ///   causes the running fiber to yield; the `Store::epoch_deadline_*`
+    ///   callbacks are not consulted.
+    ///
+    /// # Triggering an interruption
+    ///
+    /// Unlike with epoch-based interruption, the embedder must trigger an
+    /// interruption from outside the Wasm guest code. Obtain an
+    /// [`MmuInterrupter`](crate::runtime::vm::MmuInterrupter) from
+    /// [`Store::mmu_interrupter`](crate::Store::mmu_interrupter). It is `Send +
+    /// Sync` and can be handed to another thread or a timer. Then, to interrupt
+    /// the Wasm running on that store, call
+    /// [`interrupt()`](crate::MmuInterrupter::interrupt()) on your
+    /// `MmuInterrupter`. That protects the memory page, causing the Wasm to
+    /// yield at its next checkpoint. The memory page is automatically
+    /// unprotected just beforehand to ready it for next time.
+    ///
+    /// # Requirements
+    ///
+    /// - **Async.** Since MMU interruption always causes the fiber to yield,
+    ///   wasmtime must be built with the `async` feature. Configuring an engine
+    ///   with `mmu_interruption()` puts every [`Store`] derived from it into
+    ///   async mode automatically.
+    /// - **Cranelift.** Winch does not support it.
+    /// - **Linux on x86_64.** Cross-compilation to other targets is fine; the
+    ///   check is a no-op on hosts that cannot use it.
+    /// - **Signals-based traps** and thus also native signals
+    ///
+    /// # Errors
+    ///
+    /// These requirements get validated later, some when an [`Engine`] is
+    /// instantiated (which calls [`Config::validate`] herein) and others when
+    /// code is loaded into the engine. Nothing panics; errors are reported via
+    /// return values.
     pub fn mmu_interruption(&mut self, enable: bool) -> &mut Self {
         self.tunables.mmu_interruption = Some(enable);
         self
