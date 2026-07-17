@@ -1,5 +1,5 @@
 use crate::clocks::Datetime;
-use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
+use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use cap_primitives::fs::{DirOptions, FollowSymlinks, Metadata, OpenOptions, SystemTimeSpec};
 use std::collections::hash_map;
 use std::sync::Arc;
