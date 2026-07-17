@@ -2303,6 +2303,60 @@ fn return_code(kind: TransmitKind, state: StreamResult, count: ItemCount) -> Res
     })
 }
 
+fn settle_host_read(
+    transmit: &mut TransmitState,
+    kind: TransmitKind,
+    state: StreamResult,
+) -> Result<ReturnCode> {
+    let ReadState::HostReady {
+        consume,
+        guest_offset,
+        ..
+    } = mem::replace(&mut transmit.read, ReadState::Open)
+    else {
+        bail_bug!("expected ReadState::HostReady")
+    };
+    let code = return_code(kind, state, guest_offset)?;
+    transmit.read = match state {
+        StreamResult::Dropped => ReadState::Dropped,
+        StreamResult::Completed | StreamResult::Cancelled => ReadState::HostReady {
+            consume,
+            guest_offset: ItemCount::ZERO,
+            cancel: false,
+            cancel_waker: None,
+        },
+    };
+    Ok(code)
+}
+
+fn settle_host_write(
+    transmit: &mut TransmitState,
+    kind: TransmitKind,
+    state: StreamResult,
+) -> Result<ReturnCode> {
+    let WriteState::HostReady {
+        produce,
+        try_into,
+        guest_offset,
+        ..
+    } = mem::replace(&mut transmit.write, WriteState::Open)
+    else {
+        bail_bug!("expected WriteState::HostReady")
+    };
+    let code = return_code(kind, state, guest_offset)?;
+    transmit.write = match state {
+        StreamResult::Dropped => WriteState::Dropped,
+        StreamResult::Completed | StreamResult::Cancelled => WriteState::HostReady {
+            produce,
+            try_into,
+            guest_offset: ItemCount::ZERO,
+            cancel: false,
+            cancel_waker: None,
+        },
+    };
+    Ok(code)
+}
+
 impl StoreOpaque {
     fn pipe_from_guest(
         &mut self,
@@ -2315,24 +2369,7 @@ impl StoreOpaque {
             tls::get(|store| {
                 let state = store.concurrent_state_mut()?;
                 let transmit = state.get_mut(id)?;
-                let ReadState::HostReady {
-                    consume,
-                    guest_offset,
-                    ..
-                } = mem::replace(&mut transmit.read, ReadState::Open)
-                else {
-                    bail_bug!("expected ReadState::HostReady")
-                };
-                let code = return_code(kind, stream_state, guest_offset)?;
-                transmit.read = match stream_state {
-                    StreamResult::Dropped => ReadState::Dropped,
-                    StreamResult::Completed | StreamResult::Cancelled => ReadState::HostReady {
-                        consume,
-                        guest_offset: ItemCount::ZERO,
-                        cancel: false,
-                        cancel_waker: None,
-                    },
-                };
+                let code = settle_host_read(transmit, kind, stream_state)?;
                 let WriteState::GuestReady { ty, handle, .. } =
                     mem::replace(&mut transmit.write, WriteState::Open)
                 else {
@@ -2358,26 +2395,7 @@ impl StoreOpaque {
             tls::get(|store| {
                 let state = store.concurrent_state_mut()?;
                 let transmit = state.get_mut(id)?;
-                let WriteState::HostReady {
-                    produce,
-                    try_into,
-                    guest_offset,
-                    ..
-                } = mem::replace(&mut transmit.write, WriteState::Open)
-                else {
-                    bail_bug!("expected WriteState::HostReady")
-                };
-                let code = return_code(kind, stream_state, guest_offset)?;
-                transmit.write = match stream_state {
-                    StreamResult::Dropped => WriteState::Dropped,
-                    StreamResult::Completed | StreamResult::Cancelled => WriteState::HostReady {
-                        produce,
-                        try_into,
-                        guest_offset: ItemCount::ZERO,
-                        cancel: false,
-                        cancel_waker: None,
-                    },
-                };
+                let code = settle_host_write(transmit, kind, stream_state)?;
                 let ReadState::GuestReady { ty, handle, .. } =
                     mem::replace(&mut transmit.read, ReadState::Open)
                 else {
@@ -3158,16 +3176,8 @@ impl Instance {
 
         Ok(match poll {
             Poll::Ready(state) => {
-                let state = state?;
                 let transmit = store.concurrent_state_mut()?.get_mut(transmit_id)?;
-                let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
-                    bail_bug!("expected ReadState::HostReady")
-                };
-                let code = return_code(kind, state, mem::replace(guest_offset, ItemCount::ZERO))?;
-                match state {
-                    StreamResult::Dropped => transmit.read = ReadState::Dropped,
-                    _ => {}
-                }
+                let code = settle_host_read(transmit, kind, state?)?;
                 transmit.write = WriteState::Open;
                 code
             }
@@ -3206,16 +3216,8 @@ impl Instance {
 
         Ok(match poll {
             Poll::Ready(state) => {
-                let state = state?;
                 let transmit = store.concurrent_state_mut()?.get_mut(transmit_id)?;
-                let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
-                    bail_bug!("expected WriteState::HostReady")
-                };
-                let code = return_code(kind, state, mem::replace(guest_offset, ItemCount::ZERO))?;
-                match state {
-                    StreamResult::Dropped => transmit.write = WriteState::Dropped,
-                    _ => {}
-                }
+                let code = settle_host_write(transmit, kind, state?)?;
                 transmit.read = ReadState::Open;
                 code
             }
