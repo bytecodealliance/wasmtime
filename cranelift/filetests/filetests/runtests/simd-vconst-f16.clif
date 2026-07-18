@@ -1,0 +1,18 @@
+test run
+set enable_multi_ret_implicit_sret
+target riscv64 has_v has_zvfh
+target riscv64 has_v has_zvfh has_c has_zcb
+
+function %vconst_zeroes_f16x8() -> f16x8 {
+block0:
+    v0 = vconst.f16x8 [0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0]
+    return v0
+}
+; run: %vconst_zeroes_f16x8() == [0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0]
+
+function %vconst_varied_f16x8() -> f16x8 {
+block0:
+    v0 = vconst.f16x8 [0x1.0 -0x1.0 0.0 Inf -Inf 0x1.554p-2 -0x1.554p-2 0x1.92p1]
+    return v0
+}
+; run: %vconst_varied_f16x8() == [0x1.0 -0x1.0 0.0 Inf -Inf 0x1.554p-2 -0x1.554p-2 0x1.92p1]

@@ -1,0 +1,35 @@
+test compile precise-output
+set enable_multi_ret_implicit_sret
+set unwind_info=false
+target riscv64 has_v has_zvfh
+
+
+function %const_f16x8() -> f16x8 {
+    const0 = 0xf9d45846788bf825707b7b78faa77803
+
+block0:
+    v1 = vconst.f16x8 const0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vle16.v v8,[const(0)] #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x84, 0xcc
+;   auipc t6, 0
+;   addi t6, t6, 0x1c
+;   .byte 0x07, 0xd4, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x04, 0x05, 0x02
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x03, 0x78, 0xa7, 0xfa
+;   .byte 0x78, 0x7b, 0x7b, 0x70
+;   .byte 0x25, 0xf8, 0x8b, 0x78
+;   .byte 0x46, 0x58, 0xd4, 0xf9
+
