@@ -590,15 +590,17 @@ impl TryFrom<crate::filesystem::DescriptorStat> for types::DescriptorStat {
             status_change_timestamp,
         }: crate::filesystem::DescriptorStat,
     ) -> Result<Self, ErrorCode> {
+        // Internal timestamps use i64 seconds; wasi:clocks/wall-clock uses u64
+        // (non-negative). Times outside that range become missing rather than
+        // failing the whole stat (e.g. host-clamped far-past mtimes on macOS).
         Ok(Self {
             type_: type_.into(),
             link_count,
             size,
-            data_access_timestamp: data_access_timestamp.map(|t| t.try_into()).transpose()?,
+            data_access_timestamp: data_access_timestamp.and_then(|t| t.try_into().ok()),
             data_modification_timestamp: data_modification_timestamp
-                .map(|t| t.try_into())
-                .transpose()?,
-            status_change_timestamp: status_change_timestamp.map(|t| t.try_into()).transpose()?,
+                .and_then(|t| t.try_into().ok()),
+            status_change_timestamp: status_change_timestamp.and_then(|t| t.try_into().ok()),
         })
     }
 }

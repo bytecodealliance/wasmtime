@@ -24,10 +24,22 @@ impl<T> Ctx<T> {
         name: &str,
         configure: impl FnOnce(&mut WasiCtxBuilder) -> T,
     ) -> Result<(Store<Ctx<T>>, TempDir)> {
+        Self::new_with_workspace_setup(engine, name, |_| Ok(()), configure)
+    }
+
+    /// Like [`Self::new`], but allows seeding the preopened scratch directory
+    /// before the guest runs (for host-prepared filesystem fixtures).
+    pub fn new_with_workspace_setup(
+        engine: &Engine,
+        name: &str,
+        setup: impl FnOnce(&std::path::Path) -> Result<()>,
+        configure: impl FnOnce(&mut WasiCtxBuilder) -> T,
+    ) -> Result<(Store<Ctx<T>>, TempDir)> {
         const MAX_OUTPUT_SIZE: usize = 10 << 20;
         let stdout = MemoryOutputPipe::new(MAX_OUTPUT_SIZE);
         let stderr = MemoryOutputPipe::new(MAX_OUTPUT_SIZE);
         let workspace = prepare_workspace(name)?;
+        setup(workspace.path())?;
 
         // Create our wasi context.
         let mut builder = WasiCtxBuilder::new();
@@ -54,7 +66,7 @@ impl<T> Ctx<T> {
             stdout,
         };
 
-        Ok((Store::new(&engine, ctx), workspace))
+        Ok((Store::new(engine, ctx), workspace))
     }
 }
 
