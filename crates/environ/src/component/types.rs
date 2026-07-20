@@ -594,6 +594,10 @@ pub struct TypeComponentInstance {
 pub struct TypeFunc {
     /// Whether or not this is an async function.
     pub async_: bool,
+    /// Whether any parameter (transitively) contains a `borrow` handle,
+    /// letting the runtime skip borrow-scope tracking when lending is
+    /// impossible. (Borrows are only valid in parameters, not results.)
+    pub contains_borrow: bool,
     /// Names of parameters.
     pub param_names: Vec<String>,
     /// Parameters to the function represented as a tuple.

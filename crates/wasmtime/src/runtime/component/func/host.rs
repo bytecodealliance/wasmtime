@@ -354,6 +354,7 @@ where
 
     /// "Rust" entrypoint after panic-handling infrastructure is set up and raw
     /// arguments are translated to Rust types.
+    #[inline]
     fn entrypoint(
         &self,
         mut store: StoreContextMut<'_, T>,
@@ -364,6 +365,9 @@ where
     ) -> Result<()> {
         let vminstance = instance.id().get(store.0);
         let async_ = vminstance.component().env_component().options[options].async_;
+        // Skip resource-borrow scope tracking when the signature makes
+        // lending impossible (precomputed at compile time).
+        let track_scope = vminstance.component().types()[ty].contains_borrow;
 
         // If this is a synchronous-lower of a host-async function, then the
         // guest is blocking. Test, in the context of the guest task, if that's
@@ -373,7 +377,7 @@ where
         }
 
         // Enter the host by pushing a `HostTask` into the concurrent state.
-        let host_task = store.0.host_task_create()?;
+        let host_task = store.0.host_task_create(track_scope)?;
 
         let host_task_complete = if async_ {
             #[cfg(feature = "component-model-async")]
@@ -386,7 +390,14 @@ where
                  when `component-model-async` feature disabled"
             );
         } else {
-            self.call_sync_lower(store.as_context_mut(), instance, ty, options, storage)?;
+            self.call_sync_lower(
+                store.as_context_mut(),
+                instance,
+                ty,
+                options,
+                storage,
+                track_scope,
+            )?;
             true
         };
 
@@ -396,7 +407,7 @@ where
         // function transitively would have updated the current guest thread to
         // the caller of this host function.
         if host_task_complete {
-            store.0.host_task_delete(host_task)?;
+            store.0.host_task_delete(host_task, track_scope)?;
         }
 
         Ok(())
@@ -409,6 +420,7 @@ where
     /// the `async` option when lowered. Note that the host function itself
     /// can still be async, in which case this will block here waiting for it
     /// to finish.
+    #[inline]
     fn call_sync_lower(
         &self,
         mut store: StoreContextMut<'_, T>,
@@ -416,8 +428,13 @@ where
         ty: TypeFuncIndex,
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
+        track_scope: bool,
     ) -> Result<()> {
-        let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
+        let mut lift = if track_scope {
+            LiftContext::new(store.0.store_opaque_mut(), options, instance)?
+        } else {
+            LiftContext::new_without_scope(store.0.store_opaque_mut(), options, instance)?
+        };
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_PARAMS, storage)?;
 
         let ret = match self.run(store.as_context_mut(), params) {
@@ -525,6 +542,7 @@ where
     ///
     /// This will internally decide the ABI source of the parameters and use
     /// `storage` appropriately.
+    #[inline]
     fn load_params<'a>(
         &self,
         lift: &mut LiftContext<'_>,
@@ -560,6 +578,7 @@ where
     }
 
     /// Stores the result `ret` into `dst` which is calculated per the ABI.
+    #[inline]
     fn lower_result_and_exit_call(
         lower: &mut LowerContext<'_, T>,
         ty: TypeFuncIndex,
@@ -567,8 +586,11 @@ where
         dst: Destination<'_>,
     ) -> Result<()> {
         // Before lowering below semantically ensure that the caller has dropped
-        // all of its borrows and such.
-        lower.validate_scope_exit()?;
+        // all of its borrows and such. Skipped when the signature cannot
+        // contain borrows (in which case no scope was entered either).
+        if lower.types[ty].contains_borrow {
+            lower.validate_scope_exit()?;
+        }
 
         // At this point we're transitioning back to the caller task which means
         // that the current task needs to be updated. This will restore the
