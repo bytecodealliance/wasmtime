@@ -370,7 +370,7 @@ wit-parser = ["dep:wit-parser", "component-model", "std"]
 # For platforms that Wasmtime does not have support for Wasmtime will disable
 # the use of virtual memory by default, for example allocating linear memories
 # with `malloc` instead. This feature can be used, for these platforms, to
-# instead use a C API defined in `wasmtime-platform.h` instead.
+# instead use a C API defined in `wasmtime-platform.h`.
 #
 # For some more information see
 # https://docs.wasmtime.dev/stability-platform-support.html#support-for-no_std

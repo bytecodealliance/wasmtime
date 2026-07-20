@@ -777,8 +777,8 @@ impl Config {
     /// from a per-store "interrupt page". To trigger an interruption, the
     /// embedder marks that page as inaccessible; the resulting SIGSEGV is
     /// caught by Wasmtime's signal handler, which distinguishes an
-    /// interrupt-check load from an actual crash by consulting a table of
-    /// check offsets stored in the compiled artifact
+    /// interrupt-check load from an actual crash by consulting a table of check
+    /// offsets stored in the compiled artifact
     /// (`.wasmtime.mmu_interrupt_checks`). The signal handler then causes the
     /// active fiber to yield.
     ///
@@ -822,7 +822,12 @@ impl Config {
     /// - **Cranelift.** Winch does not support it.
     /// - **Linux on x86_64.** Cross-compilation to other targets is fine; the
     ///   check is a no-op on hosts that cannot use it.
-    /// - **Signals-based traps** and thus also native signals
+    /// - **Native signals** because we depend on a signal handler.
+    /// - **Signals-based traps**, because signal-handler installation (in
+    ///   [`Engine::new()`]) is currently gated on this. It should be possible
+    ///   to remove this dependency, but the use cases are few, and threading
+    ///   the value of `signals_based_traps` into the signal handler may be
+    ///   nontrivial.
     ///
     /// # Errors
     ///
