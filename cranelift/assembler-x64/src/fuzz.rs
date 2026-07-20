@@ -589,4 +589,35 @@ mod test {
         })
         .budget_ms(1_000);
     }
+
+    /// Byte-level encoding check for the APX NDD (new-data-destination) form of
+    /// `ADD`, promoted into EVEX "map 4" via the extended-EVEX prefix.
+    ///
+    /// We assert the exact bytes rather than round-tripping through Capstone
+    /// because the bundled disassembler does not yet understand APX. The
+    /// expected sequence for `addq` with ModRM.reg = rax (0), vvvv = rcx (1),
+    /// r/m = rdx (2), `W = 1`, `ND = 1`, `NF = 0` is:
+    ///
+    /// ```text
+    ///   62 F4 F4 18 01 C2
+    ///   ^^ ^^ ^^ ^^ ^^ ^^
+    ///   |  |  |  |  |  └ ModRM: mod=11 reg=rax r/m=rdx
+    ///   |  |  |  |  └ opcode 0x01 (ADD r/m, reg)
+    ///   |  |  |  └ P2: ND=1 (bit4), V4=1 (bit3, inverted), NF=0
+    ///   |  |  └ P1: W=1, vvvv=~rcx=1110, U=1, pp=00
+    ///   |  └ P0: R3 X3 B3 R4 = 1111, B4=0, map=100 (map 4)
+    ///   └ EVEX identifier
+    /// ```
+    ///
+    /// NOTE: with `ND = 1` the architectural destination is the `vvvv` register
+    /// (here rcx), while the DSL currently places the `w()` operand in
+    /// ModRM.reg. Aligning the written operand with `vvvv` is the natural next
+    /// step for full NDD support.
+    #[test]
+    fn apx_addq_rvm_ndd_encoding() {
+        use crate::inst::addq_rvm;
+        let inst = addq_rvm::<FuzzRegs>::new(FuzzReg::new(0), FuzzReg::new(1), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4F41801C2");
+    }
 }
