@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use crate::*;
 use core::ops::Range;
-use cranelift_entity::{EntityRef, packed_option::ReservedValue};
+use cranelift_entity::{EntityRef, EntitySet, packed_option::ReservedValue};
 use serde_derive::{Deserialize, Serialize};
 
 /// A WebAssembly linear memory initializer.
@@ -201,6 +201,16 @@ pub struct Module {
     /// to be infallible as part of [`ModuleTranslation::finalize_table_init`].
     pub table_initialization: TryPrimaryMap<DefinedTableIndex, TryVec<FuncIndex>>,
 
+    /// Tables whose contents or size may change after instantiation.
+    ///
+    /// Filled in during translation: imported and exported tables are
+    /// always in this set (the embedder, or another module importing the
+    /// export, can mutate them through the public API without any
+    /// instruction in this module), and a defined non-exported table is
+    /// added when any instruction in the code section can write to it.
+    /// See [`Module::table_is_immutable`] for the exact contract.
+    mutated_tables: EntitySet<TableIndex>,
+
     /// WebAssembly linear memory initializer.
     ///
     /// This will track how memory is initialized, either exclusively via
@@ -306,6 +316,7 @@ impl Module {
             exports: Default::default(),
             startup: ModuleStartup::None,
             table_initialization: Default::default(),
+            mutated_tables: Default::default(),
             memory_initialization: Default::default(),
             passive_elements: Default::default(),
             runtime_data: Default::default(),
@@ -380,6 +391,46 @@ impl Module {
     #[inline]
     pub fn is_imported_table(&self, index: TableIndex) -> bool {
         index.index() < self.num_imported_tables
+    }
+
+    /// Records that table `index` may be written to after instantiation.
+    ///
+    /// Called during translation: up front for every imported and exported
+    /// table, and again for each table some instruction in the code
+    /// section can write to.
+    #[cfg(feature = "compile")]
+    pub(crate) fn mark_table_mutated(&mut self, index: TableIndex) {
+        self.mutated_tables.insert(index);
+    }
+
+    /// Returns whether table `index` provably retains its
+    /// instantiation-time contents and size for the lifetime of every
+    /// instance of this module.
+    ///
+    /// True only when all of the following hold:
+    ///
+    /// * the table is defined in this module — an imported table's other
+    ///   owners can mutate it out of this module's view;
+    /// * the table is not exported — the embedder, or any module that
+    ///   imports the export, can mutate it through the public API without
+    ///   any instruction in this module executing;
+    /// * no instruction in this module's code section can write to it:
+    ///   `table.set`, `table.fill`, `table.grow`, `table.copy` with this
+    ///   table as the destination, `table.init`, or their
+    ///   shared-everything-threads atomic variants.
+    ///
+    /// Element segments applied at instantiation are part of the table's
+    /// *initial* contents, not a mutation. `elem.drop` drops a passive
+    /// segment without writing to any table, so it does not affect this;
+    /// a passive segment can only reach a table through `table.init`,
+    /// which does.
+    ///
+    /// Consumers may rely on this for correctness (e.g. eliding
+    /// `call_indirect` checks), so a false positive here is a soundness
+    /// bug, not a missed optimization.
+    #[inline]
+    pub fn table_is_immutable(&self, index: TableIndex) -> bool {
+        !self.mutated_tables.contains(index)
     }
 
     /// Convert a `DefinedMemoryIndex` into a `MemoryIndex`.
@@ -614,6 +665,7 @@ impl TypeTrace for Module {
             exports: _,
             startup,
             table_initialization: _,
+            mutated_tables: _,
             memory_initialization: _,
             passive_elements: _,
             runtime_data: _,
@@ -666,6 +718,7 @@ impl TypeTrace for Module {
             exports: _,
             startup,
             table_initialization: _,
+            mutated_tables: _,
             memory_initialization: _,
             passive_elements: _,
             runtime_data: _,

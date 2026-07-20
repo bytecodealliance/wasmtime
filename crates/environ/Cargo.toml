@@ -26,6 +26,7 @@ cranelift-bitset = { workspace = true, features = ['enable-serde'] }
 cranelift-bforest = { workspace = true }
 hashbrown = { workspace = true, features = ["default-hasher"] }
 wasmparser = { workspace = true, features = ['validate', 'serde', 'features'] }
+rayon = { workspace = true, optional = true }
 indexmap = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 serde_derive = { workspace = true }
@@ -83,6 +84,7 @@ compile = [
   "dep:wasmprinter",
 ]
 stack-switching = []
+parallel = ["dep:rayon", "std"]
 threads = ['std']
 wmemcheck = ['std']
 std = [

@@ -4769,6 +4769,7 @@ dependencies = [
  "log",
  "object 0.39.0",
  "postcard",
+ "rayon",
  "rustc-demangle",
  "semver",
  "serde",

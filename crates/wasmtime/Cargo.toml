@@ -201,7 +201,7 @@ profiling = [
 ]
 
 # Enables parallel compilation of WebAssembly code.
-parallel-compilation = ["dep:rayon", "std"]
+parallel-compilation = ["dep:rayon", "std", "wasmtime-environ/parallel"]
 
 # Enables support for automatic cache configuration to be enabled in `Config`.
 cache = ["dep:wasmtime-cache", "std"]

@@ -349,6 +349,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             self.translate_payload(payload?)?;
         }
 
+        analyze_table_mutability(&mut self.result)?;
+
         Ok(self.result)
     }
 
@@ -1581,4 +1583,210 @@ impl ModuleTranslation<'_> {
         };
         self.module.startup = ModuleStartup::IfMemoriesNeedInit(ty);
     }
+}
+
+/// Populate `Module::mutated_tables`: record every table whose contents or
+/// size can change after instantiation.
+///
+/// Imported and exported tables are pre-marked up front — the embedder, or
+/// another module importing the export, can mutate them through the public
+/// API without any instruction in this module executing. Each defined
+/// non-exported table is then marked if any instruction in the code
+/// section can write to it (`table.set`, `table.fill`, `table.grow`,
+/// `table.copy` as the destination, `table.init`, or a
+/// shared-everything-threads atomic table write). Active element segments
+/// are part of a table's initial state, not a mutation, and `elem.drop`
+/// drops a passive segment without writing to any table.
+///
+/// Cost: one extra decode pass over the code section. It is skipped
+/// entirely when the module has no tables or when every table is already
+/// pre-marked (e.g. the single funcref table is exported, as Emscripten
+/// output typically is). With the `parallel` feature the bodies are
+/// scanned on the rayon thread pool; serially otherwise, stopping early
+/// once every table is marked. As a data point, forcing the walk over an
+/// 833 KiB Emscripten-built sqlite3 module measures ~4 ms serially on an
+/// Apple M4 (about 70% of a serial `validate_all` of the same bytes) and
+/// ~0.6 ms with `parallel`; in a default build that module never pays
+/// either cost, since its exported table takes the skip path.
+fn analyze_table_mutability(translation: &mut ModuleTranslation<'_>) -> Result<()> {
+    let num_tables = translation.module.tables.len();
+    if num_tables == 0 {
+        return Ok(());
+    }
+
+    for i in 0..translation.module.num_imported_tables {
+        translation
+            .module
+            .mark_table_mutated(TableIndex::from_u32(i as u32));
+    }
+    let exported: Vec<TableIndex> = translation
+        .module
+        .exports
+        .values()
+        .filter_map(|entity| match entity {
+            EntityIndex::Table(index) => Some(*index),
+            _ => None,
+        })
+        .collect();
+    for index in exported {
+        translation.module.mark_table_mutated(index);
+    }
+
+    let all_marked = |module: &Module| {
+        (0..num_tables as u32).all(|i| !module.table_is_immutable(TableIndex::from_u32(i)))
+    };
+    if all_marked(&translation.module) {
+        return Ok(());
+    }
+
+    let module = &mut translation.module;
+    let bodies = &translation.function_body_inputs;
+
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        let bodies: Vec<_> = bodies.values().collect();
+        let found = bodies
+            .into_par_iter()
+            .map(|body_data| table_mutations_in_body(&body_data.body, num_tables))
+            .collect::<Result<Vec<_>>>()?;
+        for index in found.into_iter().flatten() {
+            module.mark_table_mutated(index);
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    {
+        for (_, body_data) in bodies.iter() {
+            for index in table_mutations_in_body(&body_data.body, num_tables)? {
+                module.mark_table_mutated(index);
+            }
+            if all_marked(module) {
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Decode one function body and return the tables its instructions can
+/// write to, bounded by `num_tables`.
+fn table_mutations_in_body(body: &FunctionBody<'_>, num_tables: usize) -> Result<Vec<TableIndex>> {
+    let mut scan = TableMutationScan {
+        num_tables,
+        found: Vec::new(),
+    };
+    let mut reader = body.get_operators_reader()?;
+    while !reader.eof() {
+        reader.visit_operator(&mut scan)?;
+    }
+    Ok(scan.found)
+}
+
+/// Operator visitor for `table_mutations_in_body`: records the destination
+/// table of every table-writing operator and ignores everything else.
+///
+/// Bodies have not been validated yet when this runs, so a decoded table
+/// index can be out of range. Indices at or above `num_tables` are dropped
+/// here — validation rejects such a module later — rather than sizing any
+/// per-table structure from unvalidated input.
+struct TableMutationScan {
+    num_tables: usize,
+    found: Vec<TableIndex>,
+}
+
+impl TableMutationScan {
+    fn mark(&mut self, table: u32) {
+        if (table as usize) < self.num_tables {
+            self.found.push(TableIndex::from_u32(table));
+        }
+    }
+}
+
+macro_rules! table_mutation_scan {
+    ($(@$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident ($($ann:tt)*))*) => {
+        $(table_mutation_scan!(@one $visit $({ $($arg: $argty),* })?);)*
+    };
+
+    // The operators that can write to a table mark their destination.
+    // `table.copy` writes only `dst_table`; its source is read-only, and
+    // wrongly marking it would forbid downstream optimizations on a
+    // read-only table. `table.atomic.get` is likewise a read. The
+    // remaining atomic table operators write (`rmw.cmpxchg` conditionally,
+    // which still counts as a write here). This scan decodes them like any
+    // other operator; no module containing them can currently be compiled
+    // (the cranelift translator rejects shared-everything-threads with
+    // `wasm_unsupported!`), but matching them now keeps this analysis
+    // sound if that proposal is ever implemented.
+    (@one visit_table_set { $($arg:ident: $argty:ty),* }) => {
+        fn visit_table_set(&mut self, table: u32) {
+            self.mark(table);
+        }
+    };
+    (@one visit_table_fill { $($arg:ident: $argty:ty),* }) => {
+        fn visit_table_fill(&mut self, table: u32) {
+            self.mark(table);
+        }
+    };
+    (@one visit_table_grow { $($arg:ident: $argty:ty),* }) => {
+        fn visit_table_grow(&mut self, table: u32) {
+            self.mark(table);
+        }
+    };
+    (@one visit_table_init { $($arg:ident: $argty:ty),* }) => {
+        fn visit_table_init(&mut self, _elem_index: u32, table: u32) {
+            self.mark(table);
+        }
+    };
+    (@one visit_table_copy { $($arg:ident: $argty:ty),* }) => {
+        fn visit_table_copy(&mut self, dst_table: u32, _src_table: u32) {
+            self.mark(dst_table);
+        }
+    };
+    (@one visit_table_atomic_set { $($arg:ident: $argty:ty),* }) => {
+        fn visit_table_atomic_set(&mut self, _ordering: wasmparser::Ordering, table_index: u32) {
+            self.mark(table_index);
+        }
+    };
+    (@one visit_table_atomic_rmw_xchg { $($arg:ident: $argty:ty),* }) => {
+        fn visit_table_atomic_rmw_xchg(
+            &mut self,
+            _ordering: wasmparser::Ordering,
+            table_index: u32,
+        ) {
+            self.mark(table_index);
+        }
+    };
+    (@one visit_table_atomic_rmw_cmpxchg { $($arg:ident: $argty:ty),* }) => {
+        fn visit_table_atomic_rmw_cmpxchg(
+            &mut self,
+            _ordering: wasmparser::Ordering,
+            table_index: u32,
+        ) {
+            self.mark(table_index);
+        }
+    };
+
+    // Every other operator cannot write to a table.
+    (@one $visit:ident) => {
+        fn $visit(&mut self) {}
+    };
+    (@one $visit:ident { $($arg:ident: $argty:ty),* }) => {
+        fn $visit(&mut self, $(_: $argty),*) {}
+    };
+}
+
+impl<'a> wasmparser::VisitOperator<'a> for TableMutationScan {
+    type Output = ();
+
+    fn simd_visitor(&mut self) -> Option<&mut dyn wasmparser::VisitSimdOperator<'a, Output = ()>> {
+        Some(self)
+    }
+
+    wasmparser::for_each_visit_operator!(table_mutation_scan);
+}
+
+impl<'a> wasmparser::VisitSimdOperator<'a> for TableMutationScan {
+    wasmparser::for_each_visit_simd_operator!(table_mutation_scan);
 }
