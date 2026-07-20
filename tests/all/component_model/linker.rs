@@ -1,7 +1,7 @@
 use wasmtime::Result;
 use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, Linker, ResourceType};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Config, Engine, Module, Store};
 
 #[test]
 fn old_import_importing_new_item() -> Result<()> {
@@ -208,6 +208,23 @@ fn linker_fails_to_define_unknown_core_module_imports_as_traps() -> Result<()> {
         )"#,
     )?;
     assert!(linker.define_unknown_imports_as_traps(&component).is_err());
+
+    Ok(())
+}
+
+#[test]
+fn open_instance_twice() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    let module = Module::new(&engine, "(module)")?;
+    linker.instance("foo")?.module("a", &module)?;
+    linker.instance("foo")?.module("b", &module)?;
+    assert!(linker.instance("foo")?.module("a", &module).is_err());
+    assert!(linker.instance("foo")?.module("b", &module).is_err());
+    linker.instance("foo")?.module("c", &module)?;
+    assert!(linker.root().module("foo", &module).is_err());
+    linker.instance("foo")?.module("d", &module)?;
 
     Ok(())
 }
