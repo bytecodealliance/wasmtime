@@ -583,7 +583,28 @@ pub fn lazy_per_thread_init() {
     impl Drop for Stack {
         fn drop(&mut self) {
             unsafe {
-                // Deallocate the stack memory.
+                // Before unmapping our memory make sure that it's no longer
+                // listed as our sigaltstack. While it's pretty unlikely we'll
+                // fault during thread teardown we don't want to make things
+                // worse by then additionally using an unmapped stack.
+                //
+                // Also this seems to help with pre-LLVM-23 asan configuration,
+                // see #13857 for some more details.
+                let new_stack = libc::stack_t {
+                    ss_sp: ptr::null_mut(),
+                    ss_flags: libc::SS_DISABLE,
+                    ss_size: MIN_STACK_SIZE,
+                };
+                let r = libc::sigaltstack(&new_stack, ptr::null_mut());
+                debug_assert_eq!(
+                    r,
+                    0,
+                    "registering new sigaltstack failed: {}",
+                    io::Error::last_os_error()
+                );
+
+                // Deallocate the stack memory now that nothing should be using
+                // it.
                 let r = rustix::mm::munmap(self.mmap_ptr, self.mmap_size);
                 debug_assert!(r.is_ok(), "munmap failed during thread shutdown");
             }
