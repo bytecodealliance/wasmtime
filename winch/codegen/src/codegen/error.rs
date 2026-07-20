@@ -35,9 +35,6 @@ pub(crate) enum CodeGenError {
     /// Unsupported eager initialization of tables.
     #[error("Unsupported eager initialization of tables")]
     UnsupportedTableEagerInit,
-    /// Unsupported immediate for instruction.
-    #[error("Unsupported immediate")]
-    UnsupportedImm,
     /// An internal error.
     ///
     /// This error means that an internal invariant was not met and usually
@@ -177,10 +174,6 @@ impl CodeGenError {
 
     pub(crate) const fn invalid_local_offset() -> Self {
         Self::Internal(InternalError::InvalidLocalOffset)
-    }
-
-    pub(crate) const fn unsupported_imm() -> Self {
-        Self::UnsupportedImm
     }
 
     pub(crate) const fn invalid_two_arg_form() -> Self {
