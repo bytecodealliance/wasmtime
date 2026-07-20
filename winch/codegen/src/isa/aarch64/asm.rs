@@ -313,7 +313,11 @@ impl Assembler {
                     .for_each(|i| self.emit(i));
             }
             RegClass::Float => {
-                match ASIMDFPModImm::maybe_from_u64(imm.unwrap_as_u64(), size.into()) {
+                let modimm = match imm {
+                    Imm::V128(_) => None,
+                    _ => ASIMDFPModImm::maybe_from_u64(imm.unwrap_as_u64(), size.into()),
+                };
+                match modimm {
                     Some(imm) => {
                         self.emit(Inst::FpuMoveFPImm {
                             rd: rd.map(Into::into),

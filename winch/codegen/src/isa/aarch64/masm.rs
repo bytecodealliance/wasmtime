@@ -6,7 +6,7 @@ use super::{
     regs::{self, scratch_fpr_bitset, scratch_gpr_bitset},
 };
 use crate::{
-    Context, Result,
+    Result,
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
     bail,
     codegen::{CodeGenContext, CodeGenError, Emission, FuncEnv, ptr_type_from_ptr_size},
@@ -517,14 +517,10 @@ impl Masm for MacroAssembler {
                     self.asm.mov_ir(dst, v, v.size());
                     Ok(())
                 }
-                imm @ (I::F32(_) | I::F64(_)) => {
+                imm @ (I::F32(_) | I::F64(_) | I::V128(_)) => {
                     self.asm.mov_ir(dst, imm, imm.size());
                     Ok(())
                 }
-                I::V128(_) => Err(CodeGenError::unsupported_imm()).context(
-                    "v128 immediates are not supported in winch+aarch64; the SIMD and \
-                     relaxed-SIMD proposals are unimplemented for this target",
-                ),
             },
             (RegImm::Reg(rs), rd) => match (rs.class(), rd.to_reg().class()) {
                 (RegClass::Int, RegClass::Int) => Ok(self.asm.mov_rr(rs, rd, size)),
