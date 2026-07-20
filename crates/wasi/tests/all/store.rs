@@ -116,8 +116,8 @@ fn extreme_host_mtime() -> std::time::SystemTime {
     use std::time::{Duration, SystemTime};
 
     // Outside i64 second range when representable (Unix).
-    if let Some(t) = SystemTime::UNIX_EPOCH
-        .checked_sub(Duration::from_secs((i64::MAX as u64).saturating_add(1)))
+    if let Some(t) =
+        SystemTime::UNIX_EPOCH.checked_sub(Duration::from_secs((i64::MAX as u64).saturating_add(1)))
     {
         return t;
     }
