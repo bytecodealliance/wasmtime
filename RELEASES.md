@@ -1,6 +1,6 @@
 ## 47.0.0
 
-Unreleased.
+Released 2026-07-20.
 
 ### Added
 
