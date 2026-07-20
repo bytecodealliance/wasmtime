@@ -348,3 +348,71 @@ fn all_tables_pre_marked_without_code_mutation() {
     );
     assert_eq!(bits, vec![true, true]);
 }
+
+/// Translate + `finalize_table_init`, then return, per table, whether a
+/// static funcref image is available (`Module::static_funcref_image`).
+fn translate_and_get_static_images(wat: &str) -> Vec<bool> {
+    let bytes = wat::parse_str(wat).expect("WAT parse failed");
+    let tunables = Tunables::default_host();
+    let features = WasmFeatures::WASM2;
+    let mut validator = Validator::new_with_features(features);
+    let mut types = ModuleTypesBuilder::new(&validator);
+    let env = ModuleEnvironment::new(
+        &tunables,
+        &mut validator,
+        &mut types,
+        StaticModuleIndex::from_u32(0),
+    );
+    let parser = Parser::new(0);
+    let mut translation = env.translate(parser, &bytes).expect("translate failed");
+    translation.finalize_table_init(&tunables, &mut types);
+    let n: u32 = translation.module.tables.len().try_into().unwrap();
+    (0..n)
+        .map(|i| {
+            translation
+                .module
+                .static_funcref_image(TableIndex::from_u32(i))
+                .is_some()
+        })
+        .collect()
+}
+
+/// A single constant-offset function-list segment folds completely, so
+/// the static image is available.
+#[test]
+fn fully_folded_segments_provide_static_image() {
+    let images = translate_and_get_static_images(
+        r#"
+        (module
+          (table 4 4 funcref)
+          (func $f (result i32) i32.const 0)
+          (elem (i32.const 0) $f $f))
+        "#,
+    );
+    assert_eq!(images, vec![true]);
+}
+
+/// An expressions-form segment cannot be folded; it is deferred to
+/// instantiation, so the table's runtime contents exceed its
+/// compile-time image and no static image may be exposed. Without this
+/// guard, an optimization consuming the image would miss the deferred
+/// write — the segment here installs a function whose signature differs
+/// from the folded prefix.
+#[test]
+fn deferred_segments_disable_static_image() {
+    let images = translate_and_get_static_images(
+        r#"
+        (module
+          (table 3 3 funcref)
+          (func $a (result i32) i32.const 1)
+          (func $b (result i64) i64.const 2)
+          (elem (i32.const 0) $a $a)
+          (elem (i32.const 2) funcref (ref.func $b)))
+        "#,
+    );
+    assert_eq!(
+        images,
+        vec![false],
+        "a deferred segment must disqualify the static image",
+    );
+}

@@ -1561,6 +1561,22 @@ impl ModuleTranslation<'_> {
             let _ = segments.next();
         }
         self.table_initialization.segments = segments.try_collect().panic_on_oom();
+
+        // Every segment left over here is applied at instantiation time
+        // rather than folded into the precomputed image, so the targeted
+        // tables' runtime contents are not fully described by their
+        // image. Record that so `Module::static_funcref_image` refuses
+        // them — an optimization drawing conclusions from the image of
+        // such a table would miss the deferred writes.
+        let deferred: Vec<TableIndex> = self
+            .table_initialization
+            .segments
+            .iter()
+            .map(|segment| segment.table_index)
+            .collect();
+        for index in deferred {
+            self.module.mark_table_has_deferred_segments(index);
+        }
     }
 
     /// Helper function to ratchet the `startup` function for this module as

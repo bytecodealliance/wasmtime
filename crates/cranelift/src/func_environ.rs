@@ -2167,6 +2167,30 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             .map(Some)
     }
 
+    /// Try to prove that the runtime signature check at a `call_indirect`
+    /// site through an untyped `funcref` table is redundant: the table's
+    /// contents are static for the lifetime of every instance
+    /// ([`Module::static_funcref_image`]) and every non-null entry has
+    /// the same module-interned signature as the type declared at the
+    /// call site. Null slots are fine — with the signature check gone, a
+    /// null entry still traps on the funcref null check.
+    fn try_elide_sig_check_for_immutable_table(
+        &self,
+        table_index: TableIndex,
+        ty_index: TypeIndex,
+    ) -> bool {
+        let module = self.env.module;
+        let Some(image) = module.static_funcref_image(table_index) else {
+            return false;
+        };
+        let expected_ty = module.types[ty_index].unwrap_module_type_index();
+        image
+            .iter()
+            .copied()
+            .filter(|f| !f.is_reserved_value())
+            .all(|f| module.functions[f].signature.unwrap_module_type_index() == expected_ty)
+    }
+
     fn check_and_load_code_and_callee_vmctx(
         &mut self,
         table_index: TableIndex,
@@ -2224,6 +2248,21 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // table of typed functions and that type matches `ty_index`, then
         // there's no need to perform a typecheck.
         match table.ref_type.heap_type {
+            // An untyped `funcref` table ordinarily needs a runtime
+            // signature check. But when the table's contents are static
+            // for the lifetime of every instance and every entry has the
+            // signature this call site expects, the check can never fail
+            // and is elided the same way as for typed-funcref tables
+            // below. Null slots are still caught: `may_be_null` is
+            // inherited from the table type, so the null check remains.
+            WasmHeapType::Func
+                if self.try_elide_sig_check_for_immutable_table(table_index, ty_index) =>
+            {
+                return CheckIndirectCallTypeSignature::StaticMatch {
+                    may_be_null: table.ref_type.nullable,
+                };
+            }
+
             // Functions do not have a statically known type in the table, a
             // typecheck is required. Fall through to below to perform the
             // actual typecheck.

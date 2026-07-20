@@ -211,6 +211,19 @@ pub struct Module {
     /// See [`Module::table_is_immutable`] for the exact contract.
     mutated_tables: EntitySet<TableIndex>,
 
+    /// Tables that are targeted by element segments deferred to
+    /// instantiation time.
+    ///
+    /// `ModuleTranslation::finalize_table_init` folds element segments
+    /// into [`Module::table_initialization`] only up to the first segment
+    /// it cannot apply statically (dynamic offset, expressions-form
+    /// elements, out-of-bounds or oversized reach); every remaining
+    /// segment is instead applied when an instance is created. A table in
+    /// this set therefore has runtime contents that the precomputed image
+    /// alone does not describe, and nothing may be concluded from its
+    /// image — see [`Module::static_funcref_image`].
+    tables_with_deferred_segments: EntitySet<TableIndex>,
+
     /// WebAssembly linear memory initializer.
     ///
     /// This will track how memory is initialized, either exclusively via
@@ -317,6 +330,7 @@ impl Module {
             startup: ModuleStartup::None,
             table_initialization: Default::default(),
             mutated_tables: Default::default(),
+            tables_with_deferred_segments: Default::default(),
             memory_initialization: Default::default(),
             passive_elements: Default::default(),
             runtime_data: Default::default(),
@@ -403,6 +417,14 @@ impl Module {
         self.mutated_tables.insert(index);
     }
 
+    /// Records that table `index` is the target of an element segment
+    /// deferred to instantiation time, so its precomputed image (if any)
+    /// does not describe its complete runtime contents.
+    #[cfg(feature = "compile")]
+    pub(crate) fn mark_table_has_deferred_segments(&mut self, index: TableIndex) {
+        self.tables_with_deferred_segments.insert(index);
+    }
+
     /// Returns whether table `index` provably retains its
     /// instantiation-time contents and size for the lifetime of every
     /// instance of this module.
@@ -431,6 +453,32 @@ impl Module {
     #[inline]
     pub fn table_is_immutable(&self, index: TableIndex) -> bool {
         !self.mutated_tables.contains(index)
+    }
+
+    /// Returns the contents of table `index` when they are known to hold
+    /// for the lifetime of every instance of this module: the table must
+    /// be provably immutable ([`Module::table_is_immutable`]) and its
+    /// initial contents precomputed from element segments into
+    /// [`Module::table_initialization`].
+    ///
+    /// The returned image uses `FuncIndex::reserved_value()` for null
+    /// slots, and any slot at an index past the end of the image is null.
+    /// Returns `None` for mutable, imported, or exported tables, for
+    /// tables without a precomputed image, for an empty image (which
+    /// carries no information), and for tables targeted by element
+    /// segments deferred to instantiation time — a deferred segment
+    /// rewrites slots after the image is applied, so the image alone does
+    /// not describe such a table's runtime contents.
+    pub fn static_funcref_image(&self, index: TableIndex) -> Option<&TryVec<FuncIndex>> {
+        if !self.table_is_immutable(index) {
+            return None;
+        }
+        if self.tables_with_deferred_segments.contains(index) {
+            return None;
+        }
+        let defined = self.defined_table_index(index)?;
+        let image = self.table_initialization.get(defined)?;
+        if image.is_empty() { None } else { Some(image) }
     }
 
     /// Convert a `DefinedMemoryIndex` into a `MemoryIndex`.
@@ -666,6 +714,7 @@ impl TypeTrace for Module {
             startup,
             table_initialization: _,
             mutated_tables: _,
+            tables_with_deferred_segments: _,
             memory_initialization: _,
             passive_elements: _,
             runtime_data: _,
@@ -719,6 +768,7 @@ impl TypeTrace for Module {
             startup,
             table_initialization: _,
             mutated_tables: _,
+            tables_with_deferred_segments: _,
             memory_initialization: _,
             passive_elements: _,
             runtime_data: _,

@@ -1,20 +1,20 @@
 ;;! target = "x86_64"
 
-;; Table declared with min < max (a "dynamic-declared" table) that is
-;; never written to in the module. Without the per-table mutability
-;; bit, Cranelift would emit `load.i64 v0+56` per dispatch to fetch
-;; the current bound. With it, `make_table_base_bound` lowers to
-;; `TableSize::Static` and the bound becomes an immediate.
+;; Immutable funcref table where every elem-segment entry has the same
+;; declared type as the call site. No instruction writes to table 0 and
+;; it is neither imported nor exported, so `Module::static_funcref_image`
+;; is available and every entry resolves to the call site's type. That
+;; triggers `try_elide_sig_check_for_immutable_table` →
+;; `CheckIndirectCallTypeSignature::StaticMatch`, removing the runtime
+;; signature load + compare from the dispatch hot path.
 ;;
-;; Look for: bounds-check `iconst.i32 16` (the declared min, used as
-;; static bound) and NO `load.i64 ... v0+56` for the current_elements
-;; field. (`+48` for the funcref base is still loaded — that's the
-;; element-data pointer, separate from the bound.)
+;; Look for the absence of `load.i32 user6 aligned readonly v_+16` (the
+;; sig-id load) and the matching `icmp eq / trapz user7` on the call
+;; site. Compare with `indirect-call-no-caching.wat` for the
+;; non-elided shape.
 
 (module
-  ;; min=16, max=64 — distinct, so without our optimization the
-  ;; bound would be loaded per dispatch from `current_elements`.
-  (table 16 64 funcref)
+  (table 10 10 funcref)
 
   (func $f1 (result i32) i32.const 1)
   (func $f2 (result i32) i32.const 2)
@@ -89,8 +89,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0050                               v3 = iconst.i32 16
-;; @0050                               v4 = icmp uge v2, v3  ; v3 = 16
+;; @0050                               v3 = iconst.i32 10
+;; @0050                               v4 = icmp uge v2, v3  ; v3 = 10
 ;; @0050                               v5 = uextend.i64 v2
 ;; @0050                               v6 = load.i64 notrap aligned readonly can_move region2 v0+48
 ;; @0050                               v7 = iconst.i64 3
