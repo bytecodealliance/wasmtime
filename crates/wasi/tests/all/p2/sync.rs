@@ -8,27 +8,7 @@ use wasmtime_wasi::p2::add_to_linker_sync;
 use wasmtime_wasi::p2::bindings::sync::Command;
 
 fn run(path: &str, with_builder: impl Fn(&mut WasiCtxBuilder)) -> Result<()> {
-    let path = Path::new(path);
-    let name = path.file_stem().unwrap().to_str().unwrap();
-    let engine = test_programs_artifacts::engine(|_| {});
-    let mut linker = Linker::new(&engine);
-    add_to_linker_sync(&mut linker)?;
-
-    let component = Component::from_file(&engine, path)?;
-
-    for blocking in [false, true] {
-        let (mut store, _td) = Ctx::new(&engine, name, |builder| {
-            with_builder(builder);
-            builder.allow_blocking_current_thread(blocking);
-            MyWasiCtx::new(builder.build())
-        })?;
-        let command = Command::instantiate(&mut store, &component, &linker)?;
-        command
-            .wasi_cli_run()
-            .call_run(&mut store)?
-            .map_err(|()| wasmtime::format_err!("run returned a failure"))?;
-    }
-    Ok(())
+    run_with_workspace_setup(path, |_| Ok(()), with_builder)
 }
 
 fn run_with_workspace_setup(
@@ -106,23 +86,9 @@ fn p1_fd_filestat_set() {
 }
 #[test_log::test]
 fn p1_stat_extreme_host_mtime() {
-    use std::fs::{File, FileTimes};
-    use std::io::Write;
-    use std::time::{Duration, SystemTime};
-
     run_with_workspace_setup(
         P1_STAT_EXTREME_HOST_MTIME_COMPONENT,
-        |dir| {
-            let path = dir.join("extreme.dat");
-            File::create(&path)?.write_all(b"hello")?;
-            let extreme = SystemTime::UNIX_EPOCH
-                .checked_sub(Duration::from_secs((i64::MAX as u64) + 1))
-                .expect("construct extreme SystemTime");
-            let f = File::options().write(true).open(&path)?;
-            let times = FileTimes::new().set_modified(extreme).set_accessed(extreme);
-            let _ = f.set_times(times);
-            Ok(())
-        },
+        crate::store::prepare_extreme_mtime_fixture,
         |_| {},
     )
     .unwrap()

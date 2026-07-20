@@ -7,22 +7,7 @@ use wasmtime_wasi::p1::{WasiP1Ctx, add_to_linker_async};
 use wasmtime_wasi::{WasiCtxBuilder, WasiView};
 
 async fn run(path: &str, with_builder: impl FnOnce(&mut WasiCtxBuilder)) -> Result<()> {
-    let path = Path::new(path);
-    let name = path.file_stem().unwrap().to_str().unwrap();
-    let engine = test_programs_artifacts::engine(|_config| {});
-    let mut linker = Linker::<Ctx<WasiP1Ctx>>::new(&engine);
-    add_to_linker_async(&mut linker, |t| &mut t.wasi)?;
-
-    let module = Module::from_file(&engine, path)?;
-    let (mut store, _td) = Ctx::new(&engine, name, |builder| {
-        with_builder(builder);
-        builder.build_p1()
-    })?;
-    store.data_mut().wasi.ctx().table.set_max_capacity(1000);
-    let instance = linker.instantiate_async(&mut store, &module).await?;
-    let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
-    start.call_async(&mut store, ()).await?;
-    Ok(())
+    run_with_workspace_setup(path, |_| Ok(()), with_builder).await
 }
 
 async fn run_with_workspace_setup(
@@ -95,24 +80,9 @@ async fn p1_fd_filestat_set() {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p1_stat_extreme_host_mtime() {
-    use std::fs::{File, FileTimes};
-    use std::io::Write;
-    use std::time::{Duration, SystemTime};
-
     run_with_workspace_setup(
         P1_STAT_EXTREME_HOST_MTIME,
-        |dir| {
-            let path = dir.join("extreme.dat");
-            File::create(&path)?.write_all(b"hello")?;
-            let extreme = SystemTime::UNIX_EPOCH
-                .checked_sub(Duration::from_secs((i64::MAX as u64) + 1))
-                .expect("construct extreme SystemTime");
-            let f = File::options().write(true).open(&path)?;
-            let times = FileTimes::new().set_modified(extreme).set_accessed(extreme);
-            // Platforms may reject or clamp extreme times.
-            let _ = f.set_times(times);
-            Ok(())
-        },
+        crate::store::prepare_extreme_mtime_fixture,
         |_| {},
     )
     .await

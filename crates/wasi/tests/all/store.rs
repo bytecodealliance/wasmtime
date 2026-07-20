@@ -104,3 +104,22 @@ impl WasiView for Ctx<MyWasiCtx> {
         }
     }
 }
+
+/// Seed a preopened workspace with `extreme.dat` using a host mtime that may
+/// fall outside WASI datetime ranges (or be clamped by the OS).
+pub fn prepare_extreme_mtime_fixture(dir: &std::path::Path) -> Result<()> {
+    use std::fs::{File, FileTimes};
+    use std::io::Write;
+    use std::time::{Duration, SystemTime};
+
+    let path = dir.join("extreme.dat");
+    File::create(&path)?.write_all(b"hello")?;
+    let extreme = SystemTime::UNIX_EPOCH
+        .checked_sub(Duration::from_secs((i64::MAX as u64) + 1))
+        .expect("construct extreme SystemTime");
+    let f = File::options().write(true).open(&path)?;
+    let times = FileTimes::new().set_modified(extreme).set_accessed(extreme);
+    // Platforms may reject or clamp extreme times.
+    let _ = f.set_times(times);
+    Ok(())
+}
