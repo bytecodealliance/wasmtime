@@ -481,6 +481,29 @@ impl Module {
         if image.is_empty() { None } else { Some(image) }
     }
 
+    /// Returns whether every in-bounds slot of table `index` is known to
+    /// hold a non-null function for the lifetime of every instance: the
+    /// table's contents are static ([`Module::static_funcref_image`]),
+    /// the image covers every slot of the table's size (fixed, since a
+    /// static image implies the table can never grow), and no covered
+    /// slot is null.
+    ///
+    /// When true, a null check on a value loaded from the table can
+    /// never fire for an in-bounds index. Bounds checks are unaffected —
+    /// an out-of-bounds index must still trap.
+    pub fn table_never_contains_null(&self, index: TableIndex) -> bool {
+        let Some(image) = self.static_funcref_image(index) else {
+            return false;
+        };
+        // Slots past the end of the image are null at runtime, so the
+        // image must cover the table's full size.
+        let table_min = self.tables[index].limits.min;
+        if (image.len() as u64) < table_min {
+            return false;
+        }
+        image.iter().all(|f| !f.is_reserved_value())
+    }
+
     /// Convert a `DefinedMemoryIndex` into a `MemoryIndex`.
     #[inline]
     pub fn memory_index(&self, defined_memory: DefinedMemoryIndex) -> MemoryIndex {

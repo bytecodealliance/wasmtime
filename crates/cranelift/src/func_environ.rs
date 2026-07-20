@@ -2253,13 +2253,16 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // for the lifetime of every instance and every entry has the
             // signature this call site expects, the check can never fail
             // and is elided the same way as for typed-funcref tables
-            // below. Null slots are still caught: `may_be_null` is
-            // inherited from the table type, so the null check remains.
+            // below. A null slot is still caught through `may_be_null` —
+            // unless the static image also proves every in-bounds slot
+            // non-null, in which case the null check can never fire
+            // either and is dropped with it.
             WasmHeapType::Func
                 if self.try_elide_sig_check_for_immutable_table(table_index, ty_index) =>
             {
                 return CheckIndirectCallTypeSignature::StaticMatch {
-                    may_be_null: table.ref_type.nullable,
+                    may_be_null: table.ref_type.nullable
+                        && !self.env.module.table_never_contains_null(table_index),
                 };
             }
 
