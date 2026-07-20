@@ -1652,8 +1652,14 @@ impl FuncEnvironment<'_> {
         .unwrap();
 
         // A fixed-size table can't be resized, so its base address won't change
-        // and its base load is `readonly` and `can_move`.
-        let is_static = Some(table.limits.min) == table.limits.max;
+        // and its base load is `readonly` and `can_move`. That holds when the
+        // table's type pins `min == max`, and also when translation proved the
+        // table can never be mutated or grown: its size is then `min` forever,
+        // so the bound is a compile-time constant and the per-call bound load
+        // disappears. (Imported and exported tables are never "immutable" —
+        // the host can grow them — so they only qualify via `min == max`.)
+        let is_static =
+            Some(table.limits.min) == table.limits.max || self.module.table_is_immutable(index);
         let mut base_flags = ir::MemFlagsData::trusted();
         if is_static {
             base_flags = base_flags.with_readonly().with_can_move();
