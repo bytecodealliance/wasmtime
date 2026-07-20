@@ -97,16 +97,10 @@ pub fn list() -> Vec<Inst> {
         inst("vphaddw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x01).r(), (_64b | compat) & avx),
         inst("vphaddd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x02).r(), (_64b | compat) & avx),
         inst("vaddpd", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Full)._66()._0f().w1().op(0x58).r(), (_64b | compat) & avx512vl),
-        // APX
-        //
-        // NOTE: The DSL now supports describing APX "Extended EVEX" encodings
-        // via `evex(..).map4().nd()/.nf()` (see `dsl::encoding`). Emitting a
-        // real APX instruction additionally requires format/emitter codegen
-        // support (a three-operand ND format, EGPR register bits, and the
-        // MAP4/ND/NF payload emission in `generate::format`), which is not yet
-        // wired up. Example of the intended DSL usage once codegen lands:
-        //
-        // inst("addq", fmt("RVM", [w(r64a), r(r64b), r(rm64)]),
-        //      evex(L128, Full).map4().w0().nd().op(0x01).r(), _64b),
+        // APX: NDD (new data destination) form of `ADD`, promoted into EVEX
+        // "map 4" via the extended-EVEX prefix. Operands are `[NDD dest in
+        // reg, source in vvvv, r/m source]`. `addq` is 64-bit so the `W` bit is
+        // set (`.w1()`); use `.w0()` for the 32-bit `addl` form.
+        inst("addq", fmt("RVM", [w(r64a), r(r64b), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x01).r(), _64b),
     ]
 }
