@@ -97,14 +97,14 @@
 (assert_return (invoke "reinterpret-and-promote" (i32.const 0xfffefdfc))
                (i64.const 0x7ff8000000000000))
 (assert_return (invoke "copysign-and-demote" (f64.const nan))
-               (f32.const nan:0x7fc00000))
+               (f32.const nan:0x400000))
 (assert_return (invoke "copysign-and-promote" (f32.const nan))
-               (f64.const nan:0x7ff8000000000000))
+               (f64.const nan:0x8000000000000))
 
 (assert_return (invoke "f32x4.demote_f64x2_zero"
                (v128.const i64x2 0xfffefdfccccdcecf 0xfffefdfccccdcecf))
-               (v128.const f32x4 nan:0x7fc00000 nan:0x7fc00000 0 0))
+               (v128.const f32x4 nan:0x400000 nan:0x400000 0 0))
 
 (assert_return (invoke "f64x2.promote_low_f32x4"
                (v128.const i32x4 0xfffefdfc 0xfffefdfc 0 0))
-               (v128.const f64x2 nan:0x7ff8000000000000 nan:0x7ff8000000000000))
+               (v128.const f64x2 nan:0x8000000000000 nan:0x8000000000000))

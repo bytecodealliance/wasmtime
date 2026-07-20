@@ -22,15 +22,6 @@ use wasmtime_component_util::FlagsSize;
 mod resources;
 pub use resources::ResourcesBuilder;
 
-/// Maximum nesting depth of a type allowed in Wasmtime.
-///
-/// This constant isn't chosen via any scientific means and its main purpose is
-/// to enable most of Wasmtime to handle types via recursion without worrying
-/// about stack overflow.
-///
-/// Some more information about this can be found in #4814
-const MAX_TYPE_DEPTH: u32 = 100;
-
 /// Structure used to build a [`ComponentTypes`] during translation.
 ///
 /// This contains tables to intern any component types found as well as
@@ -430,42 +421,43 @@ impl ComponentTypesBuilder {
         id: ComponentDefinedTypeId,
     ) -> Result<InterfaceType> {
         assert_eq!(types.id(), self.module_types.validator_id());
-        let ret = match &types[id] {
+        Ok(match &types[id] {
             ComponentDefinedType::Primitive(ty) => self.primitive_type(ty)?,
             ComponentDefinedType::Record(e) => InterfaceType::Record(self.record_type(types, e)?),
             ComponentDefinedType::Variant(e) => {
                 InterfaceType::Variant(self.variant_type(types, e)?)
             }
-            ComponentDefinedType::List(e) => InterfaceType::List(self.list_type(types, e)?),
-            ComponentDefinedType::Map(key, value) => {
+            ComponentDefinedType::List { element, .. } => {
+                InterfaceType::List(self.list_type(types, element)?)
+            }
+            ComponentDefinedType::Map { key, value, .. } => {
                 InterfaceType::Map(self.map_type(types, key, value)?)
             }
             ComponentDefinedType::Tuple(e) => InterfaceType::Tuple(self.tuple_type(types, e)?),
             ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
             ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
-            ComponentDefinedType::Option(e) => InterfaceType::Option(self.option_type(types, e)?),
-            ComponentDefinedType::Result { ok, err } => {
+            ComponentDefinedType::Option { ty, .. } => {
+                InterfaceType::Option(self.option_type(types, ty)?)
+            }
+            ComponentDefinedType::Result { ok, err, .. } => {
                 InterfaceType::Result(self.result_type(types, ok, err)?)
             }
             ComponentDefinedType::Own(r) => InterfaceType::Own(self.resource_id(r.resource())),
             ComponentDefinedType::Borrow(r) => {
                 InterfaceType::Borrow(self.resource_id(r.resource()))
             }
-            ComponentDefinedType::Future(ty) => {
+            ComponentDefinedType::Future { ty, .. } => {
                 InterfaceType::Future(self.future_table_type(types, ty)?)
             }
-            ComponentDefinedType::Stream(ty) => {
+            ComponentDefinedType::Stream { ty, .. } => {
                 InterfaceType::Stream(self.stream_table_type(types, ty)?)
             }
-            ComponentDefinedType::FixedLengthList(ty, size) => {
-                InterfaceType::FixedLengthList(self.fixed_length_list_type(types, ty, *size)?)
-            }
-        };
-        let info = self.type_information(&ret);
-        if info.depth > MAX_TYPE_DEPTH {
-            bail!("type nesting is too deep");
-        }
-        Ok(ret)
+            ComponentDefinedType::FixedLengthList {
+                element, length, ..
+            } => InterfaceType::FixedLengthList(
+                self.fixed_length_list_type(types, element, *length)?,
+            ),
+        })
     }
 
     /// Retrieve Wasmtime's type representation of the `error-context` type.
@@ -1002,7 +994,6 @@ struct TypeInformationCache {
 }
 
 struct TypeInformation {
-    depth: u32,
     flat: FlatTypesStorage,
     has_borrow: bool,
 }
@@ -1010,7 +1001,6 @@ struct TypeInformation {
 impl TypeInformation {
     const fn new() -> TypeInformation {
         TypeInformation {
-            depth: 0,
             flat: FlatTypesStorage::new(),
             has_borrow: false,
         }
@@ -1018,7 +1008,6 @@ impl TypeInformation {
 
     const fn primitive(flat: FlatType) -> TypeInformation {
         let mut info = TypeInformation::new();
-        info.depth = 1;
         info.flat.memory32[0] = flat;
         info.flat.memory64[0] = flat;
         info.flat.len = 1;
@@ -1027,7 +1016,6 @@ impl TypeInformation {
 
     const fn string() -> TypeInformation {
         let mut info = TypeInformation::new();
-        info.depth = 1;
         info.flat.memory32[0] = FlatType::I32;
         info.flat.memory32[1] = FlatType::I32;
         info.flat.memory64[0] = FlatType::I64;
@@ -1039,9 +1027,7 @@ impl TypeInformation {
     /// Builds up all flat types internally using the specified representation
     /// for all of the component fields of the record.
     fn build_record<'a>(&mut self, types: impl Iterator<Item = &'a TypeInformation>) {
-        self.depth = 1;
         for info in types {
-            self.depth = self.depth.max(1 + info.depth);
             self.has_borrow = self.has_borrow || info.has_borrow;
             match info.flat.as_flat_types() {
                 Some(types) => {
@@ -1075,16 +1061,14 @@ impl TypeInformation {
     {
         let cases = cases.into_iter();
         self.flat.push(FlatType::I32, FlatType::I32);
-        self.depth = 1;
 
         for info in cases {
             let info = match info {
                 Some(info) => info,
                 // If this case doesn't have a payload then it doesn't change
-                // the depth/flat representation
+                // the flat representation
                 None => continue,
             };
-            self.depth = self.depth.max(1 + info.depth);
             self.has_borrow = self.has_borrow || info.has_borrow;
 
             // If this variant is already unrepresentable in a flat
@@ -1150,7 +1134,6 @@ impl TypeInformation {
 
     fn fixed_length_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedLengthList) {
         let element_info = types.type_information(&ty.element);
-        self.depth = 1 + element_info.depth;
         self.has_borrow = element_info.has_borrow;
         match element_info.flat.as_flat_types() {
             Some(types) => {
@@ -1167,12 +1150,10 @@ impl TypeInformation {
     }
 
     fn enums(&mut self, _types: &ComponentTypesBuilder, _ty: &TypeEnum) {
-        self.depth = 1;
         self.flat.push(FlatType::I32, FlatType::I32);
     }
 
     fn flags(&mut self, _types: &ComponentTypesBuilder, ty: &TypeFlags) {
-        self.depth = 1;
         match FlagsSize::from_count(ty.names.len()) {
             FlagsSize::Size0 => {}
             FlagsSize::Size1 | FlagsSize::Size2 => {
@@ -1208,18 +1189,15 @@ impl TypeInformation {
     fn lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeList) {
         *self = TypeInformation::string();
         let info = types.type_information(&ty.element);
-        self.depth += info.depth;
         self.has_borrow = info.has_borrow;
     }
 
     fn maps(&mut self, types: &ComponentTypesBuilder, ty: &TypeMap) {
         // Maps are represented as list<tuple<k, v>> in canonical ABI
-        // So we use POINTER_PAIR like lists, and calculate depth/borrow from key and value
+        // So we use POINTER_PAIR like lists, and calculate borrow from key and value
         *self = TypeInformation::string();
         let key_info = types.type_information(&ty.key);
         let value_info = types.type_information(&ty.value);
-        // Depth is max of key/value depths, plus 1 for the extra map layer.
-        self.depth = key_info.depth.max(value_info.depth) + 1;
         self.has_borrow = key_info.has_borrow || value_info.has_borrow;
     }
 }
