@@ -12,6 +12,21 @@ readme = "README.md"
 edition.workspace = true
 default-run = "wasmtime"
 rust-version.workspace = true
+exclude = [
+  'tests/disas',
+  'tests/wasi-testsuite',
+  'tests/spec_testsuite',
+  'tests/misc_testsuite',
+  'tests/component-model',
+  'supply-chain',
+  'docs',
+  'examples/*.c',
+  'examples/*.cc',
+  'ci',
+  '.github',
+  '.claude',
+  '.agents',
+]
 
 [package.metadata.binstall]
 pkg-url = "{repo}/releases/download/v{version}/wasmtime-v{version}-{target-arch}-{target-family}{archive-suffix}"

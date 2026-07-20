@@ -1,3 +1,14 @@
+## 47.0.1
+
+Released 2026-07-20.
+
+### Fixed
+
+* Fixed publication of `wasmtime-cli` to crates.io.
+  [#13902](https://github.com/bytecodealliance/wasmtime/pull/13902)
+
+--------------------------------------------------------------------------------
+
 ## 47.0.0
 
 Released 2026-07-20.
