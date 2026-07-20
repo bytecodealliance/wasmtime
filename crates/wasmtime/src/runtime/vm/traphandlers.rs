@@ -245,7 +245,38 @@ where
         store: &mut dyn VMStore,
         f: impl FnOnce(&mut dyn VMStore) -> Result<T, E>,
     ) -> (T::Abi, Option<UnwindReason>) {
-        // First prepare the closure `f` as something that'll be invoked to
+        // First wrap `f` in call hooks if that feature is enabled. This is used
+        // as a "pretty far down in the stack" mechanism of ensuring that hooks
+        // aren't forgotten.
+        //
+        // Note that by being placed here this is handling:
+        //
+        // * libcalls
+        // * host functions
+        // * component versions of the above
+        //
+        // This specifically is NOT handling libcalls where the result can't
+        // carry a result. This should be safe as anything which doesn't return
+        // a `Result` sort of has to be simple enough to not allow recursion so
+        // it's just a brief exit from the guest to the host.
+        //
+        // Also note that this only happens with the `call-hook` feature because
+        // this otherwise imposes a dynamic dispatch on the `store` trait object
+        // which otherwise can't be optimized away.
+        #[cfg(feature = "call-hook")]
+        let f = move |store: &mut dyn VMStore| {
+            store.call_hook(crate::CallHook::CallingHost)?;
+
+            let res = f(store);
+
+            // Note that if this returns a trap then `ret` is discarded
+            // entirely.
+            store.call_hook(crate::CallHook::ReturningFromHost)?;
+
+            res.map_err(|e| e.into())
+        };
+
+        // Next prepare the closure `f` as something that'll be invoked to
         // generate the return value of this function. This is the
         // conditionally, below, passed to `catch_unwind`.
         let f = move || match f(store) {
