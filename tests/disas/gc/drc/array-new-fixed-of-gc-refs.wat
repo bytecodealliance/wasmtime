@@ -14,18 +14,18 @@
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 40 "VMContext+0x28"
 ;;     region3 = 1677721600 "TypeIdsArray+0x0"
-;;     region4 = 67108896 "VMStoreContext+0x20"
+;;     region4 = 67108904 "VMStoreContext+0x28"
 ;;     region5 = 536870912 "GcHeap"
-;;     region6 = 67108904 "VMStoreContext+0x28"
+;;     region6 = 67108912 "VMStoreContext+0x30"
 ;;     region7 = 1543503872 "Stack(ss0)"
 ;;     region8 = 1543503873 "Stack(ss1)"
 ;;     region9 = 1543503874 "Stack(ss2)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:24 sig0
 ;;     stack_limit = gv2
@@ -45,7 +45,7 @@
 ;; @0025                               v18 = call fn0(v0, v14, v16, v216, v17), stack_map=[i32 @ ss2+0, i32 @ ss1+0, i32 @ ss0+0]  ; v14 = -1476395008, v216 = 40, v17 = 8
 ;; @0025                               v5 = iconst.i32 3
 ;; @0025                               v19 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0025                               v20 = load.i64 notrap aligned readonly can_move region4 v19+32
+;; @0025                               v20 = load.i64 notrap aligned readonly can_move region4 v19+40
 ;; @0025                               v21 = uextend.i64 v18
 ;; @0025                               v22 = iadd v20, v21
 ;; @0025                               v23 = iconst.i64 24

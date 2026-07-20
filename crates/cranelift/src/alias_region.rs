@@ -1232,6 +1232,24 @@ where
         )
     }
 
+    /// Load the `VMStoreContext::mmu_interrupt_page_ptr` field.
+    pub fn vmstore_context_mmu_interrupt_page_ptr(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_mmu_interrupt_page_ptr()
+                .into(),
+        )
+    }
+
     /// Get a `Load` for the `VmStoreContext::stack_limits` field.
     pub fn vmstore_context_stack_limit_load(&mut self, func: &mut ir::Function) -> Load {
         let offset = self

@@ -71,6 +71,10 @@ impl CompilerBuilder for Builder {
             bail!("Winch does not currently support guest-level debugging");
         }
 
+        if tunables.mmu_interruption {
+            bail!("Winch does not currently support MMU interruption");
+        }
+
         self.tunables = Some(tunables.clone());
         self.cranelift.set_tunables(tunables)?;
         Ok(())

@@ -1,10 +1,22 @@
 //! Trap handling on Unix based on POSIX signals.
 
 use crate::prelude::*;
+#[cfg(has_mmu_interruption)]
+use crate::runtime;
+#[cfg(has_mmu_interruption)]
+use crate::runtime::module::lookup_code;
+#[cfg(has_mmu_interruption)]
+use crate::runtime::vm::traphandlers::raise_preexisting_trap;
 use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, tls};
+#[cfg(has_mmu_interruption)]
+use crate::runtime::vm::{Instance, VMContext};
+#[cfg(has_mmu_interruption)]
+use core::arch::naked_asm;
 use std::cell::RefCell;
 use std::io;
 use std::mem;
+#[cfg(has_mmu_interruption)]
+use std::ptr::NonNull;
 use std::ptr::{self, null_mut};
 use wasmtime_unwinder::Handler;
 
@@ -18,6 +30,10 @@ static mut PREV_SIGBUS: libc::sigaction = UNINIT_SIGACTION;
 static mut PREV_SIGILL: libc::sigaction = UNINIT_SIGACTION;
 static mut PREV_SIGFPE: libc::sigaction = UNINIT_SIGACTION;
 
+// From signal.h. Not yet exposed in libc. Value is valid for Linux and Mac; not
+// sure about elsewhere.
+#[cfg(has_mmu_interruption)]
+const SEGV_ACCERR: libc::c_int = 2;
 pub struct TrapHandler;
 
 impl TrapHandler {
@@ -128,6 +144,231 @@ now.
     }
 }
 
+/// Causes the active fiber to yield.
+///
+/// Consequently, this returns only after this fiber resumes, appearing to be a
+/// normal synchronous function from the standpoint of the caller.
+///
+/// `wasm_resume_pc` is the address of the instruction after the load that
+/// triggered the signal. `trampoline_fp` is a pointer to
+/// `task_switch_trampoline`'s frame, which points at the slot where it saved
+/// the Wasm caller's rbp. Providing these allows this to ape the behavior of
+/// the wasm-to-host trampoline so backtrace capture works in the case of fiber
+/// cancellation.
+///
+/// If this fiber gets cancelled within the duration of our yield, this function
+/// never returns, instead initiating an unwind.
+///
+/// # Safety
+///
+/// `vmctx` must be a currently-entered `VMContext`. In current use,
+/// `task_switch_trampoline` ensures RDI still holds the Wasm caller's vmctx and
+/// sets up the other two argument registers as well.
+#[cfg(has_mmu_interruption)]
+unsafe extern "C" fn yield_current_fiber(
+    vmctx: NonNull<VMContext>,
+    wasm_resume_pc: usize,
+    trampoline_fp: usize,
+) {
+    unsafe {
+        // is_cancelled means an error occurred and unwind info has been stored
+        // in TLS.
+        let is_cancelled = !Instance::enter_host_from_wasm(vmctx, |store, _instance| {
+            // Mirror the behavior of `block_on!`, which would panic in
+            // `assert_ready()` if the Store lacked Asyncness because
+            // `yield_now()` is always initially unready.
+            debug_assert!(
+                store.can_block(),
+                "mmu-interruption should automatically enable asyncness on all stores referencing the engine on which it's configured, but somehow asyncness was off"
+            );
+
+            let store_ctx = store.vm_store_context();
+
+            // Record Wasm-exit state just as a Cranelift-emitted wasm-to-host
+            // trampoline would so that any backtrace capture triggered
+            // while we are in the host (in particular, on the cancellation
+            // path below) sees a coherent topmost Wasm activation. Otherwise,
+            // it hits a debug assert and crashes.
+            *store_ctx.last_wasm_exit_pc.get() = wasm_resume_pc;
+            *store_ctx.last_wasm_exit_trampoline_fp.get() = trampoline_fp;
+
+            // Reset the epoch.
+            store_ctx.unprotect_interrupt_page();
+
+            // And actually switch fibers.
+            let result = store.with_blocking(|_store, cx| cx.block_on(runtime::store::yield_now()));
+
+            if result.is_ok() {
+                // Clear the exit state again so it doesn't appear stale once we
+                // resume Wasm.
+                let ctx = store.vm_store_context();
+                *ctx.last_wasm_exit_pc.get() = 0;
+                *ctx.last_wasm_exit_trampoline_fp.get() = 0;
+            }
+            // Else leave exit state in place so `record_unwind` (called via
+            // `raise_preexisting_trap` below) can capture a backtrace.
+
+            result
+        });
+        if is_cancelled {
+            // `block_on()` returned an Err, meaning this fiber has been
+            // cancelled and needs to exit. We unwind it using
+            // `raise_preexisting_trap()`, which, on native targets (the only
+            // ones MMU epochs apply to), never returns, doing a longjmp out and
+            // thus making anything in stack frames above irrelevant. Thus, it
+            // doesn't matter that we never get to restore registers in
+            // `task_switch_trampoline()` or jmp back to the signal-raising
+            // address.
+            Instance::enter_host_from_wasm(vmctx, |store, _instance| {
+                raise_preexisting_trap(store);
+            });
+        }
+    }
+}
+
+/// Switches tasks in response to a signal thrown under MMU-based epoch
+/// interruption.
+///
+/// Saves register state, makes a host call to switch tasks, restores state, and
+/// jmps back to the instruction after the one that triggered the signal. The
+/// address of that instruction has been squirreled away in r10 by the signal
+/// handler. The signal handler has also placed the address of the vmctx into
+/// rdi, the first argument register.
+///
+/// # Safety
+///
+/// This is invoked only by the signal handler `trap_handler`, which fulfills
+/// the prerequisites about register contents. It is reached not by a
+/// straightforward call but by jimmying the ucontext to "resume into" this
+/// (instead of the trapping location) when the handler exits.
+///
+/// This uses about 376b of stack space (on the normal stack, not the
+/// sigaltstack) to save registers + a bit more to run `yield_current_fiber()`.
+/// In practice, this should not create uncaught stack overflows because (1)
+/// this trampoline runs only in async, (2) the default async_stack_size is
+/// 2MiB, of which only 512KiB is reserved for the Wasm stack, and (3) the fiber
+/// stack has a 4KiB guard page at the bottom, which causes
+/// `abort_stack_overflow()` to run if we do crash into it.
+#[cfg(has_mmu_interruption)]
+#[unsafe(naked)]
+unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
+    naked_asm!(
+        "
+        // When control reaches here, we have just returned from a signal
+        // handler after rewriting PC to point to this trampoline but updating
+        // no other register state.
+        //
+        // The stack has enough space for this state-saving, ensured by the
+        // stack-limit checks in Cranelift-compiled code.
+
+        // Push a fake return address just to keep the stack 16b-aligned for the
+        // call, as SysV x64 demands.
+        push 0
+        // This is an ordinary frame as seen by stack-walks. We also establish
+        // rbp as our frame pointer so that we can hand it to
+        // `yield_current_fiber` as the trampoline FP: the saved wasm rbp lives
+        // at [rbp], which is exactly what
+        // `VMStoreContext::wasm_exit_fp_from_trampoline_fp` expects.
+        push rbp
+
+        // Save all GPRs except rbp/rsp (saved above and by normal stack
+        // discipline, respectively).
+        push rdx
+
+        // Now that rdx is pushed, take an intermission to put the original
+        // value of rbp into it, for use as arg 3 to yield_current_fiber().
+        lea rdx, [rsp + 8]
+
+        // And do the rest of the GPRs.
+        push rax
+        push rbx
+        push rcx
+        push rdi
+        push rsi
+        push r8
+        push r9
+        push r10
+        push r11
+        push r12
+        push r13
+        push r14
+        push r15
+
+        // N.B.: we don't save rflags; Cranelift-compiled code
+        // never assumes it is saved across instructions outside of
+        // flag-generation / flag-consumption pairs, and the only
+        // resumable traps we are interested in are not flags-related.
+
+        sub rsp, 256 // enough for all 16 XMM registers.
+        movdqu [rsp +  0 * 16], xmm0
+        movdqu [rsp +  1 * 16], xmm1
+        movdqu [rsp +  2 * 16], xmm2
+        movdqu [rsp +  3 * 16], xmm3
+        movdqu [rsp +  4 * 16], xmm4
+        movdqu [rsp +  5 * 16], xmm5
+        movdqu [rsp +  6 * 16], xmm6
+        movdqu [rsp +  7 * 16], xmm7
+        movdqu [rsp +  8 * 16], xmm8
+        movdqu [rsp +  9 * 16], xmm9
+        movdqu [rsp + 10 * 16], xmm10
+        movdqu [rsp + 11 * 16], xmm11
+        movdqu [rsp + 12 * 16], xmm12
+        movdqu [rsp + 13 * 16], xmm13
+        movdqu [rsp + 14 * 16], xmm14
+        movdqu [rsp + 15 * 16], xmm15
+
+        // vmctx is already in rdi, care of the signal handler. Get the 2nd
+        // arg ready (the 3rd already having been put in rdx above)...
+        mov rsi, r10
+        // ...and call yield_current_fiber() to do the task switch.
+        call {}
+
+        // Restore registers.
+        movdqu xmm0,  [rsp +  0 * 16]
+        movdqu xmm1,  [rsp +  1 * 16]
+        movdqu xmm2,  [rsp +  2 * 16]
+        movdqu xmm3,  [rsp +  3 * 16]
+        movdqu xmm4,  [rsp +  4 * 16]
+        movdqu xmm5,  [rsp +  5 * 16]
+        movdqu xmm6,  [rsp +  6 * 16]
+        movdqu xmm7,  [rsp +  7 * 16]
+        movdqu xmm8,  [rsp +  8 * 16]
+        movdqu xmm9,  [rsp +  9 * 16]
+        movdqu xmm10, [rsp + 10 * 16]
+        movdqu xmm11, [rsp + 11 * 16]
+        movdqu xmm12, [rsp + 12 * 16]
+        movdqu xmm13, [rsp + 13 * 16]
+        movdqu xmm14, [rsp + 14 * 16]
+        movdqu xmm15, [rsp + 15 * 16]
+        add rsp, 256
+
+        pop r15
+        pop r14
+        pop r13
+        pop r12
+        pop r11
+        pop r10
+        pop r9
+        pop r8
+        pop rsi
+        pop rdi
+        pop rcx
+        pop rbx
+        pop rax
+        pop rdx
+
+        pop rbp
+        // Pop off the fake return address.
+        add rsp, 8
+
+        // Resume right after the load instruction that triggered the signal
+        // handler.
+        jmp r10
+        ",
+        sym yield_current_fiber
+    );
+}
+
 unsafe extern "C" fn trap_handler(
     signum: libc::c_int,
     siginfo: *mut libc::siginfo_t,
@@ -147,6 +388,42 @@ unsafe extern "C" fn trap_handler(
             Some(info) => info,
             None => return false,
         };
+
+        // Check for segfaults meant as cues to end an epoch.
+        #[cfg(has_mmu_interruption)]
+        // SAFETY: `si_code` field is always initialized for SIGSEGV.
+        if signum == libc::SIGSEGV && unsafe { (*siginfo).si_code } == SEGV_ACCERR {
+            // Compare it with the offsets of MMU-interrupt-check instructions
+            // as stored in the object file.
+            let ucontext = unsafe { &mut *(context as *mut libc::ucontext_t) };
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "has_mmu_interruption implies x64, which has 64-bit usize"
+            )]
+            let pc = ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] as usize;
+            // Now things get expensive: we call lookup_code(), which takes a global lock.
+            if let Some((code_memory, offset_within_code)) = lookup_code(pc) {
+                // We're within a 'target_arch = "x86_64"', so we can just treat
+                // the stored little-endians as native u32s.
+                if let Some(return_address) = code_memory.return_address_for_mmu_interrupt_check(
+                    offset_within_code
+                        .try_into()
+                        .expect("MMU-interrupt-check location should fit in 32 bits"),
+                ) {
+                    // It is an interrupt check. Arrange to resume at asm
+                    // trampoline after signal handler exits:
+                    ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] =
+                        task_switch_trampoline as *const () as i64;
+                    // Put original resumption address in R10:
+                    ucontext.uc_mcontext.gregs[libc::REG_R10 as usize] = return_address as i64;
+                    // Trampoline can expect the vmctx in RDI.
+
+                    return true;
+                }
+            }
+            // Else it is an ordinary trap or the .wasmtime.mmu_interrupt_checks
+            // section is missing from the binary; continue on.
+        }
 
         // If we hit an exception while handling a previous trap, that's
         // quite bad, so bail out and let the system handle this
@@ -343,7 +620,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
     }
 }
 
-/// Updates the siginfo context stored in `cx` to resume to `handler` up on
+/// Updates the siginfo context stored in `cx` to resume to `handler` upon
 /// resumption while returning from the signal handler.
 unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
     cfg_select! {

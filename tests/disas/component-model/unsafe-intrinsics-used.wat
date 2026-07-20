@@ -36,11 +36,11 @@
 
 ;; function u0:0(i64 vmctx, i64) -> i64 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108968 "VMStoreContext+0x68"
+;;     region1 = 67108976 "VMStoreContext+0x70"
 ;;
 ;; block0(v0: i64, v1: i64):
 ;;     v2 = load.i64 notrap aligned readonly can_move region0 v1+8
-;;     v3 = load.i64 notrap aligned readonly can_move region1 v2+104
+;;     v3 = load.i64 notrap aligned readonly can_move region1 v2+112
 ;;     return v3
 ;; }
 ;;

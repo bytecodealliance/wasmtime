@@ -96,6 +96,7 @@ impl Inst {
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::StackSwitchBasic { .. }
+            | Inst::DeadLoadWithContext { .. }
             | Inst::TrapIf { .. }
             | Inst::TrapIfAnd { .. }
             | Inst::TrapIfOr { .. }
@@ -671,6 +672,17 @@ impl PrettyPrint for Inst {
                 )
             }
 
+            Inst::DeadLoadWithContext {
+                dst,
+                load_ptr,
+                context,
+            } => {
+                let dst = pretty_print_reg(*dst.to_reg(), 8);
+                let load_ptr = pretty_print_reg(**load_ptr, 8);
+                let context = pretty_print_reg(**context, 8);
+                format!("dead_load_with_context {dst}, {load_ptr}, {context}")
+            }
+
             Inst::JmpKnown { dst } => {
                 let op = ljustify("jmp".to_string());
                 let dst = dst.to_string();
@@ -1049,6 +1061,30 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                     .into(),
             );
             collector.reg_clobbers(clobbers);
+        }
+
+        Inst::DeadLoadWithContext {
+            dst,
+            load_ptr,
+            context,
+        } => {
+            // load_ptr is an input param.
+            collector.reg_use(load_ptr);
+            // Demand context (vmctx) go into RDI.
+            collector.reg_fixed_use(context, regs::rdi());
+            // Reserve r10 as a place for the signal handler to stow the return
+            // address (which we're overwriting with that of the epoch-ending
+            // stub). Picking r10 because it's caller-saved and not used for arg
+            // passing in Linux/x64. It is used as "a static chain pointer
+            // in case of nested functions" according to SystemV, but that's
+            // inapplicable to compiled Wasm code. It is also used to store the
+            // function stack limit in Cranelift, but the stack-limit check is
+            // over by the time we need r10, in the case of the use of this
+            // instruction for MMU-based epoch interruption.
+            //
+            // Also def it so we can use it as the destination of the dead load
+            // rather than consuming another arbitrary reg.
+            collector.reg_fixed_def(dst, regs::r10());
         }
 
         Inst::ReturnCallKnown { info } => {

@@ -22,10 +22,10 @@
 ;;       jne     0x70
 ;;   22: movq    %rbp, %rcx
 ;;       movq    8(%rsi), %rax
-;;       movq    %rcx, 0x30(%rax)
+;;       movq    %rcx, 0x38(%rax)
 ;;       movq    %rbp, %rcx
 ;;       movq    8(%rcx), %rcx
-;;       movq    %rcx, 0x38(%rax)
+;;       movq    %rcx, 0x40(%rax)
 ;;       movq    8(%rdi), %r8
 ;;       leaq    (%rsp), %rdx
 ;;       xorq    %rcx, %rcx

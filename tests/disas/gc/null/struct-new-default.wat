@@ -13,17 +13,17 @@
 )
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 32 "VMContext+0x20"
 ;;     region3 = 939524096 "VMNullHeapData+0x0"
-;;     region4 = 67108904 "VMStoreContext+0x28"
-;;     region5 = 67108896 "VMStoreContext+0x20"
+;;     region4 = 67108912 "VMStoreContext+0x30"
+;;     region5 = 67108904 "VMStoreContext+0x28"
 ;;     region6 = 40 "VMContext+0x28"
 ;;     region7 = 1677721600 "TypeIdsArray+0x0"
 ;;     region8 = 536870912 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64) -> i8 tail
 ;;     fn0 = colocated u805306368:23 sig0
 ;;     stack_limit = gv2
@@ -38,14 +38,14 @@
 ;; @0021                               v5 = iconst.i32 24
 ;; @0021                               v16 = uadd_overflow_trap v15, v5, user18  ; v5 = 24
 ;; @0021                               v18 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0021                               v19 = load.i64 notrap aligned region4 v18+40
+;; @0021                               v19 = load.i64 notrap aligned region4 v18+48
 ;; @0021                               v17 = uextend.i64 v16
 ;; @0021                               v20 = icmp ule v17, v19
 ;; @0021                               brif v20, block2, block3
 ;;
 ;;                                 block2:
 ;;                                     v49 = iconst.i32 -1342177256
-;; @0021                               v24 = load.i64 notrap aligned readonly can_move region5 v18+32
+;; @0021                               v24 = load.i64 notrap aligned readonly can_move region5 v18+40
 ;;                                     v55 = band.i32 v13, v48  ; v48 = -8
 ;;                                     v56 = uextend.i64 v55
 ;; @0021                               v26 = iadd v24, v56

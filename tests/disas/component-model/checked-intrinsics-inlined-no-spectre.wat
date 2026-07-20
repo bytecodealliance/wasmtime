@@ -49,13 +49,13 @@
 )
 ;; function u0:0(i64 vmctx, i64, i64, i64) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 1207959576 "VMFunctionImport+0x18"
-;;     region3 = 67108968 "VMStoreContext+0x68"
+;;     region3 = 67108976 "VMStoreContext+0x70"
 ;;     region4 = 1946157056 "UnsafeIntrinsicMemory"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i64, i64, i64) -> i32 tail
 ;;     sig2 = (i64 vmctx, i64, i64, i64, i64, i32) tail
@@ -71,7 +71,7 @@
 ;; @01b0                               v13 = bor v11, v12
 ;; @01b0                               trapnz v13, heap_oob
 ;; @01aa                               v6 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @01aa                               v7 = load.i64 notrap aligned readonly can_move region3 v6+104
+;; @01aa                               v7 = load.i64 notrap aligned readonly can_move region3 v6+112
 ;; @01b0                               v14 = iadd v7, v2
 ;; @01b0                               v15 = load.i32 notrap aligned region4 v14
 ;; @01bf                               v23, v24 = uadd_overflow v2, v9  ; v9 = 4

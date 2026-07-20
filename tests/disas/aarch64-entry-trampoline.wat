@@ -20,11 +20,11 @@
 ;;       mov     x3, x1
 ;;       mov     x12, x29
 ;;       ldr     x15, [x0, #8]
-;;       str     x12, [x15, #0x48]
+;;       str     x12, [x15, #0x50]
 ;;       mov     x13, sp
-;;       str     x13, [x15, #0x40]
+;;       str     x13, [x15, #0x48]
 ;;       adr     x14, #0xa0
-;;       str     x14, [x15, #0x50]
+;;       str     x14, [x15, #0x58]
 ;;       mov     x2, x0
 ;;       stur    x15, [sp]
 ;;       bl      #0
@@ -45,7 +45,7 @@
 ;;       ret
 ;;   a0: mov     x0, #1
 ;;   a4: ldur    x15, [sp]
-;;   a8: str     x0, [x15, #0x88]
+;;   a8: str     x0, [x15, #0x90]
 ;;   ac: mov     w0, #0
 ;;   b0: add     sp, sp, #0x10
 ;;   b4: ldp     d8, d9, [sp], #0x10

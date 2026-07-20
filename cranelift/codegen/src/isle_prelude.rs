@@ -827,6 +827,14 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn mem_flags_aligned_read_only(&mut self) -> MemFlags {
+            self.dfg()
+                .mem_flags
+                .get(MemFlagsData::new().with_aligned().with_readonly())
+                .expect("aligned, read-only MemFlagsData not found in DFG")
+        }
+
+        #[inline]
         fn mem_flags_data(&mut self, flags: MemFlags) -> Option<MemFlagsData> {
             Some(self.dfg().mem_flags[flags])
         }

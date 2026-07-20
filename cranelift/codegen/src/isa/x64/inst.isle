@@ -52,7 +52,7 @@
        ;; =========================================
        ;; Stack manipulation.
 
-      ;; Emits a inline stack probe loop.
+      ;; Emits an inline stack probe loop.
       (StackProbeLoop (tmp WritableReg)
                       (frame_size u32)
                       (guard_size u32))
@@ -193,6 +193,10 @@
                     (name BoxExternalName)
                     (offset i64)
                     (distance RelocDistance))
+
+       (DeadLoadWithContext (dst WritableGpr)
+                            (load_ptr Gpr)
+                            (context Gpr))
 
        ;; =========================================
        ;; Instructions pertaining to atomic memory accesses.

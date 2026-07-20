@@ -18,17 +18,17 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region1 = 67108896 "VMStoreContext+0x20"
 ;;     region2 = 40 "VMContext+0x28"
 ;;     region3 = 1677721600 "TypeIdsArray+0x0"
-;;     region4 = 67108896 "VMStoreContext+0x20"
-;;     region5 = 67108904 "VMStoreContext+0x28"
+;;     region4 = 67108904 "VMStoreContext+0x28"
+;;     region5 = 67108912 "VMStoreContext+0x30"
 ;;     region6 = 536870912 "GcHeap"
 ;;     region7 = 1207959576 "VMFunctionImport+0x18"
 ;;     region8 = 1207959560 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     stack_limit = gv2
 ;;
@@ -45,7 +45,7 @@
 ;;
 ;;                                 block4:
 ;; @002e                               v13 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @002e                               v14 = load.i64 notrap aligned readonly can_move region4 v13+32
+;; @002e                               v14 = load.i64 notrap aligned readonly can_move region4 v13+40
 ;; @002e                               v12 = uextend.i64 v2
 ;; @002e                               v15 = iadd v14, v12
 ;; @002e                               v16 = iconst.i64 4

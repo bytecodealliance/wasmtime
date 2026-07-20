@@ -124,6 +124,8 @@ pub use crate::runtime::vm::table::{Table, TableElementType};
 #[cfg(feature = "gc")]
 pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
+#[cfg(has_mmu_interruption)]
+pub use crate::runtime::vm::vmcontext::MmuInterrupter;
 #[cfg(feature = "component-model")]
 pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
 #[cfg(feature = "component-model-async")]

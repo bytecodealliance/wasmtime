@@ -724,10 +724,20 @@ impl<T> Store<T> {
 
         let pkey = engine.allocator().next_available_pkey();
 
+        #[cfg(has_mmu_interruption)]
+        let vm_store_context = if engine.tunables().mmu_interruption {
+            VMStoreContext::with_interrupt_page()
+        } else {
+            VMStoreContext::default()
+        };
+
+        #[cfg(not(has_mmu_interruption))]
+        let vm_store_context = VMStoreContext::default();
+
         let inner = StoreOpaque {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
-            vm_store_context: Default::default(),
+            vm_store_context,
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: TryPrimaryMap::new(),
@@ -770,6 +780,13 @@ impl<T> Store<T> {
             #[cfg(feature = "debug")]
             debug_handler: None,
         })?;
+
+        // MMU interruption traps in Wasm and unwinds via a fiber, so every
+        // Store built from an Engine with this option needs async.
+        #[cfg(has_mmu_interruption)]
+        if engine.tunables().mmu_interruption {
+            inner.set_async_required(Asyncness::Yes);
+        }
 
         let store_data =
             <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
@@ -1145,6 +1162,18 @@ impl<T> Store<T> {
         callback: impl FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync + 'static,
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
+    }
+
+    /// Returns an [`MmuEpochInterrupter`] iff MMU-based interruption is enabled
+    /// for this store.
+    ///
+    /// The returned handle is `Send + Sync` and can be used from any thread
+    /// to trigger an epoch interruption, like
+    /// [`Engine::increment_epoch`](crate::Engine::increment_epoch) can for
+    /// deadline-based epochs.
+    #[cfg(has_mmu_interruption)]
+    pub fn mmu_interrupter(&self) -> Option<vm::MmuInterrupter> {
+        self.inner.vm_store_context().mmu_interrupter()
     }
 
     /// Tests whether there is a pending exception.
@@ -2264,7 +2293,7 @@ at https://bytecodealliance.org/security.
 }
 
 #[cfg(any(feature = "async", feature = "gc"))]
-async fn yield_now() {
+pub(crate) async fn yield_now() {
     let mut yielded = false;
     future::poll_fn(move |cx| {
         if yielded {
