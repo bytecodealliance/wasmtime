@@ -98,9 +98,11 @@ pub fn list() -> Vec<Inst> {
         inst("vphaddd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x02).r(), (_64b | compat) & avx),
         inst("vaddpd", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Full)._66()._0f().w1().op(0x58).r(), (_64b | compat) & avx512vl),
         // APX: NDD (new data destination) form of `ADD`, promoted into EVEX
-        // "map 4" via the extended-EVEX prefix. Operands are `[NDD dest in
-        // reg, source in vvvv, r/m source]`. `addq` is 64-bit so the `W` bit is
-        // set (`.w1()`); use `.w0()` for the 32-bit `addl` form.
-        inst("addq", fmt("RVM", [w(r64a), r(r64b), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x01).r(), _64b),
+        // "map 4" via the extended-EVEX prefix. With `ND = 1` the architectural
+        // destination is the `vvvv`-encoded register, so the written operand is
+        // placed in the `V` slot (the middle operand of the `RVM` format) while
+        // the two sources occupy ModRM.reg and ModRM.rm. `addq` is 64-bit so
+        // the `W` bit is set (`.w1()`); use `.w0()` for the 32-bit `addl` form.
+        inst("addq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x01).r(), _64b & apx),
     ]
 }
