@@ -1354,6 +1354,21 @@ jobs:
     - run: cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-fast.args --skip-solver
     - run: cargo run -p cranelift-isle-veri --bin veri -- --name x64 --rule iadd_base_case_32_or_64_lea --skip-solver
 
+  # Verify the Cranelift backend, using cached SMT queries.
+  isle_veri_check:
+    needs: determine
+    if: needs.determine.outputs.run-full
+    name: Cranelift ISLE verifier check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: ./cranelift/isle/veri/verify-cache.sh cranelift/isle/veri/configs/aarch64-fast.args
+    - run: ./cranelift/isle/veri/verify-cache.sh cranelift/isle/veri/configs/aarch64.args
+    - run: ./cranelift/isle/veri/verify-cache.sh cranelift/isle/veri/configs/x64-iadd-base-case.args
+
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
   # this workflow run's list of artifacts.
@@ -1464,6 +1479,7 @@ jobs:
       - determine
       - miri
       - isle_veri_basic_check
+      - isle_veri_check
       - build-preview1-component-adapter
       - build-preview1-component-adapter-provider
       - test-min-platform-example

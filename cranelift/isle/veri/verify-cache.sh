@@ -14,8 +14,23 @@ if [ ! -d "$CACHE_DIR" ]; then
     echo "Run update-cache.sh first to populate the cache."
     exit 1
 fi
-cargo run -p cranelift-isle-veri --bin veri \
+if ! cargo run -p cranelift-isle-veri --bin veri \
     -- --config "$CONFIG" \
        --cache-dir "$CACHE_DIR" \
-       --cache-mode read-only-enforcing
+       --cache-mode read-only-enforcing; then
+    echo ""
+    echo "Cranelift verification failed (cache miss or verification error)."
+    echo ""
+    echo "This may be because you made a change to the backends and there are"
+    echo "new SMT queries that must be run for verification to complete."
+    echo ""
+    echo "Note that we do not run the SMT solver in CI; you need to run it locally,"
+    echo "then commit the SMT solver *result* to the repo (which we trust, and may"
+    echo "verify for new contributors)."
+    echo ""
+    echo "To re-populate the cache locally, run:"
+    echo "  ./cranelift/isle/veri/update-cache.sh $CONFIG"
+    echo "Then commit the new cache entries."
+    exit 1
+fi
 echo "=== Cache verification passed ==="
