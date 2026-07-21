@@ -1458,9 +1458,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get the value of a constant instruction (`iconst`, etc.) as a 64-bit
     /// value, if possible.
     pub fn get_constant(&self, ir_inst: Inst) -> Option<u64> {
-        // NB: We compute this on demand rather than caching it: a match on the
-        // dense, well-predicted `dfg.insts` entry is cheaper than a
-        // random-access hash probe.
         let c = is_constant_64bit(self.f, ir_inst)?;
 
         // The upper bits must be zero, enforced during legalization and by
