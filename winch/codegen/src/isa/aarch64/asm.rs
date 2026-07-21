@@ -15,7 +15,7 @@ use crate::{
 use cranelift_codegen::isa::aarch64;
 use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
 use cranelift_codegen::isa::aarch64::inst::{
-    ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5,
+    ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5, VecALUModOp,
 };
 use cranelift_codegen::{
     Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
@@ -26,7 +26,7 @@ use cranelift_codegen::{
         FPULeftShiftImm, FPUOp1, FPUOp2,
         FPUOpRI::{self, UShr32, UShr64},
         FPUOpRIMod, FPURightShiftImm, FpuRoundMode, Imm12, ImmLogic, ImmShift, Inst, IntToFpuOp,
-        PairAMode, ScalarSize, VecLanesOp, VecMisc2, VectorSize,
+        PairAMode, ScalarSize, VecALUOp, VecLanesOp, VecMisc2, VectorSize,
         emit::{EmitInfo, EmitState},
     },
     settings,
@@ -358,6 +358,10 @@ impl Assembler {
                 rd: writable,
                 rn: rn.into(),
             },
+            OperandSize::S128 => Inst::FpuMove128 {
+                rd: writable,
+                rn: rn.into(),
+            },
             _ => unreachable!(),
         };
 
@@ -417,6 +421,53 @@ impl Assembler {
     /// Add with carry, three registers.
     pub fn adc_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
         self.alu_rrr(ALUOp::Adc, rm, rn, rd, size);
+    }
+
+    /// Vector three-register ALU operation whose destination is also an input
+    pub fn vec_rrr_mod(
+        &mut self,
+        alu_op: VecALUModOp,
+        rn: Reg,
+        rm: Reg,
+        rd: WritableReg,
+        size: VectorSize,
+    ) {
+        self.emit(Inst::VecRRRMod {
+            alu_op,
+            rd: rd.map(Into::into),
+            ri: rd.to_reg().into(),
+            rn: rn.into(),
+            rm: rm.into(),
+            size,
+        });
+    }
+
+    /// Vector two register miscellaneous instruction.
+    pub fn vec_misc(&mut self, op: VecMisc2, rn: Reg, rd: WritableReg, size: VectorSize) {
+        self.emit(Inst::VecMisc {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+        });
+    }
+
+    /// Vector ALU op
+    pub fn vec_rrr(
+        &mut self,
+        alu_op: VecALUOp,
+        rn: Reg,
+        rm: Reg,
+        rd: WritableReg,
+        size: VectorSize,
+    ) {
+        self.emit(Inst::VecRRR {
+            alu_op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            rm: rm.into(),
+            size,
+        });
     }
 
     /// Add across Vector.
