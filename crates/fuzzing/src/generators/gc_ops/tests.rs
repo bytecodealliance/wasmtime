@@ -124,10 +124,7 @@ fn assert_valid_wasm(ops: &mut GcOps) {
     feats.reference_types();
     feats.gc();
     let mut validator = wasmparser::Validator::new_with_features(feats);
-    println!(
-        "{wat}",
-        wat = wasmprinter::print_bytes(&wasm).unwrap_or_else(|e| format!("<disasm failed: {e}>"))
-    );
+
     if let Err(e) = validator.validate_all(&wasm) {
         let wat =
             wasmprinter::print_bytes(&wasm).unwrap_or_else(|e| format!("<disasm failed: {e}>"));
