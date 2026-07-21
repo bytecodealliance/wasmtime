@@ -13,6 +13,16 @@ use wasm_encoder::{
     TypeSection, ValType,
 };
 
+/// Pick a same-kind concrete type index for `raw`, or `None` when there are no
+/// types of that kind (so the caller drops the op).
+fn pick_type_index(indices: &[u32], raw: u32) -> Option<u32> {
+    if indices.is_empty() {
+        None
+    } else {
+        Some(indices[usize::try_from(raw).unwrap() % indices.len()])
+    }
+}
+
 /// The base offsets and indices for various Wasm entities within
 /// their index spaces in the the encoded Wasm binary.
 #[derive(Clone, Copy)]
@@ -22,15 +32,19 @@ struct WasmEncodingBases {
     struct_local_idx: u32,
     eq_local_idx: u32,
     i31_local_idx: u32,
+    array_local_idx: u32,
     typed_local_base: u32,
     struct_global_idx: u32,
     eq_global_idx: u32,
     i31_global_idx: u32,
+    array_global_idx: u32,
     typed_global_base: u32,
     struct_table_idx: u32,
     eq_table_idx: u32,
     i31_table_idx: u32,
+    array_table_idx: u32,
     typed_table_base: u32,
+    array_length: u32,
 }
 
 /// A description of a Wasm module that makes a series of `externref` table
@@ -132,6 +146,19 @@ impl GcOps {
             vec![],
         );
 
+        // 7: `take_array`
+        let take_array_type_idx = types.len();
+        types.ty().function(
+            vec![ValType::Ref(RefType {
+                nullable: true,
+                heap_type: wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Array,
+                },
+            })],
+            vec![],
+        );
+
         let struct_type_base: u32 = types.len();
 
         // Build the type-id-to-wasm-index map from the pre-computed
@@ -146,9 +173,16 @@ impl GcOps {
             }
         }
 
+        // Flat encoding order (dense index -> TypeId), used below for naming the
+        // typed host imports and, later, for field lookups during encoding.
+        let encoding_order: Vec<TypeId> = encoding_order_grouped
+            .iter()
+            .flat_map(|(_, members)| members.iter().copied())
+            .collect();
+
         let encode_ty_id = |ty_id: &TypeId| -> wasm_encoder::SubType {
             let def = &self.types.type_defs[ty_id];
-            match &def.composite_type {
+            let inner = match &def.composite_type {
                 CompositeType::Struct(st) => {
                     let fields: Box<[wasm_encoder::FieldType]> = st
                         .fields
@@ -158,35 +192,41 @@ impl GcOps {
                             mutable: f.mutable,
                         })
                         .collect();
-                    wasm_encoder::SubType {
-                        is_final: def.is_final,
-                        supertype_idx: def.supertype.map(|st| type_ids_to_index[&st]),
-                        composite_type: wasm_encoder::CompositeType {
-                            inner: wasm_encoder::CompositeInnerType::Struct(
-                                wasm_encoder::StructType { fields },
-                            ),
-                            shared: false,
-                            describes: None,
-                            descriptor: None,
-                        },
-                    }
+                    wasm_encoder::CompositeInnerType::Struct(wasm_encoder::StructType { fields })
                 }
+                CompositeType::Array(at) => {
+                    let element = wasm_encoder::FieldType {
+                        element_type: at.element.field_type.to_storage_type(&type_ids_to_index),
+                        mutable: at.element.mutable,
+                    };
+                    wasm_encoder::CompositeInnerType::Array(wasm_encoder::ArrayType(element))
+                }
+            };
+            wasm_encoder::SubType {
+                is_final: def.is_final,
+                supertype_idx: def.supertype.map(|st| type_ids_to_index[&st]),
+                composite_type: wasm_encoder::CompositeType {
+                    inner,
+                    shared: false,
+                    describes: None,
+                    descriptor: None,
+                },
             }
         };
 
-        let mut struct_count = 0;
+        let mut concrete_count = 0;
 
         // Emit rec groups in the pre-computed order.
         for (_, group_members) in &encoding_order_grouped {
             let members: Vec<wasm_encoder::SubType> =
                 group_members.iter().map(encode_ty_id).collect();
             types.ty().rec(members);
-            struct_count += u32::try_from(group_members.len()).unwrap();
+            concrete_count += u32::try_from(group_members.len()).unwrap();
         }
 
-        let typed_fn_type_base: u32 = struct_type_base + struct_count;
+        let typed_fn_type_base: u32 = struct_type_base + concrete_count;
 
-        for i in 0..struct_count {
+        for i in 0..concrete_count {
             let concrete = struct_type_base + i;
             types.ty().function(
                 vec![ValType::Ref(RefType {
@@ -205,14 +245,26 @@ impl GcOps {
         imports.import("", "take_struct", EntityType::Function(4));
         imports.import("", "take_eq", EntityType::Function(5));
         imports.import("", "take_i31", EntityType::Function(take_i31_type_idx));
+        imports.import("", "take_array", EntityType::Function(take_array_type_idx));
 
-        // For each of our concrete struct types, define a function
-        // import that takes an argument of that concrete type.
+        // For each of our concrete struct/array types, define a function
+        // import that takes an argument of that concrete type. The import name
+        // records the kind so the host can define it appropriately.
         let typed_first_func_index: u32 = imports.len();
 
-        for i in 0..struct_count {
+        for i in 0..concrete_count {
             let ty_idx = typed_fn_type_base + i;
-            let name = format!("take_struct_{}", struct_type_base + i);
+            let wasm_idx = struct_type_base + i;
+            let is_array = encoding_order
+                .get(usize::try_from(i).unwrap())
+                .and_then(|tid| self.types.type_defs.get(tid))
+                .map(|def| def.composite_type.is_array())
+                .unwrap_or(false);
+            let name = if is_array {
+                format!("take_array_{wasm_idx}")
+            } else {
+                format!("take_struct_{wasm_idx}")
+            };
             imports.import("", &name, EntityType::Function(ty_idx));
         }
 
@@ -259,8 +311,23 @@ impl GcOps {
             shared: false,
         });
 
+        let array_table_idx = tables.len();
+        tables.table(TableType {
+            element_type: RefType {
+                nullable: true,
+                heap_type: wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Array,
+                },
+            },
+            minimum: u64::from(self.limits.table_size),
+            maximum: None,
+            table64: false,
+            shared: false,
+        });
+
         let typed_table_base = tables.len();
-        for i in 0..struct_count {
+        for i in 0..concrete_count {
             let concrete = struct_type_base + i;
             tables.table(TableType {
                 element_type: RefType {
@@ -332,9 +399,29 @@ impl GcOps {
             &ConstExpr::ref_null(wasm_encoder::HeapType::I31),
         );
 
-        // Add one typed (ref <type>) global per struct type.
+        // Add exactly one (ref.null array) global.
+        let array_global_idx = globals.len();
+        globals.global(
+            wasm_encoder::GlobalType {
+                val_type: ValType::Ref(RefType {
+                    nullable: true,
+                    heap_type: wasm_encoder::HeapType::Abstract {
+                        shared: false,
+                        ty: wasm_encoder::AbstractHeapType::Array,
+                    },
+                }),
+                mutable: true,
+                shared: false,
+            },
+            &ConstExpr::ref_null(wasm_encoder::HeapType::Abstract {
+                shared: false,
+                ty: wasm_encoder::AbstractHeapType::Array,
+            }),
+        );
+
+        // Add one typed (ref <type>) global per struct/array type.
         let typed_global_base = globals.len();
-        for i in 0..struct_count {
+        for i in 0..concrete_count {
             let concrete = struct_type_base + i;
             globals.global(
                 wasm_encoder::GlobalType {
@@ -381,8 +468,20 @@ impl GcOps {
         let i31_local_idx = eq_local_idx + 1;
         local_decls.push((1, ValType::Ref(RefType::I31REF)));
 
-        let typed_local_base: u32 = i31_local_idx + 1;
-        for i in 0..struct_count {
+        let array_local_idx = i31_local_idx + 1;
+        local_decls.push((
+            1,
+            ValType::Ref(RefType {
+                nullable: true,
+                heap_type: wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Array,
+                },
+            }),
+        ));
+
+        let typed_local_base: u32 = array_local_idx + 1;
+        for i in 0..concrete_count {
             let concrete = struct_type_base + i;
             local_decls.push((
                 1,
@@ -399,22 +498,20 @@ impl GcOps {
             struct_local_idx,
             eq_local_idx,
             i31_local_idx,
+            array_local_idx,
             typed_local_base,
             struct_global_idx,
             eq_global_idx,
             i31_global_idx,
+            array_global_idx,
             typed_global_base,
             struct_table_idx,
             eq_table_idx,
             i31_table_idx,
+            array_table_idx,
             typed_table_base,
+            array_length: self.limits.array_length,
         };
-
-        // Build a flat encoding order for field lookups during encoding.
-        let encoding_order: Vec<TypeId> = encoding_order_grouped
-            .iter()
-            .flat_map(|(_, members)| members.iter().copied())
-            .collect();
 
         let mut func = Function::new(local_decls);
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
@@ -470,9 +567,27 @@ impl GcOps {
         let mut stack: Vec<StackType> = Vec::new();
         let num_types = u32::try_from(self.types.type_defs.len()).unwrap();
 
+        // Concrete encoding indices split by kind, so typed ops can be remapped
+        // onto a same-kind type (struct ops never point at an array, etc.).
+        let mut struct_type_indices = Vec::new();
+        let mut array_type_indices = Vec::new();
+        for (i, tid) in encoding_order.iter().enumerate() {
+            let i = u32::try_from(i).unwrap();
+            match self.types.type_defs.get(tid) {
+                Some(def) if def.composite_type.is_array() => array_type_indices.push(i),
+                Some(_) => struct_type_indices.push(i),
+                None => {}
+            }
+        }
+
         let mut operand_types = Vec::new();
         for op in &self.ops {
-            let Some(op) = op.fixup(&self.limits, num_types) else {
+            let Some(op) = op.fixup(
+                &self.limits,
+                num_types,
+                &struct_type_indices,
+                &array_type_indices,
+            ) else {
                 continue;
             };
             let op = StackType::fixup_cast(op, &self.types, &encoding_order);
@@ -530,7 +645,7 @@ macro_rules! for_each_gc_op {
 
             #[operands([])]
             #[results([ExternRef])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
@@ -539,7 +654,7 @@ macro_rules! for_each_gc_op {
 
             #[operands([Some(ExternRef)])]
             #[results([])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
@@ -548,36 +663,36 @@ macro_rules! for_each_gc_op {
 
             #[operands([])]
             #[results([ExternRef])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 global_index = global_index.checked_rem(limits.num_globals)?;
             })]
             GlobalGet { global_index:  u32 },
 
             #[operands([Some(ExternRef)])]
             #[results([])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 global_index = global_index.checked_rem(limits.num_globals)?;
             })]
             GlobalSet { global_index: u32 },
 
             #[operands([])]
             #[results([ExternRef])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 local_index = local_index.checked_rem(limits.num_params)?;
             })]
             LocalGet { local_index: u32 },
 
             #[operands([Some(ExternRef)])]
             #[results([])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 local_index = local_index.checked_rem(limits.num_params)?;
             })]
             LocalSet { local_index: u32 },
 
             #[operands([])]
             #[results([Struct(Some(type_index))])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             StructNew { type_index: u32 },
 
@@ -587,8 +702,8 @@ macro_rules! for_each_gc_op {
 
             #[operands([Some(Struct(Some(type_index)))])]
             #[results([])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             TakeTypedStructCall { type_index: u32 },
 
@@ -602,15 +717,15 @@ macro_rules! for_each_gc_op {
 
             #[operands([Some(Struct(Some(type_index)))])]
             #[results([])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             TypedStructLocalSet { type_index: u32 },
 
             #[operands([])]
             #[results([Struct(Some(type_index))])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             TypedStructLocalGet { type_index: u32 },
 
@@ -624,21 +739,21 @@ macro_rules! for_each_gc_op {
 
             #[operands([Some(Struct(Some(type_index)))])]
             #[results([])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             TypedStructGlobalSet { type_index: u32 },
 
             #[operands([])]
             #[results([Struct(Some(type_index))])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             TypedStructGlobalGet { type_index: u32 },
 
             #[operands([Some(Struct(None))])]
             #[results([])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
@@ -647,7 +762,7 @@ macro_rules! for_each_gc_op {
 
             #[operands([])]
             #[results([Struct(None)])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
@@ -656,21 +771,21 @@ macro_rules! for_each_gc_op {
 
             #[operands([Some(Struct(Some(type_index)))])]
             #[results([])]
-            #[fixup(|limits, num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
-                type_index = type_index.checked_rem(num_types)?;
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             TypedStructTableSet { elem_index: u32, type_index: u32 },
 
             #[operands([])]
             #[results([Struct(Some(type_index))])]
-            #[fixup(|limits, num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
-                type_index = type_index.checked_rem(num_types)?;
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             TypedStructTableGet { elem_index: u32, type_index: u32 },
 
@@ -712,7 +827,7 @@ macro_rules! for_each_gc_op {
 
             #[operands([Some(Eq)])]
             #[results([])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
@@ -721,7 +836,7 @@ macro_rules! for_each_gc_op {
 
             #[operands([])]
             #[results([Eq])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
@@ -730,38 +845,38 @@ macro_rules! for_each_gc_op {
 
             #[operands([])]
             #[results([Struct(Some(type_index))])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             NullTypedStruct { type_index: u32 },
 
             #[operands([Some(Struct(Some(sub_type_index)))])]
             #[results([Struct(Some(super_type_index))])]
-            #[fixup(|_limits, num_types| {
-                sub_type_index = sub_type_index.checked_rem(num_types)?;
-                super_type_index = super_type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                sub_type_index = pick_type_index(struct_type_indices, sub_type_index)?;
+                super_type_index = pick_type_index(struct_type_indices, super_type_index)?;
             })]
             RefCastUpward { sub_type_index: u32, super_type_index: u32 },
 
             #[operands([Some(Struct(Some(super_type_index)))])]
             #[results([Struct(Some(sub_type_index))])]
-            #[fixup(|_limits, num_types| {
-                sub_type_index = sub_type_index.checked_rem(num_types)?;
-                super_type_index = super_type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                sub_type_index = pick_type_index(struct_type_indices, sub_type_index)?;
+                super_type_index = pick_type_index(struct_type_indices, super_type_index)?;
             })]
             RefCastDownward { sub_type_index: u32, super_type_index: u32 },
 
             #[operands([Some(Struct(Some(type_index)))])]
             #[results([])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             StructGet { type_index: u32, field_index: u32 },
 
             #[operands([Some(Struct(Some(type_index)))])]
             #[results([])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             StructSet { type_index: u32, field_index: u32 },
 
@@ -771,7 +886,7 @@ macro_rules! for_each_gc_op {
 
             #[operands([])]
             #[results([I31])]
-            #[fixup(|_limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Any `i32` is a valid operand to `ref.i31` (it wraps to 31
                 // bits), so no clamping is needed.
             })]
@@ -795,7 +910,7 @@ macro_rules! for_each_gc_op {
 
             #[operands([Some(I31)])]
             #[results([])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
@@ -804,7 +919,7 @@ macro_rules! for_each_gc_op {
 
             #[operands([])]
             #[results([I31])]
-            #[fixup(|limits, _num_types| {
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 // Add one to make sure that out-of-bounds table accesses are
                 // possible, but still rare.
                 elem_index = elem_index % (limits.table_size + 1);
@@ -829,14 +944,175 @@ macro_rules! for_each_gc_op {
 
             #[operands([Some(Struct(Some(type_index)))])]
             #[results([Eq])]
-            #[fixup(|_limits, num_types| {
-                type_index = type_index.checked_rem(num_types)?;
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             TypedStructRefAsEq { type_index: u32 },
 
             #[operands([Some(I31)])]
             #[results([Eq])]
             I31RefAsEq,
+
+            #[operands([])]
+            #[results([Array(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            ArrayNew { type_index: u32 },
+
+            #[operands([])]
+            #[results([Array(None)])]
+            NullArray,
+
+            #[operands([])]
+            #[results([Array(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            NullTypedArray { type_index: u32 },
+
+            #[operands([Some(Array(None))])]
+            #[results([])]
+            TakeArrayCall,
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            TakeTypedArrayCall { type_index: u32 },
+
+            #[operands([Some(Array(None))])]
+            #[results([])]
+            ArrayLocalSet,
+
+            #[operands([])]
+            #[results([Array(None)])]
+            ArrayLocalGet,
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            TypedArrayLocalSet { type_index: u32 },
+
+            #[operands([])]
+            #[results([Array(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            TypedArrayLocalGet { type_index: u32 },
+
+            #[operands([Some(Array(None))])]
+            #[results([])]
+            ArrayGlobalSet,
+
+            #[operands([])]
+            #[results([Array(None)])]
+            ArrayGlobalGet,
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            TypedArrayGlobalSet { type_index: u32 },
+
+            #[operands([])]
+            #[results([Array(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            TypedArrayGlobalGet { type_index: u32 },
+
+            #[operands([Some(Array(None))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            ArrayTableSet { elem_index: u32 },
+
+            #[operands([])]
+            #[results([Array(None)])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            ArrayTableGet { elem_index: u32 },
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            TypedArrayTableSet { elem_index: u32, type_index: u32 },
+
+            #[operands([])]
+            #[results([Array(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            TypedArrayTableGet { elem_index: u32, type_index: u32 },
+
+            #[operands([Some(Array(Some(sub_type_index)))])]
+            #[results([Array(Some(super_type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                sub_type_index = pick_type_index(array_type_indices, sub_type_index)?;
+                super_type_index = pick_type_index(array_type_indices, super_type_index)?;
+            })]
+            ArrayRefCastUpward { sub_type_index: u32, super_type_index: u32 },
+
+            #[operands([Some(Array(Some(super_type_index)))])]
+            #[results([Array(Some(sub_type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                sub_type_index = pick_type_index(array_type_indices, sub_type_index)?;
+                super_type_index = pick_type_index(array_type_indices, super_type_index)?;
+            })]
+            ArrayRefCastDownward { sub_type_index: u32, super_type_index: u32 },
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                // Keep most indices in-bounds: an array is exactly `array_length`
+                // long, so `% (array_length + 1)` is out-of-bounds only for one
+                // index value, making OOB traps possible but rare.
+                index = index % (limits.array_length + 1);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            ArrayGet { type_index: u32, index: u32 },
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                index = index % (limits.array_length + 1);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            ArraySet { type_index: u32, index: u32 },
+
+            #[operands([Some(Array(None))])]
+            #[results([])]
+            ArrayLen,
+
+            #[operands([Some(Array(None))])]
+            #[results([Eq])]
+            ArrayRefAsEq,
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([Eq])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            TypedArrayRefAsEq { type_index: u32 },
         }
     };
 }
@@ -954,16 +1230,27 @@ impl GcOp {
         for_each_gc_op!(define_gc_op_result_types)
     }
 
-    pub(crate) fn fixup(&self, limits: &GcOpsLimits, num_types: u32) -> Option<Self> {
+    /// Fix up an op's immediates. `struct_type_indices` / `array_type_indices`
+    /// are the concrete encoding indices of each kind; a typed op remaps its
+    /// type index into the matching set so struct ops never point at an array
+    /// (or vice versa), and drops itself if no type of that kind exists.
+    pub(crate) fn fixup(
+        &self,
+        limits: &GcOpsLimits,
+        num_types: u32,
+        struct_type_indices: &[u32],
+        array_type_indices: &[u32],
+    ) -> Option<Self> {
         macro_rules! define_gc_op_fixup {
             (
                 $(
                     #[operands($operands:expr)]
                     #[results($results:expr)]
-                    $( #[fixup(|$limits:ident, $num_types:ident| $fixup:expr)] )?
+                    $( #[fixup(|$limits:ident, $num_types:ident, $structs:ident, $arrays:ident| $fixup:expr)] )?
                     $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
                 )*
             ) => {{
+                let _ = (limits, num_types, struct_type_indices, array_type_indices);
                 match self {
                     $(
                         Self::$op $( { $($field),* } )? => {
@@ -972,8 +1259,14 @@ impl GcOp {
                                     #[allow(unused_mut, unused_assignments, reason = "macro code")]
                                     let mut $field = *$field;
                                 )*
+                                #[allow(unused_variables, reason = "macro code")]
                                 let $limits = limits;
+                                #[allow(unused_variables, reason = "macro code")]
                                 let $num_types = num_types;
+                                #[allow(unused_variables, reason = "macro code")]
+                                let $structs = struct_type_indices;
+                                #[allow(unused_variables, reason = "macro code")]
+                                let $arrays = array_type_indices;
                                 $fixup;
                             )?
                             Some(Self::$op $( { $( $field ),* } )? )
@@ -1030,6 +1323,7 @@ impl GcOp {
         let take_structref_idx = 3;
         let take_eqref_idx = 4;
         let take_i31_idx = 5;
+        let take_arrayref_idx = 6;
 
         match *self {
             Self::Gc => {
@@ -1107,15 +1401,18 @@ impl GcOp {
                 func.instruction(&Instruction::LocalGet(encoding_bases.eq_local_idx));
                 func.instruction(&Instruction::TableSet(encoding_bases.eq_table_idx));
             }
-            Self::NullTypedStruct { type_index } => {
+            // `NullTypedStruct` / `NullTypedArray` both produce a typed null; the
+            // concrete type index already resolves to the right kind.
+            Self::NullTypedStruct { type_index } | Self::NullTypedArray { type_index } => {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Concrete(
                     encoding_bases.struct_type_base + type_index,
                 )));
             }
             Self::StructNew { type_index: x } => {
                 if let Some(tid) = encoding_order.get(usize::try_from(x).unwrap()) {
-                    if let Some(def) = types.type_defs.get(tid) {
-                        let CompositeType::Struct(ref st) = def.composite_type;
+                    if let Some(CompositeType::Struct(st)) =
+                        types.type_defs.get(tid).map(|def| &def.composite_type)
+                    {
                         for field in &st.fields {
                             field.field_type.emit_default_const(func, type_ids_to_index);
                         }
@@ -1123,29 +1420,46 @@ impl GcOp {
                 }
                 func.instruction(&Instruction::StructNew(encoding_bases.struct_type_base + x));
             }
+            Self::ArrayNew { type_index: x } => {
+                // Create a default-initialized array of a fixed length so most
+                // subsequent indexed accesses are in-bounds.
+                func.instruction(&Instruction::I32Const(
+                    encoding_bases.array_length.cast_signed(),
+                ));
+                func.instruction(&Instruction::ArrayNewDefault(
+                    encoding_bases.struct_type_base + x,
+                ));
+            }
             Self::TakeStructCall => {
                 func.instruction(&Instruction::Call(take_structref_idx));
             }
-            Self::TakeTypedStructCall { type_index: x } => {
+            // Typed struct/array calls and storage share identical encodings
+            // (they index the same kind-agnostic typed func/local/global/table
+            // slots); only their abstract stack type differs.
+            Self::TakeTypedStructCall { type_index: x }
+            | Self::TakeTypedArrayCall { type_index: x } => {
                 let f = encoding_bases.typed_first_func_index + x;
                 func.instruction(&Instruction::Call(f));
             }
             Self::StructLocalGet => {
                 func.instruction(&Instruction::LocalGet(encoding_bases.struct_local_idx));
             }
-            Self::TypedStructLocalGet { type_index: x } => {
+            Self::TypedStructLocalGet { type_index: x }
+            | Self::TypedArrayLocalGet { type_index: x } => {
                 func.instruction(&Instruction::LocalGet(encoding_bases.typed_local_base + x));
             }
             Self::StructLocalSet => {
                 func.instruction(&Instruction::LocalSet(encoding_bases.struct_local_idx));
             }
-            Self::TypedStructLocalSet { type_index: x } => {
+            Self::TypedStructLocalSet { type_index: x }
+            | Self::TypedArrayLocalSet { type_index: x } => {
                 func.instruction(&Instruction::LocalSet(encoding_bases.typed_local_base + x));
             }
             Self::StructGlobalGet => {
                 func.instruction(&Instruction::GlobalGet(encoding_bases.struct_global_idx));
             }
-            Self::TypedStructGlobalGet { type_index: x } => {
+            Self::TypedStructGlobalGet { type_index: x }
+            | Self::TypedArrayGlobalGet { type_index: x } => {
                 func.instruction(&Instruction::GlobalGet(
                     encoding_bases.typed_global_base + x,
                 ));
@@ -1153,7 +1467,8 @@ impl GcOp {
             Self::StructGlobalSet => {
                 func.instruction(&Instruction::GlobalSet(encoding_bases.struct_global_idx));
             }
-            Self::TypedStructGlobalSet { type_index: x } => {
+            Self::TypedStructGlobalSet { type_index: x }
+            | Self::TypedArrayGlobalSet { type_index: x } => {
                 func.instruction(&Instruction::GlobalSet(
                     encoding_bases.typed_global_base + x,
                 ));
@@ -1163,6 +1478,10 @@ impl GcOp {
                 func.instruction(&Instruction::TableGet(encoding_bases.struct_table_idx));
             }
             Self::TypedStructTableGet {
+                elem_index,
+                type_index,
+            }
+            | Self::TypedArrayTableGet {
                 elem_index,
                 type_index,
             } => {
@@ -1181,6 +1500,10 @@ impl GcOp {
             Self::TypedStructTableSet {
                 elem_index,
                 type_index,
+            }
+            | Self::TypedArrayTableSet {
+                elem_index,
+                type_index,
             } => {
                 func.instruction(&Instruction::LocalSet(
                     encoding_bases.typed_local_base + type_index,
@@ -1196,6 +1519,10 @@ impl GcOp {
             Self::RefCastUpward {
                 sub_type_index: _,
                 super_type_index,
+            }
+            | Self::ArrayRefCastUpward {
+                sub_type_index: _,
+                super_type_index,
             } => {
                 // The value on the stack is already the subtype, so this
                 // cast always succeeds.
@@ -1205,6 +1532,10 @@ impl GcOp {
                 func.instruction(&Instruction::RefCastNullable(heap_type));
             }
             Self::RefCastDownward {
+                sub_type_index,
+                super_type_index,
+            }
+            | Self::ArrayRefCastDownward {
                 sub_type_index,
                 super_type_index,
             } => {
@@ -1261,9 +1592,9 @@ impl GcOp {
                 let fields = encoding_order
                     .get(usize::try_from(type_index).unwrap())
                     .and_then(|tid| types.type_defs.get(tid))
-                    .map(|def| {
-                        let CompositeType::Struct(ref st) = def.composite_type;
-                        &st.fields[..]
+                    .and_then(|def| match &def.composite_type {
+                        CompositeType::Struct(st) => Some(&st.fields[..]),
+                        CompositeType::Array(_) => None,
                     });
 
                 match fields {
@@ -1305,9 +1636,9 @@ impl GcOp {
                 let fields = encoding_order
                     .get(usize::try_from(type_index).unwrap())
                     .and_then(|tid| types.type_defs.get(tid))
-                    .map(|def| {
-                        let CompositeType::Struct(ref st) = def.composite_type;
-                        &st.fields[..]
+                    .and_then(|def| match &def.composite_type {
+                        CompositeType::Struct(st) => Some(&st.fields[..]),
+                        CompositeType::Array(_) => None,
                     });
 
                 match fields {
@@ -1378,10 +1709,14 @@ impl GcOp {
                 func.instruction(&Instruction::LocalGet(encoding_bases.i31_local_idx));
                 func.instruction(&Instruction::TableSet(encoding_bases.i31_table_idx));
             }
-            Self::StructRefAsEq | Self::TypedStructRefAsEq { .. } | Self::I31RefAsEq => {
-                // Upcasting to `eqref` is implicit in Wasm subtyping: both
-                // `struct` and `i31` are subtypes of `eq`, so the value already
-                // on the stack is a valid `eqref` and no instruction is
+            Self::StructRefAsEq
+            | Self::TypedStructRefAsEq { .. }
+            | Self::ArrayRefAsEq
+            | Self::TypedArrayRefAsEq { .. }
+            | Self::I31RefAsEq => {
+                // Upcasting to `eqref` is implicit in Wasm subtyping: `struct`,
+                // `array`, and `i31` are all subtypes of `eq`, so the value
+                // already on the stack is a valid `eqref` and no instruction is
                 // required. Only the abstract stack type changes (via
                 // `result_types`).
             }
@@ -1424,6 +1759,116 @@ impl GcOp {
                 func.instruction(&Instruction::LocalGet(encoding_bases.i31_local_idx));
                 func.instruction(&Instruction::I31GetU);
                 func.instruction(&Instruction::Call(take_i31_idx));
+                func.instruction(&Instruction::End);
+            }
+            Self::NullArray => {
+                func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Array,
+                }));
+            }
+            Self::TakeArrayCall => {
+                func.instruction(&Instruction::Call(take_arrayref_idx));
+            }
+            Self::ArrayLocalGet => {
+                func.instruction(&Instruction::LocalGet(encoding_bases.array_local_idx));
+            }
+            Self::ArrayLocalSet => {
+                func.instruction(&Instruction::LocalSet(encoding_bases.array_local_idx));
+            }
+            Self::ArrayGlobalGet => {
+                func.instruction(&Instruction::GlobalGet(encoding_bases.array_global_idx));
+            }
+            Self::ArrayGlobalSet => {
+                func.instruction(&Instruction::GlobalSet(encoding_bases.array_global_idx));
+            }
+            Self::ArrayTableGet { elem_index } => {
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::TableGet(encoding_bases.array_table_idx));
+            }
+            Self::ArrayTableSet { elem_index } => {
+                // Use array_local_idx (arrayref) to temporarily store the value before table.set.
+                func.instruction(&Instruction::LocalSet(encoding_bases.array_local_idx));
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::LocalGet(encoding_bases.array_local_idx));
+                func.instruction(&Instruction::TableSet(encoding_bases.array_table_idx));
+            }
+            Self::ArrayGet { type_index, index } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let typed_local = encoding_bases.typed_local_base + type_index;
+                let element = encoding_order
+                    .get(usize::try_from(type_index).unwrap())
+                    .and_then(|tid| types.type_defs.get(tid))
+                    .and_then(|def| match &def.composite_type {
+                        CompositeType::Array(at) => Some(&at.element),
+                        CompositeType::Struct(_) => None,
+                    });
+
+                match element {
+                    Some(element) => {
+                        // Null-guard: array.get traps on null, so skip if null.
+                        // The index is kept mostly in-bounds by fixup.
+                        func.instruction(&Instruction::LocalTee(typed_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                        func.instruction(&Instruction::Else);
+                        func.instruction(&Instruction::LocalGet(typed_local));
+                        func.instruction(&Instruction::I32Const(index.cast_signed()));
+                        if element.field_type.is_packed() {
+                            func.instruction(&Instruction::ArrayGetS(wasm_type));
+                        } else {
+                            func.instruction(&Instruction::ArrayGet(wasm_type));
+                        }
+                        // The element value is not tracked on the abstract stack.
+                        func.instruction(&Instruction::Drop);
+                        func.instruction(&Instruction::End);
+                    }
+                    None => {
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
+            }
+            Self::ArraySet { type_index, index } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let typed_local = encoding_bases.typed_local_base + type_index;
+                let element = encoding_order
+                    .get(usize::try_from(type_index).unwrap())
+                    .and_then(|tid| types.type_defs.get(tid))
+                    .and_then(|def| match &def.composite_type {
+                        CompositeType::Array(at) => Some(at.element.clone()),
+                        CompositeType::Struct(_) => None,
+                    });
+
+                match element {
+                    Some(element) if element.mutable => {
+                        // Null-guard: array.set traps on null, so skip if null.
+                        func.instruction(&Instruction::LocalTee(typed_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                        func.instruction(&Instruction::Else);
+                        func.instruction(&Instruction::LocalGet(typed_local));
+                        func.instruction(&Instruction::I32Const(index.cast_signed()));
+                        element
+                            .field_type
+                            .emit_default_const(func, type_ids_to_index);
+                        func.instruction(&Instruction::ArraySet(wasm_type));
+                        func.instruction(&Instruction::End);
+                    }
+                    // Immutable element or non-array: just drop the operand.
+                    _ => {
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
+            }
+            Self::ArrayLen => {
+                // array.len traps on null, so guard; the length is not tracked.
+                func.instruction(&Instruction::LocalTee(encoding_bases.array_local_idx));
+                func.instruction(&Instruction::RefIsNull);
+                func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                func.instruction(&Instruction::Else);
+                func.instruction(&Instruction::LocalGet(encoding_bases.array_local_idx));
+                func.instruction(&Instruction::ArrayLen);
+                func.instruction(&Instruction::Drop);
                 func.instruction(&Instruction::End);
             }
         }

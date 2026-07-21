@@ -205,11 +205,44 @@ pub struct StructType {
     pub(crate) fields: Vec<StructField>,
 }
 
-/// A composite type: currently only structs.
-#[derive(Debug, Serialize, Deserialize)]
+/// An array type definition: a single element storage type plus mutability.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ArrayType {
+    /// The element storage type of this array type.
+    pub(crate) element: StructField,
+}
+
+/// A composite type: either a struct or an array.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CompositeType {
     /// A struct composite type.
     Struct(StructType),
+    /// An array composite type.
+    Array(ArrayType),
+}
+
+impl CompositeType {
+    /// Returns `true` if this is an array composite type.
+    pub(crate) fn is_array(&self) -> bool {
+        matches!(self, CompositeType::Array(_))
+    }
+
+    /// The storage fields of this composite type.
+    ///  All struct fields or the single array element.
+    pub(crate) fn fields(&self) -> &[StructField] {
+        match self {
+            CompositeType::Struct(st) => &st.fields,
+            CompositeType::Array(at) => std::slice::from_ref(&at.element),
+        }
+    }
+
+    /// Mutable view of the storage fields; see [`CompositeType::fields`].
+    pub(crate) fn fields_mut(&mut self) -> &mut [StructField] {
+        match self {
+            CompositeType::Struct(st) => &mut st.fields,
+            CompositeType::Array(at) => std::slice::from_mut(&mut at.element),
+        }
+    }
 }
 
 /// A sub-type definition (the per-type payload).
@@ -289,11 +322,11 @@ impl Graph<RecGroupId> for RecGroupGraph<'_> {
                     }
                 }
 
-                // Field-reference edges: a concrete `(ref null $t)` field means
-                // `$t`'s group must encode first (references *within* a group are
-                // always legal and impose no ordering constraint).
-                let CompositeType::Struct(ref st) = def.composite_type;
-                for field in &st.fields {
+                // Field-reference edges: a concrete `(ref null $t)` field (or
+                // array element) means `$t`'s group must encode first (references
+                // *within* a group are always legal and impose no ordering
+                // constraint).
+                for field in def.composite_type.fields() {
                     if let FieldType::Ref { type_id, .. } = field.field_type {
                         if let Some(&ref_group) = self.type_to_group.get(&type_id) {
                             if ref_group != group {
@@ -391,6 +424,31 @@ impl Types {
         }
     }
 
+    /// Insert a type with the given composite type into the given rec group.
+    ///
+    /// The rec group must already exist.
+    pub fn insert_type(
+        &mut self,
+        id: TypeId,
+        group: RecGroupId,
+        is_final: bool,
+        supertype: Option<TypeId>,
+        composite_type: CompositeType,
+    ) {
+        self.rec_groups
+            .get_mut(&group)
+            .expect("rec group must exist")
+            .insert(id);
+        self.type_defs.insert(
+            id,
+            SubType {
+                is_final,
+                supertype,
+                composite_type,
+            },
+        );
+    }
+
     /// Insert a struct type into the given rec group.
     ///
     /// The rec group must already exist.
@@ -402,17 +460,12 @@ impl Types {
         supertype: Option<TypeId>,
         fields: Vec<StructField>,
     ) {
-        self.rec_groups
-            .get_mut(&group)
-            .expect("rec group must exist")
-            .insert(id);
-        self.type_defs.insert(
+        self.insert_type(
             id,
-            SubType {
-                is_final,
-                supertype,
-                composite_type: CompositeType::Struct(StructType { fields }),
-            },
+            group,
+            is_final,
+            supertype,
+            CompositeType::Struct(StructType { fields }),
         );
     }
 
@@ -708,18 +761,34 @@ impl Types {
             }
         }
 
-        // 8. Trim fields to max_fields limit.
-        let max_fields = usize::try_from(limits.max_fields).unwrap();
-        for def in self.type_defs.values_mut() {
-            let CompositeType::Struct(ref mut st) = def.composite_type;
-            st.fields.truncate(max_fields);
+        // 7b. A subtype must have the same composite kind as its supertype
+        //     (a struct cannot subtype an array, or vice versa).
+        let kinds: BTreeMap<TypeId, bool> = self
+            .type_defs
+            .iter()
+            .map(|(id, d)| (*id, d.composite_type.is_array()))
+            .collect();
+        for (tid, def) in self.type_defs.iter_mut() {
+            if let Some(super_id) = def.supertype {
+                if kinds.get(&super_id) != kinds.get(tid) {
+                    def.supertype = None;
+                }
+            }
         }
 
-        // 9. Normalize reference fields.
+        // 8. Trim struct fields to max_fields limit (arrays always have exactly
+        //    one element).
+        let max_fields = usize::try_from(limits.max_fields).unwrap();
+        for def in self.type_defs.values_mut() {
+            if let CompositeType::Struct(ref mut st) = def.composite_type {
+                st.fields.truncate(max_fields);
+            }
+        }
+
+        // 9. Normalize reference fields (struct fields and array elements alike).
         let valid_type_ids: BTreeSet<TypeId> = self.type_defs.keys().copied().collect();
         for def in self.type_defs.values_mut() {
-            let CompositeType::Struct(ref mut st) = def.composite_type;
-            for field in &mut st.fields {
+            for field in def.composite_type.fields_mut() {
                 match &mut field.field_type {
                     FieldType::StructRef { nullable } => *nullable = true,
                     FieldType::Ref { nullable, type_id } => {
@@ -757,21 +826,36 @@ impl Types {
             let Some(super_def) = self.type_defs.get(&super_id) else {
                 continue;
             };
-            let CompositeType::Struct(ref super_st) = super_def.composite_type;
-            let super_fields = super_st.fields.clone();
-
-            let def = self.type_defs.get_mut(tid).unwrap();
-            let CompositeType::Struct(ref mut sub_st) = def.composite_type;
-
-            // Extend subtype fields if shorter than supertype.
-            while sub_st.fields.len() < super_fields.len() {
-                sub_st
-                    .fields
-                    .push(super_fields[sub_st.fields.len()].clone());
-            }
-            // Overwrite prefix to match supertype fields exactly.
-            for (i, sf) in super_fields.iter().enumerate() {
-                sub_st.fields[i] = sf.clone();
+            // Step 7b guarantees the subtype and supertype share a composite
+            // kind. so match on the supertype and repair the subtype to match.
+            match &super_def.composite_type {
+                CompositeType::Struct(super_st) => {
+                    let super_fields = super_st.fields.clone();
+                    let def = self.type_defs.get_mut(tid).unwrap();
+                    let CompositeType::Struct(ref mut sub_st) = def.composite_type else {
+                        continue;
+                    };
+                    // Extend subtype fields if shorter than supertype.
+                    while sub_st.fields.len() < super_fields.len() {
+                        sub_st
+                            .fields
+                            .push(super_fields[sub_st.fields.len()].clone());
+                    }
+                    // Overwrite prefix to match supertype fields exactly.
+                    for (i, sf) in super_fields.iter().enumerate() {
+                        sub_st.fields[i] = sf.clone();
+                    }
+                }
+                CompositeType::Array(super_at) => {
+                    // Force the element to match exactly. This satisfies both the
+                    // covariant (immutable) and invariant (mutable) subtyping rules.
+                    let super_elem = super_at.element.clone();
+                    let def = self.type_defs.get_mut(tid).unwrap();
+                    let CompositeType::Array(ref mut sub_at) = def.composite_type else {
+                        continue;
+                    };
+                    sub_at.element = super_elem;
+                }
             }
         }
 
@@ -814,19 +898,20 @@ impl Types {
         // Every supertype must exist and must not be final.
         let max_fields = usize::try_from(limits.max_fields).unwrap();
         for (&tid, def) in &self.type_defs {
-            // Check field count limit.
-            let CompositeType::Struct(ref st) = def.composite_type;
-            if st.fields.len() > max_fields {
+            let fields = def.composite_type.fields();
+
+            // Check struct field count limit (arrays always have one element).
+            if !def.composite_type.is_array() && fields.len() > max_fields {
                 log::debug!(
                     "[-] Failed: type {tid:?} has {} fields > max_fields {max_fields}",
-                    st.fields.len()
+                    fields.len()
                 );
                 return false;
             }
 
             // Reference fields must be nullable (non-nullable references are
             // deferred), and concrete references must target an existing type.
-            for field in &st.fields {
+            for field in fields {
                 match field.field_type {
                     FieldType::StructRef { nullable } | FieldType::Ref { nullable, .. }
                         if !nullable =>
@@ -854,17 +939,26 @@ impl Types {
                         log::debug!("[-] Failed: subtype {tid:?} has final supertype {super_id:?}");
                         return false;
                     }
+                    Some(super_def)
+                        if super_def.composite_type.is_array() != def.composite_type.is_array() =>
+                    {
+                        log::debug!(
+                            "[-] Failed: subtype {tid:?} and supertype {super_id:?} have different composite kinds"
+                        );
+                        return false;
+                    }
                     Some(super_def) => {
-                        // Subtype fields must be prefix-compatible with supertype.
-                        let CompositeType::Struct(ref super_st) = super_def.composite_type;
-                        if st.fields.len() < super_st.fields.len() {
+                        // Subtype fields must be prefix-compatible with supertype
+                        // (for arrays, the single element must match exactly).
+                        let super_fields = super_def.composite_type.fields();
+                        if fields.len() < super_fields.len() {
                             log::debug!(
                                 "[-] Failed: subtype {tid:?} has fewer fields than supertype {super_id:?}"
                             );
                             return false;
                         }
-                        for (i, sf) in super_st.fields.iter().enumerate() {
-                            if st.fields[i] != *sf {
+                        for (i, sf) in super_fields.iter().enumerate() {
+                            if fields[i] != *sf {
                                 log::debug!(
                                     "[-] Failed: subtype {tid:?} field {i} differs from supertype {super_id:?}"
                                 );
@@ -890,6 +984,8 @@ pub enum StackType {
     I31,
     /// `(ref $*)` — optionally with a concrete type index.
     Struct(Option<u32>),
+    /// `(ref array)` or `(ref $t)` — optionally with a concrete type index.
+    Array(Option<u32>),
 }
 
 impl StackType {
@@ -933,9 +1029,9 @@ impl StackType {
                 }
             },
             Some(Self::Eq) => match stack.last() {
-                // struct <: eq and i31 <: eq, so a struct or i31 on the stack
-                // satisfies an eqref requirement.
-                Some(Self::Eq) | Some(Self::Struct(_)) | Some(Self::I31) => {
+                // struct, array, and i31 are all subtypes of eq, so any of them
+                // on the stack satisfies an eqref requirement.
+                Some(Self::Eq) | Some(Self::Struct(_)) | Some(Self::Array(_)) | Some(Self::I31) => {
                     log::trace!("[StackType::fixup] Eq: top ok -> pop");
                     stack.pop();
                 }
@@ -1052,6 +1148,53 @@ impl StackType {
                     }
                 }
             }
+            Some(Self::Array(wanted)) => {
+                let ok = match (wanted, stack.last()) {
+                    (Some(wanted), Some(Self::Array(Some(actual)))) => {
+                        let sub = encoding_order
+                            .get(usize::try_from(*actual).unwrap())
+                            .copied();
+                        let sup = encoding_order
+                            .get(usize::try_from(wanted).unwrap())
+                            .copied();
+                        match (sub, sup) {
+                            (Some(sub), Some(sup)) => types.is_subtype(sub, sup),
+                            _ => false,
+                        }
+                    }
+                    // Abstract arrayref requirement accepts any array on the stack.
+                    (None, Some(Self::Array(_))) => true,
+                    _ => false,
+                };
+
+                if ok {
+                    stack.pop();
+                } else {
+                    match wanted {
+                        // Abstract requirement: a null arrayref satisfies it.
+                        None => {
+                            Self::emit(GcOp::NullArray, stack, out, num_types, &mut result_types);
+                            stack.pop();
+                        }
+                        // Concrete requirement: synthesize a fresh array of that type.
+                        Some(t) => {
+                            debug_assert_ne!(
+                                num_types, 0,
+                                "typed array requirement with num_types == 0; op should have been removed"
+                            );
+                            let t = Self::clamp(t, num_types);
+                            Self::emit(
+                                GcOp::ArrayNew { type_index: t },
+                                stack,
+                                out,
+                                num_types,
+                                &mut result_types,
+                            );
+                            stack.pop();
+                        }
+                    }
+                }
+            }
         }
         log::trace!(
             "[StackType::fixup] leave stack_len={} stack={stack:?} out_len={}",
@@ -1078,6 +1221,7 @@ impl StackType {
         for ty in result_types {
             let clamped_ty = match ty {
                 Self::Struct(Some(t)) => Self::Struct(Some(Self::clamp(*t, num_types))),
+                Self::Array(Some(t)) => Self::Array(Some(Self::clamp(*t, num_types))),
                 other => *other,
             };
             log::trace!("[StackType::emit] push result {clamped_ty:?}");
@@ -1118,6 +1262,33 @@ impl StackType {
                 let sub_type_index =
                     Self::find_subtype_of(super_type_index, sub_type_index, types, encoding_order);
                 GcOp::RefCastDownward {
+                    sub_type_index,
+                    super_type_index,
+                }
+            }
+            // Array casts use the same index repair (subtyping is kind-agnostic).
+            GcOp::ArrayRefCastUpward {
+                sub_type_index,
+                super_type_index,
+            } => {
+                let super_type_index = Self::find_supertype_of(
+                    sub_type_index,
+                    super_type_index,
+                    types,
+                    encoding_order,
+                );
+                GcOp::ArrayRefCastUpward {
+                    sub_type_index,
+                    super_type_index,
+                }
+            }
+            GcOp::ArrayRefCastDownward {
+                sub_type_index,
+                super_type_index,
+            } => {
+                let sub_type_index =
+                    Self::find_subtype_of(super_type_index, sub_type_index, types, encoding_order);
+                GcOp::ArrayRefCastDownward {
                     sub_type_index,
                     super_type_index,
                 }

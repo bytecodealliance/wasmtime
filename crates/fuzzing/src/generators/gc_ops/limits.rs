@@ -15,6 +15,8 @@ pub const TABLE_SIZE_RANGE: RangeInclusive<u32> = 0..=100;
 pub const MAX_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
 /// Range for the maximum number of fields per struct type.
 pub const MAX_FIELDS_RANGE: RangeInclusive<u32> = 0..=8;
+/// Range for the length of created arrays.
+pub const ARRAY_LENGTH_RANGE: RangeInclusive<u32> = 1..=16;
 /// Maximum number of operations.
 pub const MAX_OPS: usize = 100;
 
@@ -27,6 +29,7 @@ pub struct GcOpsLimits {
     pub(crate) max_rec_groups: u32,
     pub(crate) max_types: u32,
     pub(crate) max_fields: u32,
+    pub(crate) array_length: u32,
 }
 
 impl Default for GcOpsLimits {
@@ -38,6 +41,7 @@ impl Default for GcOpsLimits {
             max_rec_groups: 5,
             max_types: 5,
             max_fields: 5,
+            array_length: 5,
         }
     }
 }
@@ -52,6 +56,7 @@ impl GcOpsLimits {
             max_rec_groups,
             max_types,
             max_fields,
+            array_length,
         } = self;
 
         let clamp = |limit: &mut u32, range: RangeInclusive<u32>| {
@@ -63,5 +68,6 @@ impl GcOpsLimits {
         clamp(max_rec_groups, MAX_REC_GROUPS_RANGE);
         clamp(max_types, MAX_TYPES_RANGE);
         clamp(max_fields, MAX_FIELDS_RANGE);
+        clamp(array_length, ARRAY_LENGTH_RANGE);
     }
 }

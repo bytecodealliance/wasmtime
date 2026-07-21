@@ -1,7 +1,9 @@
 //! Mutators for the `gc` operations.
 use crate::generators::gc_ops::limits::GcOpsLimits;
 use crate::generators::gc_ops::ops::{GcOp, GcOps};
-use crate::generators::gc_ops::types::{CompositeType, FieldType, StructField, TypeId, Types};
+use crate::generators::gc_ops::types::{
+    ArrayType, CompositeType, FieldType, StructField, TypeId, Types,
+};
 use mutatis::{
     Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult, mutators as m,
 };
@@ -50,9 +52,65 @@ impl TypesMutator {
             } else {
                 None
             };
-            // Add struct with no fields; fields can be added later by `mutate_struct_fields`.
+            // Add struct with no fields; fields can be added later by `mutate_type_members`.
             types.insert_struct(tid, gid, is_final, supertype, Vec::new());
             log::debug!("Added struct {tid:?} to rec group {gid:?}");
+            Ok(())
+        })?;
+        Ok(())
+    }
+
+    /// Add an array type with a random element to a random existing rec group,
+    /// or create a rec group when there are none (if `limits` allow).
+    fn add_array(
+        &mut self,
+        c: &mut Candidates<'_>,
+        types: &mut Types,
+        limits: &GcOpsLimits,
+    ) -> mutatis::Result<()> {
+        if c.shrink() || types.type_defs.len() >= usize::try_from(limits.max_types).unwrap() {
+            return Ok(());
+        }
+
+        let max_rec_groups = usize::try_from(limits.max_rec_groups).unwrap();
+        if types.rec_groups.is_empty() && max_rec_groups == 0 {
+            return Ok(());
+        }
+
+        c.mutation(|ctx| {
+            let gid = if types.rec_groups.is_empty() {
+                let new_gid = types.fresh_rec_group_id(ctx.rng());
+                types.insert_rec_group(new_gid);
+                new_gid
+            } else {
+                let Some(gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                    return Ok(());
+                };
+                gid
+            };
+
+            let tid = types.fresh_type_id(ctx.rng());
+            let is_final = (ctx.rng().gen_u32() % 4) == 0;
+            let supertype = if (ctx.rng().gen_u32() % 4) == 0 {
+                ctx.rng().choose(types.type_defs.keys()).copied()
+            } else {
+                None
+            };
+
+            // Arrays always have exactly one element, so generate it now.
+            let candidates: Vec<TypeId> = types.type_defs.keys().copied().collect();
+            let element = StructField {
+                field_type: FieldType::generate(ctx.rng(), &candidates),
+                mutable: (ctx.rng().gen_u32() % 2) == 0,
+            };
+            types.insert_type(
+                tid,
+                gid,
+                is_final,
+                supertype,
+                CompositeType::Array(ArrayType { element }),
+            );
+            log::debug!("Added array {tid:?} to rec group {gid:?}");
             Ok(())
         })?;
         Ok(())
@@ -213,14 +271,19 @@ impl TypesMutator {
                 return Ok(());
             }
 
-            // Collect (TypeId, is_final, supertype, fields) for members of the source group.
-            let members: SmallVec<[(TypeId, bool, Option<TypeId>, Vec<StructField>); 32]> =
+            // Collect (TypeId, is_final, supertype, composite_type) for members
+            // of the source group (works for both structs and arrays).
+            let members: SmallVec<[(TypeId, bool, Option<TypeId>, CompositeType); 32]> =
                 src_members
                     .iter()
                     .filter_map(|tid| {
                         types.type_defs.get(tid).map(|def| {
-                            let CompositeType::Struct(ref st) = def.composite_type;
-                            (*tid, def.is_final, def.supertype, st.fields.clone())
+                            (
+                                *tid,
+                                def.is_final,
+                                def.supertype,
+                                def.composite_type.clone(),
+                            )
                         })
                     })
                     .collect();
@@ -240,10 +303,16 @@ impl TypesMutator {
             }
 
             // Insert duplicated defs, rewriting intra-group supertype edges to cloned ids.
-            for (old_tid, is_final, supertype, fields) in &members {
+            for (old_tid, is_final, supertype, composite_type) in &members {
                 let new_tid = old_to_new[old_tid];
                 let mapped_super = supertype.map(|st| *old_to_new.get(&st).unwrap_or(&st));
-                types.insert_struct(new_tid, new_gid, *is_final, mapped_super, fields.clone());
+                types.insert_type(
+                    new_tid,
+                    new_gid,
+                    *is_final,
+                    mapped_super,
+                    composite_type.clone(),
+                );
             }
 
             log::debug!(
@@ -385,8 +454,8 @@ impl TypesMutator {
         Ok(())
     }
 
-    /// Mutate struct fields (add/remove/modify via `m::vec`).
-    fn mutate_struct_fields(
+    /// Mutate struct fields (add/remove/modify via `m::vec`) and array elements.
+    fn mutate_type_members(
         &mut self,
         c: &mut Candidates<'_>,
         types: &mut Types,
@@ -394,11 +463,20 @@ impl TypesMutator {
         // Snapshot target types up front so fields can reference any type (incl. self) without borrowing `types`.
         let candidates: Vec<TypeId> = types.type_defs.keys().copied().collect();
         for (_, def) in types.type_defs.iter_mut() {
-            let CompositeType::Struct(ref mut st) = def.composite_type;
-            m::vec(StructFieldMutator {
-                candidates: &candidates,
-            })
-            .mutate(c, &mut st.fields)?;
+            match &mut def.composite_type {
+                CompositeType::Struct(st) => {
+                    m::vec(StructFieldMutator {
+                        candidates: &candidates,
+                    })
+                    .mutate(c, &mut st.fields)?;
+                }
+                CompositeType::Array(at) => {
+                    StructFieldMutator {
+                        candidates: &candidates,
+                    }
+                    .mutate(c, &mut at.element)?;
+                }
+            }
         }
         Ok(())
     }
@@ -411,6 +489,7 @@ impl TypesMutator {
         limits: &GcOpsLimits,
     ) -> mutatis::Result<()> {
         self.add_struct(c, types, limits)?;
+        self.add_array(c, types, limits)?;
         self.remove_struct(c, types)?;
         self.swap_within_group(c, types)?;
         self.move_between_groups(c, types)?;
@@ -418,7 +497,7 @@ impl TypesMutator {
         self.remove_group(c, types)?;
         self.merge_groups(c, types)?;
         self.split_group(c, types, limits)?;
-        self.mutate_struct_fields(c, types)?;
+        self.mutate_type_members(c, types)?;
 
         Ok(())
     }
