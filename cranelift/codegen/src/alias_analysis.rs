@@ -43,24 +43,29 @@
 //! load, we can also insert, if we don't already have a value (from
 //! the store that produced the load's value).
 //!
-//! Then we can do two optimizations at once given this table. If a
-//! load accesses a location identified by a (last store, address,
-//! type) key already in the table, we replace it with the SSA value
-//! for that memory location. This is usually known as "redundant load
-//! elimination" if the value came from an earlier load of the same
-//! location, or "store-to-load forwarding" if the value came from an
-//! earlier store to the same location.
+//! Then we do a few optimizations at once given this table:
 //!
-//! In theory we could also do *dead-store elimination*, where if a
-//! store overwrites a key in the table, *and* if no other load/store
-//! to the abstract region occurred, *and* no other trapping
-//! instruction occurred (at which point we need an up-to-date memory
-//! state because post-trap-termination memory state can be observed),
-//! *and* we can prove the original store could not have trapped, then
-//! we can eliminate the original store. Because this is so complex,
-//! and the conditions for doing it correctly when post-trap state
-//! must be correct likely reduce the potential benefit, we don't yet
-//! do this.
+//! * If a load accesses a location identified by a (last store,
+//!   address, type) key already in the table, we replace it with the
+//!   SSA value for that memory location. This is usually known as
+//!   "redundant load elimination" if the value came from an earlier
+//!   load of the same location, or "store-to-load forwarding" if the
+//!   value came from an earlier store to the same location.
+//!
+//! * If a store writes the same value that is already in the table
+//!   for its memory location, then we can elide this store because it
+//!   doesn't actually modify memory. We call this "idempotent-store
+//!   elimination".
+//!
+//! * If a store overwrites a key in the table, *and* if this
+//!   overwriting store always executes after the original store
+//!   (i.e. this store post-dominates the original), *and* if no other
+//!   instruction has "observed" the associated alias region in
+//!   between, then we can eliminate the original store. This is
+//!   called "dead-store elimination". Note that observing an alias
+//!   region is not just loading from it, all potentially-trapping
+//!   instructions must be treated as observing all regions because we
+//!   must preserve post-trap memory state.
 
 use crate::cursor::CursorPosition;
 use crate::{FxHashMap, FxHashSet};
@@ -432,7 +437,7 @@ pub enum OptResult {
         dead: Inst,
         /// The other store instruction that makes the previous instruction
         /// dead.
-        killer: Inst,
+        overwriter: Inst,
     },
 }
 
@@ -562,13 +567,15 @@ impl<'a> AliasAnalysis<'a> {
                         && inst != last_store
                         // The last store isn't dead if this
                         // instruction is a fetch-add or something
-                        // like that.
+                        // like that, as these instructions first load
+                        // from (and therefore observe) memory before
+                        // storing to it.
                         && !func.dfg.insts[inst].opcode().can_load()
                         // `last_store` must really be a store that
                         // writes exactly the bytes this store
                         // overwrites (same region, address, offset,
                         // type, and width).
-                        && killer_fully_overwrites(func, last_store, inst, address, offset, ty)
+                        && fully_overwrites(func, last_store, inst, address, offset, ty)
                         // We can't remove dead stores if they've
                         // already been removed, and `post_dominates`
                         // requires that `last_store` is in the
@@ -587,7 +594,7 @@ impl<'a> AliasAnalysis<'a> {
                         );
                         return OptResult::DeadStore {
                             dead: last_store,
-                            killer: inst,
+                            overwriter: inst,
                         };
                     }
                 }
@@ -719,20 +726,20 @@ impl<'a> AliasAnalysis<'a> {
                     OptResult::IdempotentStore => {
                         pos.remove_inst_and_step_back();
                     }
-                    OptResult::DeadStore { dead, killer } => {
+                    OptResult::DeadStore { dead, overwriter } => {
                         assert!(
                             !matches!(pos.position(), CursorPosition::At(other) if dead == other)
                         );
                         // Copy the trap code (if any) from the dead store to
-                        // its killer.
+                        // its overwriter.
                         if let Some(flags) = pos.func.dfg.insts[dead].memflags_data(&pos.func.dfg) {
                             if let Some(code) = flags.trap_code() {
-                                let flags = pos.func.dfg.insts[killer]
+                                let flags = pos.func.dfg.insts[overwriter]
                                     .memflags_data(&pos.func.dfg)
                                     .unwrap();
                                 let flags = flags.with_trap_code(Some(code));
                                 let flags = pos.func.dfg.mem_flags.insert(flags).unwrap();
-                                *pos.func.dfg.insts[killer].memflags_mut().unwrap() = flags;
+                                *pos.func.dfg.insts[overwriter].memflags_mut().unwrap() = flags;
                             }
                         }
                         pos.func.layout.remove_inst(dead);
@@ -751,55 +758,56 @@ fn get_ext_opcode(op: Opcode) -> Option<Opcode> {
     }
 }
 
-/// Can `killer` make `dead` a dead store?
+/// Can `overwriter` make `maybe_dead` a dead store?
 ///
-/// Only if `dead` is itself a store that writes exactly the bytes
-/// `killer` overwrites: the same alias region, address, offset, type,
-/// and store width (i.e. extending/truncating opcode). Otherwise some
-/// (or all) of `dead`'s bytes may remain observable after `killer`
-/// runs, and removing `dead` would change the program's behavior.
+/// Only if `maybe_dead` is itself a store that writes exactly the
+/// bytes `overwriter` overwrites: the same alias region, address,
+/// offset, type, and store width (i.e. extending/truncating
+/// opcode). Otherwise some (or all) of `maybe_dead`'s bytes may
+/// remain observable after `overwriter` runs, and removing
+/// `maybe_dead` would change the program's behavior.
 ///
-/// `killer_addr` must already have had its value-aliases resolved (as
-/// the caller does for the killer's address).
-fn killer_fully_overwrites(
+/// `overwriter_addr` must already have had its value-aliases resolved
+/// (as the caller does for the overwriter's address).
+fn fully_overwrites(
     func: &Function,
-    dead: Inst,
-    killer: Inst,
-    killer_addr: Value,
-    killer_offset: Offset32,
-    killer_ty: Type,
+    maybe_dead: Inst,
+    overwriter: Inst,
+    overwriter_addr: Value,
+    overwriter_offset: Offset32,
+    overwriter_ty: Type,
 ) -> bool {
-    debug_assert!(!func.dfg.value_is_alias(killer_addr));
+    debug_assert!(!func.dfg.value_is_alias(overwriter_addr));
 
-    let dead_opcode = func.dfg.insts[dead].opcode();
+    let maybe_dead_opcode = func.dfg.insts[maybe_dead].opcode();
 
-    // `dead` must really be a store (this rejects the `last_fence` and merge
+    // `maybe_dead` must really be a store (this rejects the `last_fence` and merge
     // fallbacks that point at calls/fences/atomics or unrelated instructions).
-    if !dead_opcode.can_store() {
+    if !maybe_dead_opcode.can_store() {
         return false;
     }
 
     // Both must write the same number of bytes: e.g. `istore8` and `store`
     // write different widths even when their value types are equal.
-    let killer_opcode = func.dfg.insts[killer].opcode();
-    if get_ext_opcode(dead_opcode) != get_ext_opcode(killer_opcode) {
+    let overwriter_opcode = func.dfg.insts[overwriter].opcode();
+    if get_ext_opcode(maybe_dead_opcode) != get_ext_opcode(overwriter_opcode) {
         return false;
     }
 
     // Both must target the same alias region; a store to one region cannot make
     // a store to a disjoint region dead.
-    if func.dfg.insts[dead].alias_region(&func.dfg)
-        != func.dfg.insts[killer].alias_region(&func.dfg)
+    if func.dfg.insts[maybe_dead].alias_region(&func.dfg)
+        != func.dfg.insts[overwriter].alias_region(&func.dfg)
     {
         return false;
     }
 
     // Both must write the same address, offset, and type.
-    match inst_addr_offset_type(func, dead) {
+    match inst_addr_offset_type(func, maybe_dead) {
         Some((addr, offset, ty)) => {
-            func.dfg.resolve_aliases(addr) == killer_addr
-                && offset == killer_offset
-                && ty == killer_ty
+            func.dfg.resolve_aliases(addr) == overwriter_addr
+                && offset == overwriter_offset
+                && ty == overwriter_ty
         }
         None => false,
     }

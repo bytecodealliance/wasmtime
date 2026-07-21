@@ -565,9 +565,9 @@ where
                 self.stats.alias_analysis_removed_idempotent_store += 1;
                 Some(SkeletonInstSimplification::Remove)
             }
-            OptResult::DeadStore { dead, killer } => {
+            OptResult::DeadStore { dead, overwriter } => {
                 self.stats.alias_analysis_removed_dead_store += 1;
-                Some(SkeletonInstSimplification::RemoveDeadStore { dead, killer })
+                Some(SkeletonInstSimplification::RemoveDeadStore { dead, killer: overwriter })
             }
             OptResult::None => {
                 // Generic side-effecting op -- always keep it, and
