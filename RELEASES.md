@@ -1,3 +1,17 @@
+## 47.0.2
+
+Released 2026-07-21.
+
+### Fixed
+
+* Fix async-delivered write-closed events for futures.
+  [#13914](https://github.com/bytecodealliance/wasmtime/pull/13914)
+
+* Fix call hooks with yields and concurrent execution.
+  [#13871](https://github.com/bytecodealliance/wasmtime/pull/13871)
+
+--------------------------------------------------------------------------------
+
 ## 47.0.1
 
 Released 2026-07-20.
