@@ -1,9 +1,11 @@
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, format_err};
 use clap::{ArgAction, Parser};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
+use cranelift_isle_veri::cache::{CacheMode, CacheStore};
 use cranelift_isle_veri::runner::{Filter, Runner, SolverBackend, SolverRule};
 
 /// Configuration file applied by default when no `--config` is given.
@@ -96,6 +98,21 @@ struct Opts {
     /// Dump debug output.
     #[arg(long)]
     debug: bool,
+
+    /// Enable caching with the given cache directory (JSON file store).
+    ///
+    /// When specified, SMT query results are cached to JSON files under the
+    /// given directory. Subsequent runs with the same encoding can skip
+    /// solver invocation entirely by reading from the cache.
+    #[arg(long)]
+    cache_dir: Option<std::path::PathBuf>,
+
+    /// Cache read/write mode.
+    ///
+    /// - `read-write` (default): read from and write to the cache.
+    /// - `read-only-enforcing`: only read from the cache; fail on cache miss.
+    #[arg(long, value_enum, default_value = "read-write")]
+    cache_mode: CacheMode,
 }
 
 impl Opts {
@@ -263,6 +280,12 @@ fn main() -> Result<()> {
     runner.skip_solver(opts.skip_solver);
     runner.debug(opts.debug);
 
+    // Setup caching if --cache-dir is provided.
+    if let Some(cache_dir) = &opts.cache_dir {
+        let store = CacheStore::open(cache_dir.clone(), opts.cache_mode);
+        runner.set_cache_store(Arc::new(store));
+    }
+
     // Summarize what is being excluded and where output is going before
     // starting verification.
     println!("========================== Verification configuration =========================");
@@ -307,6 +330,17 @@ fn main() -> Result<()> {
         }
     }
     println!("==========================");
+
+    // Print cache config.
+    if let Some(cache_dir) = &opts.cache_dir {
+        println!(
+            "Cache:              {} (mode: {:?})",
+            cache_dir.display(),
+            opts.cache_mode
+        );
+    } else {
+        println!("Cache:              off");
+    }
 
     runner.run()?;
 

@@ -4,7 +4,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{self, Duration},
 };
 
@@ -18,6 +18,7 @@ use serde::Serialize;
 
 use crate::{
     BUILD_PROFILE, GIT_VERSION,
+    cache::{CacheEntry, CacheStore, CacheVerdict},
     debug::{print_expansion, write_expansion},
     expand::{Chaining, Expander, Expansion},
     program::Program,
@@ -489,6 +490,9 @@ pub struct Runner {
     skip_solver: bool,
     results_to_log_dir: bool,
     debug: bool,
+
+    /// Shared cache store for SMT query results (None = no caching).
+    cache_store: Option<Arc<CacheStore>>,
 }
 
 impl Runner {
@@ -508,6 +512,7 @@ impl Runner {
             results_to_log_dir: false,
             skip_solver: false,
             debug: false,
+            cache_store: None,
         })
     }
 
@@ -596,6 +601,11 @@ impl Runner {
 
     pub fn debug(&mut self, debug: bool) {
         self.debug = debug;
+    }
+
+    /// Enable caching with the given cache store.
+    pub fn set_cache_store(&mut self, store: Arc<CacheStore>) {
+        self.cache_store = Some(store);
     }
 
     pub fn run(&self) -> Result<RunSummary> {
@@ -887,6 +897,11 @@ impl Runner {
         // fails below.
         summary.print();
 
+        // Print cache stats if caching is enabled.
+        if let Some(cache) = &self.cache_store {
+            cache.print_stats();
+        }
+
         // Verification failures and un-processable expansions are both overall
         // errors so that callers (the `veri` binary and tests) observe them via
         // the returned `Result`.
@@ -1109,6 +1124,53 @@ impl Runner {
         Ok(self.default_solver_backend)
     }
 
+    /// Convert a cached verdict into a VerifyReport.
+    fn cache_verdict_to_verify_report(
+        &self,
+        verdict: CacheVerdict,
+        _model: Option<crate::cache::CacheModel>,
+        init_time: Duration,
+    ) -> VerifyReport {
+        let v = match verdict {
+            CacheVerdict::Success => Verdict::Success,
+            CacheVerdict::Failure => Verdict::Failure,
+            CacheVerdict::Unknown => Verdict::Unknown,
+            CacheVerdict::Inapplicable => Verdict::Inapplicable,
+        };
+        VerifyReport {
+            verdict: v,
+            init_time,
+            applicable_time: Duration::ZERO,
+            verify_time: None,
+        }
+    }
+
+    /// Store a verification result in the cache.
+    /// The cache key is derived from `key_smt2` (the baseline transcript).
+    fn store_cache_entry(
+        &self,
+        cache: &CacheStore,
+        key_smt2: &str,
+        solver_backend: &str,
+        verdict: CacheVerdict,
+        init_ms: u64,
+        query_ms: u64,
+    ) -> Result<()> {
+        let (short_key, full_sha256) = CacheStore::compute_key(key_smt2, solver_backend);
+        let entry = CacheEntry {
+            key_sha256: full_sha256,
+            short_key,
+            smt2_text: key_smt2.to_string(),
+            solver_backend: solver_backend.to_string(),
+            solver_version: None,
+            verdict,
+            model: None,
+            init_ms,
+            query_ms,
+        };
+        cache.store(entry)
+    }
+
     #[allow(clippy::too_many_arguments, reason = "verification code")]
     fn verify_expansion_type_instantiation(
         &self,
@@ -1140,6 +1202,21 @@ impl Runner {
         solver.encode()?;
         let init_time = start.elapsed();
 
+        // Take baseline transcript for cache key derivation.
+        let baseline = solver.take_baseline_transcript();
+        let backend_name = solver_backend.prog();
+
+        // Check cache before invoking solver reasoning.
+        if let Some(cache) = &self.cache_store {
+            if let Some((verdict, model)) = cache.check(&baseline, backend_name)? {
+                // Cache hit — return cached result without solver reasoning.
+                writeln!(output, "\t\tcache hit: {}", verdict)?;
+                let report = self.cache_verdict_to_verify_report(verdict, model, init_time);
+                return Ok(report);
+            }
+            // check() already handled read-only-enforcing mode internally
+        }
+
         // Applicability check.
         let start = time::Instant::now();
         let applicability = solver.check_assumptions_feasibility()?;
@@ -1149,6 +1226,17 @@ impl Runner {
         match applicability {
             Applicability::Applicable => (),
             Applicability::Inapplicable => {
+                // Cache the inapplicable result.
+                if let Some(cache) = &self.cache_store {
+                    let _ = self.store_cache_entry(
+                        cache,
+                        &baseline,
+                        backend_name,
+                        CacheVerdict::Inapplicable,
+                        init_time.as_millis() as u64,
+                        applicable_time.as_millis() as u64,
+                    );
+                }
                 return Ok(VerifyReport {
                     verdict: Verdict::Inapplicable,
                     init_time,
@@ -1185,6 +1273,17 @@ impl Runner {
                     failure_path: unknown_path,
                 });
 
+                // Cache the unknown result.
+                if let Some(cache) = &self.cache_store {
+                    let _ = self.store_cache_entry(
+                        cache,
+                        &baseline,
+                        backend_name,
+                        CacheVerdict::Unknown,
+                        init_time.as_millis() as u64,
+                        applicable_time.as_millis() as u64,
+                    );
+                }
                 return Ok(VerifyReport {
                     verdict: Verdict::ApplicabilityUnknown,
                     init_time,
@@ -1200,6 +1299,25 @@ impl Runner {
         let verify_time = Some(start.elapsed());
 
         writeln!(output, "\t\tverification = {verification}")?;
+
+        // Cache the verification result.
+        if let Some(cache) = &self.cache_store {
+            let _ = solver.take_phase_transcript();
+            let verdict = match &verification {
+                Verification::Success => CacheVerdict::Success,
+                Verification::Failure(_) => CacheVerdict::Failure,
+                Verification::Unknown => CacheVerdict::Unknown,
+            };
+            let _ = self.store_cache_entry(
+                cache,
+                &baseline,
+                backend_name,
+                verdict,
+                init_time.as_millis() as u64,
+                verify_time.unwrap().as_millis() as u64,
+            );
+        }
+
         Ok(match verification {
             Verification::Failure(model) => {
                 let failure_path = log_dir.join("failure.out");
