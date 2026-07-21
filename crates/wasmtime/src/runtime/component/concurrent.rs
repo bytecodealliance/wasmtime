@@ -832,6 +832,7 @@ pub(crate) enum WaitResult {
 /// lowering the result to the guest's stack and linear memory.
 pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     store: &mut dyn VMStore,
+    host_task: EnteredHostTask,
     future: impl Future<Output = Result<R>> + Send + 'static,
 ) -> Result<R> {
     let task = store.current_host_thread()?;
@@ -867,6 +868,11 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
             .poll(&mut Context::from_waker(&Waker::noop()))
     });
 
+    let caller = match host_task {
+        Some(pair) => pair.1,
+        None => bail_bug!("host task wasn't created but should have been"),
+    };
+
     match poll {
         // It completed immediately; check the result and delete the task.
         Poll::Ready(result) => result?,
@@ -879,7 +885,6 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
             let state = store.concurrent_state_mut()?;
             state.push_future(future);
 
-            let caller = state.get_mut(task)?.caller;
             let set = state.get_mut(caller.thread)?.sync_call_set;
             Waitable::Host(task).join(state, Some(set))?;
 
@@ -1588,8 +1593,8 @@ impl<T> StoreContextMut<'_, T> {
         Ok(core::iter::from_fn(move || {
             while let Some(t) = cur {
                 cur = state.parent(t);
-                if let Some(thread) = t.guest() {
-                    return Some(GuestTaskId(thread.task));
+                if let Some(task) = t.guest_task() {
+                    return Some(GuestTaskId(task));
                 }
             }
 
@@ -1597,6 +1602,13 @@ impl<T> StoreContextMut<'_, T> {
         }))
     }
 }
+
+/// Return value of [`StoreOpaque::host_task_create`].
+///
+/// This is an `Option` to handle the dynamic `store.concurrency_support()`
+/// property, and when set this returns the host task that was created in
+/// addition to the previously running guest thread.
+pub type EnteredHostTask = Option<(TableId<HostTask>, QualifiedThreadId)>;
 
 impl StoreOpaque {
     /// Returns the currently-running thread, promoting any deferred lazy thread
@@ -1628,8 +1640,8 @@ impl StoreOpaque {
         // we can get the `ComponentInstanceId` shared by the whole chain from
         // here.
         let state = self.concurrent_state_mut_without_forcing_current_thread();
-        let id = match state.unforced_current_thread.guest().copied() {
-            Some(thread) => state.get_mut(thread.task)?.instance.instance,
+        let id = match state.unforced_current_thread.guest_task() {
+            Some(task) => state.get_mut(task)?.instance.instance,
             None => bail_bug!("deferred component-model thread with non-guest base"),
         };
 
@@ -1733,8 +1745,8 @@ impl StoreOpaque {
 
         let thread = self.current_thread()?;
         let state = self.concurrent_state_mut()?;
-        let instance = if let Some(thread) = thread.guest() {
-            Some(state.get_mut(thread.task)?.instance)
+        let instance = if let Some(task) = thread.guest_task() {
+            Some(state.get_mut(task)?.instance)
         } else {
             None
         };
@@ -1812,32 +1824,17 @@ impl StoreOpaque {
     /// relatively expensive table manipulations. This would ideally be
     /// optimized to avoid the full allocation of a `HostTask` in at least some
     /// situations.
-    pub(crate) fn host_task_create(&mut self) -> Result<Option<TableId<HostTask>>> {
+    pub(crate) fn host_task_create(&mut self) -> Result<EnteredHostTask> {
         if !self.concurrency_support() {
             self.enter_call_not_concurrent()?;
             return Ok(None);
         }
         let caller = self.current_guest_thread()?;
         let state = self.concurrent_state_mut()?;
-        let task = state.push(HostTask::new(caller, HostTaskState::CalleeStarted))?;
+        let task = state.push(HostTask::new(caller.task, HostTaskState::CalleeStarted))?;
         log::trace!("new host task {task:?}");
         self.set_thread(task)?;
-        Ok(Some(task))
-    }
-
-    /// Invoked before lowering the results of a host task to the guest.
-    ///
-    /// This is used to update the current thread annotations within the store
-    /// to ensure that it reflects the guest task, not the host task, since
-    /// lowering may execute guest code.
-    pub fn host_task_reenter_caller(&mut self) -> Result<()> {
-        if !self.concurrency_support() {
-            return Ok(());
-        }
-        let task = self.current_host_thread()?;
-        let caller = self.concurrent_state_mut()?.get_mut(task)?.caller;
-        self.set_thread(caller)?;
-        Ok(())
+        Ok(Some((task, caller)))
     }
 
     /// Dual of `host_task_create` and signifies that the host has finished and
@@ -1846,9 +1843,10 @@ impl StoreOpaque {
     /// Note that this isn't invoked when the host is invoked asynchronously and
     /// the host isn't complete yet. In that situation the host task persists
     /// and will be cleaned up separately in `subtask_drop`
-    pub(crate) fn host_task_delete(&mut self, task: Option<TableId<HostTask>>) -> Result<()> {
+    pub(crate) fn host_task_delete(&mut self, task: EnteredHostTask) -> Result<()> {
         match task {
-            Some(task) => {
+            Some((task, caller)) => {
+                self.set_thread(caller)?;
                 log::trace!("delete host task {task:?}");
                 self.concurrent_state_mut()?.delete(task)?;
             }
@@ -1876,8 +1874,8 @@ impl StoreOpaque {
         let mut cur = Some(self.current_thread()?);
         let state = self.concurrent_state_mut()?;
         while let Some(t) = cur {
-            if let Some(thread) = t.guest() {
-                let task = state.get_mut(thread.task)?;
+            if let Some(task) = t.guest_task() {
+                let task = state.get_mut(task)?;
                 // Note that we only compare top-level instance IDs here.
                 // The idea is that the host is not allowed to recursively
                 // enter a top-level instance even if the specific leaf
@@ -1944,13 +1942,13 @@ impl StoreOpaque {
         // Additionally if we're switching to a new thread, set its component
         // instance's `task_may_block` according to where it left off.
         let state = self.concurrent_state_mut()?;
-        if let Some(old_thread) = old_thread.guest() {
-            let instance = state.get_mut(old_thread.task)?.instance.instance;
+        if let Some(old_task) = old_thread.guest_task() {
+            let instance = state.get_mut(old_task)?.instance.instance;
             self.component_instance_mut(instance)
                 .set_task_may_block(false)
         }
 
-        if thread.guest().is_some() {
+        if thread.guest_task().is_some() {
             self.set_task_may_block()?;
         }
 
@@ -2170,8 +2168,8 @@ impl StoreOpaque {
                     ..
                 }
             ) || old_guest_thread
-                .guest()
-                .map(|thread| self.concurrent_state_mut()?.may_block(thread.task))
+                .guest_task()
+                .map(|task| self.concurrent_state_mut()?.may_block(task))
                 .transpose()?
                 .unwrap_or(true)
         );
@@ -2347,6 +2345,7 @@ impl StoreOpaque {
         }
         let (bits, is_host) = match self.current_thread()? {
             CurrentThread::Guest(id) => (id.task.rep(), false),
+            CurrentThread::GuestTask(id) => (id.rep(), false),
             CurrentThread::Host(id) => (id.rep(), true),
             CurrentThread::None => return Ok(None),
         };
@@ -3197,9 +3196,10 @@ impl Instance {
     pub(crate) fn first_poll<T: 'static, R: Send + 'static>(
         self,
         mut store: StoreContextMut<'_, T>,
+        host_task: EnteredHostTask,
         future: impl Future<Output = Result<R>> + Send + 'static,
-        lower: impl FnOnce(StoreContextMut<T>, Option<R>) -> Result<()> + Send + 'static,
-    ) -> Result<Option<u32>> {
+        lower: impl FnOnce(StoreContextMut<T>, Option<R>, bool) -> Result<()> + Send + 'static,
+    ) -> Result<u32> {
         let token = StoreToken::new(store.as_context_mut());
         let task = store.0.current_host_thread()?;
         let state = store.0.concurrent_state_mut()?;
@@ -3229,8 +3229,8 @@ impl Instance {
             // It finished immediately; lower the result and delete the task.
             Poll::Ready(result) => {
                 let result = result.transpose()?;
-                lower(store.as_context_mut(), result)?;
-                return Ok(None);
+                lower(store.as_context_mut(), result, true)?;
+                return Ok(Status::Returned.pack(None));
             }
 
             // Future isn't ready yet, so fall through.
@@ -3262,7 +3262,7 @@ impl Instance {
                     Status::ReturnCancelled
                 };
 
-                lower(store.as_context_mut(), result)?;
+                lower(store.as_context_mut(), result, false)?;
                 let state = store.0.concurrent_state_mut()?;
                 match &mut state.get_mut(task)?.state {
                     // The task is already flagged as finished because it was
@@ -3294,9 +3294,12 @@ impl Instance {
 
         // Make this task visible to the guest and then record what it
         // was made visible as.
+        let caller = match host_task {
+            Some(pair) => pair.1,
+            None => bail_bug!("host task wasn't created but should have been"),
+        };
         let state = store.0.concurrent_state_mut()?;
         state.push_future(future);
-        let caller = state.get_mut(task)?.caller;
         let instance = state.get_mut(caller.task)?.instance;
         let handle = store
             .0
@@ -3310,7 +3313,7 @@ impl Instance {
         // caller. Note that the host task isn't deallocated as it's
         // within the store and will get deallocated later.
         store.0.set_thread(caller)?;
-        Ok(Some(handle))
+        Ok(Status::Started.pack(Some(handle)))
     }
 
     /// Implements the `task.return` intrinsic, lifting the result for the
@@ -4599,8 +4602,13 @@ type HostTaskFuture = Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>
 pub(crate) struct HostTask {
     common: WaitableCommon,
 
-    /// Guest thread which called the host.
-    caller: QualifiedThreadId,
+    /// The calling guest task of this host task. Note that this is only used
+    /// for backtrace purposes and is additionally not updated when the guest
+    /// task finishes.
+    ///
+    /// TODO: this field should probably get deleted entirely and the
+    /// backtrace-purposes here should move to an auxiliary table.
+    caller: TableId<GuestTask>,
 
     /// State of borrows/etc the host needs to track. Used when the guest passes
     /// borrows to the host, for example.
@@ -4633,7 +4641,7 @@ enum HostTaskState {
 }
 
 impl HostTask {
-    fn new(caller: QualifiedThreadId, state: HostTaskState) -> Self {
+    fn new(caller: TableId<GuestTask>, state: HostTaskState) -> Self {
         Self {
             common: WaitableCommon::default(),
             call_context: CallContext::default(),
@@ -5217,8 +5225,16 @@ impl ConcurrentInstanceState {
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum CurrentThread {
+    /// The currently running thread is a guest, identified here with its
+    /// task/thread id combo.
     Guest(QualifiedThreadId),
+    /// The currently running thread is a host task.
     Host(TableId<HostTask>),
+    /// A bit of a kludge to get `StoreOpaque::parent` working with backtraces
+    /// and this serves as the parent node of a `Host` task. This ideally would
+    /// get removed in favor of separate backtrace storage.
+    GuestTask(TableId<GuestTask>),
+    /// There is no currently running thread.
     None,
 }
 
@@ -5226,6 +5242,14 @@ impl CurrentThread {
     fn guest(&self) -> Option<&QualifiedThreadId> {
         match self {
             Self::Guest(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    fn guest_task(&self) -> Option<TableId<GuestTask>> {
+        match self {
+            Self::Guest(id) => Some(id.task),
+            Self::GuestTask(id) => Some(*id),
             _ => None,
         }
     }
@@ -5629,17 +5653,19 @@ impl ConcurrentState {
 
     /// Returns the parent thread, if any, of `cur`.
     fn parent(&mut self, cur: CurrentThread) -> Option<CurrentThread> {
-        match cur {
-            CurrentThread::Guest(thread) => {
-                let task = self.get_mut(thread.task).ok()?;
-                Some(match task.caller {
-                    Caller::Host { caller, .. } => caller,
-                    Caller::Guest { thread } => thread.into(),
-                })
+        let task = match cur {
+            CurrentThread::GuestTask(task) => task,
+            CurrentThread::Guest(thread) => thread.task,
+            CurrentThread::Host(id) => {
+                return Some(CurrentThread::GuestTask(self.get_mut(id).ok()?.caller));
             }
-            CurrentThread::Host(id) => Some(self.get_mut(id).ok()?.caller.into()),
-            CurrentThread::None => None,
-        }
+            CurrentThread::None => return None,
+        };
+        let task = self.get_mut(task).ok()?;
+        Some(match task.caller {
+            Caller::Host { caller, .. } => caller,
+            Caller::Guest { thread } => thread.into(),
+        })
     }
 }
 

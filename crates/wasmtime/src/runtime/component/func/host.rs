@@ -1,9 +1,7 @@
 //! Implementation of calling Rust-defined functions from components.
 
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent;
-#[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{Accessor, Status};
+use crate::component::concurrent::{self, Accessor, Status};
 use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{slice_to_storage, slice_to_storage_mut};
@@ -377,13 +375,10 @@ where
             store.0.check_blocking()?;
         }
 
-        // Enter the host by pushing a `HostTask` into the concurrent state.
-        let host_task = store.0.host_task_create()?;
-
-        let host_task_complete = if async_ {
+        if async_ {
             #[cfg(feature = "component-model-async")]
             {
-                self.call_async_lower(store.as_context_mut(), instance, ty, options, storage)?
+                self.call_async_lower(store.as_context_mut(), instance, ty, options, storage)
             }
             #[cfg(not(feature = "component-model-async"))]
             unreachable!(
@@ -391,20 +386,8 @@ where
                  when `component-model-async` feature disabled"
             );
         } else {
-            self.call_sync_lower(store.as_context_mut(), instance, ty, options, storage)?;
-            true
-        };
-
-        // If the host task completed, then it's deallocated.
-        //
-        // Note that if the host task did not exit then the `call_async_lower`
-        // function transitively would have updated the current guest thread to
-        // the caller of this host function.
-        if host_task_complete {
-            store.0.host_task_delete(host_task)?;
+            self.call_sync_lower(store.as_context_mut(), instance, ty, options, storage)
         }
-
-        Ok(())
     }
 
     /// Implementation of the "sync" ABI.
@@ -422,13 +405,17 @@ where
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
+        let entered_host_task = store.0.host_task_create()?;
+
         let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_PARAMS, storage)?;
 
         let ret = match self.run(store.as_context_mut(), params) {
             HostResult::Done(result) => result?,
             #[cfg(feature = "component-model-async")]
-            HostResult::Future(future) => concurrent::poll_and_block(store.0, future)?,
+            HostResult::Future(future) => {
+                concurrent::poll_and_block(store.0, entered_host_task, future)?
+            }
         };
 
         let mut lower = LowerContext::new(store, options, instance);
@@ -447,7 +434,9 @@ where
                 ptr,
             )?)
         };
-        Self::lower_result_and_exit_call(&mut lower, ty, Some(ret), dst)
+        lower.validate_scope_exit()?;
+        lower.store.0.host_task_delete(entered_host_task)?;
+        Self::lower_raw(&mut lower, ty, ret, dst)
     }
 
     /// Implementation of the "async" ABI of the component model.
@@ -463,13 +452,14 @@ where
         ty: TypeFuncIndex,
         options: OptionsIndex,
         storage: &mut [MaybeUninit<ValRaw>],
-    ) -> Result<bool> {
+    ) -> Result<()> {
         use wasmtime_environ::component::MAX_FLAT_ASYNC_PARAMS;
 
         let (component, store) = instance.component_and_store_mut(store.0);
         let mut store = StoreContextMut(store);
         let types = component.types();
         let fty = &types[ty];
+        let entered_host_task = store.0.host_task_create()?;
 
         // Lift the parameters, either from flat storage or from linear
         // memory.
@@ -494,36 +484,41 @@ where
 
         let host_result = self.run(store.as_context_mut(), params);
 
-        let task = match host_result {
+        let rc = match host_result {
             HostResult::Done(result) => {
-                Self::lower_result_and_exit_call(
-                    &mut LowerContext::new(store, options, instance),
-                    ty,
-                    Some(result?),
-                    Destination::Memory(retptr),
-                )?;
-                None
+                let result = result?;
+                let mut lower = LowerContext::new(store, options, instance);
+                lower.validate_scope_exit()?;
+                lower.store.0.host_task_delete(entered_host_task)?;
+                Self::lower_raw(&mut lower, ty, result, Destination::Memory(retptr))?;
+                Status::Returned.pack(None)
             }
-            #[cfg(feature = "component-model-async")]
-            HostResult::Future(future) => {
-                instance.first_poll(store, future, move |store, ret| {
-                    Self::lower_result_and_exit_call(
-                        &mut LowerContext::new(store, options, instance),
-                        ty,
-                        ret,
-                        Destination::Memory(retptr),
-                    )
-                })?
-            }
+            HostResult::Future(future) => instance.first_poll(
+                store.as_context_mut(),
+                entered_host_task,
+                future,
+                move |store, ret, immediate| {
+                    let mut lower = LowerContext::new(store, options, instance);
+                    lower.validate_scope_exit()?;
+                    if immediate {
+                        lower.store.0.host_task_delete(entered_host_task)?;
+                    }
+                    // FIXME(WebAssembly/component-model#678) the currently
+                    // running thread for this exit lower is wrong. This happens
+                    // to pick whatever's in the store at the time of a
+                    // non-immediate exit which is not correct. There's no real
+                    // right answer here, hence the upstream issue.
+                    if let Some(result) = ret {
+                        Self::lower_raw(&mut lower, ty, result, Destination::Memory(retptr))?;
+                    }
+                    Ok(())
+                },
+            )?,
         };
 
-        storage[0].write(ValRaw::u32(if let Some(task) = task {
-            Status::Started.pack(Some(task))
-        } else {
-            Status::Returned.pack(None)
-        }));
+        storage[0].write(ValRaw::u32(rc));
 
-        Ok(task.is_none())
+        Ok(())
     }
 
     /// Loads parameters the wasm arguments `storage`.
@@ -564,33 +559,20 @@ where
         Ok((params, &storage[param_flat_count.unwrap_or(1)..]))
     }
 
-    /// Stores the result `ret` into `dst` which is calculated per the ABI.
-    fn lower_result_and_exit_call(
+    fn lower_raw(
         lower: &mut LowerContext<'_, T>,
         ty: TypeFuncIndex,
-        ret: Option<R>,
+        ret: R,
         dst: Destination<'_>,
     ) -> Result<()> {
-        // Before lowering below semantically ensure that the caller has dropped
-        // all of its borrows and such.
-        lower.validate_scope_exit()?;
-
-        // At this point we're transitioning back to the caller task which means
-        // that the current task needs to be updated. This will restore the
-        // currently running thread as the caller's thread, for example if
-        // lowering below calls `realloc` it'll use the right context.
-        lower.store.0.host_task_reenter_caller()?;
-
-        if let Some(ret) = ret {
-            let caller_instance = lower.options().instance;
-            let mut flags = lower.instance_mut().instance_flags(caller_instance);
-            unsafe {
-                flags.set_may_leave(false);
-            }
-            Self::lower_result(lower, ty, ret, dst)?;
-            unsafe {
-                flags.set_may_leave(true);
-            }
+        let caller_instance = lower.options().instance;
+        let mut flags = lower.instance_mut().instance_flags(caller_instance);
+        unsafe {
+            flags.set_may_leave(false);
+        }
+        Self::lower_result(lower, ty, ret, dst)?;
+        unsafe {
+            flags.set_may_leave(true);
         }
         Ok(())
     }
