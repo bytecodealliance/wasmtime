@@ -726,22 +726,13 @@ impl<'a> AliasAnalysis<'a> {
                     OptResult::IdempotentStore => {
                         pos.remove_inst_and_step_back();
                     }
-                    OptResult::DeadStore { dead, overwriter } => {
+                    OptResult::DeadStore {
+                        dead,
+                        overwriter: _,
+                    } => {
                         assert!(
                             !matches!(pos.position(), CursorPosition::At(other) if dead == other)
                         );
-                        // Copy the trap code (if any) from the dead store to
-                        // its overwriter.
-                        if let Some(flags) = pos.func.dfg.insts[dead].memflags_data(&pos.func.dfg) {
-                            if let Some(code) = flags.trap_code() {
-                                let flags = pos.func.dfg.insts[overwriter]
-                                    .memflags_data(&pos.func.dfg)
-                                    .unwrap();
-                                let flags = flags.with_trap_code(Some(code));
-                                let flags = pos.func.dfg.mem_flags.insert(flags).unwrap();
-                                *pos.func.dfg.insts[overwriter].memflags_mut().unwrap() = flags;
-                            }
-                        }
                         pos.func.layout.remove_inst(dead);
                     }
                 }
@@ -798,6 +789,18 @@ fn fully_overwrites(
     // a store to a disjoint region dead.
     if func.dfg.insts[maybe_dead].alias_region(&func.dfg)
         != func.dfg.insts[overwriter].alias_region(&func.dfg)
+    {
+        return false;
+    }
+
+    // Both must have the same trap code, if any. Otherwise, removing
+    // `maybe_dead` could change which code an execution traps with.
+    if func.dfg.insts[maybe_dead]
+        .memflags()
+        .and_then(|f| func.dfg.mem_flags[f].trap_code())
+        != func.dfg.insts[overwriter]
+            .memflags()
+            .and_then(|f| func.dfg.mem_flags[f].trap_code())
     {
         return false;
     }

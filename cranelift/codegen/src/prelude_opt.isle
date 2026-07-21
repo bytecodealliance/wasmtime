@@ -124,9 +124,7 @@
         (ReplaceWithTwo (first Inst) (second Inst))
 
         ;; Remove a dead store.
-        ;;
-        ;; The trap code from `dead` (if any) is copied to `killer`.
-        (RemoveDeadStore (dead Inst) (killer Inst))))
+        (RemoveDeadStore (dead Inst) (overwriter Inst))))
 
 (decl pure inst_to_skeleton_inst_simplification (Inst) SkeletonInstSimplification)
 (rule (inst_to_skeleton_inst_simplification inst)
