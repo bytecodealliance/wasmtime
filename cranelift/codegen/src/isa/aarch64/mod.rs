@@ -57,7 +57,7 @@ impl AArch64Backend {
         domtree: &DominatorTree,
         regalloc_ctx: &mut regalloc2::Ctx,
         ctrl_plane: &mut ControlPlane,
-    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
+    ) -> CodegenResult<VCode<inst::Inst>> {
         let emit_info = EmitInfo::new(self.flags.clone(), self.isa_flags.clone());
         let sigs = SigSet::new::<abi::AArch64MachineDeps>(func, &self.flags)?;
         let abi = abi::AArch64Callee::new(func, self, &self.isa_flags, &sigs)?;
@@ -83,10 +83,9 @@ impl TargetIsa for AArch64Backend {
         want_disasm: bool,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let (vcode, regalloc_result) =
-            self.compile_vcode(func, domtree, regalloc_ctx, ctrl_plane)?;
+        let vcode = self.compile_vcode(func, domtree, regalloc_ctx, ctrl_plane)?;
 
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, &self.flags, ctrl_plane)?;
+        let emit_result = vcode.emit(&regalloc_ctx.output, want_disasm, &self.flags, ctrl_plane)?;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer;
 
