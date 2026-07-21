@@ -61,7 +61,7 @@ use crate::hash_set::HashSet;
 #[cfg(feature = "gc")]
 use crate::module::ModuleRegistry;
 use crate::prelude::*;
-use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
+use crate::store::{AsStoreOpaque, Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 #[cfg(feature = "gc")]
 use crate::vm::GcRootsList;
 use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
@@ -928,33 +928,33 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
                     call.thread,
                 );
 
-                let old_thread = store.set_thread(call.thread)?;
-                log::trace!(
-                    "GuestCallKind::DeliverEvent: replaced {old_thread:?} with {:?} as current thread",
-                    call.thread
-                );
+                let code = with_store_thread(store, call.thread, |store| {
+                    log::trace!(
+                        "GuestCallKind::DeliverEvent: set {:?} as current thread",
+                        call.thread
+                    );
 
-                store.enter_instance(runtime_instance);
+                    store.enter_instance(runtime_instance);
 
-                let Some(callback) = store
-                    .concurrent_state_mut()?
-                    .get_mut(call.thread.task)?
-                    .callback
-                    .take()
-                else {
-                    bail_bug!("guest task callback field not present")
-                };
+                    let Some(callback) = store
+                        .concurrent_state_mut()?
+                        .get_mut(call.thread.task)?
+                        .callback
+                        .take()
+                    else {
+                        bail_bug!("guest task callback field not present")
+                    };
 
-                let code = callback(store, event, handle)?;
+                    let code = callback(store, event, handle)?;
 
-                store
-                    .concurrent_state_mut()?
-                    .get_mut(call.thread.task)?
-                    .callback = Some(callback);
+                    store
+                        .concurrent_state_mut()?
+                        .get_mut(call.thread.task)?
+                        .callback = Some(callback);
 
-                store.exit_instance(runtime_instance)?;
-
-                store.set_thread(old_thread)?;
+                    store.exit_instance(runtime_instance)?;
+                    Ok(code)
+                })?;
 
                 next = instance.handle_callback_code(
                     store,
@@ -963,9 +963,7 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
                     code,
                 )?;
 
-                log::trace!(
-                    "GuestCallKind::DeliverEvent: restored {old_thread:?} as current thread"
-                );
+                log::trace!("GuestCallKind::DeliverEvent: restored previous current thread");
             }
             GuestCallKind::StartImplicit(fun) => {
                 next = fun(store)?;
@@ -1598,6 +1596,114 @@ impl<T> StoreContextMut<'_, T> {
     }
 }
 
+/// Temporarily set `thread` as the store's current thread while running `f`,
+/// then always restore the previous thread.
+///
+/// Restoration runs even when `f` returns an error. If both `f` and the
+/// restore fail, the error from `f` is preferred.
+fn with_store_thread<S, R>(
+    store: &mut S,
+    thread: impl Into<CurrentThread>,
+    f: impl FnOnce(&mut S) -> Result<R>,
+) -> Result<R>
+where
+    S: AsStoreOpaque + ?Sized,
+{
+    let old = store.as_store_opaque().set_thread(thread)?;
+    let result = f(store);
+    store.as_store_opaque().restore_thread_after(old, result)
+}
+
+#[cfg(test)]
+mod with_store_thread_tests {
+    use super::table::TableId;
+    use super::{CurrentThread, HostTask, with_store_thread};
+    use crate::store::AsStoreOpaque;
+    use crate::{Config, Engine, Result, Store, bail};
+
+    fn concurrent_store() -> Store<()> {
+        let mut config = Config::new();
+        config.concurrency_support(true);
+        let engine = Engine::new(&config).unwrap();
+        Store::new(&engine, ())
+    }
+
+    fn current_thread(store: &mut Store<()>) -> CurrentThread {
+        store
+            .as_store_opaque()
+            .concurrent_state_mut()
+            .unwrap()
+            .unforced_current_thread
+    }
+
+    /// A non-`None` current-thread value that `set_thread` accepts without a
+    /// live table entry (host threads skip guest context slot traffic).
+    fn host_marker() -> CurrentThread {
+        CurrentThread::Host(TableId::<HostTask>::new(0xdead_beef))
+    }
+
+    #[test]
+    fn restores_on_success() {
+        let mut store = concurrent_store();
+        store.as_store_opaque().set_thread(host_marker()).unwrap();
+        assert!(matches!(current_thread(&mut store), CurrentThread::Host(_)));
+
+        with_store_thread(&mut store, CurrentThread::None, |_store| {
+            assert!(matches!(
+                // Inside the scope the temporary thread is active.
+                current_thread(_store),
+                CurrentThread::None
+            ));
+            Ok::<_, crate::Error>(42)
+        })
+        .unwrap();
+
+        assert!(matches!(current_thread(&mut store), CurrentThread::Host(_)));
+    }
+
+    #[test]
+    fn restores_on_error() {
+        let mut store = concurrent_store();
+        store.as_store_opaque().set_thread(host_marker()).unwrap();
+        assert!(matches!(current_thread(&mut store), CurrentThread::Host(_)));
+
+        let err = with_store_thread(&mut store, CurrentThread::None, |_store| -> Result<()> {
+            bail!("simulated lower failure")
+        })
+        .unwrap_err();
+        assert!(
+            format!("{err}").contains("simulated lower failure"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            matches!(current_thread(&mut store), CurrentThread::Host(_)),
+            "thread context must be restored after error; got {:?}",
+            current_thread(&mut store)
+        );
+    }
+
+    #[test]
+    fn prefers_work_error_over_restore_error() {
+        // Mirrors `StoreOpaque::restore_thread_after` error preference.
+        fn prefer<R>(work: Result<R>, restore: Result<()>) -> Result<R> {
+            match (work, restore) {
+                (Ok(v), Ok(())) => Ok(v),
+                (Ok(_), Err(e)) => Err(e),
+                (Err(e), _) => Err(e),
+            }
+        }
+        let err = prefer::<()>(
+            Err(crate::format_err!("work")),
+            Err(crate::format_err!("restore")),
+        )
+        .unwrap_err();
+        assert!(format!("{err}").contains("work"));
+        assert_eq!(prefer(Ok(7), Ok(())).unwrap(), 7);
+        let err = prefer(Ok(1), Err(crate::format_err!("restore"))).unwrap_err();
+        assert!(format!("{err}").contains("restore"));
+    }
+}
+
 impl StoreOpaque {
     /// Returns the currently-running thread, promoting any deferred lazy thread
     /// into a fully-materialized `CurrentThread`.
@@ -1970,6 +2076,18 @@ impl StoreOpaque {
         };
 
         Ok(old_thread)
+    }
+
+    /// Restore `old` as the current thread after `result`.
+    ///
+    /// Prefer the original work error over a restore failure so callers still
+    /// see the failure that happened while `old` was swapped out.
+    fn restore_thread_after<R>(&mut self, old: CurrentThread, result: Result<R>) -> Result<R> {
+        match (result, self.set_thread(old)) {
+            (Ok(v), Ok(_)) => Ok(v),
+            (Ok(_), Err(e)) => Err(e),
+            (Err(e), _) => Err(e),
+        }
     }
 
     /// Set the global variable representing whether the current task may block
@@ -2650,19 +2768,21 @@ impl Instance {
                     "stackless call: replaced {old_thread:?} with {guest_thread:?} as current thread"
                 );
 
-                store.enter_instance(callee_instance);
+                let result = (|| {
+                    store.enter_instance(callee_instance);
 
-                // SAFETY: See the documentation for `make_call` to review the
-                // contract we must uphold for `call` here.
-                //
-                // Per the contract described in the `queue_call`
-                // documentation, the `callee` pointer which `call` closes
-                // over must be valid.
-                let storage = call(store)?;
+                    // SAFETY: See the documentation for `make_call` to review the
+                    // contract we must uphold for `call` here.
+                    //
+                    // Per the contract described in the `queue_call`
+                    // documentation, the `callee` pointer which `call` closes
+                    // over must be valid.
+                    let storage = call(store)?;
 
-                store.exit_instance(callee_instance)?;
-
-                store.set_thread(old_thread)?;
+                    store.exit_instance(callee_instance)?;
+                    Ok(storage)
+                })();
+                let storage = store.restore_thread_after(old_thread, result)?;
                 let state = store.concurrent_state_mut()?;
                 if let Some(t) = old_thread.guest() {
                     state.get_mut(t.thread)?.state = GuestThreadState::Running;
@@ -2684,76 +2804,75 @@ impl Instance {
                     store,
                     callee_instance.index,
                 )?;
-                let old_thread = store.set_thread(guest_thread)?;
-                log::trace!(
-                    "sync/async-stackful call: replaced {old_thread:?} with {guest_thread:?} as current thread",
-                );
-                let flags = self.id().get(store).instance_flags(callee_instance.index);
+                with_store_thread(store, guest_thread, |store| {
+                    log::trace!("sync/async-stackful call: set {guest_thread:?} as current thread",);
+                    let flags = self.id().get(store).instance_flags(callee_instance.index);
 
-                // Unless this is a callback-less (i.e. stackful)
-                // async-lifted export, we need to record that the instance
-                // cannot be entered until the call returns.
-                if !async_ {
-                    store.enter_instance(callee_instance);
-                }
-
-                // SAFETY: See the documentation for `make_call` to review the
-                // contract we must uphold for `call` here.
-                //
-                // Per the contract described in the `queue_call`
-                // documentation, the `callee` pointer which `call` closes
-                // over must be valid.
-                let storage = call(store)?;
-
-                if !async_ {
-                    // This is a sync-lifted export, so now is when we lift the
-                    // result, optionally call the post-return function, if any,
-                    // and finally notify any current or future waiters that the
-                    // subtask has returned.
-
-                    let lift = {
-                        store.exit_instance(callee_instance)?;
-
-                        let state = store.concurrent_state_mut()?;
-                        if !state.get_mut(guest_thread.task)?.result.is_none() {
-                            bail_bug!("task has already produced a result");
-                        }
-
-                        match state.get_mut(guest_thread.task)?.lift_result.take() {
-                            Some(lift) => lift,
-                            None => bail_bug!("lift_result field is missing"),
-                        }
-                    };
-
-                    // SAFETY: `result_count` represents the number of core Wasm
-                    // results returned, per `wasmparser`.
-                    let result = (lift.lift)(store, unsafe {
-                        mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(
-                            &storage[..result_count],
-                        )
-                    })?;
-
-                    let post_return_arg = match result_count {
-                        0 => ValRaw::i32(0),
-                        // SAFETY: `result_count` represents the number of
-                        // core Wasm results returned, per `wasmparser`.
-                        1 => unsafe { storage[0].assume_init() },
-                        _ => unreachable!(),
-                    };
-
-                    unsafe {
-                        call_post_return(
-                            token.as_context_mut(store),
-                            post_return.map(|v| v.as_non_null()),
-                            post_return_arg,
-                            flags,
-                        )?;
+                    // Unless this is a callback-less (i.e. stackful)
+                    // async-lifted export, we need to record that the instance
+                    // cannot be entered until the call returns.
+                    if !async_ {
+                        store.enter_instance(callee_instance);
                     }
 
-                    self.task_complete(store, guest_thread.task, result, Status::Returned)?;
-                }
+                    // SAFETY: See the documentation for `make_call` to review the
+                    // contract we must uphold for `call` here.
+                    //
+                    // Per the contract described in the `queue_call`
+                    // documentation, the `callee` pointer which `call` closes
+                    // over must be valid.
+                    let storage = call(store)?;
 
-                store.set_thread(old_thread)?;
+                    if !async_ {
+                        // This is a sync-lifted export, so now is when we lift the
+                        // result, optionally call the post-return function, if any,
+                        // and finally notify any current or future waiters that the
+                        // subtask has returned.
+
+                        let lift = {
+                            store.exit_instance(callee_instance)?;
+
+                            let state = store.concurrent_state_mut()?;
+                            if !state.get_mut(guest_thread.task)?.result.is_none() {
+                                bail_bug!("task has already produced a result");
+                            }
+
+                            match state.get_mut(guest_thread.task)?.lift_result.take() {
+                                Some(lift) => lift,
+                                None => bail_bug!("lift_result field is missing"),
+                            }
+                        };
+
+                        // SAFETY: `result_count` represents the number of core Wasm
+                        // results returned, per `wasmparser`.
+                        let result = (lift.lift)(store, unsafe {
+                            mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(
+                                &storage[..result_count],
+                            )
+                        })?;
+
+                        let post_return_arg = match result_count {
+                            0 => ValRaw::i32(0),
+                            // SAFETY: `result_count` represents the number of
+                            // core Wasm results returned, per `wasmparser`.
+                            1 => unsafe { storage[0].assume_init() },
+                            _ => unreachable!(),
+                        };
+
+                        unsafe {
+                            call_post_return(
+                                token.as_context_mut(store),
+                                post_return.map(|v| v.as_non_null()),
+                                post_return_arg,
+                                flags,
+                            )?;
+                        }
+
+                        self.task_complete(store, guest_thread.task, result, Status::Returned)?;
+                    }
+
+                    Ok(())
+                })?;
 
                 store
                     .concurrent_state_mut()?
@@ -2929,25 +3048,22 @@ impl Instance {
                     // thread, this thread's caller, may have `realloc`
                     // callbacks invoked for example and those need the correct
                     // context set for the current thread.
-                    let prev = store.0.set_thread(old_thread)?;
-
-                    // SAFETY: `return_` is a valid `*mut VMFuncRef` from
-                    // `wasmtime-cranelift`-generated fused adapter code.  Based
-                    // on how it was constructed (see
-                    // `wasmtime_environ::fact::trampoline::Compiler::compile_async_return_adapter`
-                    // for details) we know it takes `src.len()` parameters and
-                    // returns up to 1 result.
-                    unsafe {
-                        crate::Func::call_unchecked_raw(
-                            &mut store,
-                            return_.as_non_null(),
-                            my_src.as_mut_slice().into(),
-                        )?;
-                    }
-
-                    // Restore the previous current thread after the
-                    // lifting/lowering has returned.
-                    store.0.set_thread(prev)?;
+                    with_store_thread(&mut store, old_thread, |store| {
+                        // SAFETY: `return_` is a valid `*mut VMFuncRef` from
+                        // `wasmtime-cranelift`-generated fused adapter code.  Based
+                        // on how it was constructed (see
+                        // `wasmtime_environ::fact::trampoline::Compiler::compile_async_return_adapter`
+                        // for details) we know it takes `src.len()` parameters and
+                        // returns up to 1 result.
+                        unsafe {
+                            crate::Func::call_unchecked_raw(
+                                store,
+                                return_.as_non_null(),
+                                my_src.as_mut_slice().into(),
+                            )?;
+                        }
+                        Ok(())
+                    })?;
 
                     let thread = store.0.current_guest_thread()?;
                     let state = store.0.concurrent_state_mut()?;
@@ -3262,28 +3378,26 @@ impl Instance {
                 // how to manipulate borrows and knows which scope of borrows
                 // to check.
                 let mut store = token.as_context_mut(store);
-                let old = store.0.set_thread(task)?;
+                with_store_thread(&mut store, task, |store| {
+                    let status = if result.is_some() {
+                        Status::Returned
+                    } else {
+                        Status::ReturnCancelled
+                    };
 
-                let status = if result.is_some() {
-                    Status::Returned
-                } else {
-                    Status::ReturnCancelled
-                };
+                    lower(store.as_context_mut(), result)?;
+                    let state = store.0.concurrent_state_mut()?;
+                    match &mut state.get_mut(task)?.state {
+                        // The task is already flagged as finished because it was
+                        // cancelled. No need to transition further.
+                        HostTaskState::CalleeDone { .. } => {}
 
-                lower(store.as_context_mut(), result)?;
-                let state = store.0.concurrent_state_mut()?;
-                match &mut state.get_mut(task)?.state {
-                    // The task is already flagged as finished because it was
-                    // cancelled. No need to transition further.
-                    HostTaskState::CalleeDone { .. } => {}
-
-                    // Otherwise transition this task to the done state.
-                    other => *other = HostTaskState::CalleeDone { cancelled: false },
-                }
-                Waitable::Host(task).set_event(state, Some(Event::Subtask { status }))?;
-
-                store.0.set_thread(old)?;
-                Ok(())
+                        // Otherwise transition this task to the done state.
+                        other => *other = HostTaskState::CalleeDone { cancelled: false },
+                    }
+                    Waitable::Host(task).set_event(state, Some(Event::Subtask { status }))?;
+                    Ok(())
+                })
             };
 
             // Here we schedule a task to run on a worker fiber to do the
@@ -3680,12 +3794,14 @@ impl Instance {
                 );
 
                 let mut store = token.as_context_mut(store);
-                let mut params = [ValRaw::i32(context)];
-                // Use call_unchecked rather than call or call_async, as we don't want to run the function
-                // on a separate fiber if we're running in an async store.
-                unsafe { callee.call_unchecked(store.as_context_mut(), &mut params)? };
-
-                store.0.set_thread(old_thread)?;
+                let result = (|| {
+                    let mut params = [ValRaw::i32(context)];
+                    // Use call_unchecked rather than call or call_async, as we don't want to run the function
+                    // on a separate fiber if we're running in an async store.
+                    unsafe { callee.call_unchecked(store.as_context_mut(), &mut params)? };
+                    Ok(())
+                })();
+                store.0.restore_thread_after(old_thread, result)?;
 
                 store.0.cleanup_thread(
                     guest_thread,

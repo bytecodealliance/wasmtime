@@ -2475,6 +2475,12 @@ impl<T: 'static> AsStoreOpaque for StoreInner<T> {
     }
 }
 
+impl<T: 'static> AsStoreOpaque for StoreContextMut<'_, T> {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        &mut *self.0
+    }
+}
+
 impl<T: AsStoreOpaque + ?Sized> AsStoreOpaque for &mut T {
     fn as_store_opaque(&mut self) -> &mut StoreOpaque {
         T::as_store_opaque(self)

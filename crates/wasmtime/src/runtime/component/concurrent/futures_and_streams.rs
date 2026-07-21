@@ -250,35 +250,42 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
 
     // If lowering may call realloc in the guest, then the guest may need
     // to access its thread context, so we need to set the current thread before lowering
-    // and restore the old one afterward.
-    let (lower, old_thread) = if T::MAY_REQUIRE_REALLOC {
-        let old_thread = store.0.set_thread(caller_thread)?;
-        (
-            &mut LowerContext::new(store.as_context_mut(), options, instance),
-            Some(old_thread),
-        )
-    } else {
-        (
-            &mut LowerContext::new_without_realloc(store.as_context_mut(), options, instance),
-            None,
-        )
+    // and restore the old one afterward (including on error paths).
+    let finish_lower = |lower: &mut LowerContext<'_, U>| -> Result<()> {
+        if address % usize::try_from(T::ALIGN32)? != 0 {
+            bail!("read pointer not aligned");
+        }
+        lower
+            .as_slice_mut()
+            .get_mut(address..)
+            .and_then(|b| b.get_mut(..T::SIZE32 * count))
+            .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
+
+        if let Some(payload_ty) = ty.payload(lower.types) {
+            T::linear_store_list_to_memory(
+                lower,
+                *payload_ty,
+                address,
+                &buffer.remaining()[..count],
+            )?;
+        }
+        Ok(())
     };
 
-    if address % usize::try_from(T::ALIGN32)? != 0 {
-        bail!("read pointer not aligned");
-    }
-    lower
-        .as_slice_mut()
-        .get_mut(address..)
-        .and_then(|b| b.get_mut(..T::SIZE32 * count))
-        .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
-
-    if let Some(ty) = ty.payload(lower.types) {
-        T::linear_store_list_to_memory(lower, *ty, address, &buffer.remaining()[..count])?;
-    }
-
-    if let Some(old_thread) = old_thread {
-        store.0.set_thread(old_thread)?;
+    if T::MAY_REQUIRE_REALLOC {
+        super::with_store_thread(&mut store, caller_thread, |store| {
+            finish_lower(&mut LowerContext::new(
+                store.as_context_mut(),
+                options,
+                instance,
+            ))
+        })?;
+    } else {
+        finish_lower(&mut LowerContext::new_without_realloc(
+            store.as_context_mut(),
+            options,
+            instance,
+        ))?;
     }
 
     buffer.skip(count);
@@ -3276,7 +3283,7 @@ impl Instance {
         rep: u32,
     ) -> Result<()> {
         let (write_component, store) = write_instance.component_and_store_mut(store.0);
-        let (read_component, mut store) = read_instance.component_and_store_mut(store);
+        let (read_component, store) = read_instance.component_and_store_mut(store);
         let write_types = write_component.types();
         let read_types = read_component.types();
         let count = count.as_usize();
@@ -3348,21 +3355,25 @@ impl Instance {
                 if let Some(val) = val {
                     // Serializing the value may require calling the guest's realloc function, so we
                     // set the guest's thread context in case realloc requires it, and restore the original
-                    // thread context after the copy is complete.
-                    let old_thread = store.set_thread(read_caller_thread)?;
-                    let lower =
-                        &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
-                    let ptr = func::validate_inbounds_dynamic(
-                        read_abi,
-                        lower.as_slice_mut(),
-                        &ValRaw::u32(read_address.try_into()?),
-                    )?;
-                    let ty = match read_payload_ty {
-                        Some(ty) => ty,
-                        None => bail_bug!("expected read payload type to be present"),
-                    };
-                    val.store(lower, *ty, ptr)?;
-                    store.set_thread(old_thread)?;
+                    // thread context after the copy is complete (including on error paths).
+                    super::with_store_thread(store, read_caller_thread, |mut store| {
+                        let lower = &mut LowerContext::new(
+                            store.as_context_mut(),
+                            read_options,
+                            read_instance,
+                        );
+                        let ptr = func::validate_inbounds_dynamic(
+                            read_abi,
+                            lower.as_slice_mut(),
+                            &ValRaw::u32(read_address.try_into()?),
+                        )?;
+                        let ty = match read_payload_ty {
+                            Some(ty) => ty,
+                            None => bail_bug!("expected read payload type to be present"),
+                        };
+                        val.store(lower, *ty, ptr)?;
+                        Ok(())
+                    })?;
                 }
             }
             (TransmitIndex::Stream(_), TransmitIndex::Stream(_)) => {
@@ -3434,16 +3445,20 @@ impl Instance {
 
                     // Serializing the value may require calling the guest's realloc function, so we
                     // set the guest's thread context in case realloc requires it, and restore the original
-                    // thread context after the copy is complete.
-                    let old_thread = store.set_thread(read_caller_thread)?;
-                    let lower =
-                        &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
-                    let mut ptr = read_address;
-                    for value in values {
-                        value.store(lower, *read_payload_ty, ptr)?;
-                        ptr += usize::try_from(read_abi.size32)?;
-                    }
-                    store.set_thread(old_thread)?;
+                    // thread context after the copy is complete (including on error paths).
+                    super::with_store_thread(store, read_caller_thread, |mut store| {
+                        let lower = &mut LowerContext::new(
+                            store.as_context_mut(),
+                            read_options,
+                            read_instance,
+                        );
+                        let mut ptr = read_address;
+                        for value in values {
+                            value.store(lower, *read_payload_ty, ptr)?;
+                            ptr += usize::try_from(read_abi.size32)?;
+                        }
+                        Ok(())
+                    })?;
                 }
             }
             _ => bail_bug!("mismatched transmit types in copy"),
