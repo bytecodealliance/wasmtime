@@ -166,10 +166,6 @@ impl StoreOpaque {
         self.enter_call_not_concurrent()
     }
 
-    pub(crate) fn host_task_reenter_caller(&mut self) -> Result<()> {
-        Ok(())
-    }
-
     pub(crate) fn host_task_delete(&mut self, (): ()) -> Result<()> {
         Ok(self.exit_call_not_concurrent())
     }
