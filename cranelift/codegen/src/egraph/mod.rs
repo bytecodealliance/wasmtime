@@ -567,7 +567,10 @@ where
             }
             OptResult::DeadStore { dead, overwriter } => {
                 self.stats.alias_analysis_removed_dead_store += 1;
-                Some(SkeletonInstSimplification::RemoveDeadStore { dead, killer: overwriter })
+                Some(SkeletonInstSimplification::RemoveDeadStore {
+                    dead,
+                    killer: overwriter,
+                })
             }
             OptResult::None => {
                 // Generic side-effecting op -- always keep it, and
@@ -750,7 +753,8 @@ impl SkeletonInstSimplification {
             // Removing an instruction never rewrites a terminator: a block's
             // terminator cannot be removed or the block would become invalid.
             SkeletonInstSimplification::Remove
-            | SkeletonInstSimplification::RemoveWithVal { .. } => false,
+            | SkeletonInstSimplification::RemoveWithVal { .. }
+            | SkeletonInstSimplification::RemoveDeadStore { .. } => false,
 
             // Swapping a conditional branch/trap's condition operand leaves the
             // opcode and successors in place, so the CFG is preserved.
