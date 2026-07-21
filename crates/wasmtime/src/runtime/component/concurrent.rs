@@ -823,18 +823,52 @@ pub(crate) enum WaitResult {
     Completed,
 }
 
+/// Poll `future` once with a no-op waker in the store's tls context,
+/// before any task machinery exists. For pending futures,
+/// `Instance::continue_polling` should be used to add them to
+/// `ConcurrentState::futures` and have them polled by the event loop.
+#[inline]
+pub(crate) fn poll_once<F>(store: &mut dyn VMStore, future: &mut F) -> Poll<F::Output>
+where
+    F: Future + Unpin,
+{
+    tls::set(store, || {
+        Pin::new(future).poll(&mut Context::from_waker(&Waker::noop()))
+    })
+}
+
 /// Poll the specified future until it completes on behalf of a guest->host call
 /// using a sync-lowered import.
 ///
-/// This is similar to `Instance::first_poll` except it's for sync-lowered
-/// imports, meaning we don't need to handle cancellation and we can block the
-/// caller until the task completes, at which point the caller can handle
-/// lowering the result to the guest's stack and linear memory.
+/// This is similar to `poll_once` + `Instance::continue_polling` except it's
+/// for sync-lowered imports, meaning we don't need to handle cancellation and
+/// we can block the caller until the task completes, at which point the caller
+/// can handle lowering the result to the guest's stack and linear memory.
 pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     store: &mut dyn VMStore,
     future: impl Future<Output = Result<R>> + Send + 'static,
 ) -> Result<R> {
-    let task = store.current_host_thread()?;
+    // Fast path: poll the future once before materializing any `HostTask`.
+    // Most host implementations complete immediately, in which case the
+    // result is returned without any task-table traffic or result boxing.
+    let mut inner = Box::pin(future);
+    let poll = tls::set(store, || {
+        inner
+            .as_mut()
+            .poll(&mut Context::from_waker(&Waker::noop()))
+    });
+    if let Poll::Ready(result) = poll {
+        return result;
+    }
+
+    // Slow path: the future is genuinely pending. Materialize the host task
+    // now if the entrypoint deferred it (in which case this function also
+    // owns its cleanup below); otherwise use the already-current task.
+    let (task, materialized) = match store.current_thread()? {
+        CurrentThread::Host(task) => (task, false),
+        _ => (store.materialize_host_task()?, true),
+    };
+    let future = inner;
 
     // Wrap the future in a closure which will take care of stashing the result
     // in `GuestTask::result` and resuming this fiber when the host task
@@ -898,13 +932,21 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
 
     // Retrieve and return the result.
     let host_state = &mut store.concurrent_state_mut()?.get_mut(task)?.state;
-    match mem::replace(host_state, HostTaskState::CalleeDone { cancelled: false }) {
+    let result = match mem::replace(host_state, HostTaskState::CalleeDone { cancelled: false }) {
         HostTaskState::CalleeFinished(result) => Ok(match result.downcast() {
             Ok(result) => *result,
             Err(_) => bail_bug!("host task finished with wrong type of result"),
         }),
         _ => bail_bug!("unexpected host task state after completion"),
+    };
+
+    // A task materialized here (rather than by the entrypoint) is also
+    // cleaned up here, mirroring `host_task_delete` for the eager case.
+    if materialized {
+        store.host_task_reenter_caller()?;
+        store.concurrent_state_mut()?.delete(task)?;
     }
+    result
 }
 
 /// Execute the specified guest call.
@@ -1698,13 +1740,6 @@ impl StoreOpaque {
         }
     }
 
-    fn current_host_thread(&mut self) -> Result<TableId<HostTask>> {
-        match self.current_thread()?.host() {
-            Some(id) => Ok(id),
-            None => bail_bug!("current thread is not a host thread"),
-        }
-    }
-
     /// Returns whether there's a pending cancellation on the current guest thread,
     /// consuming the event if so.
     fn take_pending_cancellation(&mut self) -> Result<bool> {
@@ -1820,17 +1855,38 @@ impl StoreOpaque {
     /// relatively expensive table manipulations. This would ideally be
     /// optimized to avoid the full allocation of a `HostTask` in at least some
     /// situations.
-    pub(crate) fn host_task_create(&mut self) -> Result<Option<TableId<HostTask>>> {
+    #[inline]
+    pub(crate) fn host_task_create(
+        &mut self,
+        track_scope: bool,
+        defer: bool,
+    ) -> Result<Option<TableId<HostTask>>> {
         if !self.concurrency_support() {
-            self.enter_call_not_concurrent()?;
+            // Resource-borrow scope tracking is only needed when the
+            // function's parameters can actually contain `borrow` handles;
+            // this is precomputed per function type.
+            if track_scope {
+                self.enter_call_not_concurrent()?;
+            }
             return Ok(None);
         }
+        // Deferred (borrow-free) calls run as the caller's thread; a task is
+        // only materialized if the host future actually suspends.
+        if defer {
+            return Ok(None);
+        }
+        Ok(Some(self.materialize_host_task()?))
+    }
+
+    /// Push a new `HostTask` for a host call made by the current guest
+    /// thread, and make it the current thread.
+    pub(crate) fn materialize_host_task(&mut self) -> Result<TableId<HostTask>> {
         let caller = self.current_guest_thread()?;
         let state = self.concurrent_state_mut()?;
         let task = state.push(HostTask::new(caller, HostTaskState::CalleeStarted))?;
         log::trace!("new host task {task:?}");
         self.set_thread(task)?;
-        Ok(Some(task))
+        Ok(task)
     }
 
     /// Invoked before lowering the results of a host task to the guest.
@@ -1838,11 +1894,16 @@ impl StoreOpaque {
     /// This is used to update the current thread annotations within the store
     /// to ensure that it reflects the guest task, not the host task, since
     /// lowering may execute guest code.
+    #[inline]
     pub fn host_task_reenter_caller(&mut self) -> Result<()> {
         if !self.concurrency_support() {
             return Ok(());
         }
-        let task = self.current_host_thread()?;
+        // For deferred (task-less) host calls the current thread already is
+        // the caller; nothing to restore.
+        let CurrentThread::Host(task) = self.current_thread()? else {
+            return Ok(());
+        };
         let caller = self.concurrent_state_mut()?.get_mut(task)?.caller;
         self.set_thread(caller)?;
         Ok(())
@@ -1854,14 +1915,21 @@ impl StoreOpaque {
     /// Note that this isn't invoked when the host is invoked asynchronously and
     /// the host isn't complete yet. In that situation the host task persists
     /// and will be cleaned up separately in `subtask_drop`
-    pub(crate) fn host_task_delete(&mut self, task: Option<TableId<HostTask>>) -> Result<()> {
+    #[inline]
+    pub(crate) fn host_task_delete(
+        &mut self,
+        task: Option<TableId<HostTask>>,
+        track_scope: bool,
+    ) -> Result<()> {
         match task {
             Some(task) => {
                 log::trace!("delete host task {task:?}");
                 self.concurrent_state_mut()?.delete(task)?;
             }
             None => {
-                self.exit_call_not_concurrent();
+                if track_scope {
+                    self.exit_call_not_concurrent();
+                }
             }
         }
         Ok(())
@@ -2349,6 +2417,7 @@ impl StoreOpaque {
 
     /// Used by `ResourceTables` to record the scope of a borrow to get undone
     /// in the future.
+    #[inline]
     pub(crate) fn current_scope_id(&mut self) -> Result<Option<u32>> {
         if !self.concurrency_support() {
             return self.current_scope_id_not_concurrent();
@@ -3190,64 +3259,30 @@ impl Instance {
         Ok(status.pack(waitable))
     }
 
-    /// Poll the specified future once on behalf of a guest->host call using an
-    /// async-lowered import.
-    ///
-    /// If it returns `Ready`, return `Ok(None)`.  Otherwise, if it returns
-    /// `Pending`, add it to the set of futures to be polled as part of this
-    /// instance's event loop until it completes, and then return
-    /// `Ok(Some(handle))` where `handle` is the waitable handle to return.
-    ///
-    /// Whether the future returns `Ready` immediately or later, the `lower`
-    /// function will be used to lower the result, if any, into the guest caller's
-    /// stack and linear memory. The `lower` function is invoked with `None` if
-    /// the future is cancelled.
-    pub(crate) fn first_poll<T: 'static, R: Send + 'static>(
+    /// Continue an async-lowered host call whose future was already given
+    /// its first poll (see `poll_once`) and is pending: wrap it in an
+    /// abortable `JoinHandle` (for cancellation), materialize the `HostTask`
+    /// if the entrypoint deferred it, and register the future with the event
+    /// loop, returning the waitable handle for the guest.
+    pub(crate) fn continue_polling<T: 'static, R: Send + 'static>(
         self,
         mut store: StoreContextMut<'_, T>,
         future: impl Future<Output = Result<R>> + Send + 'static,
         lower: impl FnOnce(StoreContextMut<T>, Option<R>) -> Result<()> + Send + 'static,
     ) -> Result<Option<u32>> {
         let token = StoreToken::new(store.as_context_mut());
-        let task = store.0.current_host_thread()?;
-        let state = store.0.concurrent_state_mut()?;
 
-        // Create an abortable future which hooks calls to poll and manages call
-        // context state for the future.
         let (join_handle, future) = JoinHandle::run(future);
+        let future = Box::pin(future);
+        let task = match store.0.current_thread()? {
+            CurrentThread::Host(task) => task,
+            _ => store.0.materialize_host_task()?,
+        };
         {
-            let state = &mut state.get_mut(task)?.state;
+            let state = &mut store.0.concurrent_state_mut()?.get_mut(task)?.state;
             assert!(matches!(state, HostTaskState::CalleeStarted));
             *state = HostTaskState::CalleeRunning(join_handle);
         }
-
-        let mut future = Box::pin(future);
-
-        // Finally, poll the future.  We can use a dummy `Waker` here because
-        // we'll add the future to `ConcurrentState::futures` and poll it
-        // automatically from the event loop if it doesn't complete immediately
-        // here.
-        let poll = tls::set(store.0, || {
-            future
-                .as_mut()
-                .poll(&mut Context::from_waker(&Waker::noop()))
-        });
-
-        match poll {
-            // It finished immediately; lower the result and delete the task.
-            Poll::Ready(result) => {
-                let result = result.transpose()?;
-                lower(store.as_context_mut(), result)?;
-                return Ok(None);
-            }
-
-            // Future isn't ready yet, so fall through.
-            Poll::Pending => {}
-        }
-
-        // It hasn't finished yet; add the future to
-        // `ConcurrentState::futures` so it will be polled by the event
-        // loop and allocate a waitable handle to return to the guest.
 
         // Wrap the future in a closure responsible for lowering the result into
         // the guest's stack and memory, as well as notifying any waiters that
@@ -5234,13 +5269,6 @@ impl CurrentThread {
     fn guest(&self) -> Option<&QualifiedThreadId> {
         match self {
             Self::Guest(id) => Some(id),
-            _ => None,
-        }
-    }
-
-    fn host(&self) -> Option<TableId<HostTask>> {
-        match self {
-            Self::Host(id) => Some(*id),
             _ => None,
         }
     }
