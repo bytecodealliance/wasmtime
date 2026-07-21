@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     fs::File,
     io::Write,
     path::{Path, PathBuf},
@@ -438,6 +438,10 @@ pub struct RunSummary {
     pub total_expansions: usize,
     pub total_instantiations: usize,
     pub in_scope: usize,
+    /// In-scope expansions for which type inference rejected every candidate
+    /// instantiation, so no query reached the solver. Only populated under
+    /// `--debug`, and only reported when populated.
+    pub no_instantiations: Option<usize>,
     pub applicable: usize,
     pub success: usize,
     pub failure: usize,
@@ -449,6 +453,9 @@ impl RunSummary {
         println!("============================= Verification summary ============================");
         println!("Total expansions:    {}", self.total_expansions);
         println!("In scope expansions: {}", self.in_scope);
+        if let Some(no_instantiations) = self.no_instantiations {
+            println!("No instantiations:   {no_instantiations}");
+        }
         println!("Type instantiations: {}", self.total_instantiations);
         println!("Applicable:          {}", self.applicable);
         println!("Verification passed: {}", self.success);
@@ -831,12 +838,50 @@ impl Runner {
             log::info!("suppressed expansion errors: {n}", n = suppressed.len());
         }
 
+        // Under `--debug`, report expansions that were processed without error
+        // but produced no type instantiations at all: every candidate was
+        // rejected by type inference, so nothing was handed to the solver. They
+        // contribute no passes and no failures, so a spec that can never be
+        // instantiated otherwise looks the same as a verified one. Not every
+        // entry is a defect -- a rule guard can make a chained term's
+        // instantiation unreachable -- which is why this is a debugging aid
+        // rather than part of the normal summary.
+        let no_instantiations = if self.debug {
+            let uninstantiated: Vec<&ExpansionReport> = expansion_reports
+                .iter()
+                .filter(|report| report.type_instantiations.is_empty())
+                .collect();
+            if !uninstantiated.is_empty() {
+                let mut summary =
+                    Self::open_log_file(self.log_dir.clone(), "no_instantiations.out").ok();
+                for report in &uninstantiated {
+                    let line = format!(
+                        "#{id}\t{description}\t(type inference rejected {failed} instantiation(s))",
+                        id = report.id,
+                        description = report.description,
+                        failed = report.failed_type_inference,
+                    );
+                    if let Some(f) = summary.as_mut() {
+                        let _ = writeln!(f, "{line}");
+                    }
+                }
+                log::debug!(
+                    "expansions with no type instantiations: {n}",
+                    n = uninstantiated.len()
+                );
+            }
+            Some(uninstantiated.len())
+        } else {
+            None
+        };
+
         // Compute the summary stats
         let total_expansions = expansions.len();
         let in_scope = included.iter().filter(|&&b| b).count();
         let mut summary = RunSummary {
             total_expansions,
             in_scope,
+            no_instantiations,
             ..Default::default()
         };
         for report in &expansion_reports {
@@ -899,6 +944,34 @@ impl Runner {
         }
 
         Ok(summary)
+    }
+
+    /// Tags that this run excludes, for gating tagged instantiation sets.
+    ///
+    /// A tagged instantiation set is treated like an expansion carrying that
+    /// tag: the last filter mentioning it wins, so an `include` filter can
+    /// carve it back out of a broader `exclude`.
+    fn excluded_instantiation_tags(&self) -> HashSet<String> {
+        let tags: HashSet<&String> = self
+            .prog
+            .specenv
+            .tagged_term_instantiations
+            .values()
+            .flatten()
+            .flat_map(|(tags, _)| tags)
+            .collect();
+        tags.into_iter()
+            .filter(|tag| {
+                let mut excluded = false;
+                for filter in &self.filters {
+                    if matches!(&filter.predicate, ExpansionPredicate::Tagged(t) if t == *tag) {
+                        excluded = !filter.include;
+                    }
+                }
+                excluded
+            })
+            .cloned()
+            .collect()
     }
 
     fn should_verify(&self, expansion: &Expansion) -> Result<bool> {
@@ -975,7 +1048,8 @@ impl Runner {
         }
 
         // Verification conditions.
-        let conditions = Conditions::from_expansion(expansion, &self.prog)?;
+        let conditions =
+            Conditions::from_expansion(expansion, &self.prog, &self.excluded_instantiation_tags())?;
         if self.debug {
             conditions.pretty_print(&self.prog);
         }

@@ -5,7 +5,7 @@
 ;; the right, and thus only simplify patterns like `x+0`, not `0+x`.
 
 ;; x+0 == x.
-(rule (simplify (iadd ty
+(rule iadd_x_plus_zero (simplify (iadd ty
                       x
                       (iconst_u ty 0)))
       (subsume x))
@@ -191,7 +191,7 @@
 
 ;; If both of the multiplied arguments to an `fmul` are negated then remove
 ;; both of them since they cancel out.
-(rule (simplify (fmul ty (fneg ty x) (fneg ty y)))
+(rule fmul_fneg_fneg (simplify (fmul ty (fneg ty x) (fneg ty y)))
       (fmul ty x y))
 
 ;; Detect people open-coding `mulhi`: (x as big * y as big) >> bits
@@ -567,7 +567,7 @@
 (rule (simplify (ult ty (umax ty y x) x)) (iconst_u ty 0))
 
 ;; (-X) * C = X * (-C)
-(rule (simplify (imul (fits_in_64 ty) (ineg ty x) (iconst ty y))) (imul ty x (iconst ty (imm64_neg ty y))))
+(rule imul_ineg_const (simplify (imul (fits_in_64 ty) (ineg ty x) (iconst ty y))) (imul ty x (iconst ty (imm64_neg ty y))))
 
 ;; -(~x) --> x + 1
 (rule (simplify (ineg ty (bnot ty x))) (iadd ty x (iconst_u ty 1)))

@@ -213,6 +213,28 @@ impl Expansion {
 
         // Result.
         self.result = reindex.id(self.result);
+
+        // Equals.
+        //
+        // Rebuild the equality sets with the reindex applied, so that the
+        // deleted `target` binding is replaced by `replace`. Without this, a
+        // deleted binding can linger in the disjoint set (possibly as a set
+        // representative), and `equalities()` would later return a reference to
+        // a binding that no longer exists.
+        let mut equals = DisjointSets::default();
+        for i in 0..self.bindings.len() {
+            let binding_id = i.try_into().unwrap();
+            if let Some(eq) = self.equals.find(binding_id)
+                && eq != binding_id
+            {
+                let a = reindex.id(binding_id);
+                let b = reindex.id(eq);
+                if a != b {
+                    equals.merge(a, b);
+                }
+            }
+        }
+        self.equals = equals;
     }
 }
 
@@ -884,7 +906,9 @@ impl Reindex {
                 field: *field,
             },
 
-            Binding::Iterator { .. } => unimplemented!("iterator bindings not supported"),
+            Binding::Iterator { source } => Binding::Iterator {
+                source: self.id(*source),
+            },
         }
     }
 }

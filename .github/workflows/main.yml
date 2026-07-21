@@ -1353,6 +1353,7 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-fast.args --skip-solver
     - run: cargo run -p cranelift-isle-veri --bin veri -- --name x64 --rule iadd_base_case_32_or_64_lea --skip-solver
+    - run: cargo run -p cranelift-isle-veri --bin veri -- --name opt --only-root simplify --default-excludes --skip-solver
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to

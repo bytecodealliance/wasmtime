@@ -608,6 +608,12 @@ pub struct SpecEnv {
     // Type instantiations for the given term.
     pub term_instantiations: HashMap<TermId, Vec<Signature>>,
 
+    /// Additional type instantiations for the given term, each gated on a set
+    /// of tags. They apply only when the run excludes none of their tags, so
+    /// that expensive instantiations can be reserved for runs that ask for
+    /// them (for example, by leaving `slow` out of the exclusions).
+    pub tagged_term_instantiations: HashMap<TermId, Vec<(Vec<String>, Vec<Signature>)>>,
+
     /// Rules for which priority is significant.
     pub priority: HashSet<RuleId>,
 
@@ -632,6 +638,7 @@ impl SpecEnv {
             chain: HashSet::new(),
             term_tags: HashMap::new(),
             term_instantiations: HashMap::new(),
+            tagged_term_instantiations: HashMap::new(),
             priority: HashSet::new(),
             rule_tags: HashMap::new(),
             type_model: HashMap::new(),
@@ -798,7 +805,15 @@ impl SpecEnv {
                     Some(form) => form_signature[&form.0].clone(),
                     None => inst.signatures.iter().map(Signature::from_ast).collect(),
                 };
-                self.term_instantiations.insert(term_id, sigs);
+                if inst.tags.is_empty() {
+                    self.term_instantiations.insert(term_id, sigs);
+                } else {
+                    let tags = inst.tags.iter().map(|tag| tag.0.clone()).collect();
+                    self.tagged_term_instantiations
+                        .entry(term_id)
+                        .or_default()
+                        .push((tags, sigs));
+                }
             }
         }
     }
@@ -974,16 +989,31 @@ impl SpecEnv {
     }
 
     /// Lookup instantiations for the given term, with any named types resolved.
+    ///
+    /// Tagged instantiation sets contribute only when `excluded_tags` contains
+    /// none of their tags.
     pub fn resolve_term_instantiations(
         &self,
         term_id: &TermId,
         tyenv: &TypeEnv,
+        excluded_tags: &HashSet<String>,
     ) -> Result<Vec<Signature>> {
-        let Some(sigs) = self.term_instantiations.get(term_id) else {
+        let untagged = self.term_instantiations.get(term_id);
+        let tagged = self.tagged_term_instantiations.get(term_id);
+        if untagged.is_none() && tagged.is_none() {
             return Ok(Vec::new());
-        };
+        }
 
-        sigs.iter()
+        untagged
+            .into_iter()
+            .flatten()
+            .chain(
+                tagged
+                    .into_iter()
+                    .flatten()
+                    .filter(|(tags, _)| !tags.iter().any(|tag| excluded_tags.contains(tag)))
+                    .flat_map(|(_, sigs)| sigs),
+            )
             .map(|sig| self.resolve_signature(sig, tyenv))
             .collect::<Result<_>>()
     }

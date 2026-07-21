@@ -131,6 +131,9 @@ pub struct Instantiation {
     pub term: Ident,
     pub form: Option<Ident>,
     pub signatures: Vec<Signature>,
+    /// An untagged instantiation always applies; a tagged one contributes its
+    /// signatures only when the run does not exclude the tag.
+    pub tags: Vec<Ident>,
     pub pos: Pos,
 }
 

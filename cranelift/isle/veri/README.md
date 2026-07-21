@@ -56,8 +56,10 @@ Three example configurations live in [`configs/`](configs):
 
 | File                              | Equivalent to                                                       |
 | --------------------------------- | ------------------------------------------------------------------- |
-| `aarch64-fast.args`               | `--default-excludes` (the default AArch64 run, see below)           |
+| `aarch64-fast.args`               | `--default-excludes` (the AArch64 run below)                        |
 | `aarch64.args`                    | the default AArch64 excludes but with `slow` expansions included    |
+| `opt-fast.args`                   | `--only-root simplify --default-excludes` (the mid-end run)         |
+| `opt.args`                        | the mid-end run with `slow` expansions and instantiations included  |
 | `x64-iadd-base-case.args`         | `--name x64 --rule iadd_base_case_32_or_64_lea` (the x64 example below) |
 
 ## Running for `aarch64`
@@ -74,7 +76,7 @@ and expensive division operations.
 
 The verification bin will default to running on a number of threads
 based on the number of logical CPUs on your current machine, pass `--num-threads=n` to
-override this. On a 12-core M2 MacBook, the command above takes about 3 minutes.
+override this. On a 12-core M2 MacBook, the command above takes about a minute.
 
 By default the verifier attempts every expansion it can reach. It seeds an
 expansion at every term that has rules and a constructor, and verifies all rule
@@ -143,6 +145,129 @@ cargo run -p cranelift-isle-veri --bin veri -- --name x64 --rule iadd_base_case_
 Here, `--name` specifies the ISLE compilation unit name, and `iadd_base_case_32_or_64_lea` scopes to a single
 `lower` rule.
 
+## Running for the mid-end (`opt`)
+
+The mid-end optimization (`opt`) rules can be verified with the same tool using
+`--name opt` (for the `opt`imization compilation unit). The mid-end rules rewrite CLIF values
+primarily via the `simplify` term. There are also `simplify_skeleton` rules, but support for those
+has not yet been added.
+
+For most chains of `simplify` rules, the soundness condition is that the
+rewritten value is equivalent to the original (floating point rules are the exception, as detailed below).
+
+To verify a specific rule, such as the `x + 0 == x` rewrite in `cranelift/codegen/src/opts/arithmetic.isle`, name
+the rule:
+
+```
+;; x+0 == x.
+(rule iadd_x_plus_zero (simplify (iadd ty x (iconst_u ty 0)))
+      (subsume x))
+```
+
+and run:
+
+```
+cargo run -p cranelift-isle-veri --bin veri -- --name opt --rule iadd_x_plus_zero
+```
+
+This verifies the rule across the monomorphized integer types (`i8`, `i16`, `i32`, `i64`):
+
+```
+Type instantiations: 4
+Applicable:          4
+Verification passed: 4
+```
+
+Specs for the mid-end helper terms live in
+[`cranelift/codegen/src/spec/opt.isle`](../../codegen/src/spec/opt.isle).
+This is where the `simplify` soundness contract is stated (`result == arg`,
+relaxed to floating-point equivalence for NaN-producing rewrites; see
+[Floating-point rewrites](#floating-point-rewrites) below),
+along with specs for relevant helpers.
+Most helper terms are verified by rule chaining; the `iconst_u`/`iconst_s`
+helpers are recursive and thus cyclic, so they have explicit hand-written specs.
+Other terms with external extractors also have hand-written specs.
+
+### Floating-point rewrites
+
+Floating-point `simplify` rules need a weaker soundness contract than integer
+rules. A CLIF floating-point *arithmetic* operation that produces a NaN may
+return *any* arithmetic NaN (any sign and payload with the top fraction bit set),
+so a rewrite that yields a different NaN bit pattern is still correct; requiring
+exact bitwise equality (`result == arg`) wrongly rejects sound rules.
+
+This is modeled with the same execution-state mechanism as traps (see the
+`(state ...)`/`(modifies ...)` forms in `inst_specs.isle`), so it lives entirely
+in the specs with no special case in the verifier. A `relax_nan` state flag
+defaults to false; each floating-point arithmetic op (`fadd`/`fsub`/`fmul`/
+`fdiv`/`sqrt`/`fmin`/`fmax`/...) declares `(modifies relax_nan ...)` and sets it
+true exactly when it produces a NaN. Deterministic bit-operations (`fneg`/
+`fabs`/`fcopysign`) leave it alone. The `simplify` contract then reads the flag:
+
+```
+(if relax_nan (fp_equiv! result arg) (= result arg))
+```
+
+where `fp_equiv` holds when the two values are bitwise equal *or* both arithmetic
+NaNs. So a rewrite is checked for exact equality unless one of its values came
+from a NaN-producing arithmetic op, in which case NaN payload differences are
+allowed.
+
+For example, `(fmul (fneg x) (fneg y)) => (fmul x y)` is sound only under this
+relaxation: when `x` or `y` is a NaN the two sides produce NaNs of different
+sign. Verify it with:
+
+```
+cargo run -p cranelift-isle-veri --bin veri -- --name opt --rule fmul_fneg_fneg
+```
+
+```
+Type instantiations: 2
+Applicable:          2
+Verification passed: 2
+```
+
+#### Caveat: relaxation assumes float-typed results
+
+`relax_nan` is a single execution-state flag, not a per-value property, and
+`fp_equiv!` interprets the bits of both values as floats. The relaxation is
+therefore only sound when the rewritten value really is float-typed. It matches
+Wasm semantics for the current rules, which all compose float operations into a
+float result.
+
+It could become unsound for a future rule that computes on floats but discards
+the float result in favor of returning e.g. an integer. A NaN-producing arithmetic
+op anywhere in the expansion sets `relax_nan`, so `simplify` would check the
+integer-typed result with `fp_equiv!` and wrongly accept two integers whose bit
+patterns merely both happen to look like arithmetic NaNs, even though the integer
+values differ. In practice, such a rule would also be incorrect on other integer
+bitpatterns that do not look like an arithmetic NaN, so the rule would fail on those
+counterexamples.
+
+### Running the whole mid-end suite
+
+To sweep every mid-end rewrite in one run, seed from `simplify` and apply the
+default excludes (see [above](#verifying-a-family-of-rules-at-once) for why these
+flags are needed):
+
+```
+cargo run -p cranelift-isle-veri --bin veri -- --name opt --only-root simplify --default-excludes
+```
+
+On a 12-core M2 MacBook this takes about four minutes:
+
+```
+Total expansions:    1331
+In scope expansions: 1054
+Type instantiations: 5148
+Applicable:          5134
+Verification passed: 5134
+Verification failed: 0
+Verification unknown: 0
+```
+
+Equivalently, `--config cranelift/isle/veri/configs/opt-fast.args`.
+
 ## ISA Specifications
 
 Where possible, we derive ISA specifications in VeriISLE format from
@@ -187,5 +312,3 @@ This will:
     to pay the initialization cost of reading the large ASL specification once.
 2.  Build and execute the `isaspec` tool.
 3.  Write outputs to the `cranelift/codegen/src/isa/aarch64/spec/` directory.
-
-On a clean checkout this should be a no-op.
