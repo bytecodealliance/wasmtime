@@ -660,6 +660,11 @@ impl Assembler {
         self.alu_rrr_extend(ALUOp::Sub, rm, rn, rd, size, ExtendOp::UXTX);
     }
 
+    /// Negate a general-purpose register.
+    pub fn neg_rr(&mut self, rn: Reg, rd: WritableReg, size: OperandSize) {
+        self.alu_rrr(ALUOp::Sub, rn, zero(), rd, size);
+    }
+
     /// Subtract with three registers, setting flags.
     pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
         self.alu_rrr_extend(ALUOp::SubS, rm, rn, rd, size, ExtendOp::UXTX);

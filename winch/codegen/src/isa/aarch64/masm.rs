@@ -1868,11 +1868,51 @@ impl Masm for MacroAssembler {
 
     fn v128_shift(
         &mut self,
-        _context: &mut CodeGenContext<Emission>,
-        _lane_width: OperandSize,
-        _shift_kind: ShiftKind,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+        shift_kind: ShiftKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let shift_amount = context.pop_to_reg(self, None)?.reg;
+        let operand = context.pop_to_reg(self, None)?.reg;
+        let amount_mask = lane_width.num_bits() - 1;
+        self.and(
+            writable!(shift_amount),
+            shift_amount,
+            RegImm::i32(amount_mask as i32),
+            OperandSize::S32,
+        )?;
+
+        let size = match lane_width {
+            OperandSize::S8 => VectorSize::Size8x16,
+            OperandSize::S16 => VectorSize::Size16x8,
+            OperandSize::S32 => VectorSize::Size32x4,
+            OperandSize::S64 => VectorSize::Size64x2,
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        let (op, negate) = match shift_kind {
+            ShiftKind::Shl => (VecALUOp::Sshl, false),
+            ShiftKind::ShrS => (VecALUOp::Sshl, true),
+            ShiftKind::ShrU => (VecALUOp::Ushl, true),
+            ShiftKind::Rotl | ShiftKind::Rotr => {
+                bail!(CodeGenError::unimplemented_masm_instruction())
+            }
+        };
+
+        if negate {
+            self.asm
+                .neg_rr(shift_amount, writable!(shift_amount), OperandSize::S64);
+        }
+
+        self.with_scratch::<FloatScratch, _>(|masm, tmp| {
+            masm.asm.vec_dup(shift_amount, tmp.writable(), size);
+            masm.asm
+                .vec_rrr(op, operand, tmp.inner(), writable!(operand), size);
+        });
+
+        context.free_reg(shift_amount);
+        context.stack.push(TypedReg::v128(operand).into());
+        Ok(())
     }
 
     fn v128_q15mulr_sat_s(
