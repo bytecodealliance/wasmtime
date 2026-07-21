@@ -2496,7 +2496,7 @@ impl StoreOpaque {
             .get_mut(transmit_id)
             .with_context(|| format!("error closing writer {transmit_id:?}"))?;
         log::trace!(
-            "host_drop_writer state {transmit_id:?}; write state {:?} read state {:?}",
+            "host_drop_writer state {transmit_id:?}; read state {:?} writer state {:?}",
             transmit.read,
             transmit.write
         );
@@ -3236,9 +3236,9 @@ impl Instance {
         writer: u32,
     ) -> Result<()> {
         let table = self.id().get_mut(store).table_for_transmit(ty);
-        let transmit_rep = match ty {
+        let (transmit_rep, is_done) = match ty {
             TransmitIndex::Future(ty) => table.future_remove_writable(ty, writer)?,
-            TransmitIndex::Stream(ty) => table.stream_remove_writable(ty, writer)?,
+            TransmitIndex::Stream(ty) => (table.stream_remove_writable(ty, writer)?, false),
         };
 
         let id = TableId::<TransmitHandle>::new(transmit_rep);
@@ -3247,11 +3247,15 @@ impl Instance {
             TransmitIndex::Stream(_) => store.host_drop_writer(id, None),
             TransmitIndex::Future(_) => store.host_drop_writer(
                 id,
-                Some(|| {
-                    Err(format_err!(
-                        "cannot drop future write end without first writing a value"
-                    ))
-                }),
+                if is_done {
+                    None
+                } else {
+                    Some(|| {
+                        Err(format_err!(
+                            "cannot drop future write end without first writing a value"
+                        ))
+                    })
+                },
             ),
         }
     }

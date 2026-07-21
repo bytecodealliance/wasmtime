@@ -458,25 +458,27 @@ impl HandleTable {
         Ok(ret)
     }
 
-    /// Removes the writable future handle from `idx`, returning its `rep`.
+    /// Removes the writable future handle from `idx`, returning its `rep` along
+    /// with whether the writer is "done" (i.e. it either successfully wrote a
+    /// value or was notified that the readable end was dropped).
     pub fn future_remove_writable(
         &mut self,
         expected_ty: TypeFutureTableIndex,
         idx: u32,
-    ) -> Result<u32> {
+    ) -> Result<(u32, bool)> {
         let ret = match self.get_mut(idx)? {
             Slot::Future { rep, ty, state } => {
                 if *ty != expected_ty {
                     bail!("handle is a future of a different type");
                 }
-                match state {
-                    TransmitLocalState::Write { .. } => {}
+                let is_done = match state {
+                    TransmitLocalState::Write { done } => *done,
                     TransmitLocalState::Read { .. } => {
                         bail!("passed read end to `future.drop-writable`")
                     }
                     TransmitLocalState::Busy => bail!("cannot drop busy future"),
-                }
-                *rep
+                };
+                (*rep, is_done)
             }
             _ => bail!("handle is not a future"),
         };
