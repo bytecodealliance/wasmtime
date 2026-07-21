@@ -475,6 +475,10 @@ criteria = "safe-to-deploy"
 version = "2.14.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.target-lexicon]]
+version = "0.12.16"
+criteria = "safe-to-deploy"
+
 [[exemptions.tempfile]]
 version = "3.3.0"
 criteria = "safe-to-deploy"
@@ -525,6 +529,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.winapi-x86_64-pc-windows-gnu]]
 version = "0.4.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.xed-sys]]
+version = "0.6.0+xed-2024.05.20"
 criteria = "safe-to-deploy"
 
 [[exemptions.zip]]

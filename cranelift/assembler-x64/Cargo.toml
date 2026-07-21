@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 capstone = { workspace = true, optional = true }
+xed-sys = { workspace = true, optional = true }
 
 [dev-dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
@@ -23,3 +24,8 @@ workspace = true
 
 [features]
 fuzz = ['dep:arbitrary', 'dep:capstone']
+# Adds Intel XED as a second, optional disassembler oracle for the roundtrip
+# fuzzer. This is additive on top of `fuzz` (Capstone remains the default
+# oracle); XED is only built when this feature is explicitly enabled. Note that
+# building XED requires Python 3.9+ and a C compiler.
+fuzz-xed = ['fuzz', 'dep:xed-sys']

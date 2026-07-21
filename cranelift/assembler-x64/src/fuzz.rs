@@ -18,6 +18,9 @@ use capstone::{Capstone, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, arch:
 /// Take a random assembly instruction and check its encoding and
 /// pretty-printing against a known-good disassembler.
 ///
+/// This uses Capstone as the disassembler oracle; see [`roundtrip_with`] for
+/// the oracle-agnostic core.
+///
 /// # Panics
 ///
 /// This function panics to express failure as expected by the `arbitrary`
@@ -31,6 +34,37 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
         return;
     }
 
+    roundtrip_with(inst, "capstone", disassemble_capstone, capstone_matches);
+}
+
+/// Like [`roundtrip`], but uses Intel XED as the disassembler oracle instead of
+/// Capstone.
+///
+/// XED understands newer encodings (e.g. APX) that the bundled Capstone does
+/// not, so this is a useful second oracle. It is only available with the
+/// `fuzz-xed` feature (which requires building XED from source).
+///
+/// # Panics
+///
+/// See [`roundtrip`].
+#[cfg(feature = "fuzz-xed")]
+pub fn roundtrip_xed(inst: &Inst<FuzzRegs>) {
+    roundtrip_with(inst, "xed", disassemble_xed, xed_matches);
+}
+
+/// The oracle-agnostic core of [`roundtrip`]: assemble `inst`, disassemble the
+/// resulting bytes with the provided `disassemble` oracle, and check that the
+/// oracle's pretty-printed output matches the assembler's own `to_string`,
+/// where "matches" is defined by the oracle-specific `matches` predicate
+/// (`matches(expected_from_oracle, actual_from_assembler)`).
+///
+/// The `oracle` name is only used to label diagnostic output on failure.
+fn roundtrip_with(
+    inst: &Inst<FuzzRegs>,
+    oracle: &str,
+    disassemble: impl Fn(&[u8], &Inst<FuzzRegs>) -> String,
+    matches: impl Fn(&str, &str) -> bool,
+) {
     // Check that we can actually assemble this instruction.
     let assembled = assemble(inst);
     let expected = disassemble(&assembled, inst);
@@ -39,11 +73,11 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
     // off the instruction offset first.
     let expected = expected.split_once(' ').unwrap().1;
     let actual = inst.to_string();
-    if expected != actual && expected.trim() != fix_up(&actual) {
+    if !matches(expected, &actual) {
         println!("> {inst}");
         println!("  debug: {inst:x?}");
         println!("  assembled: {}", pretty_print_hexadecimal(&assembled));
-        println!("  expected (capstone): {expected}");
+        println!("  expected ({oracle}): {expected}");
         println!("  actual (to_string):  {actual}");
         assert_eq!(expected, &actual);
     }
@@ -58,6 +92,13 @@ fn features_mention(features: &Features, target: Feature) -> bool {
         }
         Features::Feature(f) => *f == target,
     }
+}
+
+/// Comparison predicate for the Capstone oracle: exact match, or match after
+/// applying Capstone-specific normalization ([`fix_up`]) to the assembler
+/// output.
+fn capstone_matches(expected: &str, actual: &str) -> bool {
+    expected == actual || expected.trim() == fix_up(actual)
 }
 
 /// Use this assembler to emit machine code into a byte buffer.
@@ -132,8 +173,11 @@ impl CodeSink for TestCodeSink {
     }
 }
 
+/// Disassemble a single instruction with Capstone, returning its AT&T-syntax
+/// string. This is the default [`roundtrip`] oracle.
+///
 /// Building a new `Capstone` each time is suboptimal (TODO).
-fn disassemble(assembled: &[u8], original: &Inst<FuzzRegs>) -> String {
+fn disassemble_capstone(assembled: &[u8], original: &Inst<FuzzRegs>) -> String {
     let cs = Capstone::new()
         .x86()
         .mode(x86::ArchMode::Mode64)
@@ -165,6 +209,79 @@ fn disassemble(assembled: &[u8], original: &Inst<FuzzRegs>) -> String {
     }
 
     inst.to_string()
+}
+
+/// Disassemble a single instruction with Intel XED, returning a string in the
+/// same shape as [`disassemble_capstone`] (a leading offset token, a space,
+/// then the AT&T-syntax instruction) so that [`roundtrip_with`] can compare it
+/// uniformly.
+#[cfg(feature = "fuzz-xed")]
+fn disassemble_xed(assembled: &[u8], original: &Inst<FuzzRegs>) -> String {
+    use core::ffi::c_void;
+    use std::sync::Once;
+    use xed_sys::*;
+
+    // XED requires a one-time global table initialization before any decode.
+    static INIT: Once = Once::new();
+    // SAFETY: `xed_tables_init` is safe to call; `Once` guarantees it runs
+    // exactly once even across threads.
+    INIT.call_once(|| unsafe { xed_tables_init() });
+
+    // SAFETY: all of the following are standard XED decode/format calls
+    // operating on stack-allocated, properly initialized structures.
+    unsafe {
+        let mut xedd: xed_decoded_inst_t = core::mem::zeroed();
+        xed_decoded_inst_zero(&mut xedd);
+        xed_decoded_inst_set_mode(&mut xedd, XED_MACHINE_MODE_LONG_64, XED_ADDRESS_WIDTH_64b);
+
+        let error = xed_decode(
+            &mut xedd,
+            assembled.as_ptr(),
+            assembled.len() as core::ffi::c_uint,
+        );
+        if error != XED_ERROR_NONE {
+            println!("> {original}");
+            println!("  debug: {original:x?}");
+            println!("  assembled: {}", pretty_print_hexadecimal(assembled));
+            let name = core::ffi::CStr::from_ptr(xed_error_enum_t2str(error));
+            panic!("xed failed to decode: {}", name.to_string_lossy());
+        }
+
+        // XED must consume exactly the bytes we emitted; a shorter length means
+        // trailing bytes were not part of the instruction.
+        let decoded_len = xed_decoded_inst_get_length(&xedd) as usize;
+        if decoded_len != assembled.len() {
+            println!("> {original}");
+            println!("  debug: {original:x?}");
+            println!("  assembled: {}", pretty_print_hexadecimal(assembled));
+            assert_eq!(
+                decoded_len,
+                assembled.len(),
+                "xed did not consume all bytes"
+            );
+        }
+
+        // Format in AT&T syntax to match the assembler's own pretty-printing.
+        let mut buf = [0i8; 256];
+        let ok = xed_format_context(
+            XED_SYNTAX_ATT,
+            &xedd,
+            buf.as_mut_ptr(),
+            buf.len() as core::ffi::c_int,
+            0,
+            core::ptr::null_mut::<c_void>(),
+            None,
+        );
+        assert!(ok != 0, "xed failed to format instruction");
+
+        let disasm = core::ffi::CStr::from_ptr(buf.as_ptr())
+            .to_string_lossy()
+            .into_owned();
+
+        // Prepend a fake offset token so the shape matches Capstone's
+        // `0x0: <inst>` output that `roundtrip_with` expects.
+        format!("0: {disasm}")
+    }
 }
 
 fn pretty_print_hexadecimal(hex: &[u8]) -> String {
@@ -284,6 +401,117 @@ fn remove_after_parenthesis_test() {
 fn fix_up(dis: &str) -> alloc::borrow::Cow<'_, str> {
     let dis = remove_after_semicolon(dis);
     replace_signed_immediates(&dis)
+}
+
+/// Comparison predicate for the Intel XED oracle.
+///
+/// XED decodes the same instructions as the assembler but prints them with
+/// slightly different conventions. The differences we reconcile here are:
+///
+/// - XED omits the AT&T operand-size suffix on the mnemonic (e.g. `adc`
+///   instead of `adcw`) when an operand already makes the width unambiguous.
+/// - XED appends a vector-length marker (`x`/`y`/`z` for 128/256/512-bit) to
+///   the mnemonic of some VEX/EVEX instructions with a memory operand (e.g.
+///   `vpalignrx` instead of `vpalignr`).
+/// - XED may use different internal whitespace (e.g. a double space after the
+///   mnemonic).
+///
+/// Rather than blindly stripping suffixes from the assembler mnemonic--which
+/// would corrupt mnemonics that legitimately end in those letters, like `mul`
+/// or `call`--we use XED's mnemonic as ground truth: a suffix is only dropped
+/// if doing so makes the two mnemonics exactly equal.
+#[cfg(feature = "fuzz-xed")]
+fn xed_matches(expected: &str, actual: &str) -> bool {
+    let actual = remove_after_semicolon(actual);
+
+    // Normalize runs of whitespace to a single space, and drop spaces that
+    // follow a comma, so cosmetic spacing differences (XED's double space after
+    // the mnemonic, and its lack of spaces inside memory operands like
+    // `(%rsi,%rdx,2)`) don't matter. Also drop an explicit SIB scale of 1,
+    // which XED prints (`(%rbp,%rsi,1)`) but the assembler omits.
+    fn normalize_ws(s: &str) -> String {
+        let collapsed = s.split_whitespace().collect::<Vec<_>>().join(" ");
+        collapsed.replace(", ", ",").replace(",1)", ")")
+    }
+    let expected = canonicalize_immediates(&normalize_ws(expected));
+    let actual = canonicalize_immediates(&normalize_ws(actual));
+    if expected == actual {
+        return true;
+    }
+
+    // Split "mnemonic operands" into the leading mnemonic and the remainder.
+    fn split_mnemonic(s: &str) -> (&str, &str) {
+        match s.split_once(' ') {
+            Some((m, rest)) => (m, rest),
+            None => (s, ""),
+        }
+    }
+
+    let (exp_mnemonic, exp_ops) = split_mnemonic(&expected);
+    let (act_mnemonic, act_ops) = split_mnemonic(&actual);
+
+    if exp_ops != act_ops {
+        return false;
+    }
+
+    if act_mnemonic == exp_mnemonic {
+        return true;
+    }
+
+    // The assembler mnemonic is the XED mnemonic plus a single trailing
+    // operand-size suffix (`adcw` vs `adc`).
+    if act_mnemonic.strip_suffix(['b', 'w', 'l', 'q']) == Some(exp_mnemonic) {
+        return true;
+    }
+
+    // The XED mnemonic is the assembler mnemonic plus a trailing vector-length
+    // marker (`vpalignrx` vs `vpalignr`).
+    if exp_mnemonic.strip_suffix(['x', 'y', 'z']) == Some(act_mnemonic) {
+        return true;
+    }
+
+    false
+}
+
+/// Rewrite every `$`-prefixed immediate in a disassembly string into a single
+/// canonical form so that decimal-vs-hex and signedness differences between the
+/// assembler and XED don't cause spurious mismatches.
+///
+/// The assembler prints small immediates in decimal (`$1`) and larger ones in
+/// hex (`$0xb143`), while XED always prints hex (`$0x1`). We parse each
+/// immediate's numeric value (handling an optional leading `-` and `0x`) and
+/// re-emit it as `$0x{:x}` of its `u64` two's-complement value.
+#[cfg(feature = "fuzz-xed")]
+fn canonicalize_immediates(dis: &str) -> String {
+    let mut out = String::with_capacity(dis.len());
+    let mut rest = dis;
+    while let Some(idx) = rest.find('$') {
+        out.push_str(&rest[..idx]);
+        // Everything after the '$'.
+        let after = &rest[idx + 1..];
+        let (neg, num) = match after.strip_prefix('-') {
+            Some(n) => (true, n),
+            None => (false, after),
+        };
+        let (radix, digits) = match num.strip_prefix("0x") {
+            Some(d) => (16, d),
+            None => (10, num),
+        };
+        let n = digits.chars().take_while(|c| c.is_digit(radix)).count();
+        if n == 0 {
+            // Not actually an immediate we can parse; keep the '$' literally.
+            out.push('$');
+            rest = after;
+            continue;
+        }
+        let (value_str, tail) = digits.split_at(n);
+        let value = u64::from_str_radix(value_str, radix).unwrap_or(0);
+        let value = if neg { value.wrapping_neg() } else { value };
+        out.push_str(&format!("$0x{value:x}"));
+        rest = tail;
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Fuzz-specific registers.
@@ -429,5 +657,29 @@ mod test {
             let inst = crate::inst::callq_d::new(i);
             roundtrip(&inst.into());
         }
+    }
+
+    /// Same as [`smoke`], but exercises the Intel XED oracle. Only available
+    /// with the `fuzz-xed` feature.
+    ///
+    /// This is `#[ignore]`d for now: XED and the assembler agree on decoding,
+    /// but reconciling every one of XED's printing conventions is a work in
+    /// progress. The [`xed_matches`] predicate already handles operand-size
+    /// suffixes, vector-length markers, whitespace, immediate formatting, and
+    /// explicit SIB scales; the remaining known gap is condition-code mnemonic
+    /// aliases (e.g. `cmovnl` vs `cmovge`). Run explicitly with
+    /// `cargo test --features fuzz-xed -- --ignored smoke_xed`.
+    #[cfg(feature = "fuzz-xed")]
+    #[test]
+    #[ignore = "XED disassembly normalization is a work in progress"]
+    fn smoke_xed() {
+        let count = AtomicUsize::new(0);
+        arbtest(|u| {
+            let inst: Inst<FuzzRegs> = u.arbitrary()?;
+            roundtrip_xed(&inst);
+            println!("#{}: {inst}", count.fetch_add(1, Ordering::SeqCst));
+            Ok(())
+        })
+        .budget_ms(1_000);
     }
 }

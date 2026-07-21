@@ -12,9 +12,21 @@ cargo-fuzz = true
 libfuzzer-sys = { workspace = true }
 cranelift-assembler-x64 = { path = "..", features = ['fuzz'] }
 
+[features]
+# Enable the Intel XED disassembler oracle for the `roundtrip-xed` target.
+# This builds XED from source, so it requires a C compiler and Python.
+fuzz-xed = ["cranelift-assembler-x64/fuzz-xed"]
+
 [[bin]]
 name = "roundtrip"
 path = "fuzz_targets/roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roundtrip-xed"
+path = "fuzz_targets/roundtrip-xed.rs"
 test = false
 doc = false
 bench = false
