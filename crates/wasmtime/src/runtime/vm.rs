@@ -213,6 +213,11 @@ pub unsafe trait VMStore: 'static {
         &mut self,
     ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque);
 
+    /// Invoke this store's configured call hook, if any, to notify the
+    /// embedder of a transition between the host and WebAssembly.
+    #[cfg(feature = "call-hook")]
+    fn call_hook(&mut self, s: crate::CallHook) -> Result<()>;
+
     /// Callback invoked whenever an instance observes a new epoch
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.

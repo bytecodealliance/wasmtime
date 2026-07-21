@@ -897,3 +897,38 @@ impl State {
 pub fn sync_call_hook(mut ctx: StoreContextMut<'_, State>, transition: CallHook) -> Result<()> {
     ctx.data_mut().call_hook(transition)
 }
+
+#[tokio::test]
+async fn hooks_used_at_yield_points() -> Result<(), Error> {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, State::default());
+    store.call_hook(sync_call_hook);
+    store.set_fuel(100)?;
+    store.fuel_async_yield_interval(Some(1))?;
+
+    assert_eq!(store.data().calls_into_host, 0);
+    assert_eq!(store.data().returns_from_host, 0);
+    assert_eq!(store.data().calls_into_wasm, 0);
+    assert_eq!(store.data().returns_from_wasm, 0);
+
+    let wat = r#"
+        (module
+            (func $start)
+            (start $start)
+        )
+    "#;
+    let module = Module::new(&engine, wat)?;
+
+    Linker::new(&engine)
+        .instantiate_async(&mut store, &module)
+        .await?;
+
+    assert!(store.data().calls_into_host > 0);
+    assert!(store.data().returns_from_host > 0);
+    assert_eq!(store.data().calls_into_wasm, 1);
+    assert_eq!(store.data().returns_from_wasm, 1);
+
+    Ok(())
+}

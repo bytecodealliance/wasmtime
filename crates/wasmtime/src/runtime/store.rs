@@ -2311,6 +2311,11 @@ unsafe impl<T> VMStore for StoreInner<T> {
         &mut self.inner
     }
 
+    #[cfg(feature = "call-hook")]
+    fn call_hook(&mut self, s: CallHook) -> Result<()> {
+        StoreInner::call_hook(self, s)
+    }
+
     fn resource_limiter_and_store_opaque(
         &mut self,
     ) -> (Option<StoreResourceLimiter<'_>>, &mut StoreOpaque) {
