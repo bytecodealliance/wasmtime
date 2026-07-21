@@ -416,7 +416,7 @@ impl Compiler {
                 }
 
                 if cfg!(target_arch = "aarch64") {
-                    return (config.simd() && !config.spec_test()) || config.threads();
+                    return config.threads();
                 }
 
                 !cfg!(target_arch = "x86_64")
@@ -556,16 +556,17 @@ impl WastTest {
                     "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
                     "misc_testsuite/simd/load_splat_out_of_bounds.wast",
                     "misc_testsuite/simd/replace-lane-preserve.wast",
+                    "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
                     "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                     "misc_testsuite/simd/sse-cannot-fold-unaligned-loads.wast",
                     "misc_testsuite/simd/unaligned-load.wast",
+                    "misc_testsuite/simd/v128-equal.wast",
                     "misc_testsuite/simd/v128-select.wast",
                     "misc_testsuite/winch/issue-10331.wast",
                     "misc_testsuite/winch/issue-10357.wast",
                     "misc_testsuite/winch/issue-10460.wast",
                     "misc_testsuite/winch/replace_lane.wast",
                     "misc_testsuite/winch/simd_multivalue.wast",
-                    "misc_testsuite/winch/v128_load_lane_invalid_address.wast",
                     "spec_testsuite/proposals/annotations/simd_lane.wast",
                     "spec_testsuite/proposals/multi-memory/simd_memory-multi.wast",
                     "spec_testsuite/simd_address.wast",
