@@ -592,6 +592,9 @@ pub struct Macro {
     pub body: Expr,
 }
 
+/// Type instantiation sets for a term, each gated on a set of tags.
+pub type TaggedInstantiations = Vec<(Vec<String>, Vec<Signature>)>;
+
 pub struct SpecEnv {
     /// Specification for the given term.
     pub term_spec: HashMap<TermId, Spec>,
@@ -612,7 +615,7 @@ pub struct SpecEnv {
     /// of tags. They apply only when the run excludes none of their tags, so
     /// that expensive instantiations can be reserved for runs that ask for
     /// them (for example, by leaving `slow` out of the exclusions).
-    pub tagged_term_instantiations: HashMap<TermId, Vec<(Vec<String>, Vec<Signature>)>>,
+    pub tagged_term_instantiations: HashMap<TermId, TaggedInstantiations>,
 
     /// Rules for which priority is significant.
     pub priority: HashSet<RuleId>,
