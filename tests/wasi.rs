@@ -132,6 +132,7 @@ fn execute(path: &Path) -> Result<()> {
                 if path.iter().any(|p| p == "wasm32-wasip3") {
                     cmd.arg("-Sp3").arg("-Wcomponent-model-async");
                 }
+                cmd.arg("-Stcp,udp");
                 for proposal in proposals.as_deref().unwrap_or(&[]) {
                     match proposal {
                         WasiProposal::Sockets => {
