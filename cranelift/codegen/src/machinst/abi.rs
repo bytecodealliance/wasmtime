@@ -2416,7 +2416,7 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// Generate a spill.
     pub fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> M::I {
         let ty = M::I::canonical_type_for_rc(from_reg.class());
-        debug_assert_eq!(<M>::I::rc_for_type(ty).unwrap().1, &[ty]);
+        debug_assert_eq!(<M>::I::rc_for_type(&ty).unwrap().1, &[ty]);
 
         let sp_off = self.get_spillslot_offset(to_slot);
         trace!("gen_spill: {from_reg:?} into slot {to_slot:?} at offset {sp_off}");
@@ -2428,7 +2428,7 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// Generate a reload (fill).
     pub fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot) -> M::I {
         let ty = M::I::canonical_type_for_rc(to_reg.to_reg().class());
-        debug_assert_eq!(<M>::I::rc_for_type(ty).unwrap().1, &[ty]);
+        debug_assert_eq!(<M>::I::rc_for_type(&ty).unwrap().1, &[ty]);
 
         let sp_off = self.get_spillslot_offset(from_slot);
         trace!("gen_reload: {to_reg:?} from slot {from_slot:?} at offset {sp_off}");

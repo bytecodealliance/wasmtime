@@ -235,7 +235,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 );
             }
 
-            let (rcs, reg_types) = Inst::rc_for_type(param.value_type)?;
+            let (rcs, reg_types) = Inst::rc_for_type(&param.value_type)?;
 
             if let ir::ArgumentPurpose::StructReturn = param.purpose {
                 assert!(

@@ -1224,8 +1224,8 @@ impl MachInst for Inst {
         vec![vec![0x07, 0x07]]
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
-        match ty {
+    fn rc_for_type(ty: &Type) -> CodegenResult<(&[RegClass], &[Type])> {
+        match *ty {
             types::I8 => Ok((&[RegClass::Int], &[types::I8])),
             types::I16 => Ok((&[RegClass::Int], &[types::I16])),
             types::I32 => Ok((&[RegClass::Int], &[types::I32])),

@@ -132,7 +132,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             }
 
             // Find regclass(es) of the register(s) used to store a value of this type.
-            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+            let (rcs, reg_tys) = Inst::rc_for_type(&param.value_type)?;
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
                 let next_reg = if (next_x_reg <= x_end) && *rc == RegClass::Int {

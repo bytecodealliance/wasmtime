@@ -91,7 +91,7 @@ where
         for param in params {
             // Find the regclass(es) of the register(s) used to store a value of
             // this type.
-            let (rcs, reg_tys) = Self::I::rc_for_type(param.value_type)?;
+            let (rcs, reg_tys) = Self::I::rc_for_type(&param.value_type)?;
 
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {

@@ -1110,7 +1110,7 @@ impl S390xMachineDeps {
         };
 
         // Helper routine to allocate a temp register for ty.
-        let temp_reg = |ty| match Inst::rc_for_type(ty).unwrap() {
+        let temp_reg = |ty| match Inst::rc_for_type(&ty).unwrap() {
             (&[RegClass::Int], _) => writable_gpr(0),
             (&[RegClass::Float], _) => writable_vr(1),
             _ => unreachable!(),

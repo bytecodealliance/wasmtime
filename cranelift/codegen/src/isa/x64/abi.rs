@@ -167,7 +167,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             }
 
             // Find regclass(es) of the register(s) used to store a value of this type.
-            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+            let (rcs, reg_tys) = Inst::rc_for_type(&param.value_type)?;
 
             // Now assign ABIArgSlots for each register-sized part.
             //
