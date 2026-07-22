@@ -405,16 +405,31 @@ fn fix_up(dis: &str) -> alloc::borrow::Cow<'_, str> {
 
 /// Comparison predicate for the Intel XED oracle.
 ///
-/// XED decodes the same instructions as the assembler but prints them with
-/// slightly different conventions. The differences we reconcile here are:
+/// XED decodes the same instructions as the assembler but prints them with a
+/// number of different conventions. The differences we reconcile here are:
 ///
-/// - XED omits the AT&T operand-size suffix on the mnemonic (e.g. `adc`
-///   instead of `adcw`) when an operand already makes the width unambiguous.
+/// - Cosmetic whitespace (XED's double space after the mnemonic, its lack of
+///   spaces inside memory operands), an explicit SIB scale of 1, and the AT&T
+///   indirect-branch marker `*` (as in `jmpq *%rax`).
+/// - Numeric formatting: XED always prints hex while the assembler prints small
+///   values in decimal. Normalized for `$` immediates, memory displacements,
+///   and bare branch targets.
+/// - XED omits the AT&T operand-size suffix on the mnemonic (`adc` vs `adcw`)
+///   when an operand makes the width unambiguous, or conversely adds one the
+///   assembler omits (`rcpssl` vs `rcpss`).
 /// - XED appends a vector-length marker (`x`/`y`/`z` for 128/256/512-bit) to
-///   the mnemonic of some VEX/EVEX instructions with a memory operand (e.g.
-///   `vpalignrx` instead of `vpalignr`).
-/// - XED may use different internal whitespace (e.g. a double space after the
-///   mnemonic).
+///   some VEX/EVEX mnemonics (`vpalignrx` vs `vpalignr`).
+/// - Legacy prefixes (`lock`, `rep*`, ...) printed as a leading token.
+/// - Condition-code aliases (`cmovnb` vs `cmovae`).
+/// - The AT&T/Intel spellings of the sign/zero-extend convert instructions
+///   (`cltq` vs `cdqe`) and the move-with-extension instructions (`movzbl` vs
+///   `movzxb`, `movslq` vs `movsxdl`).
+/// - `movabs`(`q`) (assembler) vs plain `mov` (XED) for the imm64 move.
+/// - Implicit operands the assembler prints but XED omits (the `%xmm0` mask of
+///   the SSE4.1 variable blends, the `$1` count of shift/rotate-by-one).
+/// - The SSE/AVX compare pseudo-ops, where the assembler bakes the predicate
+///   into the mnemonic (`vcmpneqsd`) but XED uses a predicate immediate
+///   (`vcmpsd $0x4, ...`).
 ///
 /// Rather than blindly stripping suffixes from the assembler mnemonic--which
 /// would corrupt mnemonics that legitimately end in those letters, like `mul`
@@ -428,13 +443,18 @@ fn xed_matches(expected: &str, actual: &str) -> bool {
     // follow a comma, so cosmetic spacing differences (XED's double space after
     // the mnemonic, and its lack of spaces inside memory operands like
     // `(%rsi,%rdx,2)`) don't matter. Also drop an explicit SIB scale of 1,
-    // which XED prints (`(%rbp,%rsi,1)`) but the assembler omits.
+    // which XED prints (`(%rbp,%rsi,1)`) but the assembler omits. Finally, drop
+    // the AT&T indirect-branch marker `*` (as in `jmpq *%rax`), which the
+    // assembler prints but XED does not; `*` has no other use in this syntax.
     fn normalize_ws(s: &str) -> String {
         let collapsed = s.split_whitespace().collect::<Vec<_>>().join(" ");
-        collapsed.replace(", ", ",").replace(",1)", ")")
+        collapsed
+            .replace(", ", ",")
+            .replace(",1)", ")")
+            .replace('*', "")
     }
-    let expected = canonicalize_immediates(&normalize_ws(expected));
-    let actual = canonicalize_immediates(&normalize_ws(actual));
+    let expected = canonicalize_displacements(&canonicalize_immediates(&normalize_ws(expected)));
+    let actual = canonicalize_displacements(&canonicalize_immediates(&normalize_ws(actual)));
     if expected == actual {
         return true;
     }
@@ -447,8 +467,96 @@ fn xed_matches(expected: &str, actual: &str) -> bool {
         }
     }
 
-    let (exp_mnemonic, exp_ops) = split_mnemonic(&expected);
-    let (act_mnemonic, act_ops) = split_mnemonic(&actual);
+    // Strip any leading legacy instruction prefixes (`lock`, `rep*`, ...) that
+    // both disassemblers print as a separate leading token, so the mnemonic
+    // normalization below operates on the real operation mnemonic rather than
+    // the prefix. Both sides decode the same bytes, so their prefixes agree.
+    fn strip_legacy_prefixes(s: &str) -> &str {
+        let mut s = s;
+        while let Some((head, rest)) = s.split_once(' ') {
+            if matches!(
+                head,
+                "lock" | "rep" | "repe" | "repz" | "repne" | "repnz" | "data16" | "bnd" | "notrack"
+            ) {
+                s = rest;
+            } else {
+                break;
+            }
+        }
+        s
+    }
+    let expected = strip_legacy_prefixes(&expected);
+    let actual = strip_legacy_prefixes(&actual);
+
+    let (exp_mnemonic, exp_ops) = split_mnemonic(expected);
+    let (act_mnemonic, act_ops) = split_mnemonic(actual);
+
+    // XED makes the implicit shift/rotate-by-one count explicit (`sarl $0x1, X`
+    // vs the assembler's `sarl X`); drop a leading `$0x1,` for that family so
+    // the operand lists line up.
+    fn is_shift_rotate(m: &str) -> bool {
+        const ROOTS: [&str; 8] = ["sal", "sar", "shl", "shr", "rol", "ror", "rcl", "rcr"];
+        ROOTS.contains(&m)
+            || m.strip_suffix(['b', 'w', 'l', 'q'])
+                .is_some_and(|r| ROOTS.contains(&r))
+    }
+    fn strip_shift_one<'a>(m: &str, ops: &'a str) -> &'a str {
+        if is_shift_rotate(m) {
+            if let Some(rest) = ops.strip_prefix("$0x1,") {
+                return rest;
+            }
+        }
+        ops
+    }
+
+    // The SSE4.1 variable-blend instructions (`blendvps`, `blendvpd`,
+    // `pblendvb`) take an implicit `%xmm0` mask, which the assembler prints as
+    // an explicit leading operand but XED omits. This only ever appears on the
+    // assembler (`actual`) side, so strip it there alone--stripping it from XED
+    // too would corrupt cases where `%xmm0` is also a real explicit operand.
+    fn strip_implicit_xmm0<'a>(m: &str, ops: &'a str) -> &'a str {
+        if m.starts_with("blendv") || m.starts_with("pblendv") {
+            if let Some(rest) = ops.strip_prefix("%xmm0,") {
+                return rest;
+            }
+        }
+        ops
+    }
+    let exp_ops = strip_shift_one(exp_mnemonic, exp_ops);
+    let act_ops = strip_implicit_xmm0(act_mnemonic, strip_shift_one(act_mnemonic, act_ops));
+
+    // Canonicalize any whole-operand bare number (e.g. a relative branch target
+    // like `jnp 5` vs `jnp 0x5`) into the shared hex form. Operands that are
+    // not pure numbers (registers, memory references) are left untouched.
+    fn canonicalize_operand_numbers(ops: &str) -> String {
+        ops.split(',')
+            .map(|op| canonicalize_one_number(op).unwrap_or_else(|| op.to_string()))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+    let exp_ops = canonicalize_operand_numbers(exp_ops);
+    let act_ops = canonicalize_operand_numbers(act_ops);
+
+    // SSE/AVX compare pseudo-ops: the assembler bakes the comparison predicate
+    // into the mnemonic (`vcmpneqsd`) while XED uses the generic mnemonic plus a
+    // leading predicate immediate (`vcmpsd $0x4, ...`). Convert whichever side
+    // is a pseudo-op into the generic `mnemonic + $imm` form and compare.
+    let exp_cmp = split_cmp_pseudo(exp_mnemonic).map(|(b, n)| (b, prepend_predicate(n, &exp_ops)));
+    let act_cmp = split_cmp_pseudo(act_mnemonic).map(|(b, n)| (b, prepend_predicate(n, &act_ops)));
+    if exp_cmp.is_some() || act_cmp.is_some() {
+        let (exp_base, exp_cops) =
+            exp_cmp.unwrap_or_else(|| (exp_mnemonic.to_string(), exp_ops.clone()));
+        let (act_base, act_cops) =
+            act_cmp.unwrap_or_else(|| (act_mnemonic.to_string(), act_ops.clone()));
+        if exp_cops == act_cops
+            && (exp_base == act_base
+                || act_base.strip_suffix(['b', 'w', 'l', 'q']).as_deref() == Some(&exp_base)
+                || exp_base.strip_suffix(['b', 'w', 'l', 'q']).as_deref() == Some(&act_base)
+                || exp_base.strip_suffix(['x', 'y', 'z']).as_deref() == Some(&act_base))
+        {
+            return true;
+        }
+    }
 
     if exp_ops != act_ops {
         return false;
@@ -464,13 +572,299 @@ fn xed_matches(expected: &str, actual: &str) -> bool {
         return true;
     }
 
+    // ...or vice versa: XED adds an operand-size suffix that the assembler
+    // omits (`rcpssl` vs `rcpss`) when a memory operand makes the width
+    // otherwise unstated.
+    if exp_mnemonic.strip_suffix(['b', 'w', 'l', 'q']) == Some(act_mnemonic) {
+        return true;
+    }
+
     // The XED mnemonic is the assembler mnemonic plus a trailing vector-length
     // marker (`vpalignrx` vs `vpalignr`).
     if exp_mnemonic.strip_suffix(['x', 'y', 'z']) == Some(act_mnemonic) {
         return true;
     }
 
+    // XED and the assembler may spell the same condition code differently
+    // (`cmovnb` vs `cmovae`). Canonicalize both mnemonics' condition codes and
+    // compare; a match means they name the same conditional instruction.
+    if let (Some(exp_canon), Some(act_canon)) = (
+        canonical_condition_mnemonic(exp_mnemonic),
+        canonical_condition_mnemonic(act_mnemonic),
+    ) {
+        if exp_canon == act_canon {
+            return true;
+        }
+    }
+
+    // The sign/zero-extending conversion instructions have distinct AT&T and
+    // Intel mnemonics for the same opcode; the assembler prints the AT&T form
+    // (`cltq`) while XED prints the Intel form (`cdqe`) even in AT&T syntax.
+    if canonical_convert_mnemonic(exp_mnemonic) == canonical_convert_mnemonic(act_mnemonic) {
+        return true;
+    }
+
+    // The move-with-extension instructions spell their operand sizes
+    // differently: the assembler encodes both source and destination sizes in
+    // the mnemonic (`movzbl` = zero-extend byte to long) while XED uses a
+    // single source-size suffix (`movzxb`), or omits it entirely (`movzx`) when
+    // a register source already states the width. Canonicalize both--taking the
+    // source size from the mnemonic or, failing that, the source operand--and
+    // compare. The operand lists are already known equal here.
+    if let (Some(exp_canon), Some(act_canon)) = (
+        canonical_movext_mnemonic(exp_mnemonic, &exp_ops),
+        canonical_movext_mnemonic(act_mnemonic, &act_ops),
+    ) {
+        if exp_canon == act_canon {
+            return true;
+        }
+    }
+
+    // The assembler names the imm64/moffs move `movabs`(`q`); XED prints plain
+    // `mov`. Strip the `abs` marker, then allow the usual operand-size suffix
+    // difference (`movq` vs `mov`).
+    let exp_dm = exp_mnemonic
+        .strip_prefix("movabs")
+        .map(|s| format!("mov{s}"));
+    let act_dm = act_mnemonic
+        .strip_prefix("movabs")
+        .map(|s| format!("mov{s}"));
+    if exp_dm.is_some() || act_dm.is_some() {
+        let e = exp_dm.as_deref().unwrap_or(exp_mnemonic);
+        let a = act_dm.as_deref().unwrap_or(act_mnemonic);
+        if e == a
+            || a.strip_suffix(['b', 'w', 'l', 'q']) == Some(e)
+            || e.strip_suffix(['b', 'w', 'l', 'q']) == Some(a)
+        {
+            return true;
+        }
+    }
+
     false
+}
+
+/// Map an SSE/AVX compare-predicate mnemonic fragment (as baked into the AT&T
+/// pseudo-op mnemonics, e.g. `neq`) to its immediate predicate value.
+#[cfg(feature = "fuzz-xed")]
+fn cmp_predicate(name: &str) -> Option<u8> {
+    Some(match name {
+        "eq" => 0,
+        "lt" => 1,
+        "le" => 2,
+        "unord" => 3,
+        "neq" => 4,
+        "nlt" => 5,
+        "nle" => 6,
+        "ord" => 7,
+        "eq_uq" => 8,
+        "nge" => 9,
+        "ngt" => 10,
+        "false" => 11,
+        "neq_oq" => 12,
+        "ge" => 13,
+        "gt" => 14,
+        "true" => 15,
+        "eq_os" => 16,
+        "lt_oq" => 17,
+        "le_oq" => 18,
+        "unord_s" => 19,
+        "neq_us" => 20,
+        "nlt_uq" => 21,
+        "nle_uq" => 22,
+        "ord_s" => 23,
+        "eq_us" => 24,
+        "nge_uq" => 25,
+        "ngt_uq" => 26,
+        "false_os" => 27,
+        "neq_os" => 28,
+        "ge_oq" => 29,
+        "gt_oq" => 30,
+        "true_us" => 31,
+        _ => return None,
+    })
+}
+
+/// Recognize an SSE/AVX compare pseudo-op mnemonic (`cmpneqps`, `vcmpltsd`,
+/// ...) and split it into its generic base mnemonic (`cmpps`, `vcmpsd`) and the
+/// predicate immediate value. Returns `None` for any other mnemonic.
+#[cfg(feature = "fuzz-xed")]
+fn split_cmp_pseudo(m: &str) -> Option<(String, u8)> {
+    let (prefix, rest) = match m.strip_prefix('v') {
+        Some(r) => ("v", r),
+        None => ("", m),
+    };
+    let rest = rest.strip_prefix("cmp")?;
+    for ty in ["ps", "pd", "ss", "sd"] {
+        if let Some(pred) = rest.strip_suffix(ty) {
+            if let Some(n) = cmp_predicate(pred) {
+                return Some((format!("{prefix}cmp{ty}"), n));
+            }
+        }
+    }
+    None
+}
+
+/// Prepend a predicate immediate (`$0xN`) to an operand list, matching the
+/// generic-form operand ordering used by XED for the compare instructions.
+#[cfg(feature = "fuzz-xed")]
+fn prepend_predicate(n: u8, ops: &str) -> String {
+    if ops.is_empty() {
+        format!("$0x{n:x}")
+    } else {
+        format!("$0x{n:x},{ops}")
+    }
+}
+
+/// The size letter implied by a source register operand (`%r11w` -> `w`), or
+/// `None` for a memory operand (whose size cannot be read off the operand).
+#[cfg(feature = "fuzz-xed")]
+fn reg_source_size(op: &str) -> Option<&'static str> {
+    let reg = op.strip_prefix('%')?;
+    if reg.contains('(') {
+        return None; // memory operand
+    }
+    const B: &[&str] = &[
+        "al", "bl", "cl", "dl", "sil", "dil", "spl", "bpl", "ah", "bh", "ch", "dh",
+    ];
+    const W: &[&str] = &["ax", "bx", "cx", "dx", "si", "di", "sp", "bp"];
+    const D: &[&str] = &["eax", "ebx", "ecx", "edx", "esi", "edi", "esp", "ebp"];
+    if B.contains(&reg) || (reg.starts_with('r') && reg.ends_with('b')) {
+        Some("b")
+    } else if W.contains(&reg) || (reg.starts_with('r') && reg.ends_with('w')) {
+        Some("w")
+    } else if D.contains(&reg) || (reg.starts_with('r') && reg.ends_with('d')) {
+        Some("d")
+    } else {
+        Some("q")
+    }
+}
+
+/// Canonicalize a move-with-zero/sign-extension mnemonic so the assembler's
+/// two-size AT&T spelling and XED's spelling compare equal.
+///
+/// The assembler writes `mov{z,s}<src><dst>` (e.g. `movzbl`, `movswq`). XED
+/// writes `mov{z,s}x<src>` (e.g. `movzxb`, `movsxd`) or, when a register source
+/// already states the width, just `mov{z,s}x`. Both agree on the destination
+/// via the register operand, so we reduce each to `mov{z,s}x<src>` with the
+/// source size taken from the mnemonic when present, else inferred from the
+/// source operand `ops`; the 32-bit source is normalized (`l` and `d` both mean
+/// doubleword). Returns `None` for any mnemonic that is not one of these.
+#[cfg(feature = "fuzz-xed")]
+fn canonical_movext_mnemonic(m: &str, ops: &str) -> Option<String> {
+    fn norm_src(s: &str) -> &str {
+        match s {
+            "l" | "d" => "d",
+            other => other,
+        }
+    }
+    let source_op = ops.split(',').next().unwrap_or(ops);
+    for kind in ['z', 's'] {
+        let prefix = format!("mov{kind}");
+        let Some(rest) = m.strip_prefix(&prefix) else {
+            continue;
+        };
+        // XED form: `x`, optionally followed by a single source-size letter
+        // (`movzxb`, or bare `movzx`). `movsxd` may carry a redundant trailing
+        // operand-size suffix (`movsxdl` = movsxd + l).
+        if let Some(src) = rest.strip_prefix('x') {
+            let src = match src.strip_suffix(['b', 'w', 'l', 'q']) {
+                Some(s) if !s.is_empty() => s,
+                _ => src,
+            };
+            return match src.len() {
+                0 => reg_source_size(source_op).map(|s| format!("mov{kind}x{}", norm_src(s))),
+                1 => Some(format!("mov{kind}x{}", norm_src(src))),
+                _ => None,
+            };
+        }
+        // Assembler form: exactly a source-size then destination-size letter
+        // (`movzbl`). Anything else (e.g. `movsd`, `movsldup`) is not a
+        // move-with-extension mnemonic.
+        if rest.len() == 2 {
+            return Some(format!("mov{kind}x{}", norm_src(&rest[0..1])));
+        }
+        return None;
+    }
+    None
+}
+
+/// Canonicalize the sign/zero-extending "convert" instructions, whose AT&T and
+/// Intel mnemonics differ for the same opcode (e.g. AT&T `cltq` vs Intel
+/// `cdqe`). Returns the input unchanged if it is not one of these mnemonics.
+#[cfg(feature = "fuzz-xed")]
+fn canonical_convert_mnemonic(m: &str) -> &str {
+    match m {
+        "cbtw" | "cbw" => "cbw",
+        "cwtl" | "cwde" => "cwde",
+        "cltq" | "cdqe" => "cdqe",
+        "cwtd" | "cwd" => "cwd",
+        "cltd" | "cdq" => "cdq",
+        "cqto" | "cqo" => "cqo",
+        other => other,
+    }
+}
+
+/// Canonicalize a conditional-instruction mnemonic so that different spellings
+/// of the same condition code compare equal.
+///
+/// x86 condition codes have multiple mnemonic aliases that denote the identical
+/// flag test, e.g. `ae` (above-or-equal), `nb` (not-below), and `nc`
+/// (not-carry) are the same condition. The assembler and XED may pick different
+/// aliases, so for the conditional families (`cmov`, `set`, and the `j`
+/// conditional jumps) we split off an optional trailing operand-size suffix,
+/// map the condition code to a canonical representative, and return
+/// `prefix + canonical-cc` (dropping the size suffix, which is already implied
+/// by the operands that have been matched separately).
+///
+/// Returns `None` if `m` is not a recognized conditional mnemonic, so callers
+/// can fall through to other comparisons.
+#[cfg(feature = "fuzz-xed")]
+fn canonical_condition_mnemonic(m: &str) -> Option<String> {
+    // Map every condition-code alias to a canonical representative. Aliases on
+    // the same line denote the same condition.
+    fn canonical_cc(cc: &str) -> Option<&'static str> {
+        Some(match cc {
+            "e" | "z" => "e",
+            "ne" | "nz" => "ne",
+            "b" | "c" | "nae" => "b",
+            "ae" | "nb" | "nc" => "ae",
+            "be" | "na" => "be",
+            "a" | "nbe" => "a",
+            "l" | "nge" => "l",
+            "ge" | "nl" => "ge",
+            "le" | "ng" => "le",
+            "g" | "nle" => "g",
+            "p" | "pe" => "p",
+            "np" | "po" => "np",
+            "o" => "o",
+            "no" => "no",
+            "s" => "s",
+            "ns" => "ns",
+            _ => return None,
+        })
+    }
+
+    // The conditional families we normalize. `j` must be tried last so that
+    // longer prefixes (`cmov`) are matched first.
+    for prefix in ["cmov", "set", "j"] {
+        let Some(rest) = m.strip_prefix(prefix) else {
+            continue;
+        };
+
+        // `rest` is the condition code, possibly followed by a single
+        // operand-size suffix (`cmovbq` = `cmov` + `b` + `q`). Only treat a
+        // trailing size character as a suffix when the remainder is itself a
+        // valid condition code; this avoids mis-parsing codes that genuinely
+        // end in a size-like letter (`nl`, `nb`).
+        let cc = match rest.strip_suffix(['b', 'w', 'l', 'q']) {
+            Some(stripped) if canonical_cc(stripped).is_some() => stripped,
+            _ => rest,
+        };
+
+        return canonical_cc(cc).map(|c| format!("{prefix}{c}"));
+    }
+
+    None
 }
 
 /// Rewrite every `$`-prefixed immediate in a disassembly string into a single
@@ -511,6 +905,61 @@ fn canonicalize_immediates(dis: &str) -> String {
         rest = tail;
     }
     out.push_str(rest);
+    out
+}
+
+/// Parse a complete numeric token of the form `[-]?(0x)?<digits>` and re-emit
+/// it in the canonical `0x{:x}` form used throughout XED normalization. Returns
+/// `None` if `s` is not entirely a valid number.
+#[cfg(feature = "fuzz-xed")]
+fn canonicalize_one_number(s: &str) -> Option<String> {
+    let (neg, num) = match s.strip_prefix('-') {
+        Some(n) => (true, n),
+        None => (false, s),
+    };
+    let (radix, digits) = match num.strip_prefix("0x") {
+        Some(d) => (16, d),
+        None => (10, num),
+    };
+    if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
+        return None;
+    }
+    let value = u64::from_str_radix(digits, radix).ok()?;
+    let value = if neg { value.wrapping_neg() } else { value };
+    Some(format!("0x{value:x}"))
+}
+
+/// Rewrite every numeric memory displacement--the number immediately preceding
+/// a `(` base/index group--into the same canonical `0x{:x}` form used for
+/// immediates, so decimal-vs-hex differences in displacements don't cause
+/// spurious mismatches (`-8(%rax)` vs `-0x8(%rax)`).
+#[cfg(feature = "fuzz-xed")]
+fn canonicalize_displacements(dis: &str) -> String {
+    let mut out = String::with_capacity(dis.len());
+    for ch in dis.chars() {
+        if ch != '(' {
+            out.push(ch);
+            continue;
+        }
+        // Walk backwards over any trailing displacement token in `out`:
+        // hex digits, an optional `0x` prefix, and an optional leading `-`.
+        let b = out.as_bytes();
+        let mut start = out.len();
+        while start > 0 && b[start - 1].is_ascii_hexdigit() {
+            start -= 1;
+        }
+        if start >= 2 && &out[start - 2..start] == "0x" {
+            start -= 2;
+        }
+        if start > 0 && b[start - 1] == b'-' {
+            start -= 1;
+        }
+        if let Some(canon) = canonicalize_one_number(&out[start..]) {
+            out.truncate(start);
+            out.push_str(&canon);
+        }
+        out.push('(');
+    }
     out
 }
 
@@ -662,16 +1111,16 @@ mod test {
     /// Same as [`smoke`], but exercises the Intel XED oracle. Only available
     /// with the `fuzz-xed` feature.
     ///
-    /// This is `#[ignore]`d for now: XED and the assembler agree on decoding,
-    /// but reconciling every one of XED's printing conventions is a work in
-    /// progress. The [`xed_matches`] predicate already handles operand-size
-    /// suffixes, vector-length markers, whitespace, immediate formatting, and
-    /// explicit SIB scales; the remaining known gap is condition-code mnemonic
-    /// aliases (e.g. `cmovnl` vs `cmovge`). Run explicitly with
-    /// `cargo test --features fuzz-xed -- --ignored smoke_xed`.
+    /// XED decodes the same bytes as the assembler but pretty-prints them with
+    /// a number of different conventions; the [`xed_matches`] predicate
+    /// reconciles them (operand-size suffixes, vector-length markers,
+    /// whitespace, immediate/displacement/branch-target formatting, explicit
+    /// SIB scales, legacy prefixes, condition-code aliases, the AT&T/Intel
+    /// convert mnemonics, `movabs`, the move-with-extension mnemonics, implicit
+    /// operands, and the compare pseudo-ops). Run explicitly with
+    /// `cargo test --features fuzz-xed -- smoke_xed`.
     #[cfg(feature = "fuzz-xed")]
     #[test]
-    #[ignore = "XED disassembly normalization is a work in progress"]
     fn smoke_xed() {
         let count = AtomicUsize::new(0);
         arbtest(|u| {
