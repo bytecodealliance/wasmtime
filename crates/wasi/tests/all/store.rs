@@ -48,6 +48,8 @@ impl<T> Ctx<T> {
         builder
             .args(&[name, "."])
             .inherit_network()
+            .allow_tcp(true)
+            .allow_udp(true)
             .allow_ip_name_lookup(true);
         println!("preopen: {workspace:?}");
         builder.preopened_dir(workspace.path(), ".", DirPerms::all(), FilePerms::all())?;

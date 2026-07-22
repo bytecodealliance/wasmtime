@@ -81,21 +81,11 @@ pub trait WasiSocketsView: Send {
     fn sockets(&mut self) -> WasiSocketsCtxView<'_>;
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub(crate) struct AllowedNetworkUses {
     pub(crate) ip_name_lookup: bool,
     pub(crate) udp: bool,
     pub(crate) tcp: bool,
-}
-
-impl Default for AllowedNetworkUses {
-    fn default() -> Self {
-        Self {
-            ip_name_lookup: false,
-            udp: true,
-            tcp: true,
-        }
-    }
 }
 
 impl AllowedNetworkUses {

@@ -3008,7 +3008,7 @@ start a print 1234
 
     #[test]
     fn p3_cli_deny_listen() -> Result<()> {
-        run_wasmtime(&["run", P3_CLI_DENY_LISTEN_COMPONENT])?;
+        run_wasmtime(&["run", "-Stcp", P3_CLI_DENY_LISTEN_COMPONENT])?;
         Ok(())
     }
 }

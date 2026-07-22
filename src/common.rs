@@ -364,6 +364,9 @@ impl RunCommon {
 
         if self.common.wasi.inherit_network == Some(true) {
             builder.inherit_network();
+            // Implicitly enable TCP/UDP if the entire network is being
+            // inherited to avoid the need to also pass `-Stcp,udp`.
+            builder.allow_tcp(true).allow_udp(true);
         }
         if let Some(enable) = self.common.wasi.allow_ip_name_lookup {
             builder.allow_ip_name_lookup(enable);
