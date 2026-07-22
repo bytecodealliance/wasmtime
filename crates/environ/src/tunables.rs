@@ -540,6 +540,89 @@ impl OperatorCostStrategy {
             OperatorCostStrategy::Default => default_operator_cost(op),
         }
     }
+
+    /// Get the costs of work whose size is only known at runtime.
+    pub fn variable(&self) -> &VariableOperatorCost {
+        match self {
+            OperatorCostStrategy::Table(cost) => &cost.variable,
+            OperatorCostStrategy::Default => &DEFAULT_VARIABLE_OPERATOR_COST,
+        }
+    }
+}
+
+const DEFAULT_VARIABLE_OPERATOR_COST: VariableOperatorCost = VariableOperatorCost::new();
+
+/// Fuel costs for operators whose work is proportional to a runtime operand.
+///
+/// These costs are charged in addition to the corresponding flat cost in
+/// [`OperatorCost`].
+#[derive(Clone, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct VariableOperatorCost {
+    /// Cost per byte copied by `memory.copy`.
+    pub memory_copy_per_byte: u8,
+    /// Cost per byte written by `memory.fill`.
+    pub memory_fill_per_byte: u8,
+    /// Cost per byte copied by `memory.init`.
+    pub memory_init_per_byte: u8,
+    /// Cost per page requested by `memory.grow`.
+    pub memory_grow_per_page: u8,
+
+    /// Cost per element copied by `table.copy`.
+    pub table_copy_per_element: u8,
+    /// Cost per element written by `table.fill`.
+    pub table_fill_per_element: u8,
+    /// Cost per element copied by `table.init`.
+    pub table_init_per_element: u8,
+    /// Cost per element requested by `table.grow`.
+    pub table_grow_per_element: u8,
+
+    /// Cost per element copied by `array.copy`.
+    pub array_copy_per_element: u8,
+    /// Cost per element written by `array.fill`.
+    pub array_fill_per_element: u8,
+    /// Cost per element initialized by `array.new_data`.
+    pub array_new_data_per_element: u8,
+    /// Cost per element initialized by `array.init_data`.
+    pub array_init_data_per_element: u8,
+    /// Cost per element initialized by `array.new_elem`.
+    pub array_new_elem_per_element: u8,
+    /// Cost per element initialized by `array.init_elem`.
+    pub array_init_elem_per_element: u8,
+    /// Cost per element initialized by `array.new_default`.
+    pub array_new_default_per_element: u8,
+    /// Cost per element initialized by `array.new`.
+    pub array_new_per_element: u8,
+}
+
+impl VariableOperatorCost {
+    /// Creates the default variable-cost table.
+    pub const fn new() -> Self {
+        Self {
+            memory_copy_per_byte: 1,
+            memory_fill_per_byte: 1,
+            memory_init_per_byte: 1,
+            // `memory.grow` did not previously have a dynamic fuel charge.
+            memory_grow_per_page: 0,
+            table_copy_per_element: 1,
+            table_fill_per_element: 1,
+            table_init_per_element: 1,
+            table_grow_per_element: 1,
+            array_copy_per_element: 1,
+            array_fill_per_element: 1,
+            array_new_data_per_element: 1,
+            array_init_data_per_element: 1,
+            array_new_elem_per_element: 1,
+            array_init_elem_per_element: 1,
+            array_new_default_per_element: 1,
+            array_new_per_element: 1,
+        }
+    }
+}
+
+impl Default for VariableOperatorCost {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 const fn default_operator_cost(op: &Operator) -> i64 {
@@ -608,6 +691,8 @@ macro_rules! define_operator_cost {
             $(
                 pub $op: u8,
             )*
+            /// Costs for work whose size is only known at runtime.
+            pub variable: VariableOperatorCost,
         }
 
         impl OperatorCost {
@@ -629,6 +714,7 @@ macro_rules! define_operator_cost {
                     $(
                         $op: default_cost!($op),
                     )*
+                    variable: VariableOperatorCost::new(),
                 }
             }
         }
