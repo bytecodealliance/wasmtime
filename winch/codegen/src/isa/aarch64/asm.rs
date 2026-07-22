@@ -497,6 +497,16 @@ impl Assembler {
         });
     }
 
+    /// Vector reduction across lanes
+    pub fn vec_lanes(&mut self, op: VecLanesOp, rn: Reg, rd: WritableReg, size: VectorSize) {
+        self.emit(Inst::VecLanes {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+        });
+    }
+
     /// Vector ALU op
     pub fn vec_rrr(
         &mut self,
