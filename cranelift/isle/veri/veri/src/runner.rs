@@ -1207,14 +1207,13 @@ impl Runner {
         let backend_name = solver_backend.prog();
 
         // Check cache before invoking solver reasoning.
-        if let Some(cache) = &self.cache_store {
-            if let Some((verdict, model)) = cache.check(&baseline, backend_name)? {
-                // Cache hit — return cached result without solver reasoning.
-                writeln!(output, "\t\tcache hit: {}", verdict)?;
-                let report = self.cache_verdict_to_verify_report(verdict, model, init_time);
-                return Ok(report);
-            }
-            // check() already handled read-only-enforcing mode internally
+        if let Some(cache) = &self.cache_store
+            && let Some((verdict, model)) = cache.check(&baseline, backend_name)?
+        {
+            // Cache hit — return cached result without solver reasoning.
+            writeln!(output, "\t\tcache hit: {}", verdict)?;
+            let report = self.cache_verdict_to_verify_report(verdict, model, init_time);
+            return Ok(report);
         }
 
         // Applicability check.
@@ -1280,8 +1279,8 @@ impl Runner {
                         &baseline,
                         backend_name,
                         CacheVerdict::Unknown,
-                        init_time.as_millis() as u64,
-                        applicable_time.as_millis() as u64,
+                        u64::try_from(init_time.as_millis()).unwrap(),
+                        u64::try_from(applicable_time.as_millis()).unwrap(),
                     );
                 }
                 return Ok(VerifyReport {
@@ -1296,7 +1295,7 @@ impl Runner {
         // Verify.
         let start = time::Instant::now();
         let verification = solver.check_verification_condition()?;
-        let verify_time = Some(start.elapsed());
+        let verify_time = start.elapsed();
 
         writeln!(output, "\t\tverification = {verification}")?;
 
@@ -1313,8 +1312,8 @@ impl Runner {
                 &baseline,
                 backend_name,
                 verdict,
-                init_time.as_millis() as u64,
-                verify_time.unwrap().as_millis() as u64,
+                u64::try_from(init_time.as_millis()).unwrap(),
+                u64::try_from(verify_time.as_millis()).unwrap(),
             );
         }
 
@@ -1349,20 +1348,20 @@ impl Runner {
                     verdict: Verdict::Failure,
                     init_time,
                     applicable_time,
-                    verify_time,
+                    verify_time: Some(verify_time),
                 }
             }
             Verification::Success => VerifyReport {
                 verdict: Verdict::Success,
                 init_time,
                 applicable_time,
-                verify_time,
+                verify_time: Some(verify_time),
             },
             Verification::Unknown => VerifyReport {
                 verdict: Verdict::Unknown,
                 init_time,
                 applicable_time,
-                verify_time,
+                verify_time: Some(verify_time),
             },
         })
     }

@@ -312,7 +312,6 @@ mod tests {
     fn test_roundtrip() {
         let dir = temp_cache_dir();
         let store = CacheStore::open(dir.clone(), CacheMode::ReadWrite);
-        let dir_for_cleanup = dir.clone();
 
         let (short_key, full_sha256) = CacheStore::compute_key("(set-logic ALL)", "cvc5");
         let entry = CacheEntry {

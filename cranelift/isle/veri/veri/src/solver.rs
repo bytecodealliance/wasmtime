@@ -889,7 +889,7 @@ impl<'a> Solver<'a> {
             self.send_and_capture(self.smt.list(vec![
                 self.smt.atom("declare-fun"),
                 self.smt.atom(&func),
-                self.smt.list(vec![bv_sort.clone()]),
+                self.smt.list(vec![bv_sort]),
                 bv_sort,
             ]))?;
         }
