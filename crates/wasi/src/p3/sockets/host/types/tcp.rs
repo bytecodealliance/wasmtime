@@ -10,7 +10,6 @@ use core::iter;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use std::net::SocketAddr;
-use std::task::ready;
 use tokio::sync::oneshot;
 use wasmtime::component::{
     Access, Accessor, Destination, FutureReader, Resource, ResourceTable, Source, StreamConsumer,
@@ -58,19 +57,20 @@ where
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        if finish {
-            return Poll::Ready(Ok(StreamResult::Cancelled));
-        }
-
         // If the destination buffer is empty then this is a readiness check.
         if dst.remaining(&mut store) == Some(0) {
             return match self.listener.poll_ready(cx) {
                 Poll::Ready(()) => Poll::Ready(Ok(StreamResult::Completed)),
+                Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
                 Poll::Pending => Poll::Pending,
             };
         }
 
-        let socket = ready!(self.listener.poll_accept(cx));
+        let socket = match self.listener.poll_accept(cx) {
+            Poll::Ready(socket) => socket,
+            Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => return Poll::Pending,
+        };
         let ctx = (self.getter)(store.data_mut());
         let socket = ctx
             .table
@@ -111,33 +111,33 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
         let Some((stream, _)) = self.0.as_mut() else {
             return Poll::Ready(Ok(StreamResult::Dropped));
         };
-        if finish {
-            return Poll::Ready(Ok(StreamResult::Cancelled));
-        }
 
         // 0-length read is a readiness check.
         if dst.remaining(store.as_context_mut()) == Some(0) {
             return match stream.poll_ready(cx) {
                 Poll::Ready(()) => Poll::Ready(Ok(StreamResult::Completed)),
+                Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
                 Poll::Pending => Poll::Pending,
             };
         }
 
         let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
         let buf = dst.remaining();
-        match ready!(stream.poll_read(cx, buf)) {
-            Ok(0) => {
+        match stream.poll_read(cx, buf) {
+            Poll::Ready(Ok(0)) => {
                 self.close(Ok(()));
                 Poll::Ready(Ok(StreamResult::Dropped))
             }
-            Ok(n) => {
+            Poll::Ready(Ok(n)) => {
                 dst.mark_written(n);
                 Poll::Ready(Ok(StreamResult::Completed))
             }
-            Err(err) => {
+            Poll::Ready(Err(err)) => {
                 self.close(Err(err.into()));
                 Poll::Ready(Ok(StreamResult::Dropped))
             }
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -171,9 +171,6 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
         let Some((stream, _)) = self.0.as_mut() else {
             return Poll::Ready(Ok(StreamResult::Dropped));
         };
-        if finish {
-            return Poll::Ready(Ok(StreamResult::Cancelled));
-        }
 
         let mut src = src.as_direct(store);
 
@@ -181,20 +178,23 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
         if src.remaining().is_empty() {
             return match stream.poll_ready(cx) {
                 Poll::Ready(()) => Poll::Ready(Ok(StreamResult::Completed)),
+                Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
                 Poll::Pending => Poll::Pending,
             };
         }
 
-        match ready!(stream.poll_write(cx, src.remaining())) {
-            Ok(n) => {
+        match stream.poll_write(cx, src.remaining()) {
+            Poll::Ready(Ok(n)) => {
                 debug_assert!(n > 0);
                 src.mark_read(n);
                 Poll::Ready(Ok(StreamResult::Completed))
             }
-            Err(err) => {
+            Poll::Ready(Err(err)) => {
                 self.close(Err(err.into()));
                 Poll::Ready(Ok(StreamResult::Dropped))
             }
+            Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
+            Poll::Pending => Poll::Pending,
         }
     }
 }
