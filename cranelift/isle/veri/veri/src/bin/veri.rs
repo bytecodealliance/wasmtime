@@ -99,18 +99,29 @@ struct Opts {
     #[arg(long)]
     debug: bool,
 
-    /// Enable caching with the given cache directory (JSON file store).
+    /// Read cached SMT query results from this directory (read-only).
     ///
-    /// When specified, SMT query results are cached to JSON files under the
-    /// given directory. Subsequent runs with the same encoding can skip
-    /// solver invocation entirely by reading from the cache.
+    /// Cache hits found here are served without invoking the solver. In
+    /// `read-write` mode, entries used from the source are also copied into
+    /// the destination (see `--cache-dest-dir`).
     #[arg(long)]
-    cache_dir: Option<std::path::PathBuf>,
+    cache_source_dir: Option<std::path::PathBuf>,
 
-    /// Cache read/write mode.
+    /// Write (and read) cached SMT query results in this directory.
     ///
-    /// - `read-write` (default): read from and write to the cache.
-    /// - `read-only-enforcing`: only read from the cache; fail on cache miss.
+    /// New results (solver invocations on a cache miss) are written here, as
+    /// are entries retained from the source. Required in `read-write` mode.
+    #[arg(long)]
+    cache_dest_dir: Option<std::path::PathBuf>,
+
+    /// Cache mode.
+    ///
+    /// - `read-write` (default): serve hits from the source and destination
+    ///   caches; on a miss, invoke the solver and write the result to the
+    ///   destination. Requires `--cache-dest-dir`.
+    /// - `read-only-enforcing`: serve hits from the source cache only and fail
+    ///   the run on any miss (never invokes the solver). Requires
+    ///   `--cache-source-dir`.
     #[arg(long, value_enum, default_value = "read-write")]
     cache_mode: CacheMode,
 }
@@ -280,9 +291,27 @@ fn main() -> Result<()> {
     runner.skip_solver(opts.skip_solver);
     runner.debug(opts.debug);
 
-    // Setup caching if --cache-dir is provided.
-    if let Some(cache_dir) = &opts.cache_dir {
-        let store = CacheStore::open(cache_dir.clone(), opts.cache_mode);
+    // Setup caching if any cache directory is provided.
+    let caching = opts.cache_source_dir.is_some() || opts.cache_dest_dir.is_some();
+    if caching {
+        match opts.cache_mode {
+            CacheMode::ReadOnlyEnforcing if opts.cache_source_dir.is_none() => {
+                return Err(format_err!(
+                    "--cache-mode read-only-enforcing requires --cache-source-dir"
+                ));
+            }
+            CacheMode::ReadWrite if opts.cache_dest_dir.is_none() => {
+                return Err(format_err!(
+                    "--cache-mode read-write requires --cache-dest-dir"
+                ));
+            }
+            _ => {}
+        }
+        let store = CacheStore::open(
+            opts.cache_source_dir.clone(),
+            opts.cache_dest_dir.clone(),
+            opts.cache_mode,
+        );
         runner.set_cache_store(Arc::new(store));
     }
 
@@ -332,12 +361,14 @@ fn main() -> Result<()> {
     println!("==========================");
 
     // Print cache config.
-    if let Some(cache_dir) = &opts.cache_dir {
-        println!(
-            "Cache:              {} (mode: {:?})",
-            cache_dir.display(),
-            opts.cache_mode
-        );
+    if caching {
+        let dir_str = |d: &Option<std::path::PathBuf>| match d {
+            Some(p) => p.display().to_string(),
+            None => "(none)".to_string(),
+        };
+        println!("Cache mode:         {:?}", opts.cache_mode);
+        println!("Cache source:       {}", dir_str(&opts.cache_source_dir));
+        println!("Cache destination:  {}", dir_str(&opts.cache_dest_dir));
     } else {
         println!("Cache:              off");
     }

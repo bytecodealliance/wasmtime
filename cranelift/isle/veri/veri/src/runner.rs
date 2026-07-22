@@ -1187,8 +1187,38 @@ impl Runner {
     ) -> Result<VerifyReport> {
         let start = time::Instant::now();
 
-        // Solve.
         let binary = solver_backend.prog();
+        let backend_name = binary;
+
+        // If caching is enabled, derive the cache key *without* spawning a
+        // solver: a recording pass replays the encoding through a
+        // subprocess-less context, reproducing the exact SMT-LIB2 transcript a
+        // live run would have sent. On a cache hit we return immediately,
+        // never invoking the solver at all.
+        let baseline = if self.cache_store.is_some() {
+            let smt = easy_smt::ContextBuilder::new().build()?;
+            let mut recorder = Solver::new_recording(smt, &self.prog, conditions, assignment)?;
+            recorder.set_dialect(solver_backend.dialect());
+            recorder.encode()?;
+            Some(recorder.transcript())
+        } else {
+            None
+        };
+
+        if let (Some(cache), Some(baseline)) = (&self.cache_store, &baseline)
+            && let Some((verdict, model)) = cache.check(baseline, backend_name)?
+        {
+            // Cache hit — return the cached result without spawning the solver.
+            let init_time = start.elapsed();
+            writeln!(output, "\t\tcache hit: {}", verdict)?;
+            return Ok(self.cache_verdict_to_verify_report(verdict, model, init_time));
+        }
+        // A miss in read-only-enforcing mode already returned an error from
+        // `check()` above; a miss in read-write mode (or caching disabled)
+        // falls through to a real solve.
+
+        // Solve.
+        let start = time::Instant::now();
         let args = solver_backend.args(self.timeout);
         let replay_file = Self::open_log_file(log_dir.clone(), "solver.smt2")?;
         let smt = easy_smt::ContextBuilder::new()
@@ -1202,20 +1232,6 @@ impl Runner {
         solver.encode()?;
         let init_time = start.elapsed();
 
-        // Take baseline transcript for cache key derivation.
-        let baseline = solver.take_baseline_transcript();
-        let backend_name = solver_backend.prog();
-
-        // Check cache before invoking solver reasoning.
-        if let Some(cache) = &self.cache_store
-            && let Some((verdict, model)) = cache.check(&baseline, backend_name)?
-        {
-            // Cache hit — return cached result without solver reasoning.
-            writeln!(output, "\t\tcache hit: {}", verdict)?;
-            let report = self.cache_verdict_to_verify_report(verdict, model, init_time);
-            return Ok(report);
-        }
-
         // Applicability check.
         let start = time::Instant::now();
         let applicability = solver.check_assumptions_feasibility()?;
@@ -1226,10 +1242,10 @@ impl Runner {
             Applicability::Applicable => (),
             Applicability::Inapplicable => {
                 // Cache the inapplicable result.
-                if let Some(cache) = &self.cache_store {
+                if let (Some(cache), Some(baseline)) = (&self.cache_store, &baseline) {
                     let _ = self.store_cache_entry(
                         cache,
-                        &baseline,
+                        baseline,
                         backend_name,
                         CacheVerdict::Inapplicable,
                         init_time.as_millis() as u64,
@@ -1273,10 +1289,10 @@ impl Runner {
                 });
 
                 // Cache the unknown result.
-                if let Some(cache) = &self.cache_store {
+                if let (Some(cache), Some(baseline)) = (&self.cache_store, &baseline) {
                     let _ = self.store_cache_entry(
                         cache,
-                        &baseline,
+                        baseline,
                         backend_name,
                         CacheVerdict::Unknown,
                         u64::try_from(init_time.as_millis()).unwrap(),
@@ -1300,8 +1316,7 @@ impl Runner {
         writeln!(output, "\t\tverification = {verification}")?;
 
         // Cache the verification result.
-        if let Some(cache) = &self.cache_store {
-            let _ = solver.take_phase_transcript();
+        if let (Some(cache), Some(baseline)) = (&self.cache_store, &baseline) {
             let verdict = match &verification {
                 Verification::Success => CacheVerdict::Success,
                 Verification::Failure(_) => CacheVerdict::Failure,
@@ -1309,7 +1324,7 @@ impl Runner {
             };
             let _ = self.store_cache_entry(
                 cache,
-                &baseline,
+                baseline,
                 backend_name,
                 verdict,
                 u64::try_from(init_time.as_millis()).unwrap(),

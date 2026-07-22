@@ -12,12 +12,15 @@ use sha2::Digest;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub enum CacheMode {
-    /// No caching. Delegates all queries to the solver.
-    Off,
-    /// Read-only, enforcing. Use cached results; fail the run on cache miss.
+    /// Read-only, enforcing. Use cached results from the source cache; fail the
+    /// run on a cache miss. Never invokes the solver.
     ReadOnlyEnforcing,
-    /// Read-write. Use cached results when available; invoke the solver and
-    /// cache new results on miss.
+    /// Read-write. Use cached results found in either the source or the
+    /// destination cache; on a miss, invoke the solver and write the new
+    /// result to the destination. Results found only in the source are also
+    /// copied into the destination, so the destination ends up holding exactly
+    /// the entries the run used — enabling cache garbage collection (a rebuild
+    /// that drops unused entries).
     ReadWrite,
 }
 
@@ -82,6 +85,7 @@ pub struct CacheStats {
     hits: AtomicUsize,
     misses: AtomicUsize,
     stores: AtomicUsize,
+    retained: AtomicUsize,
     errors: AtomicUsize,
 }
 
@@ -98,26 +102,42 @@ impl CacheStats {
         self.stores.fetch_add(1, Relaxed);
     }
 
+    fn inc_retained(&self) {
+        self.retained.fetch_add(1, Relaxed);
+    }
+
     #[allow(dead_code)]
     fn inc_errors(&self) {
         self.errors.fetch_add(1, Relaxed);
     }
 
-    /// Snapshot current stats as (hits, misses, stores, errors).
-    fn snapshot(&self) -> (usize, usize, usize, usize) {
+    /// Snapshot current stats as (hits, misses, stores, retained, errors).
+    fn snapshot(&self) -> (usize, usize, usize, usize, usize) {
         (
             self.hits.load(Relaxed),
             self.misses.load(Relaxed),
             self.stores.load(Relaxed),
+            self.retained.load(Relaxed),
             self.errors.load(Relaxed),
         )
     }
 }
 
-/// Persistent cache store backed by a directory of JSON files.
+/// Persistent cache store backed by directories of JSON files.
+///
+/// A store has an optional read-only `source` directory and an optional
+/// read-write `destination` directory. Lookups consult the destination first,
+/// then the source. In [`CacheMode::ReadWrite`], a result found only in the
+/// source is copied into the destination, so that after a full run the
+/// destination contains exactly the entries the run used — the basis for a
+/// garbage-collecting cache rebuild.
 pub struct CacheStore {
-    /// Directory containing cache entry files.
-    dir: PathBuf,
+    /// Read-only source directory consulted for cache hits.
+    source: Option<PathBuf>,
+    /// Destination directory: consulted for hits, and where entries are
+    /// written — both freshly-computed results and hits retained from
+    /// `source`.
+    dest: Option<PathBuf>,
     /// Operating mode.
     mode: CacheMode,
     /// Runtime statistics.
@@ -125,14 +145,19 @@ pub struct CacheStore {
 }
 
 impl CacheStore {
-    /// Open a cache at the given directory and mode.
+    /// Open a cache with the given source and destination directories and mode.
     ///
-    /// Creates the directory if it doesn't exist.
-    pub fn open(dir: PathBuf, mode: CacheMode) -> Self {
-        std::fs::create_dir_all(&dir)
-            .unwrap_or_else(|e| panic!("failed to create cache directory {}: {e}", dir.display()));
+    /// The destination directory (if any) is created if it doesn't exist. The
+    /// source directory is treated as read-only and is not created.
+    pub fn open(source: Option<PathBuf>, dest: Option<PathBuf>, mode: CacheMode) -> Self {
+        if let Some(dest) = &dest {
+            std::fs::create_dir_all(dest).unwrap_or_else(|e| {
+                panic!("failed to create cache directory {}: {e}", dest.display())
+            });
+        }
         Self {
-            dir,
+            source,
+            dest,
             mode,
             stats: CacheStats::default(),
         }
@@ -151,13 +176,13 @@ impl CacheStore {
         (short, full)
     }
 
-    /// Look up a cached result by key.
+    /// Look up a cached result by key in a specific directory.
     ///
     /// - `Ok(Some(entry))` on cache hit (file exists and full hash matches)
     /// - `Ok(None)` on cache miss (no file, parse error, or hash mismatch)
     /// - `Err(e)` on unexpected I/O errors
-    pub fn lookup(&self, short_key: &str, expected_sha256: &str) -> Result<Option<CacheEntry>> {
-        let path = self.dir.join(format!("{short_key}.json"));
+    fn lookup_in(dir: &Path, short_key: &str, expected_sha256: &str) -> Result<Option<CacheEntry>> {
+        let path = dir.join(format!("{short_key}.json"));
 
         if !path.exists() {
             return Ok(None);
@@ -190,21 +215,20 @@ impl CacheStore {
         Ok(Some(entry))
     }
 
-    /// Store a new cache entry.
-    ///
-    /// Uses atomic write (temp file + rename) to prevent corruption from
-    /// concurrent writes. No-op in `ReadOnlyEnforcing` mode.
-    pub fn store(&self, entry: CacheEntry) -> Result<()> {
-        if self.mode == CacheMode::ReadOnlyEnforcing {
-            return Ok(());
-        }
-
-        let path = self.dir.join(format!("{}.json", entry.short_key));
+    /// Write a cache entry into `dir`, using an atomic temp-file + rename to
+    /// prevent corruption from concurrent writes.
+    fn write_entry(dir: &Path, entry: &CacheEntry) -> Result<()> {
+        let path = dir.join(format!("{}.json", entry.short_key));
         let contents =
-            serde_json::to_string_pretty(&entry).with_context(|| "serializing cache entry")?;
+            serde_json::to_string_pretty(entry).with_context(|| "serializing cache entry")?;
 
-        // Write to a temp file first, then rename for atomicity.
-        let tmp_path = path.with_extension("json.tmp");
+        // Write to a temp file first, then rename for atomicity. The temp file
+        // name is made unique per write so concurrent writers (including two
+        // threads racing to persist the same key) don't clobber each other's
+        // temp file.
+        static TMP_SEQ: AtomicUsize = AtomicUsize::new(0);
+        let seq = TMP_SEQ.fetch_add(1, Relaxed);
+        let tmp_path = path.with_extension(format!("{}.{seq}.tmp", std::process::id()));
         std::fs::write(&tmp_path, &contents)
             .with_context(|| format!("writing cache entry temp file {}", tmp_path.display()))?;
 
@@ -216,11 +240,26 @@ impl CacheStore {
             )
         })?;
 
+        Ok(())
+    }
+
+    /// Store a freshly-computed cache entry into the destination cache.
+    ///
+    /// No-op if there is no destination directory (e.g. read-only-enforcing).
+    pub fn store(&self, entry: CacheEntry) -> Result<()> {
+        let Some(dest) = &self.dest else {
+            return Ok(());
+        };
+        Self::write_entry(dest, &entry)?;
         self.stats.inc_stores();
         Ok(())
     }
 
     /// Check a query against the cache.
+    ///
+    /// Consults the destination cache first, then the source. In read-write
+    /// mode, a result found only in the source is copied into the destination
+    /// (so the destination accumulates exactly the entries the run used).
     ///
     /// - `Ok(Some(verdict, model))` on cache hit
     /// - `Ok(None)` on cache miss (caller should invoke solver)
@@ -232,28 +271,49 @@ impl CacheStore {
     ) -> Result<Option<(CacheVerdict, Option<CacheModel>)>> {
         let (short_key, full_sha256) = Self::compute_key(smt2_text, solver_backend);
 
-        match self.lookup(&short_key, &full_sha256)? {
-            Some(entry) => {
-                self.stats.inc_hits();
-                Ok(Some((entry.verdict, entry.model)))
-            }
-            None => {
-                self.stats.inc_misses();
-                if self.mode == CacheMode::ReadOnlyEnforcing {
-                    bail!(
-                        "cache miss in read-only-enforcing mode: \
-                         key {short_key} not found in {}",
-                        self.dir.display()
-                    );
-                }
-                Ok(None)
-            }
+        // Destination first: freshly-written or already-retained entries.
+        if let Some(dest) = &self.dest
+            && let Some(entry) = Self::lookup_in(dest, &short_key, &full_sha256)?
+        {
+            self.stats.inc_hits();
+            return Ok(Some((entry.verdict, entry.model)));
         }
+
+        // Then the read-only source. Retain any hit into the destination so
+        // that the destination ends up holding exactly the used entries.
+        if let Some(source) = &self.source
+            && let Some(entry) = Self::lookup_in(source, &short_key, &full_sha256)?
+        {
+            self.stats.inc_hits();
+            if let Some(dest) = &self.dest {
+                Self::write_entry(dest, &entry)?;
+                self.stats.inc_retained();
+            }
+            return Ok(Some((entry.verdict, entry.model)));
+        }
+
+        // Miss.
+        self.stats.inc_misses();
+        if self.mode == CacheMode::ReadOnlyEnforcing {
+            bail!("cache miss in read-only-enforcing mode: key {short_key} not found");
+        }
+        Ok(None)
+    }
+
+    /// Count the number of cache entry files (`*.json`) in a directory.
+    fn count_entries(dir: &Path) -> usize {
+        std::fs::read_dir(dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+                    .count()
+            })
+            .unwrap_or(0)
     }
 
     /// Print cache statistics summary to stdout.
     pub fn print_stats(&self) {
-        let (hits, misses, stores, errors) = self.stats.snapshot();
+        let (hits, misses, stores, retained, _errors) = self.stats.snapshot();
         let total = hits + misses;
         let hit_pct = if total > 0 {
             hits as f64 / total as f64 * 100.0
@@ -263,34 +323,40 @@ impl CacheStore {
         let miss_pct = 100.0 - hit_pct;
 
         let mode_str = match self.mode {
-            CacheMode::Off => unreachable!("should not print stats when cache is off"),
             CacheMode::ReadOnlyEnforcing => "read-only-enforcing",
             CacheMode::ReadWrite => "read-write",
         };
+        let dir_str = |d: &Option<PathBuf>| match d {
+            Some(p) => p.display().to_string(),
+            None => "(none)".to_string(),
+        };
 
         println!("========================== Cache statistics ===========================");
-        println!("Mode:           {mode_str}");
-        println!("Directory:      {}", self.dir.display());
-        println!("Hits:           {hits} ({hit_pct:.1}%)");
-        println!("Misses:         {misses} ({miss_pct:.1}%)");
-        println!("New entries:    {stores}");
-        println!("Errors:         {errors}");
+        println!("Mode:            {mode_str}");
+        println!("Source:          {}", dir_str(&self.source));
+        println!("Destination:     {}", dir_str(&self.dest));
+        println!("Hits:            {hits} ({hit_pct:.1}%)");
+        println!("Misses:          {misses} ({miss_pct:.1}%)");
+        println!("New entries:     {stores}");
+        println!("Retained:        {retained}");
+
+        // When rebuilding into a fresh destination, report how many source
+        // entries went unused (and are therefore dropped by the rebuild).
+        if let (Some(source), Some(dest)) = (&self.source, &self.dest)
+            && source != dest
+        {
+            let source_count = Self::count_entries(source);
+            let dropped = source_count.saturating_sub(retained);
+            println!("Source entries:  {source_count}");
+            println!("Dropped (unused):{dropped:>4}");
+        }
         println!("========================================================================");
     }
 
-    /// Get a snapshot of current stats as (hits, misses, stores, errors).
-    pub fn snapshot_stats(&self) -> (usize, usize, usize, usize) {
+    /// Get a snapshot of current stats as (hits, misses, stores, retained,
+    /// errors).
+    pub fn snapshot_stats(&self) -> (usize, usize, usize, usize, usize) {
         self.stats.snapshot()
-    }
-
-    /// Get the current cache mode.
-    pub fn mode(&self) -> CacheMode {
-        self.mode
-    }
-
-    /// Get the cache directory path.
-    pub fn dir(&self) -> &Path {
-        &self.dir
     }
 }
 
@@ -308,81 +374,53 @@ mod tests {
         dir
     }
 
-    #[test]
-    fn test_roundtrip() {
-        let dir = temp_cache_dir();
-        let store = CacheStore::open(dir.clone(), CacheMode::ReadWrite);
-
-        let (short_key, full_sha256) = CacheStore::compute_key("(set-logic ALL)", "cvc5");
-        let entry = CacheEntry {
-            key_sha256: full_sha256.clone(),
-            short_key: short_key.clone(),
-            smt2_text: "(set-logic ALL)".to_string(),
-            solver_backend: "cvc5".to_string(),
-            solver_version: Some("cvc5 1.2.0".to_string()),
-            verdict: CacheVerdict::Success,
-            model: None,
-            init_ms: 5,
-            query_ms: 10,
-        };
-
-        store.store(entry).expect("store should succeed");
-
-        let looked_up = store
-            .lookup(&short_key, &full_sha256)
-            .expect("lookup should succeed");
-        assert!(looked_up.is_some());
-        let found = looked_up.unwrap();
-        assert_eq!(found.verdict, CacheVerdict::Success);
-        assert_eq!(found.solver_backend, "cvc5");
-        assert_eq!(found.solver_version, Some("cvc5 1.2.0".to_string()));
-        assert_eq!(found.init_ms, 5);
-        assert_eq!(found.query_ms, 10);
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn test_missing_key() {
-        let dir = temp_cache_dir();
-        let store = CacheStore::open(dir, CacheMode::ReadWrite);
-
-        let result = store
-            .lookup("nonexistent", "00000000000000000000000000000000")
-            .expect("lookup should succeed");
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_check_hit() {
-        let dir = temp_cache_dir();
-        let store = CacheStore::open(dir.clone(), CacheMode::ReadWrite);
-
-        // Store an entry
-        let smt2_text = "(set-logic ALL)";
-        let solver = "cvc5";
+    fn entry(smt2_text: &str, solver: &str, verdict: CacheVerdict) -> CacheEntry {
         let (short_key, full_sha256) = CacheStore::compute_key(smt2_text, solver);
-        let entry = CacheEntry {
+        CacheEntry {
             key_sha256: full_sha256,
             short_key,
             smt2_text: smt2_text.to_string(),
             solver_backend: solver.to_string(),
             solver_version: None,
-            verdict: CacheVerdict::Failure,
-            model: Some(CacheModel {
-                values: HashMap::from([("x".to_string(), "42".to_string())]),
-            }),
-            init_ms: 1,
-            query_ms: 2,
-        };
-        store.store(entry).expect("store should succeed");
+            verdict,
+            model: None,
+            init_ms: 5,
+            query_ms: 10,
+        }
+    }
 
-        // Check should return the cached result
+    #[test]
+    fn test_roundtrip() {
+        let dir = temp_cache_dir();
+        let store = CacheStore::open(None, Some(dir.clone()), CacheMode::ReadWrite);
+
+        store
+            .store(entry("(set-logic ALL)", "cvc5", CacheVerdict::Success))
+            .expect("store should succeed");
+
         let result = store
-            .check(smt2_text, solver)
+            .check("(set-logic ALL)", "cvc5")
             .expect("check should succeed");
-        assert!(result.is_some());
-        let (verdict, model) = result.unwrap();
+        assert_eq!(result.map(|(v, _)| v), Some(CacheVerdict::Success));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_check_hit_with_model() {
+        let dir = temp_cache_dir();
+        let store = CacheStore::open(None, Some(dir.clone()), CacheMode::ReadWrite);
+
+        let mut e = entry("(set-logic ALL)", "cvc5", CacheVerdict::Failure);
+        e.model = Some(CacheModel {
+            values: HashMap::from([("x".to_string(), "42".to_string())]),
+        });
+        store.store(e).expect("store should succeed");
+
+        let (verdict, model) = store
+            .check("(set-logic ALL)", "cvc5")
+            .expect("check should succeed")
+            .expect("should be a hit");
         assert_eq!(verdict, CacheVerdict::Failure);
         assert!(model.is_some());
 
@@ -392,27 +430,51 @@ mod tests {
     #[test]
     fn test_check_miss_readwrite() {
         let dir = temp_cache_dir();
-        let store = CacheStore::open(dir, CacheMode::ReadWrite);
+        let store = CacheStore::open(None, Some(dir), CacheMode::ReadWrite);
 
         let result = store.check("(unknown query)", "cvc5");
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
 
-        let (hits, misses, stores, errors) = store.snapshot_stats();
-        assert_eq!(hits, 0);
-        assert_eq!(misses, 1);
-        assert_eq!(stores, 0);
-        assert_eq!(errors, 0);
+        let (hits, misses, stores, retained, _errors) = store.snapshot_stats();
+        assert_eq!((hits, misses, stores, retained), (0, 1, 0, 0));
     }
 
     #[test]
     fn test_check_miss_readonly_enforcing() {
         let dir = temp_cache_dir();
-        let store = CacheStore::open(dir.clone(), CacheMode::ReadOnlyEnforcing);
+        let store = CacheStore::open(Some(dir), None, CacheMode::ReadOnlyEnforcing);
 
         let result = store.check("(unknown query)", "cvc5");
         assert!(result.is_err());
+    }
 
-        let _ = std::fs::remove_dir_all(&dir);
+    #[test]
+    fn test_retain_from_source() {
+        // Populate a source cache with one entry.
+        let source = temp_cache_dir();
+        let dest = temp_cache_dir();
+        {
+            let seed = CacheStore::open(None, Some(source.clone()), CacheMode::ReadWrite);
+            seed.store(entry("(set-logic ALL)", "cvc5", CacheVerdict::Success))
+                .expect("seed store should succeed");
+        }
+
+        // Read-write with a fresh destination: a source hit is retained into
+        // the destination (garbage-collecting rebuild).
+        let store = CacheStore::open(Some(source.clone()), Some(dest.clone()), CacheMode::ReadWrite);
+        let result = store
+            .check("(set-logic ALL)", "cvc5")
+            .expect("check should succeed");
+        assert_eq!(result.map(|(v, _)| v), Some(CacheVerdict::Success));
+
+        let (hits, misses, stores, retained, _errors) = store.snapshot_stats();
+        assert_eq!((hits, misses, stores, retained), (1, 0, 0, 1));
+
+        // The entry now exists in the destination too.
+        assert_eq!(CacheStore::count_entries(&dest), 1);
+
+        let _ = std::fs::remove_dir_all(&source);
+        let _ = std::fs::remove_dir_all(&dest);
     }
 }

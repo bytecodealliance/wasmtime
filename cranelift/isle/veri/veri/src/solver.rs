@@ -87,9 +87,22 @@ pub struct Solver<'a> {
     /// already been declared (see [`Solver::fp_sqrt`]).
     sqrt_uf_widths: HashSet<usize>,
 
-    /// Transcript of all SMT-LIB2 text sent to the solver, captured for
-    /// cache key derivation. Each entry is the SMT-LIB2 expression as a
-    /// human-readable string.
+    /// Whether a live solver subprocess is attached. When `false`, this
+    /// solver is in "recording" mode: SMT commands are captured into
+    /// [`Self::smt2_transcript`] (for cache-key derivation) but never sent to
+    /// a subprocess, so no solver is spawned. See [`Self::new_recording`].
+    has_backend: bool,
+
+    /// Whether we are currently inside one of the `encoded::*` semantics
+    /// helpers (cls/clz/rev/popcnt). Commands issued there are *not* part of
+    /// the cache key (they are a deterministic function of already-captured
+    /// operands), so in recording mode they are neither sent nor captured.
+    /// See [`Self::encoded`] and [`Self::command`].
+    in_encoded: bool,
+
+    /// Transcript of the SMT-LIB2 commands issued during encoding, captured
+    /// for cache-key derivation. Only populated in recording mode. Each entry
+    /// is one line of the SMT-LIB2 script as a human-readable string.
     smt2_transcript: Vec<String>,
 }
 
@@ -101,11 +114,40 @@ impl Drop for Solver<'_> {
 }
 
 impl<'a> Solver<'a> {
+    /// Create a solver backed by a live SMT subprocess (`smt` must have been
+    /// built with a `.solver(..)`).
     pub fn new(
         smt: Context,
         prog: &'a Program,
         conditions: &'a Conditions,
         assignment: &'a Assignment,
+    ) -> Result<Self> {
+        Self::with_backend(smt, prog, conditions, assignment, true)
+    }
+
+    /// Create a solver in "recording" mode, with no live subprocess.
+    ///
+    /// The `smt` context must have been built *without* a `.solver(..)` (so no
+    /// process is spawned). Running [`Self::encode`] then produces the same
+    /// SMT-LIB2 transcript that a live run would have sent, retrievable via
+    /// [`Self::transcript`], without invoking any solver. This is used to
+    /// derive the cache key so that a cached result can be served without
+    /// ever spawning a solver.
+    pub fn new_recording(
+        smt: Context,
+        prog: &'a Program,
+        conditions: &'a Conditions,
+        assignment: &'a Assignment,
+    ) -> Result<Self> {
+        Self::with_backend(smt, prog, conditions, assignment, false)
+    }
+
+    fn with_backend(
+        smt: Context,
+        prog: &'a Program,
+        conditions: &'a Conditions,
+        assignment: &'a Assignment,
+        has_backend: bool,
     ) -> Result<Self> {
         let mut solver = Self {
             smt,
@@ -115,6 +157,8 @@ impl<'a> Solver<'a> {
             assignment,
             tmp_idx: 0,
             sqrt_uf_widths: HashSet::new(),
+            has_backend,
+            in_encoded: false,
             smt2_transcript: Vec::new(),
         };
         solver.prelude()?;
@@ -125,76 +169,148 @@ impl<'a> Solver<'a> {
         self.dialect = dialect;
     }
 
-    /// Send an SMT-LIB2 expression to the solver and receive its response,
-    /// capturing both in the transcript buffer. Use for commands that return
-    /// simple responses: set-logic, push, pop, assert, declare-*, etc.
-    fn send_and_capture(&mut self, expr: SExpr) -> Result<()> {
-        let text = self.smt.display(expr).to_string();
-        self.smt2_transcript.push(text);
-        self.smt.raw_send(expr)?;
-        // Receive and discard the response (typically "success" for non-query
-        // commands like set-logic, push, pop, assert, declare-*).
-        let resp = self.smt.raw_recv()?;
-        self.smt2_transcript
-            .push(format!(";; response: {}", self.smt.display(resp)));
+    /// Issue an SMT-LIB2 command that acknowledges with `success`
+    /// (set-logic, declare-*, assert, push, pop, ...).
+    ///
+    /// With a live backend, the command is sent and its `success` ack is
+    /// awaited. In recording mode (no backend), the command text is instead
+    /// appended to the transcript along with a synthetic `;; response: success`
+    /// line, so the transcript is byte-for-byte identical to a live run's —
+    /// which is what the cache key is derived from.
+    fn command(&mut self, cmd: SExpr) -> Result<()> {
+        if self.has_backend {
+            self.smt.raw_send(cmd)?;
+            let resp = self.smt.raw_recv()?;
+            if resp != self.smt.atoms().success {
+                bail!("unexpected solver response: {}", self.smt.display(resp));
+            }
+        } else if !self.in_encoded {
+            // Recording mode: capture the command for the cache key. Commands
+            // issued from within the `encoded::*` helpers are excluded (see
+            // `in_encoded`).
+            self.smt2_transcript.push(self.smt.display(cmd).to_string());
+            self.smt2_transcript.push(";; response: success".to_string());
+        }
         Ok(())
     }
 
-    /// Send an SMT-LIB2 expression and capture only the send (not the response).
-    /// Use for commands where the caller needs to parse the response: check-sat,
-    /// get-value, exit.
-    fn send_and_capture_only(&mut self, expr: SExpr) -> Result<()> {
-        let text = self.smt.display(expr).to_string();
-        self.smt2_transcript.push(text);
-        self.smt.raw_send(expr)?;
-        Ok(())
+    /// Run `f` with commands marked as originating from an `encoded::*` helper,
+    /// so they are excluded from the recorded transcript (cache key).
+    fn encoded<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let prev = self.in_encoded;
+        self.in_encoded = true;
+        let r = f(self);
+        self.in_encoded = prev;
+        r
     }
 
-    /// Receive a response from the solver. Responses are NOT captured
-    /// (they are not part of the cache key).
-    fn recv(&mut self) -> Result<SExpr> {
-        Ok(self.smt.raw_recv()?)
+    fn set_logic(&mut self, logic: &str) -> Result<()> {
+        let cmd = self
+            .smt
+            .list(vec![self.smt.atom("set-logic"), self.smt.atom(logic)]);
+        self.command(cmd)
     }
 
-    /// Return the transcript as a single SMT-LIB2 script (lines joined by newlines).
-    pub fn transcript_text(&self) -> String {
+    fn declare_sort(&mut self, name: &str) -> Result<()> {
+        let cmd = self.smt.list(vec![
+            self.smt.atom("declare-sort"),
+            self.smt.atom(name),
+            self.smt.numeral(0),
+        ]);
+        self.command(cmd)
+    }
+
+    pub(crate) fn declare_const(
+        &mut self,
+        name: impl Into<String> + AsRef<str>,
+        sort: SExpr,
+    ) -> Result<()> {
+        let cmd = self.smt.list(vec![
+            self.smt.atom("declare-const"),
+            self.smt.atom(name),
+            sort,
+        ]);
+        self.command(cmd)
+    }
+
+    fn declare_fun(&mut self, name: &str, args: Vec<SExpr>, ret: SExpr) -> Result<()> {
+        let cmd = self.smt.list(vec![
+            self.smt.atom("declare-fun"),
+            self.smt.atom(name),
+            self.smt.list(args),
+            ret,
+        ]);
+        self.command(cmd)
+    }
+
+    pub(crate) fn assert(&mut self, expr: SExpr) -> Result<()> {
+        let cmd = self.smt.list(vec![self.smt.atom("assert"), expr]);
+        self.command(cmd)
+    }
+
+    fn push(&mut self) -> Result<()> {
+        let cmd = self.smt.list(vec![self.smt.atom("push")]);
+        self.command(cmd)
+    }
+
+    fn pop(&mut self) -> Result<()> {
+        let cmd = self.smt.list(vec![self.smt.atom("pop")]);
+        self.command(cmd)
+    }
+
+    // --- S-expression builders forwarded to the underlying context. These
+    // exist so that the `encoded::*` semantics helpers can take a `&mut Solver`
+    // (routing their `assert`/`declare_const` through the recording-aware path)
+    // while their pure builder calls keep the same spelling.
+
+    pub(crate) fn atom(&self, name: impl Into<String> + AsRef<str>) -> SExpr {
+        self.smt.atom(name)
+    }
+    pub(crate) fn list(&self, list: Vec<SExpr>) -> SExpr {
+        self.smt.list(list)
+    }
+    pub(crate) fn numeral(&self, val: impl easy_smt::IntoNumeral) -> SExpr {
+        self.smt.numeral(val)
+    }
+    pub(crate) fn atoms(&self) -> &easy_smt::KnownAtoms {
+        self.smt.atoms()
+    }
+    pub(crate) fn eq(&self, lhs: SExpr, rhs: SExpr) -> SExpr {
+        self.smt.eq(lhs, rhs)
+    }
+    pub(crate) fn bvlshr(&self, lhs: SExpr, rhs: SExpr) -> SExpr {
+        self.smt.bvlshr(lhs, rhs)
+    }
+    pub(crate) fn bvand(&self, lhs: SExpr, rhs: SExpr) -> SExpr {
+        self.smt.bvand(lhs, rhs)
+    }
+    pub(crate) fn bvshl(&self, lhs: SExpr, rhs: SExpr) -> SExpr {
+        self.smt.bvshl(lhs, rhs)
+    }
+    pub(crate) fn bvor(&self, lhs: SExpr, rhs: SExpr) -> SExpr {
+        self.smt.bvor(lhs, rhs)
+    }
+    pub(crate) fn bvashr(&self, lhs: SExpr, rhs: SExpr) -> SExpr {
+        self.smt.bvashr(lhs, rhs)
+    }
+    pub(crate) fn bvadd(&self, lhs: SExpr, rhs: SExpr) -> SExpr {
+        self.smt.bvadd(lhs, rhs)
+    }
+
+    /// Return the recorded SMT-LIB2 transcript as a single script. Only
+    /// meaningful in recording mode (see [`Self::new_recording`]); call after
+    /// [`Self::encode`] to obtain the encoding used as the cache key.
+    pub fn transcript(&self) -> String {
         self.smt2_transcript.join("\n")
-    }
-
-    /// Snapshot the baseline transcript and clear the buffer.
-    /// Call after `encode()` completes to capture prelude+encode.
-    pub fn take_baseline_transcript(&mut self) -> String {
-        let text = self.transcript_text();
-        self.smt2_transcript.clear();
-        text
-    }
-
-    /// Snapshot phase commands since last take/clear.
-    /// Call after each check phase to capture push/assert/check-sat/pop.
-    pub fn take_phase_transcript(&mut self) -> String {
-        let text = self.transcript_text();
-        self.smt2_transcript.clear();
-        text
     }
 
     fn prelude(&mut self) -> Result<()> {
         // Set logic. Required for some SMT solvers.
-        self.send_and_capture(
-            self.smt
-                .list(vec![self.smt.atom("set-logic"), self.smt.atom("ALL")]),
-        )?;
+        self.set_logic("ALL")?;
 
         // Declare sorts for special-case types.
-        self.send_and_capture(self.smt.list(vec![
-            self.smt.atom("declare-sort"),
-            self.smt.atom(UNSPECIFIED_SORT),
-            self.smt.numeral(0),
-        ]))?;
-        self.send_and_capture(self.smt.list(vec![
-            self.smt.atom("declare-sort"),
-            self.smt.atom(UNIT_SORT),
-            self.smt.numeral(0),
-        ]))?;
+        self.declare_sort(UNSPECIFIED_SORT)?;
+        self.declare_sort(UNIT_SORT)?;
 
         Ok(())
     }
@@ -214,11 +330,11 @@ impl<'a> Solver<'a> {
 
     pub fn check_assumptions_feasibility(&mut self) -> Result<Applicability> {
         // Enter solver context frame.
-        self.send_and_capture(self.smt.list(vec![self.smt.atom("push")]))?;
+        self.push()?;
 
         // Assumptions
         let assumptions = self.all(&self.conditions.assumptions);
-        self.send_and_capture(self.smt.list(vec![self.smt.atom("assert"), assumptions]))?;
+        self.assert(assumptions)?;
 
         // Check
         let verdict = match self.check()? {
@@ -228,14 +344,14 @@ impl<'a> Solver<'a> {
         };
 
         // Leave solver context frame.
-        self.send_and_capture(self.smt.list(vec![self.smt.atom("pop")]))?;
+        self.pop()?;
 
         Ok(verdict)
     }
 
     pub fn check_verification_condition(&mut self) -> Result<Verification> {
         // Enter solver context frame.
-        self.send_and_capture(self.smt.list(vec![self.smt.atom("push")]))?;
+        self.push()?;
 
         // Verification Condition
         self.verification_condition()?;
@@ -248,7 +364,7 @@ impl<'a> Solver<'a> {
         };
 
         // Leave solver context frame.
-        self.send_and_capture(self.smt.list(vec![self.smt.atom("pop")]))?;
+        self.pop()?;
 
         Ok(verdict)
     }
@@ -260,10 +376,10 @@ impl<'a> Solver<'a> {
             Dialect::Z3 => vec![self.smt.atom("check-sat-using"), self.smt.atom("default")],
         });
 
-        self.send_and_capture_only(cmd)?;
+        self.smt.raw_send(cmd)?;
 
         // Parse response.
-        let resp = self.recv()?;
+        let resp = self.smt.raw_recv()?;
         let atoms = self.smt.atoms();
         if resp == atoms.sat {
             Ok(Response::Sat)
@@ -277,12 +393,17 @@ impl<'a> Solver<'a> {
     }
 
     pub fn exit(&mut self) -> Result<()> {
+        // Nothing to do in recording mode: no subprocess was spawned.
+        if !self.has_backend {
+            return Ok(());
+        }
+
         // Send (exit) command.
-        let exit_cmd = self.smt.list(vec![self.smt.atom("exit")]);
-        self.send_and_capture_only(exit_cmd)?;
+        let exit = self.smt.list(vec![self.smt.atom("exit")]);
+        self.smt.raw_send(exit)?;
 
         // Expect success response.
-        let resp = self.recv()?;
+        let resp = self.smt.raw_recv()?;
         let atoms = self.smt.atoms();
         if resp != atoms.success {
             bail!("bad solver exit: {}", self.smt.display(resp))
@@ -292,17 +413,7 @@ impl<'a> Solver<'a> {
 
     pub fn model(&mut self) -> Result<Model> {
         let xs: Vec<_> = (0..self.conditions.exprs.len()).map(ExprId).collect();
-        let expr_atoms: Vec<SExpr> = xs.iter().map(|x| self.expr_atom(*x)).collect();
-
-        // Capture the get-value command in the transcript before calling the
-        // original (which handles complex response parsing).
-        let get_value_cmd = self.smt.list(vec![
-            self.smt.atom("get-value"),
-            self.smt.list(expr_atoms.clone()),
-        ]);
-        let text = self.smt.display(get_value_cmd).to_string();
-        self.smt2_transcript.push(text);
-
+        let expr_atoms = xs.iter().map(|x| self.expr_atom(*x)).collect();
         let values = self.smt.get_value(expr_atoms)?;
         let consts = values
             .iter()
@@ -320,11 +431,7 @@ impl<'a> Solver<'a> {
 
         // Declare.
         let name = self.expr_name(x);
-        self.send_and_capture(self.smt.list(vec![
-            self.smt.atom("declare-const"),
-            self.smt.atom(&name),
-            sort,
-        ]))?;
+        self.declare_const(&name, sort)?;
 
         Ok(())
     }
@@ -352,7 +459,7 @@ impl<'a> Solver<'a> {
         let assertion = self
             .smt
             .named(format!("expr{}", x.index()), self.smt.eq(lhs, rhs));
-        self.send_and_capture(self.smt.list(vec![self.smt.atom("assert"), assertion]))?;
+        self.assert(assertion)?;
         Ok(())
     }
 
@@ -389,10 +496,10 @@ impl<'a> Solver<'a> {
                 let xe = self.expr_atom(x);
                 let id = x.index();
                 match width {
-                    8 => Ok(cls8(&mut self.smt, xe, id)),
-                    16 => Ok(cls16(&mut self.smt, xe, id)),
-                    32 => Ok(cls32(&mut self.smt, xe, id)),
-                    64 => Ok(cls64(&mut self.smt, xe, id)),
+                    8 => Ok(self.encoded(|s| cls8(s, xe, id))),
+                    16 => Ok(self.encoded(|s| cls16(s, xe, id))),
+                    32 => Ok(self.encoded(|s| cls32(s, xe, id))),
+                    64 => Ok(self.encoded(|s| cls64(s, xe, id))),
                     _ => unimplemented!("unexpected CLS width"),
                 }
             }
@@ -404,11 +511,11 @@ impl<'a> Solver<'a> {
                 let xe = self.expr_atom(x);
                 let id: usize = x.index();
                 match width {
-                    1 => Ok(clz1(&mut self.smt, xe, id)),
-                    8 => Ok(clz8(&mut self.smt, xe, id)),
-                    16 => Ok(clz16(&mut self.smt, xe, id)),
-                    32 => Ok(clz32(&mut self.smt, xe, id)),
-                    64 => Ok(clz64(&mut self.smt, xe, id)),
+                    1 => Ok(self.encoded(|s| clz1(s, xe, id))),
+                    8 => Ok(self.encoded(|s| clz8(s, xe, id))),
+                    16 => Ok(self.encoded(|s| clz16(s, xe, id))),
+                    32 => Ok(self.encoded(|s| clz32(s, xe, id))),
+                    64 => Ok(self.encoded(|s| clz64(s, xe, id))),
                     _ => unimplemented!("unexpected CLZ width"),
                 }
             }
@@ -420,11 +527,11 @@ impl<'a> Solver<'a> {
                 let xe = self.expr_atom(x);
                 let id: usize = x.index();
                 match width {
-                    1 => Ok(rev1(&mut self.smt, xe, id)),
-                    8 => Ok(rev8(&mut self.smt, xe, id)),
-                    16 => Ok(rev16(&mut self.smt, xe, id)),
-                    32 => Ok(rev32(&mut self.smt, xe, id)),
-                    64 => Ok(rev64(&mut self.smt, xe, id)),
+                    1 => Ok(self.encoded(|s| rev1(s, xe, id))),
+                    8 => Ok(self.encoded(|s| rev8(s, xe, id))),
+                    16 => Ok(self.encoded(|s| rev16(s, xe, id))),
+                    32 => Ok(self.encoded(|s| rev32(s, xe, id))),
+                    64 => Ok(self.encoded(|s| rev64(s, xe, id))),
                     _ => unimplemented!("unexpected CLS width"),
                 }
             }
@@ -436,7 +543,7 @@ impl<'a> Solver<'a> {
                 let xe = self.expr_atom(x);
                 let id = x.index();
                 match width {
-                    8 | 16 | 32 | 64 => Ok(popcnt(&mut self.smt, width, xe, id)),
+                    8 | 16 | 32 | 64 => Ok(self.encoded(|s| popcnt(s, width, xe, id))),
                     _ => unimplemented!("unexpected Popcnt width"),
                 }
             }
@@ -659,10 +766,8 @@ impl<'a> Solver<'a> {
         let assumptions = self.all(&self.conditions.assumptions);
         let assertions = self.all(&self.conditions.assertions);
         let vc = self.smt.imp(assumptions, assertions);
-        self.send_and_capture(
-            self.smt
-                .list(vec![self.smt.atom("assert"), self.smt.not(vc)]),
-        )?;
+        let not_vc = self.smt.not(vc);
+        self.assert(not_vc)?;
         Ok(())
     }
 
@@ -697,7 +802,7 @@ impl<'a> Solver<'a> {
         ])
     }
 
-    fn extract(&self, high_bit: usize, low_bit: usize, v: SExpr) -> SExpr {
+    pub(crate) fn extract(&self, high_bit: usize, low_bit: usize, v: SExpr) -> SExpr {
         assert!(low_bit <= high_bit);
         self.smt
             .extract(high_bit.try_into().unwrap(), low_bit.try_into().unwrap(), v)
@@ -733,10 +838,8 @@ impl<'a> Solver<'a> {
         // Return bit-vector that's equal to the expression as a floating point.
         let result = self.declare_bit_vec(op, width)?;
         let result_as_fp = self.to_fp(result, width)?;
-        self.send_and_capture(self.smt.list(vec![
-            self.smt.atom("assert"),
-            self.smt.eq(result_as_fp, result_fp),
-        ]))?;
+        let eq = self.smt.eq(result_as_fp, result_fp);
+        self.assert(eq)?;
 
         Ok(result)
     }
@@ -757,10 +860,8 @@ impl<'a> Solver<'a> {
         // Return bit-vector that's equal to the expression as a floating point.
         let result = self.declare_bit_vec(op, width)?;
         let result_as_fp = self.to_fp(result, width)?;
-        self.send_and_capture(self.smt.list(vec![
-            self.smt.atom("assert"),
-            self.smt.eq(result_as_fp, result_fp),
-        ]))?;
+        let eq = self.smt.eq(result_as_fp, result_fp);
+        self.assert(eq)?;
 
         Ok(result)
     }
@@ -797,10 +898,8 @@ impl<'a> Solver<'a> {
         // Return bit-vector that's equal to the expression as a floating point.
         let result = self.declare_bit_vec(op, width)?;
         let result_as_fp = self.to_fp(result, width)?;
-        self.send_and_capture(self.smt.list(vec![
-            self.smt.atom("assert"),
-            self.smt.eq(result_as_fp, result_fp),
-        ]))?;
+        let eq = self.smt.eq(result_as_fp, result_fp);
+        self.assert(eq)?;
 
         Ok(result)
     }
@@ -823,10 +922,8 @@ impl<'a> Solver<'a> {
         // Return bit-vector that's equal to the expression as a floating point.
         let result = self.declare_bit_vec(op, width)?;
         let result_as_fp = self.to_fp(result, width)?;
-        self.send_and_capture(self.smt.list(vec![
-            self.smt.atom("assert"),
-            self.smt.eq(result_as_fp, result_fp),
-        ]))?;
+        let eq = self.smt.eq(result_as_fp, result_fp);
+        self.assert(eq)?;
 
         Ok(result)
     }
@@ -850,10 +947,8 @@ impl<'a> Solver<'a> {
         // Return bit-vector that's equal to the expression as a floating point.
         let result = self.declare_bit_vec(op, width)?;
         let result_as_fp = self.to_fp(result, width)?;
-        self.send_and_capture(self.smt.list(vec![
-            self.smt.atom("assert"),
-            self.smt.eq(result_as_fp, result_fp),
-        ]))?;
+        let eq = self.smt.eq(result_as_fp, result_fp);
+        self.assert(eq)?;
 
         Ok(result)
     }
@@ -886,12 +981,7 @@ impl<'a> Solver<'a> {
         let func = format!("fp.sqrt_uf_{width}");
         if self.sqrt_uf_widths.insert(width) {
             let bv_sort = self.smt.bit_vec_sort(self.smt.numeral(width));
-            self.send_and_capture(self.smt.list(vec![
-                self.smt.atom("declare-fun"),
-                self.smt.atom(&func),
-                self.smt.list(vec![bv_sort]),
-                bv_sort,
-            ]))?;
+            self.declare_fun(&func, vec![bv_sort], bv_sort)?;
         }
 
         Ok(self.smt.list(vec![self.smt.atom(func), self.expr_atom(x)]))
@@ -950,10 +1040,8 @@ impl<'a> Solver<'a> {
         // Return bit-vector that's equal to the expression as a floating point.
         let result = self.declare_bit_vec("conv", width)?;
         let result_as_fp = self.to_fp(result, width)?;
-        self.send_and_capture(
-            self.smt
-                .list(vec![self.smt.atom("assert"), self.smt.eq(result_as_fp, fp)]),
-        )?;
+        let eq = self.smt.eq(result_as_fp, fp);
+        self.assert(eq)?;
 
         Ok(result)
     }
@@ -1015,10 +1103,8 @@ impl<'a> Solver<'a> {
         // Return bit-vector that's equal to the expression as a floating point.
         let result = self.declare_bit_vec("conv", new_width)?;
         let result_as_fp = self.to_fp(result, new_width)?;
-        self.send_and_capture(
-            self.smt
-                .list(vec![self.smt.atom("assert"), self.smt.eq(result_as_fp, fp)]),
-        )?;
+        let eq = self.smt.eq(result_as_fp, fp);
+        self.assert(eq)?;
 
         Ok(result)
     }
@@ -1120,11 +1206,7 @@ impl<'a> Solver<'a> {
         let name = format!("${name}{}", self.tmp_idx);
         self.tmp_idx += 1;
         let sort = self.smt.bit_vec_sort(self.smt.numeral(n));
-        self.send_and_capture(self.smt.list(vec![
-            self.smt.atom("declare-const"),
-            self.smt.atom(&name),
-            sort,
-        ]))?;
+        self.declare_const(&name, sort)?;
         Ok(self.smt.atom(name))
     }
 
