@@ -1587,7 +1587,8 @@ impl EntryStoreContext {
         unsafe {
             let vm_store_context = store.0.vm_store_context();
             let new_stack_chain = VMStackChain::InitialStack(initial_stack_information);
-            *vm_store_context.stack_chain.get() = new_stack_chain;
+            let stack_chain =
+                mem::replace(&mut *vm_store_context.stack_chain.get(), new_stack_chain);
 
             Self {
                 stack_limit,
@@ -1600,7 +1601,7 @@ impl EntryStoreContext {
                 last_wasm_entry_trap_handler: *(*vm_store_context)
                     .last_wasm_entry_trap_handler
                     .get(),
-                stack_chain: (*(*vm_store_context).stack_chain.get()).clone(),
+                stack_chain,
                 vm_store_context,
             }
         }

@@ -8,6 +8,8 @@ mod call_hook;
 mod cli_tests;
 mod compile_time_builtins;
 mod component_model;
+#[cfg(all(feature = "stack-switching", unix, target_arch = "x86_64"))]
+mod continuation_traps;
 mod coredump;
 mod custom_code_memory;
 mod debug;
