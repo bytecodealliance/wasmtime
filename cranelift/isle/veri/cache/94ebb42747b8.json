@@ -1,7 +1,0 @@
-{
-  "key_sha256": "94ebb42747b8cab564ae4533a9995550cc52132dc806a0faa15fc442ff057581",
-  "short_key": "94ebb42747b8",
-  "solver_backend": "cvc5",
-  "solver_version": null,
-  "verdict": "success"
-}
