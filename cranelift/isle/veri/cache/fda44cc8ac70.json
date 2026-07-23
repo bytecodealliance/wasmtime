@@ -1,0 +1,7 @@
+{
+  "key_sha256": "fda44cc8ac70d44c3cddb581952f7b1ab898027da3d9c189d3f91ca8992a5d0a",
+  "short_key": "fda44cc8ac70",
+  "solver_backend": "cvc5",
+  "solver_version": null,
+  "verdict": "success"
+}

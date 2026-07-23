@@ -1,0 +1,7 @@
+{
+  "key_sha256": "90d23977dddc1d18cf757dedf3e5453a739b21347e2da825ccd382bd3baa1400",
+  "short_key": "90d23977dddc",
+  "solver_backend": "z3",
+  "solver_version": null,
+  "verdict": "inapplicable"
+}

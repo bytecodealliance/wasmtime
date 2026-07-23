@@ -1,0 +1,7 @@
+{
+  "key_sha256": "3a5c2d7f15dbef15b87a75576df80ef35b2cfb43d30bd951cd9c83db9b70a652",
+  "short_key": "3a5c2d7f15db",
+  "solver_backend": "cvc5",
+  "solver_version": null,
+  "verdict": "inapplicable"
+}
