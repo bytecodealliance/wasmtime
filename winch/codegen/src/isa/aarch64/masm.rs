@@ -1376,62 +1376,176 @@ impl Masm for MacroAssembler {
 
     fn v128_eq(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorEqualityKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorEqualityKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        match kind {
+            VectorEqualityKind::I8x16 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            VectorEqualityKind::I16x8 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            VectorEqualityKind::I32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            VectorEqualityKind::I64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+            VectorEqualityKind::F32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fcmeq, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            VectorEqualityKind::F64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fcmeq, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
     fn v128_ne(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorEqualityKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorEqualityKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        match kind {
+            VectorEqualityKind::I8x16 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size8x16);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size8x16);
+            }
+            VectorEqualityKind::I16x8 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size16x8);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size16x8);
+            }
+            VectorEqualityKind::I32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size32x4);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size32x4);
+            }
+            VectorEqualityKind::I64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size64x2);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size64x2);
+            }
+            VectorEqualityKind::F32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fcmeq, lhs, rhs, dst, VectorSize::Size32x4);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size32x4);
+            }
+            VectorEqualityKind::F64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fcmeq, lhs, rhs, dst, VectorSize::Size64x2);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
     fn v128_lt(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorCompareKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        // aarch64 lacks vector less-than; swap operands and use greater-than.
+        let (op, size) = match kind {
+            VectorCompareKind::I8x16S => (VecALUOp::Cmgt, VectorSize::Size8x16),
+            VectorCompareKind::I8x16U => (VecALUOp::Cmhi, VectorSize::Size8x16),
+            VectorCompareKind::I16x8S => (VecALUOp::Cmgt, VectorSize::Size16x8),
+            VectorCompareKind::I16x8U => (VecALUOp::Cmhi, VectorSize::Size16x8),
+            VectorCompareKind::I32x4S => (VecALUOp::Cmgt, VectorSize::Size32x4),
+            VectorCompareKind::I32x4U => (VecALUOp::Cmhi, VectorSize::Size32x4),
+            VectorCompareKind::I64x2S => (VecALUOp::Cmgt, VectorSize::Size64x2),
+            VectorCompareKind::F32x4 => (VecALUOp::Fcmgt, VectorSize::Size32x4),
+            VectorCompareKind::F64x2 => (VecALUOp::Fcmgt, VectorSize::Size64x2),
+        };
+        self.asm.vec_rrr(op, rhs, lhs, dst, size);
+        Ok(())
     }
 
     fn v128_le(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorCompareKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        // aarch64 lacks vector less-than; swap operands and use greater-than.
+        let (op, size) = match kind {
+            VectorCompareKind::I8x16S => (VecALUOp::Cmge, VectorSize::Size8x16),
+            VectorCompareKind::I8x16U => (VecALUOp::Cmhs, VectorSize::Size8x16),
+            VectorCompareKind::I16x8S => (VecALUOp::Cmge, VectorSize::Size16x8),
+            VectorCompareKind::I16x8U => (VecALUOp::Cmhs, VectorSize::Size16x8),
+            VectorCompareKind::I32x4S => (VecALUOp::Cmge, VectorSize::Size32x4),
+            VectorCompareKind::I32x4U => (VecALUOp::Cmhs, VectorSize::Size32x4),
+            VectorCompareKind::I64x2S => (VecALUOp::Cmge, VectorSize::Size64x2),
+            VectorCompareKind::F32x4 => (VecALUOp::Fcmge, VectorSize::Size32x4),
+            VectorCompareKind::F64x2 => (VecALUOp::Fcmge, VectorSize::Size64x2),
+        };
+        self.asm.vec_rrr(op, rhs, lhs, dst, size);
+        Ok(())
     }
 
     fn v128_gt(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorCompareKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        let (op, size) = match kind {
+            VectorCompareKind::I8x16S => (VecALUOp::Cmgt, VectorSize::Size8x16),
+            VectorCompareKind::I8x16U => (VecALUOp::Cmhi, VectorSize::Size8x16),
+            VectorCompareKind::I16x8S => (VecALUOp::Cmgt, VectorSize::Size16x8),
+            VectorCompareKind::I16x8U => (VecALUOp::Cmhi, VectorSize::Size16x8),
+            VectorCompareKind::I32x4S => (VecALUOp::Cmgt, VectorSize::Size32x4),
+            VectorCompareKind::I32x4U => (VecALUOp::Cmhi, VectorSize::Size32x4),
+            VectorCompareKind::I64x2S => (VecALUOp::Cmgt, VectorSize::Size64x2),
+            VectorCompareKind::F32x4 => (VecALUOp::Fcmgt, VectorSize::Size32x4),
+            VectorCompareKind::F64x2 => (VecALUOp::Fcmgt, VectorSize::Size64x2),
+        };
+        self.asm.vec_rrr(op, lhs, rhs, dst, size);
+        Ok(())
     }
 
     fn v128_ge(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorCompareKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        let (op, size) = match kind {
+            VectorCompareKind::I8x16S => (VecALUOp::Cmge, VectorSize::Size8x16),
+            VectorCompareKind::I8x16U => (VecALUOp::Cmhs, VectorSize::Size8x16),
+            VectorCompareKind::I16x8S => (VecALUOp::Cmge, VectorSize::Size16x8),
+            VectorCompareKind::I16x8U => (VecALUOp::Cmhs, VectorSize::Size16x8),
+            VectorCompareKind::I32x4S => (VecALUOp::Cmge, VectorSize::Size32x4),
+            VectorCompareKind::I32x4U => (VecALUOp::Cmhs, VectorSize::Size32x4),
+            VectorCompareKind::I64x2S => (VecALUOp::Cmge, VectorSize::Size64x2),
+            VectorCompareKind::F32x4 => (VecALUOp::Fcmge, VectorSize::Size32x4),
+            VectorCompareKind::F64x2 => (VecALUOp::Fcmge, VectorSize::Size64x2),
+        };
+        self.asm.vec_rrr(op, lhs, rhs, dst, size);
+        Ok(())
     }
 
     fn v128_not(&mut self, dst: WritableReg) -> Result<()> {
