@@ -93,7 +93,11 @@ mod tests {
             ctx.list(vec![ctx.atom("e0"), ctx.atom("#b0101")]),
             ctx.list(vec![
                 ctx.atom("e1"),
-                ctx.list(vec![ctx.atom("as"), ctx.atom("@a"), ctx.atom("Unspecified")]),
+                ctx.list(vec![
+                    ctx.atom("as"),
+                    ctx.atom("@a"),
+                    ctx.atom("Unspecified"),
+                ]),
             ]),
         ]);
         let value = to_json(&ctx, expr);
@@ -102,10 +106,7 @@ mod tests {
             json!([["e0", "#b0101"], ["e1", ["as", "@a", "Unspecified"]]])
         );
         let back = from_json(&ctx, &value).unwrap();
-        assert_eq!(
-            ctx.display(back).to_string(),
-            ctx.display(expr).to_string()
-        );
+        assert_eq!(ctx.display(back).to_string(), ctx.display(expr).to_string());
 
         // Atoms rebuilt from JSON are interned normally.
         let sat = from_json(&ctx, &json!("sat")).unwrap();
