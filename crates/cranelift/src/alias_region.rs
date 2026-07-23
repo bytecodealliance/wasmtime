@@ -1393,6 +1393,42 @@ where
         )
     }
 
+    /// Load the `VMStoreContext::last_wasm_entry_sp` field.
+    pub fn vmstore_context_last_wasm_entry_sp(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_entry_sp()
+                .into(),
+        )
+    }
+
+    /// Load the `VMStoreContext::last_wasm_entry_trap_handler` field.
+    pub fn vmstore_context_last_wasm_entry_trap_handler(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_entry_trap_handler()
+                .into(),
+        )
+    }
+
     /// Store the `VMStoreContext::last_wasm_entry_fp` field.
     pub fn store_vmstore_context_last_wasm_entry_fp(
         &mut self,

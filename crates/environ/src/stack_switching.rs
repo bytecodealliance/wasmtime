@@ -26,6 +26,9 @@ pub const STACK_STATE_SUSPENDED_DISCRIMINANT: u32 = 3;
 /// Discriminant of variant `Returned` in
 /// `runtime::vm::VMStackState`.
 pub const STACK_STATE_RETURNED_DISCRIMINANT: u32 = 4;
+/// Discriminant of variant `Trapped` in
+/// `runtime::vm::VMStackState`.
+pub const STACK_STATE_TRAPPED_DISCRIMINANT: u32 = 5;
 
 /// Discriminant of variant `Return` in
 /// `runtime::vm::ControlEffect`.
@@ -39,3 +42,6 @@ pub const CONTROL_EFFECT_SUSPEND_DISCRIMINANT: u32 = 2;
 /// Discriminant of variant `Switch` in
 /// `runtime::vm::ControlEffect`.
 pub const CONTROL_EFFECT_SWITCH_DISCRIMINANT: u32 = 3;
+/// Discriminant of variant `Trap` in
+/// `runtime::vm::ControlEffect`.
+pub const CONTROL_EFFECT_TRAP_DISCRIMINANT: u32 = 4;

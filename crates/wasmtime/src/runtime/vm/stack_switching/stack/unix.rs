@@ -326,7 +326,7 @@ unsafe extern "C" fn fiber_start(
     caller_vmctx: *mut VMContext,
     args: *mut VMHostArray<ValRaw>,
     return_value_count: u32,
-) {
+) -> bool {
     unsafe {
         let func_ref = NonNull::new(func_ref).unwrap();
         let caller_vmxtx = NonNull::new_unchecked(caller_vmctx);
@@ -349,17 +349,18 @@ unsafe extern "C" fn fiber_start(
         // underlying `Store`, it's fine to be slightly sloppy about the exact
         // value we set.
         //
-        // TODO(dhil): we are ignoring the boolean return value
-        // here... we probably shouldn't.
-        VMFuncRef::array_call(func_ref, None, caller_vmxtx, params_and_returns);
+        let succeeded = VMFuncRef::array_call(func_ref, None, caller_vmxtx, params_and_returns);
 
-        // The array call trampoline should have just written
-        // `return_value_count` values to the `args` buffer. Let's reflect that
-        // in its length field, to make various bounds checks happy.
-        args.length = return_value_count;
+        if succeeded {
+            // The array call trampoline should have just written
+            // `return_value_count` values to the `args` buffer. Let's reflect
+            // that in its length field, to make various bounds checks happy.
+            args.length = return_value_count;
+        }
 
         // Note that after this function returns, wasmtime_continuation_start
         // will switch back to the parent stack.
+        succeeded
     }
 }
 

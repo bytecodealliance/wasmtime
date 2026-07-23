@@ -63,6 +63,16 @@ pub(crate) unsafe extern "C" fn wasmtime_continuation_start() {
         // control context!
         call {fiber_start}
 
+        // A failed array call means that the continuation trapped. Preserve
+        // this information as the control effect sent to the parent stack.
+        test al, al
+        jz 2f
+        xor edi, edi
+        jmp 3f
+    2:
+        mov rdi, {trap_control_effect}
+    3:
+
         // Return to the parent continuation.
         // RBP is callee-saved (no matter if it's used as a frame pointe or
         // not), so its value is still TOS - 0x10.
@@ -72,20 +82,17 @@ pub(crate) unsafe extern "C" fn wasmtime_continuation_start() {
         mov rsp, -0x08[rbp]
         mov rbp,      [rbp]
 
-        // The stack_switch instruction uses register RDI for the payload.
-        // Here, the payload indicates that we are returning (value 0).
-        // See the test case below to keep this in sync with
-        // ControlEffect::return_()
-        mov rdi, 0
-
         jmp rsi
         ",
         fiber_start = sym super::fiber_start,
+        trap_control_effect = const (
+            crate::vm::CONTROL_EFFECT_TRAP_ENCODING
+        ),
     );
 }
 
 #[test]
-fn test_return_payload() {
-    // The following assumption is baked into `wasmtime_continuation_start`.
+fn test_control_effect_payloads() {
+    // These assumptions are baked into `wasmtime_continuation_start`.
     assert_eq!(wasmtime_environ::CONTROL_EFFECT_RETURN_DISCRIMINANT, 0);
 }

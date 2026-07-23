@@ -7,6 +7,16 @@ use core::{marker::PhantomPinned, ptr::NonNull};
 
 pub use stack::*;
 
+// This constant is used to signal that a trap occurred inside a child
+// continuation. Morally, it should be part of
+// `wasmtime_cranelift::stack_switching::control_effect`, but that
+// would require increasing the dependency surface considerably just
+// for a constant, thus we define it here so that it can be referenced
+// by the assembly stubs.
+#[allow(dead_code, reason = "Only referenced by assembly stubs")]
+pub const CONTROL_EFFECT_TRAP_ENCODING: u64 =
+    (wasmtime_environ::CONTROL_EFFECT_TRAP_DISCRIMINANT as u64) << 32;
+
 /// A continuation object is a handle to a continuation reference
 /// (i.e. an actual stack). A continuation object only be consumed
 /// once. The linearity is checked dynamically in the generated code
@@ -76,6 +86,10 @@ pub struct VMStackLimits {
     pub stack_limit: usize,
     /// Saved version of `last_wasm_entry_fp` field of `VMStoreContext`
     pub last_wasm_entry_fp: usize,
+    /// Saved version of `last_wasm_entry_sp` field of `VMStoreContext`
+    pub last_wasm_entry_sp: usize,
+    /// Saved version of `last_wasm_entry_trap_handler` field of `VMStoreContext`
+    pub last_wasm_entry_trap_handler: usize,
 }
 
 /// This type represents "common" information that we need to save both for the
@@ -539,6 +553,9 @@ pub enum VMStackState {
     /// Note that there is no guarantee that a VMContRef will ever
     /// reach this status, as it may stay suspended until being dropped.
     Returned = wasmtime_environ::STACK_STATE_RETURNED_DISCRIMINANT,
+    /// The function originally passed to `cont.new` terminated with a trap.
+    /// This is a terminal state and the continuation cannot be resumed.
+    Trapped = wasmtime_environ::STACK_STATE_TRAPPED_DISCRIMINANT,
 }
 
 #[cfg(test)]
@@ -567,6 +584,14 @@ mod tests {
         assert_eq!(
             offset_of!(VMStackLimits, last_wasm_entry_fp),
             usize::from(offsets.ptr.vmstack_limits_last_wasm_entry_fp())
+        );
+        assert_eq!(
+            offset_of!(VMStackLimits, last_wasm_entry_sp),
+            usize::from(offsets.ptr.vmstack_limits_last_wasm_entry_sp())
+        );
+        assert_eq!(
+            offset_of!(VMStackLimits, last_wasm_entry_trap_handler),
+            usize::from(offsets.ptr.vmstack_limits_last_wasm_entry_trap_handler())
         );
     }
 
