@@ -1153,20 +1153,15 @@ impl Runner {
         key_smt2: &str,
         solver_backend: &str,
         verdict: CacheVerdict,
-        init_ms: u64,
-        query_ms: u64,
     ) -> Result<()> {
         let (short_key, full_sha256) = CacheStore::compute_key(key_smt2, solver_backend);
         let entry = CacheEntry {
             key_sha256: full_sha256,
             short_key,
-            smt2_text: key_smt2.to_string(),
             solver_backend: solver_backend.to_string(),
             solver_version: None,
             verdict,
             model: None,
-            init_ms,
-            query_ms,
         };
         cache.store(entry)
     }
@@ -1248,8 +1243,6 @@ impl Runner {
                         baseline,
                         backend_name,
                         CacheVerdict::Inapplicable,
-                        init_time.as_millis() as u64,
-                        applicable_time.as_millis() as u64,
                     );
                 }
                 return Ok(VerifyReport {
@@ -1295,8 +1288,6 @@ impl Runner {
                         baseline,
                         backend_name,
                         CacheVerdict::Unknown,
-                        u64::try_from(init_time.as_millis()).unwrap(),
-                        u64::try_from(applicable_time.as_millis()).unwrap(),
                     );
                 }
                 return Ok(VerifyReport {
@@ -1322,14 +1313,7 @@ impl Runner {
                 Verification::Failure(_) => CacheVerdict::Failure,
                 Verification::Unknown => CacheVerdict::Unknown,
             };
-            let _ = self.store_cache_entry(
-                cache,
-                baseline,
-                backend_name,
-                verdict,
-                u64::try_from(init_time.as_millis()).unwrap(),
-                u64::try_from(verify_time.as_millis()).unwrap(),
-            );
+            let _ = self.store_cache_entry(cache, baseline, backend_name, verdict);
         }
 
         Ok(match verification {

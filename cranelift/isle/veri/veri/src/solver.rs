@@ -93,13 +93,6 @@ pub struct Solver<'a> {
     /// a subprocess, so no solver is spawned. See [`Self::new_recording`].
     has_backend: bool,
 
-    /// Whether we are currently inside one of the `encoded::*` semantics
-    /// helpers (cls/clz/rev/popcnt). Commands issued there are *not* part of
-    /// the cache key (they are a deterministic function of already-captured
-    /// operands), so in recording mode they are neither sent nor captured.
-    /// See [`Self::encoded`] and [`Self::command`].
-    in_encoded: bool,
-
     /// Transcript of the SMT-LIB2 commands issued during encoding, captured
     /// for cache-key derivation. Only populated in recording mode. Each entry
     /// is one line of the SMT-LIB2 script as a human-readable string.
@@ -158,7 +151,6 @@ impl<'a> Solver<'a> {
             tmp_idx: 0,
             sqrt_uf_widths: HashSet::new(),
             has_backend,
-            in_encoded: false,
             smt2_transcript: Vec::new(),
         };
         solver.prelude()?;
@@ -174,9 +166,7 @@ impl<'a> Solver<'a> {
     ///
     /// With a live backend, the command is sent and its `success` ack is
     /// awaited. In recording mode (no backend), the command text is instead
-    /// appended to the transcript along with a synthetic `;; response: success`
-    /// line, so the transcript is byte-for-byte identical to a live run's —
-    /// which is what the cache key is derived from.
+    /// appended to the transcript, which is what the cache key is derived from.
     fn command(&mut self, cmd: SExpr) -> Result<()> {
         if self.has_backend {
             self.smt.raw_send(cmd)?;
@@ -184,24 +174,11 @@ impl<'a> Solver<'a> {
             if resp != self.smt.atoms().success {
                 bail!("unexpected solver response: {}", self.smt.display(resp));
             }
-        } else if !self.in_encoded {
-            // Recording mode: capture the command for the cache key. Commands
-            // issued from within the `encoded::*` helpers are excluded (see
-            // `in_encoded`).
+        } else {
+            // Recording mode: capture the command text for the cache key.
             self.smt2_transcript.push(self.smt.display(cmd).to_string());
-            self.smt2_transcript.push(";; response: success".to_string());
         }
         Ok(())
-    }
-
-    /// Run `f` with commands marked as originating from an `encoded::*` helper,
-    /// so they are excluded from the recorded transcript (cache key).
-    fn encoded<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        let prev = self.in_encoded;
-        self.in_encoded = true;
-        let r = f(self);
-        self.in_encoded = prev;
-        r
     }
 
     fn set_logic(&mut self, logic: &str) -> Result<()> {
@@ -496,10 +473,10 @@ impl<'a> Solver<'a> {
                 let xe = self.expr_atom(x);
                 let id = x.index();
                 match width {
-                    8 => Ok(self.encoded(|s| cls8(s, xe, id))),
-                    16 => Ok(self.encoded(|s| cls16(s, xe, id))),
-                    32 => Ok(self.encoded(|s| cls32(s, xe, id))),
-                    64 => Ok(self.encoded(|s| cls64(s, xe, id))),
+                    8 => Ok(cls8(self, xe, id)),
+                    16 => Ok(cls16(self, xe, id)),
+                    32 => Ok(cls32(self, xe, id)),
+                    64 => Ok(cls64(self, xe, id)),
                     _ => unimplemented!("unexpected CLS width"),
                 }
             }
@@ -511,11 +488,11 @@ impl<'a> Solver<'a> {
                 let xe = self.expr_atom(x);
                 let id: usize = x.index();
                 match width {
-                    1 => Ok(self.encoded(|s| clz1(s, xe, id))),
-                    8 => Ok(self.encoded(|s| clz8(s, xe, id))),
-                    16 => Ok(self.encoded(|s| clz16(s, xe, id))),
-                    32 => Ok(self.encoded(|s| clz32(s, xe, id))),
-                    64 => Ok(self.encoded(|s| clz64(s, xe, id))),
+                    1 => Ok(clz1(self, xe, id)),
+                    8 => Ok(clz8(self, xe, id)),
+                    16 => Ok(clz16(self, xe, id)),
+                    32 => Ok(clz32(self, xe, id)),
+                    64 => Ok(clz64(self, xe, id)),
                     _ => unimplemented!("unexpected CLZ width"),
                 }
             }
@@ -527,11 +504,11 @@ impl<'a> Solver<'a> {
                 let xe = self.expr_atom(x);
                 let id: usize = x.index();
                 match width {
-                    1 => Ok(self.encoded(|s| rev1(s, xe, id))),
-                    8 => Ok(self.encoded(|s| rev8(s, xe, id))),
-                    16 => Ok(self.encoded(|s| rev16(s, xe, id))),
-                    32 => Ok(self.encoded(|s| rev32(s, xe, id))),
-                    64 => Ok(self.encoded(|s| rev64(s, xe, id))),
+                    1 => Ok(rev1(self, xe, id)),
+                    8 => Ok(rev8(self, xe, id)),
+                    16 => Ok(rev16(self, xe, id)),
+                    32 => Ok(rev32(self, xe, id)),
+                    64 => Ok(rev64(self, xe, id)),
                     _ => unimplemented!("unexpected CLS width"),
                 }
             }
@@ -543,7 +520,7 @@ impl<'a> Solver<'a> {
                 let xe = self.expr_atom(x);
                 let id = x.index();
                 match width {
-                    8 | 16 | 32 | 64 => Ok(self.encoded(|s| popcnt(s, width, xe, id))),
+                    8 | 16 | 32 | 64 => Ok(popcnt(self, width, xe, id)),
                     _ => unimplemented!("unexpected Popcnt width"),
                 }
             }

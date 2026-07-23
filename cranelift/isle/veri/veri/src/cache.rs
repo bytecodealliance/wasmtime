@@ -61,8 +61,6 @@ pub struct CacheEntry {
     pub key_sha256: String,
     /// Short key (first 12 hex chars) used for file naming.
     pub short_key: String,
-    /// SMT-LIB2 transcript that produced this result.
-    pub smt2_text: String,
     /// Which solver backend was used (e.g., "cvc5" or "z3").
     pub solver_backend: String,
     /// Solver version string (e.g., "z3 4.13.3").
@@ -73,10 +71,6 @@ pub struct CacheEntry {
     /// Counterexample model (only present for "failure" verdict).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<CacheModel>,
-    /// Timing: milliseconds for encoding phase.
-    pub init_ms: u64,
-    /// Timing: milliseconds for the check-sat query.
-    pub query_ms: u64,
 }
 
 /// Statistics accumulated during a run.
@@ -379,13 +373,10 @@ mod tests {
         CacheEntry {
             key_sha256: full_sha256,
             short_key,
-            smt2_text: smt2_text.to_string(),
             solver_backend: solver.to_string(),
             solver_version: None,
             verdict,
             model: None,
-            init_ms: 5,
-            query_ms: 10,
         }
     }
 
