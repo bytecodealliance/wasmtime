@@ -196,6 +196,9 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             bail!("realloc return: beyond end of memory")
         }
 
+        // Note that this restoration isn't part of a `Drop` guard which works
+        // because once a component traps it's locked-down and inaccessible, so
+        // it's ok if this isn't restored.
         #[cfg(feature = "component-model-async")]
         {
             *self.store.0.vm_store_context_mut().component_context_mut() = orig_context;
