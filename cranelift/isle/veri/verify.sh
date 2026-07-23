@@ -2,25 +2,28 @@
 #
 # Driver for VeriISLE verification with the SMT query cache.
 #
+# The cache lives locally at cranelift/isle/veri/cache (gitignored). Sharing
+# the cache across runs in CI (via artifacts) is planned separately; for now
+# these modes manage a local cache only.
+#
 # Usage:
 #   ./cranelift/isle/veri/verify.sh [MODE]
 #
 # Modes:
-#   cache-only     Verify purely from the committed cache, in read-only,
-#                  enforcing mode. Fails on any cache miss and never invokes an
-#                  SMT solver. This is the fast, solver-free check intended for
-#                  CI on pull requests.
+#   cache-only     Verify purely from the local cache, in read-only, enforcing
+#                  mode. Fails on any cache miss and never invokes an SMT
+#                  solver. Use this to validate that a previously generated
+#                  cache fully covers the current backends.
 #
-#   rebuild-cache  Regenerate the committed cache: read from the existing cache,
-#                  write only the entries actually used into a fresh directory,
-#                  then swap it in. Unused entries are dropped (garbage
-#                  collected). Cache misses are computed by invoking the SMT
-#                  solver, so this requires z3 and/or cvc5 to be installed. This
-#                  is intended to run from the main-branch merge queue.
+#   rebuild-cache  Regenerate the cache: read from the existing cache, write
+#                  only the entries actually used into a fresh directory, then
+#                  swap it in. Unused entries are dropped (garbage collected).
+#                  Cache misses are computed by invoking the SMT solver, so
+#                  this requires z3 and/or cvc5 to be installed.
 #
-#   (no argument)  Local development: use and update the committed cache
-#                  in-place. Serves cached results where possible and invokes
-#                  the solver on misses, writing new entries back to the cache.
+#   (no argument)  Local development: use and update the cache in-place.
+#                  Serves cached results where possible and invokes the solver
+#                  on misses, writing new entries back to the cache.
 #
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -29,7 +32,6 @@ MODE="${1:-local}"
 
 CACHE_DIR="cranelift/isle/veri/cache"
 CONFIGS=(
-    cranelift/isle/veri/configs/aarch64-fast.args
     cranelift/isle/veri/configs/aarch64.args
     cranelift/isle/veri/configs/x64-iadd-base-case.args
 )
@@ -38,7 +40,7 @@ CONFIGS=(
 run_all() {
     for config in "${CONFIGS[@]}"; do
         echo "=== veri: $config ==="
-        cargo run -p cranelift-isle-veri --bin veri -- --config "$config" "$@"
+        cargo run -p cranelift-isle-veri --release --bin veri -- --config "$config" "$@"
     done
 }
 
@@ -47,6 +49,8 @@ cache-only)
     echo "=== Verifying from cache (read-only, enforcing; no solver) ==="
     if [ ! -d "$CACHE_DIR" ]; then
         echo "ERROR: cache directory does not exist: $CACHE_DIR" >&2
+        echo "Generate it first (requires z3 and/or cvc5):" >&2
+        echo "  ./cranelift/isle/veri/verify.sh rebuild-cache" >&2
         exit 1
     fi
     if ! run_all --cache-source-dir "$CACHE_DIR" --cache-mode read-only-enforcing; then
@@ -54,13 +58,12 @@ cache-only)
 
 Verification failed (cache miss or verification error).
 
-A cache miss means the backends changed such that there are new SMT queries not
-present in the committed cache. We do not run the SMT solver on pull requests;
-instead the solver *results* are committed to the repository.
+A cache miss means the ISLE source in the backends changed such that
+there are new SMT queries not present in the cache. Regenerate it
+(requires z3 and/or cvc5):
 
-To regenerate the cache locally (requires z3 and/or cvc5):
   ./cranelift/isle/veri/verify.sh rebuild-cache
-Then commit the updated cache under $CACHE_DIR.
+
 EOF
         exit 1
     fi
@@ -79,7 +82,7 @@ rebuild-cache)
     # Swap the rebuilt cache in.
     rm -rf "$CACHE_DIR"
     mv "$REBUILD_DIR" "$CACHE_DIR"
-    echo "=== Cache rebuilt at $CACHE_DIR; review 'git status' and commit ==="
+    echo "=== Cache rebuilt at $CACHE_DIR ==="
     ;;
 
 local | "")

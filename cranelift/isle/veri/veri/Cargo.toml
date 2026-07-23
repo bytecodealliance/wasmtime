@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 cranelift-isle = { version = "*", path = "../../isle/", features = ["fancy-errors", "logging"] }
+cranelift-isle-veri-caching = { path = "../caching" }
 cranelift-codegen-meta = { version = "*", path = "../../../codegen/meta", features = ["spec"] }
 log = { workspace = true }
 env_logger = { workspace = true }
@@ -16,7 +17,6 @@ serde_json = { workspace = true }
 num-bigint = "0.4.6"
 num-traits = "0.2.19"
 easy-smt = "0.3.2"
-sha2 = "0.10"
 rayon = { workspace = true }
 tempfile = { workspace = true }
 

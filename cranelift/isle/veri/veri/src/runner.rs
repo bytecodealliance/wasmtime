@@ -13,12 +13,12 @@ use cranelift_isle::{
     sema::{Term, TermId},
     trie_again::RuleSet,
 };
+use cranelift_isle_veri_caching::{self as caching, Cache};
 use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::{
     BUILD_PROFILE, GIT_VERSION,
-    cache::{CacheEntry, CacheStore, CacheVerdict},
     debug::{print_expansion, write_expansion},
     expand::{Chaining, Expander, Expansion},
     program::Program,
@@ -491,8 +491,8 @@ pub struct Runner {
     results_to_log_dir: bool,
     debug: bool,
 
-    /// Shared cache store for SMT query results (None = no caching).
-    cache_store: Option<Arc<CacheStore>>,
+    /// Shared cache of SMT query results (None = no caching).
+    cache: Option<Arc<Cache>>,
 }
 
 impl Runner {
@@ -512,7 +512,7 @@ impl Runner {
             results_to_log_dir: false,
             skip_solver: false,
             debug: false,
-            cache_store: None,
+            cache: None,
         })
     }
 
@@ -603,9 +603,9 @@ impl Runner {
         self.debug = debug;
     }
 
-    /// Enable caching with the given cache store.
-    pub fn set_cache_store(&mut self, store: Arc<CacheStore>) {
-        self.cache_store = Some(store);
+    /// Enable caching with the given cache.
+    pub fn set_cache(&mut self, cache: Arc<Cache>) {
+        self.cache = Some(cache);
     }
 
     pub fn run(&self) -> Result<RunSummary> {
@@ -898,7 +898,7 @@ impl Runner {
         summary.print();
 
         // Print cache stats if caching is enabled.
-        if let Some(cache) = &self.cache_store {
+        if let Some(cache) = &self.cache {
             cache.print_stats();
         }
 
@@ -1124,48 +1124,6 @@ impl Runner {
         Ok(self.default_solver_backend)
     }
 
-    /// Convert a cached verdict into a VerifyReport.
-    fn cache_verdict_to_verify_report(
-        &self,
-        verdict: CacheVerdict,
-        _model: Option<crate::cache::CacheModel>,
-        init_time: Duration,
-    ) -> VerifyReport {
-        let v = match verdict {
-            CacheVerdict::Success => Verdict::Success,
-            CacheVerdict::Failure => Verdict::Failure,
-            CacheVerdict::Unknown => Verdict::Unknown,
-            CacheVerdict::Inapplicable => Verdict::Inapplicable,
-        };
-        VerifyReport {
-            verdict: v,
-            init_time,
-            applicable_time: Duration::ZERO,
-            verify_time: None,
-        }
-    }
-
-    /// Store a verification result in the cache.
-    /// The cache key is derived from `key_smt2` (the baseline transcript).
-    fn store_cache_entry(
-        &self,
-        cache: &CacheStore,
-        key_smt2: &str,
-        solver_backend: &str,
-        verdict: CacheVerdict,
-    ) -> Result<()> {
-        let (short_key, full_sha256) = CacheStore::compute_key(key_smt2, solver_backend);
-        let entry = CacheEntry {
-            key_sha256: full_sha256,
-            short_key,
-            solver_backend: solver_backend.to_string(),
-            solver_version: None,
-            verdict,
-            model: None,
-        };
-        cache.store(entry)
-    }
-
     #[allow(clippy::too_many_arguments, reason = "verification code")]
     fn verify_expansion_type_instantiation(
         &self,
@@ -1182,45 +1140,22 @@ impl Runner {
     ) -> Result<VerifyReport> {
         let start = time::Instant::now();
 
+        // Build the SMT context through the caching layer: commands are
+        // recorded as they are issued, queries are answered from the cache
+        // when possible, and a solver subprocess is spawned — with the
+        // recorded state played into it — only on a cache miss.
         let binary = solver_backend.prog();
-        let backend_name = binary;
-
-        // If caching is enabled, derive the cache key *without* spawning a
-        // solver: a recording pass replays the encoding through a
-        // subprocess-less context, reproducing the exact SMT-LIB2 transcript a
-        // live run would have sent. On a cache hit we return immediately,
-        // never invoking the solver at all.
-        let baseline = if self.cache_store.is_some() {
-            let smt = easy_smt::ContextBuilder::new().build()?;
-            let mut recorder = Solver::new_recording(smt, &self.prog, conditions, assignment)?;
-            recorder.set_dialect(solver_backend.dialect());
-            recorder.encode()?;
-            Some(recorder.transcript())
-        } else {
-            None
-        };
-
-        if let (Some(cache), Some(baseline)) = (&self.cache_store, &baseline)
-            && let Some((verdict, model)) = cache.check(baseline, backend_name)?
-        {
-            // Cache hit — return the cached result without spawning the solver.
-            let init_time = start.elapsed();
-            writeln!(output, "\t\tcache hit: {}", verdict)?;
-            return Ok(self.cache_verdict_to_verify_report(verdict, model, init_time));
-        }
-        // A miss in read-only-enforcing mode already returned an error from
-        // `check()` above; a miss in read-write mode (or caching disabled)
-        // falls through to a real solve.
-
-        // Solve.
-        let start = time::Instant::now();
         let args = solver_backend.args(self.timeout);
         let replay_file = Self::open_log_file(log_dir.clone(), "solver.smt2")?;
-        let smt = easy_smt::ContextBuilder::new()
+        let mut smt_builder = caching::ContextBuilder::new();
+        smt_builder
             .solver(binary)
             .solver_args(&args)
-            .replay_file(Some(replay_file))
-            .build()?;
+            .replay_file(Some(replay_file));
+        if let Some(cache) = &self.cache {
+            smt_builder.cache(cache.clone());
+        }
+        let smt = smt_builder.build()?;
 
         let mut solver = Solver::new(smt, &self.prog, conditions, assignment)?;
         solver.set_dialect(solver_backend.dialect());
@@ -1236,15 +1171,6 @@ impl Runner {
         match applicability {
             Applicability::Applicable => (),
             Applicability::Inapplicable => {
-                // Cache the inapplicable result.
-                if let (Some(cache), Some(baseline)) = (&self.cache_store, &baseline) {
-                    let _ = self.store_cache_entry(
-                        cache,
-                        baseline,
-                        backend_name,
-                        CacheVerdict::Inapplicable,
-                    );
-                }
                 return Ok(VerifyReport {
                     verdict: Verdict::Inapplicable,
                     init_time,
@@ -1281,15 +1207,6 @@ impl Runner {
                     failure_path: unknown_path,
                 });
 
-                // Cache the unknown result.
-                if let (Some(cache), Some(baseline)) = (&self.cache_store, &baseline) {
-                    let _ = self.store_cache_entry(
-                        cache,
-                        baseline,
-                        backend_name,
-                        CacheVerdict::Unknown,
-                    );
-                }
                 return Ok(VerifyReport {
                     verdict: Verdict::ApplicabilityUnknown,
                     init_time,
@@ -1302,20 +1219,9 @@ impl Runner {
         // Verify.
         let start = time::Instant::now();
         let verification = solver.check_verification_condition()?;
-        let verify_time = start.elapsed();
+        let verify_time = Some(start.elapsed());
 
         writeln!(output, "\t\tverification = {verification}")?;
-
-        // Cache the verification result.
-        if let (Some(cache), Some(baseline)) = (&self.cache_store, &baseline) {
-            let verdict = match &verification {
-                Verification::Success => CacheVerdict::Success,
-                Verification::Failure(_) => CacheVerdict::Failure,
-                Verification::Unknown => CacheVerdict::Unknown,
-            };
-            let _ = self.store_cache_entry(cache, baseline, backend_name, verdict);
-        }
-
         Ok(match verification {
             Verification::Failure(model) => {
                 let failure_path = log_dir.join("failure.out");
@@ -1347,20 +1253,20 @@ impl Runner {
                     verdict: Verdict::Failure,
                     init_time,
                     applicable_time,
-                    verify_time: Some(verify_time),
+                    verify_time,
                 }
             }
             Verification::Success => VerifyReport {
                 verdict: Verdict::Success,
                 init_time,
                 applicable_time,
-                verify_time: Some(verify_time),
+                verify_time,
             },
             Verification::Unknown => VerifyReport {
                 verdict: Verdict::Unknown,
                 init_time,
                 applicable_time,
-                verify_time: Some(verify_time),
+                verify_time,
             },
         })
     }

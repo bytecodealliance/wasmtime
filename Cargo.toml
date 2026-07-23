@@ -186,6 +186,7 @@ members = [
   "cranelift/isle/islec",
   "cranelift/isle/veri/aslp",
   "cranelift/isle/veri/isaspec",
+  "cranelift/isle/veri/caching",
   "cranelift/isle/veri/test-macros",
   "cranelift/isle/veri/veri",
   "cranelift/serde",

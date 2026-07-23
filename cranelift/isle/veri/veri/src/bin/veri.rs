@@ -5,8 +5,8 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, format_err};
 use clap::{ArgAction, Parser};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
-use cranelift_isle_veri::cache::{CacheMode, CacheStore};
 use cranelift_isle_veri::runner::{Filter, Runner, SolverBackend, SolverRule};
+use cranelift_isle_veri_caching::{Cache, CacheMode};
 
 /// Configuration file applied by default when no `--config` is given.
 const DEFAULT_CONFIG: &str = "cranelift/isle/veri/configs/aarch64-fast.args";
@@ -122,7 +122,7 @@ struct Opts {
     /// - `read-only-enforcing`: serve hits from the source cache only and fail
     ///   the run on any miss (never invokes the solver). Requires
     ///   `--cache-source-dir`.
-    #[arg(long, value_enum, default_value = "read-write")]
+    #[arg(long, default_value = "read-write")]
     cache_mode: CacheMode,
 }
 
@@ -307,12 +307,12 @@ fn main() -> Result<()> {
             }
             _ => {}
         }
-        let store = CacheStore::open(
+        let cache = Cache::open(
             opts.cache_source_dir.clone(),
             opts.cache_dest_dir.clone(),
             opts.cache_mode,
         );
-        runner.set_cache_store(Arc::new(store));
+        runner.set_cache(Arc::new(cache));
     }
 
     // Summarize what is being excluded and where output is going before

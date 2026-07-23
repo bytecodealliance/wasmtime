@@ -1,13 +1,11 @@
-use easy_smt::*;
+use cranelift_isle_veri_caching::*;
 
-use crate::solver::Solver;
-
-fn declare(smt: &mut Solver<'_>, name: String, val: SExpr) -> SExpr {
+fn declare(smt: &mut Context, name: String, val: SExpr) -> SExpr {
     smt.declare_const(name.clone(), val).unwrap();
     smt.atom(name)
 }
 
-pub fn rev64(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
+pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // Generated code.
     let x1 = declare(
         smt,
@@ -115,7 +113,7 @@ pub fn rev64(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
     rev64ret
 }
 
-pub fn rev32(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
+pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     let x = smt.extract(31, 0, x);
 
     // Generated code.
@@ -207,7 +205,7 @@ pub fn rev32(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
     rev32ret
 }
 
-pub fn rev16(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
+pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     let x = smt.extract(15, 0, x);
 
     // Generated code.
@@ -265,7 +263,7 @@ pub fn rev16(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
     rev16ret
 }
 
-pub fn rev8(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
+pub fn rev8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     let x = smt.extract(7, 0, x);
 
     // Generated code.
@@ -311,7 +309,7 @@ pub fn rev8(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
     rev8ret
 }
 
-pub fn rev1(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
+pub fn rev1(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     let x = smt.extract(0, 0, x);
 
     // Generated code.

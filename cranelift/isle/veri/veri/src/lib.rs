@@ -16,7 +16,6 @@ macro_rules! declare_id {
     };
 }
 
-pub mod cache;
 pub mod debug;
 pub mod encoded;
 pub mod expand;

@@ -1,14 +1,12 @@
 // Adapted from https://stackoverflow.com/questions/23856596/how-to-count-leading-zeros-in-a-32-bit-unsigned-integer
-use easy_smt::*;
+use cranelift_isle_veri_caching::*;
 
-use crate::solver::Solver;
-
-fn declare(smt: &mut Solver<'_>, name: String, val: SExpr) -> SExpr {
+fn declare(smt: &mut Context, name: String, val: SExpr) -> SExpr {
     smt.declare_const(name.clone(), val).unwrap();
     smt.atom(name)
 }
 
-pub fn cls64(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
+pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // Generated code.
     // total zeros counter
     let zret0 = declare(
@@ -769,7 +767,7 @@ pub fn cls64(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
     cls64ret
 }
 
-pub fn cls32(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
+pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     let x = smt.extract(31, 0, x);
 
     // Generated code.
@@ -1428,7 +1426,7 @@ pub fn cls32(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
     cls32ret
 }
 
-pub fn cls16(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
+pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     let x = smt.extract(15, 0, x);
 
     // Generated code.
@@ -1947,7 +1945,7 @@ pub fn cls16(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
     cls16ret
 }
 
-pub fn cls8(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
+pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     let x = smt.extract(7, 0, x);
 
     // Generated code.
@@ -2370,7 +2368,7 @@ pub fn cls8(smt: &mut Solver<'_>, x: SExpr, id: usize) -> SExpr {
     cls8ret
 }
 
-pub fn cls1(smt: &mut Solver<'_>, id: usize) -> SExpr {
+pub fn cls1(smt: &mut Context, id: usize) -> SExpr {
     // Generated code.
     let cls1ret = declare(
         smt,
