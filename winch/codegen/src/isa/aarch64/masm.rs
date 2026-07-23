@@ -364,7 +364,7 @@ impl Masm for MacroAssembler {
                             })
                         })?;
                     }
-                    imm @ (I::F32(_) | I::F64(_)) => {
+                    imm @ (I::F32(_) | I::F64(_) | I::V128(_)) => {
                         self.with_scratch::<FloatScratch, _>(|masm, scratch| -> Result<()> {
                             masm.asm.mov_ir(scratch.writable(), imm, imm.size());
                             dst.to_addressing_mode(masm, size, |masm, mem| {
@@ -373,7 +373,6 @@ impl Masm for MacroAssembler {
                             })
                         })?;
                     }
-                    _ => bail!(CodeGenError::unsupported_wasm_type()),
                 };
                 Ok(())
             }
@@ -444,15 +443,9 @@ impl Masm for MacroAssembler {
     fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
         let size = kind.derive_operand_size();
         self.with_aligned_sp(|masm| match &kind {
-            LoadKind::Operand(_) => {
-                if size == OperandSize::S128 {
-                    bail!(CodeGenError::UnimplementedWasmLoadKind)
-                } else {
-                    src.to_addressing_mode(masm, size, |masm, mem| {
-                        Ok(masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS))
-                    })
-                }
-            }
+            LoadKind::Operand(_) => src.to_addressing_mode(masm, size, |masm, mem| {
+                Ok(masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS))
+            }),
             LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
             LoadKind::ScalarExtend(extend_kind) => {
                 if extend_kind.signed() {

@@ -153,7 +153,8 @@ impl Aarch64ABI {
                 (index_env.next_gpr().map(regs::xreg), ty)
             }
 
-            ty @ (WasmValType::F32 | WasmValType::F64) => {
+            // v128 is passed in a vector register, like f32 and f64.
+            ty @ (WasmValType::F32 | WasmValType::F64 | WasmValType::V128) => {
                 (index_env.next_fpr().map(regs::vreg), ty)
             }
 
@@ -163,28 +164,31 @@ impl Aarch64ABI {
                 }
                 _ => bail!(CodeGenError::unsupported_wasm_type()),
             },
-
-            _ => bail!(CodeGenError::unsupported_wasm_type()),
         };
 
         let ty_size = <Self as ABI>::sizeof(wasm_arg);
         let default = || {
-            let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size as u32);
-            let slot_size = Self::stack_slot_size();
             // Stack slots for parameters are aligned to a fixed slot size,
-            // in the case of Aarch64, 8 bytes.
+            // 8 bytes if the type size is 8 or less and type-sized aligned
+            // if the type size is greater than 8 bytes.
             // For the non-default calling convention, stack slots for
             // return values are type-sized aligned.
             // For the default calling convention, we don't type-size align,
             // given that results on the stack must match spills generated
             // from within the compiler, which are not type-size aligned.
-            let next_stack = if params_or_returns == ParamsOrReturns::Params {
-                align_to(stack_offset, slot_size as u32) + (slot_size as u32)
+            let (arg_offset, next_stack) = if params_or_returns == ParamsOrReturns::Params {
+                let slot_size = (Self::stack_slot_size() as u32).max(ty_size as u32);
+                let offset = align_to(stack_offset, slot_size);
+                (offset, offset + slot_size)
             } else if call_conv.is_default() {
-                stack_offset + (ty_size as u32)
+                (stack_offset, stack_offset + (ty_size as u32))
             } else {
-                align_to(stack_offset, ty_size as u32) + (ty_size as u32)
+                (
+                    stack_offset,
+                    align_to(stack_offset, ty_size as u32) + (ty_size as u32),
+                )
             };
+            let arg = ABIOperand::stack_offset(arg_offset, *ty, ty_size as u32);
             (arg, next_stack)
         };
         Ok(reg.map_or_else(default, |reg| {

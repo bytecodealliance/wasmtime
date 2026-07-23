@@ -416,7 +416,7 @@ impl Compiler {
                 }
 
                 if cfg!(target_arch = "aarch64") {
-                    return (config.simd() && !config.spec_test()) || config.threads();
+                    return config.threads();
                 }
 
                 !cfg!(target_arch = "x86_64")
@@ -518,9 +518,28 @@ impl WastTest {
                 "misc_testsuite/simd/issue4807.wast",
                 "misc_testsuite/simd/replace-lane-preserve.wast",
                 "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
+                "misc_testsuite/simd/interesting-float-splat.wast",
+                "misc_testsuite/simd/issue_3173_select_v128.wast",
+                "misc_testsuite/simd/v128-select.wast",
+                "misc_testsuite/winch/issue-10460.wast",
+                "misc_testsuite/winch/issue-10357.wast",
+                "misc_testsuite/winch/simd_multivalue.wast",
+                "misc_testsuite/simd/unaligned-load.wast",
+                "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
+                "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
+                "misc_testsuite/winch/replace_lane.wast",
+                "misc_testsuite/simd/v128-equal.wast",
+                "misc_testsuite/winch/issue-10331.wast",
             ];
             if now_supported.iter().any(|part| self.path.ends_with(part)) {
                 return false;
+            }
+
+            // SIMD support on winch aarch64 is still incomplete
+            // (bytecodealliance/wasmtime#9925); non-spec simd tests are
+            // expected to fail unless listed in `now_supported` above.
+            if self.config.simd() && !self.config.spec_test() {
+                return true;
             }
         }
 
@@ -570,6 +589,11 @@ impl WastTest {
                     "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                     "misc_testsuite/simd/sse-cannot-fold-unaligned-loads.wast",
                     "misc_testsuite/simd/unaligned-load.wast",
+                    "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
+                    "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
+                    "misc_testsuite/winch/replace_lane.wast",
+                    "misc_testsuite/simd/v128-equal.wast",
+                    "misc_testsuite/winch/issue-10331.wast",
                     "misc_testsuite/simd/v128-select.wast",
                     "misc_testsuite/winch/issue-10331.wast",
                     "misc_testsuite/winch/issue-10357.wast",
@@ -666,6 +690,7 @@ impl WastTest {
                         "misc_testsuite/winch/replace_lane.wast",
                         "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
                         "misc_testsuite/simd/v128-equal.wast",
+                        "misc_testsuite/winch/issue-10331.wast",
                         "spec_testsuite/simd_align.wast",
                         "spec_testsuite/simd_boolean.wast",
                         "spec_testsuite/simd_conversions.wast",
@@ -702,6 +727,11 @@ impl WastTest {
                         "spec_testsuite/simd_bitwise.wast",
                         "misc_testsuite/simd/load_splat_out_of_bounds.wast",
                         "misc_testsuite/simd/unaligned-load.wast",
+                        "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
+                        "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
+                        "misc_testsuite/winch/replace_lane.wast",
+                        "misc_testsuite/simd/v128-equal.wast",
+                        "misc_testsuite/winch/issue-10331.wast",
                         "multi-memory/simd_memory-multi.wast",
                         "misc_testsuite/simd/issue4807.wast",
                         "spec_testsuite/simd_const.wast",
