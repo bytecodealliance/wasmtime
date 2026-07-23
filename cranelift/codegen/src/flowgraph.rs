@@ -167,6 +167,25 @@ impl ControlFlowGraph {
         self.data[block].successors.iter(&self.succ_forest)
     }
 
+    /// Get an iterator over all blocks this control-flow graph has storage for,
+    /// in block order.
+    ///
+    /// This may include blocks that are not in the function's layout (e.g. a
+    /// block that was created but never inserted, or has since been removed);
+    /// such blocks have no predecessors or successors in the graph.
+    pub fn blocks(&self) -> impl ExactSizeIterator<Item = Block> + '_ {
+        self.data.keys()
+    }
+
+    /// Get the number of blocks this control-flow graph has storage for.
+    ///
+    /// This equals `func.dfg.num_blocks()` for the function the CFG was
+    /// computed from, and is an upper bound on the block indices appearing in
+    /// the graph.
+    pub fn num_blocks(&self) -> usize {
+        self.blocks().len()
+    }
+
     /// Check if the CFG is in a valid state.
     ///
     /// Note that this doesn't perform any kind of validity checks. It simply checks if the
