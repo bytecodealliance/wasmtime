@@ -1319,8 +1319,33 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn splat(&mut self, _context: &mut CodeGenContext<Emission>, _size: SplatKind) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn splat(&mut self, context: &mut CodeGenContext<Emission>, size: SplatKind) -> Result<()> {
+        let src = context.pop_to_reg(self, None)?;
+        let dst = writable!(context.any_fpr(self)?);
+
+        match size {
+            SplatKind::I8x16 => {
+                self.asm.vec_dup(src.reg, dst, VectorSize::Size8x16);
+            }
+            SplatKind::I16x8 => {
+                self.asm.vec_dup(src.reg, dst, VectorSize::Size16x8);
+            }
+            SplatKind::I32x4 => {
+                self.asm.vec_dup(src.reg, dst, VectorSize::Size32x4);
+            }
+            SplatKind::I64x2 => {
+                self.asm.vec_dup(src.reg, dst, VectorSize::Size64x2);
+            }
+            SplatKind::F32x4 => {
+                self.asm.vec_dup_elem(src.reg, dst, VectorSize::Size32x4, 0);
+            }
+            SplatKind::F64x2 => {
+                self.asm.vec_dup_elem(src.reg, dst, VectorSize::Size64x2, 0);
+            }
+        }
+        context.free_reg(src);
+        context.stack.push(TypedReg::v128(dst.to_reg()).into());
+        Ok(())
     }
 
     fn shuffle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg, _lanes: [u8; 16]) -> Result<()> {
@@ -1345,22 +1370,76 @@ impl Masm for MacroAssembler {
 
     fn extract_lane(
         &mut self,
-        _src: Reg,
-        _dst: WritableReg,
-        _lane: u8,
-        _kind: ExtractLaneKind,
+        src: Reg,
+        dst: WritableReg,
+        lane: u8,
+        kind: ExtractLaneKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        match kind {
+            ExtractLaneKind::I8x16S => {
+                self.asm
+                    .mov_from_vec_signed(src, dst, lane, VectorSize::Size8x16, OperandSize::S32)
+            }
+            ExtractLaneKind::I16x8S => {
+                self.asm
+                    .mov_from_vec_signed(src, dst, lane, VectorSize::Size16x8, OperandSize::S32)
+            }
+            ExtractLaneKind::I8x16U => self.asm.mov_from_vec(src, dst, lane, OperandSize::S8),
+            ExtractLaneKind::I16x8U => self.asm.mov_from_vec(src, dst, lane, OperandSize::S16),
+            ExtractLaneKind::I32x4 => self.asm.mov_from_vec(src, dst, lane, OperandSize::S32),
+            ExtractLaneKind::I64x2 => self.asm.mov_from_vec(src, dst, lane, OperandSize::S64),
+            ExtractLaneKind::F32x4 => {
+                self.asm
+                    .fpu_move_from_vec(src, dst, lane, VectorSize::Size32x4)
+            }
+            ExtractLaneKind::F64x2 => {
+                self.asm
+                    .fpu_move_from_vec(src, dst, lane, VectorSize::Size64x2)
+            }
+        }
+        Ok(())
     }
 
     fn replace_lane(
         &mut self,
-        _src: RegImm,
-        _dst: WritableReg,
-        _lane: u8,
-        _kind: ReplaceLaneKind,
+        src: RegImm,
+        dst: WritableReg,
+        lane: u8,
+        kind: ReplaceLaneKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        let size = match kind {
+            ReplaceLaneKind::I8x16 => VectorSize::Size8x16,
+            ReplaceLaneKind::I16x8 => VectorSize::Size16x8,
+            ReplaceLaneKind::I32x4 => VectorSize::Size32x4,
+            ReplaceLaneKind::I64x2 => VectorSize::Size64x2,
+            ReplaceLaneKind::F32x4 => VectorSize::Size32x4,
+            ReplaceLaneKind::F64x2 => VectorSize::Size64x2,
+        };
+        match kind {
+            ReplaceLaneKind::I8x16
+            | ReplaceLaneKind::I16x8
+            | ReplaceLaneKind::I32x4
+            | ReplaceLaneKind::I64x2 => match src {
+                RegImm::Reg(reg) => self.asm.mov_to_vec(reg, dst, lane, size),
+                RegImm::Imm(imm) => {
+                    self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                        masm.asm.mov_ir(scratch.writable(), imm, imm.size());
+                        masm.asm.mov_to_vec(scratch.inner(), dst, lane, size);
+                    });
+                }
+            },
+            ReplaceLaneKind::F32x4 | ReplaceLaneKind::F64x2 => match src {
+                RegImm::Reg(reg) => self.asm.vec_mov_element(reg, dst, lane, 0, size),
+                RegImm::Imm(imm) => {
+                    self.with_scratch::<FloatScratch, _>(|masm, scratch| {
+                        masm.asm.mov_ir(scratch.writable(), imm, imm.size());
+                        masm.asm
+                            .vec_mov_element(scratch.inner(), dst, lane, 0, size);
+                    });
+                }
+            },
+        }
+        Ok(())
     }
 
     fn atomic_cas(

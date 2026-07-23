@@ -468,6 +468,86 @@ impl Assembler {
             });
         }
     }
+    /// Duplicate a general-purpose register's value into every lane of a
+    /// vector register.
+    pub fn vec_dup(&mut self, rn: Reg, rd: WritableReg, size: VectorSize) {
+        self.emit(Inst::VecDup {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+        });
+    }
+
+    /// Signed move from a vector element to a GPR.
+    pub fn mov_from_vec_signed(
+        &mut self,
+        rn: Reg,
+        rd: WritableReg,
+        idx: u8,
+        size: VectorSize,
+        scalar_size: OperandSize,
+    ) {
+        self.emit(Inst::MovFromVecSigned {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            idx,
+            size,
+            scalar_size: scalar_size.into(),
+        });
+    }
+
+    /// Move from a vector element to a scalar float register.
+    pub fn fpu_move_from_vec(&mut self, rn: Reg, rd: WritableReg, idx: u8, size: VectorSize) {
+        self.emit(Inst::FpuMoveFromVec {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            idx,
+            size,
+        });
+    }
+
+    /// Move a GPR into a vector element, preserving the other lanes.
+    pub fn mov_to_vec(&mut self, rn: Reg, rd: WritableReg, idx: u8, size: VectorSize) {
+        self.emit(Inst::MovToVec {
+            rd: rd.map(Into::into),
+            ri: rd.to_reg().into(),
+            rn: rn.into(),
+            idx,
+            size,
+        });
+    }
+
+    /// Move a vector element into a vector element, preserving the other
+    /// lanes.
+    pub fn vec_mov_element(
+        &mut self,
+        rn: Reg,
+        rd: WritableReg,
+        dest_idx: u8,
+        src_idx: u8,
+        size: VectorSize,
+    ) {
+        self.emit(Inst::VecMovElement {
+            rd: rd.map(Into::into),
+            ri: rd.to_reg().into(),
+            rn: rn.into(),
+            dest_idx,
+            src_idx,
+            size,
+        });
+    }
+
+    /// Duplicate one lane of a vector register into every lane of a vector
+    /// register.
+    pub fn vec_dup_elem(&mut self, rn: Reg, rd: WritableReg, size: VectorSize, lane: u8) {
+        self.emit(Inst::VecDupFromFpu {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+            lane,
+        });
+    }
+
     /// Vector three-register ALU operation whose destination is also an input
     pub fn vec_rrr_mod(
         &mut self,

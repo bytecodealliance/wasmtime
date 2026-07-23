@@ -516,6 +516,8 @@ impl WastTest {
             let now_supported = [
                 "misc_testsuite/winch/v128_load_lane_invalid_address.wast",
                 "misc_testsuite/simd/issue4807.wast",
+                "misc_testsuite/simd/replace-lane-preserve.wast",
+                "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
             ];
             if now_supported.iter().any(|part| self.path.ends_with(part)) {
                 return false;
