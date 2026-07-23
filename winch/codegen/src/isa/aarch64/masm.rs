@@ -33,7 +33,8 @@ use cranelift_codegen::{
     ir::{MemFlagsData, RelSourceLoc, SourceLoc, types},
     isa::aarch64,
     isa::aarch64::inst::{
-        self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, VectorSize,
+        self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, VecALUModOp, VecALUOp,
+        VecMisc2, VectorSize,
     },
     settings,
 };
@@ -1430,42 +1431,65 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
-    fn v128_not(&mut self, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_not(&mut self, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size32x4);
+        Ok(())
     }
 
     fn fence(&mut self) -> Result<()> {
         Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn v128_and(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_and(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_rrr(VecALUOp::And, src1, src2, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_and_not(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_and_not(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_rrr(VecALUOp::Bic, src2, src1, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_or(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_or(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_rrr(VecALUOp::Orr, src1, src2, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_xor(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_xor(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_rrr(VecALUOp::Eor, src1, src2, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_bitselect(
-        &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _mask: Reg,
-        _dst: WritableReg,
-    ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_bitselect(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()> {
+        self.asm.fmov_rr(mask, dst, OperandSize::S128);
+        self.asm
+            .vec_rrr_mod(VecALUModOp::Bsl, src1, src2, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_any_true(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_any_true(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.with_scratch::<FloatScratch, _>(|masm, tmp| {
+            masm.asm.vec_rrr(
+                VecALUOp::Umaxp,
+                src,
+                src,
+                tmp.writable(),
+                VectorSize::Size32x4,
+            );
+            masm.asm.mov_from_vec(tmp.inner(), dst, 0, OperandSize::S64);
+        });
+        self.asm.subs_ir(
+            Imm12::maybe_from_u64(0).unwrap(),
+            dst.to_reg(),
+            OperandSize::S64,
+        );
+        self.asm.cset(dst, Cond::Ne);
+        Ok(())
     }
 
     fn v128_convert(&mut self, _src: Reg, _dst: WritableReg, _kind: V128ConvertKind) -> Result<()> {

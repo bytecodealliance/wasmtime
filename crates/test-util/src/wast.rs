@@ -513,7 +513,10 @@ impl WastTest {
         }
 
         if config.compiler == Compiler::Winch && cfg!(target_arch = "aarch64") {
-            let now_supported = ["misc_testsuite/winch/v128_load_lane_invalid_address.wast"];
+            let now_supported = [
+                "misc_testsuite/winch/v128_load_lane_invalid_address.wast",
+                "misc_testsuite/simd/issue4807.wast",
+            ];
             if now_supported.iter().any(|part| self.path.ends_with(part)) {
                 return false;
             }
@@ -557,7 +560,6 @@ impl WastTest {
                     "misc_testsuite/simd/cvt-from-uint.wast",
                     "misc_testsuite/simd/edge-of-memory.wast",
                     "misc_testsuite/simd/interesting-float-splat.wast",
-                    "misc_testsuite/simd/issue4807.wast",
                     "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                     "misc_testsuite/simd/issue_3173_select_v128.wast",
                     "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
