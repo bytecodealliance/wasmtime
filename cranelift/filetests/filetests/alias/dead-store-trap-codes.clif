@@ -1,0 +1,80 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; We do not eliminate dead stores when the overwriting store has a different
+;; trap code: this risks changing the observed trap code of an execution.
+
+function %different_trap_codes(i64, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i32):
+    store aligned region0 user10 v1, v0
+    store aligned region0 user20 v2, v0
+    return
+}
+
+; function %different_trap_codes(i64, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store user10 aligned region0 v1, v0
+;     store user20 aligned region0 v2, v0
+;     return
+; }
+
+function %dead_traps_overwriter_does_not(i64, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i32):
+    store aligned region0 user10 v1, v0
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %dead_traps_overwriter_does_not(i64, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store user10 aligned region0 v1, v0
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+function %dead_does_not_trap_overwriter_does(i64, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    store aligned region0 user20 v2, v0
+    return
+}
+
+; function %dead_does_not_trap_overwriter_does(i64, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     store user20 aligned region0 v2, v0
+;     return
+; }
+
+function %different_trap_codes_across_blocks(i64, i32, i32) {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i32, v2: i32):
+    store aligned region0 user10 v1, v0
+    jump block1
+
+block1:
+    store aligned region0 user20 v2, v0
+    return
+}
+
+; function %different_trap_codes_across_blocks(i64, i32, i32) fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store user10 aligned region0 v1, v0
+;     jump block1
+;
+; block1:
+;     store.i32 user20 aligned region0 v2, v0
+;     return
+; }

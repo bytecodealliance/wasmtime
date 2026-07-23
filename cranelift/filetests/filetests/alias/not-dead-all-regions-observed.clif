@@ -1,0 +1,121 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; A call on one path clobbers all regions, so the store is kept.
+function %call_on_path(i64, i32, i32) {
+    region0 = 0 "R"
+    fn0 = colocated %g()
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    brif v1, block1, block2
+
+block1:
+    call fn0()
+    jump block3
+
+block2:
+    jump block3
+
+block3:
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %call_on_path(i64, i32, i32) fast {
+;     region0 = 0 "R"
+;     sig0 = () fast
+;     fn0 = colocated %g sig0
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     brif v1, block1, block2
+;
+; block1:
+;     call fn0()
+;     jump block3
+;
+; block2:
+;     jump block3
+;
+; block3:
+;     store.i32 notrap aligned region0 v2, v0
+;     return
+; }
+
+;; A trapping instruction on one path keeps the store.
+function %trap_on_path(i64, i32, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store notrap aligned region0 v1, v0
+    brif v1, block1, block2
+
+block1:
+    trapz v3, user42
+    jump block3
+
+block2:
+    jump block3
+
+block3:
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %trap_on_path(i64, i32, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store notrap aligned region0 v1, v0
+;     brif v1, block1, block2
+;
+; block1:
+;     trapz.i32 v3, user42
+;     jump block3
+;
+; block2:
+;     jump block3
+;
+; block3:
+;     store.i32 notrap aligned region0 v2, v0
+;     return
+; }
+
+;; A fence on one path keeps the store.
+function %fence_on_path(i64, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    brif v1, block1, block2
+
+block1:
+    fence
+    jump block3
+
+block2:
+    jump block3
+
+block3:
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %fence_on_path(i64, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     brif v1, block1, block2
+;
+; block1:
+;     fence 
+;     jump block3
+;
+; block2:
+;     jump block3
+;
+; block3:
+;     store.i32 notrap aligned region0 v2, v0
+;     return
+; }
+

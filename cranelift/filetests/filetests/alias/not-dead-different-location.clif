@@ -1,0 +1,60 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; The killer writes a different offset in the same region, so the first store
+;; is not dead: its bytes are never overwritten and must be kept.
+function %killer_writes_different_offset(i64, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    store notrap aligned region0 v2, v0+8
+    return
+}
+
+; function %killer_writes_different_offset(i64, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     store notrap aligned region0 v2, v0+8
+;     return
+; }
+
+;; The killer writes a different address value in the same region, so the first
+;; store is not dead (the addresses may differ at runtime).
+function %killer_writes_different_address(i64, i64, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i64, v2: i32, v3: i32):
+    store notrap aligned region0 v2, v0
+    store notrap aligned region0 v3, v1
+    return
+}
+
+; function %killer_writes_different_address(i64, i64, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i64, v2: i32, v3: i32):
+;     store notrap aligned region0 v2, v0
+;     store notrap aligned region0 v3, v1
+;     return
+; }
+
+;; The killer is narrower than the dead store, so it only partially overwrites
+;; it; the upper bytes of the wide store are still observable and it is kept.
+function %killer_narrower_than_dead(i64, i64, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i64, v2: i32):
+    store notrap aligned region0 v1, v0
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %killer_narrower_than_dead(i64, i64, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i64, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     store notrap aligned region0 v2, v0
+;     return
+; }

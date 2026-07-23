@@ -34,6 +34,7 @@ impl SubTest for TestAliasAnalysis {
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         comp_ctx.flowgraph();
+        comp_ctx.compute_post_dom_tree();
         comp_ctx
             .replace_redundant_loads()
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, Into::into(e)))?;
