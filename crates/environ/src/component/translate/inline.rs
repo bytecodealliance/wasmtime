@@ -1092,10 +1092,12 @@ impl<'a> Inliner<'a> {
                     .push((*func, dfg::CoreDef::UnsafeIntrinsic(*func, intrinsic)));
             }
             ThreadIndex { func } => {
-                let index = self
-                    .result
-                    .trampolines
-                    .push((*func, dfg::Trampoline::ThreadIndex));
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadIndex {
+                        instance: frame.instance,
+                    },
+                ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             ThreadNewIndirect {

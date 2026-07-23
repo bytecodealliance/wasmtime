@@ -101,7 +101,7 @@
 
 (assert_return (invoke "run") (u32.const 42))
 
-;; Test that `thread.index` is exempt from may-leave checks
+;; Test that `thread.index` is not exempt from may-leave checks
 (component
   (core func $thread.index (canon thread.index))
 
@@ -118,4 +118,33 @@
     (canon lift (core func $dm "run") (post-return (func $dm "post-return"))))
 )
 
-(assert_return (invoke "run"))
+(assert_trap (invoke "run") "cannot leave component instance")
+
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (global $index (mut i32) (i32.const 0))
+    (memory (export "memory") 1)
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+       (global.set $index (call $thread-index))
+       (if (i32.eqz (global.get $index)) (then unreachable))
+       (i32.const 100)
+    )
+    (func (export "run") (param i32 i32)
+       (local $index i32)
+       (local.set $index (call $thread-index))
+       (if (i32.eqz (local.get $index)) (then unreachable))
+       (if (i32.ne (local.get $index) (global.get $index)) (then unreachable))
+    )
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+  (func (export "run") (param "s" string) (canon lift
+    (core func $m "run")
+    (memory $m "memory")
+    (realloc (func $m "realloc"))
+  ))
+)
+(assert_trap (invoke "run" (str.const "x")) "cannot leave component instance")

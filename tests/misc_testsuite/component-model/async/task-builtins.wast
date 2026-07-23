@@ -180,8 +180,8 @@
       call $backpressure.inc
       call $backpressure.dec
 
-      ;; context.get should be what was set in `realloc`
-      (if (i32.ne (call $context.get) (i32.const 100)) (then (unreachable)))
+      ;; context set in realloc should be separate from this thread's context
+      (if (i32.ne (call $context.get) (i32.const 0)) (then (unreachable)))
     )
   )
   (core instance $m (instantiate $M (with "" (instance
@@ -416,7 +416,7 @@
       (if (i32.ne (local.get 2) (i32.const 1)) (then (unreachable)))
       (if (i32.ne (local.get 3) (i32.const 2)) (then (unreachable)))
 
-      (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
+      (if (i32.ne (call $context.get) (i32.const 0)) (then (unreachable)))
       (call $context.set (i32.const 500))
 
       call $backpressure.inc
@@ -448,11 +448,11 @@
     (func (export "run")
       ;; set this tasks's context before calling $run, in calling $run the
       ;; runtime will then call `realloc` above for the string return value
-      ;; which should see our 400 value. That will then set 500 which we
-      ;; should then see after the return.
+      ;; which should NOT see our 400 value. That will then set 500 which we
+      ;; should NOT then see after the return.
       (call $context.set (i32.const 400))
       (call $run (i32.const 20))
-      (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+      (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
     )
   )
   (core instance $m (instantiate $M (with "" (instance
@@ -616,7 +616,7 @@
         (if (i32.ne (local.get 3) (i32.const 2)) (then (unreachable)))
 
         call $context.get
-        i32.const 400
+        i32.const 0
         i32.ne
         if unreachable end
 
@@ -663,15 +663,15 @@
       (import "" "task.return" (func $task.return (param i32)))
       (import "" "memory" (memory 1))
 
-      ;; Set context[0] to 400, then read the future, which should call realloc and set
-      ;; context[0] to 500, then check that we see that value.
+      ;; Set context[0] to 400, then read the future, which should call realloc
+      ;; and set context[0] to 500, then check that we DON'T see that value.
       (func (export "run-future") (param $fr i32) (result i32)
         (local $ret i32)
 
         (call $context.set (i32.const 400))
         (local.set $ret (call $future.read (local.get $fr) (i32.const 40)))
         (if (i32.ne (i32.const 0 (; COMPLETED ;)) (local.get $ret)) (then (unreachable)))
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
 
         (call $task.return (i32.const 42))
         (i32.const 0 (; EXIT ;))
@@ -684,7 +684,7 @@
         (call $context.set (i32.const 400))
         (local.set $ret (call $stream.read (local.get $sr) (i32.const 40) (i32.const 1)))
         (if (i32.ne (i32.const 0x10 (; COMPLETED | 1<<4 ;)) (local.get $ret)) (then (unreachable)))
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
 
         (call $task.return (i32.const 42))
         (i32.const 0 (; EXIT ;))

@@ -713,7 +713,7 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
-            Trampoline::ThreadIndex => {
+            Trampoline::ThreadIndex { .. } => {
                 self.translate_libcall(
                     host::thread_index,
                     TrapSentinel::NegativeOne,
@@ -1478,7 +1478,6 @@ impl<'a> TrampolineCompiler<'a> {
         let instance = match trampoline {
             // These intrinsics explicitly do not check the may-leave flag.
             Trampoline::ResourceRep { .. }
-            | Trampoline::ThreadIndex
             | Trampoline::BackpressureInc { .. }
             | Trampoline::BackpressureDec { .. } => return,
 
@@ -1508,6 +1507,7 @@ impl<'a> TrampolineCompiler<'a> {
             | Trampoline::WaitableSetPoll { instance, .. }
             | Trampoline::WaitableSetDrop { instance }
             | Trampoline::WaitableJoin { instance }
+            | Trampoline::ThreadIndex { instance }
             | Trampoline::ThreadNewIndirect { instance, .. }
             | Trampoline::ThreadResumeLater { instance, .. }
             | Trampoline::ThreadSuspend { instance, .. }
