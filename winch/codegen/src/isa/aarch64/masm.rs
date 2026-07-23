@@ -1591,22 +1591,46 @@ impl Masm for MacroAssembler {
 
     fn v128_min(
         &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _dst: WritableReg,
-        _kind: V128MinKind,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        kind: V128MinKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let (op, size) = match kind {
+            V128MinKind::F32x4 | V128MinKind::F64x2 => {
+                bail!(CodeGenError::unimplemented_masm_instruction())
+            }
+            V128MinKind::I8x16S => (VecALUOp::Smin, VectorSize::Size8x16),
+            V128MinKind::I8x16U => (VecALUOp::Umin, VectorSize::Size8x16),
+            V128MinKind::I16x8S => (VecALUOp::Smin, VectorSize::Size16x8),
+            V128MinKind::I16x8U => (VecALUOp::Umin, VectorSize::Size16x8),
+            V128MinKind::I32x4S => (VecALUOp::Smin, VectorSize::Size32x4),
+            V128MinKind::I32x4U => (VecALUOp::Umin, VectorSize::Size32x4),
+        };
+        self.asm.vec_rrr(op, src1, src2, dst, size);
+        Ok(())
     }
 
     fn v128_max(
         &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _dst: WritableReg,
-        _kind: V128MaxKind,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        kind: V128MaxKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let (op, size) = match kind {
+            V128MaxKind::F32x4 | V128MaxKind::F64x2 => {
+                bail!(CodeGenError::unimplemented_masm_instruction())
+            }
+            V128MaxKind::I8x16S => (VecALUOp::Smax, VectorSize::Size8x16),
+            V128MaxKind::I8x16U => (VecALUOp::Umax, VectorSize::Size8x16),
+            V128MaxKind::I16x8S => (VecALUOp::Smax, VectorSize::Size16x8),
+            V128MaxKind::I16x8U => (VecALUOp::Umax, VectorSize::Size16x8),
+            V128MaxKind::I32x4S => (VecALUOp::Smax, VectorSize::Size32x4),
+            V128MaxKind::I32x4U => (VecALUOp::Umax, VectorSize::Size32x4),
+        };
+        self.asm.vec_rrr(op, src1, src2, dst, size);
+        Ok(())
     }
 
     fn v128_extmul(
@@ -1634,14 +1658,15 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
-    fn v128_avgr(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
-    ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.asm.vec_rrr(
+            VecALUOp::Urhadd,
+            lhs,
+            rhs,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
     fn v128_div(
