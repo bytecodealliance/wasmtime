@@ -372,6 +372,12 @@ async fn p2_udp_connect() {
     run(P2_UDP_CONNECT_COMPONENT, |_| {}).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_udp_send_to_closed_receiver() {
+    run(P2_UDP_SEND_TO_CLOSED_RECEIVER_COMPONENT, |_| {})
+        .await
+        .unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_stream_pollable_correct() {
     run(P2_STREAM_POLLABLE_CORRECT_COMPONENT, |_| {})
         .await

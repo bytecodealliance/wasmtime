@@ -346,6 +346,14 @@ fn p2_udp_connect() {
     run(P2_UDP_CONNECT_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
+// This test is flaky on Windows.  It consistently passes when run by itself but
+// consistently fails when run in combination with the `p2::async_` variation,
+// and we've thus far been unable to determine the reason.
+#[cfg_attr(windows, ignore = "This test is flaky on Windows.")]
+fn p2_udp_send_to_closed_receiver() {
+    run(P2_UDP_SEND_TO_CLOSED_RECEIVER_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
 fn p2_stream_pollable_correct() {
     run(P2_STREAM_POLLABLE_CORRECT_COMPONENT, |_| {}).unwrap()
 }
