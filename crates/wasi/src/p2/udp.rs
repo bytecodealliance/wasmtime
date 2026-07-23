@@ -81,7 +81,11 @@ impl IncomingDatagramStream {
             self.current_recv = Some(recv);
         }
 
-        self.current_recv.as_mut().unwrap().poll_ready(cx)
+        self.current_recv
+            .as_mut()
+            .unwrap()
+            .poll_ready(cx)
+            .map(|_| ())
     }
 
     pub(crate) fn try_recv(&mut self) -> Result<(Vec<u8>, SocketAddr), ErrorCode> {
@@ -113,7 +117,7 @@ impl OutgoingDatagramStream {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<()> {
         match &mut self.prev_send {
-            Some(send) => send.poll_ready(cx),
+            Some(send) => send.poll_ready(cx).map(|_| ()),
             None => std::task::Poll::Ready(()),
         }
     }

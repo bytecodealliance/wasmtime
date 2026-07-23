@@ -1,22 +1,16 @@
 use crate::p2::SocketError;
 use crate::p2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
-use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
-use crate::sockets::WasiSocketsCtxView;
-use std::mem;
-use std::net::ToSocketAddrs;
-use std::pin::Pin;
+use crate::sockets::ip_name_lookup::resolve_addresses;
+use crate::sockets::{MaybeReady, WasiSocketsCtxView, noop_cx};
+use std::net::IpAddr;
+use std::task::Poll;
 use std::vec;
 use wasmtime::Result;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::{DynPollable, Pollable, subscribe};
 
-use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, parse_host};
-
-pub enum ResolveAddressStream {
-    Waiting(AbortOnDropJoinHandle<Result<Vec<IpAddress>, SocketError>>),
-    Done(Result<vec::IntoIter<IpAddress>, SocketError>),
-}
+pub struct ResolveAddressStream(MaybeReady<Result<vec::IntoIter<IpAddr>, ErrorCode>>);
 
 impl Host for WasiSocketsCtxView<'_> {
     fn resolve_addresses(
@@ -29,15 +23,16 @@ impl Host for WasiSocketsCtxView<'_> {
         // use for it.
         _ = self.table.get(&network)?;
 
-        let host = parse_host(&name)?;
+        let fut = resolve_addresses(&self.ctx, name);
+        let stream = ResolveAddressStream(MaybeReady::poll_or_spawn(async move {
+            Ok(fut.await?.into_iter())
+        }));
 
-        if !self.ctx.allowed_network_uses.ip_name_lookup {
-            return Err(ErrorCode::PermanentResolverFailure.into());
+        // Attempt to surface errors immediately.
+        if let MaybeReady::Ready(Err(err)) = &stream.0 {
+            return Err((*err).into());
         }
-
-        let task = spawn_blocking(move || blocking_resolve(&host));
-        let resource = self.table.push(ResolveAddressStream::Waiting(task))?;
-        Ok(resource)
+        Ok(self.table.push(stream)?)
     }
 }
 
@@ -47,22 +42,13 @@ impl HostResolveAddressStream for WasiSocketsCtxView<'_> {
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Option<IpAddress>, SocketError> {
         let stream: &mut ResolveAddressStream = self.table.get_mut(&resource)?;
-        loop {
-            match stream {
-                ResolveAddressStream::Waiting(future) => {
-                    match crate::runtime::poll_noop(Pin::new(future)) {
-                        Some(result) => {
-                            *stream = ResolveAddressStream::Done(result.map(|v| v.into_iter()));
-                        }
-                        None => return Err(ErrorCode::WouldBlock.into()),
-                    }
-                }
-                ResolveAddressStream::Done(slot @ Err(_)) => {
-                    mem::replace(slot, Ok(Vec::new().into_iter()))?;
-                    unreachable!();
-                }
-                ResolveAddressStream::Done(Ok(iter)) => return Ok(iter.next()),
-            }
+        let Poll::Ready(result) = stream.0.poll_ready(&mut noop_cx()) else {
+            return Err(ErrorCode::WouldBlock.into());
+        };
+
+        match result {
+            Ok(iter) => Ok(iter.next().map(|addr| addr.into())),
+            Err(err) => Err((*err).into()),
         }
     }
 
@@ -82,27 +68,6 @@ impl HostResolveAddressStream for WasiSocketsCtxView<'_> {
 #[async_trait::async_trait]
 impl Pollable for ResolveAddressStream {
     async fn ready(&mut self) {
-        if let ResolveAddressStream::Waiting(future) = self {
-            *self = ResolveAddressStream::Done(future.await.map(|v| v.into_iter()));
-        }
-    }
-}
-
-fn blocking_resolve(host: &url::Host) -> Result<Vec<IpAddress>, SocketError> {
-    match host {
-        url::Host::Ipv4(v4addr) => Ok(vec![IpAddress::Ipv4(from_ipv4_addr(*v4addr))]),
-        url::Host::Ipv6(v6addr) => Ok(vec![IpAddress::Ipv6(from_ipv6_addr(*v6addr))]),
-        url::Host::Domain(domain) => {
-            // For now use the standard library to perform actual resolution through
-            // the usage of the `ToSocketAddrs` trait. This is only
-            // resolving names, not ports, so force the port to be 0.
-            let addresses = (domain.as_str(), 0)
-                .to_socket_addrs()
-                .map_err(|_| ErrorCode::NameUnresolvable)? // If/when we use `getaddrinfo` directly, map the error properly.
-                .map(|addr| addr.ip().to_canonical().into())
-                .collect();
-
-            Ok(addresses)
-        }
+        std::future::poll_fn(|cx| self.0.poll_ready(cx).map(|_| ())).await
     }
 }

@@ -2,8 +2,9 @@ use crate::p2::SocketError;
 use crate::p2::bindings::sockets::network::{
     self, ErrorCode, IpAddress, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
 };
-use crate::sockets::WasiSocketsCtxView;
-use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
+use crate::sockets::{
+    WasiSocketsCtxView, from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr,
+};
 use rustix::io::Errno;
 use std::io;
 use wasmtime::Error;

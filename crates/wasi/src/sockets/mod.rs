@@ -1,13 +1,19 @@
+use core::fmt;
 use core::future::Future;
+use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use core::ops::Deref;
+use rustix::fd::AsFd;
+use rustix::io::Errno;
+use rustix::net::sockopt;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::{net::SocketAddr, task::Poll};
+use std::task::Poll;
+use tracing::debug;
 use wasmtime::component::{HasData, ResourceTable};
 
+pub(crate) mod ip_name_lookup;
 mod tcp;
 mod udp;
-pub(crate) mod util;
 pub use tcp::TcpSocket;
 pub(crate) use tcp::{TcpListenStream, TcpReceiveStream, TcpSendStream};
 pub use udp::UdpSocket;
@@ -55,14 +61,6 @@ pub struct WasiSockets;
 impl HasData for WasiSockets {
     type Data<'a> = WasiSocketsCtxView<'a>;
 }
-
-/// Value taken from rust std library.
-pub(crate) const DEFAULT_TCP_BACKLOG: u32 = 128;
-
-/// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
-/// but we do not account for e.g. the transport layer here for simplicity.
-/// In practice, datagrams are typically less than 1500 bytes.
-pub(crate) const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 #[derive(Clone, Default)]
 pub struct WasiSocketsCtx {
@@ -249,7 +247,7 @@ impl<T> MaybeReady<T> {
         T: Send + 'static,
     {
         let mut fut = Box::pin(fut);
-        match fut.as_mut().poll(&mut noop_cx()) {
+        match crate::runtime::with_ambient_tokio_runtime(|| fut.as_mut().poll(&mut noop_cx())) {
             Poll::Ready(val) => Self::Ready(val),
             Poll::Pending => Self::new(crate::runtime::spawn(fut)),
         }
@@ -260,16 +258,19 @@ impl<T> MaybeReady<T> {
             Self::Pending(_) => panic!("future not ready"),
         }
     }
-    pub(crate) fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
+    pub(crate) fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<&mut T> {
         match self {
             Self::Pending(fut) => match fut.as_mut().poll(cx) {
                 Poll::Ready(val) => {
                     *self = Self::Ready(val);
-                    Poll::Ready(())
+                    Poll::Ready(match self {
+                        Self::Ready(val) => val,
+                        _ => unreachable!(),
+                    })
                 }
                 Poll::Pending => Poll::Pending,
             },
-            Self::Ready(_) => Poll::Ready(()),
+            Self::Ready(val) => Poll::Ready(val),
         }
     }
     pub(crate) async fn into_future(self) -> T {
@@ -282,4 +283,297 @@ impl<T> MaybeReady<T> {
 
 pub(crate) fn noop_cx() -> std::task::Context<'static> {
     std::task::Context::from_waker(futures::task::noop_waker_ref())
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ErrorCode {
+    AccessDenied,
+    NotSupported,
+    InvalidArgument,
+    OutOfMemory,
+    Timeout,
+    InvalidState,
+    AddressNotBindable,
+    AddressInUse,
+    RemoteUnreachable,
+    ConnectionRefused,
+    ConnectionBroken,
+    ConnectionReset,
+    ConnectionAborted,
+    DatagramTooLarge,
+    Other,
+}
+
+impl fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+impl std::error::Error for ErrorCode {}
+
+impl From<std::io::Error> for ErrorCode {
+    fn from(value: std::io::Error) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&std::io::Error> for ErrorCode {
+    fn from(value: &std::io::Error) -> Self {
+        // Attempt the more detailed native error code first:
+        if let Some(errno) = Errno::from_io_error(value) {
+            return errno.into();
+        }
+
+        match value.kind() {
+            std::io::ErrorKind::AddrInUse => Self::AddressInUse,
+            std::io::ErrorKind::AddrNotAvailable => Self::AddressNotBindable,
+            std::io::ErrorKind::ConnectionAborted => Self::ConnectionAborted,
+            std::io::ErrorKind::ConnectionRefused => Self::ConnectionRefused,
+            std::io::ErrorKind::ConnectionReset => Self::ConnectionReset,
+            std::io::ErrorKind::InvalidInput => Self::InvalidArgument,
+            std::io::ErrorKind::NotConnected => Self::InvalidState,
+            std::io::ErrorKind::OutOfMemory => Self::OutOfMemory,
+            std::io::ErrorKind::PermissionDenied => Self::AccessDenied,
+            std::io::ErrorKind::TimedOut => Self::Timeout,
+            std::io::ErrorKind::Unsupported => Self::NotSupported,
+            std::io::ErrorKind::HostUnreachable => Self::RemoteUnreachable,
+            std::io::ErrorKind::NetworkUnreachable => Self::RemoteUnreachable,
+            std::io::ErrorKind::NetworkDown => Self::RemoteUnreachable,
+            std::io::ErrorKind::BrokenPipe => Self::ConnectionBroken,
+            _ => {
+                debug!("unknown I/O error: {value}");
+                Self::Other
+            }
+        }
+    }
+}
+
+impl From<Errno> for ErrorCode {
+    fn from(value: Errno) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&Errno> for ErrorCode {
+    fn from(value: &Errno) -> Self {
+        match *value {
+            #[cfg(not(windows))]
+            Errno::PERM => Self::AccessDenied,
+            Errno::ACCESS => Self::AccessDenied,
+            Errno::ADDRINUSE => Self::AddressInUse,
+            Errno::ADDRNOTAVAIL => Self::AddressNotBindable,
+            Errno::TIMEDOUT => Self::Timeout,
+            #[cfg(not(windows))]
+            Errno::PIPE => Self::ConnectionBroken,
+            Errno::CONNREFUSED => Self::ConnectionRefused,
+            Errno::CONNRESET => Self::ConnectionReset,
+            Errno::CONNABORTED => Self::ConnectionAborted,
+            Errno::INVAL => Self::InvalidArgument,
+            Errno::HOSTUNREACH => Self::RemoteUnreachable,
+            Errno::HOSTDOWN => Self::RemoteUnreachable,
+            Errno::NETDOWN => Self::RemoteUnreachable,
+            Errno::NETUNREACH => Self::RemoteUnreachable,
+            #[cfg(target_os = "linux")]
+            Errno::NONET => Self::RemoteUnreachable,
+            Errno::ISCONN => Self::InvalidState,
+            Errno::NOTCONN => Self::InvalidState,
+            Errno::DESTADDRREQ => Self::InvalidState,
+            Errno::MSGSIZE => Self::DatagramTooLarge,
+            #[cfg(not(windows))]
+            Errno::NOMEM => Self::OutOfMemory,
+            Errno::NOBUFS => Self::OutOfMemory,
+            Errno::OPNOTSUPP => Self::NotSupported,
+            Errno::NOPROTOOPT => Self::NotSupported,
+            Errno::PFNOSUPPORT => Self::NotSupported,
+            Errno::PROTONOSUPPORT => Self::NotSupported,
+            Errno::PROTOTYPE => Self::NotSupported,
+            Errno::SOCKTNOSUPPORT => Self::NotSupported,
+            Errno::AFNOSUPPORT => Self::NotSupported,
+
+            // FYI, EINPROGRESS should have already been handled by connect.
+            _ => {
+                debug!("unknown I/O error: {value}");
+                Self::Other
+            }
+        }
+    }
+}
+
+fn is_deprecated_ipv4_compatible(addr: Ipv6Addr) -> bool {
+    matches!(addr.segments(), [0, 0, 0, 0, 0, 0, _, _])
+        && addr != Ipv6Addr::UNSPECIFIED
+        && addr != Ipv6Addr::LOCALHOST
+}
+
+pub(crate) fn is_valid_address_family(addr: IpAddr, socket_family: SocketAddressFamily) -> bool {
+    match (socket_family, addr) {
+        (SocketAddressFamily::Ipv4, IpAddr::V4(..)) => true,
+        (SocketAddressFamily::Ipv6, IpAddr::V6(ipv6)) => {
+            // Reject IPv4-*compatible* IPv6 addresses. They have been deprecated
+            // since 2006, OS handling of them is inconsistent and our own
+            // validations don't take them into account either.
+            // Note that these are not the same as IPv4-*mapped* IPv6 addresses.
+            !is_deprecated_ipv4_compatible(ipv6) && ipv6.to_ipv4_mapped().is_none()
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn is_valid_remote_address(addr: SocketAddr) -> bool {
+    !addr.ip().to_canonical().is_unspecified() && addr.port() != 0
+}
+
+pub(crate) fn is_valid_unicast_address(addr: IpAddr) -> bool {
+    match addr.to_canonical() {
+        IpAddr::V4(ipv4) => !ipv4.is_multicast() && !ipv4.is_broadcast(),
+        IpAddr::V6(ipv6) => !ipv6.is_multicast(),
+    }
+}
+
+pub(crate) fn to_ipv4_addr(addr: (u8, u8, u8, u8)) -> Ipv4Addr {
+    let (x0, x1, x2, x3) = addr;
+    Ipv4Addr::new(x0, x1, x2, x3)
+}
+
+pub(crate) fn from_ipv4_addr(addr: Ipv4Addr) -> (u8, u8, u8, u8) {
+    let [x0, x1, x2, x3] = addr.octets();
+    (x0, x1, x2, x3)
+}
+
+pub(crate) fn to_ipv6_addr(addr: (u16, u16, u16, u16, u16, u16, u16, u16)) -> Ipv6Addr {
+    let (x0, x1, x2, x3, x4, x5, x6, x7) = addr;
+    Ipv6Addr::new(x0, x1, x2, x3, x4, x5, x6, x7)
+}
+
+pub(crate) fn from_ipv6_addr(addr: Ipv6Addr) -> (u16, u16, u16, u16, u16, u16, u16, u16) {
+    let [x0, x1, x2, x3, x4, x5, x6, x7] = addr.segments();
+    (x0, x1, x2, x3, x4, x5, x6, x7)
+}
+
+/*
+ * Syscalls wrappers with (opinionated) portability fixes.
+ */
+
+fn normalize_get_buffer_size(value: usize) -> usize {
+    if cfg!(target_os = "linux") {
+        // Linux doubles the value passed to setsockopt to allow space for bookkeeping overhead.
+        // getsockopt returns this internally doubled value.
+        // We'll half the value to at least get it back into the same ballpark that the application requested it in.
+        //
+        // This normalized behavior is tested for in: test-programs/src/bin/preview2_tcp_sockopts.rs
+        value / 2
+    } else {
+        value
+    }
+}
+
+fn normalize_set_buffer_size(value: usize) -> usize {
+    value.clamp(1, i32::MAX as usize)
+}
+
+fn get_ip_ttl(fd: impl AsFd) -> Result<u8, ErrorCode> {
+    let v = sockopt::ip_ttl(fd)?;
+    let Ok(v) = v.try_into() else {
+        return Err(ErrorCode::NotSupported);
+    };
+    Ok(v)
+}
+
+fn get_ipv6_unicast_hops(fd: impl AsFd) -> Result<u8, ErrorCode> {
+    let v = sockopt::ipv6_unicast_hops(fd)?;
+    Ok(v)
+}
+
+pub(crate) fn get_unicast_hop_limit(
+    fd: impl AsFd,
+    family: SocketAddressFamily,
+) -> Result<u8, ErrorCode> {
+    match family {
+        SocketAddressFamily::Ipv4 => get_ip_ttl(fd),
+        SocketAddressFamily::Ipv6 => get_ipv6_unicast_hops(fd),
+    }
+}
+
+pub(crate) fn set_unicast_hop_limit(
+    fd: impl AsFd,
+    family: SocketAddressFamily,
+    value: u8,
+) -> Result<(), ErrorCode> {
+    if value == 0 {
+        // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+        //
+        // A well-behaved IP application should never send out new packets with TTL 0.
+        // We validate the value ourselves because OS'es are not consistent in this.
+        // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
+        return Err(ErrorCode::InvalidArgument);
+    }
+    match family {
+        SocketAddressFamily::Ipv4 => {
+            sockopt::set_ip_ttl(fd, value.into())?;
+        }
+        SocketAddressFamily::Ipv6 => {
+            sockopt::set_ipv6_unicast_hops(fd, Some(value))?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn get_receive_buffer_size(fd: impl AsFd) -> Result<u64, ErrorCode> {
+    let v = sockopt::socket_recv_buffer_size(fd)?;
+    Ok(normalize_get_buffer_size(v).try_into().unwrap_or(u64::MAX))
+}
+
+pub(crate) fn set_receive_buffer_size(fd: impl AsFd, value: u64) -> Result<usize, ErrorCode> {
+    if value == 0 {
+        // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+        return Err(ErrorCode::InvalidArgument);
+    }
+    let value = value.try_into().unwrap_or(usize::MAX);
+    let value = normalize_set_buffer_size(value);
+    match sockopt::set_socket_recv_buffer_size(fd, value) {
+        // Most platforms (Linux, Windows, Fuchsia, Solaris, Illumos, Haiku, ESP-IDF, ..and more?) treat the value
+        // passed to SO_SNDBUF/SO_RCVBUF as a performance tuning hint and silently clamp the input if it exceeds
+        // their capability.
+        // As far as I can see, only the *BSD family views this option as a hard requirement and fails when the
+        // value is out of range. We normalize this behavior in favor of the more commonly understood
+        // "performance hint" semantics. In other words; even ENOBUFS is "Ok".
+        // A future improvement could be to query the corresponding sysctl on *BSD platforms and clamp the input
+        // `size` ourselves, to completely close the gap with other platforms.
+        //
+        // This normalized behavior is tested for in: test-programs/src/bin/preview2_tcp_sockopts.rs
+        Err(Errno::NOBUFS) => {}
+        Err(err) => return Err(err.into()),
+        _ => {}
+    };
+    Ok(value)
+}
+
+pub(crate) fn get_send_buffer_size(fd: impl AsFd) -> Result<u64, ErrorCode> {
+    let v = sockopt::socket_send_buffer_size(fd)?;
+    Ok(normalize_get_buffer_size(v).try_into().unwrap_or(u64::MAX))
+}
+
+pub(crate) fn set_send_buffer_size(fd: impl AsFd, value: u64) -> Result<usize, ErrorCode> {
+    if value == 0 {
+        // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+        return Err(ErrorCode::InvalidArgument);
+    }
+    let value = value.try_into().unwrap_or(usize::MAX);
+    let value = normalize_set_buffer_size(value);
+    match sockopt::set_socket_send_buffer_size(fd, value) {
+        // See comment in `set_receive_buffer_size` for why we ignore NOBUFS.
+        Err(Errno::NOBUFS) => {}
+        Err(err) => return Err(err.into()),
+        _ => {}
+    };
+    Ok(value)
+}
+
+pub(crate) fn unspecified_addr(family: SocketAddressFamily) -> SocketAddr {
+    let ip = match family {
+        SocketAddressFamily::Ipv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        SocketAddressFamily::Ipv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+    };
+    SocketAddr::new(ip, 0)
 }

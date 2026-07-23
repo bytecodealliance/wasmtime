@@ -1,16 +1,20 @@
 use crate::runtime::with_ambient_tokio_runtime;
-use crate::sockets::util::{
-    ErrorCode, get_unicast_hop_limit, is_valid_address_family, is_valid_remote_address,
-    receive_buffer_size, send_buffer_size, set_receive_buffer_size, set_send_buffer_size,
-    set_unicast_hop_limit, udp_bind, udp_connect, udp_disconnect, udp_socket, unspecified_addr,
-};
 use crate::sockets::{
-    MAX_UDP_DATAGRAM_SIZE, SocketAddrCheck, SocketAddrUse, SocketAddressFamily, WasiSocketsCtx,
+    ErrorCode, SocketAddrCheck, SocketAddrUse, SocketAddressFamily, WasiSocketsCtx,
+    get_receive_buffer_size, get_send_buffer_size, get_unicast_hop_limit, is_valid_address_family,
+    is_valid_remote_address, set_receive_buffer_size, set_send_buffer_size, set_unicast_hop_limit,
+    unspecified_addr,
 };
+use rustix::fd::AsFd;
 use rustix::io::Errno;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::debug;
+
+/// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
+/// but we do not account for e.g. the transport layer here for simplicity.
+/// In practice, datagrams are typically less than 1500 bytes.
+pub(crate) const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 /// A host UDP socket, plus associated bookkeeping.
 ///
@@ -40,15 +44,7 @@ impl UdpSocket {
     ) -> Result<Self, ErrorCode> {
         cx.allowed_network_uses.check_allowed_udp()?;
 
-        let socket = with_ambient_tokio_runtime(|| {
-            // Manually construct a new socket, because neither std nor tokio
-            // provides a way to create an unbound UDP socket.
-            let fd = udp_socket(family)?;
-            if family == SocketAddressFamily::Ipv6 {
-                rustix::net::sockopt::set_ipv6_v6only(&fd, true)?;
-            }
-            tokio::net::UdpSocket::try_from(std::net::UdpSocket::from(fd))
-        })?;
+        let socket = with_ambient_tokio_runtime(|| socket(family))?;
 
         // Native UDP sockets are immediately writable after creation and
         // existing guest code out in the wild depends on that. However, due to
@@ -108,7 +104,7 @@ impl UdpSocket {
 
         self.permissions.check(addr, SocketAddrUse::UdpBind).await?;
 
-        udp_bind(&self.socket, addr)?;
+        bind(&self.socket, addr)?;
         Ok(())
     }
 
@@ -144,20 +140,9 @@ impl UdpSocket {
             }
         }
 
-        let result = udp_connect(&self.socket, addr).map_err(|e| match e {
-            // The most common reason for AFNOSUPPORT is an invalid address
-            // family. This should have already been handled by our own
-            // validation slightly higher up in this function. This error
-            // mapping is here just in case there is an edge case we didn't catch.
-            Errno::AFNOSUPPORT => ErrorCode::InvalidArgument,
-            Errno::INPROGRESS => {
-                debug!("UDP connect returned EINPROGRESS, which should never happen");
-                ErrorCode::Other
-            }
-            err => err.into(),
-        });
+        let result = connect(&self.socket, addr);
         self.update_remote_address();
-        result
+        result.map_err(|e| e.into())
     }
 
     pub(crate) fn disconnect(&mut self) -> Result<(), ErrorCode> {
@@ -173,9 +158,9 @@ impl UdpSocket {
         // manually settle the `is_bound` state here:
         self.is_bound = true;
 
-        let result = udp_disconnect(&self.socket).map_err(|e| e.into());
+        let result = disconnect(&self.socket);
         self.update_remote_address();
-        result
+        result.map_err(|e| e.into())
     }
 
     /// Update our internal bookkeeping based on the actual state of the socket.
@@ -203,7 +188,7 @@ impl UdpSocket {
         let is_bound = self.is_bound();
 
         async move {
-            if data.len() > MAX_UDP_DATAGRAM_SIZE {
+            if data.len() > MAX_DATAGRAM_SIZE {
                 return Err(ErrorCode::DatagramTooLarge);
             }
 
@@ -264,7 +249,7 @@ impl UdpSocket {
             }
 
             loop {
-                let mut data = vec![0; super::MAX_UDP_DATAGRAM_SIZE];
+                let mut data = vec![0; MAX_DATAGRAM_SIZE];
                 let (len, addr) = socket.recv_from(&mut data).await?;
                 data.truncate(len);
 
@@ -294,7 +279,7 @@ impl UdpSocket {
     }
 
     pub(crate) fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
-        let n = receive_buffer_size(&self.socket)?;
+        let n = get_receive_buffer_size(&self.socket)?;
         Ok(n)
     }
 
@@ -304,12 +289,123 @@ impl UdpSocket {
     }
 
     pub(crate) fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
-        let n = send_buffer_size(&self.socket)?;
+        let n = get_send_buffer_size(&self.socket)?;
         Ok(n)
     }
 
     pub(crate) fn set_send_buffer_size(&self, value: u64) -> Result<(), ErrorCode> {
         set_send_buffer_size(&self.socket, value)?;
         Ok(())
+    }
+}
+
+/// Creates a non-blocking/cloexec UDP socket.
+fn socket(family: SocketAddressFamily) -> std::io::Result<tokio::net::UdpSocket> {
+    // Let the standard library be responsible for handling `WSAStartup`.
+    #[cfg(windows)]
+    static INIT: std::sync::Once = std::sync::Once::new();
+    #[cfg(windows)]
+    INIT.call_once(|| {
+        let _ = std::net::TcpStream::connect(std::net::SocketAddrV4::new(
+            std::net::Ipv4Addr::UNSPECIFIED,
+            0,
+        ));
+    });
+
+    #[cfg(not(any(windows, target_vendor = "apple")))]
+    let flags = rustix::net::SocketFlags::CLOEXEC | rustix::net::SocketFlags::NONBLOCK;
+    #[cfg(any(windows, target_vendor = "apple"))]
+    let flags = rustix::net::SocketFlags::empty();
+
+    let socket = rustix::net::socket_with(
+        match family {
+            SocketAddressFamily::Ipv4 => rustix::net::AddressFamily::INET,
+            SocketAddressFamily::Ipv6 => rustix::net::AddressFamily::INET6,
+        },
+        rustix::net::SocketType::DGRAM,
+        flags,
+        None,
+    )?;
+    #[cfg(target_vendor = "apple")]
+    rustix::io::ioctl_fioclex(&socket)?;
+    #[cfg(any(windows, target_vendor = "apple"))]
+    rustix::io::ioctl_fionbio(&socket, true)?;
+
+    // From the WASI spec:
+    // > On IPv6 sockets, IPV6_V6ONLY is enabled by default and can't
+    // > be configured otherwise.
+    if family == SocketAddressFamily::Ipv6 {
+        rustix::net::sockopt::set_ipv6_v6only(&socket, true)?;
+    }
+
+    Ok(tokio::net::UdpSocket::try_from(std::net::UdpSocket::from(
+        socket,
+    ))?)
+}
+
+fn bind(sockfd: impl AsFd, addr: SocketAddr) -> Result<(), Errno> {
+    rustix::net::bind(sockfd, &addr).map_err(|err| match err {
+        // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
+        // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+        #[cfg(windows)]
+        Errno::NOBUFS => Errno::ADDRINUSE,
+        // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
+        // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
+        //
+        // The most common reasons for this error should have already
+        // been handled by our own validation. This error mapping is here just
+        // in case there is an edge case we didn't catch.
+        Errno::AFNOSUPPORT => Errno::INVAL,
+        _ => err,
+    })
+}
+
+fn connect(sockfd: impl AsFd, addr: SocketAddr) -> Result<(), Errno> {
+    match rustix::net::connect(sockfd.as_fd(), &addr) {
+        // When connecting a UDP socket, the OS looks up the best route to the
+        // remote address and selects an appropriate outgoing interface.
+        // If the new destination routes through an interface different than the
+        // previously selected interface, most operating systems will
+        // automatically update the socket's local address to match that route.
+        //
+        // Linux however doesn't do that automatically and we manually
+        // dissolve the existing association and then connect again to the
+        // new destination.
+        #[cfg(target_os = "linux")]
+        Err(Errno::INVAL) => {
+            _ = disconnect(sockfd.as_fd());
+            return rustix::net::connect(sockfd.as_fd(), &addr);
+        }
+        // The most common reason for AFNOSUPPORT is an invalid address
+        // family. This should have already been handled by our own
+        // validation. This error mapping is here just in case there is an
+        // edge case we didn't catch.
+        Err(Errno::AFNOSUPPORT) => Err(Errno::INVAL),
+        // EINPROGRESS should only returned by non-blocking TCP sockets,
+        // not UDP sockets.
+        Err(Errno::INPROGRESS) => {
+            debug!("UDP connect returned EINPROGRESS, which should never happen");
+            Ok(())
+        }
+        r => r,
+    }
+}
+
+fn disconnect(sockfd: impl AsFd) -> Result<(), Errno> {
+    match rustix::net::connect_unspec(sockfd) {
+        // BSD platforms return an error even if the UDP socket was disconnected successfully.
+        //
+        // MacOS was kind enough to document this: https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/connect.2.html
+        // > Datagram sockets may dissolve the association by connecting to an
+        // > invalid address, such as a null address or an address with the address
+        // > family set to AF_UNSPEC (the error EAFNOSUPPORT will be harmlessly
+        // > returned).
+        //
+        // ... except that this appears to be incomplete, because experiments
+        // have shown that MacOS actually returns EINVAL, depending on the
+        // address family of the socket.
+        #[cfg(target_os = "macos")]
+        Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
+        r => r,
     }
 }

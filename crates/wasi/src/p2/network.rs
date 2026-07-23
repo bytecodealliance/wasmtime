@@ -24,30 +24,47 @@ impl From<rustix::io::Errno> for SocketError {
     }
 }
 
-impl From<crate::sockets::util::ErrorCode> for SocketError {
-    fn from(error: crate::sockets::util::ErrorCode) -> Self {
+impl From<crate::sockets::ErrorCode> for SocketError {
+    fn from(error: crate::sockets::ErrorCode) -> Self {
         ErrorCode::from(error).into()
     }
 }
 
-impl From<crate::sockets::util::ErrorCode> for ErrorCode {
-    fn from(error: crate::sockets::util::ErrorCode) -> Self {
+impl From<crate::sockets::ErrorCode> for ErrorCode {
+    fn from(error: crate::sockets::ErrorCode) -> Self {
         match error {
-            crate::sockets::util::ErrorCode::Other => Self::Unknown,
-            crate::sockets::util::ErrorCode::AccessDenied => Self::AccessDenied,
-            crate::sockets::util::ErrorCode::NotSupported => Self::NotSupported,
-            crate::sockets::util::ErrorCode::InvalidArgument => Self::InvalidArgument,
-            crate::sockets::util::ErrorCode::OutOfMemory => Self::OutOfMemory,
-            crate::sockets::util::ErrorCode::Timeout => Self::Timeout,
-            crate::sockets::util::ErrorCode::InvalidState => Self::InvalidState,
-            crate::sockets::util::ErrorCode::AddressNotBindable => Self::AddressNotBindable,
-            crate::sockets::util::ErrorCode::AddressInUse => Self::AddressInUse,
-            crate::sockets::util::ErrorCode::RemoteUnreachable => Self::RemoteUnreachable,
-            crate::sockets::util::ErrorCode::ConnectionRefused => Self::ConnectionRefused,
-            crate::sockets::util::ErrorCode::ConnectionBroken => Self::Unknown,
-            crate::sockets::util::ErrorCode::ConnectionReset => Self::ConnectionReset,
-            crate::sockets::util::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
-            crate::sockets::util::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
+            crate::sockets::ErrorCode::Other => Self::Unknown,
+            crate::sockets::ErrorCode::AccessDenied => Self::AccessDenied,
+            crate::sockets::ErrorCode::NotSupported => Self::NotSupported,
+            crate::sockets::ErrorCode::InvalidArgument => Self::InvalidArgument,
+            crate::sockets::ErrorCode::OutOfMemory => Self::OutOfMemory,
+            crate::sockets::ErrorCode::Timeout => Self::Timeout,
+            crate::sockets::ErrorCode::InvalidState => Self::InvalidState,
+            crate::sockets::ErrorCode::AddressNotBindable => Self::AddressNotBindable,
+            crate::sockets::ErrorCode::AddressInUse => Self::AddressInUse,
+            crate::sockets::ErrorCode::RemoteUnreachable => Self::RemoteUnreachable,
+            crate::sockets::ErrorCode::ConnectionRefused => Self::ConnectionRefused,
+            crate::sockets::ErrorCode::ConnectionBroken => Self::Unknown,
+            crate::sockets::ErrorCode::ConnectionReset => Self::ConnectionReset,
+            crate::sockets::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
+            crate::sockets::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
+        }
+    }
+}
+
+impl From<crate::sockets::ip_name_lookup::ErrorCode> for ErrorCode {
+    fn from(code: crate::sockets::ip_name_lookup::ErrorCode) -> Self {
+        match code {
+            crate::sockets::ip_name_lookup::ErrorCode::AccessDenied => Self::AccessDenied,
+            crate::sockets::ip_name_lookup::ErrorCode::InvalidArgument => Self::InvalidArgument,
+            crate::sockets::ip_name_lookup::ErrorCode::NameUnresolvable => Self::NameUnresolvable,
+            crate::sockets::ip_name_lookup::ErrorCode::TemporaryResolverFailure => {
+                Self::TemporaryResolverFailure
+            }
+            crate::sockets::ip_name_lookup::ErrorCode::PermanentResolverFailure => {
+                Self::PermanentResolverFailure
+            }
+            crate::sockets::ip_name_lookup::ErrorCode::Other => Self::Unknown,
         }
     }
 }

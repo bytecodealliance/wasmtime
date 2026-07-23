@@ -1,14 +1,9 @@
 use crate::runtime::with_ambient_tokio_runtime;
-use crate::sockets::util::{
-    ErrorCode, get_unicast_hop_limit, is_valid_address_family, is_valid_remote_address,
-    is_valid_unicast_address, receive_buffer_size, send_buffer_size, set_keep_alive_count,
-    set_keep_alive_idle_time, set_keep_alive_interval, set_receive_buffer_size,
-    set_send_buffer_size, set_unicast_hop_limit, shutdown, tcp_accept, tcp_bind, tcp_reset,
-    unspecified_addr,
-};
 use crate::sockets::{
-    DEFAULT_TCP_BACKLOG, MaybeReady, SocketAddrCheck, SocketAddrUse, SocketAddressFamily,
-    WasiSocketsCtx,
+    ErrorCode, MaybeReady, SocketAddrCheck, SocketAddrUse, SocketAddressFamily, WasiSocketsCtx,
+    get_receive_buffer_size, get_send_buffer_size, get_unicast_hop_limit, is_valid_address_family,
+    is_valid_remote_address, is_valid_unicast_address, set_receive_buffer_size,
+    set_send_buffer_size, set_unicast_hop_limit, unspecified_addr,
 };
 use rustix::fd::AsFd;
 use rustix::io::Errno;
@@ -16,10 +11,15 @@ use rustix::net::sockopt;
 use std::fmt::Debug;
 use std::future::poll_fn;
 use std::mem;
-use std::net::{Shutdown, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Poll, ready};
 use std::time::Duration;
+
+/// Value taken from rust std library.
+const DEFAULT_BACKLOG: u32 = 128;
+
+const NANOS_PER_SEC: u64 = 1_000_000_000;
 
 /// The state of a TCP socket.
 ///
@@ -116,24 +116,15 @@ impl TcpSocket {
     ) -> Result<Self, ErrorCode> {
         ctx.allowed_network_uses.check_allowed_tcp()?;
 
-        with_ambient_tokio_runtime(|| {
-            let socket = match family {
-                SocketAddressFamily::Ipv4 => tokio::net::TcpSocket::new_v4()?,
-                SocketAddressFamily::Ipv6 => {
-                    let socket = tokio::net::TcpSocket::new_v6()?;
-                    sockopt::set_ipv6_v6only(&socket, true)?;
-                    socket
-                }
-            };
+        let socket = with_ambient_tokio_runtime(|| socket(family))?;
 
-            Ok(Self {
-                tcp_state: TcpState::Default(socket),
-                listen_backlog_size: DEFAULT_TCP_BACKLOG,
-                family,
-                is_bound: false,
-                listener_options: Default::default(),
-                permissions: ctx.socket_addr_check.clone(),
-            })
+        Ok(Self {
+            tcp_state: TcpState::Default(socket),
+            listen_backlog_size: DEFAULT_BACKLOG,
+            family,
+            is_bound: false,
+            listener_options: Default::default(),
+            permissions: ctx.socket_addr_check.clone(),
         })
     }
 
@@ -176,7 +167,7 @@ impl TcpSocket {
         }
 
         self.permissions.check(addr, SocketAddrUse::TcpBind).await?;
-        tcp_bind(sock, addr)?;
+        bind(sock, addr)?;
         Ok(())
     }
 
@@ -310,7 +301,7 @@ impl TcpSocket {
         // > socket.
         if !already_bound {
             let implicit = unspecified_addr(self.family);
-            tcp_bind(&sock, implicit)?;
+            bind(&sock, implicit)?;
         }
 
         let listener = sock.listen(self.listen_backlog_size).map_err(|err| {
@@ -455,10 +446,13 @@ impl TcpSocket {
     }
 
     pub(crate) fn set_keep_alive_idle_time(&mut self, value: u64) -> Result<(), ErrorCode> {
-        let value = {
-            let fd = self.as_fd()?;
-            set_keep_alive_idle_time(fd, value)?
-        };
+        if value == 0 {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+            return Err(ErrorCode::InvalidArgument);
+        }
+        let fd = self.as_fd()?;
+        let value = clamp_keep_alive_time(value);
+        sockopt::set_tcp_keepidle(fd, Duration::from_nanos(value))?;
         self.listener_options.set_keep_alive_idle_time(value);
         Ok(())
     }
@@ -470,8 +464,13 @@ impl TcpSocket {
     }
 
     pub(crate) fn set_keep_alive_interval(&self, value: u64) -> Result<(), ErrorCode> {
+        if value == 0 {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+            return Err(ErrorCode::InvalidArgument);
+        }
         let fd = self.as_fd()?;
-        set_keep_alive_interval(fd, Duration::from_nanos(value))?;
+        let value = clamp_keep_alive_time(value);
+        sockopt::set_tcp_keepintvl(fd, Duration::from_nanos(value))?;
         Ok(())
     }
 
@@ -482,8 +481,13 @@ impl TcpSocket {
     }
 
     pub(crate) fn set_keep_alive_count(&self, value: u32) -> Result<(), ErrorCode> {
+        if value == 0 {
+            // WIT: "If the provided value is 0, an `invalid-argument` error is returned."
+            return Err(ErrorCode::InvalidArgument);
+        }
+        let value = clamp_keep_alive_count(value);
         let fd = self.as_fd()?;
-        set_keep_alive_count(fd, value)?;
+        sockopt::set_tcp_keepcnt(fd, value)?;
         Ok(())
     }
 
@@ -504,7 +508,7 @@ impl TcpSocket {
 
     pub(crate) fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
         let fd = self.as_fd()?;
-        let n = receive_buffer_size(fd)?;
+        let n = get_receive_buffer_size(fd)?;
         Ok(n)
     }
 
@@ -519,7 +523,7 @@ impl TcpSocket {
 
     pub(crate) fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
         let fd = self.as_fd()?;
-        let n = send_buffer_size(fd)?;
+        let n = get_send_buffer_size(fd)?;
         Ok(n)
     }
 
@@ -552,7 +556,7 @@ impl TcpListenStream {
                 }
                 Err(err) => TcpState::Closed(err),
             },
-            listen_backlog_size: DEFAULT_TCP_BACKLOG,
+            listen_backlog_size: DEFAULT_BACKLOG,
             family: self.family,
             is_bound: true,
             listener_options: Default::default(),
@@ -567,7 +571,7 @@ impl TcpListenStream {
 
             self.pending_accept = Some(MaybeReady::new(async move {
                 loop {
-                    match tcp_accept(&listener).await {
+                    match accept(&listener).await {
                         Ok((client, addr)) => {
                             if permissions
                                 .check(addr, SocketAddrUse::TcpAccept)
@@ -576,7 +580,7 @@ impl TcpListenStream {
                             {
                                 return Ok(client);
                             } else {
-                                tcp_reset(client);
+                                reset(client);
                                 continue;
                             }
                         }
@@ -588,7 +592,13 @@ impl TcpListenStream {
             }));
         }
 
-        with_ambient_tokio_runtime(|| self.pending_accept.as_mut().unwrap().poll_ready(cx))
+        with_ambient_tokio_runtime(|| {
+            self.pending_accept
+                .as_mut()
+                .unwrap()
+                .poll_ready(cx)
+                .map(|_| ())
+        })
     }
 }
 
@@ -632,7 +642,7 @@ impl TcpSendStream {
 }
 impl Drop for TcpSendStream {
     fn drop(&mut self) {
-        _ = shutdown(&self.inner, Shutdown::Write);
+        _ = rustix::net::shutdown(&self.inner, rustix::net::Shutdown::Write);
     }
 }
 
@@ -670,7 +680,7 @@ impl TcpReceiveStream {
 }
 impl Drop for TcpReceiveStream {
     fn drop(&mut self) {
-        _ = shutdown(&self.inner, Shutdown::Read);
+        _ = rustix::net::shutdown(&self.inner, rustix::net::Shutdown::Read);
     }
 }
 
@@ -772,4 +782,114 @@ mod does_not_inherit_options {
             }
         }
     }
+}
+
+fn socket(family: SocketAddressFamily) -> std::io::Result<tokio::net::TcpSocket> {
+    match family {
+        SocketAddressFamily::Ipv4 => tokio::net::TcpSocket::new_v4(),
+        SocketAddressFamily::Ipv6 => {
+            let socket = tokio::net::TcpSocket::new_v6()?;
+
+            // From the WASI spec:
+            // > On IPv6 sockets, IPV6_V6ONLY is enabled by default and can't
+            // > be configured otherwise.
+            sockopt::set_ipv6_v6only(&socket, true)?;
+            Ok(socket)
+        }
+    }
+}
+
+fn bind(socket: &tokio::net::TcpSocket, local_address: SocketAddr) -> Result<(), ErrorCode> {
+    // From the WASI spec:
+    // > The bind operation shouldn't be affected by the TIME_WAIT state of a
+    // > recently closed socket on the same local address. In practice this
+    // > means that the SO_REUSEADDR socket option should be set implicitly on
+    // > all platforms, except on Windows where this is the default behavior
+    // > and SO_REUSEADDR performs something different.
+    #[cfg(not(windows))]
+    {
+        _ = sockopt::set_socket_reuseaddr(&socket, true);
+    }
+
+    // Perform the OS bind call.
+    socket
+        .bind(local_address)
+        .map_err(|err| match Errno::from_io_error(&err) {
+            // From https://pubs.opengroup.org/onlinepubs/9699919799/functions/bind.html:
+            // > [EAFNOSUPPORT] The specified address is not a valid address for the address family of the specified socket
+            //
+            // The most common reasons for this error should have already
+            // been handled by our own validation.. This error mapping is here
+            // just in case there is an edge case we didn't catch.
+            Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument,
+            // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-bind#:~:text=WSAENOBUFS
+            // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+            #[cfg(windows)]
+            Some(Errno::NOBUFS) => ErrorCode::AddressInUse,
+            _ => err.into(),
+        })
+}
+
+async fn accept(
+    listener: &tokio::net::TcpListener,
+) -> std::io::Result<(tokio::net::TcpStream, SocketAddr)> {
+    listener
+        .accept()
+        .await
+        .map_err(|err| match Errno::from_io_error(&err) {
+            // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
+            // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
+            // > or the service provider is still processing a callback function.
+            //
+            // wasi-sockets doesn't have an equivalent to the EINPROGRESS error,
+            // because in POSIX this error is only returned by a non-blocking
+            // `connect` and wasi-sockets has a different solution for that.
+            #[cfg(windows)]
+            Some(Errno::INPROGRESS) => Errno::INTR.into(),
+
+            // Normalize Linux' non-standard behavior.
+            //
+            // From https://man7.org/linux/man-pages/man2/accept.2.html:
+            // > Linux accept() passes already-pending network errors on the
+            // > new socket as an error code from accept(). This behavior
+            // > differs from other BSD socket implementations. (...)
+            #[cfg(target_os = "linux")]
+            Some(
+                Errno::CONNRESET
+                | Errno::NETRESET
+                | Errno::HOSTUNREACH
+                | Errno::HOSTDOWN
+                | Errno::NETDOWN
+                | Errno::NETUNREACH
+                | Errno::PROTO
+                | Errno::NOPROTOOPT
+                | Errno::NONET
+                | Errno::OPNOTSUPP,
+            ) => Errno::CONNABORTED.into(),
+
+            _ => err,
+        })
+}
+
+fn reset(socket: tokio::net::TcpStream) {
+    _ = socket.set_zero_linger();
+    drop(socket);
+}
+
+fn clamp_keep_alive_time(value: u64) -> u64 {
+    // Ensure that the value passed to the actual syscall never gets rounded down to 0.
+    const MIN: u64 = 1 * NANOS_PER_SEC;
+
+    // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
+    const MAX: u64 = (i16::MAX as u64) * NANOS_PER_SEC;
+
+    value.clamp(MIN, MAX)
+}
+
+fn clamp_keep_alive_count(value: u32) -> u32 {
+    const MIN_CNT: u32 = 1;
+    // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
+    const MAX_CNT: u32 = i8::MAX as u32;
+
+    value.clamp(MIN_CNT, MAX_CNT)
 }

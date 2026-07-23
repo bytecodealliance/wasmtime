@@ -197,7 +197,7 @@ impl WriteState {
                     Ok(n) => {
                         let _ = bytes.split_to(n);
                     }
-                    Err(crate::sockets::util::ErrorCode::ConnectionBroken) => {
+                    Err(crate::sockets::ErrorCode::ConnectionBroken) => {
                         return Err(WriteError::Closed);
                     }
                     Err(e) => {
