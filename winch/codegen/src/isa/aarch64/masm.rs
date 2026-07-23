@@ -34,7 +34,8 @@ use cranelift_codegen::{
     isa::aarch64,
     isa::aarch64::inst::{
         self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, ScalarSize,
-        VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecRRNarrowOp, VectorSize,
+        VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecRRNarrowOp, VecRRPairLongOp,
+        VecRRRLongOp, VectorSize,
     },
     settings,
 };
@@ -1970,19 +1971,46 @@ impl Masm for MacroAssembler {
 
     fn v128_extmul(
         &mut self,
-        _context: &mut CodeGenContext<Emission>,
-        _kind: V128ExtMulKind,
+        context: &mut CodeGenContext<Emission>,
+        kind: V128ExtMulKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let (op, high_half) = match kind {
+            V128ExtMulKind::LowI8x16S => (VecRRRLongOp::Smull8, false),
+            V128ExtMulKind::HighI8x16S => (VecRRRLongOp::Smull8, true),
+            V128ExtMulKind::LowI8x16U => (VecRRRLongOp::Umull8, false),
+            V128ExtMulKind::HighI8x16U => (VecRRRLongOp::Umull8, true),
+            V128ExtMulKind::LowI16x8S => (VecRRRLongOp::Smull16, false),
+            V128ExtMulKind::HighI16x8S => (VecRRRLongOp::Smull16, true),
+            V128ExtMulKind::LowI16x8U => (VecRRRLongOp::Umull16, false),
+            V128ExtMulKind::HighI16x8U => (VecRRRLongOp::Umull16, true),
+            V128ExtMulKind::LowI32x4S => (VecRRRLongOp::Smull32, false),
+            V128ExtMulKind::HighI32x4S => (VecRRRLongOp::Smull32, true),
+            V128ExtMulKind::LowI32x4U => (VecRRRLongOp::Umull32, false),
+            V128ExtMulKind::HighI32x4U => (VecRRRLongOp::Umull32, true),
+        };
+        let rhs = context.pop_to_reg(self, None)?;
+        let lhs = context.pop_to_reg(self, None)?;
+        self.asm
+            .vec_rrr_long(op, lhs.reg, rhs.reg, writable!(lhs.reg), high_half);
+        context.free_reg(rhs);
+        context.stack.push(TypedReg::v128(lhs.reg).into());
+        Ok(())
     }
 
     fn v128_extadd_pairwise(
         &mut self,
-        _src: Reg,
-        _dst: WritableReg,
-        _kind: V128ExtAddKind,
+        src: Reg,
+        dst: WritableReg,
+        kind: V128ExtAddKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let op = match kind {
+            V128ExtAddKind::I8x16S => VecRRPairLongOp::Saddlp8,
+            V128ExtAddKind::I8x16U => VecRRPairLongOp::Uaddlp8,
+            V128ExtAddKind::I16x8S => VecRRPairLongOp::Saddlp16,
+            V128ExtAddKind::I16x8U => VecRRPairLongOp::Uaddlp16,
+        };
+        self.asm.vec_rr_pair_long(op, src, dst);
+        Ok(())
     }
 
     fn v128_dot(&mut self, _lhs: Reg, _rhs: Reg, _dst: WritableReg) -> Result<()> {

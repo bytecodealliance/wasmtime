@@ -16,6 +16,7 @@ use cranelift_codegen::isa::aarch64;
 use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
 use cranelift_codegen::isa::aarch64::inst::{
     ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5, VecALUModOp, VecExtendOp, VecRRNarrowOp,
+    VecRRPairLongOp, VecRRRLongOp,
 };
 use cranelift_codegen::{
     Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
@@ -545,6 +546,35 @@ impl Assembler {
             rn: rn.into(),
             size,
             lane,
+        });
+    }
+
+    /// Vector widening multiply: multiply the low or high halves of `rn` and
+    /// `rm` into lanes of twice the source lane width.
+    pub fn vec_rrr_long(
+        &mut self,
+        alu_op: VecRRRLongOp,
+        rn: Reg,
+        rm: Reg,
+        rd: WritableReg,
+        high_half: bool,
+    ) {
+        self.emit(Inst::VecRRRLong {
+            alu_op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            rm: rm.into(),
+            high_half,
+        });
+    }
+
+    /// Vector pairwise widening add: sum adjacent lane pairs of `rn` into
+    /// lanes of twice the source lane width.
+    pub fn vec_rr_pair_long(&mut self, op: VecRRPairLongOp, rn: Reg, rd: WritableReg) {
+        self.emit(Inst::VecRRPairLong {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
         });
     }
 
