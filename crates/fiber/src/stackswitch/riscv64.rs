@@ -25,7 +25,7 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
       //
       // Note that this order for saving is important since we use CFI directives
       // below to point to where all the saved registers are.
-      // Reserve space before writing (match riscv32imac).
+      // Reserve space before writing.
       addi sp, sp, -0xd0
       sd ra, 0xc8(sp)
       sd fp, 0xc0(sp)
