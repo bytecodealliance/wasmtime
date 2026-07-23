@@ -33,8 +33,8 @@ use cranelift_codegen::{
     ir::{MemFlagsData, RelSourceLoc, SourceLoc, types},
     isa::aarch64,
     isa::aarch64::inst::{
-        self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, VecALUModOp, VecALUOp,
-        VecMisc2, VectorSize,
+        self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, ScalarSize,
+        VecALUModOp, VecALUOp, VecExtendOp, VecMisc2, VecRRNarrowOp, VectorSize,
     },
     settings,
 };
@@ -1615,12 +1615,21 @@ impl Masm for MacroAssembler {
 
     fn v128_narrow(
         &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _dst: WritableReg,
-        _kind: V128NarrowKind,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        kind: V128NarrowKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        let (op, lane_size) = match kind {
+            V128NarrowKind::I16x8S => (VecRRNarrowOp::Sqxtn, ScalarSize::Size8),
+            V128NarrowKind::I16x8U => (VecRRNarrowOp::Sqxtun, ScalarSize::Size8),
+            V128NarrowKind::I32x4S => (VecRRNarrowOp::Sqxtn, ScalarSize::Size16),
+            V128NarrowKind::I32x4U => (VecRRNarrowOp::Sqxtun, ScalarSize::Size16),
+        };
+        debug_assert!(dst.to_reg() != src2);
+        self.asm.vec_narrow(op, src1, dst, false, lane_size);
+        self.asm.vec_narrow(op, src2, dst, true, lane_size);
+        Ok(())
     }
 
     fn v128_demote(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
@@ -1631,8 +1640,24 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
-    fn v128_extend(&mut self, _src: Reg, _dst: WritableReg, _kind: V128ExtendKind) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_extend(&mut self, src: Reg, dst: WritableReg, kind: V128ExtendKind) -> Result<()> {
+        use VecExtendOp::{Sxtl, Uxtl};
+        let (op, high_half, lane_size) = match kind {
+            V128ExtendKind::LowI8x16S => (Sxtl, false, ScalarSize::Size16),
+            V128ExtendKind::HighI8x16S => (Sxtl, true, ScalarSize::Size16),
+            V128ExtendKind::LowI8x16U => (Uxtl, false, ScalarSize::Size16),
+            V128ExtendKind::HighI8x16U => (Uxtl, true, ScalarSize::Size16),
+            V128ExtendKind::LowI16x8S => (Sxtl, false, ScalarSize::Size32),
+            V128ExtendKind::HighI16x8S => (Sxtl, true, ScalarSize::Size32),
+            V128ExtendKind::LowI16x8U => (Uxtl, false, ScalarSize::Size32),
+            V128ExtendKind::HighI16x8U => (Uxtl, true, ScalarSize::Size32),
+            V128ExtendKind::LowI32x4S => (Sxtl, false, ScalarSize::Size64),
+            V128ExtendKind::HighI32x4S => (Sxtl, true, ScalarSize::Size64),
+            V128ExtendKind::LowI32x4U => (Uxtl, false, ScalarSize::Size64),
+            V128ExtendKind::HighI32x4U => (Uxtl, true, ScalarSize::Size64),
+        };
+        self.asm.vec_extend(op, src, dst, high_half, lane_size);
+        Ok(())
     }
 
     fn v128_add(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, kind: V128AddKind) -> Result<()> {

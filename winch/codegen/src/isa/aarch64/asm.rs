@@ -15,7 +15,7 @@ use crate::{
 use cranelift_codegen::isa::aarch64;
 use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
 use cranelift_codegen::isa::aarch64::inst::{
-    ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5, VecALUModOp,
+    ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5, VecALUModOp, VecExtendOp, VecRRNarrowOp,
 };
 use cranelift_codegen::{
     Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
@@ -423,6 +423,51 @@ impl Assembler {
         self.alu_rrr(ALUOp::Adc, rm, rn, rd, size);
     }
 
+    /// Vector extend: widen the low or high half's lanes to `lane_size`.
+    pub fn vec_extend(
+        &mut self,
+        t: VecExtendOp,
+        rn: Reg,
+        rd: WritableReg,
+        high_half: bool,
+        lane_size: ScalarSize,
+    ) {
+        self.emit(Inst::VecExtend {
+            t,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            high_half,
+            lane_size,
+        });
+    }
+
+    /// Vector narrow: saturate `rn`'s lanes to `lane_size` into the low or
+    /// high half of `rd`; the high-half form preserves `rd`'s other lanes.
+    pub fn vec_narrow(
+        &mut self,
+        op: VecRRNarrowOp,
+        rn: Reg,
+        rd: WritableReg,
+        high_half: bool,
+        lane_size: ScalarSize,
+    ) {
+        if high_half {
+            self.emit(Inst::VecRRNarrowHigh {
+                op,
+                rd: rd.map(Into::into),
+                ri: rd.to_reg().into(),
+                rn: rn.into(),
+                lane_size,
+            });
+        } else {
+            self.emit(Inst::VecRRNarrowLow {
+                op,
+                rd: rd.map(Into::into),
+                rn: rn.into(),
+                lane_size,
+            });
+        }
+    }
     /// Vector three-register ALU operation whose destination is also an input
     pub fn vec_rrr_mod(
         &mut self,
