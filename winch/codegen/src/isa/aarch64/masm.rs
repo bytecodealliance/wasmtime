@@ -774,6 +774,9 @@ impl Masm for MacroAssembler {
         _reg: WritableReg,
         _lane_size: OperandSize,
     ) -> Result<()> {
+        if !self.shared_flags.enable_nan_canonicalization() {
+            return Ok(());
+        }
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
@@ -1518,24 +1521,96 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
-    fn v128_add(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _kind: V128AddKind,
-    ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_add(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, kind: V128AddKind) -> Result<()> {
+        match kind {
+            V128AddKind::F32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fadd, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            V128AddKind::F64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fadd, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+            V128AddKind::I8x16 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Add, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128AddKind::I8x16SatS => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sqadd, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128AddKind::I8x16SatU => {
+                self.asm
+                    .vec_rrr(VecALUOp::Uqadd, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128AddKind::I16x8 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Add, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128AddKind::I16x8SatS => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sqadd, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128AddKind::I16x8SatU => {
+                self.asm
+                    .vec_rrr(VecALUOp::Uqadd, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128AddKind::I32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Add, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            V128AddKind::I64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Add, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
-    fn v128_sub(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _kind: V128SubKind,
-    ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_sub(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, kind: V128SubKind) -> Result<()> {
+        match kind {
+            V128SubKind::F32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fsub, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            V128SubKind::F64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fsub, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+            V128SubKind::I8x16 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sub, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128SubKind::I8x16SatS => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sqsub, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128SubKind::I8x16SatU => {
+                self.asm
+                    .vec_rrr(VecALUOp::Uqsub, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128SubKind::I16x8 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sub, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128SubKind::I16x8SatS => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sqsub, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128SubKind::I16x8SatU => {
+                self.asm
+                    .vec_rrr(VecALUOp::Uqsub, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128SubKind::I32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sub, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            V128SubKind::I64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sub, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
     fn v128_mul(
