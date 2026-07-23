@@ -326,12 +326,7 @@ mod tests {
         let cache = Cache::open(None, Some(dir.path().to_path_buf()), CacheMode::ReadWrite);
 
         cache
-            .store(
-                "cvc5",
-                "(set-logic ALL)\n(check-sat)",
-                "(check-sat)",
-                &json!("unsat"),
-            )
+            .store("cvc5", "(set-logic ALL)\n(check-sat)", &json!("unsat"))
             .expect("store should succeed");
 
         let result = cache
@@ -364,7 +359,7 @@ mod tests {
                 Some(source.path().to_path_buf()),
                 CacheMode::ReadWrite,
             );
-            seed.store("cvc5", "(check-sat)", "(check-sat)", &json!("sat"))
+            seed.store("cvc5", "(check-sat)", &json!("sat"))
                 .expect("seed store should succeed");
         }
 
