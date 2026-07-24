@@ -1,0 +1,32 @@
+test interpret
+test run
+target x86_64 has_avx has_avx_vnni
+target aarch64
+
+;; Signed*unsigned i8 widening dot-accumulate — the form x64 AVX-VNNI
+;; `vpdpbusd` computes: `a` sign-extended, `b` zero-extended. On a host with
+;; AVX-VNNI this lowers to a single `vpdpbusd`; elsewhere to the widening chain.
+;; The second case uses b bytes > 127 so the unsigned reading differs from
+;; signed (0xc8 = -56 signed = 200 unsigned).
+function %vpdpbusd_i8x16(i8x16, i8x16, i32x4) -> i32x4 {
+block0(v0: i8x16, v1: i8x16, v2: i32x4):
+    v3 = swiden_low v0
+    v4 = uwiden_low v1
+    v5 = imul v3, v4
+    v6 = swiden_high v0
+    v7 = uwiden_high v1
+    v8 = imul v6, v7
+    v9 = swiden_low v5
+    v10 = swiden_high v5
+    v11 = iadd_pairwise v9, v10
+    v12 = swiden_low v8
+    v13 = swiden_high v8
+    v14 = iadd_pairwise v12, v13
+    v15 = iadd_pairwise v11, v14
+    v16 = iadd v15, v2
+    return v16
+}
+
+; run: %vpdpbusd_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1], [0 0 0 0]) == [10 26 42 58]
+; run: %vpdpbusd_i8x16([1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1], [-56 -56 -56 -56 -56 -56 -56 -56 -56 -56 -56 -56 -56 -56 -56 -56], [0 0 0 0]) == [800 800 800 800]
+; run: %vpdpbusd_i8x16([-1 -2 -3 -4 5 6 7 8 1 1 1 1 2 2 2 2], [10 10 10 10 1 1 1 1 -56 -56 -56 -56 3 3 3 3], [100 0 0 0]) == [0 26 800 24]

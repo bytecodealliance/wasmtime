@@ -9,8 +9,8 @@ use std::vec::Vec;
 use std::{format, println};
 
 use crate::{
-    AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, CodeSink, DeferredTarget, Fixed, Gpr, Inst,
-    KnownOffset, NonRspGpr, Registers, TrapCode, Xmm,
+    AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, CodeSink, DeferredTarget, Feature, Features,
+    Fixed, Gpr, Inst, KnownOffset, NonRspGpr, Registers, TrapCode, Xmm,
 };
 use arbitrary::{Arbitrary, Result, Unstructured};
 use capstone::{Capstone, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, arch::x86};
@@ -24,6 +24,13 @@ use capstone::{Capstone, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, arch:
 /// fuzzer infrastructure. It may fail during assembly, disassembly, or when
 /// comparing the disassembled strings.
 pub fn roundtrip(inst: &Inst<FuzzRegs>) {
+    // The bundled capstone build does not disassemble AVX-VNNI instructions, so
+    // the roundtrip oracle has no reference to compare against; skip them. Their
+    // encodings are covered by dedicated filetests.
+    if features_mention(inst.features(), Feature::avx_vnni) {
+        return;
+    }
+
     // Check that we can actually assemble this instruction.
     let assembled = assemble(inst);
     let expected = disassemble(&assembled, inst);
@@ -39,6 +46,17 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
         println!("  expected (capstone): {expected}");
         println!("  actual (to_string):  {actual}");
         assert_eq!(expected, &actual);
+    }
+}
+
+/// Whether an instruction's feature term references `target`; used to skip
+/// instructions the disassembler oracle cannot handle.
+fn features_mention(features: &Features, target: Feature) -> bool {
+    match features {
+        Features::And(a, b) | Features::Or(a, b) => {
+            features_mention(a, target) || features_mention(b, target)
+        }
+        Features::Feature(f) => *f == target,
     }
 }
 
