@@ -16,7 +16,7 @@ use cranelift_codegen::isa::aarch64;
 use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
 use cranelift_codegen::isa::aarch64::inst::{
     ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5, VecALUModOp, VecExtendOp, VecRRLongOp,
-    VecRRNarrowOp, VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp,
+    VecRRNarrowOp, VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmOp,
 };
 use cranelift_codegen::{
     Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
@@ -635,6 +635,65 @@ impl Assembler {
             rn: rn.into(),
             size,
         });
+    }
+
+    /// Vector table lookup: index `rn`'s bytes by `rm`, zeroing out of range
+    /// lanes.
+    pub fn vec_tbl(&mut self, rn: Reg, rm: Reg, rd: WritableReg) {
+        self.emit(Inst::VecTbl {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            rm: rm.into(),
+        });
+    }
+
+    /// Vector table lookup, leaving out of range lanes of `rd` unmodified.
+    pub fn vec_tbl_ext(&mut self, rn: Reg, rm: Reg, rd: WritableReg) {
+        self.emit(Inst::VecTblExt {
+            rd: rd.map(Into::into),
+            ri: rd.to_reg().into(),
+            rn: rn.into(),
+            rm: rm.into(),
+        });
+    }
+
+    /// Vector shift by immediate.
+    pub fn vec_shift_imm(
+        &mut self,
+        op: VecShiftImmOp,
+        imm: u8,
+        rn: Reg,
+        rd: WritableReg,
+        size: VectorSize,
+    ) {
+        self.emit(Inst::VecShiftImm {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+            imm,
+        });
+    }
+
+    /// Extract a vector from a pair of vectors, starting at byte `imm4`.
+    pub fn vec_extract(&mut self, rn: Reg, rm: Reg, rd: WritableReg, imm4: u8) {
+        self.emit(Inst::VecExtract {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            rm: rm.into(),
+            imm4,
+        });
+    }
+
+    /// Load a 128-bit constant into a vector register.
+    pub fn vec_load_const(&mut self, constant: &[u8; 16], rd: WritableReg) {
+        let handle = self.add_constant(constant);
+        self.uload(
+            AMode::Const { addr: handle },
+            rd,
+            OperandSize::S128,
+            TRUSTED_FLAGS,
+        );
     }
 
     /// Vector reduction across lanes

@@ -36,7 +36,7 @@ use cranelift_codegen::{
     isa::aarch64::inst::{
         self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, ScalarSize,
         VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecRRLongOp, VecRRNarrowOp,
-        VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VectorSize,
+        VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmOp, VectorSize,
     },
     settings,
 };
@@ -1388,12 +1388,43 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn shuffle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg, _lanes: [u8; 16]) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()> {
+        // Use `tbl` with `lanes` to select the lanes in `lhs` and `rhs`
+        // separately, then combine them with `tbx` into `dst`.
+        //
+        // A single-register `tbl` sets lanes whose index is out of range
+        // (above 15) to 0, so each source is indexed by a version of `lanes`
+        // that puts the other source's indices out of range: `lhs` is indexed
+        // by `lanes` as-is (its indices are 0..=15; `rhs`'s 16..=31 fall out
+        // of range), while for `rhs` every index is shifted down by 16
+        // (mapping 16..=31 to 0..=15, and wrapping `lhs`'s 0..=15 to 240..).
+        //
+        // `tbx`, unlike `tbl`, leaves out of range lanes of the destination
+        // unmodified, so the second lookup fills in `rhs`'s lanes while
+        // preserving the lanes already selected from `lhs`, avoiding a
+        // separate combining instruction.
+        let mut lhs_mask = [0u8; 16];
+        let mut rhs_mask = [0u8; 16];
+        for (i, lane) in lanes.iter().enumerate() {
+            lhs_mask[i] = *lane;
+            rhs_mask[i] = lane.wrapping_sub(16);
+        }
+
+        self.with_scratch::<FloatScratch, _>(|masm, mask| {
+            masm.asm.vec_load_const(&lhs_mask, mask.writable());
+            masm.asm.vec_tbl(lhs, mask.inner(), dst);
+            masm.asm.vec_load_const(&rhs_mask, mask.writable());
+            masm.asm.vec_tbl_ext(rhs, mask.inner(), dst);
+        });
+        Ok(())
     }
 
-    fn swizzle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn swizzle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) -> Result<()> {
+        // `tbl` sets lanes whose index is out of range (above 15) to 0, which
+        // is exactly the behavior the Wasm instruction requires, so no
+        // clamping of the indices in `rhs` is needed.
+        self.asm.vec_tbl(lhs, rhs, dst);
+        Ok(())
     }
 
     fn atomic_rmw(
@@ -2158,8 +2189,99 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_bitmask(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        // Each sequence replicates the sign bit across its lane, masks in the
+        // bit position that lane contributes, and sums the lanes together,
+        // following the `vhigh_bits` lowerings in cranelift's
+        // `isa/aarch64/lower.isle`, which use the same masks.
+        let (shift, mask, vector_size) = match size {
+            OperandSize::S8 => (
+                7,
+                [
+                    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08, 0x10,
+                    0x20, 0x40, 0x80,
+                ],
+                VectorSize::Size8x16,
+            ),
+            OperandSize::S16 => (
+                15,
+                [
+                    0x01, 0x00, 0x02, 0x00, 0x04, 0x00, 0x08, 0x00, 0x10, 0x00, 0x20, 0x00, 0x40,
+                    0x00, 0x80, 0x00,
+                ],
+                VectorSize::Size16x8,
+            ),
+            OperandSize::S32 => (
+                31,
+                [
+                    0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x08,
+                    0x00, 0x00, 0x00,
+                ],
+                VectorSize::Size32x4,
+            ),
+            // With only two lanes the sign bits are cheaper to move out and
+            // combine in general purpose registers.
+            OperandSize::S64 => {
+                let sign_bit = ImmShift::maybe_from_u64(63).unwrap();
+                self.with_scratch::<IntScratch, _>(|masm, upper| {
+                    masm.asm
+                        .mov_from_vec(src, upper.writable(), 1, OperandSize::S64);
+                    masm.asm.mov_from_vec(src, dst, 0, OperandSize::S64);
+                    masm.asm.shift_ir(
+                        sign_bit,
+                        upper.inner(),
+                        upper.writable(),
+                        ShiftKind::ShrU,
+                        OperandSize::S64,
+                    );
+                    masm.asm.shift_ir(
+                        sign_bit,
+                        dst.to_reg(),
+                        dst,
+                        ShiftKind::ShrU,
+                        OperandSize::S64,
+                    );
+                    masm.asm.shift_ir(
+                        ImmShift::maybe_from_u64(1).unwrap(),
+                        upper.inner(),
+                        upper.writable(),
+                        ShiftKind::Shl,
+                        OperandSize::S64,
+                    );
+                    masm.asm
+                        .add_rrr(upper.inner(), dst.to_reg(), dst, OperandSize::S64);
+                });
+                return Ok(());
+            }
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        // `src` is dead after this operation, so it doubles as a temporary.
+        let acc = writable!(src);
+        self.with_scratch::<FloatScratch, _>(|masm, tmp| {
+            masm.asm
+                .vec_shift_imm(VecShiftImmOp::Sshr, shift, src, acc, vector_size);
+            masm.asm.vec_load_const(&mask, tmp.writable());
+            masm.asm
+                .vec_rrr(VecALUOp::And, src, tmp.inner(), acc, vector_size);
+            if let VectorSize::Size8x16 = vector_size {
+                // Interleave the two halves so that each 16-bit lane holds one
+                // byte's worth of bits from each half, letting a single
+                // reduction gather all sixteen.
+                masm.asm.vec_extract(src, src, tmp.writable(), 8);
+                masm.asm
+                    .vec_rrr(VecALUOp::Zip1, src, tmp.inner(), acc, VectorSize::Size8x16);
+            }
+            let (reduce_size, lane_size) = match vector_size {
+                VectorSize::Size8x16 | VectorSize::Size16x8 => {
+                    (VectorSize::Size16x8, OperandSize::S16)
+                }
+                other => (other, OperandSize::S32),
+            };
+            masm.asm.vec_lanes(VecLanesOp::Addv, src, acc, reduce_size);
+            masm.asm.mov_from_vec(src, dst, 0, lane_size);
+        });
+        Ok(())
     }
 
     fn v128_trunc(
