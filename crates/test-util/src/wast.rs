@@ -193,22 +193,17 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.reference_types = Some(true);
     ret.multi_memory = Some(true);
     ret.component_model_implements = Some(true);
+    ret.bulk_memory = Some(true);
+    ret.component_model_async = Some(true);
+    ret.component_model_more_async_builtins = Some(true);
+    ret.component_model_async_stackful = Some(true);
+    ret.component_model_threading = Some(true);
+
+    if test.ends_with("memory64.wast") {
+        ret.component_model_memory64 = Some(true);
+    }
 
     if let Some(parent) = test.parent() {
-        if parent.ends_with("async")
-            || [
-                "trap-in-post-return.wast",
-                "resources.wast",
-                "multiple-resources.wast",
-            ]
-            .into_iter()
-            .any(|name| Some(name) == test.file_name().and_then(|s| s.to_str()))
-        {
-            ret.component_model_async = Some(true);
-            ret.component_model_async_stackful = Some(true);
-            ret.component_model_more_async_builtins = Some(true);
-            ret.component_model_threading = Some(true);
-        }
         if parent.ends_with("wasm-tools") {
             ret.memory64 = Some(true);
             ret.threads = Some(true);
@@ -472,9 +467,8 @@ impl WastTest {
         }
 
         let unsupported = [
-            // Can be re-enabled once the tests/component-model submodule has been bumped to a commit that includes
-            // https://github.com/WebAssembly/component-model/pull/676
-            "test/wasm-tools/memory64.wast",
+            // needs to be updated after WebAssembly/component-model#680
+            "test/values/post-return.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;

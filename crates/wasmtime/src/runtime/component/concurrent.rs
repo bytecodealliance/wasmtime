@@ -4063,9 +4063,13 @@ impl Instance {
                         store.suspend(SuspendReason::Yielding {
                             thread: caller,
                             cancellable: false,
-                            // `subtask.cancel` is not allowed to be called in a
-                            // sync context, so we cannot skip the may-block check.
-                            skip_may_block_check: false,
+                            // We've already checked that for a sync version of
+                            // this intrinsic we're allowed to block (start of
+                            // the function here), and otherwise this is similar
+                            // to `suspension_intrinsic` where we're doing a
+                            // brief yield to deliver the event, so there's no
+                            // need to check may-block again.
+                            skip_may_block_check: true,
                         })?;
                         break;
                     } else if let GuestThreadState::Ready {
@@ -4079,7 +4083,8 @@ impl Instance {
                         store.suspend(SuspendReason::Yielding {
                             thread: caller,
                             cancellable: false,
-                            skip_may_block_check: false,
+                            // See the comment above for why this is `true`
+                            skip_may_block_check: true,
                         })?;
                         break;
                     }
