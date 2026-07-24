@@ -1,0 +1,125 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+;; Multiple loads sharing `base + uextend(index)` with distinct constant
+;; offsets: the `base + index` add is materialized once and reused, with each
+;; offset folded into the load's immediate. Previously each load emitted its own
+;; `add base, #offset` (defeating CSE of the shared `base + index`).
+function %shared_base_uext(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iadd v0, v2
+    v4 = load.i16 v3+260
+    v5 = load.i16 v3+262
+    v6 = load.i16 v3+264
+    v7 = load.i16 v3+266
+    v8 = sextend.i32 v4
+    v9 = sextend.i32 v5
+    v10 = sextend.i32 v6
+    v11 = sextend.i32 v7
+    v12 = iadd v8, v9
+    v13 = iadd v10, v11
+    v14 = iadd v12, v13
+    return v14
+}
+
+; VCode:
+; block0:
+;   add x11, x0, x1, UXTW
+;   ldrh w12, [x11, #260]
+;   ldrh w14, [x11, #262]
+;   ldrh w13, [x11, #264]
+;   sxth w14, w14
+;   ldrsh x11, [x11, #266]
+;   add w12, w14, w12, SXTH
+;   add w11, w11, w13, SXTH
+;   add w0, w12, w11
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x11, x0, w1, uxtw
+;   ldrh w12, [x11, #0x104] ; trap: heap_oob
+;   ldrh w14, [x11, #0x106] ; trap: heap_oob
+;   ldrh w13, [x11, #0x108] ; trap: heap_oob
+;   sxth w14, w14
+;   ldrsh x11, [x11, #0x10a] ; trap: heap_oob
+;   add w12, w14, w12, sxth
+;   add w11, w11, w13, sxth
+;   add w0, w12, w11
+;   ret
+
+;; Same with a sign-extended index.
+function %shared_base_sext(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+    v2 = sextend.i64 v1
+    v3 = iadd v0, v2
+    v4 = load.i16 v3+260
+    v5 = load.i16 v3+262
+    v8 = sextend.i32 v4
+    v9 = sextend.i32 v5
+    v12 = iadd v8, v9
+    return v12
+}
+
+; VCode:
+; block0:
+;   add x6, x0, x1, SXTW
+;   ldrh w7, [x6, #260]
+;   ldrsh x6, [x6, #262]
+;   add w0, w6, w7, SXTH
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x6, x0, w1, sxtw
+;   ldrh w7, [x6, #0x104] ; trap: heap_oob
+;   ldrsh x6, [x6, #0x106] ; trap: heap_oob
+;   add w0, w6, w7, sxth
+;   ret
+
+;; A single load with a non-zero offset: both forms are two instructions, so
+;; this is neutral (folds the offset into the load immediate).
+function %single_use_uext(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iadd v0, v2
+    v4 = load.i16 v3+128
+    v5 = sextend.i32 v4
+    return v5
+}
+
+; VCode:
+; block0:
+;   add x4, x0, x1, UXTW
+;   ldrsh x0, [x4, #128]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x4, x0, w1, uxtw
+;   ldrsh x0, [x4, #0x80] ; trap: heap_oob
+;   ret
+
+;; Zero offset: must stay a single `ldrh [base, index, uxtw]` (the non-zero
+;; guard keeps `RegExtended` here rather than splitting into add + load).
+function %offset_zero_uext(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iadd v0, v2
+    v4 = load.i16 v3
+    v5 = sextend.i32 v4
+    return v5
+}
+
+; VCode:
+; block0:
+;   ldrsh x0, [x0, w1, UXTW]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrsh x0, [x0, w1, uxtw] ; trap: heap_oob
+;   ret
+
