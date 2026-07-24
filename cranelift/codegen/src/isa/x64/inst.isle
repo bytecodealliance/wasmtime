@@ -1314,6 +1314,9 @@
 (decl pure use_avx_vnni () bool)
 (extern constructor use_avx_vnni use_avx_vnni)
 
+(decl pure use_avx512vnni () bool)
+(extern constructor use_avx512vnni use_avx512vnni)
+
 (decl pure has_sse3 () bool)
 (extern constructor has_sse3 has_sse3)
 
@@ -2952,6 +2955,11 @@
 ;; `sgn`) grouped 16->4. `acc` is the read-write accumulator.
 (decl x64_vpdpbusd (Xmm Xmm XmmMem128) Xmm)
 (rule (x64_vpdpbusd acc uns sgn) (x64_vpdpbusd_a acc uns sgn))
+
+;; EVEX AVX512-VNNI form of the same op, for hosts with AVX512VNNI+AVX512VL but
+;; not the VEX AVX-VNNI (e.g. Ice Lake, Cascade Lake).
+(decl x64_vpdpbusd_evex (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vpdpbusd_evex acc uns sgn) (x64_vpdpbusd_b acc uns sgn))
 
 ;; Helper for creating `insertps` instructions.
 (decl x64_insertps (Xmm XmmMem32 u8) Xmm)

@@ -1,5 +1,5 @@
-use crate::dsl::{Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, vex, w};
+use crate::dsl::{Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -29,5 +29,7 @@ pub fn list() -> Vec<Inst> {
         // products summed into a 32-bit lane and accumulated into the first
         // (read-write) operand. One op for the pmaddubsw + pmaddwd + paddd chain.
         inst("vpdpbusd", fmt("A", [rw(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().w0().op(0x50).r(), (_64b | compat) & avx_vnni),
+        // EVEX AVX512-VNNI form (128-bit), for hosts with AVX512VNNI + AVX512VL.
+        inst("vpdpbusd", fmt("B", [rw(xmm1), r(xmm2), r(xmm_m128)]), evex(L128, Full)._66()._0f38().w0().op(0x50).r(), (_64b | compat) & avx512vnni & avx512vl),
      ]
 }
