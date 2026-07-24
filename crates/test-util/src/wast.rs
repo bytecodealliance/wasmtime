@@ -530,6 +530,7 @@ impl WastTest {
                 "misc_testsuite/simd/load_splat_out_of_bounds.wast",
                 "misc_testsuite/simd/edge-of-memory.wast",
                 "misc_testsuite/issue6562.wast",
+                "misc_testsuite/simd/almost-extmul.wast",
             ];
             if now_supported.iter().any(|part| self.path.ends_with(part)) {
                 return false;
