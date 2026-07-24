@@ -2076,9 +2076,18 @@ fn define_mov_from_vec() -> SpecConfig {
         aarch64::gpreg(4),
         Mapping::require(spec_var("rd".to_string())),
     );
+    // The source is a 128-bit vector register, but the ISLE `rn` field is
+    // declared `Reg`, which is modelled as `(bv 64)`. Qualifying it as 128 bits
+    // contradicts that model, so the spec cannot be type checked; widening it
+    // instead would need a distinct vector register type, as x64 has for `Xmm`.
+    //
+    // Until then this specification covers only the lanes lying within the low
+    // 64 bits of the register. That is incomplete rather than unsound: reads of
+    // a higher lane are excluded by the `require` clause, so a lowering that
+    // needs one will fail to verify.
     mappings.reads.insert(
         aarch64::vreg(5),
-        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 128)),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 64)),
     );
 
     SpecConfig {
@@ -2091,7 +2100,8 @@ fn define_mov_from_vec() -> SpecConfig {
                 .iter()
                 .rev()
                 .map(|size| {
-                    let lanes = 128 / size.ty().bits();
+                    // Lanes within the low 64 bits only; see above.
+                    let lanes = 64 / size.ty().bits();
                     Arm {
                         variant: format!("{size:?}"),
                         args: Vec::new(),

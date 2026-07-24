@@ -770,7 +770,9 @@
 
 (spec (i64_neg x) (provide (= result (bvneg x))))
 (spec (u64_sub x y) (provide (= result (bvsub x y))))
-(spec (u64_shl x y) (provide (= result (bvshl x y))))
+(spec (u64_shl x y)
+      (match (bvult y #x00000040))
+      (provide (= result (bvshl x (zero_ext 64 y)))))
 (spec (u64_eq x y) (provide (= result (= x y))))
 (spec (u64_is_odd x) (provide (= result (= (conv_to 1 x) #b1))))
 (spec (i64_checked_neg x)
@@ -801,7 +803,7 @@
 (spec (u64_wrapping_shl x y)
       (provide (= result
                   (bvshl x
-                         (zero_ext 32 (bvand y #x0000003f)))))) ; shift by y mod 64
+                         (zero_ext 64 (bvand y #x0000003f)))))) ; shift by y mod 64
 (spec (u64_wrapping_sub x y) (provide (= result (bvsub x y))))
 (spec (u64_wrapping_add x y) (provide (= result (bvadd x y))))
 (spec (u64_gt x y) (provide (bvugt x y)))

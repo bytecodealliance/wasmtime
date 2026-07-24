@@ -379,7 +379,8 @@
 
 (spec (RegMemImm.Imm simm32) (provide
       (= result
-            (bvor (bvshl #b10 62)(zero_ext 64 simm32)))))
+            (bvor
+                  #x8000000000000000 (zero_ext 64 simm32)))))
 
 (spec (RegMemImm.Mem addr) (provide
       (= result

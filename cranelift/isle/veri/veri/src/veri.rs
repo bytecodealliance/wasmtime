@@ -782,8 +782,19 @@ impl Conditions {
         prog: &Program,
         excluded_tags: &HashSet<String>,
     ) -> Result<Self> {
-        let builder = ConditionsBuilder::new(expansion, prog, excluded_tags);
+        let builder = ConditionsBuilder::new(Some(expansion), prog, excluded_tags);
         builder.build()
+    }
+
+    /// Verification conditions for a single term's spec, independent of any
+    /// expansion that might reach it.
+    ///
+    /// Checked against every declared instantiation: with no expansion there is
+    /// no run whose excluded tags could narrow the set.
+    pub fn from_term(term: TermId, kind: TermKind, prog: &Program) -> Result<Self> {
+        let excluded_tags = HashSet::new();
+        let builder = ConditionsBuilder::new(None, prog, &excluded_tags);
+        builder.build_term(term, kind)
     }
 
     pub fn pretty_print(&self, prog: &Program) {
@@ -939,9 +950,19 @@ impl Conditions {
     }
 }
 
-enum TermKind {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TermKind {
     Constructor,
     Extractor,
+}
+
+fn is_fallible(term: &sema::Term, tyenv: &sema::TypeEnv, kind: TermKind) -> bool {
+    match kind {
+        TermKind::Constructor => term.is_partial(),
+        TermKind::Extractor => term
+            .extractor_sig(tyenv)
+            .is_some_and(|sig| sig.ret_kind == sema::ReturnKind::Option),
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -996,11 +1017,14 @@ impl Variables {
 }
 
 struct ConditionsBuilder<'a> {
-    expansion: &'a Expansion,
+    /// Expansion under verification, absent when building the conditions for a
+    /// single term in isolation.
+    expansion: Option<&'a Expansion>,
     prog: &'a Program,
     /// Tags excluded by this run, gating tagged instantiation sets.
     excluded_tags: &'a HashSet<String>,
-
+    /// Term whose conditions are under construction, for diagnostics.
+    context_term: Option<TermId>,
     state_modification_conds: HashMap<String, Vec<ExprId>>,
     binding_value: HashMap<BindingId, Symbolic>,
     expr_map: HashMap<Expr, ExprId>,
@@ -1010,7 +1034,7 @@ struct ConditionsBuilder<'a> {
 
 impl<'a> ConditionsBuilder<'a> {
     fn new(
-        expansion: &'a Expansion,
+        expansion: Option<&'a Expansion>,
         prog: &'a Program,
         excluded_tags: &'a HashSet<String>,
     ) -> Self {
@@ -1018,6 +1042,7 @@ impl<'a> ConditionsBuilder<'a> {
             expansion,
             prog,
             excluded_tags,
+            context_term: expansion.map(|e| e.term),
             state_modification_conds: HashMap::new(),
             binding_value: HashMap::new(),
             expr_map: HashMap::new(),
@@ -1026,14 +1051,24 @@ impl<'a> ConditionsBuilder<'a> {
         }
     }
 
+    /// The expansion under verification.
+    ///
+    /// Panics when the conditions are for a single term in isolation, which has
+    /// no surrounding expansion. Only the `build` path reaches these uses.
+    fn expansion(&self) -> &'a Expansion {
+        self.expansion.expect("expansion should be set")
+    }
+
     fn build(mut self) -> Result<Conditions> {
+        let expansion = self.expansion();
+
         // State initialization.
         for state in &self.prog.specenv.state {
             self.init_state(state)?;
         }
 
         // Bindings.
-        for (i, binding) in self.expansion.bindings.iter().enumerate() {
+        for (i, binding) in expansion.bindings.iter().enumerate() {
             if let Some(binding) = binding {
                 self.add_binding(i.try_into().unwrap(), binding)?;
             }
@@ -1041,20 +1076,20 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Callee contract for the term under expansion.
         self.constructor(
-            self.expansion.result,
-            self.expansion.term,
-            &self.expansion.parameters,
+            expansion.result,
+            expansion.term,
+            &expansion.parameters,
             Invocation::Callee,
         )?;
 
         // Constraints.
-        for constrain in &self.expansion.constraints {
+        for constrain in &expansion.constraints {
             let holds = self.constrain(constrain)?;
             self.conditions.assumptions.push(holds);
         }
 
         // Equals.
-        for (a, b) in self.expansion.equalities() {
+        for (a, b) in expansion.equalities() {
             let eq = self.bindings_equal(a, b)?;
             self.conditions.assumptions.push(eq);
         }
@@ -1066,6 +1101,57 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Validate
         self.conditions.validate()?;
+
+        Ok(self.conditions)
+    }
+
+    /// Build conditions for a single term's spec, applied to freshly allocated
+    /// arguments and return value of its declared types.
+    fn build_term(mut self, term: TermId, kind: TermKind) -> Result<Conditions> {
+        let prog = self.prog;
+        self.context_term = Some(term);
+
+        // State initialization.
+        for state in &prog.specenv.state {
+            self.init_state(state)?;
+        }
+
+        // Allocate a value per declared argument type, and one for the return.
+        let term_data = prog.term(term);
+        let mut args = Vec::new();
+        for (i, ty) in term_data.arg_tys.iter().enumerate() {
+            args.push(self.alloc_model(*ty, format!("arg{i}"))?);
+        }
+        let ret = self.alloc_model(term_data.ret_ty, "ret".to_string())?;
+
+        // A fallible term's outputs are wrapped in an option whose
+        // discriminant decides whether the spec's `provides` apply, and a spec
+        // with `match` clauses requires that domain. Which values are the
+        // outputs depends on the term kind: a constructor produces its return
+        // value, whereas an extractor consumes it and produces the arguments.
+        let outputs = match kind {
+            TermKind::Constructor => ret.clone(),
+            TermKind::Extractor => Symbolic::Tuple(args.clone()),
+        };
+        let outputs = if is_fallible(term_data, &prog.tyenv, kind) {
+            self.alloc_option(outputs)
+        } else {
+            outputs
+        };
+        let (domain, outputs) = Domain::from_return_value(&outputs);
+
+        // Evaluate the spec as the callee, the direction in which its
+        // `provides` are asserted.
+        let (args, result) = match kind {
+            TermKind::Constructor => (args.as_slice(), outputs.clone()),
+            TermKind::Extractor => (outputs.elements(), ret),
+        };
+        self.call(term, kind, args, result, Invocation::Callee, domain)?;
+
+        // State defaults.
+        for state in &prog.specenv.state {
+            self.state_default(state)?;
+        }
 
         Ok(self.conditions)
     }
@@ -1115,7 +1201,7 @@ impl<'a> ConditionsBuilder<'a> {
         // Ensure dependencies have been added.
         for source in binding.sources() {
             let source_binding = self
-                .expansion
+                .expansion()
                 .binding(*source)
                 .expect("source binding should be defined");
             self.add_binding(*source, source_binding)?;
@@ -1465,7 +1551,7 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Lookup enum type via corresponding constriant,
         let tys: Vec<_> = self
-            .expansion
+            .expansion()
             .constraints
             .iter()
             .flat_map(|c| match c {
@@ -1551,7 +1637,7 @@ impl<'a> ConditionsBuilder<'a> {
 
         // Lookup the struct type via the corresponding constraint on the source.
         let tys: Vec<_> = self
-            .expansion
+            .expansion()
             .constraints
             .iter()
             .flat_map(|c| match c {
@@ -2342,12 +2428,22 @@ impl<'a> ConditionsBuilder<'a> {
     /// Determine the type of the given binding in the context of the
     /// [Expansion] we are constructing verification conditions for.
     fn binding_type(&self, binding: &Binding) -> BindingType {
+        let expansion = self.expansion();
         binding_type(
             binding,
-            self.expansion.term,
+            expansion.term,
             self.prog,
-            |binding_id: BindingId| self.expansion.bindings[binding_id.index()].clone().unwrap(),
+            |binding_id: BindingId| expansion.bindings[binding_id.index()].clone().unwrap(),
         )
+    }
+
+    /// Wrap a fallible term's outputs in an option with a fresh discriminant.
+    fn alloc_option(&mut self, inner: Symbolic) -> Symbolic {
+        let some = self.alloc_variable(Type::Bool, Variable::component_name("ret", "some"));
+        Symbolic::Option(SymbolicOption {
+            some,
+            inner: Box::new(inner),
+        })
     }
 
     fn alloc_binding(&mut self, binding_type: &BindingType, name: String) -> Result<Symbolic> {
@@ -2458,7 +2554,9 @@ impl<'a> ConditionsBuilder<'a> {
 
     fn alloc_model(&mut self, type_id: TypeId, name: String) -> Result<Symbolic> {
         let type_name = self.prog.type_name(type_id);
-        let term_name = self.prog.term_name(self.expansion.term);
+        let term_name = self
+            .prog
+            .term_name(self.context_term.expect("context term should be set"));
         let ty = self
             .prog
             .specenv
