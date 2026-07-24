@@ -6,9 +6,6 @@ use clap::{ArgAction, Parser};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle_veri::runner::{Filter, Runner, SolverBackend, SolverRule};
 
-/// Configuration file applied by default when no `--config` is given.
-const DEFAULT_CONFIG: &str = "cranelift/isle/veri/configs/aarch64-fast.args";
-
 #[derive(Parser)]
 // Allow a single-valued argument to appear more than once, with the last
 // occurrence winning. This lets a value set in a `--config` file  be overridden
@@ -157,11 +154,11 @@ fn main() -> Result<()> {
     // Expand any `--config` files into the argument list before parsing.
     // Configuration arguments are placed ahead of the arguments given on the
     // command line so that the command line takes precedence.
+    // No configuration file is applied unless one is asked for: a run should
+    // only ever have the filters and exclusions that are visible in its own
+    // command line.
     let raw: Vec<String> = std::env::args().collect();
-    let mut config_paths = collect_config_paths(&raw[1..]);
-    if config_paths.is_empty() {
-        config_paths.push(std::path::PathBuf::from(DEFAULT_CONFIG));
-    }
+    let config_paths = collect_config_paths(&raw[1..]);
     let opts = if config_paths.is_empty() {
         Opts::parse()
     } else {
@@ -266,6 +263,18 @@ fn main() -> Result<()> {
     // Summarize what is being excluded and where output is going before
     // starting verification.
     println!("========================== Verification configuration =========================");
+    println!(
+        "Config files:       {}",
+        if config_paths.is_empty() {
+            "none".to_string()
+        } else {
+            config_paths
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    );
     println!("Number of threads:  {}", rayon::current_num_threads());
     println!("Working directory:  {}", work_dir.display());
     println!("Log directory:      {}", log_dir.display());

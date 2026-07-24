@@ -1,0 +1,698 @@
+;;;; Specs for mid-end (`opt`) helper terms declared in `prelude_opt.isle`,
+;;;; rather than in the shared `inst_specs.isle`.
+
+;; Soundness contract for the top-level rewrite term: by default a rewrite must
+;; preserve the value exactly (bitwise equality). This holds for all non-floating
+;; point rules and for most float values, including deterministic float bit-ops
+;; (`fneg`/`fabs`/`fcopysign`) and float arithmetic that does not produce a NaN.
+;;
+;; The one exception is float arithmetic that produces a NaN: because Wasm
+;; arithmetic NaN payloads are nondeterministic, exact bit-equality is too
+;; strong. When the value being rewritten was produced by a float-arithmetic op
+;; that returned a NaN (tracked by the `relax_nan` execution state, set in
+;; `inst_specs.isle`), the contract relaxes to CLIF-level float equivalence
+;; (`fp_equiv!`: bitwise-equal or both arithmetic NaNs). This matches Wasm
+;; semantics for existing rules that compose operations on floats, but could be
+;; unsound on future rules that compute on floats yet discard the float result
+;; in favor of returning e.g. an integer result (where `fp_equiv!` on an
+;; integer-typed result would wrongly treat NaN-patterned bits as equivalent).
+(spec (simplify arg)
+    (provide
+        (if relax_nan
+            (fp_equiv! result arg)
+            (= result arg))))
+(instantiate simplify
+    ((args (bv  8)) (ret (bv  8)))
+    ((args (bv 16)) (ret (bv 16)))
+    ((args (bv 32)) (ret (bv 32)))
+    ((args (bv 64)) (ret (bv 64))))
+
+;; `remat` and `subsume` annotate a rewrite without changing the value.
+(spec (remat x) (provide (= result x)))
+(spec (subsume x) (provide (= result x)))
+
+;; `imm64_*` constant folding: the wrapping op masked to the low `ty` bits (the
+;; Rust impls `& ty_mask`), keeping `Imm64` consistent with the `iconst` spec.
+(spec (imm64_add ty x y)
+    (provide (= result (bvand (bvadd x y) (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_sub ty x y)
+    (provide (= result (bvand (bvsub x y) (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_neg ty x)
+    (provide (= result (bvand (bvneg x) (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_not ty x)
+    (provide (= result (bvand (bvnot x) (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_mul ty x y)
+    (provide (= result (bvand (bvmul x y) (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_and ty x y)
+    (provide (= result (bvand (bvand x y) (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_or ty x y)
+    (provide (= result (bvand (bvor x y) (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_xor ty x y)
+    (provide (= result (bvand (bvxor x y) (low_bits_mask! 64 (:bits ty))))))
+
+;; `imm64_shl`/`imm64_ushr`: the shift amount is masked to `ty.bits()-1` on
+;; 64-bit `Imm64` values.
+(spec (imm64_shl ty x y)
+    (provide (= result
+                (bvand (bvshl x (bvand y (bvsub (int2bv 64 (:bits ty)) #x0000000000000001)))
+                       (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_ushr ty x y)
+    (provide (= result
+                (bvlshr (bvand x (low_bits_mask! 64 (:bits ty)))
+                        (bvand y (bvsub (int2bv 64 (:bits ty)) #x0000000000000001))))))
+
+;; `iconst_u`/`iconst_s` are `(decl rec ...)` (their 128-bit/vector rules
+;; recur), so they are cyclic and need specs rather than chaining. As
+;; extractors they yield the constant `c` as the zero/sign-extension of the
+;; matched value to 64 bits, mirroring the `iconst` spec.
+(spec (iconst_u ty c)
+    (provide (= c (zero_ext 64 result))
+             (= (:bits ty) (widthof result))))
+(instantiate iconst_u
+    ((args (named Type) (bv 64)) (ret (bv 8)))
+    ((args (named Type) (bv 64)) (ret (bv 16)))
+    ((args (named Type) (bv 64)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+(spec (iconst_s ty c)
+    (provide (= c (sign_ext 64 result))
+             (= (:bits ty) (widthof result))))
+(instantiate iconst_s
+    ((args (named Type) (bv 64)) (ret (bv 8)))
+    ((args (named Type) (bv 64)) (ret (bv 16)))
+    ((args (named Type) (bv 64)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+;; Comparison helpers, each an extractor for an `icmp` with a fixed condition
+;; code; mirroring the `icmp` spec (result `#x01`/`#x00`).
+(form comparison
+    ((args (named Type) (bv  8) (bv  8)) (ret (bv 8)))
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv 8)))
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 8)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 8))))
+(spec (eq ty x y)
+    (provide (= result (if (= x y) #x01 #x00))))
+(spec (ne ty x y)
+    (provide (= result (if (not (= x y)) #x01 #x00))))
+(spec (ult ty x y)
+    (provide (= result (if (bvult x y) #x01 #x00))))
+(spec (ule ty x y)
+    (provide (= result (if (bvule x y) #x01 #x00))))
+(spec (ugt ty x y)
+    (provide (= result (if (bvugt x y) #x01 #x00))))
+(spec (uge ty x y)
+    (provide (= result (if (bvuge x y) #x01 #x00))))
+(spec (slt ty x y)
+    (provide (= result (if (bvslt x y) #x01 #x00))))
+(spec (sle ty x y)
+    (provide (= result (if (bvsle x y) #x01 #x00))))
+(spec (sgt ty x y)
+    (provide (= result (if (bvsgt x y) #x01 #x00))))
+(spec (sge ty x y)
+    (provide (= result (if (bvsge x y) #x01 #x00))))
+(instantiate eq comparison)
+(instantiate ne comparison)
+(instantiate ult comparison)
+(instantiate ule comparison)
+(instantiate ugt comparison)
+(instantiate uge comparison)
+(instantiate slt comparison)
+(instantiate sle comparison)
+(instantiate sgt comparison)
+(instantiate sge comparison)
+
+;; Pure constant-folding helpers on 64-bit immediates.
+(spec (i64_wrapping_neg x) (provide (= result (bvneg x))))
+(spec (u64_lt x y) (provide (= result (bvult x y))))
+(spec (imm64 x) (provide (= result x)))
+
+(spec (cmp_true ty) (provide (= result (zero_ext (widthof result) #b1))))
+(instantiate cmp_true
+    ((args (named Type)) (ret (bv  8)))
+    ((args (named Type)) (ret (bv 16)))
+    ((args (named Type)) (ret (bv 32)))
+    ((args (named Type)) (ret (bv 64))))
+
+;; `all_zero` is a `(decl rec ...)` (the vector rules recur), so it needs a spec
+;; rather than chaining.
+(spec (all_zero ty)
+    (provide (= result (bvzero! (widthof result)))
+             (= (:bits ty) (widthof result))))
+(instantiate all_zero
+    ((args (named Type)) (ret (bv  8)))
+    ((args (named Type)) (ret (bv 16)))
+    ((args (named Type)) (ret (bv 32)))
+    ((args (named Type)) (ret (bv 64))))
+
+;; Type-derived `u64` helpers. `ty_mask` is the low `ty.bits()` set (Rust
+;; `u64::MAX >> (64 - ty.bits())`), `ty_umax` is defined as `ty_mask`, and
+;; `ty_bits_u64` is the bitwidth itself.
+(spec (ty_mask ty) (provide (= result (low_bits_mask! 64 (:bits ty)))))
+(spec (ty_umax ty) (provide (= result (low_bits_mask! 64 (:bits ty)))))
+(spec (ty_bits_u64 ty) (provide (= result (int2bv 64 (:bits ty)))))
+
+;; `uextend_maybe` "sees through" a `uextend`: given the outer value `result`,
+;; it yields the inner `val`, with the outer being the zero-extension of the
+;; inner to `ty` bits. Mirrors `maybe_uextend`.
+(spec (uextend_maybe ty val)
+    (provide (= result (zero_ext (widthof result) val))
+             (= (:bits ty) (widthof result))))
+
+;; The rule `(uextend_maybe ty val) => (uextend ty val)` needs concrete widths to
+;; type-check standalone (its spec leaves `val`'s width free). Unlike `uextend`,
+;; `uextend_maybe` also has an identity rule for the same-width case, so allow
+;; every `val`-width <= `ty`-width pairing rather than reusing strict `extend`.
+(instantiate uextend_maybe
+    ((args (named Type) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv  8)) (ret (bv 16)))
+    ((args (named Type) (bv  8)) (ret (bv 32)))
+    ((args (named Type) (bv  8)) (ret (bv 64)))
+    ((args (named Type) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 16)) (ret (bv 32)))
+    ((args (named Type) (bv 16)) (ret (bv 64)))
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 32)) (ret (bv 64)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+(attr splat (tag vector))
+
+;;;; Concrete `f32`/`f64` sign bit-ops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Total sign-bit folds (`Ieee{32,64}` model as `(bv {32,64})`); no NaN-sign case
+;; analysis needed, unlike the `fneg`/`fabs`/`fcopysign` instruction specs.
+(spec (f32_neg x) (provide (= result (bvxor x (fp_sign_bit_set! (widthof x))))))
+(spec (f64_neg x) (provide (= result (bvxor x (fp_sign_bit_set! (widthof x))))))
+(spec (f32_abs x) (provide (= result (bvand x (bvnot (fp_sign_bit_set! (widthof x)))))))
+(spec (f64_abs x) (provide (= result (bvand x (bvnot (fp_sign_bit_set! (widthof x)))))))
+(spec (f32_copysign x y)
+    (provide
+        (= result
+            (bvor (bvand x (bvnot (fp_sign_bit_set! (widthof x))))
+                  (bvand y (fp_sign_bit_set! (widthof y)))))))
+(spec (f64_copysign x y)
+    (provide
+        (= result
+            (bvor (bvand x (bvnot (fp_sign_bit_set! (widthof x))))
+                  (bvand y (fp_sign_bit_set! (widthof y)))))))
+
+;;;; Concrete `f32`/`f64` arithmetic constant-folds ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Partial: Rust `.non_nan()` returns None on a NaN result, so the `match` rules
+;; out NaN-producing inputs (relax_nan stays false; exact equality required). Each
+;; `fold_f*` macro copies the non-NaN branches of the `inst_specs.isle` result, so
+;; `lhs == rhs` is structural rather than a 64-bit IEEE-equivalence query.
+(macro (fold_fadd x y)
+    (if (or (fp.isNaN x) (fp.isNaN y))
+        (nans2! x y)
+    (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_opposite_sign! x y))
+        (nans0! (widthof x))
+    (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_equal_sign! x y))
+        x
+    (if (fp.isInfinite x)
+        x
+    (if (fp.isInfinite y)
+        y
+    (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+        (fp.+zero (widthof x))
+    (if (and (fp.isZero x) (fp.isZero y) (fp_equal_sign! x y))
+        x
+    (if (fp.isZero x)
+        y
+    (if (fp.isZero y)
+        x
+    (if (and (= (fp_magnitude! x) (fp_magnitude! y)) (fp_opposite_sign! x y))
+        (fp.+zero (widthof x))
+        (fp.add x y))))))))))))
+
+(macro (fold_fsub x y)
+    (if (or (fp.isNaN x) (fp.isNaN y))
+        (nans2! x y)
+    (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_equal_sign! x y))
+        (nans0! (widthof x))
+    (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_opposite_sign! x y))
+        x
+    (if (fp.isInfinite x)
+        x
+    (if (fp.isInfinite y)
+        (fp.neg y)
+    (if (and (fp.isZero x) (fp.isZero y) (fp_equal_sign! x y))
+        (fp.+zero (widthof x))
+    (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+        x
+    (if (fp.isZero y)
+        x
+    (if (fp.isZero x)
+        (fp.neg y)
+    (if (and (= (fp_magnitude! x) (fp_magnitude! y)) (fp_equal_sign! x y))
+        (fp.+zero (widthof x))
+        (fp.sub x y))))))))))))
+
+(macro (fold_fmul x y)
+    (if (or (fp.isNaN x) (fp.isNaN y))
+        (nans2! x y)
+    (if (and (fp.isZero x) (fp.isInfinite y))
+        (nans0! (widthof x))
+    (if (and (fp.isInfinite x) (fp.isZero y))
+        (nans0! (widthof x))
+    (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_equal_sign! x y))
+        (fp.+oo (widthof x))
+    (if (and (fp.isInfinite x) (fp.isInfinite y) (fp_opposite_sign! x y))
+        (fp.-oo (widthof x))
+    (if (and (fp.isInfinite x) (fp_equal_sign! x y))
+        (fp.+oo (widthof x))
+    (if (and (fp.isInfinite y) (fp_equal_sign! x y))
+        (fp.+oo (widthof x))
+    (if (and (fp.isInfinite x) (fp_opposite_sign! x y))
+        (fp.-oo (widthof x))
+    (if (and (fp.isInfinite y) (fp_opposite_sign! x y))
+        (fp.-oo (widthof x))
+    (if (and (fp.isZero x) (fp.isZero y) (fp_equal_sign! x y))
+        (fp.+zero (widthof x))
+    (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+        (fp.-zero (widthof x))
+        (fp.mul x y)))))))))))))
+
+(macro (fold_fdiv x y)
+    (if (or (fp.isNaN x) (fp.isNaN y))
+        (nans2! x y)
+    (if (and (fp.isInfinite x) (fp.isInfinite y))
+        (nans0! (widthof x))
+    (if (and (fp.isZero x) (fp.isZero y))
+        (nans2! x y)
+    (if (and (fp.isInfinite x) (fp_equal_sign! x y))
+        (fp.+oo (widthof x))
+    (if (and (fp.isInfinite x) (fp_opposite_sign! x y))
+        (fp.-oo (widthof x))
+    (if (and (fp.isInfinite y) (fp_equal_sign! x y))
+        (fp.+zero (widthof x))
+    (if (and (fp.isInfinite y) (fp_opposite_sign! x y))
+        (fp.-zero (widthof x))
+    (if (and (fp.isZero x) (fp_equal_sign! x y))
+        (fp.+zero (widthof x))
+    (if (and (fp.isZero x) (fp_opposite_sign! x y))
+        (fp.-zero (widthof x))
+    (if (and (fp.isZero y) (fp_equal_sign! x y))
+        (fp.+oo (widthof x))
+    (if (and (fp.isZero y) (fp_opposite_sign! x y))
+        (fp.-oo (widthof x))
+        (fp.div x y)))))))))))))
+
+(spec (f32_add x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))
+                (not (and (fp.isInfinite x) (fp.isInfinite y) (fp_opposite_sign! x y)))))
+    (provide (= result (fold_fadd! x y))))
+(spec (f64_add x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))
+                (not (and (fp.isInfinite x) (fp.isInfinite y) (fp_opposite_sign! x y)))))
+    (provide (= result (fold_fadd! x y))))
+(spec (f32_sub x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))
+                (not (and (fp.isInfinite x) (fp.isInfinite y) (fp_equal_sign! x y)))))
+    (provide (= result (fold_fsub! x y))))
+(spec (f64_sub x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))
+                (not (and (fp.isInfinite x) (fp.isInfinite y) (fp_equal_sign! x y)))))
+    (provide (= result (fold_fsub! x y))))
+
+;; cvc5 answers `unknown` on the bit-blasted `fsub` fold queries; route them to z3
+(attr f32_sub (tag solver_z3))
+(attr f64_sub (tag solver_z3))
+(spec (f32_mul x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))
+                (not (and (fp.isZero x) (fp.isInfinite y)))
+                (not (and (fp.isInfinite x) (fp.isZero y)))))
+    (provide (= result (fold_fmul! x y))))
+
+(spec (f64_mul x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))
+                (not (and (fp.isZero x) (fp.isInfinite y)))
+                (not (and (fp.isInfinite x) (fp.isZero y)))))
+    (provide (= result (fold_fmul! x y))))
+
+(spec (f32_div x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))
+                (not (and (fp.isInfinite x) (fp.isInfinite y)))
+                (not (and (fp.isZero x) (fp.isZero y)))))
+    (provide (= result (fold_fdiv! x y))))
+
+(spec (f64_div x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))
+                (not (and (fp.isInfinite x) (fp.isInfinite y)))
+                (not (and (fp.isZero x) (fp.isZero y)))))
+    (provide (= result (fold_fdiv! x y))))
+
+;; Fold `minimum`/`maximum` (partial: None iff a NaN input). `fp.min`/`fp.max` are
+;; unspecified on opposite-sign zeros, where IEEE returns -0/+0.
+(spec (f32_min x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))))
+    (provide (= result
+        (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+            (fp.-zero (widthof x))
+            (fp.min x y)))))
+
+(spec (f64_min x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))))
+    (provide (= result
+        (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+            (fp.-zero (widthof x))
+            (fp.min x y)))))
+
+(spec (f32_max x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))))
+    (provide (= result
+        (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+            (fp.+zero (widthof x))
+            (fp.max x y)))))
+
+(spec (f64_max x y)
+    (match (and (not (fp.isNaN x)) (not (fp.isNaN y))))
+    (provide (= result
+        (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
+            (fp.+zero (widthof x))
+            (fp.max x y)))))
+
+;; Partial (None on negative/NaN input). `fp.sqrt` is uninterpreted (see
+;; `solver.rs`), so the +inf and zero cases are spelled out.
+(spec (f32_sqrt x)
+    (match (or (fp.isZero x) (fp.isPositive x)))
+    (provide (= result
+        (if (and (fp.isInfinite x) (fp.isPositive x))
+            (fp.+oo (widthof x))
+        (if (fp.isZero x)
+            x
+            (fp.sqrt x))))))
+
+(spec (f64_sqrt x)
+    (match (or (fp.isZero x) (fp.isPositive x)))
+    (provide (= result
+        (if (and (fp.isInfinite x) (fp.isPositive x))
+            (fp.+oo (widthof x))
+        (if (fp.isZero x)
+            x
+            (fp.sqrt x))))))
+
+;; `roundToIntegral` with a directed mode; partial only on NaN input. `fp.ceil`/
+;; etc. are real ops that already handle the inf/zero/small-magnitude cases, so
+;; the bare op suffices.
+(spec (f32_ceil x)    (match (not (fp.isNaN x))) (provide (= result (fp.ceil x))))
+(spec (f64_ceil x)    (match (not (fp.isNaN x))) (provide (= result (fp.ceil x))))
+(spec (f32_floor x)   (match (not (fp.isNaN x))) (provide (= result (fp.floor x))))
+(spec (f64_floor x)   (match (not (fp.isNaN x))) (provide (= result (fp.floor x))))
+(spec (f32_trunc x)   (match (not (fp.isNaN x))) (provide (= result (fp.trunc x))))
+(spec (f64_trunc x)   (match (not (fp.isNaN x))) (provide (= result (fp.trunc x))))
+(spec (f32_nearest x) (match (not (fp.isNaN x))) (provide (= result (fp.nearest x))))
+(spec (f64_nearest x) (match (not (fp.isNaN x))) (provide (= result (fp.nearest x))))
+
+;;;; Concrete int-to-float constant-folds ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Fold `n as f{32,64}` on a 64-bit immediate: convert un/signed to the dest float
+;; width under round-nearest-ties-to-even.
+(spec (f32_from_uint n) (provide (= result (to_fp_unsigned (widthof result) n))))
+(spec (f64_from_uint n) (provide (= result (to_fp_unsigned (widthof result) n))))
+(spec (f32_from_sint n) (provide (= result (to_fp (widthof result) n))))
+(spec (f64_from_sint n) (provide (= result (to_fp (widthof result) n))))
+
+;;;; Generated `u64`/`i64` numeric helpers (`numerics.isle`) ;;;;;;;;;;;;;;;;;;;;;
+;; `gen_isle.rs` primitives on `u64`/`i64` (model as `(bv 64)`); `u64_*` unsigned,
+;; `i64_*` signed. `u64_checked_rem` is partial (None on a zero divisor).
+(spec (u64_and x y) (provide (= result (bvand x y))))
+(spec (u64_or x y) (provide (= result (bvor x y))))
+(spec (u64_not x) (provide (= result (bvnot x))))
+
+;; Byte-reverse the low 16/32/64 bits (`(n as u_).swap_bytes()`).
+(spec (u64_bswap16 n)
+    (provide (= result (zero_ext 64 (concat (extract 7 0 n) (extract 15 8 n))))))
+(spec (u64_bswap32 n)
+    (provide (= result (zero_ext 64 (concat (extract 7 0 n)
+                                    (concat (extract 15 8 n)
+                                    (concat (extract 23 16 n) (extract 31 24 n))))))))
+(spec (u64_bswap64 n)
+    (provide (= result (concat (extract 7 0 n)
+                       (concat (extract 15 8 n)
+                       (concat (extract 23 16 n)
+                       (concat (extract 31 24 n)
+                       (concat (extract 39 32 n)
+                       (concat (extract 47 40 n)
+                       (concat (extract 55 48 n) (extract 63 56 n)))))))))))
+(spec (u64_lt_eq x y) (provide (= result (bvule x y))))
+(spec (u64_checked_rem x y)
+    (match (not (bv_is_zero! y)))
+    (provide (= result (bvurem x y))))
+
+;; Non-partial (panic on zero divisor): `require` non-zero, discharged by the
+;; caller's `u64_checked_rem` guard. Tagged `slow` below (the division rules that
+;; reach them are `unknown` at 64 bits).
+(spec (u64_div x y)
+    (require (not (bv_is_zero! y)))
+    (provide (= result (bvudiv x y))))
+(spec (u64_rem x y)
+    (require (not (bv_is_zero! y)))
+    (provide (= result (bvurem x y))))
+(spec (i64_eq x y) (provide (= result (= x y))))
+(spec (u64_extract_non_zero x)
+    (match (not (bv_is_zero! result)))
+    (provide (= x result)))
+(spec (i64_lt x y) (provide (= result (bvslt x y))))
+(spec (i64_gt_eq x y) (provide (= result (bvsge x y))))
+
+;;;; Type-derived signed bounds ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Signed min/max of `ty` in the low bits: `(i64::{MIN,MAX} as u64) >> (64-bits)`.
+(spec (ty_smin ty)
+    (provide (= result (bvlshr #x8000000000000000 (bvsub (int2bv 64 64) (int2bv 64 (:bits ty)))))))
+(spec (ty_smax ty)
+    (provide (= result (bvlshr #x7fffffffffffffff (bvsub (int2bv 64 64) (int2bv 64 (:bits ty)))))))
+
+;; Partial: half-width integer type (i16->i8, ...); undefined for i8.
+(spec (ty_half_width ty)
+    (match (bvuge (int2bv 64 (:bits ty)) (int2bv 64 16)))
+    (provide (= (int2bv 64 (:bits result)) (bvlshr (int2bv 64 (:bits ty)) (int2bv 64 1)))))
+(spec (ty_equal lhs rhs) (provide (= result (= lhs rhs))))
+
+;; Partial: bit width (8/16/32) -> that integer type.
+(spec (shift_amt_to_type v)
+    (match (or (= v (int2bv 64 8)) (= v (int2bv 64 16)) (= v (int2bv 64 32))))
+    (provide (= (int2bv 64 (:bits result)) v)))
+
+;;;; `imm64_*` min/max/shift folding ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 64-bit `Imm64`, masked to the low `ty` bits. Signed ops sign-extend those bits
+;; first (Rust `sign_extend_from_width` = shl then ashr by `64-bits`; `sext_ty!`).
+(macro (sext_ty x ty)
+    (bvashr (bvshl x (bvsub (int2bv 64 64) (int2bv 64 (:bits ty))))
+            (bvsub (int2bv 64 64) (int2bv 64 (:bits ty)))))
+(spec (i64_sextend_u64 ty x) (provide (= result (sext_ty! x ty))))
+(spec (imm64_umin ty x y)
+    (provide (= result (if (bvule (bvand x (low_bits_mask! 64 (:bits ty)))
+                                  (bvand y (low_bits_mask! 64 (:bits ty))))
+                           (bvand x (low_bits_mask! 64 (:bits ty)))
+                           (bvand y (low_bits_mask! 64 (:bits ty)))))))
+(spec (imm64_umax ty x y)
+    (provide (= result (if (bvuge (bvand x (low_bits_mask! 64 (:bits ty)))
+                                  (bvand y (low_bits_mask! 64 (:bits ty))))
+                           (bvand x (low_bits_mask! 64 (:bits ty)))
+                           (bvand y (low_bits_mask! 64 (:bits ty)))))))
+(spec (imm64_smin ty x y)
+    (provide (= result (bvand (if (bvsle (sext_ty! x ty) (sext_ty! y ty))
+                                  (sext_ty! x ty) (sext_ty! y ty))
+                              (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_smax ty x y)
+    (provide (= result (bvand (if (bvsge (sext_ty! x ty) (sext_ty! y ty))
+                                  (sext_ty! x ty) (sext_ty! y ty))
+                              (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_sshr ty x y)
+    (provide (= result (bvand (bvashr (sext_ty! x ty)
+                                      (bvand y (bvsub (int2bv 64 (:bits ty)) (int2bv 64 1))))
+                              (low_bits_mask! 64 (:bits ty))))))
+(spec (imm64_masked ty x)
+    (provide (= result (bvand x (low_bits_mask! 64 (:bits ty))))))
+
+;;;; `imm64_*` bit-count / rotate / compare folding ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; `clz` counts leading zeros within `ty` (subtract the `64-bits` offset); `ctz`
+;; is `clz` of the bit-reversed value, or `ty.bits()` for zero. Rotates are shifts.
+(macro (bits ty) (int2bv 64 (:bits ty)))
+(macro (mask ty) (low_bits_mask! 64 (:bits ty)))
+(spec (imm64_clz ty a)
+    (provide (= result (bvsub (clz a) (bvsub (int2bv 64 64) (bits! ty))))))
+(spec (imm64_ctz ty a)
+    (provide (= result (if (bv_is_zero! a) (bits! ty) (clz (rev a))))))
+(spec (imm64_rotl ty x y)
+    (provide (= result
+        (bvand (bvor (bvshl (bvand x (mask! ty)) (bvand y (bvsub (bits! ty) (int2bv 64 1))))
+                     (bvlshr (bvand x (mask! ty))
+                             (bvsub (bits! ty) (bvand y (bvsub (bits! ty) (int2bv 64 1))))))
+               (mask! ty)))))
+(spec (imm64_rotr ty x y)
+    (provide (= result
+        (bvand (bvor (bvlshr (bvand x (mask! ty)) (bvand y (bvsub (bits! ty) (int2bv 64 1))))
+                     (bvshl (bvand x (mask! ty))
+                            (bvsub (bits! ty) (bvand y (bvsub (bits! ty) (int2bv 64 1))))))
+               (mask! ty)))))
+
+;; Fold an integer compare to `1`/`0`: unsigned codes on the masked values, signed
+;; codes on the sign-extended ones.
+(spec (imm64_icmp ty cc x y)
+    (provide (= result
+        (if (match cc
+                ((Equal) (= (bvand x (mask! ty)) (bvand y (mask! ty))))
+                ((NotEqual) (not (= (bvand x (mask! ty)) (bvand y (mask! ty)))))
+                ((UnsignedGreaterThan) (bvugt (bvand x (mask! ty)) (bvand y (mask! ty))))
+                ((UnsignedGreaterThanOrEqual) (bvuge (bvand x (mask! ty)) (bvand y (mask! ty))))
+                ((UnsignedLessThan) (bvult (bvand x (mask! ty)) (bvand y (mask! ty))))
+                ((UnsignedLessThanOrEqual) (bvule (bvand x (mask! ty)) (bvand y (mask! ty))))
+                ((SignedGreaterThan) (bvsgt (sext_ty! x ty) (sext_ty! y ty)))
+                ((SignedGreaterThanOrEqual) (bvsge (sext_ty! x ty) (sext_ty! y ty)))
+                ((SignedLessThan) (bvslt (sext_ty! x ty) (sext_ty! y ty)))
+                ((SignedLessThanOrEqual) (bvsle (sext_ty! x ty) (sext_ty! y ty))))
+            (int2bv 64 1) (int2bv 64 0)))))
+
+;; Partial extractor: matches a positive power-of-two (`result`) and yields its
+;; log2 (`x` = trailing-zero count).
+(spec (imm64_power_of_two x)
+    (match (and (bvsge result (int2bv 64 0))
+                (not (bv_is_zero! result))
+                (bv_is_zero! (bvand result (bvsub result (int2bv 64 1))))))
+    (provide (= x (clz (rev result)))))
+
+;;;; Condition-code helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; `IntCC::complement` (negate) / `IntCC::swap_args` (swap operands), per
+;; `ir/condcodes.rs`.
+(spec (intcc_complement cc)
+    (provide (= result
+        (match cc
+            ((Equal) (IntCC.NotEqual))
+            ((NotEqual) (IntCC.Equal))
+            ((SignedLessThan) (IntCC.SignedGreaterThanOrEqual))
+            ((SignedGreaterThanOrEqual) (IntCC.SignedLessThan))
+            ((SignedGreaterThan) (IntCC.SignedLessThanOrEqual))
+            ((SignedLessThanOrEqual) (IntCC.SignedGreaterThan))
+            ((UnsignedLessThan) (IntCC.UnsignedGreaterThanOrEqual))
+            ((UnsignedGreaterThanOrEqual) (IntCC.UnsignedLessThan))
+            ((UnsignedGreaterThan) (IntCC.UnsignedLessThanOrEqual))
+            ((UnsignedLessThanOrEqual) (IntCC.UnsignedGreaterThan))))))
+(spec (intcc_swap_args cc)
+    (provide (= result
+        (match cc
+            ((Equal) (IntCC.Equal))
+            ((NotEqual) (IntCC.NotEqual))
+            ((SignedGreaterThan) (IntCC.SignedLessThan))
+            ((SignedGreaterThanOrEqual) (IntCC.SignedLessThanOrEqual))
+            ((SignedLessThan) (IntCC.SignedGreaterThan))
+            ((SignedLessThanOrEqual) (IntCC.SignedGreaterThanOrEqual))
+            ((UnsignedGreaterThan) (IntCC.UnsignedLessThan))
+            ((UnsignedGreaterThanOrEqual) (IntCC.UnsignedLessThanOrEqual))
+            ((UnsignedLessThan) (IntCC.UnsignedGreaterThan))
+            ((UnsignedLessThanOrEqual) (IntCC.UnsignedGreaterThanOrEqual))))))
+
+;; `intcc_class`: class bitset (unsigned=1, signed=2, eq=3). `intcc_comparable`
+;; succeeds when the classes overlap and yields whether the overlap is the signed
+;; bit. Inlined via `icc_class!` since a spec can't call the `intcc_class` term.
+(macro (icc_class cc)
+    (match cc
+        ((UnsignedLessThan) (int2bv 64 1))
+        ((UnsignedLessThanOrEqual) (int2bv 64 1))
+        ((UnsignedGreaterThan) (int2bv 64 1))
+        ((UnsignedGreaterThanOrEqual) (int2bv 64 1))
+        ((SignedLessThan) (int2bv 64 2))
+        ((SignedLessThanOrEqual) (int2bv 64 2))
+        ((SignedGreaterThan) (int2bv 64 2))
+        ((SignedGreaterThanOrEqual) (int2bv 64 2))
+        ((Equal) (int2bv 64 3))
+        ((NotEqual) (int2bv 64 3))))
+(spec (intcc_class cc) (provide (= result (icc_class! cc))))
+(spec (intcc_comparable cc1 cc2)
+    (match (not (bv_is_zero! (bvand (icc_class! cc1) (icc_class! cc2)))))
+    (provide (= result (= (bvand (icc_class! cc1) (icc_class! cc2)) (int2bv 64 2)))))
+
+;; `decompose_intcc`: per-condition tag (eq=1, lt=2, le=3, gt=4, ge=5, ne=6).
+;; `compose_icmp`: the inverse -- tag `v` (0=const-false, 7=const-true, else the
+;; matching icmp) with a `signed` flag. Power the `band`/`bor`-of-icmp rules.
+(spec (decompose_intcc cc)
+    (provide (= result
+        (match cc
+            ((Equal) (int2bv 64 1))
+            ((UnsignedLessThan) (int2bv 64 2))
+            ((SignedLessThan) (int2bv 64 2))
+            ((UnsignedLessThanOrEqual) (int2bv 64 3))
+            ((SignedLessThanOrEqual) (int2bv 64 3))
+            ((UnsignedGreaterThan) (int2bv 64 4))
+            ((SignedGreaterThan) (int2bv 64 4))
+            ((UnsignedGreaterThanOrEqual) (int2bv 64 5))
+            ((SignedGreaterThanOrEqual) (int2bv 64 5))
+            ((NotEqual) (int2bv 64 6))))))
+(macro (icmp_bit c) (if c #x01 #x00))
+(spec (compose_icmp ty v signed x y)
+    (provide (= result
+        (if (= v (int2bv 64 0)) #x00
+        (if (= v (int2bv 64 1)) (icmp_bit! (= x y))
+        (if (= v (int2bv 64 2)) (icmp_bit! (if signed (bvslt x y) (bvult x y)))
+        (if (= v (int2bv 64 3)) (icmp_bit! (if signed (bvsle x y) (bvule x y)))
+        (if (= v (int2bv 64 4)) (icmp_bit! (if signed (bvsgt x y) (bvugt x y)))
+        (if (= v (int2bv 64 5)) (icmp_bit! (if signed (bvsge x y) (bvuge x y)))
+        (if (= v (int2bv 64 6)) (icmp_bit! (not (= x y)))
+        #x01))))))))))
+
+;; Reached only at `ty = I8` (icmp results are `(bv 8)`), so all operands/result bv8.
+(instantiate compose_icmp
+    ((args (named Type) (bv 64) Bool (bv 8) (bv 8)) (ret (bv 8))))
+
+;;;; Bit-manipulation instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; `bitrev` = `rev`. `bmask` broadcasts truthiness to an all-ones/all-zeros mask of
+;; the (possibly different-width) result type.
+(spec (bitrev ty x)
+    (provide (= result (rev x)) (= (:bits ty) (widthof result))))
+(instantiate bitrev bv_unary_8_to_64)
+(spec (bmask ty v)
+    (provide (= result (if (bv_is_zero! v) (bvzero! (widthof result)) (bvones! (widthof result))))
+             (= (:bits ty) (widthof result))))
+(instantiate bmask
+    ((args (named Type) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv  8)) (ret (bv 16)))
+    ((args (named Type) (bv  8)) (ret (bv 32)))
+    ((args (named Type) (bv  8)) (ret (bv 64)))
+    ((args (named Type) (bv 16)) (ret (bv  8)))
+    ((args (named Type) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 16)) (ret (bv 32)))
+    ((args (named Type) (bv 16)) (ret (bv 64)))
+    ((args (named Type) (bv 32)) (ret (bv  8)))
+    ((args (named Type) (bv 32)) (ret (bv 16)))
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 32)) (ret (bv 64)))
+    ((args (named Type) (bv 64)) (ret (bv  8)))
+    ((args (named Type) (bv 64)) (ret (bv 16)))
+    ((args (named Type) (bv 64)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
+;;;; Spaceship helpers (declared in `prelude_opt.isle`) ;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; `spaceship_s`/`spaceship_u ty x y` are `isub $I8 (sgt/ugt ty x y) (slt/ult ty x
+;; y))` three-way comparisons resulting in an `i8` (`1`/`0`/`-1`).  Result is
+;; `(bv 8)`; the operands have width `ty`.
+(spec (spaceship_s ty x y)
+    (provide (= result (bvsub (if (bvsgt x y) #x01 #x00) (if (bvslt x y) #x01 #x00)))))
+(spec (spaceship_u ty x y)
+    (provide (= result (bvsub (if (bvugt x y) #x01 #x00) (if (bvult x y) #x01 #x00)))))
+(instantiate spaceship_s comparison)
+(instantiate spaceship_u comparison)
+
+;;;; Chaining ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(attr iadd_uextend (veri chain))
+(attr isub_uextend (veri chain))
+(attr truthy (veri chain))
+
+;;;; Coverage-gap tags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(attr multi_lane (tag vector))
+(attr ty_int_vec128 (tag vector))
+(attr fma (tag vector))
+(attr iconcat (tag i128))
+(attr f16const (tag narrowfloat))
+(attr ieee128_constant (tag i128))
+
+;; `make_inst` builds a pure node from an `InstructionData`, so every expansion
+;; that verifies an instruction's own *constructor body* (rather than using its
+;; spec as a leaf) reaches it. The verifier has no model for `InstructionData`
+;; or its `ValueArray2`/`ValueArray3` argument arrays, so those expansions fail
+;; with "unspecified model for type `ValueArray2`/`ValueArray3`". No verified
+;; `simplify` expansion reaches `make_inst` (rewrite rules use instruction specs
+;; as leaves), so tagging it excludes exactly the un-modelable construction
+;; expansions.
+(attr make_inst (tag TODO))
+
+;; Slow/unknown
+(attr u64_div (tag slow))
+(attr u64_rem (tag slow))
+(attr rule imul_ineg_const (tag slow))

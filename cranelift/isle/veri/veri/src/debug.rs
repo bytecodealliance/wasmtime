@@ -285,7 +285,7 @@ pub fn binding_string(
             source = source.index(),
             field = field.index()
         ),
-        Binding::Iterator { .. } => unimplemented!("iterator bindings unsupported"),
+        Binding::Iterator { source } => format!("iterator({source})", source = source.index()),
     }
 }
 

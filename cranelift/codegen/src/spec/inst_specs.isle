@@ -2,6 +2,7 @@
 
 (model Imm64 (type (bv 64)))
 
+(model Ieee16 (type (bv 16)))
 (model Ieee32 (type (bv 32)))
 (model Ieee64 (type (bv 64)))
 
@@ -61,6 +62,18 @@
     (type Bool)
     (default (not clif_trap)))
 
+; Whether the value being rewritten is a nondeterministic arithmetic NaN,
+; which loosens the mid-end `simplify` soundness contract from exact bitwise
+; equality to `fp_equiv!` (see `opt.isle`). Relevant floating-point arithmetic
+; instructions (`fadd`/`fmul`/...) set to true exactly when they produce a NaN;
+; deterministic float bit-ops (`fneg`/`fabs`/`fcopysign`) leave it at the
+; default `false`. Modeled as execution state (like `clif_trap`) so the relaxation
+; is expressed declaratively in specs rather than special-cased in the verifier
+; (because `simplify` does not consume the value type).
+(state relax_nan
+    (type Bool)
+    (default (not relax_nan)))
+
 ;;;; Common Term Forms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (form
@@ -76,6 +89,37 @@
     ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
     ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+;; Shifts and rotates take their amount from a second operand whose integer type
+;; is independent of the type being shifted, so every combination of operand and
+;; amount width is a valid instantiation. Enumerating the full cross product is
+;; expensive.
+;;
+;; The default set below keeps, for each operand width, the narrowest amount,
+;; the operand's own width, and the widest. `bv_shift_8_to_64_extra` adds the
+;; remaining combinations under the `slow` tag, for runs that want the exhaustive
+;; cross product.
+(form
+    bv_shift_8_to_64
+    ((args (named Type) (bv  8) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv  8) (bv 64)) (ret (bv  8)))
+    ((args (named Type) (bv 16) (bv  8)) (ret (bv 16)))
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 16) (bv 64)) (ret (bv 16)))
+    ((args (named Type) (bv 32) (bv  8)) (ret (bv 32)))
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 32) (bv 64)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv  8)) (ret (bv 64)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+
+(form
+    bv_shift_8_to_64_extra
+    ((args (named Type) (bv  8) (bv 16)) (ret (bv  8)))
+    ((args (named Type) (bv  8) (bv 32)) (ret (bv  8)))
+    ((args (named Type) (bv 16) (bv 32)) (ret (bv 16)))
+    ((args (named Type) (bv 32) (bv 16)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 16)) (ret (bv 64)))
+    ((args (named Type) (bv 64) (bv 32)) (ret (bv 64))))
 
 (form
     bv_ternary_8_to_64
@@ -246,32 +290,38 @@
     ((args (named Type) (bv 64)) (ret (bv 32)))
     ((args (named Type) (bv 64)) (ret (bv 64))))
 
+;; The shift amount `y` is taken modulo the bit width of the shifted value `x`,
+;; and its type is independent of `x`'s, so it is normalised through a common
+;; 64-bit width: `zero_ext` preserves `y`'s unsigned value exactly (every
+;; integer type is at most 64 bits), masking with `bits - 1` is the modulo, and
+;; the final `conv_to` only ever narrows, since the masked amount is less than
+;; `bits`.
+(macro (shift_amount x y)
+    (conv_to (widthof x)
+        (bvand
+            (zero_ext 64 y)
+            (bvsub (int2bv 64 (widthof x)) #x0000000000000001))))
+
 (spec (ishl ty x y)
     (provide
         (= (:bits ty) (widthof result))
-        (= result
-            (bvshl
-                x
-                (bvand y (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) #x0000000000000001)))))))
-(instantiate ishl bv_binary_8_to_64)
+        (= result (bvshl x (shift_amount! x y)))))
+(instantiate ishl bv_shift_8_to_64)
+(instantiate ishl bv_shift_8_to_64_extra (tag slow))
 
 (spec (ushr ty x y)
     (provide
         (= (:bits ty) (widthof result))
-        (= result
-            (bvlshr
-                x
-                (bvand y (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) #x0000000000000001)))))))
-(instantiate ushr bv_binary_8_to_64)
+        (= result (bvlshr x (shift_amount! x y)))))
+(instantiate ushr bv_shift_8_to_64)
+(instantiate ushr bv_shift_8_to_64_extra (tag slow))
 
 (spec (sshr ty x y)
     (provide
         (= (:bits ty) (widthof result))
-        (= result
-            (bvashr
-                x
-                (bvand y (conv_to (widthof y) (bvsub (int2bv 64 (widthof y)) #x0000000000000001)))))))
-(instantiate sshr bv_binary_8_to_64)
+        (= result (bvashr x (shift_amount! x y)))))
+(instantiate sshr bv_shift_8_to_64)
+(instantiate sshr bv_shift_8_to_64_extra (tag slow))
 
 (spec (band ty x y)
     (provide (= result (bvand x y))
@@ -293,15 +343,20 @@
              (= (:bits ty) (widthof result))))
 (instantiate bnot bv_unary_8_to_64)
 
+;; Rotate amounts are taken modulo the bit width, so `shift_amount!` applies
+;; here too: masking with `bits - 1` is the same as reducing modulo `bits` for
+;; the power-of-two widths modelled here.
 (spec (rotl ty x y)
-    (provide (= result (rotl x y))
+    (provide (= result (rotl x (shift_amount! x y)))
              (= (:bits ty) (widthof result))))
-(instantiate rotl bv_binary_8_to_64)
+(instantiate rotl bv_shift_8_to_64)
+(instantiate rotl bv_shift_8_to_64_extra (tag slow))
 
 (spec (rotr ty x y)
-    (provide (= result (rotr x y))
+    (provide (= result (rotr x (shift_amount! x y)))
              (= (:bits ty) (widthof result))))
-(instantiate rotr bv_binary_8_to_64)
+(instantiate rotr bv_shift_8_to_64)
+(instantiate rotr bv_shift_8_to_64_extra (tag slow))
 
 (spec (bitselect ty c x y)
     (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))
@@ -332,24 +387,31 @@
 ;; the result by concatenating the bytes of `x` in reverse order (`concat`'s
 ;; first argument is the high-order part). `bswap` is defined for i16/i32/i64/
 ;; i128; we verify the 16/32/64-bit widths, matching the rest of this file.
+;;
+;; Every arm of a `switch` is evaluated and all arms must have the same type, so
+;; the arms below take a 64-bit widening of `x` and produce a 64-bit result that
+;; the enclosing `conv_to` narrows to the result width.
+(macro (bswap16 x) (concat (extract  7  0 x) (extract 15  8 x)))
+(macro (bswap32 x)
+    (concat (bswap16! x)
+    (concat (extract 23 16 x)
+            (extract 31 24 x))))
+(macro (bswap64 x)
+    (concat (bswap32! x)
+    (concat (extract 39 32 x)
+    (concat (extract 47 40 x)
+    (concat (extract 55 48 x)
+            (extract 63 56 x))))))
 (spec (bswap ty x)
     (provide
         (= (:bits ty) (widthof result))
-        (= result
-            (switch (widthof x)
-                (16 (concat (extract  7 0 x) (extract 15  8 x)))
-                (32 (concat (extract  7 0 x)
-                    (concat (extract 15  8 x)
-                    (concat (extract 23 16 x)
-                            (extract 31 24 x)))))
-                (64 (concat (extract  7 0 x)
-                    (concat (extract 15  8 x)
-                    (concat (extract 23 16 x)
-                    (concat (extract 31 24 x)
-                    (concat (extract 39 32 x)
-                    (concat (extract 47 40 x)
-                    (concat (extract 55 48 x)
-                            (extract 63 56 x)))))))))))))
+        (let ((w (conv_to 64 x)))
+            (= result
+                (conv_to (widthof result)
+                    (switch (widthof x)
+                        (16 (conv_to 64 (bswap16! w)))
+                        (32 (conv_to 64 (bswap32! w)))
+                        (64 (bswap64! w))))))))
 (instantiate bswap
     ((args (named Type) (bv 16)) (ret (bv 16)))
     ((args (named Type) (bv 32)) (ret (bv 32)))
@@ -367,16 +429,14 @@
     ((args (named Type) (bv 64)) (ret (bv 32))))
 
 (form extend
-    ((args (named Type) (bv  8)) (ret (bv  8)))
     ((args (named Type) (bv  8)) (ret (bv 16)))
     ((args (named Type) (bv  8)) (ret (bv 32)))
     ((args (named Type) (bv  8)) (ret (bv 64)))
-    ((args (named Type) (bv 16)) (ret (bv 16)))
     ((args (named Type) (bv 16)) (ret (bv 32)))
     ((args (named Type) (bv 16)) (ret (bv 64)))
-    ((args (named Type) (bv 32)) (ret (bv 32)))
     ((args (named Type) (bv 32)) (ret (bv 64))))
-    ;; Note: (bv 64) -> (bv 64) not accepted in clif
+    ;; Note: extends must strictly widen, so same-width instantiations
+    ;; (8->8, 16->16, 32->32, 64->64) are not accepted in clif.
 
 (spec (uextend ty x)
     (provide (= result (zero_ext (widthof result) x))
@@ -387,16 +447,6 @@
     (provide (= result (sign_ext (widthof result) x))
              (= (:bits ty) (widthof result))))
 (instantiate sextend extend)
-
-;; `maybe_uextend` "sees through" a `uextend`: given the outer value `result`,
-;; it yields the inner value `value`. When `result` is defined by a `uextend`,
-;; `value` is that uextend's argument; otherwise `value` is `result` itself. In
-;; both cases the inner value is the low bits of the outer value, i.e. the outer
-;; value is the zero-extension of the inner one to the outer width (in the
-;; fall-through case the two widths are equal, so this is the identity). The
-;; extractor is total (it always matches), so no `match` clause is needed.
-(spec (maybe_uextend value)
-    (provide (= result (zero_ext (widthof result) value))))
 
 (spec (smin ty x y)
     (provide (= result (if (bvsle x y) x y))
@@ -710,7 +760,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (fadd ty x y)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
@@ -751,7 +804,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (fsub ty x y)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
@@ -794,7 +850,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (fmul ty x y)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
@@ -837,7 +896,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (fdiv ty x y)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
@@ -884,7 +946,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (fmin ty x y)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
@@ -911,7 +976,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (fmax ty x y)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
@@ -967,14 +1035,11 @@
 (spec (fneg ty x)
     (provide
         (= (:bits ty) (widthof result))
-        (= result
-            ; If z is a NaN, then return z with negated sign.
-            (if (fp.isNaN x)
-                (nan_neg! x)
-            ; Else if z is an infinity, then return that infinity negated.
-            ; Else if z is a zero, then return that zero negated.
-            ; Else return z negated.
-                (fp.neg x))))) ; Remaining cases of the spec handled by SMT fp.neg
+        ; IEEE-754 negation just toggles the sign bit for every input (normal,
+        ; +/-0, +/-inf, NaN), so model it directly in the bit-vector theory: this
+        ; is bit-exact and avoids an fp<->bv bridge that makes queries like
+        ; `fmul_fneg_fneg` intractable.
+        (= result (bvxor x (fp_sign_bit_set! (widthof x))))))
 (instantiate fneg
     ((args (named Type) (bv 32)) (ret (bv 32)))
     ((args (named Type) (bv 64)) (ret (bv 64))))
@@ -984,7 +1049,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (sqrt ty x)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If z is a NaN, then return an element of nans{z}.
@@ -1012,7 +1080,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (ceil ty x)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If z is a NaN, then return an element of nans{z}.
@@ -1037,7 +1108,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (floor ty x)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If z is a NaN, then return an element of nans{z}.
@@ -1062,7 +1136,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (trunc ty x)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If z is a NaN, then return an element of nans{z}.
@@ -1089,7 +1166,10 @@
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (nearest ty x)
+    (modifies relax_nan produces_nan)
     (provide
+        (= produces_nan (fp.isNaN result))
+        (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
         (= result
             ; If z is a NaN, then return an element of nans{z}.
@@ -1148,18 +1228,21 @@
     ((args (named Type) (bv 64)) (ret (bv 32)))
     ((args (named Type) (bv 64)) (ret (bv 64))))
 
+;; The integer operand is converted at its full precision: it is widened to 64
+;; bits (zero- or sign-extended to match the signedness of the conversion) and
+;; handed to `to_fp`, which rounds to the destination float width. Narrowing the
+;; operand to the float width first would model, for example, `fcvt_from_uint.f32
+;; x:i64` as converting only the low 32 bits of `x`.
 (spec (fcvt_from_uint ty x)
     (provide
         (= (:bits ty) (widthof result))
-        (let ((N (widthof result)))
-            (= result (to_fp_unsigned N (conv_to N (zero_ext 64 x)))))))
+        (= result (to_fp_unsigned (widthof result) (zero_ext 64 x)))))
 (instantiate fcvt_from_uint fcvt)
 
 (spec (fcvt_from_sint ty x)
     (provide
         (= (:bits ty) (widthof result))
-        (let ((N (widthof result)))
-            (= result (to_fp N (conv_to N (sign_ext 64 x)))))))
+        (= result (to_fp (widthof result) (sign_ext 64 x)))))
 (instantiate fcvt_from_sint fcvt)
 
 ;; Can trap if invalid conversion

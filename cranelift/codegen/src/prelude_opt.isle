@@ -198,8 +198,9 @@
     (if-let c_reextended (i64_sextend_u64 ty c_masked))
     (if-let true (i64_eq c c_reextended))
     (iconst ty (imm64 c_masked)))
-(rule 1 (iconst_s $I128 c) (sextend $I128 (iconst_s $I64 c)))
+(rule iconst_s_i128 1 (iconst_s $I128 c) (sextend $I128 (iconst_s $I64 c)))
 (rule 2 (iconst_s (ty_vec128 ty) c) (splat ty (iconst_s (lane_type ty) c)))
+(attr rule iconst_s_i128 (tag i128))
 
 ;; Same as `iconst_s`, but used for zero-extending constant values.
 ;;
@@ -214,8 +215,9 @@
 (rule 0 (iconst_u (ty_int (fits_in_64 ty)) c)
     (if-let true (u64_lt_eq c (ty_umax ty)))
     (iconst ty (imm64 c)))
-(rule 1 (iconst_u $I128 c) (uextend $I128 (iconst_u $I64 c)))
+(rule iconst_u_i128 1 (iconst_u $I128 c) (uextend $I128 (iconst_u $I64 c)))
 (rule 2 (iconst_u (ty_vec128 ty) c) (splat ty (iconst_u (lane_type ty) c)))
+(attr rule iconst_u_i128 (tag i128))
 
 ;; These take `Value`, rather than going through `inst_data_value_tupled`,
 ;; because most of the time they want to return the original `Value`, and it
@@ -630,3 +632,7 @@
         (isub $I64 numerator tt)))
 (rule (apply_div_const_magic_s64_finish (Opcode.Sdiv) _numerator _divisor qf)
       qf)
+
+(model Inst (type (bv)))
+(model ValueArray2 (type (bv)))
+(model ValueArray3 (type (bv)))

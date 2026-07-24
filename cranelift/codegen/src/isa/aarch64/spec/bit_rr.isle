@@ -1602,6 +1602,63 @@
                             )
                         )
                     )
+                    ((Rev16)
+                        (=
+                            rd
+                            (concat
+                                (extract 55 48 (as rn (bv 64)))
+                                (concat
+                                    (extract 63 56 (as rn (bv 64)))
+                                    (concat
+                                        (extract 39 32 (as rn (bv 64)))
+                                        (concat
+                                            (extract 47 40 (as rn (bv 64)))
+                                            (concat
+                                                (extract 23 16 (as rn (bv 64)))
+                                                (concat (extract 31 24 (as rn (bv 64))) (concat (extract 7 0 (as rn (bv 64))) (extract 15 8 (as rn (bv 64)))))
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                    ((Rev32)
+                        (=
+                            rd
+                            (concat
+                                (concat (concat (extract 39 32 (as rn (bv 64))) (extract 47 40 (as rn (bv 64)))) (extract 55 48 (as rn (bv 64))))
+                                (concat
+                                    (extract 63 56 (as rn (bv 64)))
+                                    (concat
+                                        (concat (concat (extract 7 0 (as rn (bv 64))) (extract 15 8 (as rn (bv 64)))) (extract 23 16 (as rn (bv 64))))
+                                        (extract 31 24 (as rn (bv 64)))
+                                    )
+                                )
+                            )
+                        )
+                    )
+                    ((Rev64)
+                        (=
+                            rd
+                            (concat
+                                (concat
+                                    (concat
+                                        (concat
+                                            (concat
+                                                (concat (concat (extract 7 0 (as rn (bv 64))) (extract 15 8 (as rn (bv 64)))) (extract 23 16 (as rn (bv 64))))
+                                                (extract 31 24 (as rn (bv 64)))
+                                            )
+                                            (extract 39 32 (as rn (bv 64)))
+                                        )
+                                        (extract 47 40 (as rn (bv 64)))
+                                    )
+                                    (extract 55 48 (as rn (bv 64)))
+                                )
+                                (extract 63 56 (as rn (bv 64)))
+                            )
+                        )
+                    )
                 )
             )
             ((Size32)
@@ -2398,6 +2455,30 @@
                             )
                         )
                     )
+                    ((Rev16)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (concat
+                                    (extract 23 16 (as rn (bv 64)))
+                                    (concat (extract 31 24 (as rn (bv 64))) (concat (extract 7 0 (as rn (bv 64))) (extract 15 8 (as rn (bv 64)))))
+                                )
+                            )
+                        )
+                    )
+                    ((Rev32)
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (concat
+                                    (concat (concat (extract 7 0 (as rn (bv 64))) (extract 15 8 (as rn (bv 64)))) (extract 23 16 (as rn (bv 64))))
+                                    (extract 31 24 (as rn (bv 64)))
+                                )
+                            )
+                        )
+                    )
                 )
             )
         )
@@ -2405,8 +2486,8 @@
     (require
         (match
             size
-            ((Size64) (match op ((Cls) true) ((RBit) true) ((Clz) true)))
-            ((Size32) (match op ((Cls) true) ((RBit) true) ((Clz) true)))
+            ((Size64) (match op ((Cls) true) ((RBit) true) ((Clz) true) ((Rev16) true) ((Rev32) true) ((Rev64) true)))
+            ((Size32) (match op ((Cls) true) ((RBit) true) ((Clz) true) ((Rev16) true) ((Rev32) true)))
         )
     )
 )

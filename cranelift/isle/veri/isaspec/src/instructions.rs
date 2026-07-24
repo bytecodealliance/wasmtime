@@ -628,10 +628,9 @@ fn define_bit_rr() -> SpecConfig {
         BitOp::Cls,
         BitOp::RBit,
         BitOp::Clz,
-        // --------------
-        // BitOp::Rev16,
-        // BitOp::Rev32,
-        // BitOp::Rev64,
+        BitOp::Rev16,
+        BitOp::Rev32,
+        BitOp::Rev64,
     ];
 
     // OperandSize
@@ -644,8 +643,18 @@ fn define_bit_rr() -> SpecConfig {
             enumerate   (op, bit_ops);
             register    (rd, write, gp, 4);
             register    (rn, read,  gp64, 5);
+            filter      (is_bit_op_size_supported(op, size));
             instruction ();
         }
+    }
+}
+
+fn is_bit_op_size_supported(bit_op: BitOp, size: OperandSize) -> bool {
+    match bit_op {
+        // `Rev64` emits `opc = 0b11` (see `enc_bit_rr`), which is unallocated
+        // when `sf = 0`: the 32-bit byte reversal is `Rev32`'s `opc = 0b10`.
+        BitOp::Rev64 => size == OperandSize::Size64,
+        _ => true,
     }
 }
 

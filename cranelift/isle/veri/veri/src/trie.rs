@@ -153,7 +153,12 @@ pub fn binding_type(
             }
         }
 
-        Binding::Iterator { .. } => unimplemented!("iterator bindings not supported"),
+        Binding::Iterator { source } => {
+            // The yielded element has the source term's element type, which we
+            // model as its (single) return type.
+            let source_binding = lookup_binding(*source);
+            binding_type(&source_binding, term_id, prog, lookup_binding)
+        }
     }
 }
 
@@ -169,6 +174,8 @@ fn external_sig_return_type(sig: &ExternalSig) -> BindingType {
     match sig.ret_kind {
         ReturnKind::Option => BindingType::Option(Box::new(ty)),
         ReturnKind::Plain => ty,
-        ReturnKind::Iterator => unimplemented!("extractor iterator return"),
+        // Model an iterator term as producing a single element of `ty`, which
+        // `Binding::Iterator` then picks out.
+        ReturnKind::Iterator => ty,
     }
 }
