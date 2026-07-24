@@ -34,6 +34,7 @@ impl<'a> ExplorerWriter<'a> {
         prog: &'a Program,
         chaining: &'a Chaining<'a>,
         expansions: &'a Vec<Expansion>,
+        dev: bool,
     ) -> Self {
         Self {
             prog,
@@ -42,7 +43,7 @@ impl<'a> ExplorerWriter<'a> {
             root,
             base: PathBuf::new(),
             graphs: false,
-            dev: true, // TODO(mbm): configurable dev mode
+            dev,
         }
     }
 

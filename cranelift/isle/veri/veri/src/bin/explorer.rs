@@ -29,6 +29,10 @@ struct Opts {
     /// Whether to enable graph generation.
     #[arg(long, env = "ISLE_EXPLORER_GRAPHS")]
     graphs: bool,
+
+    /// Enable development mode.
+    #[arg(long)]
+    dev: bool,
 }
 
 impl Opts {
@@ -78,6 +82,7 @@ fn main() -> Result<()> {
         &prog,
         expander.chaining(),
         expander.expansions(),
+        opts.dev,
     );
     if opts.graphs {
         explorer_writer.enable_graphs();
