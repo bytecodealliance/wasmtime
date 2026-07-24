@@ -696,6 +696,7 @@ impl std::ops::Deref for Context {
 mod tests {
     use super::*;
     use crate::cache::{Cache, CacheMode};
+    #[cfg(unix)]
     use std::path::PathBuf;
 
     /// Build a context around a solver that cannot possibly be spawned, so
@@ -715,6 +716,7 @@ mod tests {
     /// prelude, declaration, an assert, then a pushed frame with a check-sat
     /// and (on sat) a get-value, then pop and exit. Returns the check
     /// response and the get-value bindings.
+    #[cfg(unix)]
     fn session(ctx: &mut Context) -> io::Result<(Response, Vec<(String, String)>)> {
         ctx.set_logic("ALL")?;
         let bv8 = ctx.bit_vec_sort(ctx.numeral(8));
