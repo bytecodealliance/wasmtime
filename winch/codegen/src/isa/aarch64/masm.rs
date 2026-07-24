@@ -2044,9 +2044,8 @@ impl Masm for MacroAssembler {
         kind: V128MinKind,
     ) -> Result<()> {
         let (op, size) = match kind {
-            V128MinKind::F32x4 | V128MinKind::F64x2 => {
-                bail!(CodeGenError::unimplemented_masm_instruction())
-            }
+            V128MinKind::F32x4 => (VecALUOp::Fmin, VectorSize::Size32x4),
+            V128MinKind::F64x2 => (VecALUOp::Fmin, VectorSize::Size64x2),
             V128MinKind::I8x16S => (VecALUOp::Smin, VectorSize::Size8x16),
             V128MinKind::I8x16U => (VecALUOp::Umin, VectorSize::Size8x16),
             V128MinKind::I16x8S => (VecALUOp::Smin, VectorSize::Size16x8),
@@ -2066,9 +2065,8 @@ impl Masm for MacroAssembler {
         kind: V128MaxKind,
     ) -> Result<()> {
         let (op, size) = match kind {
-            V128MaxKind::F32x4 | V128MaxKind::F64x2 => {
-                bail!(CodeGenError::unimplemented_masm_instruction())
-            }
+            V128MaxKind::F32x4 => (VecALUOp::Fmax, VectorSize::Size32x4),
+            V128MaxKind::F64x2 => (VecALUOp::Fmax, VectorSize::Size64x2),
             V128MaxKind::I8x16S => (VecALUOp::Smax, VectorSize::Size8x16),
             V128MaxKind::I8x16U => (VecALUOp::Umax, VectorSize::Size8x16),
             V128MaxKind::I16x8S => (VecALUOp::Smax, VectorSize::Size16x8),
@@ -2147,14 +2145,15 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_div(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
-    ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_div(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.asm.vec_rrr(
+            VecALUOp::Fdiv,
+            lhs,
+            rhs,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
     fn v128_sqrt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
@@ -2197,24 +2196,28 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_pmin(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
-    ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_pmin(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        let size = VectorSize::from_lane_size(size.into(), true);
+        self.with_scratch::<FloatScratch, _>(|masm, mask| {
+            masm.asm
+                .vec_rrr(VecALUOp::Fcmgt, lhs, rhs, mask.writable(), size);
+            masm.asm
+                .vec_rrr_mod(VecALUModOp::Bsl, rhs, lhs, mask.writable(), size);
+            masm.asm.fmov_rr(mask.inner(), dst, OperandSize::S128);
+        });
+        Ok(())
     }
 
-    fn v128_pmax(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
-    ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_pmax(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        let size = VectorSize::from_lane_size(size.into(), true);
+        self.with_scratch::<FloatScratch, _>(|masm, mask| {
+            masm.asm
+                .vec_rrr(VecALUOp::Fcmgt, rhs, lhs, mask.writable(), size);
+            masm.asm
+                .vec_rrr_mod(VecALUModOp::Bsl, rhs, lhs, mask.writable(), size);
+            masm.asm.fmov_rr(mask.inner(), dst, OperandSize::S128);
+        });
+        Ok(())
     }
 }
 
