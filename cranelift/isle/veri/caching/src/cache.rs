@@ -124,10 +124,17 @@ impl Cache {
     /// The key is the SHA-256 hash of `"{solver}\n{script}"`, where `script`
     /// is the replay script of the path so far followed by the query command.
     fn compute_key(solver: &str, script: &str) -> String {
+        // This allows us to invalidate the whole cache (in CI and
+        // locally for users) if we change something material about the
+        // settings, like the timeout or a solver version.
+        static CACHE_VERSION: &[u8] = b"1\n";
+
         let mut hash = sha2::Sha256::new();
         hash.update(solver.as_bytes());
         hash.update(b"\n");
         hash.update(script.as_bytes());
+        hash.update(b"\n");
+        hash.update(CACHE_VERSION);
         format!("{:x}", hash.finalize())
     }
 
