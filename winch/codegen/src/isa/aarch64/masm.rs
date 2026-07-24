@@ -811,13 +811,54 @@ impl Masm for MacroAssembler {
 
     fn maybe_canonicalize_v128_nan(
         &mut self,
-        _reg: WritableReg,
-        _lane_size: OperandSize,
+        reg: WritableReg,
+        lane_size: OperandSize,
     ) -> Result<()> {
         if !self.shared_flags.enable_nan_canonicalization() {
             return Ok(());
         }
-        bail!(CodeGenError::unimplemented_masm_instruction())
+
+        // Derive the canonical NaN in the NaN lanes with shifts instead of
+        // loading it as a constant.
+        let (vector_size, ushr, shl) = match lane_size {
+            OperandSize::S32 => (VectorSize::Size32x4, 23, 22),
+            OperandSize::S64 => (VectorSize::Size64x2, 52, 51),
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+        self.with_scratch::<FloatScratch, _>(|masm, mask| {
+            // All ones in the lanes that are not NaN.
+            masm.asm.vec_rrr(
+                VecALUOp::Fcmeq,
+                reg.to_reg(),
+                reg.to_reg(),
+                mask.writable(),
+                vector_size,
+            );
+            // Zero the NaN lanes, preserving the rest.
+            masm.asm
+                .vec_rrr(VecALUOp::And, reg.to_reg(), mask.inner(), reg, vector_size);
+            // All ones in the NaN lanes.
+            masm.asm
+                .vec_misc(VecMisc2::Not, mask.inner(), mask.writable(), vector_size);
+            // Reduce the NaN lanes to canonical NaNs.
+            masm.asm.vec_shift_imm(
+                VecShiftImmOp::Ushr,
+                ushr,
+                mask.inner(),
+                mask.writable(),
+                vector_size,
+            );
+            masm.asm.vec_shift_imm(
+                VecShiftImmOp::Shl,
+                shl,
+                mask.inner(),
+                mask.writable(),
+                vector_size,
+            );
+            masm.asm
+                .vec_rrr(VecALUOp::Orr, reg.to_reg(), mask.inner(), reg, vector_size);
+        });
+        Ok(())
     }
 
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
