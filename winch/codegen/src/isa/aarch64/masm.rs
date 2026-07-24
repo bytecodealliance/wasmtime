@@ -34,8 +34,8 @@ use cranelift_codegen::{
     isa::aarch64,
     isa::aarch64::inst::{
         self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, ScalarSize,
-        VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecRRNarrowOp, VecRRPairLongOp,
-        VecRRRLongOp, VectorSize,
+        VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecRRLongOp, VecRRNarrowOp,
+        VecRRPairLongOp, VecRRRLongOp, VectorSize,
     },
     settings,
 };
@@ -1682,8 +1682,30 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_convert(&mut self, _src: Reg, _dst: WritableReg, _kind: V128ConvertKind) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_convert(&mut self, src: Reg, dst: WritableReg, kind: V128ConvertKind) -> Result<()> {
+        match kind {
+            V128ConvertKind::I32x4S => {
+                self.asm
+                    .vec_misc(VecMisc2::Scvtf, src, dst, VectorSize::Size32x4);
+            }
+            V128ConvertKind::I32x4U => {
+                self.asm
+                    .vec_misc(VecMisc2::Ucvtf, src, dst, VectorSize::Size32x4);
+            }
+            V128ConvertKind::I32x4LowS => {
+                self.asm
+                    .vec_extend(VecExtendOp::Sxtl, src, dst, false, ScalarSize::Size64);
+                self.asm
+                    .vec_misc(VecMisc2::Scvtf, dst.to_reg(), dst, VectorSize::Size64x2);
+            }
+            V128ConvertKind::I32x4LowU => {
+                self.asm
+                    .vec_extend(VecExtendOp::Uxtl, src, dst, false, ScalarSize::Size64);
+                self.asm
+                    .vec_misc(VecMisc2::Ucvtf, dst.to_reg(), dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
     fn v128_narrow(
@@ -1705,12 +1727,15 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_demote(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_demote(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_narrow(VecRRNarrowOp::Fcvtn, src, dst, false, ScalarSize::Size32);
+        Ok(())
     }
 
-    fn v128_promote(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_promote(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.asm.vec_rr_long(VecRRLongOp::Fcvtl32, src, dst, false);
+        Ok(())
     }
 
     fn v128_extend(&mut self, src: Reg, dst: WritableReg, kind: V128ExtendKind) -> Result<()> {
@@ -1966,20 +1991,49 @@ impl Masm for MacroAssembler {
         context: &mut CodeGenContext<Emission>,
         kind: V128TruncKind,
     ) -> Result<()> {
+        let reg = writable!(context.pop_to_reg(self, None)?.reg);
         match kind {
             V128TruncKind::F32x4 | V128TruncKind::F64x2 => {
-                let reg = writable!(context.pop_to_reg(self, None)?.reg);
                 self.asm.vec_misc(
                     VecMisc2::Frintz,
                     reg.to_reg(),
                     reg,
                     VectorSize::from_lane_size(kind.dst_lane_size().into(), true),
                 );
-                context.stack.push(TypedReg::v128(reg.to_reg()).into());
-                Ok(())
             }
-            _ => bail!(CodeGenError::unimplemented_masm_instruction()),
+            V128TruncKind::I32x4FromF32x4S => {
+                self.asm
+                    .vec_misc(VecMisc2::Fcvtzs, reg.to_reg(), reg, VectorSize::Size32x4);
+            }
+            V128TruncKind::I32x4FromF32x4U => {
+                self.asm
+                    .vec_misc(VecMisc2::Fcvtzu, reg.to_reg(), reg, VectorSize::Size32x4);
+            }
+            V128TruncKind::I32x4FromF64x2SZero => {
+                self.asm
+                    .vec_misc(VecMisc2::Fcvtzs, reg.to_reg(), reg, VectorSize::Size64x2);
+                self.asm.vec_narrow(
+                    VecRRNarrowOp::Sqxtn,
+                    reg.to_reg(),
+                    reg,
+                    false,
+                    ScalarSize::Size32,
+                );
+            }
+            V128TruncKind::I32x4FromF64x2UZero => {
+                self.asm
+                    .vec_misc(VecMisc2::Fcvtzu, reg.to_reg(), reg, VectorSize::Size64x2);
+                self.asm.vec_narrow(
+                    VecRRNarrowOp::Uqxtn,
+                    reg.to_reg(),
+                    reg,
+                    false,
+                    ScalarSize::Size32,
+                );
+            }
         }
+        context.stack.push(TypedReg::v128(reg.to_reg()).into());
+        Ok(())
     }
 
     fn v128_min(

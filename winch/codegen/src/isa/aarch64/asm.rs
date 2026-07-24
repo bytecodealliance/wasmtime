@@ -15,8 +15,8 @@ use crate::{
 use cranelift_codegen::isa::aarch64;
 use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
 use cranelift_codegen::isa::aarch64::inst::{
-    ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5, VecALUModOp, VecExtendOp, VecRRNarrowOp,
-    VecRRPairLongOp, VecRRRLongOp,
+    ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5, VecALUModOp, VecExtendOp, VecRRLongOp,
+    VecRRNarrowOp, VecRRPairLongOp, VecRRRLongOp,
 };
 use cranelift_codegen::{
     Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
@@ -575,6 +575,16 @@ impl Assembler {
             op,
             rd: rd.map(Into::into),
             rn: rn.into(),
+        });
+    }
+
+    /// Vector lengthening operation: widen the low or high half's lanes.
+    pub fn vec_rr_long(&mut self, op: VecRRLongOp, rn: Reg, rd: WritableReg, high_half: bool) {
+        self.emit(Inst::VecRRLong {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            high_half,
         });
     }
 
