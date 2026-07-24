@@ -22,7 +22,7 @@ impl Wizer {
 
         let instance = instantiate(store, &module).await?;
         self.initialize(store, &instance).await?;
-        self.snapshot(cx, &mut WasmtimeWizer { store, instance })
+        self.snapshot(&cx, &mut WasmtimeWizer { store, instance })
             .await
     }
 
