@@ -36,7 +36,7 @@ use cranelift_codegen::{
     isa::aarch64::inst::{
         self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, ScalarSize,
         VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecRRLongOp, VecRRNarrowOp,
-        VecRRPairLongOp, VecRRRLongOp, VectorSize,
+        VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VectorSize,
     },
     settings,
 };
@@ -1898,10 +1898,133 @@ impl Masm for MacroAssembler {
 
     fn v128_mul(
         &mut self,
-        _context: &mut CodeGenContext<Emission>,
-        _kind: V128MulKind,
+        context: &mut CodeGenContext<Emission>,
+        kind: V128MulKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let rhs = context.pop_to_reg(self, None)?;
+        let lhs = context.pop_to_reg(self, None)?;
+
+        match kind {
+            V128MulKind::F32x4 => self.asm.vec_rrr(
+                VecALUOp::Fmul,
+                lhs.reg,
+                rhs.reg,
+                writable!(lhs.reg),
+                VectorSize::Size32x4,
+            ),
+            V128MulKind::F64x2 => self.asm.vec_rrr(
+                VecALUOp::Fmul,
+                lhs.reg,
+                rhs.reg,
+                writable!(lhs.reg),
+                VectorSize::Size64x2,
+            ),
+            V128MulKind::I16x8 => self.asm.vec_rrr(
+                VecALUOp::Mul,
+                lhs.reg,
+                rhs.reg,
+                writable!(lhs.reg),
+                VectorSize::Size16x8,
+            ),
+            V128MulKind::I32x4 => self.asm.vec_rrr(
+                VecALUOp::Mul,
+                lhs.reg,
+                rhs.reg,
+                writable!(lhs.reg),
+                VectorSize::Size32x4,
+            ),
+            // aarch64 has no 64-bit lane `mul`, so the multiplication is
+            // performed with 32-bit operations (following the lowering in
+            // cranelift's `isa/aarch64/lower.isle`).
+            //
+            // Each 64-bit lane of `lhs` and `rhs` is split into 32-bit
+            // halves:
+            //
+            //   x = a + 2^32(b)    pictured as  |b|a|  (high half | low half)
+            //   y = c + 2^32(d)    pictured as  |d|c|
+            //
+            // making each lane of the product:
+            //
+            //   x * y = ac + 2^32(ad + bc) + 2^64(bd)
+            //
+            // The `2^64(bd)` term is entirely above bit 63, so it is
+            // discarded, same as the wrapping 64-bit multiplication.
+            V128MulKind::I64x2 => {
+                let tmp = context.any_fpr(self)?;
+                self.with_scratch::<FloatScratch, _>(|masm, hi| {
+                    // Swap the halves of each lane of `rhs` so each half
+                    // lines up with the opposite half of `lhs`:
+                    //   hi = |c|d|
+                    masm.asm.vec_misc(
+                        VecMisc2::Rev64,
+                        rhs.reg,
+                        hi.writable(),
+                        VectorSize::Size32x4,
+                    );
+                    // A single 32-bit multiply against `lhs = |b|a|` now
+                    // computes both cross terms of every lane:
+                    //   hi = |bc|ad|
+                    // The products' upper bits are discarded, matching the
+                    // shift past 2^64 they would receive below.
+                    masm.asm.vec_rrr(
+                        VecALUOp::Mul,
+                        hi.inner(),
+                        lhs.reg,
+                        hi.writable(),
+                        VectorSize::Size32x4,
+                    );
+                    // Sum adjacent elements, collapsing each lane to:
+                    //   hi = |ad + bc|
+                    masm.asm.vec_rrr(
+                        VecALUOp::Addp,
+                        hi.inner(),
+                        hi.inner(),
+                        hi.writable(),
+                        VectorSize::Size32x4,
+                    );
+                    // Extract the low halves of each lane:
+                    //   tmp = |a1|a0|
+                    //   lhs = |c1|c0|
+                    masm.asm.vec_narrow(
+                        VecRRNarrowOp::Xtn,
+                        lhs.reg,
+                        writable!(tmp),
+                        false,
+                        ScalarSize::Size32,
+                    );
+                    masm.asm.vec_narrow(
+                        VecRRNarrowOp::Xtn,
+                        rhs.reg,
+                        writable!(lhs.reg),
+                        false,
+                        ScalarSize::Size32,
+                    );
+                    // Widen the sums back to 64-bit lanes, shifted into the
+                    // high half:
+                    //   hi = |(ad + bc) << 32|
+                    masm.asm
+                        .vec_rr_long(VecRRLongOp::Shll32, hi.inner(), hi.writable(), false);
+                    // Multiply the low halves into exact 64-bit products and
+                    // accumulate, completing each lane:
+                    //   hi = |ac + 2^32(ad + bc)|
+                    masm.asm.vec_rrrr_long(
+                        VecRRRLongModOp::Umlal32,
+                        lhs.reg,
+                        tmp,
+                        hi.writable(),
+                        false,
+                    );
+                    masm.asm
+                        .fmov_rr(hi.inner(), writable!(lhs.reg), OperandSize::S128);
+                });
+                context.free_reg(tmp);
+            }
+        }
+
+        context.stack.push(lhs.into());
+        context.free_reg(rhs);
+
+        Ok(())
     }
 
     fn v128_abs(&mut self, src: Reg, dst: WritableReg, kind: V128AbsKind) -> Result<()> {
@@ -1981,12 +2104,19 @@ impl Masm for MacroAssembler {
 
     fn v128_q15mulr_sat_s(
         &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        self.asm.vec_rrr(
+            VecALUOp::Sqrdmulh,
+            lhs,
+            rhs,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
     fn v128_all_true(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
@@ -2168,8 +2298,22 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_dot(&mut self, _lhs: Reg, _rhs: Reg, _dst: WritableReg) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_dot(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg) -> Result<()> {
+        self.with_scratch::<FloatScratch, _>(|masm, low| {
+            // Multiply each half into 32-bit lanes, then sum adjacent pairs.
+            masm.asm
+                .vec_rrr_long(VecRRRLongOp::Smull16, lhs, rhs, low.writable(), false);
+            masm.asm
+                .vec_rrr_long(VecRRRLongOp::Smull16, lhs, rhs, dst, true);
+            masm.asm.vec_rrr(
+                VecALUOp::Addp,
+                low.inner(),
+                dst.to_reg(),
+                dst,
+                VectorSize::Size32x4,
+            );
+        });
+        Ok(())
     }
 
     fn v128_popcnt(&mut self, context: &mut CodeGenContext<Emission>) -> Result<()> {
