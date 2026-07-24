@@ -20,7 +20,7 @@
     ))
 
     (func (export "foo") async (param "p1" u32) (result u32)
-      (canon lift (core func $i "foo") async (callback (func $i "callback")))
+      (canon lift (core func $i "foo") async (callback (core func $i "callback")))
     )
   )
 
@@ -28,7 +28,7 @@
     (import "a" (func $foo async (param "p1" u32) (result u32)))
     (core module $libc (memory (export "memory") 1))
     (core instance $libc (instantiate $libc))
-    (core func $foo (canon lower (func $foo) async (memory $libc "memory")))
+    (core func $foo (canon lower (func $foo) async (memory (core memory $libc "memory"))))
     (core module $m
       (import "libc" "memory" (memory 1))
       (import "" "foo" (func $foo (param i32 i32) (result i32)))
@@ -73,7 +73,7 @@
     (import "a" (func $foo async (param "p1" u32) (result u32)))
     (core module $libc (memory (export "memory") 1))
     (core instance $libc (instantiate $libc))
-    (core func $foo (canon lower (func $foo) async (memory $libc "memory")))
+    (core func $foo (canon lower (func $foo) async (memory (core memory $libc "memory"))))
     (core module $m
       (import "libc" "memory" (memory 1))
       (import "" "foo" (func $foo (param i32 i32) (result i32)))
@@ -117,7 +117,7 @@
     ))
 
     (func (export "foo") async (param "p1" u32) (result u32)
-      (canon lift (core func $i "foo") async (callback (func $i "callback")))
+      (canon lift (core func $i "foo") async (callback (core func $i "callback")))
     )
   )
 

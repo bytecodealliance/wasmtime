@@ -18,7 +18,7 @@
     (import "" "stream.read" (func $stream-read (param i32 i32 i32) (result i32)))
   )
   (type $stream-type (stream u8))
-  (core func $stream-read (canon stream.read $stream-type async (memory $libc "memory")))
+  (core func $stream-read (canon stream.read $stream-type async (memory (core memory $libc "memory"))))
   (core instance $i (instantiate $m (with "" (instance (export "stream.read" (func $stream-read))))))
 )
 
@@ -43,7 +43,7 @@
     (import "" "stream.read" (func $stream-read (param i32 i32 i32) (result i32)))
   )
   (type $stream-type (stream string))
-  (core func $stream-read (canon stream.read $stream-type async (memory $libc "memory") (realloc (func $libc "realloc"))))
+  (core func $stream-read (canon stream.read $stream-type async (memory (core memory $libc "memory")) (realloc (core func $libc "realloc"))))
   (core instance $i (instantiate $m (with "" (instance (export "stream.read" (func $stream-read))))))
 )
 
@@ -55,7 +55,7 @@
     (import "" "stream.write" (func $stream-write (param i32 i32 i32) (result i32)))
   )
   (type $stream-type (stream u8))
-  (core func $stream-write (canon stream.write $stream-type async (memory $libc "memory")))
+  (core func $stream-write (canon stream.write $stream-type async (memory (core memory $libc "memory"))))
   (core instance $i (instantiate $m (with "" (instance (export "stream.write" (func $stream-write))))))
 )
 
@@ -169,8 +169,8 @@
   )
   (type $s (stream u8))
   (core func $stream.new (canon stream.new $s))
-  (core func $stream.read (canon stream.read $s async (memory $libc "mem")))
-  (core func $stream.write (canon stream.write $s async (memory $libc "mem")))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "mem"))))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "mem"))))
   (core instance $ics (instantiate $ics
     (with "" (instance
       (export "stream.new" (func $stream.new))

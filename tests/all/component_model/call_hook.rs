@@ -100,8 +100,8 @@ fn call_func_with_realloc() -> Result<()> {
             (func (export "list8-to-str") (param "a" (list u8)) (result string)
                 (canon lift
                     (core func $i "roundtrip")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -150,7 +150,7 @@ fn call_func_with_post_return() -> Result<()> {
             (func (export "export")
                 (canon lift
                     (core func $i "roundtrip")
-                    (post-return (func $i "post-return"))
+                    (post-return (core func $i "post-return"))
                 )
             )
         )"#;
@@ -651,7 +651,7 @@ async fn concurrent_behavior_balanced() -> Result<()> {
                     (with "" (instance (export "task.return" (func $task-return))))
                 ))
                 (func (export "foo") async (param "p1" u32) (result u32)
-                    (canon lift (core func $i "foo") async (callback (func $i "callback")))
+                    (canon lift (core func $i "foo") async (callback (core func $i "callback")))
                 )
             )
 
@@ -659,7 +659,7 @@ async fn concurrent_behavior_balanced() -> Result<()> {
                 (import "a" (func $foo async (param "p1" u32) (result u32)))
                 (core module $libc (memory (export "memory") 1))
                 (core instance $libc (instantiate $libc))
-                (core func $foo (canon lower (func $foo) async (memory $libc "memory")))
+                (core func $foo (canon lower (func $foo) async (memory (core memory $libc "memory"))))
                 (core module $m
                     (import "libc" "memory" (memory 1))
                     (import "" "foo" (func $foo (param i32 i32) (result i32)))

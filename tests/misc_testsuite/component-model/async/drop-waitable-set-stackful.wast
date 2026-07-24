@@ -37,7 +37,7 @@
       )
     )
     (canon waitable-set.new (core func $waitable-set.new))
-    (canon waitable-set.wait (memory $memory "mem") (core func $waitable-set.wait))
+    (canon waitable-set.wait (memory (core memory $memory "mem")) (core func $waitable-set.wait))
     (canon waitable-set.drop (core func $waitable-set.drop))
     (core instance $core (instantiate $Core (with "" (instance
       (export "mem" (memory $memory "mem"))
@@ -87,7 +87,7 @@
         unreachable
       )
     )
-    (canon lower (func $c "wait-on-set") async (memory $memory "mem") (core func $wait-on-set'))
+    (canon lower (func $c "wait-on-set") async (memory (core memory $memory "mem")) (core func $wait-on-set'))
     (canon lower (func $c "drop-while-waiting") (core func $drop-while-waiting'))
     (core instance $core (instantiate $Core (with "" (instance
       (export "mem" (memory $memory "mem"))

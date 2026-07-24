@@ -433,8 +433,8 @@ mod inc_list {
             (core instance $i (instantiate $m))
             (func (export "inc-list") (param "xs" (list u8)) (result (list u8))
               (canon lift (core func $i "inc-list")
-                          (memory $i "memory")
-                          (realloc (func $i "realloc")))
+                          (memory (core memory $i "memory"))
+                          (realloc (core func $i "realloc")))
             )
         )
     "#;
@@ -658,8 +658,8 @@ mod inc_random {
             (core instance $i (instantiate $m))
             (func (export "inc-random") (param "i" u32) (param "xs" (list u8)) (result (list u8))
               (canon lift (core func $i "inc-random")
-                          (memory $i "memory")
-                          (realloc (func $i "realloc")))
+                          (memory (core memory $i "memory"))
+                          (realloc (core func $i "realloc")))
             )
         )
     "#;

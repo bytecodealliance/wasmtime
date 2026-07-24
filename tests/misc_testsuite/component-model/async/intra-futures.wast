@@ -12,8 +12,8 @@
 
   (type $s (future string))
   (core func $future.new (canon future.new $s))
-  (core func $future.read (canon future.read $s async (memory $libc "m") (realloc (func $libc "realloc"))))
-  (core func $future.write (canon future.write $s async (memory $libc "m")))
+  (core func $future.read (canon future.read $s async (memory (core memory $libc "m")) (realloc (core func $libc "realloc"))))
+  (core func $future.write (canon future.write $s async (memory (core memory $libc "m"))))
 
   (core module $m
     (import "" "m" (memory 1))

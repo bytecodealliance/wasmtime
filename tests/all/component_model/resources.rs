@@ -437,7 +437,7 @@ fn manually_destroy() -> Result<()> {
                   (func (export "pass") (param i32) (result i32) local.get 0)
                 )
                 (core instance $i (instantiate $m))
-                (type $t2' (resource (rep i32) (dtor (func $i "dtor"))))
+                (type $t2' (resource (rep i32) (dtor (core func $i "dtor"))))
                 (export $t2 "t2" (type $t2'))
                 (core func $ctor (canon resource.new $t2))
                 (func (export "[constructor]t2") (param "rep" u32) (result (own $t2))
@@ -699,7 +699,7 @@ fn cannot_reenter_during_import() -> Result<()> {
                     ))
                 ))
 
-                (type $t2' (resource (rep i32) (dtor (func $i "dtor"))))
+                (type $t2' (resource (rep i32) (dtor (core func $i "dtor"))))
                 (export $t2 "t" (type $t2'))
                 (core func $ctor (canon resource.new $t2))
                 (func (export "ctor") (param "x" u32) (result (own $t2))
@@ -1737,7 +1737,7 @@ async fn drop_after_sync_lowered_async_host_function() -> Result<()> {
     (func (export "call") async
       (canon lift (core func $i "call")
         async
-        (callback (func $i "cb"))))
+        (callback (core func $i "cb"))))
   )
 
   (component $B
@@ -1779,7 +1779,7 @@ async fn drop_after_sync_lowered_async_host_function() -> Result<()> {
     (func (export "call") async (param "x" (borrow $r))
         (canon lift (core func $i "call")
             async
-            (callback (func $i "cb"))))
+            (callback (core func $i "cb"))))
   )
   (instance $a (instantiate $A (with "f" (func $f))))
   (instance $b (instantiate $B

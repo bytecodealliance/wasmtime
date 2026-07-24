@@ -141,12 +141,12 @@
       i32.shr_u
     )
   )
-  (core func $slow (canon lower (func $host "return-two-slowly") async (memory $mem "mem")))
+  (core func $slow (canon lower (func $host "return-two-slowly") async (memory (core memory $mem "mem"))))
   (core func $subtask.cancel (canon subtask.cancel))
   (core func $subtask.drop (canon subtask.drop))
   (core func $waitable-set.new (canon waitable-set.new))
   (core func $waitable.join (canon waitable.join))
-  (core func $waitable-set.wait (canon waitable-set.wait (memory $mem "mem")))
+  (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $mem "mem"))))
   (core func $waitable-set.drop (canon waitable-set.drop))
   (core instance $i (instantiate $m
     (with "" (instance
@@ -230,12 +230,12 @@
       i32.shr_u
     )
   )
-  (core func $slow (canon lower (func $host "return-two-slowly") async (memory $mem "mem")))
+  (core func $slow (canon lower (func $host "return-two-slowly") async (memory (core memory $mem "mem"))))
   (core func $subtask.cancel (canon subtask.cancel))
   (core func $subtask.drop (canon subtask.drop))
   (core func $waitable-set.new (canon waitable-set.new))
   (core func $waitable.join (canon waitable.join))
-  (core func $waitable-set.wait (canon waitable-set.wait (memory $mem "mem")))
+  (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $mem "mem"))))
   (core func $thread.yield (canon thread.yield))
   (core instance $i (instantiate $m
     (with "" (instance
@@ -359,12 +359,12 @@
       (call $waitable-set.drop (local.get $ws))
     )
   )
-  (core func $echo (canon lower (func $host "echo-slowly") async (memory $mem "mem")))
+  (core func $echo (canon lower (func $host "echo-slowly") async (memory (core memory $mem "mem"))))
   (core func $subtask.cancel (canon subtask.cancel))
   (core func $subtask.drop (canon subtask.drop))
   (core func $waitable-set.new (canon waitable-set.new))
   (core func $waitable.join (canon waitable.join))
-  (core func $waitable-set.wait (canon waitable-set.wait (memory $mem "mem")))
+  (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $mem "mem"))))
   (core func $waitable-set.drop (canon waitable-set.drop))
   (core instance $i (instantiate $m
     (with "" (instance
@@ -456,8 +456,8 @@
       i32.shr_u
     )
   )
-  (core func $slow-sync (canon lower (func $host "return-two-slowly") (memory $mem "mem")))
-  (core func $slow-async (canon lower (func $host "return-two-slowly") async (memory $mem "mem")))
+  (core func $slow-sync (canon lower (func $host "return-two-slowly") (memory (core memory $mem "mem"))))
+  (core func $slow-async (canon lower (func $host "return-two-slowly") async (memory (core memory $mem "mem"))))
   (core func $subtask.cancel (canon subtask.cancel))
   (core func $subtask.drop (canon subtask.drop))
   (core instance $i (instantiate $m

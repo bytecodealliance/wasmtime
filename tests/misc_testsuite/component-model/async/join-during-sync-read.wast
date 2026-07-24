@@ -40,13 +40,13 @@
   (core type $start-func-ty (func (param i32)))
   (alias core export $libc "table" (core table $table))
 
-  (core func $thread.new-indirect (canon thread.new-indirect $start-func-ty (table $table)))
+  (core func $thread.new-indirect (canon thread.new-indirect $start-func-ty (core table $table)))
   (core func $thread.yield-then-resume (canon thread.yield-then-resume))
   (core func $waitable-set.new (canon waitable-set.new))
   (core func $waitable.join (canon waitable.join))
   (type $future (future))
   (core func $future.new (canon future.new $future))
-  (core func $future.read (canon future.read $future (memory $libc "memory")))
+  (core func $future.read (canon future.read $future (memory (core memory $libc "memory"))))
 
   (core instance $m (instantiate $m
     (with "" (instance

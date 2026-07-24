@@ -183,7 +183,7 @@
 
         (core func $task-cancel (canon task.cancel))
         (core func $thread-new-indirect
-            (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
+            (canon thread.new-indirect $start-func-ty (core table $indirect-function-table)))
         (core func $thread-yield (canon thread.yield))
         (core func $thread-yield-cancellable (canon thread.yield cancellable))
         (core func $thread-index (canon thread.index))
@@ -194,10 +194,10 @@
         (core func $thread-suspend-then-resume-cancellable (canon thread.suspend-then-resume cancellable))
         (core func $thread-suspend (canon thread.suspend))
         (core func $thread-suspend-cancellable (canon thread.suspend cancellable))
-        (core func $future.read (canon future.read $FT (memory $memory "mem")))
+        (core func $future.read (canon future.read $FT (memory (core memory $memory "mem"))))
         (core func $waitable-set.new (canon waitable-set.new))
         (core func $waitable.join (canon waitable.join))
-        (core func $waitable-set.wait (canon waitable-set.wait (memory $memory "mem")))
+        (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $memory "mem"))))
 
         ;; Instantiate the main module
         (core instance $cm (
@@ -345,16 +345,16 @@
         )
 
         (core func $waitable-set.new (canon waitable-set.new))
-        (core func $waitable-set.wait (canon waitable-set.wait (memory $memory "mem")))
+        (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $memory "mem"))))
         (core func $waitable.join (canon waitable.join))
         (core func $subtask.cancel (canon subtask.cancel async))
         (core func $future.new (canon future.new $FT))
-        (core func $future.write (canon future.write $FT (memory $memory "mem")))
+        (core func $future.write (canon future.write $FT (memory (core memory $memory "mem"))))
         (core func $thread.yield (canon thread.yield))
-        (canon lower (func $run-yield) async (memory $memory "mem") (core func $run-yield'))
-        (canon lower (func $run-suspend) async (memory $memory "mem") (core func $run-suspend'))
-        (canon lower (func $run-suspend-then-resume) async (memory $memory "mem") (core func $run-suspend-then-resume'))
-        (canon lower (func $run-yield-then-resume) async (memory $memory "mem") (core func $run-yield-then-resume'))
+        (canon lower (func $run-yield) async (memory (core memory $memory "mem")) (core func $run-yield'))
+        (canon lower (func $run-suspend) async (memory (core memory $memory "mem")) (core func $run-suspend'))
+        (canon lower (func $run-suspend-then-resume) async (memory (core memory $memory "mem")) (core func $run-suspend-then-resume'))
+        (canon lower (func $run-yield-then-resume) async (memory (core memory $memory "mem")) (core func $run-yield-then-resume'))
         (core instance $dm (instantiate $DM (with "" (instance
             (export "mem" (memory $memory "mem"))
             (export "run-yield" (func $run-yield'))

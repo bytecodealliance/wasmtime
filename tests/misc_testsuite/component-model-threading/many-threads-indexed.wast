@@ -99,7 +99,7 @@
     (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
 
     (core func $thread-new-indirect
-        (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
+        (canon thread.new-indirect $start-func-ty (core table $indirect-function-table)))
     (core func $thread-yield (canon thread.yield))
     (core func $thread-index (canon thread.index))
     (core func $thread-yield-then-resume (canon thread.yield-then-resume))

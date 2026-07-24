@@ -38,7 +38,7 @@
       i32.shr_u
     )
   )
-  (core func $slow (canon lower (func $host "return-two-slowly") async (memory $mem "mem")))
+  (core func $slow (canon lower (func $host "return-two-slowly") async (memory (core memory $mem "mem"))))
   (core func $thread.yield (canon thread.yield))
   (core func $subtask.drop (canon subtask.drop))
   (core instance $i (instantiate $m

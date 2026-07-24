@@ -108,8 +108,8 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     (import "echo" (func $echo (param "a" string) (result string)))
     (core instance $libc (instantiate $libc))
     (core func $echo (canon lower (func $echo)
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
         string-encoding={encoding}
     ))
     (core instance $echo (instantiate $echo
@@ -119,8 +119,8 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     (func (export "echo2") (param "a" string) (result string)
         (canon lift
             (core func $echo "echo")
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
             string-encoding={encoding}
         )
     )
@@ -216,7 +216,7 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     )
     (core instance $m (instantiate $m))
     (func (export "a") (param "a" string)
-      (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
+      (canon lift (core func $m "") (realloc (core func $m "realloc")) (memory (core memory $m "memory"))
         string-encoding={dst})
     )
   )
@@ -227,7 +227,7 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (memory (export "memory") 1)
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) string-encoding={src} (memory $libc "memory")))
+    (core func $f (canon lower (func $f) string-encoding={src} (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
 
@@ -284,7 +284,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     )
     (core instance $m (instantiate $m))
     (func (export "a") (param "a" string)
-      (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
+      (canon lift (core func $m "") (realloc (core func $m "realloc")) (memory (core memory $m "memory"))
         string-encoding={dst})
     )
   )
@@ -295,7 +295,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (memory (export "memory") 1)
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) string-encoding={src} (memory $libc "memory")))
+    (core func $f (canon lower (func $f) string-encoding={src} (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
 
@@ -389,7 +389,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     )
     (core instance $m (instantiate $m))
     (func (export "a") (param "a" string)
-      (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
+      (canon lift (core func $m "") (realloc (core func $m "realloc")) (memory (core memory $m "memory"))
         string-encoding={dst})
     )
   )
@@ -400,7 +400,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
       (memory (export "memory") 1)
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) string-encoding={src} (memory $libc "memory")))
+    (core func $f (canon lower (func $f) string-encoding={src} (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
 
@@ -535,7 +535,7 @@ fn test_raw_when_encoded(
     )
     (core instance $m (instantiate $m))
     (func (export "a") (param "a" string)
-      (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory")
+      (canon lift (core func $m "") (realloc (core func $m "realloc")) (memory (core memory $m "memory"))
         string-encoding={dst})
     )
   )
@@ -547,7 +547,7 @@ fn test_raw_when_encoded(
       (func (export "realloc") (param i32 i32 i32 i32) (result i32) i32.const 0)
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) string-encoding={src} (memory $libc "memory")))
+    (core func $f (canon lower (func $f) string-encoding={src} (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
 
@@ -555,8 +555,8 @@ fn test_raw_when_encoded(
     )
     (core instance $m (instantiate $m (with "" (instance (export "" (func $f))))))
     (func (export "f") (param "a" (list u8)) (param "b" u32) (canon lift (core func $m "f")
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))))
   )
 
   (instance $c (instantiate $c))
@@ -607,7 +607,7 @@ fn pass_string_on_component_boundary() -> Result<()> {
     )
     (core instance $m (instantiate $m))
     (func (export "a") (param "a" string)
-      (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory"))
+      (canon lift (core func $m "") (realloc (core func $m "realloc")) (memory (core memory $m "memory")))
     )
   )
 
@@ -620,7 +620,7 @@ fn pass_string_on_component_boundary() -> Result<()> {
       (data (memory 0) (i32.const 0) "0123456789abcdef")
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) (memory $libc "memory")))
+    (core func $f (canon lower (func $f) (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
       (func (export "f")

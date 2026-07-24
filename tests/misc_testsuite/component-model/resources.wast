@@ -680,7 +680,7 @@
   (core instance $i1 (instantiate $m1))
 
   (type $r1 (resource (rep i32)))
-  (type $r2 (resource (rep i32) (dtor (func $i1 "dtor"))))
+  (type $r2 (resource (rep i32) (dtor (core func $i1 "dtor"))))
 
   (core func $drop1 (canon resource.drop $r1))
   (core func $drop2 (canon resource.drop $r2))
@@ -1120,7 +1120,7 @@
     (export "resource.rep" (func $resource.rep))
   ))))
   (func (export "run")
-    (canon lift (core func $dm "run") (post-return (func $dm "post-return"))))
+    (canon lift (core func $dm "run") (post-return (core func $dm "post-return"))))
 )
 
 (assert_return (invoke "run"))

@@ -10,7 +10,7 @@
     (core instance $libc (instantiate $libc))
 
     (type $future (future))
-    (core func $read (canon future.read $future (memory $libc "memory")))
+    (core func $read (canon future.read $future (memory (core memory $libc "memory"))))
 
     (core module $m
       (import "" "read" (func $read (param i32 i32) (result i32)))
@@ -71,7 +71,7 @@
     (core instance $libc (instantiate $libc))
 
     (type $future (future))
-    (core func $read (canon future.read $future (memory $libc "memory") async))
+    (core func $read (canon future.read $future (memory (core memory $libc "memory")) async))
 
     (core module $m
       (import "" "read" (func $read (param i32 i32) (result i32)))
@@ -131,7 +131,7 @@
     (core instance $libc (instantiate $libc))
 
     (type $future (future))
-    (core func $read (canon future.read $future (memory $libc "memory")))
+    (core func $read (canon future.read $future (memory (core memory $libc "memory"))))
 
     (core module $m
       (import "" "read" (func $read (param i32 i32) (result i32)))
@@ -151,7 +151,7 @@
       ))
     ))
     (func (export "run") async (param "x" $future)
-      (canon lift (core func $i "run") async (callback (func $i "cb"))))
+      (canon lift (core func $i "run") async (callback (core func $i "cb"))))
   )
   (instance $child (instantiate $child))
 
@@ -196,7 +196,7 @@
     (core instance $libc (instantiate $libc))
 
     (type $future (future))
-    (core func $read (canon future.read $future (memory $libc "memory") async))
+    (core func $read (canon future.read $future (memory (core memory $libc "memory")) async))
     (core func $return (canon task.return))
 
     (core module $m
@@ -220,7 +220,7 @@
       ))
     ))
     (func (export "run") async (param "x" $future)
-      (canon lift (core func $i "run") async (callback (func $i "cb"))))
+      (canon lift (core func $i "run") async (callback (core func $i "cb"))))
   )
   (instance $child (instantiate $child))
 

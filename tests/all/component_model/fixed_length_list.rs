@@ -222,7 +222,7 @@ fn fixed_length_list_length_mismatch_rejected() -> Result<()> {
   (type $ft (func (param "x" $lst) (result u32)))
   (alias core export $i "run" (core func $run))
   (func (export "run") (type $ft)
-    (canon lift (core func $run) (memory $i "memory")))
+    (canon lift (core func $run) (memory (core memory $i "memory"))))
 )
 "#;
     let mut config = Config::new();

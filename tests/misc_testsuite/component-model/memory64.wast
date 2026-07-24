@@ -58,8 +58,8 @@
 
     (func (export "roundtrip") (param "a" string) (result string)
       (canon lift (core func $m "roundtrip")
-        (memory $m "memory")
-        (realloc (func $m "realloc"))))
+        (memory (core memory $m "memory"))
+        (realloc (core func $m "realloc"))))
   )
   (instance $c64 (instantiate $c64))
 
@@ -86,8 +86,8 @@
 
     (core func $roundtrip
       (canon lower (func $i "roundtrip")
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))))
 
     (core module $m
       (import "" "memory" (memory 1))
@@ -111,8 +111,8 @@
 
     (func (export "roundtrip") (param "a" string) (result string)
       (canon lift (core func $m "roundtrip")
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))))
   )
 
   (instance $c32 (instantiate $c32 (with "backend" (instance $c64))))

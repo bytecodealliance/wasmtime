@@ -62,7 +62,7 @@
   (core func $never-return (canon lower (func $host "never-return") async))
   (core func $cancel (canon subtask.cancel))
   (core func $drop-subtask (canon subtask.drop))
-  (core func $thread.new-indirect (canon thread.new-indirect $start-func-ty (table $table)))
+  (core func $thread.new-indirect (canon thread.new-indirect $start-func-ty (core table $table)))
   (core func $thread.index (canon thread.index))
   (core func $thread.suspend-then-resume (canon thread.suspend-then-resume))
   (core func $thread.resume-later (canon thread.resume-later))

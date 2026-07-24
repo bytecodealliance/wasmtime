@@ -37,7 +37,7 @@
   (core module $m
     (import "" "waitable-set.wait" (func $waitable-set-wait (param i32 i32) (result i32)))
   )
-  (core func $waitable-set-wait (canon waitable-set.wait (memory $libc "memory")))
+  (core func $waitable-set-wait (canon waitable-set.wait (memory (core memory $libc "memory"))))
   (core instance $i (instantiate $m (with "" (instance (export "waitable-set.wait" (func $waitable-set-wait))))))
 )
 
@@ -48,7 +48,7 @@
   (core module $m
     (import "" "waitable-set.poll" (func $waitable-set-poll (param i32 i32) (result i32)))
   )
-  (core func $waitable-set-poll (canon waitable-set.poll (memory $libc "memory")))
+  (core func $waitable-set-poll (canon waitable-set.poll (memory (core memory $libc "memory"))))
   (core instance $i (instantiate $m (with "" (instance (export "waitable-set.poll" (func $waitable-set-poll))))))
 )
 
@@ -118,7 +118,7 @@
     (export "context.set" (func $context.set))
   ))))
   (func (export "run")
-    (canon lift (core func $dm "run") (post-return (func $dm "post-return"))))
+    (canon lift (core func $dm "run") (post-return (core func $dm "post-return"))))
 )
 
 (assert_return (invoke "run"))
@@ -192,8 +192,8 @@
   ))))
   (func (export "run") (param "x" string)
     (canon lift (core func $m "run")
-      (realloc (func $libc "realloc"))
-      (memory $libc "memory")
+      (realloc (core func $libc "realloc"))
+      (memory (core memory $libc "memory"))
     )
   )
 )
@@ -207,7 +207,7 @@
     (core module $libc (memory (export "memory") 1))
     (core instance $libc (instantiate $libc))
 
-    (core func $task.return (canon task.return (result string) (memory $libc "memory")))
+    (core func $task.return (canon task.return (result string) (memory (core memory $libc "memory"))))
 
     (core module $m
       (import "" "task.return" (func $task.return (param i32 i32)))
@@ -240,11 +240,11 @@
       ))
     ))
     (func (export "run-sync") (result string)
-      (canon lift (core func $m "run-sync") (memory $libc "memory"))
+      (canon lift (core func $m "run-sync") (memory (core memory $libc "memory")))
     )
     (func (export "run-async") async (result string)
-      (canon lift (core func $m "run-async") (memory $libc "memory") async
-          (callback (func $m "run-async-cb")))
+      (canon lift (core func $m "run-async") (memory (core memory $libc "memory")) async
+          (callback (core func $m "run-async-cb")))
     )
   )
 
@@ -291,28 +291,28 @@
 
     (core func $sync-to-sync
       (canon lower (func $a "run-sync")
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
       )
     )
     (core func $async-to-sync
       (canon lower (func $a "run-async")
         async
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
       )
     )
     (core func $sync-to-async
       (canon lower (func $a "run-sync")
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
       )
     )
     (core func $async-to-async
       (canon lower (func $a "run-async")
         async
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
       )
     )
 
@@ -435,8 +435,8 @@
 
   (core func $run
     (canon lower (func $host "return-hi")
-      (memory $libc "memory")
-      (realloc (func $libc "realloc"))
+      (memory (core memory $libc "memory"))
+      (realloc (core func $libc "realloc"))
     )
   )
 
@@ -480,8 +480,8 @@
     (core module $libc
       (memory (export "memory") 1))
     (core instance $libc (instantiate $libc))
-    (core func $run-reader-future (canon lower (func $reader "run-future") (memory $libc "memory") async))
-    (core func $run-reader-stream (canon lower (func $reader "run-stream") (memory $libc "memory") async))
+    (core func $run-reader-future (canon lower (func $reader "run-future") (memory (core memory $libc "memory")) async))
+    (core func $run-reader-stream (canon lower (func $reader "run-stream") (memory (core memory $libc "memory")) async))
     (core module $m
       (import "" "future.write" (func $future.write (param i32 i32) (result i32)))
       (import "" "stream.write" (func $stream.write (param i32 i32 i32) (result i32)))
@@ -573,13 +573,13 @@
     )
     (canon future.new $FT (core func $future.new))
     (canon future.write $FT async
-      (memory $libc "memory") (core func $future.write))
+      (memory (core memory $libc "memory")) (core func $future.write))
     (canon stream.new $ST (core func $stream.new))
     (canon stream.write $ST async
-      (memory $libc "memory") (core func $stream.write))
+      (memory (core memory $libc "memory")) (core func $stream.write))
     (canon waitable.join (core func $waitable.join))
     (canon waitable-set.new (core func $waitable-set.new))
-    (canon task.return (result u32) (memory $libc "memory") (core func $task.return))
+    (canon task.return (result u32) (memory (core memory $libc "memory")) (core func $task.return))
     (canon context.set i32 0 (core func $context.set))
 
     (core instance $M (instantiate $m (with "" (instance
@@ -596,8 +596,8 @@
     ))))
 
     (func (export "run") async (result u32)
-      (canon lift (core func $M "run") (memory $libc "memory")
-        async (callback (func $M "run-cb")))
+      (canon lift (core func $M "run") (memory (core memory $libc "memory"))
+        async (callback (core func $M "run-cb")))
     )
   )
 
@@ -646,14 +646,14 @@
     (type $ST (stream string))
     (canon future.new $FT (core func $future.new))
     (canon future.read $FT
-      (memory $libc "memory") (realloc (func $libc "realloc")) (core func $future.read))
+      (memory (core memory $libc "memory")) (realloc (core func $libc "realloc")) (core func $future.read))
     (canon stream.new $ST (core func $stream.new))
     (canon stream.read $ST
-      (memory $libc "memory") (realloc (func $libc "realloc")) (core func $stream.read))
+      (memory (core memory $libc "memory")) (realloc (core func $libc "realloc")) (core func $stream.read))
     (canon waitable.join (core func $waitable.join))
     (canon waitable-set.new (core func $waitable-set.new))
-    (canon waitable-set.wait (memory $libc "memory") (core func $waitable-set.wait))
-    (canon task.return (result u32) (memory $libc "memory") (core func $task.return))
+    (canon waitable-set.wait (memory (core memory $libc "memory")) (core func $waitable-set.wait))
+    (canon task.return (result u32) (memory (core memory $libc "memory")) (core func $task.return))
 
     (core module $m
       (import "" "future.read" (func $future.read (param i32 i32) (result i32)))
@@ -700,13 +700,13 @@
         (export "task.return" (func $task.return))
         (export "memory" (memory 1))))))
       (func (export "run-future") async (param "future" $FT) (result u32)
-        (canon lift (core func $M "run-future") (memory $libc "memory") (realloc (func $libc "realloc"))
-          async (callback (func $M "run-cb"))
+        (canon lift (core func $M "run-future") (memory (core memory $libc "memory")) (realloc (core func $libc "realloc"))
+          async (callback (core func $M "run-cb"))
         )
       )
       (func (export "run-stream") async (param "stream" $ST) (result u32)
-        (canon lift (core func $M "run-stream") (memory $libc "memory") (realloc (func $libc "realloc"))
-          async (callback (func $M "run-cb"))
+        (canon lift (core func $M "run-stream") (memory (core memory $libc "memory")) (realloc (core func $libc "realloc"))
+          async (callback (core func $M "run-cb"))
         )
       )
   )

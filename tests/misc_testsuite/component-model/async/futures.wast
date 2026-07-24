@@ -19,7 +19,7 @@
     (import "" "future.read" (func $future-read (param i32 i32) (result i32)))
   )
   (type $future-type (future u8))
-  (core func $future-read (canon future.read $future-type async (memory $libc "memory")))
+  (core func $future-read (canon future.read $future-type async (memory (core memory $libc "memory"))))
   (core instance $i (instantiate $m (with "" (instance (export "future.read" (func $future-read))))))
 )
 
@@ -34,7 +34,7 @@
     (import "" "future.read" (func $future-read (param i32 i32) (result i32)))
   )
   (type $future-type (future string))
-  (core func $future-read (canon future.read $future-type async (memory $libc "memory") (realloc (func $libc "realloc"))))
+  (core func $future-read (canon future.read $future-type async (memory (core memory $libc "memory")) (realloc (core func $libc "realloc"))))
   (core instance $i (instantiate $m (with "" (instance (export "future.read" (func $future-read))))))
 )
 
@@ -46,7 +46,7 @@
     (import "" "future.write" (func $future-write (param i32 i32) (result i32)))
   )
   (type $future-type (future u8))
-  (core func $future-write (canon future.write $future-type async (memory $libc "memory")))
+  (core func $future-write (canon future.write $future-type async (memory (core memory $libc "memory"))))
   (core instance $i (instantiate $m (with "" (instance (export "future.write" (func $future-write))))))
 )
 

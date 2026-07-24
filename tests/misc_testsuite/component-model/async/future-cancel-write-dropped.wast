@@ -6,7 +6,7 @@
   (core func $new (canon future.new $f))
   (core module $libc (memory (export "mem") 1))
   (core instance $libc (instantiate $libc))
-  (core func $write (canon future.write $f async (memory $libc "mem")))
+  (core func $write (canon future.write $f async (memory (core memory $libc "mem"))))
   (core func $cancel (canon future.cancel-write $f))
   (core func $drop-read (canon future.drop-readable $f))
   (core module $m

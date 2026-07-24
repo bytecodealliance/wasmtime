@@ -75,7 +75,7 @@
     (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
 
     (core func $thread-new-indirect
-        (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
+        (canon thread.new-indirect $start-func-ty (core table $indirect-function-table)))
     (core func $thread-yield (canon thread.yield))
     (core func $thread-index (canon thread.index))
     (core func $thread-yield-then-resume (canon thread.yield-then-resume))
@@ -115,7 +115,7 @@
     (export "thread.index" (func $thread.index))
   ))))
   (func (export "run")
-    (canon lift (core func $dm "run") (post-return (func $dm "post-return"))))
+    (canon lift (core func $dm "run") (post-return (core func $dm "post-return"))))
 )
 
 (assert_trap (invoke "run") "cannot leave component instance")
@@ -143,8 +143,8 @@
   ))))
   (func (export "run") (param "s" string) (canon lift
     (core func $m "run")
-    (memory $m "memory")
-    (realloc (func $m "realloc"))
+    (memory (core memory $m "memory"))
+    (realloc (core func $m "realloc"))
   ))
 )
 (assert_trap (invoke "run" (str.const "x")) "cannot leave component instance")

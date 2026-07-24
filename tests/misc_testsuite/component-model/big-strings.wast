@@ -53,24 +53,24 @@
     (func (export "utf8") (param "x" string)
       (canon lift
         (core func $i "f")
-        (memory $i "m")
-        (realloc (func $i "realloc"))
+        (memory (core memory $i "m"))
+        (realloc (core func $i "realloc"))
         string-encoding=utf8
       )
     )
     (func (export "utf16") (param "x" string)
       (canon lift
         (core func $i "f")
-        (memory $i "m")
-        (realloc (func $i "realloc"))
+        (memory (core memory $i "m"))
+        (realloc (core func $i "realloc"))
         string-encoding=utf16
       )
     )
     (func (export "latin1-utf16") (param "x" string)
       (canon lift
         (core func $i "f")
-        (memory $i "m")
-        (realloc (func $i "realloc"))
+        (memory (core memory $i "m"))
+        (realloc (core func $i "realloc"))
         string-encoding=latin1+utf16
       )
     )
@@ -88,17 +88,17 @@
 
     (core module $libc (memory (export "mem") 1))
     (core instance $libc (instantiate $libc))
-    (core func $utf8-utf8 (canon lower (func $a "utf8") string-encoding=utf8 (memory $libc "mem")))
-    (core func $utf8-utf16 (canon lower (func $a "utf16") string-encoding=utf8 (memory $libc "mem")))
-    (core func $utf8-latin1+utf16 (canon lower (func $a "latin1-utf16") string-encoding=utf8 (memory $libc "mem")))
+    (core func $utf8-utf8 (canon lower (func $a "utf8") string-encoding=utf8 (memory (core memory $libc "mem"))))
+    (core func $utf8-utf16 (canon lower (func $a "utf16") string-encoding=utf8 (memory (core memory $libc "mem"))))
+    (core func $utf8-latin1+utf16 (canon lower (func $a "latin1-utf16") string-encoding=utf8 (memory (core memory $libc "mem"))))
 
-    (core func $utf16-utf8 (canon lower (func $a "utf8") string-encoding=utf16 (memory $libc "mem")))
-    (core func $utf16-utf16 (canon lower (func $a "utf16") string-encoding=utf16 (memory $libc "mem")))
-    (core func $utf16-latin1+utf16 (canon lower (func $a "latin1-utf16") string-encoding=utf16 (memory $libc "mem")))
+    (core func $utf16-utf8 (canon lower (func $a "utf8") string-encoding=utf16 (memory (core memory $libc "mem"))))
+    (core func $utf16-utf16 (canon lower (func $a "utf16") string-encoding=utf16 (memory (core memory $libc "mem"))))
+    (core func $utf16-latin1+utf16 (canon lower (func $a "latin1-utf16") string-encoding=utf16 (memory (core memory $libc "mem"))))
 
-    (core func $latin1+utf16-utf8 (canon lower (func $a "utf8") string-encoding=latin1+utf16 (memory $libc "mem")))
-    (core func $latin1+utf16-utf16 (canon lower (func $a "utf16") string-encoding=latin1+utf16 (memory $libc "mem")))
-    (core func $latin1+utf16-latin1+utf16 (canon lower (func $a "latin1-utf16") string-encoding=latin1+utf16 (memory $libc "mem")))
+    (core func $latin1+utf16-utf8 (canon lower (func $a "utf8") string-encoding=latin1+utf16 (memory (core memory $libc "mem"))))
+    (core func $latin1+utf16-utf16 (canon lower (func $a "utf16") string-encoding=latin1+utf16 (memory (core memory $libc "mem"))))
+    (core func $latin1+utf16-latin1+utf16 (canon lower (func $a "latin1-utf16") string-encoding=latin1+utf16 (memory (core memory $libc "mem"))))
 
     (core module $m
       (import "" "utf8-utf8" (func $utf8-utf8 (param i32 i32)))

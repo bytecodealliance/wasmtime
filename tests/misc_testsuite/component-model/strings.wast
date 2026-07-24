@@ -12,9 +12,9 @@
   )
   (core instance $m (instantiate $m))
   (func (export "f1") (result string)
-    (canon lift (core func $m "f") (memory $m "m") string-encoding=utf16))
+    (canon lift (core func $m "f") (memory (core memory $m "m")) string-encoding=utf16))
   (func (export "f2") (result string)
-    (canon lift (core func $m "f") (memory $m "m") string-encoding=latin1+utf16))
+    (canon lift (core func $m "f") (memory (core memory $m "m")) string-encoding=latin1+utf16))
 
 )
 (component instance $A $A)
@@ -41,8 +41,8 @@
     (func (export "a") (param "a" string)
       (canon lift
         (core func $m "")
-        (realloc (func $m "realloc"))
-        (memory $m "memory")
+        (realloc (core func $m "realloc"))
+        (memory (core memory $m "memory"))
         string-encoding=utf16)
     )
   )
@@ -56,7 +56,7 @@
       (data (memory 0) (i32.const 0) "àà")
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) string-encoding=utf8 (memory $libc "memory")))
+    (core func $f (canon lower (func $f) string-encoding=utf8 (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
       (func (export "f") (call $f (i32.const 0) (i32.const 4)))
@@ -91,8 +91,8 @@
     (func (export "a") (param "a" string)
       (canon lift
         (core func $m "")
-        (realloc (func $m "realloc"))
-        (memory $m "memory")
+        (realloc (core func $m "realloc"))
+        (memory (core memory $m "memory"))
         string-encoding=latin1+utf16)
     )
   )
@@ -106,7 +106,7 @@
       (data (memory 0) (i32.const 0) "\41\00\a3\03")
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) string-encoding=utf16 (memory $libc "memory")))
+    (core func $f (canon lower (func $f) string-encoding=utf16 (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
       (func (export "f") (call $f (i32.const 0) (i32.const 2)))
@@ -140,8 +140,8 @@
     (func (export "a") (param "a" string)
       (canon lift
         (core func $m "")
-        (realloc (func $m "realloc"))
-        (memory $m "memory")
+        (realloc (core func $m "realloc"))
+        (memory (core memory $m "memory"))
         string-encoding=latin1+utf16)
     )
   )
@@ -154,7 +154,7 @@
       (data (memory 0) (i32.const 0) "\41\00\41\00")
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) string-encoding=latin1+utf16 (memory $libc "memory")))
+    (core func $f (canon lower (func $f) string-encoding=latin1+utf16 (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
       ;; the length here contains `UTF16_TAG` and it's additionally 1 code
@@ -191,8 +191,8 @@
     (func (export "a") (param "a" string)
       (canon lift
         (core func $m "")
-        (realloc (func $m "realloc"))
-        (memory $m "memory")
+        (realloc (core func $m "realloc"))
+        (memory (core memory $m "memory"))
         string-encoding=latin1+utf16)
     )
   )
@@ -207,7 +207,7 @@
       (data (memory 0) (i32.const 0) "Ë")
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) (memory $libc "memory")))
+    (core func $f (canon lower (func $f) (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
       (func (export "f") (call $f (i32.const 0) (i32.const 2)))
@@ -271,8 +271,8 @@
     (func (export "a") (param "a" string)
       (canon lift
         (core func $m "")
-        (realloc (func $m "realloc"))
-        (memory $m "memory")
+        (realloc (core func $m "realloc"))
+        (memory (core memory $m "memory"))
         string-encoding=latin1+utf16)
     )
   )
@@ -291,7 +291,7 @@
       (data (memory 0) (i32.const 0) "Ë┛")
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) (memory $libc "memory")))
+    (core func $f (canon lower (func $f) (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
       (func (export "f") (call $f (i32.const 0) (i32.const 5)))
@@ -346,8 +346,8 @@
     (func (export "a") (param "a" string)
       (canon lift
         (core func $m "")
-        (realloc (func $m "realloc"))
-        (memory $m "memory")
+        (realloc (core func $m "realloc"))
+        (memory (core memory $m "memory"))
         string-encoding=latin1+utf16)
     )
   )
@@ -363,7 +363,7 @@
       (data (memory 0) (i32.const 0) "Ë┛")
     )
     (core instance $libc (instantiate $libc))
-    (core func $f (canon lower (func $f) (memory $libc "memory")))
+    (core func $f (canon lower (func $f) (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $f (param i32 i32)))
       (func (export "f") (call $f (i32.const 0) (i32.const 5)))

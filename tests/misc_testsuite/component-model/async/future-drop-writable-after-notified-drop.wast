@@ -9,7 +9,7 @@
 
     (type $f (future u32))
     (core func $future.new (canon future.new $f))
-    (core func $future.write (canon future.write $f async (memory $libc "mem")))
+    (core func $future.write (canon future.write $f async (memory (core memory $libc "mem"))))
     (core func $future.drop-writable (canon future.drop-writable $f))
     (core func $task.return (canon task.return))
     (core func $waitable-set.new (canon waitable-set.new))
@@ -77,7 +77,7 @@
     (func (export "get-future") (result (future u32))
       (canon lift (core func $ci "get-future")))
     (func (export "write-and-wait") async
-      (canon lift (core func $ci "write-and-wait") async (callback (func $ci "write-and-wait-cb"))))
+      (canon lift (core func $ci "write-and-wait") async (callback (core func $ci "write-and-wait-cb"))))
   )
 
   (component $B
@@ -96,7 +96,7 @@
     (core func $waitable-set.new (canon waitable-set.new))
     (core func $waitable-set.drop (canon waitable-set.drop))
     (core func $waitable.join (canon waitable.join))
-    (core func $waitable-set.wait (canon waitable-set.wait (memory $libc "mem")))
+    (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $libc "mem"))))
     (core func $subtask.drop (canon subtask.drop))
 
     (core module $dm

@@ -1532,7 +1532,7 @@ impl Declarations {
             let lift_async_option = match lift_abi {
                 LiftAbi::Sync => "",
                 LiftAbi::AsyncStackful => "async",
-                LiftAbi::AsyncCallback => "async (callback (func $i \"callback\"))",
+                LiftAbi::AsyncCallback => "async (callback (core func $i \"callback\"))",
             };
 
             let mut intrinsic_defs = String::new();
@@ -1544,7 +1544,7 @@ impl Declarations {
                     intrinsic_defs.push_str(&format!(
                         r#"
 (core func $task.return (canon task.return {results}
-    (memory $libc "memory") string-encoding={encoding}))
+    (memory (core memory $libc "memory")) string-encoding={encoding}))
                         "#,
                     ));
                     intrinsic_imports.push_str(
@@ -1567,8 +1567,8 @@ impl Declarations {
 
     (core func $f_lower (canon lower
         (func $f)
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
         string-encoding={encoding}
         {lower_async_option}
     ))
@@ -1591,8 +1591,8 @@ impl Declarations {
     (func (export "{EXPORT_FUNCTION}") (type $export_sig)
         (canon lift
             (core func $i "{EXPORT_FUNCTION}")
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
             string-encoding={encoding}
             {lift_async_option}
         )

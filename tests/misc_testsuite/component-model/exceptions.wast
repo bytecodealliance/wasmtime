@@ -98,8 +98,8 @@
     (core instance $i (instantiate $m))
     (func (export "f") (param "s" string)
       (canon lift (core func $i "f")
-        (memory $i "memory")
-        (realloc (func $i "realloc")))))
+        (memory (core memory $i "memory"))
+        (realloc (core func $i "realloc")))))
 
   (component $B
     (import "f" (func $f (param "s" string)))
@@ -107,7 +107,7 @@
       (memory (export "memory") 1)
       (data (i32.const 16) "hello"))
     (core instance $libc (instantiate $libc))
-    (core func $f-core (canon lower (func $f) (memory $libc "memory")))
+    (core func $f-core (canon lower (func $f) (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "f" (func $f (param i32 i32)))
       (func (export "run")
@@ -137,7 +137,7 @@
       (func (export "post-f") (throw $t)))
     (core instance $i (instantiate $m))
     (func (export "f")
-      (canon lift (core func $i "f") (post-return (func $i "post-f")))))
+      (canon lift (core func $i "f") (post-return (core func $i "post-f")))))
 
   (component $B
     (import "f" (func $f))
@@ -182,7 +182,7 @@
         call_ref $f))
     (core instance $shim (instantiate $shim))
 
-    (type $t (resource (rep i32) (dtor (func $shim "dtor"))))
+    (type $t (resource (rep i32) (dtor (core func $shim "dtor"))))
     (core func $t.new (canon resource.new $t))
 
     (core module $a

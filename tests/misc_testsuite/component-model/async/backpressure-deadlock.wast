@@ -33,7 +33,7 @@
 
     (func (export "turn-on-backpressure") (canon lift (core func $i "turn-on-backpressure")))
     (func (export "f") async
-      (canon lift (core func $i "f") async (callback (func $i "callback"))))
+      (canon lift (core func $i "f") async (callback (core func $i "callback"))))
   )
   (instance $A (instantiate $A))
 
@@ -46,11 +46,11 @@
     (core module $libc (memory (export "mem") 1))
     (core instance $libc (instantiate $libc))
 
-    (core func $f (canon lower (func $A "f") async (memory $libc "mem")))
+    (core func $f (canon lower (func $A "f") async (memory (core memory $libc "mem"))))
     (core func $turn-on-backpressure (canon lower (func $A "turn-on-backpressure")))
     (core func $waitable-set.new (canon waitable-set.new))
     (core func $waitable.join (canon waitable.join))
-    (core func $waitable-set.wait (canon waitable-set.wait (memory $libc "mem")))
+    (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $libc "mem"))))
 
     (core module $m
       (import "" "f" (func $f (result i32)))

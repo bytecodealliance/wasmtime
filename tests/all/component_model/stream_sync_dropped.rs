@@ -87,7 +87,7 @@ async fn stream_read_sync_dropped_retires_host_producer() -> Result<()> {
                 )
             )
             (type $s (stream u8))
-            (core func $stream.read (canon stream.read $s async (memory $libc "mem")))
+            (core func $stream.read (canon stream.read $s async (memory (core memory $libc "mem"))))
             (core instance $i (instantiate $m
                 (with "" (instance
                     (export "stream.read" (func $stream.read))
@@ -168,7 +168,7 @@ async fn stream_write_sync_dropped_retires_host_consumer() -> Result<()> {
             )
             (type $s (stream u8))
             (core func $stream.new (canon stream.new $s))
-            (core func $stream.write (canon stream.write $s async (memory $libc "mem")))
+            (core func $stream.write (canon stream.write $s async (memory (core memory $libc "mem"))))
             (core instance $i (instantiate $m
                 (with "" (instance
                     (export "stream.new" (func $stream.new))

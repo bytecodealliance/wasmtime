@@ -17,7 +17,7 @@
 
     (core instance $a (instantiate $a))
     (func (export "run") async
-      (canon lift (core func $a "run") async (callback (func $a "run-cb"))))
+      (canon lift (core func $a "run") async (callback (core func $a "run-cb"))))
   )
   (component $B
     (import "a" (instance $a (export "run" (func async))))
@@ -29,7 +29,7 @@
     (core func $new (canon waitable-set.new))
     (core func $join (canon waitable.join))
     (core func $drop (canon waitable-set.drop))
-    (core func $wait (canon waitable-set.wait (memory $libc "memory")))
+    (core func $wait (canon waitable-set.wait (memory (core memory $libc "memory"))))
 
     (core module $b
       (import "" "run" (func $run_a (result i32)))

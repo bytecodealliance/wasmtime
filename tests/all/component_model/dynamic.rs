@@ -968,8 +968,8 @@ fn introspection() -> Result<()> {
                 (func (export "fn") (param "x" (option $Foo)) (result (option (tuple u32 u32)))
                     (canon lift
                         (core func $i3 "f")
-                        (memory $i3 "memory")
-                        (realloc (func $i3 "realloc"))
+                        (memory (core memory $i3 "memory"))
+                        (realloc (core func $i3 "realloc"))
                     )
                 )
             )

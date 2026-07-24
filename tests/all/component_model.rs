@@ -284,8 +284,8 @@ fn make_echo_component_with_params(type_definition: &str, params: &[Param]) -> S
             (func (export "echo") (param "a" $Foo) (result $Foo)
                 (canon lift
                     (core func $i "echo")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#

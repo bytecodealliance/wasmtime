@@ -30,7 +30,7 @@ static std::string echo_component(std::string_view type, std::string_view func,
 		{}
 	)
 	(core instance $libc (instantiate $libc))
-	(core func $do_lower (canon lower (func $do) (memory $libc "memory") (realloc (func $libc "realloc"))))
+	(core func $do_lower (canon lower (func $do) (memory (core memory $libc "memory")) (realloc (core func $libc "realloc"))))
 
 	(core module $doer
 		(import "host" "do" (func $do {}))
@@ -50,8 +50,8 @@ static std::string echo_component(std::string_view type, std::string_view func,
 		(result $Foo)
 		(canon lift
 			(core func $doer "call")
-			(memory $libc "memory")
-			(realloc (func $libc "realloc")))
+			(memory (core memory $libc "memory"))
+			(realloc (core func $libc "realloc")))
 	)
 
 	(export "call" (func $call))
@@ -946,7 +946,7 @@ TEST(component, value_guest_resource) {
     (func (export "last-dtor-rep") (result i32) global.get $g)
   )
   (core instance $a (instantiate $a))
-  (type $r' (resource (rep i32) (dtor (func $a "dtor"))))
+  (type $r' (resource (rep i32) (dtor (core func $a "dtor"))))
   (export $r "r" (type $r'))
 
   (core func $new (canon resource.new $r))

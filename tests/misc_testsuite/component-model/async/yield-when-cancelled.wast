@@ -48,7 +48,7 @@
       ))
     ))
 
-    (func (export "f") async (canon lift (core func $i "f") async (callback (func $i "f-callback"))))
+    (func (export "f") async (canon lift (core func $i "f") async (callback (core func $i "f-callback"))))
   )
   (instance $a (instantiate $a))
 

@@ -66,22 +66,22 @@ fn typecheck() -> Result<()> {
                 (canon lift (core func $i "thunk"))
             )
             (func (export "take-string") (param "a" string)
-                (canon lift (core func $i "take-string") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "take-string") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "take-two-args") (param "a" s32) (param "b" (list u8))
-                (canon lift (core func $i "two-args") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "two-args") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "ret-tuple") (result (tuple u8 s8))
-                (canon lift (core func $i "ret-one") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "ret-one") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "ret-tuple1") (result (tuple u32))
-                (canon lift (core func $i "ret-one") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "ret-one") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "ret-string") (result string)
-                (canon lift (core func $i "ret-one") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "ret-one") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "ret-list-u8") (result (list u8))
-                (canon lift (core func $i "ret-one") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "ret-one") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
         )
     "#;
@@ -659,10 +659,10 @@ fn tuple_result() -> Result<()> {
             (type $result (tuple s8 u16 float32 float64))
             (func (export "tuple")
                 (param "a" s8) (param "b" u16) (param "c" float32) (param "d" float64) (result $result)
-                (canon lift (core func $i "foo") (memory $i "memory"))
+                (canon lift (core func $i "foo") (memory (core memory $i "memory")))
             )
             (func (export "invalid") (result $result)
-                (canon lift (core func $i "invalid") (memory $i "memory"))
+                (canon lift (core func $i "invalid") (memory (core memory $i "memory")))
             )
         )
     "#;
@@ -720,31 +720,31 @@ fn strings() -> Result<()> {
             (func (export "list8-to-str") (param "a" (list u8)) (result string)
                 (canon lift
                     (core func $i "roundtrip")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "str-to-list8") (param "a" string) (result (list u8))
                 (canon lift
                     (core func $i "roundtrip")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "list16-to-str") (param "a" (list u16)) (result string)
                 (canon lift
                     (core func $i "roundtrip")
                     string-encoding=utf16
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "str-to-list16") (param "a" string) (result (list u16))
                 (canon lift
                     (core func $i "roundtrip")
                     string-encoding=utf16
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -849,7 +849,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
 
                     (i32.const 0)
             "#,
-            r#"async (callback (func $i "callback"))"#,
+            r#"async (callback (core func $i "callback"))"#,
         )
     } else {
         (
@@ -906,7 +906,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
             (type $tuple (tuple (list u8) u32))
             (core func $task-return (canon task.return
                 (result $tuple)
-                (memory $libc "memory")
+                (memory (core memory $libc "memory"))
             ))
             (core instance $i (instantiate $m
                 (with "" (instance (export "task.return" (func $task-return))))
@@ -933,8 +933,8 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
             (func (export "many-param") (type $t)
                 (canon lift
                     (core func $i "foo")
-                    (memory $libc "memory")
-                    (realloc (func $libc "realloc"))
+                    (memory (core memory $libc "memory"))
+                    (realloc (core func $libc "realloc"))
                     {async_opts}
                 )
             )
@@ -1126,7 +1126,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
                    call $task-return
                    i32.const 0
             "#,
-            r#"async (callback (func $i "callback"))"#,
+            r#"async (callback (core func $i "callback"))"#,
         )
     } else {
         ("", "")
@@ -1377,7 +1377,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
             ))
             (core func $task-return (canon task.return
                 (result $tuple)
-                (memory $libc "memory")
+                (memory (core memory $libc "memory"))
             ))
             (core instance $i (instantiate $m
                 (with "" (instance (export "task.return" (func $task-return))))
@@ -1388,8 +1388,8 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
             (func (export "many-results") (type $t)
                 (canon lift
                     (core func $i "foo")
-                    (memory $libc "memory")
-                    (realloc (func $libc "realloc"))
+                    (memory (core memory $libc "memory"))
+                    (realloc (core func $libc "realloc"))
                     {async_opts}
                 )
             )
@@ -1562,10 +1562,10 @@ fn some_traps() -> Result<()> {
             (core instance $i (instantiate $m))
 
             (func (export "take-list-unreachable") (param "a" (list u8))
-                (canon lift (core func $i "take-list") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "take-list") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "take-string-unreachable") (param "a" string)
-                (canon lift (core func $i "take-list") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "take-list") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
 
             (type $t (func
@@ -1581,7 +1581,7 @@ fn some_traps() -> Result<()> {
                 (param "s10" string)
             ))
             (func (export "take-many-unreachable") (type $t)
-                (canon lift (core func $i "take-many") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "take-many") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
 
             (core module $m2
@@ -1595,13 +1595,13 @@ fn some_traps() -> Result<()> {
             (core instance $i2 (instantiate $m2))
 
             (func (export "take-list-base-oob") (param "a" (list u8))
-                (canon lift (core func $i2 "take-list") (memory $i2 "memory") (realloc (func $i2 "realloc")))
+                (canon lift (core func $i2 "take-list") (memory (core memory $i2 "memory")) (realloc (core func $i2 "realloc")))
             )
             (func (export "take-string-base-oob") (param "a" string)
-                (canon lift (core func $i2 "take-list") (memory $i2 "memory") (realloc (func $i2 "realloc")))
+                (canon lift (core func $i2 "take-list") (memory (core memory $i2 "memory")) (realloc (core func $i2 "realloc")))
             )
             (func (export "take-many-base-oob") (type $t)
-                (canon lift (core func $i2 "take-many") (memory $i2 "memory") (realloc (func $i2 "realloc")))
+                (canon lift (core func $i2 "take-many") (memory (core memory $i2 "memory")) (realloc (core func $i2 "realloc")))
             )
 
             (core module $m3
@@ -1615,13 +1615,13 @@ fn some_traps() -> Result<()> {
             (core instance $i3 (instantiate $m3))
 
             (func (export "take-list-end-oob") (param "a" (list u8))
-                (canon lift (core func $i3 "take-list") (memory $i3 "memory") (realloc (func $i3 "realloc")))
+                (canon lift (core func $i3 "take-list") (memory (core memory $i3 "memory")) (realloc (core func $i3 "realloc")))
             )
             (func (export "take-string-end-oob") (param "a" string)
-                (canon lift (core func $i3 "take-list") (memory $i3 "memory") (realloc (func $i3 "realloc")))
+                (canon lift (core func $i3 "take-list") (memory (core memory $i3 "memory")) (realloc (core func $i3 "realloc")))
             )
             (func (export "take-many-end-oob") (type $t)
-                (canon lift (core func $i3 "take-many") (memory $i3 "memory") (realloc (func $i3 "realloc")))
+                (canon lift (core func $i3 "take-many") (memory (core memory $i3 "memory")) (realloc (core func $i3 "realloc")))
             )
 
             (core module $m4
@@ -1643,7 +1643,7 @@ fn some_traps() -> Result<()> {
             (core instance $i4 (instantiate $m4))
 
             (func (export "take-many-second-oob") (type $t)
-                (canon lift (core func $i4 "take-many") (memory $i4 "memory") (realloc (func $i4 "realloc")))
+                (canon lift (core func $i4 "take-many") (memory (core memory $i4 "memory")) (realloc (core func $i4 "realloc")))
             )
         )"#
     );
@@ -1848,8 +1848,8 @@ fn char_bool_memory() -> Result<()> {
 
             (func (export "ret-tuple") (param "a" u32) (param "b" u32) (result (tuple bool char))
                 (canon lift (core func $i "ret-tuple")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc")))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc")))
             )
         )"#
     );
@@ -1907,14 +1907,14 @@ fn string_list_oob() -> Result<()> {
 
             (func (export "ret-list-u8") (result (list u8))
                 (canon lift (core func $i "ret-list")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "ret-string") (result string)
                 (canon lift (core func $i "ret-list")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -2039,32 +2039,32 @@ fn option() -> Result<()> {
             (core instance $i (instantiate $m))
 
             (func (export "option-u8-to-tuple") (param "a" (option u8)) (result (tuple u32 u32))
-                (canon lift (core func $i "pass1") (memory $i "memory"))
+                (canon lift (core func $i "pass1") (memory (core memory $i "memory")))
             )
             (func (export "option-u32-to-tuple") (param "a" (option u32)) (result (tuple u32 u32))
-                (canon lift (core func $i "pass1") (memory $i "memory"))
+                (canon lift (core func $i "pass1") (memory (core memory $i "memory")))
             )
             (func (export "option-string-to-tuple") (param "a" (option string)) (result (tuple u32 string))
                 (canon lift
                     (core func $i "pass2")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "to-option-u8") (param "a" u32) (param "b" u32) (result (option u8))
-                (canon lift (core func $i "pass1") (memory $i "memory"))
+                (canon lift (core func $i "pass1") (memory (core memory $i "memory")))
             )
             (func (export "to-option-u32") (param "a" u32) (param "b" u32) (result (option u32))
                 (canon lift
                     (core func $i "pass1")
-                    (memory $i "memory")
+                    (memory (core memory $i "memory"))
                 )
             )
             (func (export "to-option-string") (param "a" u32) (param "b" string) (result (option string))
                 (canon lift
                     (core func $i "pass2")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -2198,14 +2198,14 @@ fn expected() -> Result<()> {
                 (canon lift (core func $i "pass0"))
             )
             (func (export "take-expected-u8-f32") (param "a" (result u8 (error float32))) (result (tuple u32 u32))
-                (canon lift (core func $i "pass1") (memory $i "memory"))
+                (canon lift (core func $i "pass1") (memory (core memory $i "memory")))
             )
             (type $list (list u8))
             (func (export "take-expected-string") (param "a" (result string (error $list))) (result (tuple u32 string))
                 (canon lift
                     (core func $i "pass2")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "to-expected-unit") (param "a" u32) (result (result))
@@ -2214,8 +2214,8 @@ fn expected() -> Result<()> {
             (func (export "to-expected-s16-f32") (param "a" u32) (param "b" u32) (result (result s16 (error float32)))
                 (canon lift
                     (core func $i "pass1")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -2322,8 +2322,8 @@ fn fancy_list() -> Result<()> {
                 (result (tuple u32 u32 (list u8)))
                 (canon lift
                     (core func $i "take")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -2426,22 +2426,22 @@ fn invalid_alignment() -> Result<()> {
                 (param "s9" string) (param "s10" string) (param "s11" string) (param "s12" string)
                 (canon lift
                     (core func $i "take-i32")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "string-ret") (result string)
                 (canon lift
                     (core func $i "ret-1")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "list-u32-ret") (result (list u32))
                 (canon lift
                     (core func $i "ret-unaligned-list")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -2587,28 +2587,28 @@ fn raw_slice_of_various_types() -> Result<()> {
             )
             (core instance $i (instantiate $m))
             (func (export "list-u8") (result (list u8))
-                (canon lift (core func $i "list8") (memory $i "memory"))
+                (canon lift (core func $i "list8") (memory (core memory $i "memory")))
             )
             (func (export "list-i8") (result (list s8))
-                (canon lift (core func $i "list8") (memory $i "memory"))
+                (canon lift (core func $i "list8") (memory (core memory $i "memory")))
             )
             (func (export "list-u16") (result (list u16))
-                (canon lift (core func $i "list16") (memory $i "memory"))
+                (canon lift (core func $i "list16") (memory (core memory $i "memory")))
             )
             (func (export "list-i16") (result (list s16))
-                (canon lift (core func $i "list16") (memory $i "memory"))
+                (canon lift (core func $i "list16") (memory (core memory $i "memory")))
             )
             (func (export "list-u32") (result (list u32))
-                (canon lift (core func $i "list32") (memory $i "memory"))
+                (canon lift (core func $i "list32") (memory (core memory $i "memory")))
             )
             (func (export "list-i32") (result (list s32))
-                (canon lift (core func $i "list32") (memory $i "memory"))
+                (canon lift (core func $i "list32") (memory (core memory $i "memory")))
             )
             (func (export "list-u64") (result (list u64))
-                (canon lift (core func $i "list64") (memory $i "memory"))
+                (canon lift (core func $i "list64") (memory (core memory $i "memory")))
             )
             (func (export "list-i64") (result (list s64))
-                (canon lift (core func $i "list64") (memory $i "memory"))
+                (canon lift (core func $i "list64") (memory (core memory $i "memory")))
             )
         )
     "#;
@@ -2770,12 +2770,12 @@ fn lower_then_lift() -> Result<()> {
   (core instance $libc (instantiate $libc))
 
   (core func $f_lower
-    (canon lower (func $f) (memory $libc "memory"))
+    (canon lower (func $f) (memory (core memory $libc "memory")))
   )
   (func $f2 (param "a" string)
     (canon lift (core func $f_lower)
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
     )
   )
   (export "f" (func $f2))
@@ -2810,12 +2810,12 @@ fn lower_then_lift() -> Result<()> {
   (core instance $libc (instantiate $libc))
 
   (core func $f_lower
-    (canon lower (func $f) (memory $libc "memory"))
+    (canon lower (func $f) (memory (core memory $libc "memory")))
   )
   (func $f2 (param "a" string) (result string)
     (canon lift (core func $f_lower)
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
     )
   )
   (export "f" (func $f2))
@@ -2864,7 +2864,7 @@ fn errors_that_poison_instance() -> Result<()> {
   )
   (core instance $m2 (instantiate $m2))
   (func (export "f3") (param "a" string)
-    (canon lift (core func $m2 "f") (realloc (func $m2 "r")) (memory $m2 "m"))
+    (canon lift (core func $m2 "f") (realloc (core func $m2 "r")) (memory (core memory $m2 "m")))
   )
 
   (core module $m3
@@ -2873,7 +2873,7 @@ fn errors_that_poison_instance() -> Result<()> {
   )
   (core instance $m3 (instantiate $m3))
   (func (export "f4") (result string)
-    (canon lift (core func $m3 "f") (memory $m3 "m"))
+    (canon lift (core func $m3 "f") (memory (core memory $m3 "m")))
   )
 )
     "#
@@ -3178,7 +3178,7 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
   (core instance $m (instantiate $m (with "" (instance
     (export "thread.index" (func $thread-index))
   ))))
-  (type $r (resource (rep i32) (dtor (func $m "dtor"))))
+  (type $r (resource (rep i32) (dtor (core func $m "dtor"))))
   (core func $new (canon resource.new $r))
   (core module $m2
     (import "" "new" (func $new (param i32) (result i32)))
@@ -3450,8 +3450,8 @@ fn map_trampoline_alignment() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3460,8 +3460,8 @@ fn map_trampoline_alignment() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u64)) (result (map u8 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3488,8 +3488,8 @@ fn map_trampoline_alignment() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3498,8 +3498,8 @@ fn map_trampoline_alignment() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u64)) (result (map u8 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3586,8 +3586,8 @@ fn map_trampoline_alignment_u32_u64() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3596,8 +3596,8 @@ fn map_trampoline_alignment_u32_u64() -> Result<()> {
         (func (export "echo2") (param "m" (map u32 u64)) (result (map u32 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3623,8 +3623,8 @@ fn map_trampoline_alignment_u32_u64() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3633,8 +3633,8 @@ fn map_trampoline_alignment_u32_u64() -> Result<()> {
         (func (export "echo2") (param "m" (map u32 u64)) (result (map u32 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3717,8 +3717,8 @@ fn map_trampoline_alignment_u8_u32() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3727,8 +3727,8 @@ fn map_trampoline_alignment_u8_u32() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u32)) (result (map u8 u32))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3754,8 +3754,8 @@ fn map_trampoline_alignment_u8_u32() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3764,8 +3764,8 @@ fn map_trampoline_alignment_u8_u32() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u32)) (result (map u8 u32))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3848,8 +3848,8 @@ fn map_trampoline_alignment_u16_u64() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3858,8 +3858,8 @@ fn map_trampoline_alignment_u16_u64() -> Result<()> {
         (func (export "echo2") (param "m" (map u16 u64)) (result (map u16 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3885,8 +3885,8 @@ fn map_trampoline_alignment_u16_u64() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3895,8 +3895,8 @@ fn map_trampoline_alignment_u16_u64() -> Result<()> {
         (func (export "echo2") (param "m" (map u16 u64)) (result (map u16 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3979,8 +3979,8 @@ fn map_trampoline_alignment_u8_u16() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3989,8 +3989,8 @@ fn map_trampoline_alignment_u8_u16() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u16)) (result (map u8 u16))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -4016,8 +4016,8 @@ fn map_trampoline_alignment_u8_u16() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -4026,8 +4026,8 @@ fn map_trampoline_alignment_u8_u16() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u16)) (result (map u8 u16))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -4110,8 +4110,8 @@ fn map_trampoline_alignment_u64_u8() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -4120,8 +4120,8 @@ fn map_trampoline_alignment_u64_u8() -> Result<()> {
         (func (export "echo2") (param "m" (map u64 u8)) (result (map u64 u8))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -4147,8 +4147,8 @@ fn map_trampoline_alignment_u64_u8() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -4157,8 +4157,8 @@ fn map_trampoline_alignment_u64_u8() -> Result<()> {
         (func (export "echo2") (param "m" (map u64 u8)) (result (map u64 u8))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )

@@ -28,7 +28,7 @@
       ))
     ))
     (func (export "f") async
-      (canon lift (core func $i "a") async (callback (func $i "cb"))))
+      (canon lift (core func $i "a") async (callback (core func $i "cb"))))
   )
 
   (component $b

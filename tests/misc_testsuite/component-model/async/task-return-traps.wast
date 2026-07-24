@@ -14,7 +14,7 @@
     (core instance $i (instantiate $m
         (with "" (instance (export "task.return" (func $task-return))))
     ))
-    (func (export "foo") async (canon lift (core func $i "foo") async (callback (func $i "callback"))))
+    (func (export "foo") async (canon lift (core func $i "foo") async (callback (core func $i "callback"))))
 )
 (assert_trap (invoke "foo") "async-lifted export failed to produce a result")
 
@@ -39,7 +39,7 @@
     (core type $start-func-ty (func (param i32)))
     (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
     (core func $thread-new-indirect
-        (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
+        (canon thread.new-indirect $start-func-ty (core table $indirect-function-table)))
     (core func $thread.resume-later (canon thread.resume-later))
     (core func $task-return (canon task.return))
     (core instance $i (instantiate $m
@@ -50,7 +50,7 @@
         ))
         (with "libc" (instance $libc))
     ))
-    (func (export "foo") async (canon lift (core func $i "foo") async (callback (func $i "callback"))))
+    (func (export "foo") async (canon lift (core func $i "foo") async (callback (core func $i "callback"))))
 )
 
 (assert_trap (invoke "foo") "async-lifted export failed to produce a result")
@@ -74,7 +74,7 @@
     (core type $start-func-ty (func (param i32)))
     (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
     (core func $thread-new-indirect
-        (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
+        (canon thread.new-indirect $start-func-ty (core table $indirect-function-table)))
     (core func $thread.resume-later (canon thread.resume-later))
     (core func $task-return (canon task.return))
     (core instance $i (instantiate $m
@@ -125,7 +125,7 @@
         (import "" "task.return" (func $task-return))
         (func (export "foo") (call $task-return))
     )
-    (core func $task-return (canon task.return (memory $libc "memory")))
+    (core func $task-return (canon task.return (memory (core memory $libc "memory"))))
     (core instance $i (instantiate $m
         (with "" (instance (export "task.return" (func $task-return))))
     ))

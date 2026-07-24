@@ -22,7 +22,7 @@
     ))
 
     (func (export "foo") async (param "p1" u32) (result u32)
-      (canon lift (core func $i "foo") async (callback (func $i "callback")))
+      (canon lift (core func $i "foo") async (callback (core func $i "callback")))
     )
   )
 

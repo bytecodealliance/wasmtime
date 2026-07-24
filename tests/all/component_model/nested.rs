@@ -76,8 +76,8 @@ fn thread_options_through_inner() -> Result<()> {
     (core func $host_lower
         (canon lower
             (func $host)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         )
     )
 
@@ -100,7 +100,7 @@ fn thread_options_through_inner() -> Result<()> {
     (func (export "run") (param "a" u32) (result string)
         (canon lift
             (core func $m "run")
-            (memory $m "memory")
+            (memory (core memory $m "memory"))
         )
     )
   )

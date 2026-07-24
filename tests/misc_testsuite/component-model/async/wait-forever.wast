@@ -30,7 +30,7 @@
     ))
 
     (func (export "run") async
-      (canon lift (core func $i "run") async (callback (func $i "cb"))))
+      (canon lift (core func $i "run") async (callback (core func $i "cb"))))
   )
   (instance $child (instantiate $child))
 

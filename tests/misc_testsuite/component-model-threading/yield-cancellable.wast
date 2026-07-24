@@ -7,7 +7,7 @@
   (core instance $libc (instantiate $libc))
   (core type $start-func-ty (func (param i32)))
   (core func $thread.new-indirect
-    (canon thread.new-indirect $start-func-ty (table $libc "t")))
+    (canon thread.new-indirect $start-func-ty (core table $libc "t")))
   (core func $thread.resume-later (canon thread.resume-later))
   (core func $thread.index (canon thread.index))
   (core func $thread.yield-cancellable (canon thread.yield cancellable))
@@ -53,6 +53,6 @@
     (export "tbl" (table $libc "t"))))))
 
   (func (export "run") async
-    (canon lift (core func $i "run") async (callback (func $i "cb"))))
+    (canon lift (core func $i "run") async (callback (core func $i "cb"))))
 )
 (assert_return (invoke "run"))

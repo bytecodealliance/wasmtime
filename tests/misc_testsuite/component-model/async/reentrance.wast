@@ -15,14 +15,14 @@
         (with "" (instance (export "task.return" (func $task-return))))
     ))
     (func $shim-export async (param "p1" u32) (result u32)
-        (canon lift (core func $shim "export") async (callback (func $shim "callback")))
+        (canon lift (core func $shim "export") async (callback (core func $shim "callback")))
     )
 
     (component $inner
         (import "import" (func $import async (param "p1" u32) (result u32)))
         (core module $libc (memory (export "memory") 1))
         (core instance $libc (instantiate $libc))
-        (core func $import (canon lower (func $import) async (memory $libc "memory")))
+        (core func $import (canon lower (func $import) async (memory (core memory $libc "memory"))))
 
         (core module $m
             (import "libc" "memory" (memory 1))
@@ -47,14 +47,14 @@
             (with "libc" (instance $libc))
         ))
         (func (export "export") async (param "p1" u32) (result u32)
-            (canon lift (core func $i "export") async (callback (func $i "callback")))
+            (canon lift (core func $i "export") async (callback (core func $i "callback")))
         )
     )
     (instance $inner (instantiate $inner (with "import" (func $shim-export))))
 
     (core module $libc (memory (export "memory") 1))
     (core instance $libc (instantiate $libc))
-    (core func $inner-export (canon lower (func $inner "export") async (memory $libc "memory")))
+    (core func $inner-export (canon lower (func $inner "export") async (memory (core memory $libc "memory"))))
 
     (core module $donut
         (import "" "funcs" (table 1 1 funcref))
@@ -85,7 +85,7 @@
         (with "libc" (instance $libc))
     ))
     (func (export "export") async (param "p1" u32) (result u32)
-        (canon lift (core func $donut "export") async (callback (func $donut "callback")))
+        (canon lift (core func $donut "export") async (callback (core func $donut "callback")))
     )
 )
 

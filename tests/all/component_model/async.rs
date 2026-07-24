@@ -120,8 +120,8 @@ async fn resume_separate_thread() -> Result<()> {
                 (core func $yield
                     (canon lower
                         (func $yield)
-                        (memory $libc "memory")
-                        (realloc (func $libc "realloc"))
+                        (memory (core memory $libc "memory"))
+                        (realloc (core func $libc "realloc"))
                     )
                 )
 
@@ -195,8 +195,8 @@ async fn poll_through_wasm_activation() -> Result<()> {
                 (core instance $i (instantiate $m))
                 (func (export "run") (param "x" (list u8))
                     (canon lift (core func $i "run")
-                                (memory $i "memory")
-                                (realloc (func $i "realloc"))))
+                                (memory (core memory $i "memory"))
+                                (realloc (core func $i "realloc"))))
             )
         "#
     );
@@ -355,7 +355,7 @@ async fn cancel_host_future() -> Result<()> {
   )
 
   (type $f (future u32))
-  (core func $future.read (canon future.read $f async (memory $libc "memory")))
+  (core func $future.read (canon future.read $f async (memory (core memory $libc "memory"))))
   (core func $future.cancel-read (canon future.cancel-read $f))
 
   (core instance $i (instantiate $m
@@ -368,7 +368,7 @@ async fn cancel_host_future() -> Result<()> {
   (func (export "run") async (param "f" $f)
     (canon lift
       (core func $i "run")
-      (memory $libc "memory")
+      (memory (core memory $libc "memory"))
     )
   )
 )
@@ -757,12 +757,12 @@ async fn stream_cancel_read_async_does_not_corrupt_state() -> Result<()> {
   )
 
   (type $s (stream u8))
-  (core func $stream.read (canon stream.read $s async (memory $libc "memory")))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "memory"))))
   (core func $stream.cancel-read (canon stream.cancel-read $s async))
   (core func $stream.drop-readable (canon stream.drop-readable $s))
   (canon waitable.join (core func $waitable.join))
   (canon waitable-set.new (core func $waitable-set.new))
-  (canon waitable-set.wait (memory $libc "memory") (core func $waitable-set.wait))
+  (canon waitable-set.wait (memory (core memory $libc "memory")) (core func $waitable-set.wait))
   (canon waitable-set.drop (core func $waitable-set.drop))
 
   (core instance $i (instantiate $m
@@ -780,7 +780,7 @@ async fn stream_cancel_read_async_does_not_corrupt_state() -> Result<()> {
   (func (export "run") async (param "s" (stream u8))
     (canon lift
       (core func $i "run")
-      (memory $libc "memory")
+      (memory (core memory $libc "memory"))
     )
   )
 )
@@ -874,7 +874,7 @@ async fn concurrent_sync_calls_to_async_host() -> Result<()> {
             (core type $start-func-ty (func (param i32)))
             (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
             (core func $thread-new-indirect
-                (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
+                (canon thread.new-indirect $start-func-ty (core table $indirect-function-table)))
             (core func $thread-resume-later (canon thread.resume-later))
 
             (core func $await-three-calls (canon lower (func $await-three-calls) ))
@@ -936,7 +936,7 @@ async fn bytes_stream_producer() -> Result<()> {
                 )
             )
             (type $s (stream u8))
-            (core func $stream.read (canon stream.read $s async (memory $libc "mem")))
+            (core func $stream.read (canon stream.read $s async (memory (core memory $libc "mem"))))
             (core instance $i (instantiate $m
                 (with "" (instance
                     (export "mem" (memory $libc "mem"))

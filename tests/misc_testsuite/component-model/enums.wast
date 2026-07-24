@@ -48,7 +48,7 @@
   ))
   (export $e "e" (type $e'))
   (func (export "return-two") (param "e" $e) (result (tuple $e $e))
-    (canon lift (core func $i "return-two") (memory $i "mem")))
+    (canon lift (core func $i "return-two") (memory (core memory $i "mem"))))
 )
 
 (assert_return (invoke "return-two" (enum.const "E1"))
