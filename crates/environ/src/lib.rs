@@ -42,6 +42,8 @@ mod string_pool;
 mod trap_encoding;
 mod tunables;
 mod types;
+#[macro_use]
+mod vmtypes;
 mod vmoffsets;
 mod wasm_error;
 

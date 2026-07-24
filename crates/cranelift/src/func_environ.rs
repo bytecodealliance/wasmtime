@@ -1563,10 +1563,7 @@ impl FuncEnvironment<'_> {
         // The base pointer load is `can_move`, and additionally `readonly` when
         // this memory's base can never move.
         let memory_tunables = MemoryTunables::new(self.tunables, MemoryKind::LinearMemory);
-        let mut base_flags = ir::MemFlagsData::trusted().with_can_move();
-        if !memory.memory_may_move(&memory_tunables) {
-            base_flags.set_readonly();
-        }
+        let base_readonly = !memory.memory_may_move(&memory_tunables);
 
         if let Some(def_index) = self.module.defined_memory_index(index) {
             if is_shared {
@@ -1577,49 +1574,61 @@ impl FuncEnvironment<'_> {
                 let mem = self
                     .alias_regions
                     .vmctx_vmmemory_pointer_load(func, def_index);
+                let mut base = self.alias_regions.vm_memory_definition().base();
+                base.can_move();
+                if base_readonly {
+                    base.readonly();
+                }
+                let base = base.to_deferred_load(func);
+                let len = self
+                    .alias_regions
+                    .vm_memory_definition()
+                    .current_length()
+                    .to_deferred_load(func);
                 (
-                    VmctxLoadChain::new(smallvec![
-                        mem,
-                        self.alias_regions
-                            .vmmemory_definition_base_load(func, base_flags),
-                    ]),
-                    VmctxLoadChain::new(smallvec![
-                        mem,
-                        self.alias_regions
-                            .vmmemory_definition_current_length_load(func),
-                    ]),
+                    VmctxLoadChain::new(smallvec![mem, base]),
+                    VmctxLoadChain::new(smallvec![mem, len]),
                 )
             } else {
+                // A defined, owned memory's `VMMemoryDefinition` is inlined into
+                // the `vmctx` at an absolute offset, so its fields are loaded
+                // relative to the `vmctx` itself: fold that offset into each
+                // field's offset.
                 let owned_index = self.module.owned_memory_index(def_index);
+                let vmctx_off = self.offsets.vmctx_vmmemory_definition(owned_index);
+                let mut base = self.alias_regions.vm_memory_definition().base();
+                base.can_move();
+                if base_readonly {
+                    base.readonly();
+                }
+                *base.offset() += vmctx_off;
+                let base = base.to_deferred_load(func);
+                let mut len = self.alias_regions.vm_memory_definition().current_length();
+                *len.offset() += vmctx_off;
+                let len = len.to_deferred_load(func);
                 (
-                    VmctxLoadChain::new(smallvec![
-                        self.alias_regions.vmctx_vmmemory_definition_base_load(
-                            func,
-                            owned_index,
-                            base_flags
-                        )
-                    ]),
-                    VmctxLoadChain::new(smallvec![
-                        self.alias_regions
-                            .vmctx_vmmemory_definition_current_length_load(func, owned_index)
-                    ]),
+                    VmctxLoadChain::new(smallvec![base]),
+                    VmctxLoadChain::new(smallvec![len]),
                 )
             }
         } else {
             let mem = self
                 .alias_regions
                 .vmctx_vmmemory_import_from_load(func, index);
+            let mut base = self.alias_regions.vm_memory_definition().base();
+            base.can_move();
+            if base_readonly {
+                base.readonly();
+            }
+            let base = base.to_deferred_load(func);
+            let len = self
+                .alias_regions
+                .vm_memory_definition()
+                .current_length()
+                .to_deferred_load(func);
             (
-                VmctxLoadChain::new(smallvec![
-                    mem,
-                    self.alias_regions
-                        .vmmemory_definition_base_load(func, base_flags),
-                ]),
-                VmctxLoadChain::new(smallvec![
-                    mem,
-                    self.alias_regions
-                        .vmmemory_definition_current_length_load(func),
-                ]),
+                VmctxLoadChain::new(smallvec![mem, base]),
+                VmctxLoadChain::new(smallvec![mem, len]),
             )
         }
     }
@@ -1654,30 +1663,28 @@ impl FuncEnvironment<'_> {
         // A fixed-size table can't be resized, so its base address won't change
         // and its base load is `readonly` and `can_move`.
         let is_static = Some(table.limits.min) == table.limits.max;
-        let mut base_flags = ir::MemFlagsData::trusted();
-        if is_static {
-            base_flags = base_flags.with_readonly().with_can_move();
-        }
 
         if let Some(def_index) = self.module.defined_table_index(index) {
             // A defined table's `VMTableDefinition` is inlined into the vmctx,
             // reached at an absolute `vmctx` offset.
-            let base = VmctxLoadChain::new(smallvec![
-                self.alias_regions
-                    .vmctx_vmtable_definition_base_load(func, def_index, base_flags)
-            ]);
+            let vmctx_off = self.offsets.vmctx_vmtable_definition(def_index);
+            let mut base = self.alias_regions.vm_table_definition().base();
+            if is_static {
+                base.readonly().can_move();
+            }
+            *base.offset() += vmctx_off;
+            let base = VmctxLoadChain::new(smallvec![base.to_deferred_load(func)]);
             let bound = if is_static {
                 TableSize::Static {
                     bound: table.limits.min,
                 }
             } else {
+                let mut current_elements =
+                    self.alias_regions.vm_table_definition().current_elements();
+                current_elements.cast(bound_ty);
+                *current_elements.offset() += vmctx_off;
                 TableSize::Dynamic {
-                    bound: VmctxLoadChain::new(smallvec![
-                        self.alias_regions
-                            .vmctx_vmtable_definition_current_elements_load(
-                                func, def_index, bound_ty
-                            )
-                    ]),
+                    bound: VmctxLoadChain::new(smallvec![current_elements.to_deferred_load(func)]),
                 }
             };
             (base, bound)
@@ -1685,11 +1692,11 @@ impl FuncEnvironment<'_> {
             // An imported table is reached through a `*mut VMTableDefinition`
             // loaded from the `vmctx`.
             let from = self.alias_regions.vmctx_vmtable_from_load(func, index);
-            let base = VmctxLoadChain::new(smallvec![
-                from,
-                self.alias_regions
-                    .vmtable_definition_base_load(func, base_flags),
-            ]);
+            let mut base = self.alias_regions.vm_table_definition().base();
+            if is_static {
+                base.readonly().can_move();
+            }
+            let base = VmctxLoadChain::new(smallvec![from, base.to_deferred_load(func)]);
             let bound = if is_static {
                 TableSize::Static {
                     bound: table.limits.min,
@@ -1699,7 +1706,10 @@ impl FuncEnvironment<'_> {
                     bound: VmctxLoadChain::new(smallvec![
                         from,
                         self.alias_regions
-                            .vmtable_definition_current_elements_load(func, bound_ty),
+                            .vm_table_definition()
+                            .current_elements()
+                            .cast(bound_ty)
+                            .to_deferred_load(func),
                     ]),
                 }
             };
@@ -3505,11 +3515,18 @@ impl FuncEnvironment<'_> {
                     .alias_regions
                     .vmctx_vmmemory_pointer(pos, vmctx, def_index);
                 self.alias_regions
-                    .vmmemory_definition_current_length_atomic(pos, mem_ptr)
+                    .vm_memory_definition()
+                    .current_length()
+                    .load_atomic(pos, mem_ptr)
             } else {
+                // A defined, owned memory's `VMMemoryDefinition` is inlined into
+                // the `vmctx` at an absolute offset.
                 let owned_index = self.module.owned_memory_index(def_index);
-                self.alias_regions
-                    .vmctx_vmmemory_definition_current_length(pos, owned_index, vmctx)
+                let vmctx_off = self.offsets.vmctx_vmmemory_definition(owned_index);
+                let mut len = self.alias_regions.vm_memory_definition().current_length();
+                *len.offset() += vmctx_off;
+                let load = len.to_deferred_load(pos.func);
+                load.emit(pos, vmctx)
             }
         } else {
             let mem_ptr = self
@@ -3517,10 +3534,14 @@ impl FuncEnvironment<'_> {
                 .vmctx_vmmemory_import_from(pos, vmctx, index);
             if is_shared {
                 self.alias_regions
-                    .vmmemory_definition_current_length_atomic(pos, mem_ptr)
+                    .vm_memory_definition()
+                    .current_length()
+                    .load_atomic(pos, mem_ptr)
             } else {
                 self.alias_regions
-                    .vmmemory_definition_current_length(pos, mem_ptr)
+                    .vm_memory_definition()
+                    .current_length()
+                    .load(pos, mem_ptr)
             }
         }
     }
