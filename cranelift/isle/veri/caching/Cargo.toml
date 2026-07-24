@@ -1,0 +1,16 @@
+[package]
+name = "cranelift-isle-veri-caching"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+description = "Transparent caching layer over easy-smt for the ISLE verifier"
+
+[dependencies]
+easy-smt = "0.3.2"
+log = { workspace = true }
+serde = { workspace = true, features = ['derive'] }
+serde_json = { workspace = true }
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile = { workspace = true }

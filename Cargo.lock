@@ -883,6 +883,7 @@ dependencies = [
  "clap",
  "cranelift-codegen-meta",
  "cranelift-isle",
+ "cranelift-isle-veri-caching",
  "cranelift-isle-veri-test-macros",
  "easy-smt",
  "env_logger 0.11.5",
@@ -913,6 +914,18 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "cranelift-isle-veri-caching"
+version = "0.1.0"
+dependencies = [
+ "easy-smt",
+ "log",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]

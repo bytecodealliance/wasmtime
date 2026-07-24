@@ -4,7 +4,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{self, Duration},
 };
 
@@ -13,6 +13,7 @@ use cranelift_isle::{
     sema::{Term, TermId},
     trie_again::RuleSet,
 };
+use cranelift_isle_veri_caching::{self as caching, Cache};
 use rayon::prelude::*;
 use serde::Serialize;
 
@@ -496,6 +497,9 @@ pub struct Runner {
     skip_solver: bool,
     results_to_log_dir: bool,
     debug: bool,
+
+    /// Shared cache of SMT query results (None = no caching).
+    cache: Option<Arc<Cache>>,
 }
 
 impl Runner {
@@ -515,6 +519,7 @@ impl Runner {
             results_to_log_dir: false,
             skip_solver: false,
             debug: false,
+            cache: None,
         })
     }
 
@@ -603,6 +608,11 @@ impl Runner {
 
     pub fn debug(&mut self, debug: bool) {
         self.debug = debug;
+    }
+
+    /// Enable caching with the given cache.
+    pub fn set_cache(&mut self, cache: Arc<Cache>) {
+        self.cache = Some(cache);
     }
 
     pub fn run(&self) -> Result<RunSummary> {
@@ -932,6 +942,11 @@ impl Runner {
         // fails below.
         summary.print();
 
+        // Print cache stats if caching is enabled.
+        if let Some(cache) = &self.cache {
+            cache.print_stats();
+        }
+
         // Verification failures and un-processable expansions are both overall
         // errors so that callers (the `veri` binary and tests) observe them via
         // the returned `Result`.
@@ -1199,15 +1214,22 @@ impl Runner {
     ) -> Result<VerifyReport> {
         let start = time::Instant::now();
 
-        // Solve.
+        // Build the SMT context through the caching layer: commands are
+        // recorded as they are issued, queries are answered from the cache
+        // when possible, and a solver subprocess is spawned — with the
+        // recorded state played into it — only on a cache miss.
         let binary = solver_backend.prog();
         let args = solver_backend.args(self.timeout);
         let replay_file = Self::open_log_file(log_dir.clone(), "solver.smt2")?;
-        let smt = easy_smt::ContextBuilder::new()
+        let mut smt_builder = caching::ContextBuilder::new();
+        smt_builder
             .solver(binary)
             .solver_args(&args)
-            .replay_file(Some(replay_file))
-            .build()?;
+            .replay_file(Some(replay_file));
+        if let Some(cache) = &self.cache {
+            smt_builder.cache(cache.clone());
+        }
+        let smt = smt_builder.build()?;
 
         let mut solver = Solver::new(smt, &self.prog, conditions, assignment)?;
         solver.set_dialect(solver_backend.dialect());
