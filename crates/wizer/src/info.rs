@@ -6,7 +6,7 @@ use std::ops::Range;
 ///
 /// These are created during our `parse` pass and then used throughout
 /// our later passes.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ModuleContext<'a> {
     /// The raw sections from the original Wasm input.
     raw_sections: Vec<wasm_encoder::RawSection<'a>>,

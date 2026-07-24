@@ -5,7 +5,7 @@ use std::collections::HashMap;
 /// [`Wizer::instrument_component`].
 ///
 /// [`Wizer::instrument_component`]: crate::Wizer::instrument_component
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ComponentContext<'a> {
     /// Sections of the component, which are either raw bytes or a parsed module
     /// using `ModuleContext`.
@@ -31,6 +31,7 @@ pub struct ComponentContext<'a> {
 }
 
 /// Generated accessors during instrumentation and the metadata about them.
+#[derive(Clone)]
 pub(crate) enum Accessor {
     /// This accessor retrieves the value of a wasm global.
     Global {
@@ -64,6 +65,7 @@ pub(crate) enum Accessor {
 }
 
 /// A section of a component, learned during parsing.
+#[derive(Clone)]
 pub(crate) enum RawSection<'a> {
     /// A non-module section, whose raw contents are stored here.
     Raw(wasm_encoder::RawSection<'a>),
