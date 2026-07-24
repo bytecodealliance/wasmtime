@@ -783,64 +783,39 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
-            let pointer_type = env.pointer_type();
-            let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
-            let last_wasm_entry_fp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_fp();
-            let last_wasm_entry_sp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_sp();
-            let last_wasm_entry_trap_handler_offset = env
-                .offsets
-                .ptr
-                .vmstack_limits_last_wasm_entry_trap_handler();
-
             // The load side reads this continuation's inline `VMStackLimits`
             // (the `VMContRef` region); the store side targets the
             // `VMStoreContext`.
-            let vmcontref_region = env.alias_regions.vmcontref_region(builder.func);
-            let our_memflags =
-                ir::MemFlagsData::trusted().with_alias_region(Some(vmcontref_region));
-
-            let stack_limit = builder.ins().load(
-                pointer_type,
-                our_memflags,
-                stack_limits_ptr,
-                i32::from(stack_limit_offset),
-            );
+            let stack_limit = env
+                .alias_regions
+                .stack_limit(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions.store_vmstore_context_stack_limit(
                 &mut builder.cursor(),
                 vmruntime_limits_ptr,
                 stack_limit,
             );
 
-            let last_wasm_entry_fp = builder.ins().load(
-                pointer_type,
-                our_memflags,
-                stack_limits_ptr,
-                i32::from(last_wasm_entry_fp_offset),
-            );
+            let last_wasm_entry_fp = env
+                .alias_regions
+                .last_wasm_entry_fp(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions.store_vmstore_context_last_wasm_entry_fp(
                 &mut builder.cursor(),
                 vmruntime_limits_ptr,
                 last_wasm_entry_fp,
             );
 
-            let last_wasm_entry_sp = builder.ins().load(
-                pointer_type,
-                our_memflags,
-                stack_limits_ptr,
-                i32::from(last_wasm_entry_sp_offset),
-            );
+            let last_wasm_entry_sp = env
+                .alias_regions
+                .last_wasm_entry_sp(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions.store_vmstore_context_last_wasm_entry_sp(
                 &mut builder.cursor(),
                 vmruntime_limits_ptr,
                 last_wasm_entry_sp,
             );
 
-            let last_wasm_entry_trap_handler = builder.ins().load(
-                pointer_type,
-                our_memflags,
-                stack_limits_ptr,
-                i32::from(last_wasm_entry_trap_handler_offset),
-            );
+            let last_wasm_entry_trap_handler = env
+                .alias_regions
+                .last_wasm_entry_trap_handler(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions
                 .store_vmstore_context_last_wasm_entry_trap_handler(
                     &mut builder.cursor(),
