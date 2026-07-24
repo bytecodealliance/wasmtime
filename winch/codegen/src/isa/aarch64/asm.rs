@@ -627,6 +627,22 @@ impl Assembler {
         });
     }
 
+    /// Load a scalar and replicate it into all vector lanes.
+    pub fn vec_load_replicate(
+        &mut self,
+        rn: Reg,
+        rd: WritableReg,
+        size: VectorSize,
+        flags: MemFlagsData,
+    ) {
+        self.emit(Inst::VecLoadReplicate {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+            flags,
+        });
+    }
+
     /// Vector ALU op
     pub fn vec_rrr(
         &mut self,

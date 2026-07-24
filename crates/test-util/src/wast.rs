@@ -532,6 +532,10 @@ impl WastTest {
                 "misc_testsuite/winch/issue-10331.wast",
                 "misc_testsuite/int-to-float-splat.wast",
                 "misc_testsuite/simd/cvt-from-uint.wast",
+                "misc_testsuite/memory64/simd.wast",
+                "misc_testsuite/simd/load_splat_out_of_bounds.wast",
+                "misc_testsuite/simd/edge-of-memory.wast",
+                "misc_testsuite/issue6562.wast",
             ];
             if now_supported.iter().any(|part| self.path.ends_with(part)) {
                 return false;

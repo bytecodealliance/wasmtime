@@ -18,12 +18,13 @@ use crate::{
     },
     masm::{
         CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch,
-        Imm as I, IntCmpKind, IntScratch, LoadKind, MacroAssembler as Masm, MulWideKind,
-        OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, Scratch,
-        ScratchType, ShiftKind, SplatKind, StackSlot, StoreKind, TRUSTED_FLAGS, TrapCode,
-        TruncKind, UNTRUSTED_FLAGS, V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind,
-        V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind,
-        V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
+        Imm as I, IntCmpKind, IntScratch, LaneSelector, LoadKind, MacroAssembler as Masm,
+        MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset,
+        Scratch, ScratchType, ShiftKind, SplatKind, SplatLoadKind, StackSlot, StoreKind,
+        TRUSTED_FLAGS, TrapCode, TruncKind, UNTRUSTED_FLAGS, V128AbsKind, V128AddKind,
+        V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128LoadExtendKind,
+        V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind, V128SubKind,
+        V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
     },
     stack::{TypedReg, Val},
 };
@@ -392,9 +393,14 @@ impl Masm for MacroAssembler {
             StoreKind::Atomic(_size) => {
                 Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
             }
-            StoreKind::VectorLane(_selector) => {
-                Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
-            }
+            StoreKind::VectorLane(LaneSelector { lane, size }) => masm
+                .with_scratch::<IntScratch, _>(|masm, scratch| {
+                    masm.asm.mov_from_vec(src, scratch.writable(), lane, size);
+                    dst.to_addressing_mode(masm, size, |masm, mem| {
+                        masm.asm.str(scratch.inner(), mem, size, UNTRUSTED_FLAGS);
+                        Ok(())
+                    })
+                }),
         })
     }
 
@@ -443,10 +449,25 @@ impl Masm for MacroAssembler {
     fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
         let size = kind.derive_operand_size();
         self.with_aligned_sp(|masm| match &kind {
-            LoadKind::Operand(_) => src.to_addressing_mode(masm, size, |masm, mem| {
-                Ok(masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS))
-            }),
-            LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
+            // Scalar loads into a vector register zero the unused upper bits,
+            // which is exactly the semantics `VectorZero` requires.
+            LoadKind::Operand(_) | LoadKind::VectorZero(_) => {
+                src.to_addressing_mode(masm, size, |masm, mem| {
+                    Ok(masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS))
+                })
+            }
+            LoadKind::Splat(splat_load_kind) => {
+                let vector_size = match splat_load_kind {
+                    SplatLoadKind::S8 => VectorSize::Size8x16,
+                    SplatLoadKind::S16 => VectorSize::Size16x8,
+                    SplatLoadKind::S32 => VectorSize::Size32x4,
+                    SplatLoadKind::S64 => VectorSize::Size64x2,
+                };
+                let (base, _) = src.unwrap_offset();
+                masm.asm
+                    .vec_load_replicate(base, dst, vector_size, UNTRUSTED_FLAGS);
+                Ok(())
+            }
             LoadKind::ScalarExtend(extend_kind) => {
                 if extend_kind.signed() {
                     src.to_addressing_mode(masm, size, |masm, mem| {
@@ -461,16 +482,41 @@ impl Masm for MacroAssembler {
                     })
                 }
             }
-            LoadKind::VectorExtend(_vector_extend_kind) => {
-                bail!(CodeGenError::UnimplementedWasmLoadKind)
+            LoadKind::VectorExtend(extend_kind) => {
+                let (op, lane_size) = match extend_kind {
+                    V128LoadExtendKind::E8x8S => (VecExtendOp::Sxtl, ScalarSize::Size16),
+                    V128LoadExtendKind::E8x8U => (VecExtendOp::Uxtl, ScalarSize::Size16),
+                    V128LoadExtendKind::E16x4S => (VecExtendOp::Sxtl, ScalarSize::Size32),
+                    V128LoadExtendKind::E16x4U => (VecExtendOp::Uxtl, ScalarSize::Size32),
+                    V128LoadExtendKind::E32x2S => (VecExtendOp::Sxtl, ScalarSize::Size64),
+                    V128LoadExtendKind::E32x2U => (VecExtendOp::Uxtl, ScalarSize::Size64),
+                };
+                src.to_addressing_mode(masm, size, |masm, mem| {
+                    masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS);
+                    masm.asm.vec_extend(op, dst.to_reg(), dst, false, lane_size);
+                    Ok(())
+                })
             }
-            LoadKind::VectorLane(_selector) => {
-                bail!(CodeGenError::unimplemented_masm_instruction())
+            LoadKind::VectorLane(LaneSelector { lane, size }) => {
+                let vector_size = match size {
+                    OperandSize::S8 => VectorSize::Size8x16,
+                    OperandSize::S16 => VectorSize::Size16x8,
+                    OperandSize::S32 => VectorSize::Size32x4,
+                    OperandSize::S64 => VectorSize::Size64x2,
+                    _ => bail!(CodeGenError::unexpected_operand_size()),
+                };
+                masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    src.to_addressing_mode(masm, *size, |masm, mem| {
+                        masm.asm
+                            .uload(mem, scratch.writable(), *size, UNTRUSTED_FLAGS);
+                        Ok(())
+                    })?;
+                    masm.asm
+                        .mov_to_vec(scratch.inner(), dst, *lane, vector_size);
+                    Ok(())
+                })
             }
             LoadKind::Atomic(_, _) => bail!(CodeGenError::unimplemented_masm_instruction()),
-            LoadKind::VectorZero(_size) => {
-                bail!(CodeGenError::UnimplementedWasmLoadKind)
-            }
         })
     }
 
