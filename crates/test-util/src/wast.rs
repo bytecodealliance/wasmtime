@@ -531,6 +531,8 @@ impl WastTest {
                 "misc_testsuite/simd/edge-of-memory.wast",
                 "misc_testsuite/issue6562.wast",
                 "misc_testsuite/simd/almost-extmul.wast",
+                "misc_testsuite/simd/sse-cannot-fold-unaligned-loads.wast",
+                "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
             ];
             if now_supported.iter().any(|part| self.path.ends_with(part)) {
                 return false;
