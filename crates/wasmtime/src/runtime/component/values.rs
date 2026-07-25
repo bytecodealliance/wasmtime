@@ -367,7 +367,7 @@ impl Val {
                 match number_elements.checked_mul(element_size) {
                     Some(total_size) if total_size <= bytes.len() => {
                         cx.consume_fuel_array(number_elements, size_of::<Val>())?;
-                        Val::Tuple(
+                        Val::FixedLengthList(
                             (0..number_elements)
                                 .map(|n| {
                                     // the match already checked that the whole array fits into usize
