@@ -6,7 +6,10 @@ use cranelift_module::{ModuleError, ModuleReloc, ModuleRelocTarget, ModuleResult
 use crate::JITMemoryProvider;
 use crate::memory::JITMemoryKind;
 
-const VENEER_SIZE: usize = 24; // ldr + br + pointer
+/// Size reserved per veneer. This is exactly the size of the largest veneer:
+/// 16 bytes on AArch64 (`ldr` + `br` + 8-byte target address). The x86_64
+/// veneer is 14 bytes (`jmp qword ptr [rip]` + 8-byte target address).
+const VENEER_SIZE: usize = 16;
 
 /// Reads a 32bit instruction at `iptr`, and writes it again after
 /// being altered by `modifier`
@@ -37,11 +40,12 @@ impl CompiledBlob {
         #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
         kind: JITMemoryKind,
     ) -> ModuleResult<Self> {
-        // Reserve veneers for all function calls just in case
+        // Reserve a worst-case veneer slot for every branch relocation in
+        // case its target is out of range.
         let mut veneer_count = 0;
         for reloc in &relocs {
             match reloc.kind {
-                Reloc::Arm64Call => veneer_count += 1,
+                Reloc::Arm64Call | Reloc::X86CallPCRel4 => veneer_count += 1,
                 _ => {}
             }
         }
@@ -137,10 +141,42 @@ impl CompiledBlob {
                     let what = relocation_target_addr(name, addend);
                     unsafe { write_unaligned(at as *mut u64, u64::try_from(what).unwrap()) };
                 }
-                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
+                Reloc::X86PCRel4 => {
                     let what = relocation_target_addr(name, addend);
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
+                }
+                Reloc::X86CallPCRel4 => {
+                    // This relocation is applied to the 32-bit displacement of a `call` or
+                    // `jmp` instruction, which is relative to the end of the instruction,
+                    // i.e. 4 bytes past `at`. The addend (always -4 as emitted by the x64
+                    // backend) accounts for this, so the instruction transfers control to
+                    // `what + 4`.
+                    let what = relocation_target_addr(name, addend);
+                    if let Ok(pcrel) = i32::try_from((what as isize) - (at as isize)) {
+                        unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    } else {
+                        // The target is out of range for the 32-bit displacement, so
+                        // redirect the call through a veneer at the end of the function,
+                        // just like for `Arm64Call` below: `jmp qword ptr [rip]` followed
+                        // by the absolute target address.
+                        let veneer_idx = next_veneer_idx;
+                        next_veneer_idx += 1;
+                        assert!(veneer_idx < self.veneer_count);
+                        let veneer =
+                            unsafe { self.ptr.byte_add(self.size + veneer_idx * VENEER_SIZE) };
+
+                        let target = u64::try_from(what.checked_add(4).unwrap()).unwrap();
+                        unsafe {
+                            ptr::copy_nonoverlapping([0xff, 0x25, 0, 0, 0, 0].as_ptr(), veneer, 6);
+                            write_unaligned(veneer.byte_add(6).cast::<u64>(), target);
+                        }
+
+                        // Point the original instruction at the veneer instead; the
+                        // displacement is again relative to the end of the 4-byte field.
+                        let pcrel = i32::try_from((veneer as isize) - (at as isize) - 4).unwrap();
+                        unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    }
                 }
                 Reloc::X86GOTPCRel4 => {
                     panic!("GOT relocation shouldn't be generated when !is_pic");
@@ -176,7 +212,7 @@ impl CompiledBlob {
                         // end of the function.
                         let veneer_idx = next_veneer_idx;
                         next_veneer_idx += 1;
-                        assert!(veneer_idx <= self.veneer_count);
+                        assert!(veneer_idx < self.veneer_count);
                         let veneer =
                             unsafe { self.ptr.byte_add(self.size + veneer_idx * VENEER_SIZE) };
 

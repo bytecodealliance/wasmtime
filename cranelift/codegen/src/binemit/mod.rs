@@ -26,7 +26,13 @@ pub enum Reloc {
     Abs8,
     /// x86 PC-relative 4-byte
     X86PCRel4,
-    /// x86 call to PC-relative 4-byte
+    /// x86 call to PC-relative 4-byte.
+    ///
+    /// This relocation is only ever applied to the displacement of a `call`
+    /// or `jmp` instruction, never to address materialization (e.g. `lea`,
+    /// which uses [`Reloc::X86PCRel4`] instead). Consumers may therefore
+    /// redirect the control transfer through a veneer when the target is out
+    /// of range of the 32-bit displacement, as `cranelift-jit` does.
     X86CallPCRel4,
     /// x86 call to PLT-relative 4-byte
     X86CallPLTRel4,
