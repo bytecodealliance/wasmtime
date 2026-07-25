@@ -80,7 +80,12 @@ fn host_trap() -> Result<()> {
     bail!("intentional host trap")
 }
 
+// TODO(dhil): Enable ASAN. ASAN produces a false positive here,
+// because ASAN thinks the thread is on the default stack. We need to
+// instrument the stack switching runtime to inform ASAN about the
+// switching of stacks.
 #[test]
+#[cfg_attr(any(asan, miri), ignore)]
 fn traps_cross_continuation_stacks_and_host_frames() -> Result<()> {
     let mut config = Config::new();
     config.wasm_stack_switching(true);
@@ -134,7 +139,9 @@ struct CatchState {
     error: Option<Error>,
 }
 
+// TODO(dhil): Enable ASAN.
 #[test]
+#[cfg_attr(any(asan, miri), ignore)]
 fn parent_frames_resume_after_host_catches_trap() -> Result<()> {
     let mut config = Config::new();
     config.wasm_stack_switching(true);
