@@ -35,6 +35,20 @@ block0(v0: i8):
 ; run: %select_i8(2) == 42
 ; run: %select_i8(-1) == 42
 
+function %select_i128_cond(i64, i64) -> i32 {
+block0(v0: i64, v1: i64):
+    v2 = iconcat v0, v1
+    v3 = iconst.i32 42
+    v4 = iconst.i32 97
+    v5 = select v2, v3, v4
+    return v5
+}
+; run: %select_i128_cond(0, 0) == 97
+; run: %select_i128_cond(1, 0) == 42
+; run: %select_i128_cond(0, 1) == 42
+; run: %select_i128_cond(0, 0x80000000_00000000) == 42
+; run: %select_i128_cond(-1, -1) == 42
+
 function %select_ne_f64(f64, f64) -> i32 {
 block0(v0: f64, v1: f64):
     v2 = fcmp ne v0, v1

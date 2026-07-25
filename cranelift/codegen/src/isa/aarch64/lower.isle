@@ -1574,7 +1574,7 @@
 ;; Shift for vector types.
 (rule -3 (lower (ishl (ty_vec128 ty) x y))
       (let ((size VectorSize (vector_size ty))
-            (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
+            (masked_shift_amt Reg (and_imm $I32 (lo_reg y) (shift_mask ty)))
             (shift Reg (vec_dup masked_shift_amt size)))
         (sshl x shift size)))
 (rule -2 (lower (ishl (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
@@ -1645,7 +1645,7 @@
 ;; the input anyway.
 (rule -4 (lower (ushr (ty_vec128 ty) x y))
       (let ((size VectorSize (vector_size ty))
-            (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
+            (masked_shift_amt Reg (and_imm $I32 (lo_reg y) (shift_mask ty)))
             (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (ushl x shift size)))
 (rule -3 (lower (ushr (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
@@ -1703,7 +1703,7 @@
 ;; input anyway.
 (rule -3 (lower (sshr (ty_vec128 ty) x y))
       (let ((size VectorSize (vector_size ty))
-            (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
+            (masked_shift_amt Reg (and_imm $I32 (lo_reg y) (shift_mask ty)))
             (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (sshl x shift size)))
 (rule -2 (lower (sshr (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))

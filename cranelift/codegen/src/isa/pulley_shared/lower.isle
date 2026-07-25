@@ -18,6 +18,10 @@
 (rule 0 (lower_cond val @ (value_type (fits_in_32 _))) (Cond.If32 (zext32 val)))
 (rule 1 (lower_cond val @ (value_type $I64))
   (Cond.IfXneq64I32 val 0))
+(rule 1 (lower_cond val @ (value_type $I128))
+  (Cond.IfXneq64I32 (pulley_xbor64 (value_regs_get val 0)
+                                   (value_regs_get val 1))
+                    0))
 
 ;; Peel away explicit `uextend` values to take a look at the inner value.
 (rule 2 (lower_cond (uextend _ val)) (lower_cond val))
@@ -495,16 +499,16 @@
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (ishl $I8 a b))
-  (pulley_xshl32 a (pulley_xband32_s8 b 7)))
+  (pulley_xshl32 a (pulley_xband32_s8 (lo_xreg b) 7)))
 
 (rule (lower (ishl $I16 a b))
-  (pulley_xshl32 a (pulley_xband32_s8 b 15)))
+  (pulley_xshl32 a (pulley_xband32_s8 (lo_xreg b) 15)))
 
 (rule (lower (ishl $I32 a b))
-  (pulley_xshl32 a b))
+  (pulley_xshl32 a (lo_xreg b)))
 
 (rule (lower (ishl $I64 a b))
-  (pulley_xshl64 a b))
+  (pulley_xshl64 a (lo_xreg b)))
 
 ;; Special-case constant shift amounts.
 (rule 1 (lower (ishl $I32 a b))
@@ -516,10 +520,10 @@
 
 ;; vector shifts
 
-(rule (lower (ishl $I8X16 a b)) (pulley_vshli8x16 a b))
-(rule (lower (ishl $I16X8 a b)) (pulley_vshli16x8 a b))
-(rule (lower (ishl $I32X4 a b)) (pulley_vshli32x4 a b))
-(rule (lower (ishl $I64X2 a b)) (pulley_vshli64x2 a b))
+(rule (lower (ishl $I8X16 a b)) (pulley_vshli8x16 a (lo_xreg b)))
+(rule (lower (ishl $I16X8 a b)) (pulley_vshli16x8 a (lo_xreg b)))
+(rule (lower (ishl $I32X4 a b)) (pulley_vshli32x4 a (lo_xreg b)))
+(rule (lower (ishl $I64X2 a b)) (pulley_vshli64x2 a (lo_xreg b)))
 
 ;; Helper to extract a constant from `Value`, mask it to 6 bits, and then make a
 ;; `U6`.
@@ -534,16 +538,16 @@
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (ushr $I8 a b))
-  (pulley_xshr32_u (zext32 a) (pulley_xband32_s8 b 7)))
+  (pulley_xshr32_u (zext32 a) (pulley_xband32_s8 (lo_xreg b) 7)))
 
 (rule (lower (ushr $I16 a b))
-  (pulley_xshr32_u (zext32 a) (pulley_xband32_s8 b 15)))
+  (pulley_xshr32_u (zext32 a) (pulley_xband32_s8 (lo_xreg b) 15)))
 
 (rule (lower (ushr $I32 a b))
-  (pulley_xshr32_u a b))
+  (pulley_xshr32_u a (lo_xreg b)))
 
 (rule (lower (ushr $I64 a b))
-  (pulley_xshr64_u a b))
+  (pulley_xshr64_u a (lo_xreg b)))
 
 ;; Special-case constant shift amounts.
 (rule 1 (lower (ushr $I32 a b))
@@ -555,24 +559,24 @@
 
 ;; vector shifts
 
-(rule (lower (ushr $I8X16 a b)) (pulley_vshri8x16_u a b))
-(rule (lower (ushr $I16X8 a b)) (pulley_vshri16x8_u a b))
-(rule (lower (ushr $I32X4 a b)) (pulley_vshri32x4_u a b))
-(rule (lower (ushr $I64X2 a b)) (pulley_vshri64x2_u a b))
+(rule (lower (ushr $I8X16 a b)) (pulley_vshri8x16_u a (lo_xreg b)))
+(rule (lower (ushr $I16X8 a b)) (pulley_vshri16x8_u a (lo_xreg b)))
+(rule (lower (ushr $I32X4 a b)) (pulley_vshri32x4_u a (lo_xreg b)))
+(rule (lower (ushr $I64X2 a b)) (pulley_vshri64x2_u a (lo_xreg b)))
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (sshr $I8 a b))
-  (pulley_xshr32_u (sext32 a) (pulley_xband32_s8 b 7)))
+  (pulley_xshr32_u (sext32 a) (pulley_xband32_s8 (lo_xreg b) 7)))
 
 (rule (lower (sshr $I16 a b))
-  (pulley_xshr32_u (sext32 a) (pulley_xband32_s8 b 15)))
+  (pulley_xshr32_u (sext32 a) (pulley_xband32_s8 (lo_xreg b) 15)))
 
 (rule (lower (sshr $I32 a b))
-  (pulley_xshr32_s a b))
+  (pulley_xshr32_s a (lo_xreg b)))
 
 (rule (lower (sshr $I64 a b))
-  (pulley_xshr64_s a b))
+  (pulley_xshr64_s a (lo_xreg b)))
 
 ;; Special-case constant shift amounts.
 (rule 1 (lower (sshr $I32 a b))
@@ -584,10 +588,10 @@
 
 ;; vector shifts
 
-(rule (lower (sshr $I8X16 a b)) (pulley_vshri8x16_s a b))
-(rule (lower (sshr $I16X8 a b)) (pulley_vshri16x8_s a b))
-(rule (lower (sshr $I32X4 a b)) (pulley_vshri32x4_s a b))
-(rule (lower (sshr $I64X2 a b)) (pulley_vshri64x2_s a b))
+(rule (lower (sshr $I8X16 a b)) (pulley_vshri8x16_s a (lo_xreg b)))
+(rule (lower (sshr $I16X8 a b)) (pulley_vshri16x8_s a (lo_xreg b)))
+(rule (lower (sshr $I32X4 a b)) (pulley_vshri32x4_s a (lo_xreg b)))
+(rule (lower (sshr $I64X2 a b)) (pulley_vshri64x2_s a (lo_xreg b)))
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -727,13 +731,13 @@
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (rotl $I32 a b)) (pulley_xrotl32 a b))
-(rule (lower (rotl $I64 a b)) (pulley_xrotl64 a b))
+(rule (lower (rotl $I32 a b)) (pulley_xrotl32 a (lo_xreg b)))
+(rule (lower (rotl $I64 a b)) (pulley_xrotl64 a (lo_xreg b)))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (rotr $I32 a b)) (pulley_xrotr32 a b))
-(rule (lower (rotr $I64 a b)) (pulley_xrotr64 a b))
+(rule (lower (rotr $I32 a b)) (pulley_xrotr32 a (lo_xreg b)))
+(rule (lower (rotr $I64 a b)) (pulley_xrotr64 a (lo_xreg b)))
 
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
