@@ -10,8 +10,14 @@ use cranelift_module::*;
 fn isa() -> Option<OwnedTargetIsa> {
     let mut flag_builder = settings::builder();
     flag_builder.set("use_colocated_libcalls", "false").unwrap();
-    // FIXME set back to true once the x64 backend supports it.
-    flag_builder.set("is_pic", "false").unwrap();
+    // PIC is only supported by the JIT on x86_64, where it routes symbol
+    // address materialization through per-blob GOT entries.
+    let is_pic = if cfg!(target_arch = "x86_64") {
+        "true"
+    } else {
+        "false"
+    };
+    flag_builder.set("is_pic", is_pic).unwrap();
     let isa_builder = cranelift_native::builder().ok()?;
     isa_builder.finish(settings::Flags::new(flag_builder)).ok()
 }
@@ -220,27 +226,18 @@ fn empty_data_object() {
     module.define_data(data_id, &data).unwrap();
 }
 
-/// Reproduces a bug where a `call` or `jmp` between two functions of the same
-/// module that happen to be placed further than ±2 GiB apart panicked while
-/// applying the `X86CallPCRel4` relocation, instead of routing the control
-/// transfer through a veneer like AArch64 already did for `Arm64Call`.
 #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
-#[test]
-fn far_x86_control_transfers_use_veneers() {
-    use std::alloc::{Layout, alloc_zeroed, dealloc};
+mod far_x86_memory {
     use std::collections::VecDeque;
     use std::io;
-    use std::mem;
     use std::ptr;
     use std::sync::{Arc, Mutex};
 
-    use cranelift_codegen::binemit::Reloc;
+    use cranelift_jit::{BranchProtection, JITMemoryKind, JITMemoryProvider};
+    use cranelift_module::ModuleResult;
 
-    const VENEER_SIZE: usize = 16;
+    pub(super) const VENEER_SIZE: usize = 16;
 
-    /// A large (a bit more than 2 GiB) virtual memory reservation that
-    /// executable allocations are carved out of, so that functions can
-    /// deterministically be placed out of `rel32` range of each other.
     struct ReservedAddressSpace {
         base: usize,
         len: usize,
@@ -281,21 +278,98 @@ fn far_x86_control_transfers_use_veneers() {
     }
 
     #[derive(Clone, Copy)]
-    enum Placement {
+    pub(super) enum Placement {
         Low,
         High,
     }
 
-    /// A memory provider which places each executable allocation at the next
-    /// page on the requested side of the reserved address space.
-    struct FarMemoryProvider {
+    #[derive(Clone, Copy)]
+    enum FinalProtection {
+        ReadExecute,
+        ReadOnly,
+        ReadWrite,
+    }
+
+    struct Allocation {
+        addr: usize,
+        len: usize,
+        final_protection: FinalProtection,
+    }
+
+    /// Places JIT allocations at predetermined ends of a virtual address
+    /// reservation so tests can deterministically exceed `rel32` range.
+    pub(super) struct FarMemoryProvider {
         space: ReservedAddressSpace,
-        placements: VecDeque<Placement>,
+        executable_placements: VecDeque<Placement>,
+        readonly_placements: VecDeque<Placement>,
+        writable_placements: VecDeque<Placement>,
         low_offset: usize,
         high_offset: usize,
-        exec_allocs: Vec<(usize, usize)>,
-        heap_allocs: Vec<(usize, Layout)>,
+        allocations: Vec<Allocation>,
         requested_exec_sizes: Arc<Mutex<Vec<usize>>>,
+    }
+
+    impl FarMemoryProvider {
+        pub(super) fn new(
+            executable_placements: impl IntoIterator<Item = Placement>,
+            readonly_placements: impl IntoIterator<Item = Placement>,
+        ) -> (Self, Arc<Mutex<Vec<usize>>>) {
+            let space = ReservedAddressSpace::new();
+            let high_offset = space.len;
+            let requested_exec_sizes = Arc::new(Mutex::new(Vec::new()));
+            (
+                Self {
+                    space,
+                    executable_placements: executable_placements.into_iter().collect(),
+                    readonly_placements: readonly_placements.into_iter().collect(),
+                    writable_placements: VecDeque::new(),
+                    low_offset: 0,
+                    high_offset,
+                    allocations: Vec::new(),
+                    requested_exec_sizes: Arc::clone(&requested_exec_sizes),
+                },
+                requested_exec_sizes,
+            )
+        }
+
+        fn allocate_at(
+            &mut self,
+            size: usize,
+            align: u64,
+            placement: Placement,
+            final_protection: FinalProtection,
+        ) -> io::Result<*mut u8> {
+            assert!(usize::try_from(align).unwrap() <= self.space.page_size);
+            let len = size
+                .next_multiple_of(self.space.page_size)
+                .max(self.space.page_size);
+            let addr = match placement {
+                Placement::Low => {
+                    let addr = self.space.base + self.low_offset;
+                    self.low_offset += len;
+                    addr
+                }
+                Placement::High => {
+                    self.high_offset -= len;
+                    self.space.base + self.high_offset
+                }
+            };
+            assert!(self.low_offset <= self.high_offset);
+            let result = unsafe {
+                libc::mprotect(
+                    addr as *mut libc::c_void,
+                    len,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                )
+            };
+            assert_eq!(result, 0);
+            self.allocations.push(Allocation {
+                addr,
+                len,
+                final_protection,
+            });
+            Ok(addr as *mut u8)
+        }
     }
 
     impl JITMemoryProvider for FarMemoryProvider {
@@ -305,70 +379,49 @@ fn far_x86_control_transfers_use_veneers() {
             align: u64,
             kind: JITMemoryKind,
         ) -> io::Result<*mut u8> {
-            match kind {
+            let (placement, final_protection) = match kind {
                 JITMemoryKind::Executable => {
-                    assert!(usize::try_from(align).unwrap() <= self.space.page_size);
                     self.requested_exec_sizes.lock().unwrap().push(size);
-                    let len = size
-                        .next_multiple_of(self.space.page_size)
-                        .max(self.space.page_size);
-                    let placement = self
-                        .placements
+                    (
+                        self.executable_placements
+                            .pop_front()
+                            .expect("placement for every executable allocation"),
+                        FinalProtection::ReadExecute,
+                    )
+                }
+                JITMemoryKind::Writable => (
+                    self.writable_placements
                         .pop_front()
-                        .expect("placement for every executable allocation");
-                    let addr = match placement {
-                        Placement::Low => {
-                            let addr = self.space.base + self.low_offset;
-                            self.low_offset += len;
-                            addr
-                        }
-                        Placement::High => {
-                            self.high_offset -= len;
-                            self.space.base + self.high_offset
-                        }
-                    };
-                    assert!(self.low_offset <= self.high_offset);
-                    let result = unsafe {
-                        libc::mprotect(
-                            addr as *mut libc::c_void,
-                            len,
-                            libc::PROT_READ | libc::PROT_WRITE,
-                        )
-                    };
-                    assert_eq!(result, 0);
-                    self.exec_allocs.push((addr, len));
-                    Ok(addr as *mut u8)
-                }
-                _ => {
-                    let align = usize::try_from(align).map_err(io::Error::other)?;
-                    let layout = Layout::from_size_align(size.max(1), align.max(1))
-                        .map_err(io::Error::other)?;
-                    let ptr = unsafe { alloc_zeroed(layout) };
-                    if ptr.is_null() {
-                        return Err(io::Error::other("JIT allocation failed"));
-                    }
-                    self.heap_allocs.push((ptr.addr(), layout));
-                    Ok(ptr)
-                }
-            }
+                        .expect("placement for every writable allocation"),
+                    FinalProtection::ReadWrite,
+                ),
+                JITMemoryKind::ReadOnly => (
+                    self.readonly_placements
+                        .pop_front()
+                        .expect("placement for every read-only allocation"),
+                    FinalProtection::ReadOnly,
+                ),
+            };
+            self.allocate_at(size, align, placement, final_protection)
         }
 
         unsafe fn free_memory(&mut self) {
-            for (address, layout) in self.heap_allocs.drain(..) {
-                unsafe { dealloc(address as *mut u8, layout) };
-            }
-            // Executable allocations are freed all at once when the reserved
-            // address space is unmapped on drop.
-            self.exec_allocs.clear();
+            // All allocations are freed together when `space` is unmapped.
+            self.allocations.clear();
         }
 
         fn finalize(&mut self, _branch_protection: BranchProtection) -> ModuleResult<()> {
-            for &(addr, len) in &self.exec_allocs {
+            for allocation in &self.allocations {
+                let protection = match allocation.final_protection {
+                    FinalProtection::ReadExecute => libc::PROT_READ | libc::PROT_EXEC,
+                    FinalProtection::ReadOnly => libc::PROT_READ,
+                    FinalProtection::ReadWrite => libc::PROT_READ | libc::PROT_WRITE,
+                };
                 let result = unsafe {
                     libc::mprotect(
-                        addr as *mut libc::c_void,
-                        len,
-                        libc::PROT_READ | libc::PROT_EXEC,
+                        allocation.addr as *mut libc::c_void,
+                        allocation.len,
+                        protection,
                     )
                 };
                 assert_eq!(result, 0);
@@ -376,31 +429,36 @@ fn far_x86_control_transfers_use_veneers() {
             Ok(())
         }
     }
+}
 
-    let space = ReservedAddressSpace::new();
-    let high_offset = space.len;
-    let requested_exec_sizes = Arc::new(Mutex::new(Vec::new()));
+/// Reproduces a bug where a `call` or `jmp` between two functions of the same
+/// module that happen to be placed further than ±2 GiB apart panicked while
+/// applying the `X86CallPCRel4` relocation, instead of routing the control
+/// transfer through a veneer like AArch64 already did for `Arm64Call`.
+#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[test]
+fn far_x86_control_transfers_use_veneers() {
+    use std::mem;
+
+    use cranelift_codegen::binemit::Reloc;
+
+    use far_x86_memory::{FarMemoryProvider, Placement, VENEER_SIZE};
+
+    let (memory, requested_exec_sizes) = FarMemoryProvider::new(
+        [
+            Placement::Low,
+            Placement::High,
+            Placement::Low,
+            Placement::High,
+            Placement::Low,
+            Placement::Low,
+            Placement::High,
+            Placement::High,
+        ],
+        [],
+    );
     let mut builder = JITBuilder::new(default_libcall_names()).unwrap();
-    builder.memory_provider(Box::new(FarMemoryProvider {
-        space,
-        placements: [
-            Placement::Low,
-            Placement::High,
-            Placement::Low,
-            Placement::High,
-            Placement::Low,
-            Placement::Low,
-            Placement::High,
-            Placement::High,
-        ]
-        .into_iter()
-        .collect(),
-        low_offset: 0,
-        high_offset,
-        exec_allocs: Vec::new(),
-        heap_allocs: Vec::new(),
-        requested_exec_sizes: Arc::clone(&requested_exec_sizes),
-    }));
+    builder.memory_provider(Box::new(memory));
 
     let mut module = JITModule::new(builder);
     let mut signature = module.make_signature();
@@ -598,6 +656,251 @@ fn far_x86_control_transfers_use_veneers() {
         mixed_caller_code.len() + mixed_relocations.len() * VENEER_SIZE
     );
     drop(requested_exec_sizes);
+
+    unsafe { module.free_memory() };
+}
+
+/// Reproduces the Roto failure: JIT code materializes the address of an
+/// anonymous read-only data object allocated more than ±2 GiB away. The
+/// GOT-relative load cannot be relaxed to a `lea` and reads the address from
+/// a GOT entry at the end of the function's allocation.
+#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[test]
+fn far_x86_data_address_resolves_through_got() {
+    use cranelift_codegen::binemit::Reloc;
+
+    use far_x86_memory::{FarMemoryProvider, Placement};
+
+    let (memory, _) = FarMemoryProvider::new([Placement::Low], [Placement::High]);
+    let mut builder = JITBuilder::new(default_libcall_names()).unwrap();
+    builder.memory_provider(Box::new(memory));
+    let mut module = JITModule::new(builder);
+
+    let data_id = module.declare_anonymous_data(false, false).unwrap();
+    let mut data = DataDescription::new();
+    data.define(vec![42].into_boxed_slice());
+    module.define_data(data_id, &data).unwrap();
+
+    let mut signature = module.make_signature();
+    signature
+        .returns
+        .push(AbiParam::new(module.target_config().pointer_type()));
+    let address_func = module
+        .declare_function("data_address", Linkage::Local, &signature)
+        .unwrap();
+    let mut ctx = module.make_context();
+    ctx.func.name = UserFuncName::user(0, address_func.as_u32());
+    ctx.func.signature = signature;
+    let data_ref = module.declare_data_in_func(data_id, &mut ctx.func);
+    let mut func_ctx = FunctionBuilderContext::new();
+    {
+        let mut bcx = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+        let block = bcx.create_block();
+        bcx.switch_to_block(block);
+        let address = bcx
+            .ins()
+            .symbol_value(module.target_config().pointer_type(), data_ref);
+        bcx.ins().return_(&[address]);
+        bcx.seal_all_blocks();
+        bcx.finalize(module.target_config());
+    }
+    module.define_function(address_func, &mut ctx).unwrap();
+
+    // Before the fix, finalization panics here while applying an out-of-range
+    // X86PCRel4 relocation.
+    module.finalize_definitions().unwrap();
+
+    let relocs = ctx.compiled_code().unwrap().buffer.relocs();
+    assert_eq!(relocs.len(), 1);
+    assert_eq!(relocs[0].kind, Reloc::X86GOTPCRel4);
+    let reloc_offset = usize::try_from(relocs[0].offset).unwrap();
+
+    let (data_ptr, _) = module.get_finalized_data(data_id);
+    let address_ptr = module.get_finalized_function(address_func);
+    assert!(address_ptr.addr().abs_diff(data_ptr.addr()) > i32::MAX as usize);
+
+    // The load stays a `mov` and reads the data object's address from a GOT
+    // entry at the end of the function's allocation.
+    assert_eq!(
+        unsafe { address_ptr.byte_add(reloc_offset - 2).read() },
+        0x8b
+    );
+    let displacement = unsafe {
+        address_ptr
+            .byte_add(reloc_offset)
+            .cast::<i32>()
+            .read_unaligned()
+    };
+    let got_entry = address_ptr
+        .wrapping_byte_add(reloc_offset + 4)
+        .wrapping_byte_offset(displacement as isize);
+    assert!(got_entry.addr() > address_ptr.addr());
+    assert_eq!(
+        unsafe { got_entry.cast::<u64>().read_unaligned() },
+        data_ptr.addr() as u64
+    );
+
+    let get_address: extern "C" fn() -> usize = unsafe { std::mem::transmute(address_ptr) };
+    assert_eq!(get_address(), data_ptr.addr());
+
+    unsafe { module.free_memory() };
+}
+
+/// When the memory provider does place a symbol within displacement range,
+/// the GOT-relative load is relaxed to a `lea` computing the address
+/// directly, so near symbol accesses don't pay for a GOT indirection.
+#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[test]
+fn near_x86_data_address_relaxes_got_load_to_lea() {
+    use cranelift_codegen::binemit::Reloc;
+
+    use far_x86_memory::{FarMemoryProvider, Placement};
+
+    let (memory, _) = FarMemoryProvider::new([Placement::Low], [Placement::Low]);
+    let mut builder = JITBuilder::new(default_libcall_names()).unwrap();
+    builder.memory_provider(Box::new(memory));
+    let mut module = JITModule::new(builder);
+
+    let data_id = module.declare_anonymous_data(false, false).unwrap();
+    let mut data = DataDescription::new();
+    data.define(vec![42].into_boxed_slice());
+    module.define_data(data_id, &data).unwrap();
+
+    let mut signature = module.make_signature();
+    signature
+        .returns
+        .push(AbiParam::new(module.target_config().pointer_type()));
+    let address_func = module
+        .declare_function("data_address", Linkage::Local, &signature)
+        .unwrap();
+    let mut ctx = module.make_context();
+    ctx.func.name = UserFuncName::user(0, address_func.as_u32());
+    ctx.func.signature = signature;
+    let data_ref = module.declare_data_in_func(data_id, &mut ctx.func);
+    let mut func_ctx = FunctionBuilderContext::new();
+    {
+        let mut bcx = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+        let block = bcx.create_block();
+        bcx.switch_to_block(block);
+        let address = bcx
+            .ins()
+            .symbol_value(module.target_config().pointer_type(), data_ref);
+        bcx.ins().return_(&[address]);
+        bcx.seal_all_blocks();
+        bcx.finalize(module.target_config());
+    }
+    module.define_function(address_func, &mut ctx).unwrap();
+    module.finalize_definitions().unwrap();
+
+    let relocs = ctx.compiled_code().unwrap().buffer.relocs();
+    assert_eq!(relocs.len(), 1);
+    assert_eq!(relocs[0].kind, Reloc::X86GOTPCRel4);
+    let reloc_offset = usize::try_from(relocs[0].offset).unwrap();
+
+    let (data_ptr, _) = module.get_finalized_data(data_id);
+    let address_ptr = module.get_finalized_function(address_func);
+    assert!(address_ptr.addr().abs_diff(data_ptr.addr()) <= i32::MAX as usize);
+
+    // The load was relaxed to a `lea` pointing directly at the data object.
+    assert_eq!(
+        unsafe { address_ptr.byte_add(reloc_offset - 2).read() },
+        0x8d
+    );
+    let displacement = unsafe {
+        address_ptr
+            .byte_add(reloc_offset)
+            .cast::<i32>()
+            .read_unaligned()
+    };
+    assert_eq!(
+        address_ptr
+            .wrapping_byte_add(reloc_offset + 4)
+            .wrapping_byte_offset(displacement as isize),
+        data_ptr
+    );
+
+    let get_address: extern "C" fn() -> usize = unsafe { std::mem::transmute(address_ptr) };
+    assert_eq!(get_address(), data_ptr.addr());
+
+    unsafe { module.free_memory() };
+}
+
+/// A materialized function pointer has the same range issue as a data pointer,
+/// but direct calls to that function must remain eligible for call veneers.
+/// The GOT entry holds the function's real address, preserving pointer
+/// identity with `get_finalized_function`.
+#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[test]
+fn far_x86_function_address_resolves_through_got() {
+    use cranelift_codegen::binemit::Reloc;
+
+    use far_x86_memory::{FarMemoryProvider, Placement};
+
+    let (memory, _) = FarMemoryProvider::new([Placement::High, Placement::Low], []);
+    let mut builder = JITBuilder::new(default_libcall_names()).unwrap();
+    builder.memory_provider(Box::new(memory));
+    let mut module = JITModule::new(builder);
+
+    let target_signature = module.make_signature();
+    let target = module
+        .declare_function("address_target", Linkage::Local, &target_signature)
+        .unwrap();
+    module
+        .define_function_bytes(target, 1, &[0xc3], &[])
+        .unwrap();
+
+    let mut address_signature = module.make_signature();
+    address_signature
+        .returns
+        .push(AbiParam::new(module.target_config().pointer_type()));
+    let address_func = module
+        .declare_function("function_address", Linkage::Local, &address_signature)
+        .unwrap();
+    let mut ctx = module.make_context();
+    ctx.func.name = UserFuncName::user(0, address_func.as_u32());
+    ctx.func.signature = address_signature;
+    let target_ref = module.declare_func_in_func(target, &mut ctx.func);
+    let mut func_ctx = FunctionBuilderContext::new();
+    {
+        let mut bcx = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+        let block = bcx.create_block();
+        bcx.switch_to_block(block);
+        bcx.ins().call(target_ref, &[]);
+        let address = bcx
+            .ins()
+            .func_addr(module.target_config().pointer_type(), target_ref);
+        bcx.ins().return_(&[address]);
+        bcx.seal_all_blocks();
+        bcx.finalize(module.target_config());
+    }
+    module.define_function(address_func, &mut ctx).unwrap();
+
+    // Before the fix, finalization panics here while applying an out-of-range
+    // X86PCRel4 relocation.
+    module.finalize_definitions().unwrap();
+
+    let relocs = ctx.compiled_code().unwrap().buffer.relocs();
+    assert_eq!(relocs.len(), 2);
+    assert_eq!(
+        relocs
+            .iter()
+            .filter(|reloc| reloc.kind == Reloc::X86CallPCRel4)
+            .count(),
+        1
+    );
+    assert_eq!(
+        relocs
+            .iter()
+            .filter(|reloc| reloc.kind == Reloc::X86GOTPCRel4)
+            .count(),
+        1
+    );
+
+    let target_ptr = module.get_finalized_function(target);
+    let address_ptr = module.get_finalized_function(address_func);
+    assert!(address_ptr.addr().abs_diff(target_ptr.addr()) > i32::MAX as usize);
+    let get_address: extern "C" fn() -> usize = unsafe { std::mem::transmute(address_ptr) };
+    assert_eq!(get_address(), target_ptr.addr());
 
     unsafe { module.free_memory() };
 }
