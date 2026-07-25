@@ -1283,6 +1283,7 @@ impl CommonOptions {
             ("component-model", component_model_map, wasm_component_model_map)
             ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
             ("component-model", component_model_implements, wasm_component_model_implements)
+            ("component-model", component_model_memory64, wasm_component_model_memory64)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
