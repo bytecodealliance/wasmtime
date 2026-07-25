@@ -112,7 +112,7 @@ impl<T> Clone for Linker<T> {
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 struct ImportKey {
     module: Atom,
-    name: Option<Atom>,
+    name: Atom,
 }
 
 impl TryClone for ImportKey {
@@ -370,34 +370,7 @@ impl<T> Linker<T> {
         T: 'static,
     {
         let store = store.as_context();
-        let key = self.import_key(module, Some(name))?;
-        self.insert(key, Definition::new(store.0, item.into()))?;
-        Ok(self)
-    }
-
-    /// Same as [`Linker::define`], except only the name of the import is
-    /// provided, not a module name as well.
-    ///
-    /// This is only relevant when working with the module linking proposal
-    /// where one-level names are allowed (in addition to two-level names).
-    /// Otherwise this method need not be used.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
-    /// memory allocation fails. See the `OutOfMemory` type's documentation for
-    /// details on Wasmtime's out-of-memory handling.
-    pub fn define_name(
-        &mut self,
-        store: impl AsContext<Data = T>,
-        name: &str,
-        item: impl Into<Extern>,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
-        let store = store.as_context();
-        let key = self.import_key(name, None)?;
+        let key = self.import_key(module, name)?;
         self.insert(key, Definition::new(store.0, item.into()))?;
         Ok(self)
     }
@@ -406,7 +379,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        let key = self.import_key(module, Some(name))?;
+        let key = self.import_key(module, name)?;
         self.insert(key, Definition::HostFunc(try_new(func)?))?;
         Ok(self)
     }
@@ -659,12 +632,7 @@ impl<T> Linker<T> {
         let mut store = store.as_context_mut();
         let exports: TryVec<_> = instance
             .exports(&mut store)
-            .map(|e| {
-                Ok((
-                    self.import_key(module_name, Some(e.name()))?,
-                    e.into_extern(),
-                ))
-            })
+            .map(|e| Ok((self.import_key(module_name, e.name())?, e.into_extern())))
             .try_collect::<_, Error>()?;
         for (key, export) in exports {
             self.insert(key, Definition::new(store.0, export))?;
@@ -943,7 +911,7 @@ impl<T> Linker<T> {
                 let instance_pre = self.instantiate_pre(module)?;
                 let export_name = export.name().to_owned();
                 let func = mk_func(&mut store, func_ty, export_name, instance_pre);
-                let key = self.import_key(module_name, Some(export.name()))?;
+                let key = self.import_key(module_name, export.name())?;
                 self.insert(key, Definition::new(store.0, func.into()))?;
             } else if export.name() == "memory" && export.ty().memory().is_some() {
                 // Allow an exported "memory" memory for now.
@@ -1001,8 +969,8 @@ impl<T> Linker<T> {
         as_module: &str,
         as_name: &str,
     ) -> Result<&mut Self> {
-        let src = self.import_key(module, Some(name))?;
-        let dst = self.import_key(as_module, Some(as_name))?;
+        let src = self.import_key(module, name)?;
+        let dst = self.import_key(as_module, as_name)?;
         match self.map.get(&src).cloned() {
             Some(item) => self.insert(dst, item)?,
             None => bail!("no item named `{module}::{name}` defined"),
@@ -1047,20 +1015,18 @@ impl<T> Linker<T> {
     fn insert(&mut self, key: ImportKey, item: Definition) -> Result<()> {
         if !self.allow_shadowing && self.map.contains_key(&key) {
             let module = &self.pool[key.module];
-            match key.name.and_then(|n| self.pool.get(n)) {
-                Some(name) => bail!("import of `{module}::{name}` defined twice"),
-                None => bail!("import of `{module}` defined twice"),
-            }
+            let name = &self.pool[key.name];
+            bail!("import of `{module}::{name}` defined twice");
         }
 
         self.map.insert(key, item)?;
         Ok(())
     }
 
-    fn import_key(&mut self, module: &str, name: Option<&str>) -> Result<ImportKey, OutOfMemory> {
+    fn import_key(&mut self, module: &str, name: &str) -> Result<ImportKey, OutOfMemory> {
         Ok(ImportKey {
             module: self.pool.insert(module)?,
-            name: name.map(|name| self.pool.insert(name)).transpose()?,
+            name: self.pool.insert(name)?,
         })
     }
 
@@ -1262,7 +1228,7 @@ impl<T> Linker<T> {
             let store = store.as_context_mut();
             (
                 &self.pool[key.module],
-                &self.pool[key.name.unwrap()],
+                &self.pool[key.name],
                 // Should be safe since `T` is connecting the linker and store
                 unsafe { item.to_extern(store.0).panic_on_oom() },
             )
@@ -1305,7 +1271,7 @@ impl<T> Linker<T> {
     fn _get(&self, module: &str, name: &str) -> Option<&Definition> {
         let key = ImportKey {
             module: self.pool.get_atom(module)?,
-            name: Some(self.pool.get_atom(name)?),
+            name: self.pool.get_atom(name)?,
         };
         self.map.get(&key)
     }
