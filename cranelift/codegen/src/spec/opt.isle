@@ -546,7 +546,7 @@
     (match (and (bvsge result (int2bv 64 0))
                 (not (bv_is_zero! result))
                 (bv_is_zero! (bvand result (bvsub result (int2bv 64 1))))))
-    (provide (= x (clz (rev result)))))
+    (provide (= result (bvshl (int2bv 64 1) (zero_ext 64 x)))))
 
 ;;;; Condition-code helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; `IntCC::complement` (negate) / `IntCC::swap_args` (swap operands), per
