@@ -8,8 +8,6 @@ mod call_hook;
 mod cli_tests;
 mod compile_time_builtins;
 mod component_model;
-#[cfg(all(feature = "stack-switching", unix, target_arch = "x86_64"))]
-mod continuation_traps;
 mod coredump;
 mod custom_code_memory;
 mod debug;
@@ -53,6 +51,8 @@ mod pulley;
 mod relocs;
 mod stack_creator;
 mod stack_overflow;
+#[cfg(all(feature = "stack-switching", unix, target_arch = "x86_64"))]
+mod stack_switching;
 mod store;
 mod structs;
 mod table;
