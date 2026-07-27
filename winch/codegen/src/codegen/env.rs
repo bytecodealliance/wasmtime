@@ -244,8 +244,12 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                         ),
                         None => (
                             Some(self.vmoffsets.vmctx_vmtable_from(index)),
-                            self.vmoffsets.vmtable_definition_base().into(),
-                            self.vmoffsets.vmtable_definition_current_elements().into(),
+                            self.vmoffsets.ptr.vm_table_definition().base().into(),
+                            self.vmoffsets
+                                .ptr
+                                .vm_table_definition()
+                                .current_elements()
+                                .into(),
                         ),
                     };
 
@@ -276,10 +280,11 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                             if is_shared {
                                 (
                                     Some(self.vmoffsets.vmctx_vmmemory_pointer(defined)),
-                                    self.vmoffsets.ptr.vmmemory_definition_base().into(),
+                                    self.vmoffsets.ptr.vm_memory_definition().base().into(),
                                     self.vmoffsets
                                         .ptr
-                                        .vmmemory_definition_current_length()
+                                        .vm_memory_definition()
+                                        .current_length()
                                         .into(),
                                 )
                             } else {
@@ -294,10 +299,11 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                         }
                         None => (
                             Some(self.vmoffsets.vmctx_vmmemory_import_from(index)),
-                            self.vmoffsets.ptr.vmmemory_definition_base().into(),
+                            self.vmoffsets.ptr.vm_memory_definition().base().into(),
                             self.vmoffsets
                                 .ptr
-                                .vmmemory_definition_current_length()
+                                .vm_memory_definition()
+                                .current_length()
                                 .into(),
                         ),
                     };

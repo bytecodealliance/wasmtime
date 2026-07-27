@@ -417,25 +417,85 @@ mod test_vmtag_import {
     }
 }
 
-/// The fields compiled code needs to access to utilize a WebAssembly linear
-/// memory defined within the instance, namely the start address and the
-/// size in bytes.
-#[derive(Debug)]
-#[repr(C)]
-pub struct VMMemoryDefinition {
-    /// The start address.
-    pub base: VmPtr<u8>,
+/// Define the runtime definitions of the shared `VM*` types.
+macro_rules! define_vm_types {
+    ( $(
+        $(#[doc = $sdoc:literal])*
+        $(#[derive($($d:ident),*)])?
+        #[repr($($repr:tt)*)]
+        #[snake_name = $snake:ident]
+        $svis:vis struct $Name:ident {
+            $(
+                $(#[doc = $fdoc:literal])*
+                $(#[readonly])?
+                $(#[can_move])?
+                $fvis:vis $fname:ident : $fty:tt $(< $fgen:tt >)? ,
+            )*
+        }
+    )* ) => {
+        $(
+            $(#[doc = $sdoc])*
+            $(#[derive($($d),*)])?
+            #[repr($($repr)*)]
+            $svis struct $Name {
+                $(
+                    $(#[doc = $fdoc])*
+                    $fvis $fname: $fty $(< $fgen >)?,
+                )*
+            }
+        )*
 
-    /// The current logical size of this linear memory in bytes.
-    ///
-    /// This is atomic because shared memories must be able to grow their length
-    /// atomically. For relaxed access, see
-    /// [`VMMemoryDefinition::current_length()`].
-    pub current_length: AtomicUsize,
+        #[cfg(test)]
+        mod test_vm_type_layouts {
+            use super::{ $( $Name, )* };
+            use core::mem::{align_of, offset_of, size_of};
+            use wasmtime_environ::{HostPtr, PtrSize};
+
+            $(
+                #[test]
+                fn $snake() {
+                    let host = HostPtr;
+                    let offsets = host.$snake();
+
+                    let expected = usize::from(offsets.size());
+                    let actual = size_of::<$Name>();
+                    assert_eq!(
+                        expected,
+                        actual,
+                        "size of {} failed: {expected} (expected) != {actual} (actual)",
+                        stringify!($Name),
+                    );
+
+                    let expected = usize::from(offsets.align());
+                    let actual = align_of::<$Name>();
+                    assert_eq!(
+                        expected,
+                        actual,
+                        "alignment of {} failed: {expected} (expected) != {actual} (actual)",
+                        stringify!($Name),
+                    );
+
+                    $(
+                        let expected = usize::from(offsets.$fname());
+                        let actual = offset_of!($Name, $fname);
+                        assert_eq!(
+                            expected,
+                            actual,
+                            "offset of {}::{} failed: {expected} (expected) != {actual} (actual)",
+                            stringify!($Name),
+                            stringify!($fname),
+                        );
+                    )*
+                }
+            )*
+        }
+    };
 }
+wasmtime_environ::for_each_vm_type!(define_vm_types);
 
-// SAFETY: the above definition has `repr(C)` and each field individually
-// implements `VmSafe`, which satisfies the requirements of this trait.
+// SAFETY: `VMMemoryDefinition` is generated with `#[repr(C)]` and each field
+// individually implements `VmSafe`, which satisfies the requirements of this
+// trait.
 unsafe impl VmSafe for VMMemoryDefinition {}
 
 impl VMMemoryDefinition {
@@ -464,98 +524,19 @@ impl VMMemoryDefinition {
     }
 }
 
-#[cfg(test)]
-mod test_vmmemory_definition {
-    use super::VMMemoryDefinition;
-    use core::mem::offset_of;
-    use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
-
-    #[test]
-    fn check_vmmemory_definition_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMMemoryDefinition>(),
-            usize::from(offsets.ptr.size_of_vmmemory_definition())
-        );
-        assert_eq!(
-            offset_of!(VMMemoryDefinition, base),
-            usize::from(offsets.ptr.vmmemory_definition_base())
-        );
-        assert_eq!(
-            offset_of!(VMMemoryDefinition, current_length),
-            usize::from(offsets.ptr.vmmemory_definition_current_length())
-        );
-        /* TODO: Assert that the size of `current_length` matches.
-        assert_eq!(
-            size_of::<VMMemoryDefinition::current_length>(),
-            usize::from(offsets.size_of_vmmemory_definition_current_length())
-        );
-        */
-    }
-}
-
-/// The fields compiled code needs to access to utilize a WebAssembly table
-/// defined within the instance.
-#[derive(Debug, Copy, Clone)]
-#[repr(C)]
-pub struct VMTableDefinition {
-    /// Pointer to the table data.
-    pub base: VmPtr<u8>,
-
-    /// The current number of elements in the table.
-    pub current_elements: usize,
-}
-
-// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+// SAFETY: `VMTableDefinition` is generated with `#[repr(C)]` and only contains
+// `VmSafe` fields.
 unsafe impl VmSafe for VMTableDefinition {}
 
-#[cfg(test)]
-mod test_vmtable_definition {
-    use super::VMTableDefinition;
-    use core::mem::offset_of;
-    use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
-
-    #[test]
-    fn check_vmtable_definition_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMTableDefinition>(),
-            usize::from(offsets.size_of_vmtable_definition())
-        );
-        assert_eq!(
-            offset_of!(VMTableDefinition, base),
-            usize::from(offsets.vmtable_definition_base())
-        );
-        assert_eq!(
-            offset_of!(VMTableDefinition, current_elements),
-            usize::from(offsets.vmtable_definition_current_elements())
-        );
-    }
-}
-
-/// The storage for a WebAssembly global defined within the instance.
-///
-/// TODO: Pack the globals more densely, rather than using the same size
-/// for every type.
-#[derive(Debug)]
-#[repr(C, align(16))]
-pub struct VMGlobalDefinition {
-    storage: [u8; 16],
-    // If more elements are added here, remember to add offset_of tests below!
-}
-
-// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+// SAFETY: `VMGlobalDefinition` is generated with `#[repr(C)]` and only contains
+// `VmSafe` fields.
 unsafe impl VmSafe for VMGlobalDefinition {}
 
 #[cfg(test)]
 mod test_vmglobal_definition {
     use super::VMGlobalDefinition;
     use std::mem::{align_of, size_of};
-    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
+    use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
 
     #[test]
     fn check_vmglobal_definition_alignment() {
@@ -566,16 +547,6 @@ mod test_vmglobal_definition {
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<[u8; 16]>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<[f32; 4]>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<[f64; 2]>());
-    }
-
-    #[test]
-    fn check_vmglobal_definition_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMGlobalDefinition>(),
-            usize::from(offsets.ptr.size_of_vmglobal_definition())
-        );
     }
 
     #[test]
@@ -777,40 +748,19 @@ mod test_vmshared_type_index {
     }
 }
 
-/// A WebAssembly tag defined within the instance.
-///
-#[derive(Debug)]
-#[repr(C)]
-pub struct VMTagDefinition {
-    /// Function signature's type id.
-    pub type_index: VMSharedTypeIndex,
-}
-
 impl VMTagDefinition {
     pub fn new(type_index: VMSharedTypeIndex) -> Self {
         Self { type_index }
     }
 }
 
-// SAFETY: the above structure is repr(C) and only contains VmSafe
-// fields.
+// SAFETY: `VMTagDefinition` is generated with `#[repr(C)]` and only contains
+// `VmSafe` fields.
 unsafe impl VmSafe for VMTagDefinition {}
 
 #[cfg(test)]
 mod test_vmtag_definition {
-    use super::VMTagDefinition;
-    use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
-
-    #[test]
-    fn check_vmtag_definition_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMTagDefinition>(),
-            usize::from(offsets.ptr.size_of_vmtag_definition())
-        );
-    }
+    use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
 
     #[test]
     fn check_vmtag_begins_aligned() {

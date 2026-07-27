@@ -172,8 +172,8 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(builtins) = ret.ptr.size(),
             size(vm_store_context) = ret.ptr.size(),
             align(16),
-            size(may_leave) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
-            size(task_may_block) = ret.ptr.size_of_vmglobal_definition(),
+            size(may_leave) = cmul(ret.num_runtime_component_instances, ret.ptr.vm_global_definition().size()),
+            size(task_may_block) = ret.ptr.vm_global_definition().size(),
             align(u32::from(ret.ptr.size())),
             size(trampoline_func_refs) = cmul(ret.num_trampolines, ret.ptr.size_of_vm_func_ref()),
             size(intrinsic_func_refs) = cmul(ret.num_unsafe_intrinsics, ret.ptr.size_of_vm_func_ref()),
@@ -218,7 +218,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     #[inline]
     pub fn may_leave(&self, index: RuntimeComponentInstanceIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_component_instances);
-        self.may_leave + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
+        self.may_leave + index.as_u32() * u32::from(self.ptr.vm_global_definition().size())
     }
 
     /// The offset of the `task_may_block` field.

@@ -2057,7 +2057,9 @@ impl TrampolineCompiler<'_> {
     fn load_runtime_memory_base(&mut self, vmctx: ir::Value, mem: RuntimeMemoryIndex) -> ir::Value {
         let from_vmmemory_definition = self.load_memory(vmctx, mem);
         self.alias_regions
-            .vmmemory_definition_base(&mut self.builder.cursor(), from_vmmemory_definition)
+            .vm_memory_definition()
+            .base()
+            .load(&mut self.builder.cursor(), from_vmmemory_definition)
     }
 }
 
