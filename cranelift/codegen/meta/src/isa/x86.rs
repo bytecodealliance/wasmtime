@@ -53,6 +53,12 @@ pub(crate) fn define() -> TargetIsa {
         "FMA: CPUID.01H:ECX.FMA[bit 12]",
         false,
     );
+    let has_avx_vnni = settings.add_bool(
+        "has_avx_vnni",
+        "Has support for AVX-VNNI.",
+        "AVX-VNNI: CPUID.07H.01H:EAX.AVX_VNNI[bit 4]",
+        false,
+    );
     let has_avx512bitalg = settings.add_bool(
         "has_avx512bitalg",
         "Has support for AVX512BITALG.",
@@ -175,7 +181,7 @@ pub(crate) fn define() -> TargetIsa {
     let alderlake = settings.add_preset(
         "alderlake",
         "Alderlake microarchitecture.",
-        preset!(tremont && has_bmi1 && has_bmi2 && has_lzcnt && has_fma),
+        preset!(tremont && has_bmi1 && has_bmi2 && has_lzcnt && has_fma && has_avx_vnni),
     );
     let sierra_forest = settings.add_preset(
         "sierraforest",

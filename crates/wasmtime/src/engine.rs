@@ -601,6 +601,7 @@ information about this check\
             "has_avx" => "avx",
             "has_avx2" => "avx2",
             "has_fma" => "fma",
+            "has_avx_vnni" => "avxvnni",
             "has_bmi1" => "bmi1",
             "has_bmi2" => "bmi2",
             "has_avx512bitalg" => "avx512bitalg",

@@ -4047,6 +4047,24 @@
                            (imul _ (swiden_high _ x) (swiden_high _ y))))
       (x64_pmaddwd x y))
 
+;; AVX-VNNI: fold the u8*i8 widening dot-accumulate tree into one `vpdpbusd`
+;; (`a` sign-extended, `b` zero-extended — the signed*unsigned form the
+;; instruction computes). Same tree as aarch64 `sdot` but with `uwiden` on `b`;
+;; priority stays above the scalar `iadd` rules the overlap checker can't prove
+;; disjoint.
+(rule 8 (lower (has_type $I32X4
+                (iadd _
+                  (iadd_pairwise _
+                    (iadd_pairwise _
+                      (swiden_low _ lo @ (imul _ (swiden_low _ a) (uwiden_low _ b)))
+                      (swiden_high _ lo))
+                    (iadd_pairwise _
+                      (swiden_low _ hi @ (imul _ (swiden_high _ a) (uwiden_high _ b)))
+                      (swiden_high _ hi)))
+                  c)))
+      (if-let true (use_avx_vnni))
+      (x64_vpdpbusd c b a))
+
 ;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; With SSE4.1 use the `pmovsx*` instructions for this. The `pmovsx*`
