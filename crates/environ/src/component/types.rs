@@ -1393,7 +1393,6 @@ pub enum FlatType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::hash_map::DefaultHasher;
 
     fn variant(cases: &[(&str, InterfaceType)]) -> TypeVariant {
         TypeVariant {
