@@ -69,6 +69,7 @@ run_fuzzers! {
     api_calls
     dominator_tree
     gc_access
+    assembler_roundtrip_xed
 }
 
 fn pulley_roundtrip(u: Unstructured<'_>) -> Result<()> {
@@ -80,6 +81,26 @@ fn assembler_roundtrip(u: Unstructured<'_>) -> Result<()> {
     use cranelift_assembler_x64::{Inst, fuzz};
     let inst: Inst<fuzz::FuzzRegs> = Arbitrary::arbitrary_take_rest(u)?;
     fuzz::roundtrip(&inst);
+    Ok(())
+}
+
+/// Same as [`assembler_roundtrip`], but checks the assembler against Intel XED
+/// rather than Capstone. XED understands newer encodings (e.g. APX) that the
+/// bundled Capstone cannot decode.
+///
+/// Building XED requires a C compiler and Python, so this is gated behind the
+/// `fuzz-xed` feature and is a no-op without it. The fuzzer is always listed in
+/// `run_fuzzers!` regardless so that the input-byte discriminants of the other
+/// fuzzers stay stable.
+fn assembler_roundtrip_xed(u: Unstructured<'_>) -> Result<()> {
+    #[cfg(feature = "fuzz-xed")]
+    {
+        use cranelift_assembler_x64::{Inst, fuzz};
+        let inst: Inst<fuzz::FuzzRegs> = Arbitrary::arbitrary_take_rest(u)?;
+        fuzz::roundtrip_xed(&inst);
+    }
+    #[cfg(not(feature = "fuzz-xed"))]
+    let _ = u;
     Ok(())
 }
 
