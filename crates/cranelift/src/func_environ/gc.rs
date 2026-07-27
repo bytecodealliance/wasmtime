@@ -801,9 +801,15 @@ pub fn translate_array_new(
     array_type_index: TypeIndex,
     elem: ir::Value,
     len: ir::Value,
-    cost_per_element: u8,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new({array_type_index:?}, {elem:?}, {len:?})");
+    let cost = func_env
+        .tunables
+        .operator_cost
+        .variable()
+        .array_new_per_element;
+    func_env.pre_translate_bulk_op(builder, len, cost)?;
+
     let result =
         gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
     let zero = builder.ins().iconst(ir::types::I32, 0);
@@ -818,7 +824,6 @@ pub fn translate_array_new(
         zero,
         elem,
         len,
-        cost_per_element,
     )?;
     log::trace!("translate_array_new(..) -> {result:?}");
     Ok(result)
@@ -829,9 +834,14 @@ pub fn translate_array_new_default(
     builder: &mut FunctionBuilder,
     array_type_index: TypeIndex,
     len: ir::Value,
-    cost_per_element: u8,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new_default({array_type_index:?}, {len:?})");
+    let cost = func_env
+        .tunables
+        .operator_cost
+        .variable()
+        .array_new_default_per_element;
+    func_env.pre_translate_bulk_op(builder, len, cost)?;
 
     let interned_ty = func_env.module.types[array_type_index].unwrap_module_type_index();
     let array_ty = func_env.types.unwrap_array(interned_ty)?;
@@ -850,7 +860,6 @@ pub fn translate_array_new_default(
         zero,
         elem,
         len,
-        cost_per_element,
     )?;
     Ok(result)
 }
@@ -1754,8 +1763,10 @@ pub fn translate_array_new_entity(
     entity: CheckedEntity,
     entity_offset: ir::Value,
     len: ir::Value,
-    cost_per_element: u8,
+    cost_per_unit: u8,
 ) -> WasmResult<ir::Value> {
+    env.pre_translate_bulk_op(builder, len, cost_per_unit)?;
+
     // Before actually allocating this array first do a bounds-check on the
     // passive entity itself.
     let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
@@ -1774,7 +1785,6 @@ pub fn translate_array_new_entity(
         dst,
         entity_offset,
         len,
-        cost_per_element,
     )?;
 
     Ok(array)

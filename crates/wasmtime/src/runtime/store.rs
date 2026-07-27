@@ -1041,6 +1041,10 @@ impl<T> Store<T> {
     /// The `interval` parameter indicates how much fuel should be
     /// consumed between yields of an async future. When fuel runs out wasm will trap.
     ///
+    /// For limitations related to consumption of fuel and when yield points are
+    /// injected, see the discussion in
+    /// [`Config::epoch_interruption`](crate::Config::epoch_interruption).
+    ///
     /// # Error
     ///
     /// This method will error if fuel is not enabled or `interval` is

@@ -690,10 +690,6 @@ impl Config {
     /// signal handler), then we can ensure that all async code will
     /// yield to the executor within a bounded time.
     ///
-    /// The deadline check cannot be avoided by malicious wasm code. It is safe
-    /// to use epoch deadlines to limit the execution time of untrusted
-    /// code.
-    ///
     /// The [`Store`](crate::Store) tracks the deadline, and controls
     /// what happens when the deadline is reached during
     /// execution. Several behaviors are possible:
@@ -738,6 +734,27 @@ impl Config {
     /// opportunity to use `tokio::time::timeout` for example on a wasm
     /// computation and have the desired effect of cancelling a blocking
     /// operation when a timeout expires.
+    ///
+    /// ## Limitations with malicious guests
+    ///
+    /// Epochs are designed to handle malicious WebAssembly guests -- the
+    /// deadline check cannot be avoided by WebAssembly code. It is safe to use
+    /// epoch deadlines to limit the execution time of untrusted code.
+    ///
+    /// Note, though, that a current limitation to this is that
+    /// bulk-data-transfer instructions, such as `memory.copy`, only check the
+    /// epoch once at the start of the operation. These operations can take a
+    /// variable amount of time to complete based on how many bytes are being
+    /// copied. This means that the maximal time slice a guest might take is
+    /// the maximum of the epoch interval and the largest
+    /// memory-copy-style-instruction executed. The size of a copy is bounded
+    /// on the size of linear memory or GC heap size. In the limit, however, a
+    /// guest using a 64-bit linear memory with a 128GiB size could issue a
+    /// 128GiB `memory.copy` which would have no preemption within the
+    /// instruction itself. Hosts which need strict time limits for guests right
+    /// now are recommended to ensure that the store's allocated heap size
+    /// (linear memory + GC heap) are bounded with a
+    /// [`ResourceLimiter`](crate::ResourceLimiter).
     ///
     /// ## When to use fuel vs. epochs
     ///
