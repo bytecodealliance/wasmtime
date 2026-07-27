@@ -72,7 +72,7 @@ macro_rules! define_vm_type_offsets {
     // references; and `VMGlobalKind` is a `repr(C, u32)` enum with a `u32`
     // payload.
     (@size ($p:expr) VmPtr < $g:ty >) => { u32::from($p) };
-    (@size ($p:expr) Option < $g:ty >) => { u32::from($p) };
+    (@size ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@size ($p:expr) AtomicUsize) => { u32::from($p) };
     (@size ($p:expr) usize) => { u32::from($p) };
     (@size ($p:expr) [u8; 16]) => { 16u32 };
@@ -85,7 +85,7 @@ macro_rules! define_vm_type_offsets {
     // Classify a field type to its alignment in bytes as a `u32`, given `$p`
     // (the target pointer size as a `u8`).
     (@align ($p:expr) VmPtr < $g:ty >) => { u32::from($p) };
-    (@align ($p:expr) Option < $g:ty >) => { u32::from($p) };
+    (@align ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@align ($p:expr) AtomicUsize) => { u32::from($p) };
     (@align ($p:expr) usize) => { u32::from($p) };
     (@align ($p:expr) [u8; 16]) => { 16u32 };
@@ -104,9 +104,13 @@ macro_rules! define_vm_type_offsets {
     // caller-minted identifiers (for the pointer size and running offset) that
     // are threaded through the recursion so their hygiene stays consistent
     // across the emitted `let` bindings.
+    //
+    // Fields arrive pre-split into `[ $fname : $fty... ]` groups (see `@impl`
+    // below), so each field's type is a raw token sequence that the `@size`
+    // and `@align` classifiers can match against structurally.
     (@fields $Name:ident ($p:ident, $o:ident) prefix( $($prefix:tt)* )) => {};
     (@fields $Name:ident ($p:ident, $o:ident) prefix( $($prefix:tt)* )
-        [ $fname:ident : $fty:tt $(< $fgen:ty >)? ]
+        [ $fname:ident : $($fty:tt)* ]
         $($rest:tt)*
     ) => {
         #[doc = concat!(
@@ -118,18 +122,80 @@ macro_rules! define_vm_type_offsets {
             let $p = self.0.size();
             let $o: u32 = 0;
             $($prefix)*
-            let $o = align($o, define_vm_type_offsets!(@align ($p) $fty $(< $fgen >)?));
+            let $o = align($o, define_vm_type_offsets!(@align ($p) $($fty)*));
             let _ = $p;
             u8::try_from($o).unwrap()
         }
         define_vm_type_offsets!(@fields $Name ($p, $o)
             prefix(
                 $($prefix)*
-                let $o = align($o, define_vm_type_offsets!(@align ($p) $fty $(< $fgen >)?));
-                let $o = $o + define_vm_type_offsets!(@size ($p) $fty $(< $fgen >)?);
+                let $o = align($o, define_vm_type_offsets!(@align ($p) $($fty)*));
+                let $o = $o + define_vm_type_offsets!(@size ($p) $($fty)*);
             )
             $($rest)*
         );
+    };
+
+    // Emit an `offsets::VMFoo` type's inherent `impl`. Fields are peeled off
+    // the raw struct body one at a time into `[ $fname : $fty... ]` groups
+    // accumulated in the `{ ... }` list; once the body is exhausted, the
+    // terminal arm emits the per-field offset methods plus `align`/`size`.
+    //
+    // Splitting the body by hand (rather than matching `$fty:tt $(< $fgen:ty
+    // >)?` within a repetition) is what lets each field's type reach the
+    // `@size`/`@align` classifiers as raw tokens, so those classifiers can
+    // require `Option`s to specifically be `Option<VmPtr<_>>`.
+    (@impl $Name:ident [$($repr:tt)*] { $( [ $fname:ident : $($fty:tt)* ] )* }) => {
+        impl<P: PtrSize> $Name<P> {
+            define_vm_type_offsets!(@fields $Name (p, o) prefix()
+                $( [ $fname : $($fty)* ] )*
+            );
+
+            #[doc = concat!("The alignment of the `", stringify!($Name), "` type.")]
+            #[inline]
+            pub fn align(&self) -> u8 {
+                let p = self.0.size();
+                let a: u32 = define_vm_type_offsets!(@repr_align $($repr)*);
+                $(
+                    let a = core::cmp::max(
+                        a,
+                        define_vm_type_offsets!(@align (p) $($fty)*),
+                    );
+                )*
+                let _ = p;
+                u8::try_from(a).unwrap()
+            }
+
+            #[doc = concat!("The size of the `", stringify!($Name), "` type.")]
+            #[inline]
+            pub fn size(&self) -> u8 {
+                let p = self.0.size();
+                let o: u32 = 0;
+                $(
+                    let o = align(o, define_vm_type_offsets!(@align (p) $($fty)*));
+                    let o = o + define_vm_type_offsets!(@size (p) $($fty)*);
+                )*
+                let o = align(o, u32::from(self.align()));
+                let _ = p;
+                u8::try_from(o).unwrap()
+            }
+        }
+    };
+    // Skip a field attribute (`#[doc = ...]`, `#[readonly]`, `#[can_move]`).
+    (@impl $Name:ident $repr:tt { $($groups:tt)* } #[$($attr:tt)*] $($rest:tt)*) => {
+        define_vm_type_offsets!(@impl $Name $repr { $($groups)* } $($rest)*);
+    };
+    // Consume a field's visibility and name, then collect its type tokens.
+    (@impl $Name:ident $repr:tt { $($groups:tt)* } $fvis:vis $fname:ident : $($rest:tt)*) => {
+        define_vm_type_offsets!(@impl_ty $Name $repr { $($groups)* } $fname [] $($rest)*);
+    };
+    // Accumulate one field's type tokens up to its terminating comma, then
+    // append the completed `[ $fname : $fty... ]` group and resume `@impl`.
+    (@impl_ty $Name:ident $repr:tt { $($groups:tt)* } $fname:ident [ $($fty:tt)* ] , $($rest:tt)*) => {
+        define_vm_type_offsets!(@impl $Name $repr { $($groups)* [ $fname : $($fty)* ] } $($rest)*);
+    };
+    (@impl_ty $Name:ident $repr:tt { $($groups:tt)* } $fname:ident [ $($fty:tt)* ] $tok:tt $($rest:tt)*) => {
+        define_vm_type_offsets!(@impl_ty $Name $repr { $($groups)* } $fname [ $($fty)* $tok ] $($rest)*);
     };
 
     // Top-level entry: the list of `VM*` type definitions.
@@ -139,12 +205,7 @@ macro_rules! define_vm_type_offsets {
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
         $svis:vis struct $Name:ident {
-            $(
-                $(#[doc = $fdoc:literal])*
-                $(#[readonly])?
-                $(#[can_move])?
-                $fvis:vis $fname:ident : $fty:tt $(< $fgen:ty >)? ,
-            )*
+            $($body:tt)*
         }
     )* ) => {
         /// Offsets of fields within the various `VM*` types, parameterized over
@@ -160,40 +221,7 @@ macro_rules! define_vm_type_offsets {
                 #[doc = concat!("Offsets of fields within the `", stringify!($Name), "` type.")]
                 pub struct $Name<P: PtrSize>(pub P);
 
-                impl<P: PtrSize> $Name<P> {
-                    define_vm_type_offsets!(@fields $Name (p, o) prefix()
-                        $( [ $fname : $fty $(< $fgen >)? ] )*
-                    );
-
-                    #[doc = concat!("The alignment of the `", stringify!($Name), "` type.")]
-                    #[inline]
-                    pub fn align(&self) -> u8 {
-                        let p = self.0.size();
-                        let a: u32 = define_vm_type_offsets!(@repr_align $($repr)*);
-                        $(
-                            let a = core::cmp::max(
-                                a,
-                                define_vm_type_offsets!(@align (p) $fty $(< $fgen >)?),
-                            );
-                        )*
-                        let _ = p;
-                        u8::try_from(a).unwrap()
-                    }
-
-                    #[doc = concat!("The size of the `", stringify!($Name), "` type.")]
-                    #[inline]
-                    pub fn size(&self) -> u8 {
-                        let p = self.0.size();
-                        let o: u32 = 0;
-                        $(
-                            let o = align(o, define_vm_type_offsets!(@align (p) $fty $(< $fgen >)?));
-                            let o = o + define_vm_type_offsets!(@size (p) $fty $(< $fgen >)?);
-                        )*
-                        let o = align(o, u32::from(self.align()));
-                        let _ = p;
-                        u8::try_from(o).unwrap()
-                    }
-                }
+                define_vm_type_offsets!(@impl $Name [$($repr)*] {} $($body)*);
             )*
         }
     };
