@@ -1090,28 +1090,35 @@ impl CopyingCollection<'_, '_> {
     /// increment regardless of whether the worklist still has items.
     fn process_worklist_increment(&mut self) -> Result<GcProgress> {
         log::trace!("Begin processing worklist increment");
+        // Take ownership for the increment, but always put `trace_infos` back
+        // even if `worklist_pop` or `scan` fails. Otherwise a mid-increment
+        // error would permanently empty the heap's table and leave the GC in
+        // an inconsistent state.
         let mut trace_infos = mem::take(&mut self.heap.trace_infos);
-        let mut count = 0;
-        let has_more = loop {
-            if count >= OBJECTS_PER_INCREMENT {
-                break true;
-            }
-            match self.heap.worklist_pop()? {
-                Some(gc_ref) => {
-                    debug_assert!(self.heap.is_in_active_space(gc_ref.heap_index()?.get()));
-                    self.heap
-                        .scan(&gc_ref, &mut trace_infos, self.trace_state)?;
-                    count += 1;
+        let result = (|| {
+            let mut count = 0;
+            let has_more = loop {
+                if count >= OBJECTS_PER_INCREMENT {
+                    break true;
                 }
-                None => break false,
+                match self.heap.worklist_pop()? {
+                    Some(gc_ref) => {
+                        debug_assert!(self.heap.is_in_active_space(gc_ref.heap_index()?.get()));
+                        self.heap
+                            .scan(&gc_ref, &mut trace_infos, self.trace_state)?;
+                        count += 1;
+                    }
+                    None => break false,
+                }
+            };
+            if !has_more {
+                self.phase = CopyingCollectionPhase::SweepExternRefs;
             }
-        };
+            log::trace!("End processing worklist increment (has_more={has_more})");
+            Ok(GcProgress::Continue)
+        })();
         self.heap.trace_infos = trace_infos;
-        if !has_more {
-            self.phase = CopyingCollectionPhase::SweepExternRefs;
-        }
-        log::trace!("End processing worklist increment (has_more={has_more})");
-        Ok(GcProgress::Continue)
+        result
     }
 
     /// Clean up dead externrefs by iterating the idle semi-space's externref
