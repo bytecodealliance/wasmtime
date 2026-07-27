@@ -139,6 +139,16 @@ enum ModuleOrComponent<'a> {
     Component(&'a Component),
 }
 
+impl<'a> ModuleOrComponent<'a> {
+    fn engine(&self) -> &'a Engine {
+        match self {
+            ModuleOrComponent::Module(module) => module.engine(),
+            #[cfg(feature = "component-model")]
+            ModuleOrComponent::Component(component) => component.engine(),
+        }
+    }
+}
+
 impl ModuleRegistry {
     /// Get a previously-registered module by id.
     pub fn module_by_id(&self, id: RegisteredModuleId) -> Option<&Module> {
@@ -216,6 +226,8 @@ impl ModuleRegistry {
     }
 
     /// Registers a new module with the registry.
+    ///
+    /// Returns an error if `module` was not compiled by `engine`.
     pub fn register_module(
         &mut self,
         module: &Module,
@@ -226,6 +238,9 @@ impl ModuleRegistry {
             .map(|id| id.unwrap())
     }
 
+    /// Registers a new component with the registry.
+    ///
+    /// Returns an error if `component` was not compiled by `engine`.
     #[cfg(feature = "component-model")]
     pub fn register_component(
         &mut self,
@@ -242,12 +257,24 @@ impl ModuleRegistry {
     }
 
     /// Registers a new module with the registry.
+    ///
+    /// Returns an error if `module_or_component` was not compiled by `engine`.
+    /// All code and metadata enters a store through here, so callers
+    /// registering on a store's behalf pass that store's engine to keep foreign
+    /// code out of it.
     fn register(
         &mut self,
         module_or_component: ModuleOrComponent<'_>,
         engine: &Engine,
         breakpoint_state: RegisterBreakpointState,
     ) -> Result<Option<RegisteredModuleId>> {
+        // Nothing below here may run for a foreign module or component: the
+        // type indices it carries mean something else entirely in this
+        // engine.
+        ensure!(
+            Engine::same(engine, module_or_component.engine()),
+            "cross-`Engine` usage is not supported"
+        );
         let compiled_id = match module_or_component {
             ModuleOrComponent::Module(module) => module.id(),
             #[cfg(feature = "component-model")]
