@@ -103,7 +103,7 @@ impl<'a> Compilation<'a> {
                 let index = MemoryIndex::new(0);
                 ModuleMemoryOffset::Imported {
                     offset_to_vm_memory_definition: ofs.vmctx_vmmemory_import(index)
-                        + u32::from(ofs.vmmemory_import_from()),
+                        + u32::from(ofs.ptr.vm_memory_import().from()),
                     offset_to_memory_base: ofs.ptr.vm_memory_definition().base().into(),
                 }
             } else if ofs.num_owned_memories > 0 {

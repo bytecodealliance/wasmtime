@@ -540,11 +540,16 @@ impl<'a, Offsets> Field<'a, Offsets> {
 macro_rules! define_vm_type_alias_region_helpers {
     // Classify a field type to its Cranelift `ir::Type`, given `$pt` (the
     // target pointer type as an `ir::Type`).
-    (@field_ty $pt:expr, VmPtr < u8 >) => { $pt };
+    (@field_ty $pt:expr, VmPtr < $g:ty >) => { $pt };
+    (@field_ty $pt:expr, Option < VmPtr < $g:ty >>) => { $pt };
     (@field_ty $pt:expr, AtomicUsize) => { $pt };
     (@field_ty $pt:expr, usize) => { $pt };
     (@field_ty $pt:expr, [u8; 16]) => { ir::types::I8X16 };
     (@field_ty $pt:expr, VMSharedTypeIndex) => { ir::types::I32 };
+    (@field_ty $pt:expr, DefinedTableIndex) => { ir::types::I32 };
+    (@field_ty $pt:expr, DefinedMemoryIndex) => { ir::types::I32 };
+    (@field_ty $pt:expr, DefinedTagIndex) => { ir::types::I32 };
+    (@field_ty $pt:expr, VMGlobalKind) => { ir::types::I64 };
 
     // Apply a field attribute to its access flags. The `#[readonly]` and
     // `#[can_move]` markers map to the corresponding `MemFlagsData` builder
@@ -554,6 +559,100 @@ macro_rules! define_vm_type_alias_region_helpers {
     (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move() };
     (@apply_attr $flags:expr, [doc = $d:literal]) => { $flags };
 
+    // Emit the accessor `struct` and per-field methods for one `VM*` type.
+    //
+    // Fields arrive pre-split into `{ $fname [ $attrs... ] [ $fty... ] }` groups
+    // (see `@munch` below); the terminal arm consumes those groups once the
+    // struct body has been fully peeled apart.
+    (@emit $Name:ident $snake:ident {
+        $( { $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] } )*
+    }) => {
+        #[doc = concat!(
+            "An [`AliasRegions`] accessor for the fields of a `",
+            stringify!($Name), "`."
+        )]
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for all VM types; not all accessors are used yet"
+        )]
+        pub struct $Name<'a, Offsets> {
+            regions: &'a mut AliasRegions<Offsets>,
+        }
+
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for all VM types; not all accessors are used yet"
+        )]
+        impl<Offsets> AliasRegions<Offsets> {
+            #[doc = concat!(
+                "Get an accessor for the fields of a `", stringify!($Name), "`."
+            )]
+            pub fn $snake(&mut self) -> $Name<'_, Offsets> {
+                $Name { regions: self }
+            }
+        }
+
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for all VM types; not all accessors are used yet"
+        )]
+        impl<'a, Offsets> $Name<'a, Offsets>
+        where
+            Offsets: GetPtrSize,
+        {
+            $(
+                #[doc = concat!(
+                    "Get the [`Field`] for the `", stringify!($fname),
+                    "` field of `", stringify!($Name), "`."
+                )]
+                pub fn $fname(self) -> Field<'a, Offsets> {
+                    let offset = u32::from(
+                        self.regions.offsets.get_ptr_size().$snake().$fname()
+                    );
+                    let flags = ir::MemFlagsData::trusted();
+                    $(
+                        let flags = define_vm_type_alias_region_helpers!(
+                            @apply_attr flags, $fattr
+                        );
+                    )*
+                    let ty = define_vm_type_alias_region_helpers!(
+                        @field_ty self.regions.pointer_type, $($fty)*
+                    );
+                    Field::new(self.regions, VmType::$Name, offset, flags, ty)
+                }
+            )*
+        }
+    };
+
+    // Peel fields off the raw struct body one at a time, accumulating completed
+    // `{ $fname [ $attrs... ] [ $fty... ] }` groups plus the pending attributes
+    // for the field currently being parsed.
+    //
+    // Splitting the body by hand (rather than matching `$fty:tt $(< $fgen:ty
+    // >)?` within a repetition) is what lets each field's type reach the
+    // `@field_ty` classifier as raw tokens, so it can require `Option`s to
+    // specifically be `Option<VmPtr<_>>`.
+    (@munch $Name:ident $snake:ident { $($groups:tt)* } [ $($pend:tt)* ]) => {
+        define_vm_type_alias_region_helpers!(@emit $Name $snake { $($groups)* });
+    };
+    // Stash a field attribute's bracket group (`[readonly]`, `[can_move]`,
+    // `[doc = ...]`) as pending for the next field.
+    (@munch $Name:ident $snake:ident { $($groups:tt)* } [ $($pend:tt)* ] # $fattr:tt $($rest:tt)*) => {
+        define_vm_type_alias_region_helpers!(@munch $Name $snake { $($groups)* } [ $($pend)* $fattr ] $($rest)*);
+    };
+    // Consume a field's visibility and name, then collect its type tokens.
+    (@munch $Name:ident $snake:ident { $($groups:tt)* } [ $($pend:tt)* ] $fvis:vis $fname:ident : $($rest:tt)*) => {
+        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fname [ $($pend)* ] [] $($rest)*);
+    };
+    // Accumulate one field's type tokens up to its terminating comma, then
+    // append the completed group and reset the pending attributes.
+    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fname:ident [ $($pend:tt)* ] [ $($fty:tt)* ] , $($rest:tt)*) => {
+        define_vm_type_alias_region_helpers!(@munch $Name $snake { $($groups)* { $fname [ $($pend)* ] [ $($fty)* ] } } [] $($rest)*);
+    };
+    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fname:ident [ $($pend:tt)* ] [ $($fty:tt)* ] $tok:tt $($rest:tt)*) => {
+        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fname [ $($pend)* ] [ $($fty)* $tok ] $($rest)*);
+    };
+
     // Top-level entry: the list of `VM*` type definitions.
     ( $(
         $(#[doc = $sdoc:literal])*
@@ -561,68 +660,11 @@ macro_rules! define_vm_type_alias_region_helpers {
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
         $svis:vis struct $Name:ident {
-            $(
-                $( # $fattr:tt )*
-                $fvis:vis $fname:ident : $fty:tt $(< $fgen:tt >)? ,
-            )*
+            $($body:tt)*
         }
     )* ) => {
         $(
-            #[doc = concat!(
-                "An [`AliasRegions`] accessor for the fields of a `",
-                stringify!($Name), "`."
-            )]
-            #[allow(
-                dead_code,
-                reason = "generated uniformly for all VM types; not all accessors are used yet"
-            )]
-            pub struct $Name<'a, Offsets> {
-                regions: &'a mut AliasRegions<Offsets>,
-            }
-
-            #[allow(
-                dead_code,
-                reason = "generated uniformly for all VM types; not all accessors are used yet"
-            )]
-            impl<Offsets> AliasRegions<Offsets> {
-                #[doc = concat!(
-                    "Get an accessor for the fields of a `", stringify!($Name), "`."
-                )]
-                pub fn $snake(&mut self) -> $Name<'_, Offsets> {
-                    $Name { regions: self }
-                }
-            }
-
-            #[allow(
-                dead_code,
-                reason = "generated uniformly for all VM types; not all accessors are used yet"
-            )]
-            impl<'a, Offsets> $Name<'a, Offsets>
-            where
-                Offsets: GetPtrSize,
-            {
-                $(
-                    #[doc = concat!(
-                        "Get the [`Field`] for the `", stringify!($fname),
-                        "` field of `", stringify!($Name), "`."
-                    )]
-                    pub fn $fname(self) -> Field<'a, Offsets> {
-                        let offset = u32::from(
-                            self.regions.offsets.get_ptr_size().$snake().$fname()
-                        );
-                        let flags = ir::MemFlagsData::trusted();
-                        $(
-                            let flags = define_vm_type_alias_region_helpers!(
-                                @apply_attr flags, $fattr
-                            );
-                        )*
-                        let ty = define_vm_type_alias_region_helpers!(
-                            @field_ty self.regions.pointer_type, $fty $(< $fgen >)?
-                        );
-                        Field::new(self.regions, VmType::$Name, offset, flags, ty)
-                    }
-                )*
-            }
+            define_vm_type_alias_region_helpers!(@munch $Name $snake {} [] $($body)*);
         )*
     };
 }
@@ -892,7 +934,7 @@ impl AliasRegions<VMOffsets<u8>> {
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmtag_import_vmctx(tag),
-            self.offsets.vmtag_import_vmctx().into(),
+            self.offsets.ptr.vm_tag_import().vmctx().into(),
             VmType::VMTagImport,
         )
     }
@@ -911,7 +953,7 @@ impl AliasRegions<VMOffsets<u8>> {
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmtag_import_index(tag),
-            self.offsets.vmtag_import_index().into(),
+            self.offsets.ptr.vm_tag_import().index().into(),
             VmType::VMTagImport,
         )
     }
@@ -930,7 +972,7 @@ impl AliasRegions<VMOffsets<u8>> {
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmtag_import_from(tag),
-            self.offsets.vmtag_import_from().into(),
+            self.offsets.ptr.vm_tag_import().from().into(),
             VmType::VMTagImport,
         )
     }
@@ -949,7 +991,7 @@ impl AliasRegions<VMOffsets<u8>> {
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmfunction_import_vmctx(func),
-            self.offsets.vmfunction_import_vmctx().into(),
+            self.offsets.ptr.vm_function_import().vmctx().into(),
             VmType::VMFunctionImport,
         )
     }
@@ -968,7 +1010,7 @@ impl AliasRegions<VMOffsets<u8>> {
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             self.offsets.vmctx_vmfunction_import_wasm_call(func),
-            self.offsets.vmfunction_import_wasm_call().into(),
+            self.offsets.ptr.vm_function_import().wasm_call().into(),
             VmType::VMFunctionImport,
         )
     }
@@ -982,14 +1024,14 @@ impl AliasRegions<VMOffsets<u8>> {
         memory: MemoryIndex,
     ) -> ir::Value {
         let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
-        let mem_vmctx_offset = mem_offset + u32::from(self.offsets.vmmemory_import_vmctx());
+        let mem_vmctx_offset = mem_offset + u32::from(self.offsets.ptr.vm_memory_import().vmctx());
         self.vmimport_load(
             cursor,
             self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             mem_vmctx_offset,
-            self.offsets.vmmemory_import_vmctx().into(),
+            self.offsets.ptr.vm_memory_import().vmctx().into(),
             VmType::VMMemoryImport,
         )
     }
@@ -1003,14 +1045,14 @@ impl AliasRegions<VMOffsets<u8>> {
         memory: MemoryIndex,
     ) -> ir::Value {
         let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
-        let mem_index_offset = mem_offset + u32::from(self.offsets.vmmemory_import_index());
+        let mem_index_offset = mem_offset + u32::from(self.offsets.ptr.vm_memory_import().index());
         self.vmimport_load(
             cursor,
             ir::types::I32,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             mem_index_offset,
-            self.offsets.vmmemory_import_index().into(),
+            self.offsets.ptr.vm_memory_import().index().into(),
             VmType::VMMemoryImport,
         )
     }
@@ -1035,12 +1077,12 @@ impl AliasRegions<VMOffsets<u8>> {
         memory: MemoryIndex,
     ) -> Load {
         let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
-        let offset = mem_offset + u32::from(self.offsets.vmmemory_import_from());
+        let offset = mem_offset + u32::from(self.offsets.ptr.vm_memory_import().from());
         let region = self.region(
             func,
             AliasRegionKey::Vm {
                 ty: VmType::VMMemoryImport,
-                offset: self.offsets.vmmemory_import_from().into(),
+                offset: self.offsets.ptr.vm_memory_import().from().into(),
             },
         );
         Load {
@@ -1062,14 +1104,15 @@ impl AliasRegions<VMOffsets<u8>> {
         table: TableIndex,
     ) -> ir::Value {
         let table_offset = self.offsets.vmctx_vmtable_import(table);
-        let table_vmctx_offset = table_offset + u32::from(self.offsets.vmtable_import_vmctx());
+        let table_vmctx_offset =
+            table_offset + u32::from(self.offsets.ptr.vm_table_import().vmctx());
         self.vmimport_load(
             cursor,
             self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             table_vmctx_offset,
-            self.offsets.vmtable_import_vmctx().into(),
+            self.offsets.ptr.vm_table_import().vmctx().into(),
             VmType::VMTableImport,
         )
     }
@@ -1083,14 +1126,15 @@ impl AliasRegions<VMOffsets<u8>> {
         table: TableIndex,
     ) -> ir::Value {
         let table_offset = self.offsets.vmctx_vmtable_import(table);
-        let table_index_offset = table_offset + u32::from(self.offsets.vmtable_import_index());
+        let table_index_offset =
+            table_offset + u32::from(self.offsets.ptr.vm_table_import().index());
         self.vmimport_load(
             cursor,
             ir::types::I32,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             table_index_offset,
-            self.offsets.vmtable_import_index().into(),
+            self.offsets.ptr.vm_table_import().index().into(),
             VmType::VMTableImport,
         )
     }
@@ -1103,7 +1147,7 @@ impl AliasRegions<VMOffsets<u8>> {
             func,
             AliasRegionKey::Vm {
                 ty: VmType::VMTableImport,
-                offset: self.offsets.vmtable_import_from().into(),
+                offset: self.offsets.ptr.vm_table_import().from().into(),
             },
         );
         Load {
@@ -1131,7 +1175,7 @@ impl AliasRegions<VMOffsets<u8>> {
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             from_offset,
-            self.offsets.vmglobal_import_from().into(),
+            self.offsets.ptr.vm_global_import().from().into(),
             VmType::VMGlobalImport,
         )
     }
@@ -1902,7 +1946,7 @@ where
         base_flags: ir::MemFlagsData,
         funcref: ir::Value,
     ) -> ir::Value {
-        let offset = self.offsets.get_ptr_size().vm_func_ref_type_index();
+        let offset = self.offsets.get_ptr_size().vm_func_ref().type_index();
         let region = self.vmfuncref_region(cursor.func, offset.into());
         let ty = ir::Type::int_with_byte_size(
             self.offsets
@@ -1929,7 +1973,7 @@ where
         base_flags: ir::MemFlagsData,
         funcref: ir::Value,
     ) -> ir::Value {
-        let offset = self.offsets.get_ptr_size().vm_func_ref_wasm_call();
+        let offset = self.offsets.get_ptr_size().vm_func_ref().wasm_call();
         let region = self.vmfuncref_region(cursor.func, offset.into());
         cursor.ins().load(
             self.pointer_type,
@@ -1946,7 +1990,7 @@ where
         base_flags: ir::MemFlagsData,
         funcref: ir::Value,
     ) -> ir::Value {
-        let offset = self.offsets.get_ptr_size().vm_func_ref_vmctx();
+        let offset = self.offsets.get_ptr_size().vm_func_ref().vmctx();
         let region = self.vmfuncref_region(cursor.func, offset.into());
         cursor.ins().load(
             self.pointer_type,
@@ -1967,7 +2011,7 @@ where
             .offsets
             .get_ptr_size()
             .vmarray_call_host_func_context_func_ref();
-        let field = self.offsets.get_ptr_size().vm_func_ref_array_call();
+        let field = self.offsets.get_ptr_size().vm_func_ref().array_call();
         let region = self.vmfuncref_region(cursor.func, field.into());
         cursor.ins().load(
             self.pointer_type,

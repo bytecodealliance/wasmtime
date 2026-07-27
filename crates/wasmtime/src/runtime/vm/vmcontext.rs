@@ -67,32 +67,8 @@ pub struct VMArrayCallFunction(VMFunctionBody);
 #[repr(transparent)]
 pub struct VMWasmCallFunction(VMFunctionBody);
 
-/// An imported function.
-///
-/// Basically the same as `VMFuncRef`, except that `wasm_call` is not optional.
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct VMFunctionImport {
-    /// Same as `VMFuncRef::array_call`.
-    pub array_call: VmPtr<VMArrayCallFunction>,
-
-    /// Same as `VMFuncRef::wasm_call`, except always non-null. Must be filled
-    /// in by the time Wasm is importing this function!
-    pub wasm_call: VmPtr<VMWasmCallFunction>,
-
-    /// Function signature's _actual_ type id.
-    ///
-    /// This is the type that the function was defined with, not the type that
-    /// it was imported as. These two can be different in the face of subtyping
-    /// and we need the former for to correctly implement dynamic downcasts.
-    pub type_index: VMSharedTypeIndex,
-
-    /// Same as `VMFuncRef::vmctx`.
-    pub vmctx: VmPtr<VMOpaqueContext>,
-    // If more elements are added here, remember to add offset_of tests below!
-}
-
-// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+// SAFETY: `VMFunctionImport` is generated with `#[repr(C)]` and only contains
+// `VmSafe` fields.
 unsafe impl VmSafe for VMFunctionImport {}
 
 impl VMFunctionImport {
@@ -119,33 +95,6 @@ mod test_vmfunction_import {
     use super::{VMFuncRef, VMFunctionImport};
     use core::mem::offset_of;
     use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
-
-    #[test]
-    fn check_vmfunction_import_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMFunctionImport>(),
-            usize::from(offsets.size_of_vmfunction_import())
-        );
-        assert_eq!(
-            offset_of!(VMFunctionImport, array_call),
-            usize::from(offsets.vmfunction_import_array_call())
-        );
-        assert_eq!(
-            offset_of!(VMFunctionImport, wasm_call),
-            usize::from(offsets.vmfunction_import_wasm_call())
-        );
-        assert_eq!(
-            offset_of!(VMFunctionImport, type_index),
-            usize::from(offsets.vmfunction_import_type_index())
-        );
-        assert_eq!(
-            offset_of!(VMFunctionImport, vmctx),
-            usize::from(offsets.vmfunction_import_vmctx())
-        );
-    }
 
     #[test]
     fn vmfunction_import_and_vmfunc_ref_have_same_layout() {
@@ -190,53 +139,14 @@ mod test_vmfunction_body {
     }
 }
 
-/// The fields compiled code needs to access to utilize a WebAssembly table
-/// imported from another instance.
-#[derive(Debug, Copy, Clone)]
-#[repr(C)]
-pub struct VMTableImport {
-    /// A pointer to the imported table description.
-    pub from: VmPtr<VMTableDefinition>,
-
-    /// A pointer to the `VMContext` that owns the table description.
-    pub vmctx: VmPtr<VMContext>,
-
-    /// The table index, within `vmctx`, this definition resides at.
-    pub index: DefinedTableIndex,
-}
-
-// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+// SAFETY: `VMTableImport` is generated with `#[repr(C)]` and only contains
+// `VmSafe` fields.
 unsafe impl VmSafe for VMTableImport {}
 
 #[cfg(test)]
 mod test_vmtable {
-    use super::VMTableImport;
-    use core::mem::offset_of;
-    use std::mem::size_of;
     use wasmtime_environ::component::{Component, VMComponentOffsets};
-    use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
-
-    #[test]
-    fn check_vmtable_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMTableImport>(),
-            usize::from(offsets.size_of_vmtable_import())
-        );
-        assert_eq!(
-            offset_of!(VMTableImport, from),
-            usize::from(offsets.vmtable_import_from())
-        );
-        assert_eq!(
-            offset_of!(VMTableImport, vmctx),
-            usize::from(offsets.vmtable_import_vmctx())
-        );
-        assert_eq!(
-            offset_of!(VMTableImport, index),
-            usize::from(offsets.vmtable_import_index())
-        );
-    }
+    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
 
     #[test]
     fn ensure_sizes_match() {
@@ -248,86 +158,18 @@ mod test_vmtable {
         let component = Component::default();
         let vm_component_offsets = VMComponentOffsets::new(HostPtr, &component);
         assert_eq!(
-            vm_offsets.size_of_vmtable_import(),
-            vm_component_offsets.size_of_vmtable_import()
+            vm_offsets.ptr.vm_table_import().size(),
+            vm_component_offsets.ptr.vm_table_import().size()
         );
     }
 }
 
-/// The fields compiled code needs to access to utilize a WebAssembly linear
-/// memory imported from another instance.
-#[derive(Debug, Copy, Clone)]
-#[repr(C)]
-pub struct VMMemoryImport {
-    /// A pointer to the imported memory description.
-    pub from: VmPtr<VMMemoryDefinition>,
-
-    /// A pointer to the `VMContext` that owns the memory description.
-    pub vmctx: VmPtr<VMContext>,
-
-    /// The index of the memory in the containing `vmctx`.
-    pub index: DefinedMemoryIndex,
-}
-
-// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+// SAFETY: `VMMemoryImport` is generated with `#[repr(C)]` and only contains
+// `VmSafe` fields.
 unsafe impl VmSafe for VMMemoryImport {}
 
-#[cfg(test)]
-mod test_vmmemory_import {
-    use super::VMMemoryImport;
-    use core::mem::offset_of;
-    use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
-
-    #[test]
-    fn check_vmmemory_import_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMMemoryImport>(),
-            usize::from(offsets.size_of_vmmemory_import())
-        );
-        assert_eq!(
-            offset_of!(VMMemoryImport, from),
-            usize::from(offsets.vmmemory_import_from())
-        );
-        assert_eq!(
-            offset_of!(VMMemoryImport, vmctx),
-            usize::from(offsets.vmmemory_import_vmctx())
-        );
-        assert_eq!(
-            offset_of!(VMMemoryImport, index),
-            usize::from(offsets.vmmemory_import_index())
-        );
-    }
-}
-
-/// The fields compiled code needs to access to utilize a WebAssembly global
-/// variable imported from another instance.
-///
-/// Note that unlike with functions, tables, and memories, `VMGlobalImport`
-/// doesn't include a `vmctx` pointer. Globals are never resized, and don't
-/// require a `vmctx` pointer to access.
-#[derive(Debug, Copy, Clone)]
-#[repr(C)]
-pub struct VMGlobalImport {
-    /// A pointer to the imported global variable description.
-    pub from: VmPtr<VMGlobalDefinition>,
-
-    /// A pointer to the context that owns the global.
-    ///
-    /// Exactly what's stored here is dictated by `kind` below. This is `None`
-    /// for `VMGlobalKind::Host`, it's a `VMContext` for
-    /// `VMGlobalKind::Instance`, and it's `VMComponentContext` for
-    /// `VMGlobalKind::ComponentFlags`.
-    pub vmctx: Option<VmPtr<VMOpaqueContext>>,
-
-    /// The kind of global, and extra location information in addition to
-    /// `vmctx` above.
-    pub kind: VMGlobalKind,
-}
-
-// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+// SAFETY: `VMGlobalImport` is generated with `#[repr(C)]` and only contains
+// `VmSafe` fields.
 unsafe impl VmSafe for VMGlobalImport {}
 
 /// The kinds of globals that Wasmtime has.
@@ -348,74 +190,9 @@ pub enum VMGlobalKind {
 // SAFETY: the above enum is repr(C) and stores nothing else
 unsafe impl VmSafe for VMGlobalKind {}
 
-#[cfg(test)]
-mod test_vmglobal_import {
-    use super::VMGlobalImport;
-    use core::mem::offset_of;
-    use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
-
-    #[test]
-    fn check_vmglobal_import_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMGlobalImport>(),
-            usize::from(offsets.size_of_vmglobal_import())
-        );
-        assert_eq!(
-            offset_of!(VMGlobalImport, from),
-            usize::from(offsets.vmglobal_import_from())
-        );
-    }
-}
-
-/// The fields compiled code needs to access to utilize a WebAssembly
-/// tag imported from another instance.
-#[derive(Debug, Copy, Clone)]
-#[repr(C)]
-pub struct VMTagImport {
-    /// A pointer to the imported tag description.
-    pub from: VmPtr<VMTagDefinition>,
-
-    /// The instance that owns this tag.
-    pub vmctx: VmPtr<VMContext>,
-
-    /// The index of the tag in the containing `vmctx`.
-    pub index: DefinedTagIndex,
-}
-
-// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+// SAFETY: `VMTagImport` is generated with `#[repr(C)]` and only contains
+// `VmSafe` fields.
 unsafe impl VmSafe for VMTagImport {}
-
-#[cfg(test)]
-mod test_vmtag_import {
-    use super::VMTagImport;
-    use core::mem::{offset_of, size_of};
-    use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
-
-    #[test]
-    fn check_vmtag_import_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMTagImport>(),
-            usize::from(offsets.size_of_vmtag_import())
-        );
-        assert_eq!(
-            offset_of!(VMTagImport, from),
-            usize::from(offsets.vmtag_import_from())
-        );
-        assert_eq!(
-            offset_of!(VMTagImport, vmctx),
-            usize::from(offsets.vmtag_import_vmctx())
-        );
-        assert_eq!(
-            offset_of!(VMTagImport, index),
-            usize::from(offsets.vmtag_import_index())
-        );
-    }
-}
 
 /// Define the runtime definitions of the shared `VM*` types.
 macro_rules! define_vm_types {
@@ -429,7 +206,7 @@ macro_rules! define_vm_types {
                 $(#[doc = $fdoc:literal])*
                 $(#[readonly])?
                 $(#[can_move])?
-                $fvis:vis $fname:ident : $fty:tt $(< $fgen:tt >)? ,
+                $fvis:vis $fname:ident : $fty:tt $(< $fgen:ty >)? ,
             )*
         }
     )* ) => {
@@ -770,51 +547,8 @@ mod test_vmtag_definition {
     }
 }
 
-/// The VM caller-checked "funcref" record, for caller-side signature checking.
-///
-/// It consists of function pointer(s), a type id to be checked by the
-/// caller, and the vmctx closure associated with this function.
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct VMFuncRef {
-    /// Function pointer for this funcref if being called via the "array"
-    /// calling convention that `Func::new` et al use.
-    pub array_call: VmPtr<VMArrayCallFunction>,
-
-    /// Function pointer for this funcref if being called via the calling
-    /// convention we use when compiling Wasm.
-    ///
-    /// Most functions come with a function pointer that we can use when they
-    /// are called from Wasm. The notable exception is when we `Func::wrap` a
-    /// host function, and we don't have a Wasm compiler on hand to compile a
-    /// Wasm-to-native trampoline for the function. In this case, we leave
-    /// `wasm_call` empty until the function is passed as an import to Wasm (or
-    /// otherwise exposed to Wasm via tables/globals). At this point, we look up
-    /// a Wasm-to-native trampoline for the function in the Wasm's compiled
-    /// module and use that fill in `VMFunctionImport::wasm_call`. **However**
-    /// there is no guarantee that the Wasm module has a trampoline for this
-    /// function's signature. The Wasm module only has trampolines for its
-    /// types, and if this function isn't of one of those types, then the Wasm
-    /// module will not have a trampoline for it. This is actually okay, because
-    /// it means that the Wasm cannot actually call this function. But it does
-    /// mean that this field needs to be an `Option` even though it is non-null
-    /// the vast vast vast majority of the time.
-    pub wasm_call: Option<VmPtr<VMWasmCallFunction>>,
-
-    /// Function signature's type id.
-    pub type_index: VMSharedTypeIndex,
-
-    /// The VM state associated with this function.
-    ///
-    /// The actual definition of what this pointer points to depends on the
-    /// function being referenced: for core Wasm functions, this is a `*mut
-    /// VMContext`, for host functions it is a `*mut VMHostFuncContext`, and for
-    /// component functions it is a `*mut VMComponentContext`.
-    pub vmctx: VmPtr<VMOpaqueContext>,
-    // If more elements are added here, remember to add offset_of tests below!
-}
-
-// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+// SAFETY: `VMFuncRef` is generated with `#[repr(C)]` and only contains
+// `VmSafe` fields.
 unsafe impl VmSafe for VMFuncRef {}
 
 impl VMFuncRef {
@@ -912,40 +646,6 @@ impl VMFuncRef {
         } else {
             None
         }
-    }
-}
-
-#[cfg(test)]
-mod test_vm_func_ref {
-    use super::VMFuncRef;
-    use core::mem::offset_of;
-    use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
-
-    #[test]
-    fn check_vm_func_ref_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMFuncRef>(),
-            usize::from(offsets.ptr.size_of_vm_func_ref())
-        );
-        assert_eq!(
-            offset_of!(VMFuncRef, array_call),
-            usize::from(offsets.ptr.vm_func_ref_array_call())
-        );
-        assert_eq!(
-            offset_of!(VMFuncRef, wasm_call),
-            usize::from(offsets.ptr.vm_func_ref_wasm_call())
-        );
-        assert_eq!(
-            offset_of!(VMFuncRef, type_index),
-            usize::from(offsets.ptr.vm_func_ref_type_index())
-        );
-        assert_eq!(
-            offset_of!(VMFuncRef, vmctx),
-            usize::from(offsets.ptr.vm_func_ref_vmctx())
-        );
     }
 }
 

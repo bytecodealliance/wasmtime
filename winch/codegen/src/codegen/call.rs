@@ -240,13 +240,13 @@ impl FnCall {
         // Load the callee VMContext, that will be passed as first argument to
         // the function call.
         masm.load_ptr(
-            masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_vmctx().into())?,
+            masm.address_at_reg(funcref_ptr, ptr.vm_func_ref().vmctx().into())?,
             writable!(callee_vmctx),
         )?;
 
         // Load the function pointer to be called.
         masm.load_ptr(
-            masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_wasm_call().into())?,
+            masm.address_at_reg(funcref_ptr, ptr.vm_func_ref().wasm_call().into())?,
             writable!(funcref),
         )?;
         context.free_reg(funcref_ptr);
