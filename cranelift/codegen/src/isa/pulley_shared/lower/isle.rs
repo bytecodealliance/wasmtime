@@ -10,8 +10,8 @@ use crate::ir::{condcodes::*, immediates::*, types::*, *};
 use crate::isa::CallConv;
 use crate::isa::pulley_shared::{
     inst::{
-        FReg, OperandSize, PulleyCall, ReturnCallInfo, VReg, WritableFReg, WritableVReg,
-        WritableXReg, XReg,
+        FReg, OperandSize, PulleyCall, PulleyCallIndirect, ReturnCallInfo, VReg, WritableFReg,
+        WritableVReg, WritableXReg, XReg,
     },
     lower::{Cond, regs},
     *,
@@ -30,7 +30,7 @@ type Unit = ();
 type VecArgPair = Vec<ArgPair>;
 type VecRetPair = Vec<RetPair>;
 type BoxCallInfo = Box<CallInfo<PulleyCall>>;
-type BoxCallIndInfo = Box<CallInfo<XReg>>;
+type BoxCallIndInfo = Box<CallInfo<PulleyCallIndirect>>;
 type BoxCallIndirectHostInfo = Box<CallInfo<ExternalName>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<XReg>>;
@@ -124,7 +124,7 @@ where
         &mut self,
         sig: Sig,
         dest: Reg,
-        uses: CallArgList,
+        mut uses: CallArgList,
         defs: CallRetList,
         try_call_info: Option<TryCallInfo>,
     ) -> BoxCallIndInfo {
@@ -133,8 +133,30 @@ where
         self.lower_ctx
             .abi_mut()
             .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+        let call_conv = self.lower_ctx.sigs()[sig].call_conv();
 
-        let dest = XReg::new(dest).unwrap();
+        // Mirror of `gen_call_info`: take out the first four integer
+        // arguments (x0..x3) and pass them through the `args` list so the
+        // emitted `call_indirect{1,2,3,4}` op can move them at call time.
+        // Saves one Pulley dispatch per moved arg vs the previous "regalloc
+        // emits xmov; then `call_indirect`" sequence.
+        let mut args = SmallVec::new();
+        uses.sort_by_key(|arg| arg.preg);
+        if call_conv != CallConv::PreserveAll {
+            uses.retain(|arg| {
+                if arg.preg != regs::x0()
+                    && arg.preg != regs::x1()
+                    && arg.preg != regs::x2()
+                    && arg.preg != regs::x3()
+                {
+                    return true;
+                }
+                args.push(XReg::new(arg.vreg).unwrap());
+                false
+            });
+        }
+        let target = XReg::new(dest).unwrap();
+        let dest = PulleyCallIndirect { target, args };
         Box::new(
             self.lower_ctx
                 .gen_call_info(sig, dest, uses, defs, try_call_info, false),
