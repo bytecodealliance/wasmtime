@@ -1329,6 +1329,9 @@
 (decl pure use_avx2 () bool)
 (extern constructor use_avx2 use_avx2)
 
+(decl pure use_apx () bool)
+(extern constructor use_apx use_apx)
+
 (decl pure has_cmpxchg16b () bool)
 (extern constructor has_cmpxchg16b has_cmpxchg16b)
 

@@ -94,6 +94,15 @@
 (rule iadd_base_case_32_or_64_lea -5 (lower (iadd (ty_32_or_64 ty) x y))
       (x64_lea ty (to_amode_add (mem_flags_trusted_data) x y (zero_offset))))
 
+;; APX: when the `has_apx` feature is enabled, use the NDD (new-data-
+;; destination) form of `add` for 64-bit adds. Unlike the legacy two-operand
+;; `add`, the NDD form writes its result to a fresh register encoded in the
+;; EVEX `vvvv` field, so the register allocator does not need to insert a move
+;; to preserve either input.
+(rule iadd_apx_ndd 1 (lower (iadd $I64 x y))
+      (if-let true (use_apx))
+      (x64_addq_rvm x y))
+
 ;; Higher-priority cases than the previous two where a load can be sunk into
 ;; the add instruction itself. Note that both operands are tested for
 ;; sink-ability since addition is commutative

@@ -229,7 +229,7 @@ impl dsl::Format {
         fmtln!(f, "let w = {};", vex.w.as_bool());
         let bits = "len, pp, mmmmm, w";
 
-        self.generate_vex_or_evex_prefix(f, "VexPrefix", &bits, vex.is4, None, || {
+        self.generate_vex_or_evex_prefix(f, "VexPrefix", &bits, vex.is4, None, "two_op", "three_op", || {
             vex.unwrap_digit()
         })
     }
@@ -237,16 +237,36 @@ impl dsl::Format {
     fn generate_evex_prefix(&self, f: &mut Formatter, evex: &dsl::Evex) -> ModRmStyle {
         f.empty_line();
         f.comment("Emit EVEX prefix.");
-        let ll = evex.length.evex_bits();
-        fmtln!(f, "let ll = {ll:#04b};");
+
+        // Intel APX promotes legacy GPR instructions into "EVEX map 4" using a
+        // re-purposed payload layout (see `EvexPrefix::legacy` in the runtime
+        // assembler and section 3.1.2.3.1 of the APX spec). In that case we
+        // emit the ND/NF bits and select the `legacy_*` constructors instead of
+        // the AVX-512 ones.
+        let apx_legacy = matches!(evex.apx, Some(dsl::ApxClass::LegacyGpr));
+
         fmtln!(f, "let pp = {:#04b};", evex.pp.map_or(0b00, |pp| pp.bits()));
         fmtln!(f, "let mmm = {:#07b};", evex.mmm.unwrap().bits());
         fmtln!(f, "let w = {};", evex.w.as_bool());
-        // NB: when bcast is supported in the future the `evex_scaling`
-        // calculation for `Full` and `Half` below need to be updated.
+
+        let (bits, two_op, three_op);
+        if apx_legacy {
+            fmtln!(f, "let nd = {};", evex.nd == Some(true));
+            fmtln!(f, "let nf = {};", evex.nf == Some(true));
+            bits = String::from("pp, mmm, w, nd, nf");
+            two_op = "legacy_two_op";
+            three_op = "legacy_three_op";
+        } else {
+            let ll = evex.length.evex_bits();
+            fmtln!(f, "let ll = {ll:#04b};");
+            // NB: when bcast is supported in the future the `evex_scaling`
+            // calculation for `Full` and `Half` below need to be updated.
+            fmtln!(f, "let bcast = false;");
+            bits = String::from("ll, pp, mmm, w, bcast");
+            two_op = "two_op";
+            three_op = "three_op";
+        }
         let bcast = false;
-        fmtln!(f, "let bcast = {bcast};");
-        let bits = format!("ll, pp, mmm, w, bcast");
         let is4 = false;
 
         let length_bytes = match evex.length {
@@ -289,7 +309,7 @@ impl dsl::Format {
             },
         });
 
-        self.generate_vex_or_evex_prefix(f, "EvexPrefix", &bits, is4, evex_scaling, || {
+        self.generate_vex_or_evex_prefix(f, "EvexPrefix", &bits, is4, evex_scaling, two_op, three_op, || {
             evex.unwrap_digit()
         })
     }
@@ -304,6 +324,8 @@ impl dsl::Format {
         bits: &str,
         is4: bool,
         evex_scaling: Option<i8>,
+        two_op: &str,
+        three_op: &str,
         unwrap_digit: impl Fn() -> Option<u8>,
     ) -> ModRmStyle {
         use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
@@ -316,7 +338,7 @@ impl dsl::Format {
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(
                     f,
-                    "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                    "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                 );
                 ModRmStyle::Reg {
                     reg: ModRmReg::Reg(*reg),
@@ -333,7 +355,7 @@ impl dsl::Format {
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(
                     f,
-                    "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                    "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                 );
                 ModRmStyle::RegMem {
                     reg: ModRmReg::Reg(*reg),
@@ -348,7 +370,7 @@ impl dsl::Format {
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(
                     f,
-                    "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                    "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                 );
                 ModRmStyle::RegMemIs4 {
                     reg: ModRmReg::Reg(*reg),
@@ -368,7 +390,7 @@ impl dsl::Format {
                     fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                     fmtln!(
                         f,
-                        "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                        "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                     );
                     ModRmStyle::RegMem {
                         reg: ModRmReg::Digit(digit),
@@ -381,7 +403,7 @@ impl dsl::Format {
                     let reg = reg_or_vvvv;
                     fmtln!(f, "let reg = self.{reg}.enc();");
                     fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                    fmtln!(f, "let prefix = {prefix_type}::two_op(reg, rm, {bits});");
+                    fmtln!(f, "let prefix = {prefix_type}::{two_op}(reg, rm, {bits});");
                     ModRmStyle::RegMem {
                         reg: ModRmReg::Reg(*reg),
                         rm: *rm,
@@ -399,7 +421,7 @@ impl dsl::Format {
                         fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                         fmtln!(
                             f,
-                            "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                            "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                         );
                         ModRmStyle::Reg {
                             reg: ModRmReg::Digit(digit),
@@ -411,7 +433,7 @@ impl dsl::Format {
                         let reg = reg_or_vvvv;
                         fmtln!(f, "let reg = self.{reg}.enc();");
                         fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                        fmtln!(f, "let prefix = {prefix_type}::two_op(reg, rm, {bits});");
+                        fmtln!(f, "let prefix = {prefix_type}::{two_op}(reg, rm, {bits});");
                         ModRmStyle::Reg {
                             reg: ModRmReg::Reg(*reg),
                             rm: *rm,
@@ -423,7 +445,7 @@ impl dsl::Format {
                 assert!(!is4);
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                fmtln!(f, "let prefix = {prefix_type}::two_op(reg, rm, {bits});");
+                fmtln!(f, "let prefix = {prefix_type}::{two_op}(reg, rm, {bits});");
                 ModRmStyle::RegMem {
                     reg: ModRmReg::Reg(*reg),
                     rm: *rm,

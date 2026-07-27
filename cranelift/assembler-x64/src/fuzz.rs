@@ -412,4 +412,37 @@ mod test {
             roundtrip(&inst.into());
         }
     }
+
+    /// Byte-level encoding check for the APX NDD (new-data-destination) form of
+    /// `ADD`, promoted into EVEX "map 4" via the extended-EVEX prefix.
+    ///
+    /// We assert the exact bytes rather than round-tripping through Capstone
+    /// because the bundled disassembler does not yet understand APX. With
+    /// `ND = 1` the architectural destination is the `vvvv`-encoded register, so
+    /// the `RVM` operands are `[ModRM.reg source, vvvv destination, ModRM.rm
+    /// source]`. For `addq %rax, %rcx, %rdx` (destination `%rax` = 0 in `vvvv`,
+    /// source `%rcx` = 1 in ModRM.reg, source `%rdx` = 2 in ModRM.rm), `W = 1`,
+    /// `ND = 1`, `NF = 0`, the expected sequence is:
+    ///
+    /// ```text
+    ///   62 F4 FC 18 01 CA
+    ///   ^^ ^^ ^^ ^^ ^^ ^^
+    ///   |  |  |  |  |  └ ModRM: mod=11 reg=rcx r/m=rdx
+    ///   |  |  |  |  └ opcode 0x01 (ADD r/m, reg)
+    ///   |  |  |  └ P2: ND=1 (bit4), V4=1 (bit3, inverted), NF=0
+    ///   |  |  └ P1: W=1, vvvv=~rax=1111, U=1, pp=00
+    ///   |  └ P0: R3 X3 B3 R4 = 1111, B4=0, map=100 (map 4)
+    ///   └ EVEX identifier
+    /// ```
+    #[test]
+    fn apx_addq_rvm_ndd_encoding() {
+        use crate::inst::addq_rvm;
+        // Format is `RVM` = [ModRM.reg source, vvvv destination, ModRM.rm
+        // source], so the constructor arguments are (reg source = %rcx,
+        // destination = %rax, r/m source = %rdx).
+        let inst =
+            addq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1801CA");
+    }
 }

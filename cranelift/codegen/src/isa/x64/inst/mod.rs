@@ -1590,6 +1590,10 @@ impl asm::AvailableFeatures for &EmitInfo {
     fn avx512vbmi(&self) -> bool {
         self.isa_flags.has_avx512vbmi()
     }
+
+    fn apx(&self) -> bool {
+        self.isa_flags.has_apx()
+    }
 }
 
 impl MachInstEmit for Inst {

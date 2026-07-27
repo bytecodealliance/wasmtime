@@ -83,6 +83,15 @@ pub(crate) fn define() -> TargetIsa {
         "AVX512F: CPUID.07H:EBX.AVX512F[bit 16]",
         false,
     );
+    // Registered so `target x86_64 has_apx` parses; not yet referenced by any
+    // preset because no shipping microarchitecture ships APX today. Drop the
+    // leading underscore once a preset needs it.
+    let _has_apx = settings.add_bool(
+        "has_apx",
+        "Has support for APX.",
+        "APX_F: CPUID.(EAX=07H,ECX=1H):EDX.APX_F[bit 21]",
+        false,
+    );
     let has_popcnt = settings.add_bool(
         "has_popcnt",
         "Has support for POPCNT.",
