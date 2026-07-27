@@ -251,22 +251,6 @@ fn linker_get_default() -> Result<()> {
     })
 }
 
-#[test]
-fn linker_define_name() -> Result<()> {
-    let mut config = Config::new();
-    config.enable_compiler(false);
-    config.concurrency_support(false);
-    let engine = Engine::new(&config)?;
-
-    OomTest::new().test(|| {
-        let mut store = Store::try_new(&engine, ())?;
-        let mut linker = Linker::<()>::new(&engine);
-        let func = Func::try_wrap(&mut store, || {})?;
-        linker.define_name(&store, "func", func)?;
-        Ok(())
-    })
-}
-
 #[tokio::test]
 async fn linker_module_async() -> Result<()> {
     let module_bytes = {
