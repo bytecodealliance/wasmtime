@@ -32,4 +32,4 @@
     ;; pretend this is the actual function end
     "\0b"             ;; end
   )
-  "hello")
+  "operators remaining after end")

@@ -12,6 +12,7 @@ use crate::{
 };
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
+use core::fmt;
 use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
@@ -98,6 +99,12 @@ struct ComponentInner {
 
     /// The checksum of the source binary from which the module was compiled.
     checksum: WasmChecksum,
+}
+
+impl fmt::Debug for Component {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Component").finish_non_exhaustive()
+    }
 }
 
 pub(crate) struct AllCallFuncPointers {
