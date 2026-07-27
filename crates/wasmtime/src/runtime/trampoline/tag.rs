@@ -33,28 +33,31 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
 
     let imports = Imports::default();
 
+    // Both the tag's signature type and its exception type are referred to by
+    // engine-level type index from the dummy module's `Tag`, so both
+    // `RegisteredType`s must be handed to the instance's runtime info to keep
+    // those indices rooted in the engine's type registry for as long as the
+    // instance (and thus the store) is alive.
+    let runtime_info = ModuleRuntimeInfo::bare_with_registered_types(
+        try_new::<Arc<_>>(module)?,
+        store.engine(),
+        [func_ty, exn_ty],
+    )?;
+
     unsafe {
         let allocator =
             OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
-        let module = try_new::<Arc<_>>(module)?;
 
         // Note that `assert_ready` should be valid here because this module
         // doesn't allocate tables or memories meaning it shouldn't need a
         // resource limiter so `None` is passed. As a result no `await` points
         // should ever be hit.
-        //
-        // Both the tag's signature type and its exception type are
-        // referred to by engine-level type index from the dummy
-        // module's `Tag`, so both `RegisteredType`s must be handed to
-        // the instance's runtime info to keep those indices rooted in
-        // the engine's type registry for as long as the instance (and
-        // thus the store) is alive.
         vm::assert_ready(store.allocate_instance(
             None,
             AllocateInstanceKind::Dummy {
                 allocator: &allocator,
             },
-            &ModuleRuntimeInfo::bare_with_registered_types(module, [func_ty, exn_ty])?,
+            &runtime_info,
             imports,
         ))
     }

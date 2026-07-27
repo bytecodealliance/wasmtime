@@ -227,10 +227,17 @@ impl<T: 'static> Linker<T> {
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
     ///
+    /// Returns an error if `component` was not compiled by the same
+    /// [`Engine`](crate::Engine) as this linker.
+    ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
+        ensure!(
+            Engine::same(&self.engine, component.engine()),
+            "cross-`Engine` instantiation is not currently supported"
+        );
         let cx = self.typecheck(&component)?;
 
         // A successful typecheck resolves all of the imported resources used by

@@ -305,17 +305,40 @@ pub struct BareModuleInfo {
 
 impl ModuleRuntimeInfo {
     pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Result<Self, OutOfMemory> {
-        ModuleRuntimeInfo::bare_with_registered_types(module, None)
+        ModuleRuntimeInfo::new_bare(module, TryVec::new())
     }
 
+    /// Same as [`ModuleRuntimeInfo::bare`], but additionally keeps
+    /// `registered_types` alive for as long as the resulting instance.
+    ///
+    /// This is the choke point at which a host-allocated table or tag holds
+    /// `VMSharedTypeIndex`es alive on behalf of a store, so it is where we
+    /// check that those types belong to that store's engine. Returns an error
+    /// if any of `registered_types` was not registered with `engine`.
     pub(crate) fn bare_with_registered_types(
         module: Arc<wasmtime_environ::Module>,
+        engine: &crate::Engine,
         registered_types: impl IntoIterator<Item = RegisteredType>,
+    ) -> Result<Self> {
+        let mut types = TryVec::new();
+        for ty in registered_types {
+            crate::ensure!(
+                crate::Engine::same(engine, ty.engine()),
+                "type used with wrong engine"
+            );
+            types.push(ty)?;
+        }
+        Ok(ModuleRuntimeInfo::new_bare(module, types)?)
+    }
+
+    fn new_bare(
+        module: Arc<wasmtime_environ::Module>,
+        registered_types: TryVec<RegisteredType>,
     ) -> Result<Self, OutOfMemory> {
         let info = try_new(BareModuleInfo {
             offsets: VMOffsets::new(HostPtr, &module),
             module,
-            _registered_types: registered_types.into_iter().try_collect()?,
+            _registered_types: registered_types,
         })?;
         Ok(ModuleRuntimeInfo::Bare(info))
     }
