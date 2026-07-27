@@ -67,20 +67,33 @@ fn align(offset: u32, width: u32) -> u32 {
 /// `size` and `align` methods.
 macro_rules! define_vm_type_offsets {
     // Classify a field type to its size in bytes as a `u32`, given `$p` (the
-    // target pointer size as a `u8`).
-    (@size ($p:expr) VmPtr < u8 >) => { u32::from($p) };
+    // target pointer size as a `u8`). All `VmPtr<_>` and `Option<VmPtr<_>>`
+    // fields are pointer-sized; the `Defined*Index` types are `u32` entity
+    // references; and `VMGlobalKind` is a `repr(C, u32)` enum with a `u32`
+    // payload.
+    (@size ($p:expr) VmPtr < $g:ty >) => { u32::from($p) };
+    (@size ($p:expr) Option < $g:ty >) => { u32::from($p) };
     (@size ($p:expr) AtomicUsize) => { u32::from($p) };
     (@size ($p:expr) usize) => { u32::from($p) };
     (@size ($p:expr) [u8; 16]) => { 16u32 };
     (@size ($p:expr) VMSharedTypeIndex) => { u32::from(($p).size_of_vmshared_type_index()) };
+    (@size ($p:expr) DefinedTableIndex) => { 4u32 };
+    (@size ($p:expr) DefinedMemoryIndex) => { 4u32 };
+    (@size ($p:expr) DefinedTagIndex) => { 4u32 };
+    (@size ($p:expr) VMGlobalKind) => { 8u32 };
 
     // Classify a field type to its alignment in bytes as a `u32`, given `$p`
     // (the target pointer size as a `u8`).
-    (@align ($p:expr) VmPtr < u8 >) => { u32::from($p) };
+    (@align ($p:expr) VmPtr < $g:ty >) => { u32::from($p) };
+    (@align ($p:expr) Option < $g:ty >) => { u32::from($p) };
     (@align ($p:expr) AtomicUsize) => { u32::from($p) };
     (@align ($p:expr) usize) => { u32::from($p) };
     (@align ($p:expr) [u8; 16]) => { 16u32 };
     (@align ($p:expr) VMSharedTypeIndex) => { u32::from(($p).align_of_vmshared_type_index()) };
+    (@align ($p:expr) DefinedTableIndex) => { 4u32 };
+    (@align ($p:expr) DefinedMemoryIndex) => { 4u32 };
+    (@align ($p:expr) DefinedTagIndex) => { 4u32 };
+    (@align ($p:expr) VMGlobalKind) => { 4u32 };
 
     // Classify a `#[repr(...)]` to the minimum alignment it forces, as a `u32`.
     (@repr_align C) => { 1u32 };
@@ -93,7 +106,7 @@ macro_rules! define_vm_type_offsets {
     // across the emitted `let` bindings.
     (@fields $Name:ident ($p:ident, $o:ident) prefix( $($prefix:tt)* )) => {};
     (@fields $Name:ident ($p:ident, $o:ident) prefix( $($prefix:tt)* )
-        [ $fname:ident : $fty:tt $(< $fgen:tt >)? ]
+        [ $fname:ident : $fty:tt $(< $fgen:ty >)? ]
         $($rest:tt)*
     ) => {
         #[doc = concat!(
@@ -130,7 +143,7 @@ macro_rules! define_vm_type_offsets {
                 $(#[doc = $fdoc:literal])*
                 $(#[readonly])?
                 $(#[can_move])?
-                $fvis:vis $fname:ident : $fty:tt $(< $fgen:tt >)? ,
+                $fvis:vis $fname:ident : $fty:tt $(< $fgen:ty >)? ,
             )*
         }
     )* ) => {
@@ -201,7 +214,7 @@ macro_rules! define_ptr_size_vm_type_accessors {
                 $(#[doc = $fdoc:literal])*
                 $(#[readonly])?
                 $(#[can_move])?
-                $fvis:vis $fname:ident : $fty:tt $(< $fgen:tt >)? ,
+                $fvis:vis $fname:ident : $fty:tt $(< $fgen:ty >)? ,
             )*
         }
     )* ) => {
@@ -289,36 +302,6 @@ pub trait PtrSize {
     /// The offset of the `VMContext::builtin_functions` field
     fn vmcontext_builtin_functions(&self) -> u8 {
         self.vmcontext_store_context() + self.size()
-    }
-
-    /// The offset of the `array_call` field.
-    #[inline]
-    fn vm_func_ref_array_call(&self) -> u8 {
-        0 * self.size()
-    }
-
-    /// The offset of the `wasm_call` field.
-    #[inline]
-    fn vm_func_ref_wasm_call(&self) -> u8 {
-        1 * self.size()
-    }
-
-    /// The offset of the `type_index` field.
-    #[inline]
-    fn vm_func_ref_type_index(&self) -> u8 {
-        2 * self.size()
-    }
-
-    /// The offset of the `vmctx` field.
-    #[inline]
-    fn vm_func_ref_vmctx(&self) -> u8 {
-        3 * self.size()
-    }
-
-    /// Return the size of `VMFuncRef`.
-    #[inline]
-    fn size_of_vm_func_ref(&self) -> u8 {
-        4 * self.size()
     }
 
     /// Return the size of `VMSharedTypeIndex`.
@@ -1004,19 +987,19 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
 
         fields! {
             size(imported_memories)
-                = cmul(ret.num_imported_memories, ret.size_of_vmmemory_import()),
+                = cmul(ret.num_imported_memories, ret.ptr.vm_memory_import().size()),
             size(defined_memories)
                 = cmul(ret.num_defined_memories, ret.ptr.size_of_vmmemory_pointer()),
             size(owned_memories)
                 = cmul(ret.num_owned_memories, ret.ptr.vm_memory_definition().size()),
             size(imported_functions)
-                = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
+                = cmul(ret.num_imported_functions, ret.ptr.vm_function_import().size()),
             size(imported_tables)
-                = cmul(ret.num_imported_tables, ret.size_of_vmtable_import()),
+                = cmul(ret.num_imported_tables, ret.ptr.vm_table_import().size()),
             size(imported_globals)
-                = cmul(ret.num_imported_globals, ret.size_of_vmglobal_import()),
+                = cmul(ret.num_imported_globals, ret.ptr.vm_global_import().size()),
             size(imported_tags)
-                = cmul(ret.num_imported_tags, ret.size_of_vmtag_import()),
+                = cmul(ret.num_imported_tags, ret.ptr.vm_tag_import().size()),
             size(defined_tables)
                 = cmul(ret.num_defined_tables, ret.ptr.vm_table_definition().size()),
             align(16),
@@ -1026,10 +1009,10 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 = cmul(ret.num_defined_tags, ret.ptr.vm_tag_definition().size()),
             size(defined_func_refs) = cmul(
                 ret.num_escaped_funcs,
-                ret.ptr.size_of_vm_func_ref(),
+                ret.ptr.vm_func_ref().size(),
             ),
             size(startup_func_ref) = if ret.has_startup_func {
-                ret.ptr.size_of_vm_func_ref()
+                ret.ptr.vm_func_ref().size()
             } else {
                 0
             },
@@ -1043,70 +1026,11 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
     }
 }
 
-impl<P: PtrSize> VMOffsets<P> {
-    /// The offset of the `VMFunctionImport::array_call` field.
-    #[inline]
-    pub fn vmfunction_import_array_call(&self) -> u8 {
-        0 * self.pointer_size()
-    }
-
-    /// The offset of the `VMFunctionImport::wasm_call` field.
-    #[inline]
-    pub fn vmfunction_import_wasm_call(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
-    /// The offset of the `VMFunctionImport::type_index` field.
-    #[inline]
-    pub fn vmfunction_import_type_index(&self) -> u8 {
-        2 * self.pointer_size()
-    }
-
-    /// The offset of the `VMFunctionImport::vmctx` field.
-    #[inline]
-    pub fn vmfunction_import_vmctx(&self) -> u8 {
-        3 * self.pointer_size()
-    }
-
-    /// Return the size of `VMFunctionImport`.
-    #[inline]
-    pub fn size_of_vmfunction_import(&self) -> u8 {
-        4 * self.pointer_size()
-    }
-}
-
 /// Offsets for `*const VMFunctionBody`.
 impl<P: PtrSize> VMOffsets<P> {
     /// The size of the `current_elements` field.
     pub fn size_of_vmfunction_body_ptr(&self) -> u8 {
         1 * self.pointer_size()
-    }
-}
-
-/// Offsets for `VMTableImport`.
-impl<P: PtrSize> VMOffsets<P> {
-    /// The offset of the `from` field.
-    #[inline]
-    pub fn vmtable_import_from(&self) -> u8 {
-        0 * self.pointer_size()
-    }
-
-    /// The offset of the `vmctx` field.
-    #[inline]
-    pub fn vmtable_import_vmctx(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
-    /// The offset of the `index` field.
-    #[inline]
-    pub fn vmtable_import_index(&self) -> u8 {
-        2 * self.pointer_size()
-    }
-
-    /// Return the size of `VMTableImport`.
-    #[inline]
-    pub fn size_of_vmtable_import(&self) -> u8 {
-        3 * self.pointer_size()
     }
 }
 
@@ -1119,82 +1043,12 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Offsets for `VMMemoryImport`.
-impl<P: PtrSize> VMOffsets<P> {
-    /// The offset of the `from` field.
-    #[inline]
-    pub fn vmmemory_import_from(&self) -> u8 {
-        0 * self.pointer_size()
-    }
-
-    /// The offset of the `vmctx` field.
-    #[inline]
-    pub fn vmmemory_import_vmctx(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
-    /// The offset of the `index` field.
-    #[inline]
-    pub fn vmmemory_import_index(&self) -> u8 {
-        2 * self.pointer_size()
-    }
-
-    /// Return the size of `VMMemoryImport`.
-    #[inline]
-    pub fn size_of_vmmemory_import(&self) -> u8 {
-        3 * self.pointer_size()
-    }
-}
-
-/// Offsets for `VMGlobalImport`.
-impl<P: PtrSize> VMOffsets<P> {
-    /// The offset of the `from` field.
-    #[inline]
-    pub fn vmglobal_import_from(&self) -> u8 {
-        0 * self.pointer_size()
-    }
-
-    /// Return the size of `VMGlobalImport`.
-    #[inline]
-    pub fn size_of_vmglobal_import(&self) -> u8 {
-        // `VMGlobalImport` has two pointers plus 8 bytes for `VMGlobalKind`
-        2 * self.pointer_size() + 8
-    }
-}
-
 /// Offsets for `VMSharedTypeIndex`.
 impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMSharedTypeIndex`.
     #[inline]
     pub fn size_of_vmshared_type_index(&self) -> u8 {
         self.ptr.size_of_vmshared_type_index()
-    }
-}
-
-/// Offsets for `VMTagImport`.
-impl<P: PtrSize> VMOffsets<P> {
-    /// The offset of the `from` field.
-    #[inline]
-    pub fn vmtag_import_from(&self) -> u8 {
-        0 * self.pointer_size()
-    }
-
-    /// The offset of the `vmctx` field.
-    #[inline]
-    pub fn vmtag_import_vmctx(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
-    /// The offset of the `index` field.
-    #[inline]
-    pub fn vmtag_import_index(&self) -> u8 {
-        2 * self.pointer_size()
-    }
-
-    /// Return the size of `VMTagImport`.
-    #[inline]
-    pub fn size_of_vmtag_import(&self) -> u8 {
-        3 * self.pointer_size()
     }
 }
 
@@ -1289,7 +1143,7 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vmctx_vmfunction_import(&self, index: FuncIndex) -> u32 {
         assert!(index.as_u32() < self.num_imported_functions);
         self.vmctx_imported_functions_begin()
-            + index.as_u32() * u32::from(self.size_of_vmfunction_import())
+            + index.as_u32() * u32::from(self.ptr.vm_function_import().size())
     }
 
     /// Return the offset to `VMTable` index `index`.
@@ -1297,7 +1151,7 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vmctx_vmtable_import(&self, index: TableIndex) -> u32 {
         assert!(index.as_u32() < self.num_imported_tables);
         self.vmctx_imported_tables_begin()
-            + index.as_u32() * u32::from(self.size_of_vmtable_import())
+            + index.as_u32() * u32::from(self.ptr.vm_table_import().size())
     }
 
     /// Return the offset to `VMMemoryImport` index `index`.
@@ -1305,7 +1159,7 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vmctx_vmmemory_import(&self, index: MemoryIndex) -> u32 {
         assert!(index.as_u32() < self.num_imported_memories);
         self.vmctx_imported_memories_begin()
-            + index.as_u32() * u32::from(self.size_of_vmmemory_import())
+            + index.as_u32() * u32::from(self.ptr.vm_memory_import().size())
     }
 
     /// Return the offset to `VMGlobalImport` index `index`.
@@ -1313,14 +1167,15 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vmctx_vmglobal_import(&self, index: GlobalIndex) -> u32 {
         assert!(index.as_u32() < self.num_imported_globals);
         self.vmctx_imported_globals_begin()
-            + index.as_u32() * u32::from(self.size_of_vmglobal_import())
+            + index.as_u32() * u32::from(self.ptr.vm_global_import().size())
     }
 
     /// Return the offset to `VMTagImport` index `index`.
     #[inline]
     pub fn vmctx_vmtag_import(&self, index: TagIndex) -> u32 {
         assert!(index.as_u32() < self.num_imported_tags);
-        self.vmctx_imported_tags_begin() + index.as_u32() * u32::from(self.size_of_vmtag_import())
+        self.vmctx_imported_tags_begin()
+            + index.as_u32() * u32::from(self.ptr.vm_tag_import().size())
     }
 
     /// Return the offset to `VMTableDefinition` index `index`.
@@ -1368,7 +1223,7 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vmctx_func_ref(&self, index: FuncRefIndex) -> u32 {
         assert!(!index.is_reserved_value());
         assert!(index.as_u32() < self.num_escaped_funcs);
-        self.vmctx_func_refs_begin() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
+        self.vmctx_func_refs_begin() + index.as_u32() * u32::from(self.ptr.vm_func_ref().size())
     }
 
     /// Returns the offset to the `VMFuncRef` for the module startup function.
@@ -1399,26 +1254,26 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `wasm_call` field in `*const VMFunctionBody` index `index`.
     #[inline]
     pub fn vmctx_vmfunction_import_wasm_call(&self, index: FuncIndex) -> u32 {
-        self.vmctx_vmfunction_import(index) + u32::from(self.vmfunction_import_wasm_call())
+        self.vmctx_vmfunction_import(index) + u32::from(self.ptr.vm_function_import().wasm_call())
     }
 
     /// Return the offset to the `array_call` field in `*const VMFunctionBody` index `index`.
     #[inline]
     pub fn vmctx_vmfunction_import_array_call(&self, index: FuncIndex) -> u32 {
-        self.vmctx_vmfunction_import(index) + u32::from(self.vmfunction_import_array_call())
+        self.vmctx_vmfunction_import(index) + u32::from(self.ptr.vm_function_import().array_call())
     }
 
     /// Return the offset to the `vmctx` field in `*const VMFunctionBody` index `index`.
     #[inline]
     pub fn vmctx_vmfunction_import_vmctx(&self, index: FuncIndex) -> u32 {
-        self.vmctx_vmfunction_import(index) + u32::from(self.vmfunction_import_vmctx())
+        self.vmctx_vmfunction_import(index) + u32::from(self.ptr.vm_function_import().vmctx())
     }
 
     /// Return the offset to the `from` field in the imported `VMTable` at index
     /// `index`.
     #[inline]
     pub fn vmctx_vmtable_from(&self, index: TableIndex) -> u32 {
-        self.vmctx_vmtable_import(index) + u32::from(self.vmtable_import_from())
+        self.vmctx_vmtable_import(index) + u32::from(self.ptr.vm_table_import().from())
     }
 
     /// Return the offset to the `base` field in `VMTableDefinition` index `index`.
@@ -1437,7 +1292,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `from` field in `VMMemoryImport` index `index`.
     #[inline]
     pub fn vmctx_vmmemory_import_from(&self, index: MemoryIndex) -> u32 {
-        self.vmctx_vmmemory_import(index) + u32::from(self.vmmemory_import_from())
+        self.vmctx_vmmemory_import(index) + u32::from(self.ptr.vm_memory_import().from())
     }
 
     /// Return the offset to the `base` field in `VMMemoryDefinition` index `index`.
@@ -1456,25 +1311,25 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `from` field in `VMGlobalImport` index `index`.
     #[inline]
     pub fn vmctx_vmglobal_import_from(&self, index: GlobalIndex) -> u32 {
-        self.vmctx_vmglobal_import(index) + u32::from(self.vmglobal_import_from())
+        self.vmctx_vmglobal_import(index) + u32::from(self.ptr.vm_global_import().from())
     }
 
     /// Return the offset to the `from` field in `VMTagImport` index `index`.
     #[inline]
     pub fn vmctx_vmtag_import_from(&self, index: TagIndex) -> u32 {
-        self.vmctx_vmtag_import(index) + u32::from(self.vmtag_import_from())
+        self.vmctx_vmtag_import(index) + u32::from(self.ptr.vm_tag_import().from())
     }
 
     /// Return the offset to the `vmctx` field in `VMTagImport` index `index`.
     #[inline]
     pub fn vmctx_vmtag_import_vmctx(&self, index: TagIndex) -> u32 {
-        self.vmctx_vmtag_import(index) + u32::from(self.vmtag_import_vmctx())
+        self.vmctx_vmtag_import(index) + u32::from(self.ptr.vm_tag_import().vmctx())
     }
 
     /// Return the offset to the `index` field in `VMTagImport` index `index`.
     #[inline]
     pub fn vmctx_vmtag_import_index(&self, index: TagIndex) -> u32 {
-        self.vmctx_vmtag_import(index) + u32::from(self.vmtag_import_index())
+        self.vmctx_vmtag_import(index) + u32::from(self.ptr.vm_tag_import().index())
     }
 }
 

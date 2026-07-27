@@ -467,7 +467,7 @@ where
             .checked_mul(sig_index_bytes.into())
             .unwrap();
         let signatures_base_offset = self.env.vmoffsets.ptr.vmctx_type_ids_array();
-        let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref_type_index();
+        let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref().type_index();
         // Get the caller id.
         let caller_id = self.context.any_gpr(self.masm)?;
 
@@ -2508,8 +2508,10 @@ where
             // the vmctx itself.
             None => {
                 let vmimport = self.env.vmoffsets.vmctx_vmmemory_import(mem);
-                let vmctx_offset = vmimport + u32::from(self.env.vmoffsets.vmmemory_import_vmctx());
-                let index_offset = vmimport + u32::from(self.env.vmoffsets.vmmemory_import_index());
+                let vmctx_offset =
+                    vmimport + u32::from(self.env.vmoffsets.ptr.vm_memory_import().vmctx());
+                let index_offset =
+                    vmimport + u32::from(self.env.vmoffsets.ptr.vm_memory_import().index());
                 let index_addr = self.masm.address_at_vmctx(index_offset)?;
                 let index_dst = self.context.reg_for_class(RegClass::Int, self.masm)?;
                 self.masm
@@ -2538,8 +2540,10 @@ where
             }
             None => {
                 let vmimport = self.env.vmoffsets.vmctx_vmtable_import(table);
-                let vmctx_offset = vmimport + u32::from(self.env.vmoffsets.vmtable_import_vmctx());
-                let index_offset = vmimport + u32::from(self.env.vmoffsets.vmtable_import_index());
+                let vmctx_offset =
+                    vmimport + u32::from(self.env.vmoffsets.ptr.vm_table_import().vmctx());
+                let index_offset =
+                    vmimport + u32::from(self.env.vmoffsets.ptr.vm_table_import().index());
                 let index_addr = self.masm.address_at_vmctx(index_offset)?;
                 let index_dst = self.context.reg_for_class(RegClass::Int, self.masm)?;
                 self.masm
