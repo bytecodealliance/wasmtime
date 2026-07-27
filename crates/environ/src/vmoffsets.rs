@@ -80,7 +80,7 @@ macro_rules! define_vm_type_offsets {
     (@align ($p:expr) AtomicUsize) => { u32::from($p) };
     (@align ($p:expr) usize) => { u32::from($p) };
     (@align ($p:expr) [u8; 16]) => { 16u32 };
-    (@align ($p:expr) VMSharedTypeIndex) => { u32::from(($p).size_of_vmshared_type_index()) };
+    (@align ($p:expr) VMSharedTypeIndex) => { u32::from(($p).align_of_vmshared_type_index()) };
 
     // Classify a `#[repr(...)]` to the minimum alignment it forces, as a `u32`.
     (@repr_align C) => { 1u32 };
@@ -324,6 +324,12 @@ pub trait PtrSize {
     /// Return the size of `VMSharedTypeIndex`.
     #[inline]
     fn size_of_vmshared_type_index(&self) -> u8 {
+        4
+    }
+
+    /// Return the alignment of `VMSharedTypeIndex`.
+    #[inline]
+    fn align_of_vmshared_type_index(&self) -> u8 {
         4
     }
 

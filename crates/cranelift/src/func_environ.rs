@@ -1601,11 +1601,13 @@ impl FuncEnvironment<'_> {
                 if base_readonly {
                     base.readonly();
                 }
-                *base.offset() += vmctx_off;
-                let base = base.to_deferred_load(func);
-                let mut len = self.alias_regions.vm_memory_definition().current_length();
-                *len.offset() += vmctx_off;
-                let len = len.to_deferred_load(func);
+                let base = base.relative_to(vmctx_off).to_deferred_load(func);
+                let len = self
+                    .alias_regions
+                    .vm_memory_definition()
+                    .current_length()
+                    .relative_to(vmctx_off)
+                    .to_deferred_load(func);
                 (
                     VmctxLoadChain::new(smallvec![base]),
                     VmctxLoadChain::new(smallvec![len]),
@@ -1672,8 +1674,9 @@ impl FuncEnvironment<'_> {
             if is_static {
                 base.readonly().can_move();
             }
-            *base.offset() += vmctx_off;
-            let base = VmctxLoadChain::new(smallvec![base.to_deferred_load(func)]);
+            let base = VmctxLoadChain::new(smallvec![
+                base.relative_to(vmctx_off).to_deferred_load(func)
+            ]);
             let bound = if is_static {
                 TableSize::Static {
                     bound: table.limits.min,
@@ -1682,9 +1685,12 @@ impl FuncEnvironment<'_> {
                 let mut current_elements =
                     self.alias_regions.vm_table_definition().current_elements();
                 current_elements.cast(bound_ty);
-                *current_elements.offset() += vmctx_off;
                 TableSize::Dynamic {
-                    bound: VmctxLoadChain::new(smallvec![current_elements.to_deferred_load(func)]),
+                    bound: VmctxLoadChain::new(smallvec![
+                        current_elements
+                            .relative_to(vmctx_off)
+                            .to_deferred_load(func)
+                    ]),
                 }
             };
             (base, bound)
@@ -3523,10 +3529,11 @@ impl FuncEnvironment<'_> {
                 // the `vmctx` at an absolute offset.
                 let owned_index = self.module.owned_memory_index(def_index);
                 let vmctx_off = self.offsets.vmctx_vmmemory_definition(owned_index);
-                let mut len = self.alias_regions.vm_memory_definition().current_length();
-                *len.offset() += vmctx_off;
-                let load = len.to_deferred_load(pos.func);
-                load.emit(pos, vmctx)
+                self.alias_regions
+                    .vm_memory_definition()
+                    .current_length()
+                    .relative_to(vmctx_off)
+                    .load(pos, vmctx)
             }
         } else {
             let mem_ptr = self

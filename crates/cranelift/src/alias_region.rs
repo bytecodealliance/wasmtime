@@ -364,16 +364,16 @@ pub struct Field<'a, Offsets> {
     ///
     /// This is fixed when the `Field` is created, derived from the field's
     /// offset *within* its containing `VM*` type, and is deliberately
-    /// independent of [`Field::offset`]: adjusting the load/store offset (e.g.
-    /// to make the access relative to the `vmctx` rather than to a pointer to
-    /// the containing structure) must not change which alias region the access
-    /// belongs to.
+    /// independent of [`Field::relative_to`]: rebasing the load/store
+    /// (e.g. to make the access relative to the `vmctx` rather than to a pointer
+    /// to the containing structure) must not change which alias region the
+    /// access belongs to.
     key: AliasRegionKey,
     /// The offset added to the base value when emitting a load or store of this
     /// field.
     ///
     /// Initially the field's offset *within* its containing `VM*` type; callers
-    /// may adjust it via [`Field::offset`].
+    /// may rebase it via [`Field::relative_to`].
     offset: u32,
     /// The base memory flags for accesses of this field, before this field's
     /// alias region is mixed in.
@@ -429,29 +429,25 @@ impl<'a, Offsets> Field<'a, Offsets> {
     /// `VMGlobalDefinition`'s storage (a `[u8; 16]` represented as
     /// `ir::types::I8X16`) to the global's actual Wasm type's representation
     /// (`ir::types::I32` for a Wasm `i32`).
-    #[allow(
-        dead_code,
-        reason = "part of the general `Field` API; not all fields are cast yet"
-    )]
     pub fn cast(&mut self, ty: ir::Type) -> &mut Self {
         self.ty = ty;
         self
     }
 
-    /// Get a mutable reference to the offset at which this field's load or store
-    /// will be emitted, relative to its base value.
+    /// Rebase this field's load or store to be relative to a new base.
     ///
-    /// The offset starts out as the field's offset *within* its containing
-    /// `VM*` type, so accesses are relative to a pointer to that structure. To
-    /// make an access relative to something else, adjust the offset: for
-    /// example, add the structure's own offset within the `vmctx` when the
-    /// structure is inlined into the `vmctx` (as for an owned memory's
-    /// `VMMemoryDefinition`) so that the access is relative to the `vmctx`
-    /// directly.
+    /// The `struct_offset` parameter is the offset of this field's containing
+    /// `VM*` structure within the new base.
     ///
-    /// Adjusting the offset does not change the field's alias region.
-    pub fn offset(&mut self) -> &mut u32 {
-        &mut self.offset
+    /// A `Field` starts out relative to a pointer to its containing `VM*`
+    /// structure. When that structure is inlined directly into a larger one (as
+    /// an owned memory's `VMMemoryDefinition` is inlined into the `vmctx`), use
+    /// this method to fold the structure's own offset within the larger
+    /// structure into this `Field`, so that the resulting access is relative to
+    /// the larger structure directly.
+    pub fn relative_to(mut self, struct_offset: u32) -> Self {
+        self.offset += struct_offset;
+        self
     }
 
     /// Get-or-create this field's alias region and mix it into this field's
@@ -464,11 +460,11 @@ impl<'a, Offsets> Field<'a, Offsets> {
     /// Get a deferred [`Load`] descriptor for this field, for use in a
     /// `VmctxLoadChain`.
     ///
-    /// The load is emitted at [`Field::offset`] relative to its base value. By
-    /// default that is the field's offset within its containing `VM*`
+    /// The load is emitted at the field's current offset relative to its base
+    /// value. By default that is the field's offset within its containing `VM*`
     /// structure, so the load is relative to a pointer to that structure; to
     /// make it relative to something else (e.g. the `vmctx`, when the structure
-    /// is inlined into the `vmctx`), adjust [`Field::offset`] first.
+    /// is inlined into the `vmctx`), call [`Field::relative_to`] first.
     pub fn to_deferred_load(&mut self, func: &mut ir::Function) -> Load {
         let flags = self.flags_with_region(func);
         Load {
