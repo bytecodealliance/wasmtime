@@ -59,6 +59,9 @@ impl Global {
     /// Returns an error if the `ty` provided does not match the type of the
     /// value `val`, or if `val` comes from a different store than `store`.
     ///
+    /// Returns an error if the content type of `ty` was not created with the
+    /// same [`Engine`](crate::Engine) as `store`.
+    ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.

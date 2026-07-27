@@ -1225,6 +1225,11 @@ impl<T> Store<T> {
     /// instantiated. This is useful for guest-debug workflows where
     /// the debugger needs to see modules to set breakpoints before
     /// the first Wasm instruction executes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `module` was not compiled by this store's
+    /// [`Engine`].
     #[cfg(feature = "debug")]
     pub fn debug_register_module(&mut self, module: &crate::Module) -> crate::Result<()> {
         let (modules, engine, breakpoints) = self.inner.modules_and_engine_and_breakpoints_mut();
@@ -1235,11 +1240,18 @@ impl<T> Store<T> {
     /// Register all inner modules of a [`Component`](crate::component::Component)
     /// with this store's module registry for debugging, without instantiating
     /// the component.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `component` was not compiled by this store's
+    /// [`Engine`].
     #[cfg(all(feature = "debug", feature = "component-model"))]
     pub fn debug_register_component(
         &mut self,
         component: &crate::component::Component,
     ) -> crate::Result<()> {
+        let (modules, engine, breakpoints) = self.inner.modules_and_engine_and_breakpoints_mut();
+        modules.register_component(component, engine, breakpoints)?;
         for module in component.static_modules() {
             self.debug_register_module(module)?;
         }
@@ -1550,10 +1562,10 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "debug")]
-    pub(crate) fn breakpoints_and_registry_mut(
+    pub(crate) fn breakpoints_and_registry_and_engine_mut(
         &mut self,
-    ) -> (&mut BreakpointState, &mut ModuleRegistry) {
-        (&mut self.breakpoints, &mut self.modules)
+    ) -> (&mut BreakpointState, &mut ModuleRegistry, &Engine) {
+        (&mut self.breakpoints, &mut self.modules, &self.engine)
     }
 
     #[cfg(feature = "debug")]

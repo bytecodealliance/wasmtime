@@ -2770,6 +2770,10 @@ impl HostFunc {
         );
     }
 
+    pub(crate) fn engine(&self) -> &Engine {
+        &self.engine
+    }
+
     pub(crate) fn sig_index(&self) -> VMSharedTypeIndex {
         self.func_ref().type_index
     }

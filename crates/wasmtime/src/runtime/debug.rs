@@ -6,7 +6,7 @@ use crate::module::RegisterBreakpointState;
 use crate::store::StoreId;
 use crate::vm::{Activation, Backtrace};
 use crate::{
-    AnyRef, AsContextMut, CodeMemory, ExnRef, Extern, ExternRef, Func, Instance, Module,
+    AnyRef, AsContextMut, CodeMemory, Engine, ExnRef, Extern, ExternRef, Func, Instance, Module,
     OwnedRooted, StoreContext, StoreContextMut, Val,
     code::StoreCodePC,
     module::ModuleRegistry,
@@ -153,8 +153,8 @@ impl StoreOpaque {
             return None;
         }
 
-        let (breakpoints, registry) = self.breakpoints_and_registry_mut();
-        Some(breakpoints.edit(registry))
+        let (breakpoints, registry, engine) = self.breakpoints_and_registry_and_engine_mut();
+        Some(breakpoints.edit(registry, engine))
     }
 
     fn debug_all_instances(&mut self) -> Vec<Instance> {
@@ -999,6 +999,8 @@ impl BreakpointKey {
 pub struct BreakpointEdit<'a> {
     state: &'a mut BreakpointState,
     registry: &'a mut ModuleRegistry,
+    /// The engine that owns everything in `registry`.
+    engine: &'a Engine,
     /// Modules that have been edited.
     ///
     /// Invariant: each of these modules' CodeMemory objects is
@@ -1007,10 +1009,15 @@ pub struct BreakpointEdit<'a> {
 }
 
 impl BreakpointState {
-    pub(crate) fn edit<'a>(&'a mut self, registry: &'a mut ModuleRegistry) -> BreakpointEdit<'a> {
+    pub(crate) fn edit<'a>(
+        &'a mut self,
+        registry: &'a mut ModuleRegistry,
+        engine: &'a Engine,
+    ) -> BreakpointEdit<'a> {
         BreakpointEdit {
             state: self,
             registry,
+            engine,
             dirty_modules: BTreeSet::new(),
         }
     }
@@ -1045,6 +1052,21 @@ impl BreakpointState {
 }
 
 impl<'a> BreakpointEdit<'a> {
+    /// Errors if `module` does not belong to the same engine as the store
+    /// being edited.
+    ///
+    /// The module registry rejects foreign modules on its own, but breakpoint
+    /// bookkeeping is updated before a module reaches the registry, and
+    /// removing a breakpoint that was never added does not touch the registry
+    /// at all. So this editing session checks up front as well.
+    fn check_engine(&self, module: &Module) -> Result<()> {
+        crate::ensure!(
+            crate::Engine::same(self.engine, module.engine()),
+            "cross-`Engine` breakpoint editing is not supported"
+        );
+        Ok(())
+    }
+
     fn get_code_memory<'b>(
         breakpoints: &BreakpointState,
         registry: &'b mut ModuleRegistry,
@@ -1089,7 +1111,13 @@ impl<'a> BreakpointEdit<'a> {
     /// available opcode PC.
     ///
     /// No effect if the breakpoint is already set.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `module` was not compiled by the same engine as
+    /// the store being edited.
     pub fn add_breakpoint(&mut self, module: &Module, pc: ModulePC) -> Result<()> {
+        self.check_engine(module)?;
         let frame_table = module
             .frame_table()
             .expect("Frame table must be present when guest-debug is enabled");
@@ -1120,7 +1148,13 @@ impl<'a> BreakpointEdit<'a> {
     /// that module.
     ///
     /// No effect if the breakpoint was not set.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `module` was not compiled by the same engine as
+    /// the store being edited.
     pub fn remove_breakpoint(&mut self, module: &Module, pc: ModulePC) -> Result<()> {
+        self.check_engine(module)?;
         let requested_key = BreakpointKey::from_raw(module, pc);
         let actual_key = self
             .state
