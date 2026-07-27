@@ -245,7 +245,7 @@ here is:
 | [`multi-value`]                         | ✅        | ✅        |
 | [`bulk-memory`]                         | ✅        | ✅        |
 | [`reference-types`]                     | ✅        | ❌[^a]    |
-| [`simd`]                                | ✅        | ❌        |
+| [`simd`]                                | ✅        | ✅        |
 | [`component-model`]                     | ✅        | ✅        |
 | [`relaxed-simd`]                        | ✅        | ❌        |
 | [`multi-memory`]                        | ✅        | ✅        |

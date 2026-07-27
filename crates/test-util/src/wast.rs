@@ -149,18 +149,72 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.custom_descriptors = Some(true);
         }
         Some(proposal) => panic!("unsupported proposal {proposal:?}"),
+
+        // The rough goal here is to enable a minimal set of features for the
+        // spec test in question. The fewer features required the more
+        // configurations this can run on. For example Winch doesn't currently
+        // support GC but it can still run all the simd tests which don't use
+        // GC. In general the upstream spec tests are not silo'd by feature
+        // meaning that one test probably requires a whole bunch of proposals.
+        // The tests are also quite large meaning the entire test may not need
+        // a particular feature, but there's not much we can do about that.
+        //
+        // What follows is a coarse algorithm of guessing, based on a test's
+        // name, what features are needed. The upstream spec test suite is a
+        // frozen commit in a git submodule within this repo meaning that this
+        // should work but will need updates when new tests are added or
+        // preexisting tests are changed.
         None => {
+            let test_name = test.file_name().unwrap().to_str().unwrap();
             ret.reference_types = Some(true);
-            ret.simd = Some(true);
-            ret.simd = Some(true);
-            ret.relaxed_simd = Some(true);
             ret.multi_memory = Some(true);
-            ret.gc = Some(true);
-            ret.reference_types = Some(true);
-            ret.memory64 = Some(true);
-            ret.tail_call = Some(true);
-            ret.extended_const = Some(true);
-            ret.exceptions = Some(true);
+            if test_name.contains("simd") {
+                ret.simd = Some(true);
+            }
+            if test_name.contains("relaxed") {
+                ret.relaxed_simd = Some(true);
+            }
+            if test_name.contains("64") || test_name.contains("mixed") {
+                ret.memory64 = Some(true);
+            }
+            if test_name.contains("ref")
+                || test_name.contains("array")
+                || test_name.contains("struct")
+                || test_name.contains("table")
+                || test_name.contains("type")
+                || test_name.contains("tag")
+                || test_name.contains("extern")
+                || test_name.contains("br_on_")
+                || test_name.contains("linking")
+                || test_name.contains("instance")
+                || test_name.contains("local_init")
+                || test_name.contains("elem")
+                || test_name.contains("global")
+                || test_name.contains("i31")
+                || test_name.contains("unreached-valid")
+                || test_name.contains("select")
+                || test_name.contains("data")
+            {
+                ret.gc = Some(true);
+            }
+            if test_name.contains("return_") || test_name.contains("try_table") {
+                ret.tail_call = Some(true);
+            }
+            if test_name.contains("tag")
+                || test_name.contains("try_table")
+                || test_name.contains("throw")
+                || test_name.contains("ref")
+                || test_name.contains("instance")
+                || test_name.contains("imports")
+            {
+                ret.exceptions = Some(true);
+            }
+            if test_name.contains("global")
+                || test_name.contains("elem")
+                || test_name.contains("data")
+            {
+                ret.extended_const = Some(true);
+            }
 
             if test.parent().unwrap().ends_with("legacy") {
                 ret.legacy_exceptions = Some(true);
@@ -399,13 +453,11 @@ impl Compiler {
                 if config.gc()
                     || config.tail_call()
                     || config.function_references()
-                    || config.gc()
                     || config.relaxed_simd()
                     || config.gc_types()
                     || config.exceptions()
                     || config.legacy_exceptions()
                     || config.stack_switching()
-                    || config.legacy_exceptions()
                 {
                     return true;
                 }
@@ -605,7 +657,7 @@ impl WastTest {
                         "misc_testsuite/winch/issue-10331.wast",
                         "misc_testsuite/int-to-float-splat.wast",
                         "misc_testsuite/simd/cvt-from-uint.wast",
-                        "multi-memory/simd_memory-multi.wast",
+                        "spec_testsuite/simd_memory-multi.wast",
                         "misc_testsuite/simd/issue4807.wast",
                         "spec_testsuite/simd_const.wast",
                         "spec_testsuite/simd_i8x16_sat_arith.wast",
