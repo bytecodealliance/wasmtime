@@ -729,21 +729,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.switch_to_block(continuation_block);
     }
 
-    /// Manually insert a fuel check, as opposed to what already happens around
-    /// normal loops headers and function entries.
-    ///
-    /// This can be used for expensive opcodes, such as `array.copy`, where the
-    /// operation's runtime is a function of the runtime state.
-    fn manual_fuel_check(&mut self, builder: &mut FunctionBuilder<'_>, fuel_to_consume: ir::Value) {
-        self.fuel_increment_var(builder);
-
-        let fuel = builder.use_var(self.fuel_var);
-        let fuel = builder.ins().iadd(fuel, fuel_to_consume);
-        builder.def_var(self.fuel_var, fuel);
-
-        self.fuel_check(builder);
-    }
-
     fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
         debug_assert!(self.epoch_deadline_var.is_reserved_value());
         self.epoch_deadline_var = builder.declare_var(ir::types::I64);
@@ -2612,6 +2597,8 @@ impl FuncEnvironment<'_> {
         delta: ir::Value,
         init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
+        self.pre_translate_bulk_op(builder, delta)?;
+
         let mut pos = builder.cursor();
         let table = self.table(table_index);
         let (table_vmctx, defined_table_index) =
@@ -2652,7 +2639,16 @@ impl FuncEnvironment<'_> {
         builder.ins().brif(failed, done_block, &[], fill_block, &[]);
 
         builder.switch_to_block(fill_block);
-        self.translate_table_fill(builder, table_index, result_idx, init_value, delta)?;
+        self.translate_entity_fill(
+            builder,
+            CheckedEntity::Table {
+                table: table_index,
+                initialized: false,
+            },
+            result_idx,
+            init_value,
+            delta,
+        )?;
         builder.ins().jump(done_block, &[]);
 
         builder.switch_to_block(done_block);
@@ -3654,7 +3650,11 @@ impl FuncEnvironment<'_> {
     /// The main purpose of this helper is to handle situations when fuel and
     /// epochs are enabled to break up the copy into a loop of chunks with
     /// preemption checks between them.
-    fn raw_bulk_memory_operation(&mut self, builder: &mut FunctionBuilder<'_>, mut op: BulkOp) {
+    fn raw_bulk_memory_operation(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        op: BulkOp,
+    ) -> WasmResult<()> {
         // Fast path: a copy whose byte length is a small compile-time constant is
         // expanded inline (see `emit_inline_memcpy`), skipping the libcall's fixed
         // per-call cost (a wasm/host transition and an indirect call) that
@@ -3675,253 +3675,29 @@ impl FuncEnvironment<'_> {
         } = op
         {
             if bytes <= INLINE_COPY_MAX_BYTES {
-                if self.tunables.consume_fuel {
-                    self.fuel_consumed += bytes as i64;
-                }
                 let src_region = self.bulk_copy_alias_region(builder.func, src_entity);
                 let dst_region = self.bulk_copy_alias_region(builder.func, dst_entity);
                 self.emit_inline_memcpy(builder, dst, src, bytes, src_region, dst_region);
-                return;
+                return Ok(());
             }
         }
-
-        // Very scientifically chosen. Or, more seriously, this is just an
-        // arbitrary number for now. 100k copies of this size locally takes half
-        // a second, so seems like a reasonably large chunk size to not hit perf
-        // too much by chunking but also enable time slicing.
-        const UNINTERRUPTABLE_CHUNK_SIZE: i64 = 128 << 20;
 
         let mut pos = builder.cursor();
         let vmctx = self.vmctx_val(&mut pos);
-        let pointer_type = self.pointer_type();
 
         // Performs a raw call to the actual libcall, as dictated by the
-        // provided `op`. This unconditionally inserts epoch/fuel checks for all
-        // calls.
-        let raw_call =
-            |env: &mut FuncEnvironment<'_>, builder: &mut FunctionBuilder<'_>, op: &_| {
-                if env.tunables.epoch_interruption {
-                    env.epoch_check(builder);
-                }
-                match *op {
-                    BulkOp::MemoryCopy { dst, src, len, .. } => {
-                        if env.tunables.consume_fuel {
-                            // Note that fuel is always a 64-bit counter.
-                            let fuel_consumed = match env.pointer_type() {
-                                ir::types::I32 => builder.ins().uextend(ir::types::I64, len),
-                                ir::types::I64 => len,
-                                _ => unreachable!(),
-                            };
-                            env.manual_fuel_check(builder, fuel_consumed);
-                        }
-                        let memory_copy = env.builtin_functions.memory_copy(&mut builder.func);
-                        builder.ins().call(memory_copy, &[vmctx, dst, src, len]);
-                    }
-                    BulkOp::MemoryFill { dst, val, len } => {
-                        if env.tunables.consume_fuel {
-                            let fuel_consumed = match env.pointer_type() {
-                                ir::types::I32 => builder.ins().uextend(ir::types::I64, len),
-                                ir::types::I64 => len,
-                                _ => unreachable!(),
-                            };
-                            env.manual_fuel_check(builder, fuel_consumed);
-                        }
-                        let memory_fill = env.builtin_functions.memory_fill(&mut builder.func);
-                        builder.ins().call(memory_fill, &[vmctx, dst, val, len]);
-                    }
-                }
-            };
-
-        // If epochs and fuel are disabled, then just call the libcall and
-        // return. No need for the loops below.
-        if !self.tunables.epoch_interruption && !self.tunables.consume_fuel {
-            raw_call(self, builder, &op);
-            return;
-        }
-
-        // If fuel is enabled, first take all the pending fuel and flush it to
-        // our internal variable. This is necessary to avoid picking up all
-        // pending fuel on each turn of the loop below.
-        if self.tunables.consume_fuel {
-            self.fuel_increment_var(builder);
-        }
-
-        let current_block = builder.current_block().unwrap();
-        let chunk_block = builder.create_block();
-        let last_chunk_block = builder.create_block();
-
-        builder.ensure_inserted_block();
-        builder.insert_block_after(chunk_block, current_block);
-        builder.insert_block_after(last_chunk_block, chunk_block);
-
-        let chunk = builder
-            .ins()
-            .iconst(pointer_type, UNINTERRUPTABLE_CHUNK_SIZE);
-
-        // For `memcpy` when chunking this up we might need to do a backwards
-        // copy or a forwards copy. Determine that here and jump to the
-        // backwards copy if needed.
-        let backwards_block = if let BulkOp::MemoryCopy { dst, src, .. } = op {
-            let forwards = builder.ins().icmp(IntCC::UnsignedGreaterThan, src, dst);
-            let forwards_block = builder.create_block();
-            let backwards_block = builder.create_block();
-            builder
-                .ins()
-                .brif(forwards, forwards_block, &[], backwards_block, &[]);
-            builder.switch_to_block(forwards_block);
-            builder.seal_block(forwards_block);
-            Some((backwards_block, op.clone()))
-        } else {
-            None
-        };
-
-        // Helper closure to test if the length in `op` is larger than `chunk`,
-        // and if so do a single chunk. Else this goes to the final block with
-        // the final operation.
-        let has_chunk_branch =
-            |builder: &mut FunctionBuilder<'_>, op: &_, chunk_block, last_chunk_block| {
-                let len = match *op {
-                    BulkOp::MemoryCopy { len, .. } | BulkOp::MemoryFill { len, .. } => len,
-                };
-                let has_chunk = builder.ins().icmp(IntCC::UnsignedGreaterThan, len, chunk);
-                match *op {
-                    BulkOp::MemoryCopy { dst, src, len, .. } => {
-                        builder.ins().brif(
-                            has_chunk,
-                            chunk_block,
-                            &[dst.into(), src.into(), len.into()],
-                            last_chunk_block,
-                            &[dst.into(), src.into(), len.into()],
-                        );
-                    }
-                    BulkOp::MemoryFill { dst, len, .. } => {
-                        builder.ins().brif(
-                            has_chunk,
-                            chunk_block,
-                            &[dst.into(), len.into()],
-                            last_chunk_block,
-                            &[dst.into(), len.into()],
-                        );
-                    }
-                }
-            };
-
-        let append_block_params = |builder: &mut FunctionBuilder<'_>, block, op: &mut _| match op {
+        // provided `op`.
+        match op {
             BulkOp::MemoryCopy { dst, src, len, .. } => {
-                *dst = builder.append_block_param(block, pointer_type);
-                *src = builder.append_block_param(block, pointer_type);
-                *len = builder.append_block_param(block, pointer_type);
+                let memory_copy = self.builtin_functions.memory_copy(&mut builder.func);
+                builder.ins().call(memory_copy, &[vmctx, dst, src, len]);
             }
-            BulkOp::MemoryFill { dst, len, .. } => {
-                *dst = builder.append_block_param(block, pointer_type);
-                *len = builder.append_block_param(block, pointer_type);
+            BulkOp::MemoryFill { dst, val, len } => {
+                let memory_fill = self.builtin_functions.memory_fill(&mut builder.func);
+                builder.ins().call(memory_fill, &[vmctx, dst, val, len]);
             }
-        };
-
-        // Forwards copy: dispatch to the per-chunk loop or the final iteration
-        // if there's no chunks.
-        has_chunk_branch(builder, &op, chunk_block, last_chunk_block);
-
-        // Forwards copy: In the block with per-chunk copies, each operation
-        // performs `chunk` length of bytes and then decrements the current
-        // length by `chunk`. Afterwards a condition tests if we do another
-        // chunk or break out for the final chunk.
-        builder.switch_to_block(chunk_block);
-        append_block_params(builder, chunk_block, &mut op);
-        let op_len = match &mut op {
-            BulkOp::MemoryCopy { len, .. } | BulkOp::MemoryFill { len, .. } => len,
-        };
-        let remaining_len = *op_len;
-        *op_len = chunk;
-        raw_call(self, builder, &op);
-        match &mut op {
-            BulkOp::MemoryCopy { dst, src, len, .. } => {
-                *dst = builder.ins().iadd(*dst, chunk);
-                *src = builder.ins().iadd(*src, chunk);
-                *len = builder.ins().isub(remaining_len, chunk);
-            }
-            BulkOp::MemoryFill { len, dst, .. } => {
-                *dst = builder.ins().iadd(*dst, chunk);
-                *len = builder.ins().isub(remaining_len, chunk);
-            }
-        };
-        has_chunk_branch(builder, &op, chunk_block, last_chunk_block);
-        builder.seal_block(chunk_block);
-
-        // Backwards copy: similar to the above but with adjustments on where
-        // increments/decrements happen. Notably:
-        //
-        // * Initial src/end are the final byte address
-        // * Each chunk starts out by decrementing src/end as opposed to above
-        //   where the increment happens at the end.
-        // * The final block performs the final decrement before jumping to the
-        //   shared `last_chunk_block` between the forwards/backwards paths.
-        if let Some((backwards_block, mut op)) = backwards_block {
-            // Setup `dst=dst+len` and `src=src+len`, then see if we have a
-            // chunk.
-            builder.switch_to_block(backwards_block);
-            builder.seal_block(backwards_block);
-            let backwards_chunk_block = builder.create_block();
-            let backwards_last_chunk_block = builder.create_block();
-            let BulkOp::MemoryCopy { dst, src, len, .. } = &mut op else {
-                unreachable!()
-            };
-            *dst = builder.ins().iadd(*dst, *len);
-            *src = builder.ins().iadd(*src, *len);
-            has_chunk_branch(
-                builder,
-                &op,
-                backwards_chunk_block,
-                backwards_last_chunk_block,
-            );
-
-            // Execute the per-chunk backwards copy, adjusting pointers before
-            // the copy itself.
-            builder.switch_to_block(backwards_chunk_block);
-            append_block_params(builder, backwards_chunk_block, &mut op);
-            let BulkOp::MemoryCopy { dst, src, len, .. } = &mut op else {
-                unreachable!()
-            };
-            let remaining_len = *len;
-            *len = chunk;
-            *dst = builder.ins().isub(*dst, chunk);
-            *src = builder.ins().isub(*src, chunk);
-            raw_call(self, builder, &op);
-            let BulkOp::MemoryCopy { len, .. } = &mut op else {
-                unreachable!()
-            };
-            *len = builder.ins().isub(remaining_len, chunk);
-            has_chunk_branch(
-                builder,
-                &op,
-                backwards_chunk_block,
-                backwards_last_chunk_block,
-            );
-            builder.seal_block(backwards_chunk_block);
-
-            // Final backwards chunk: adjust the dst/src to be their true base
-            // pointers and then delegate to `last_chunk_block` for the actual
-            // memcpy.
-            builder.switch_to_block(backwards_last_chunk_block);
-            builder.seal_block(backwards_last_chunk_block);
-            append_block_params(builder, backwards_last_chunk_block, &mut op);
-            let BulkOp::MemoryCopy { dst, src, len, .. } = &mut op else {
-                unreachable!()
-            };
-            *dst = builder.ins().isub(*dst, *len);
-            *src = builder.ins().isub(*src, *len);
-            builder.ins().jump(
-                last_chunk_block,
-                &[(*dst).into(), (*src).into(), (*len).into()],
-            );
         }
-
-        // In the final block we know that the length of the operation is less
-        // than `chunk`.
-        builder.switch_to_block(last_chunk_block);
-        builder.seal_block(last_chunk_block);
-        append_block_params(builder, last_chunk_block, &mut op);
-        raw_call(self, builder, &op);
+        Ok(())
     }
 
     /// Emits a generic "fill" of `entity` from `dst` for `len` elements,
@@ -3932,6 +3708,13 @@ impl FuncEnvironment<'_> {
     /// `dst` and `len` values must be typed appropriately for `entity`. This
     /// will perform a bounds-check before actually executing the operation and
     /// then afterwards will perform the operation.
+    ///
+    /// This function will charge fuel/check epochs before it executes anything
+    /// internally. This is only done for cases where `entity` is already
+    /// initialized, however, as otherwise this wasm operation hasn't yet
+    /// completed. Callers where `entity` is uninitialized must manually invoke
+    /// `self.pre_translate_bulk_op` before calling this (probably at the start
+    /// of the entire wasm opcode).
     fn translate_entity_fill(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -3943,6 +3726,10 @@ impl FuncEnvironment<'_> {
         let entity = entity.into();
         let idx_type = entity.index_type(self);
 
+        if entity.is_initialized() {
+            self.pre_translate_bulk_op(builder, len)?;
+        }
+
         // Bounds check `dst+len` and convert it to a raw heap address.
         let raw_dst_addr = self.translate_entity_bounds_check(builder, entity, dst, len)?;
 
@@ -3952,26 +3739,22 @@ impl FuncEnvironment<'_> {
             self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, idx_type);
 
         match entity {
-            CheckedEntity::Memory(_) => {
-                self.raw_bulk_memory_operation(
-                    builder,
-                    BulkOp::MemoryFill {
-                        dst: raw_dst_addr,
-                        val,
-                        len: len_ptr,
-                    },
-                );
-            }
+            CheckedEntity::Memory(_) => self.raw_bulk_memory_operation(
+                builder,
+                BulkOp::MemoryFill {
+                    dst: raw_dst_addr,
+                    val,
+                    len: len_ptr,
+                },
+            ),
             CheckedEntity::Table { .. } | CheckedEntity::Array { .. } => {
-                self.emit_raw_array_or_table_fill(builder, entity, raw_dst_addr, val, len_ptr)?;
+                self.emit_raw_array_or_table_fill(builder, entity, raw_dst_addr, val, len_ptr)
             }
             // Not allowed to be written to in wasm.
             CheckedEntity::Data { .. } | CheckedEntity::Elem(_) | CheckedEntity::RuntimeData(_) => {
                 unreachable!()
             }
         }
-
-        Ok(())
     }
 
     /// Performs a manual element-by-element fill of `entity`, starting at
@@ -4014,7 +3797,7 @@ impl FuncEnvironment<'_> {
         if entity.allows_memset(self)
             && let Some(value) = self.fill_value_as_memset(builder, elem_ty, value)
         {
-            self.raw_bulk_memory_operation(
+            return self.raw_bulk_memory_operation(
                 builder,
                 BulkOp::MemoryFill {
                     dst: dst_elem_addr,
@@ -4022,7 +3805,6 @@ impl FuncEnvironment<'_> {
                     len: copy_byte_len,
                 },
             );
-            return Ok(());
         }
 
         // Funcref values are intern'd when stored on the GC heap, and the
@@ -4063,12 +3845,6 @@ impl FuncEnvironment<'_> {
         builder.insert_block_after(loop_block, current_block);
         builder.insert_block_after(continue_block, loop_block);
 
-        // Before entering the loop below flush our fuel counters to ensure
-        // that previous instructions' fuel isn't counted once-per-iteration.
-        if self.tunables.consume_fuel {
-            self.fuel_increment_var(builder);
-        }
-
         // Current block: test to see if this is actually an empty copy. If it
         // is then skip over the entire loop, otherwise enter the loop and
         // perform the first ieration.
@@ -4086,11 +3862,6 @@ impl FuncEnvironment<'_> {
         // by the element size, then see if we turn again or exit.
         builder.switch_to_block(loop_block);
         let elem_addr = builder.append_block_param(loop_block, pointer_ty);
-        // Consume one unit of fuel per loop iteration.
-        if self.tunables.consume_fuel {
-            self.fuel_consumed += 1;
-        }
-        self.translate_loop_header(builder)?;
         match entity {
             CheckedEntity::Table { table, initialized } => {
                 assert!(!is_pre_interned_funcref);
@@ -4266,6 +4037,10 @@ impl FuncEnvironment<'_> {
     /// of the copy. Both `dst` and `src` have types appropriate to index their
     /// respective entities, and `len` has a type that's the smaller of the two
     /// index types.
+    ///
+    /// This function will charge fuel/check epochs before it executes anything
+    /// internally when `dst_entity` is already initialized. See
+    /// `translate_entity_fill` for information on this.
     fn translate_entity_copy(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -4279,6 +4054,10 @@ impl FuncEnvironment<'_> {
         let src_entity = src_entity.into();
         let dst_idx_ty = dst_entity.index_type(self);
         let src_idx_ty = src_entity.index_type(self);
+
+        if dst_entity.is_initialized() {
+            self.pre_translate_bulk_op(builder, len)?;
+        }
 
         // The length is 32-bit if either is 32-bit, but if they're both 64-bit
         // then it's 64-bit.
@@ -4336,8 +4115,7 @@ impl FuncEnvironment<'_> {
                         src_entity,
                         dst_entity,
                     },
-                );
-                Ok(())
+                )
             }
 
             // Tables/arrays are sometimes a memcpy, sometimes a per-element
@@ -4685,7 +4463,7 @@ impl FuncEnvironment<'_> {
         // parameters (or expand it inline; see `raw_bulk_memory_operation`).
         if !type_forbids_memcpy && dst_element_size == src_element_size {
             let const_len = const_count.and_then(|c| c.checked_mul(u64::from(dst_element_size)));
-            self.raw_bulk_memory_operation(
+            return self.raw_bulk_memory_operation(
                 builder,
                 BulkOp::MemoryCopy {
                     dst: dst_elem_addr,
@@ -4696,7 +4474,6 @@ impl FuncEnvironment<'_> {
                     dst_entity,
                 },
             );
-            return Ok(());
         }
 
         // For other copies, this is a per-element loop. Use the helper to
@@ -4968,13 +4745,6 @@ impl FuncEnvironment<'_> {
         builder.insert_block_after(backwards_block, forward_block);
         builder.insert_block_after(done_block, backwards_block);
 
-        // Update our local fuel counter, if enabled, before entering the loops
-        // below. This zeros out `self.fuel_consumed` so we don't consume
-        // previous fuel on each iteration of the loop.
-        if self.tunables.consume_fuel {
-            self.fuel_increment_var(builder);
-        }
-
         // Terminate `current_block` by testing to see if we're copying any
         // elements at all.
         builder
@@ -5064,11 +4834,6 @@ impl FuncEnvironment<'_> {
         let src_cur = builder.append_block_param(forward_block, self.pointer_type());
         let src_index = builder.append_block_param(forward_block, src_index_ty);
         let forward_keepalives = append_keepalive_params(builder, forward_block);
-        // Consume a single unit of fuel on each iteration of the loop.
-        if self.tunables.consume_fuel {
-            self.fuel_consumed += 1;
-        }
-        self.translate_loop_header(builder)?;
         copy_one(self, builder, dst_cur, src_cur, src_index)?;
         let dst_next = builder.ins().iadd_imm(dst_cur, i64::from(dst_element_size));
         let src_next = builder.ins().iadd_imm(src_cur, i64::from(src_element_size));
@@ -5090,10 +4855,6 @@ impl FuncEnvironment<'_> {
         let src_cur = builder.append_block_param(backwards_block, self.pointer_type());
         let src_index = builder.append_block_param(backwards_block, src_index_ty);
         let backward_keepalives = append_keepalive_params(builder, backwards_block);
-        if self.tunables.consume_fuel {
-            self.fuel_consumed += 1;
-        }
-        self.translate_loop_header(builder)?;
         let dst_cur = {
             let size = builder
                 .ins()
@@ -5215,6 +4976,61 @@ impl FuncEnvironment<'_> {
         );
         let ret = pos.func.dfg.inst_results(call_inst)[0];
         Ok(builder.ins().ireduce(ir::types::I32, ret))
+    }
+
+    /// Translation prefix before bulk operations such as `memory.copy`.
+    ///
+    /// Takes the `cost` of the operation, proportional to the amount of data
+    /// being moved, and checks fuel/epochs as necessary. The `cost` value is
+    /// interepreted as an unsigned integer and automatically cast up to fuel's
+    /// 64-bit type.
+    fn pre_translate_bulk_op(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        cost: ir::Value,
+    ) -> WasmResult<()> {
+        let const_cost =
+            Self::value_as_const_int(builder, cost).map(|c| i64::try_from(c).unwrap_or(i64::MAX));
+
+        if self.tunables.consume_fuel {
+            match const_cost {
+                // Fold constant costs directly into internal state.
+                Some(cost) => self.fuel_consumed = self.fuel_consumed.saturating_add(cost),
+
+                None => {
+                    // Note that fuel is always a 64-bit counter.
+                    //
+                    // Also note that the cost is clamped to `i64::MAX` to
+                    // prevent fuel counter overflows since `cost` is otherwise
+                    // an untrusted value.
+                    let cost = match builder.func.dfg.value_type(cost) {
+                        ir::types::I32 => builder.ins().uextend(ir::types::I64, cost),
+                        ir::types::I64 => {
+                            let max = builder.ins().iconst(ir::types::I64, i64::MAX);
+                            builder.ins().umin(cost, max)
+                        }
+                        _ => unreachable!(),
+                    };
+                    self.fuel_increment_var(builder);
+                    let fuel = builder.use_var(self.fuel_var);
+                    let fuel = builder.ins().iadd(fuel, cost);
+                    builder.def_var(self.fuel_var, fuel);
+                }
+            }
+        }
+
+        // Skip explicit fuel/epoch checks for operations which are
+        // subjectively, and statically, considered cheap.
+        const SMALL_BULK_OP_COST: i64 = 128;
+        if let Some(cost) = const_cost
+            && cost <= SMALL_BULK_OP_COST
+        {
+            return Ok(());
+        }
+
+        // This isn't a loop header but for fuel/epoch purposes it's the same
+        // thing.
+        self.translate_loop_header(builder)
     }
 
     pub fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
@@ -6052,6 +5868,7 @@ impl FuncEnvironment<'_> {
             index_type_to_ir_type(ty.idx_type),
             ty.limits.min.cast_signed(),
         );
+        self.pre_translate_bulk_op(builder, len)?;
         self.translate_entity_fill(
             builder,
             CheckedEntity::Table {
@@ -6487,6 +6304,19 @@ impl CheckedEntity {
             // Tables that are lazily initialized can't be memset because the
             // initialized bit needs to be set when storing values.
             CheckedEntity::Table { .. } => !env.tunables.table_lazy_init,
+        }
+    }
+
+    /// Returns whether this entity is initialized.
+    fn is_initialized(&self) -> bool {
+        match self {
+            CheckedEntity::Memory(_)
+            | CheckedEntity::Data { .. }
+            | CheckedEntity::RuntimeData(_)
+            | CheckedEntity::Elem(_) => true,
+            CheckedEntity::Array { initialized, .. } | CheckedEntity::Table { initialized, .. } => {
+                *initialized
+            }
         }
     }
 }
