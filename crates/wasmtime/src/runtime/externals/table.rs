@@ -52,6 +52,9 @@ impl Table {
     /// Returns an error if `init` does not match the element type of the table,
     /// or if `init` does not belong to the `store` provided.
     ///
+    /// Returns an error if the element type of `ty` was not created with the
+    /// same [`Engine`](crate::Engine) as `store`.
+    ///
     /// # Panics
     ///
     /// This function will panic when used with a [`Store`](`crate::Store`)
@@ -98,6 +101,11 @@ impl Table {
     ///
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the element type of `ty` was not created with the
+    /// same [`Engine`](crate::Engine) as `store`.
     #[cfg(feature = "async")]
     pub async fn new_async(
         mut store: impl AsContextMut<Data: Send>,

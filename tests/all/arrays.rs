@@ -1,4 +1,4 @@
-use super::gc_store;
+use super::{gc_engine, gc_store};
 use wasmtime::*;
 
 #[test]
@@ -70,11 +70,12 @@ fn array_new_cross_store_initial_elem() {
 #[test]
 #[should_panic = "wrong store"]
 fn array_new_cross_store_pre() {
-    let mut store1 = gc_store().unwrap();
-    let mut store2 = gc_store().unwrap();
+    let engine = gc_engine().unwrap();
+    let mut store1 = Store::new(&engine, ());
+    let mut store2 = Store::new(&engine, ());
 
     let array_ty = ArrayType::new(
-        store1.engine(),
+        &engine,
         FieldType::new(Mutability::Var, StorageType::ValType(ValType::ANYREF)),
     );
     let pre = ArrayRefPre::new(&mut store2, array_ty);
@@ -155,11 +156,12 @@ fn array_new_fixed_cross_store_initial_elem() {
 #[test]
 #[should_panic = "wrong store"]
 fn array_new_fixed_cross_store_pre() {
-    let mut store1 = gc_store().unwrap();
-    let mut store2 = gc_store().unwrap();
+    let engine = gc_engine().unwrap();
+    let mut store1 = Store::new(&engine, ());
+    let mut store2 = Store::new(&engine, ());
 
     let array_ty = ArrayType::new(
-        store1.engine(),
+        &engine,
         FieldType::new(Mutability::Var, StorageType::ValType(ValType::ANYREF)),
     );
     let pre = ArrayRefPre::new(&mut store2, array_ty);

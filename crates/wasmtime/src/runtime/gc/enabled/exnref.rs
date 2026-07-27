@@ -70,6 +70,11 @@ pub struct ExnRefPre {
 impl ExnRefPre {
     /// Create a new `ExnRefPre` that is associated with the given store
     /// and type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ty` was not created with the same
+    /// [`Engine`](crate::Engine) as `store`.
     pub fn new(mut store: impl AsContextMut, ty: ExnType) -> Self {
         Self::_new(store.as_context_mut().0, ty)
     }

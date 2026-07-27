@@ -32,6 +32,11 @@ impl Tag {
     /// (see also: [`Store::limiter_async`](`crate::Store::limiter_async`).
     /// When using an async resource limiter, use [`Tag::new_async`]
     /// instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `ty` was not created with the same
+    /// [`Engine`](crate::Engine) as `store`.
     pub fn new(mut store: impl AsContextMut, ty: &TagType) -> Result<Tag> {
         generate_tag_export(store.as_context_mut().0, ty)
     }
