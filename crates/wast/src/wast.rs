@@ -573,6 +573,14 @@ impl WastContext {
         }
     }
 
+    fn assert_suspension(&self, result: Outcome, _expected: &str) -> Result<()> {
+        match result {
+            Outcome::Ok(values) => bail!("expected suspension, got {values:?}"),
+            Outcome::Trap(err) if err.downcast_ref::<Trap>() == Some(&Trap::UnhandledTag) => Ok(()),
+            Outcome::Trap(err) => bail!("expected suspension, got {err:?}"),
+        }
+    }
+
     /// Run a wast script from a byte buffer.
     pub fn run_wast(&mut self, filename: &str, wast: &[u8]) -> Result<()> {
         let wast = str::from_utf8(wast)?;
@@ -766,6 +774,14 @@ impl WastContext {
                 let result = self.perform_action(&action)?;
                 self.assert_exception(result)?;
             }
+            AssertSuspension {
+                line: _,
+                action,
+                text,
+            } => {
+                let result = self.perform_action(&action)?;
+                self.assert_suspension(result, &text)?;
+            }
 
             Thread {
                 name,
@@ -816,10 +832,6 @@ impl WastContext {
                     .ok_or_else(|| format_err!("no thread named `{thread}`"))?
                     .join()
                     .unwrap()?;
-            }
-
-            AssertSuspension { .. } => {
-                bail!("unimplemented wast directive");
             }
 
             AssertMalformedCustom {

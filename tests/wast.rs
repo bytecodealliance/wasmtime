@@ -70,6 +70,10 @@ fn main() {
     // leave the full combinatorial matrix and such to fuzz testing which
     // configures many more settings than those configured here.
     for test in tests {
+        if test.config.stack_switching() && !cfg!(all(target_arch = "x86_64", target_os = "linux"))
+        {
+            continue;
+        }
         let collector = if test.test_uses_gc_types() {
             Collector::DeferredReferenceCounting
         } else {
