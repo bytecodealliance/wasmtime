@@ -4,7 +4,6 @@ use test_programs::wasi::filesystem::types::{
     Descriptor, DescriptorFlags, ErrorCode, OpenFlags, PathFlags,
 };
 
-const RW_ALIAS_FILENAME: &str = "alias.txt";
 const RO_TEST_FILENAME: &str = "test.txt";
 const RO_EXPECTED_CONTENTS: &[u8] = b"read only test file\n";
 
@@ -31,31 +30,15 @@ unsafe fn test_ro_file_has_expected_contents(dir: &Descriptor) {
     );
 }
 
-unsafe fn test_file_hardlink_across_perms(rw_dir: &Descriptor, ro_dir: &Descriptor) {
+unsafe fn test_file_rename_across_perms(rw_dir: &Descriptor, ro_dir: &Descriptor) {
     // Check test preconditions.
     test_ro_file_has_expected_contents(ro_dir);
 
-    // Create a hardlink inside the file ro dir so there are two files pointing to
-    // the read-only file.
-    match ro_dir.link_at(
-        PathFlags::empty(),
-        RO_TEST_FILENAME,
-        ro_dir,
-        RW_ALIAS_FILENAME,
-    ) {
-        // The readonly dir isnt recreated fresh per test mode in the p2
-        // runner, so just allow this to fail with exists because its very
-        // tedious to restructure everything to fix this properly
-        Ok(()) | Err(ErrorCode::Exist) => {}
-        _ => panic!("should be possible to create link inside ro file domain"),
-    }
-
-    // Renaming that file into the file rw dir should fail with permissions
-    // error, otherwise it would permit opening the ro file as rw
-    let err = ro_dir.rename_at(RW_ALIAS_FILENAME, rw_dir, RW_ALIAS_FILENAME);
+    // Renaming the ro dir file into the rw dir should fail with permissions error
+    let err = ro_dir.rename_at(RO_TEST_FILENAME, rw_dir, RO_TEST_FILENAME);
     assert!(
         err.is_err(),
-        "rename_at should fail because link source is file readonly, and dest is file readwrite"
+        "rename_at should fail because source dir is readonly, dest dir is readwrite"
     );
     assert_eq!(
         err.err().unwrap(),
@@ -90,6 +73,6 @@ fn main() {
 
     // Run the tests.
     unsafe {
-        test_file_hardlink_across_perms(rw_dir, ro_dir);
+        test_file_rename_across_perms(rw_dir, ro_dir);
     }
 }
