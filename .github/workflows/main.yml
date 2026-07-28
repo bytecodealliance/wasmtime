@@ -741,7 +741,7 @@ jobs:
     - uses: ./.github/actions/apt-get-install
       with:
         packages: ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
-    - run: cargo fuzz check --dev
+    - run: cargo fuzz check --dev --features fuzz-xed
     - run: cargo fuzz check --dev --fuzz-dir ./cranelift/isle/fuzz
     - run: cargo fuzz check --dev --fuzz-dir ./crates/environ/fuzz --features component-model
     - run: cargo fuzz check --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
