@@ -1004,3 +1004,30 @@ mod named_imports {
         });
     }
 }
+
+mod include_component_type {
+    wasmtime::component::bindgen!({
+        inline: "
+            package demo:pkg;
+
+            interface host {
+                greet: func(name: string) -> string;
+            }
+
+            world component-type-world {
+                import host;
+                export run: func() -> u32;
+            }
+        ",
+        include_component_type: true,
+    });
+
+    #[test]
+    fn component_type_decodes() {
+        let (resolve, world) = wit_parser::decoding::decode_world(COMPONENT_TYPE).unwrap();
+        let world = &resolve.worlds[world];
+        assert_eq!(world.name, "component-type-world");
+        assert_eq!(world.imports.len(), 1);
+        assert_eq!(world.exports.len(), 1);
+    }
+}

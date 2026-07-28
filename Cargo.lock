@@ -5088,6 +5088,7 @@ dependencies = [
  "bitflags 2.11.1",
  "heck",
  "indexmap 2.14.0",
+ "wit-component 0.254.0",
  "wit-parser 0.254.0",
 ]
 
