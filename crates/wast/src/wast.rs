@@ -576,23 +576,11 @@ impl WastContext {
         }
     }
 
-    fn assert_suspension(&self, result: Outcome, expected: &str) -> Result<()> {
-        let trap = match result {
-            Outcome::Ok(values) => bail!("expected suspension, got {:?}", values),
-            Outcome::Trap(t) => t,
-        };
-        let actual = format!("{trap:?}");
-        if actual.contains(expected)
-            || actual.contains("unhandled tag")
-            || actual.contains("Calling suspend outside of a continuation")
-        {
-            Ok(())
-        } else {
-            bail!(
-                "assert_suspension: expected '{}', got '{}'",
-                expected,
-                actual
-            )
+    fn assert_suspension(&self, result: Outcome, _expected: &str) -> Result<()> {
+        match result {
+            Outcome::Ok(values) => bail!("expected suspension, got {values:?}"),
+            Outcome::Trap(err) if err.downcast_ref::<Trap>() == Some(&Trap::UnhandledTag) => Ok(()),
+            Outcome::Trap(err) => bail!("expected suspension, got {err:?}"),
         }
     }
 
