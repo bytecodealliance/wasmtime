@@ -1059,9 +1059,6 @@ impl Dir {
     }
 
     pub(crate) async fn readlink_at(&self, path: String) -> Result<String, ErrorCode> {
-        if self.perms.write_not_permitted() {
-            return Err(ErrorCode::NotPermitted);
-        }
         let link = self
             .run_blocking(move |d| cap_primitives::fs::read_link(d, path.as_ref()))
             .await?;
