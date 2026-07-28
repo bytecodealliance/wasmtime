@@ -1,0 +1,14 @@
+test compile
+set opt_level=speed
+set stack_switch_model=basic
+target x86_64
+
+;; A stack switch is a GC safepoint. Its stack map is associated with the
+;; resume PC saved in the outgoing control context.
+function %switch_with_stack_map(i64, i64, i64) -> i64 {
+    ss0 = explicit_slot 4
+
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = stack_switch v0, v1, v2, stack_map=[i32 @ ss0+0]
+    return v3
+}

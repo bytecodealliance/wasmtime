@@ -602,6 +602,21 @@ macro_rules! for_each_vm_type {
                 pub data: *mut u8,
             }
 
+            /// Payload values exchanged with a continuation and the metadata
+            /// needed to trace GC references among them.
+            #[derive(Debug, Clone)]
+            #[repr(C)]
+            #[snake_name = vm_payloads]
+            pub struct VMPayloads {
+                /// The payload values themselves.
+                #[aggregate]
+                pub buffer: VMHostArray,
+
+                /// One marker byte per buffer slot, indicating whether that
+                /// slot contains a GC reference, or null when no slots do.
+                pub gc_ref_data: *mut u8,
+            }
+
             /// The information saved for every stack, whether it is a
             /// continuation's or the initial stack's.
             #[derive(Debug, Clone)]
@@ -651,12 +666,12 @@ macro_rules! for_each_vm_type {
                 /// The arguments to, and return values of, the function passed
                 /// to `cont.new`.
                 #[aggregate]
-                pub args: VMHostArray,
+                pub args: VMPayloads,
 
                 /// The payloads passed to and from this continuation once it
                 /// has been suspended.
                 #[aggregate]
-                pub values: VMHostArray,
+                pub values: VMPayloads,
 
                 /// Tells the compiler that this structure has potential
                 /// self-references, through `last_ancestor`.

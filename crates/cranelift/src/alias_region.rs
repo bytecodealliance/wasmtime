@@ -68,6 +68,7 @@ enum VmType {
     VMContRef,
     VMCommonStackInformation,
     VMHostArray,
+    VMPayloads,
     ContinuationStackMemory,
     VMFunctionImport,
     VMMemoryImport,

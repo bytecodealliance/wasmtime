@@ -3,7 +3,7 @@
 
 mod stack;
 
-use crate::vm::{VMCommonStackInformation, VMContRef, VMHostArray, VMStackLimits};
+use crate::vm::{VMCommonStackInformation, VMContRef, VMHostArray, VMPayloads, VMStackLimits};
 use core::{marker::PhantomPinned, ptr::NonNull};
 
 pub use stack::*;
@@ -51,7 +51,7 @@ pub const CONTROL_EFFECT_TRAP_ENCODING: u64 =
 /// (i.e., the one pointed to by the VMContObj) has a pointer to the
 /// other end of the chain (i.e., its last ancestor).
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VMContObj {
     pub contref: NonNull<VMContRef>,
     pub revision: usize,
@@ -109,6 +109,27 @@ impl VMHostArray {
             data: core::ptr::null_mut(),
         }
     }
+
+    /// Makes this array empty.
+    pub fn clear(&mut self) {
+        *self = Self::empty();
+    }
+}
+
+impl VMPayloads {
+    /// Creates an empty payload buffer with no GC metadata.
+    pub fn empty() -> Self {
+        Self {
+            buffer: VMHostArray::empty(),
+            gc_ref_data: core::ptr::null_mut(),
+        }
+    }
+
+    /// Makes this payload buffer empty and invalidates its GC metadata.
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+        self.gc_ref_data = core::ptr::null_mut();
+    }
 }
 
 impl VMContRef {
@@ -135,8 +156,8 @@ impl VMContRef {
         let parent_chain = VMStackChain::Absent;
         let last_ancestor = core::ptr::null_mut();
         let stack = VMContinuationStack::unallocated();
-        let args = VMHostArray::empty();
-        let values = VMHostArray::empty();
+        let args = VMPayloads::empty();
+        let values = VMPayloads::empty();
         let revision = 0;
         let _marker = PhantomPinned;
 
@@ -174,7 +195,7 @@ unsafe impl Sync for VMContRef {}
 /// Implements `cont.new` instructions (i.e., creation of continuations).
 #[cfg(feature = "stack-switching")]
 #[inline(always)]
-pub fn cont_new(
+pub fn cont_new<const GC_REFS: bool>(
     store: &mut dyn crate::vm::VMStore,
     instance: crate::store::InstanceId,
     func: *mut u8,
@@ -197,9 +218,9 @@ pub fn cont_new(
 
     // The initialization function will allocate the actual args/return value buffer and
     // update this object (if needed).
-    let contref_args_ptr = &mut contref.args as *mut VMHostArray;
+    let contref_args_ptr = &mut contref.args as *mut VMPayloads;
 
-    contref.stack.initialize(
+    contref.stack.initialize::<GC_REFS>(
         func.cast::<crate::vm::VMFuncRef>(),
         caller_vmctx.as_ptr(),
         contref_args_ptr,

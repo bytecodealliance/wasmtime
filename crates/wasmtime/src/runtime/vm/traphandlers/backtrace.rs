@@ -335,10 +335,15 @@ impl Backtrace {
         let mut continuations_iter = unsafe { chain.into_continuation_iter() }.peekable();
 
         while let Some(continuation_ptr) = continuations_iter.next() {
-            let parent_limits_ptr = stack_limits_iter
-                .next()
-                .expect("expected one more VMStackLimits than continuations");
             let continuation = unsafe { &*continuation_ptr };
+            let Some(parent_limits_ptr) = stack_limits_iter.next() else {
+                // A detached suspended continuation chain ends in `Absent`,
+                // unlike a running chain which ends in an initial stack. The
+                // currently suspended stack was already traced above, and the
+                // last continuation has no parent stack left to trace.
+                debug_assert_eq!(continuation.parent_chain, VMStackChain::Absent);
+                break;
+            };
             let parent_limits = unsafe { &*parent_limits_ptr };
 
             // The parent of `continuation` if present and not the last in the chain.
