@@ -51,7 +51,11 @@ mod pulley;
 mod relocs;
 mod stack_creator;
 mod stack_overflow;
-#[cfg(all(feature = "stack-switching", unix, target_arch = "x86_64"))]
+#[cfg(all(
+    feature = "stack-switching",
+    target_os = "linux",
+    target_arch = "x86_64"
+))]
 mod stack_switching;
 mod store;
 mod structs;
