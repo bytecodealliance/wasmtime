@@ -40,7 +40,7 @@ pub async fn create_table(
                 AllocateInstanceKind::Dummy {
                     allocator: &allocator,
                 },
-                &ModuleRuntimeInfo::bare_with_registered_type(
+                &ModuleRuntimeInfo::bare_with_registered_types(
                     module,
                     table.element().clone().into_registered_type(),
                 )?,
