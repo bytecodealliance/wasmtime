@@ -606,6 +606,10 @@ impl<'a> AliasAnalysis<'a> {
                         // from (and therefore observe) memory before
                         // storing to it.
                         && !func.dfg.insts[inst].opcode().can_load()
+                        // A store with memory fence semantics (such as an
+                        // atomic store) is observable by other threads, so it
+                        // can never be eliminated.
+                        && !has_memory_fence_semantics(func.dfg.insts[last_store].opcode())
                         // `last_store` must really be a store that
                         // writes exactly the bytes this store
                         // overwrites (same region, address, offset,
