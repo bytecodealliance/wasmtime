@@ -7,8 +7,7 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p2::add_to_linker_async;
 use wasmtime_wasi::p2::bindings::{Command, clocks::wall_clock, filesystem::types as filesystem};
 use wasmtime_wasi::{
-    FsPerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiCtxView,
-    WasiView,
+    FsPerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView,
 };
 
 struct CommandCtx {

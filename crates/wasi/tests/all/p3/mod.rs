@@ -203,11 +203,7 @@ async fn run_with_readonly_testfile(component_path: &str) -> wasmtime::Result<()
 
     run_with_builder(component_path, false, |builder| {
         builder
-            .preopened_dir(
-                tempdir.path(),
-                "readonly",
-                FsPerms::ReadOnly,
-            )
+            .preopened_dir(tempdir.path(), "readonly", FsPerms::ReadOnly)
             .unwrap();
     })
     .await?;

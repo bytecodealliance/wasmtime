@@ -38,7 +38,6 @@ async fn test_file_rename_across_perms(rw_dir: &Descriptor, ro_dir: &Descriptor)
     // Check test preconditions.
     test_ro_file_has_expected_contents(ro_dir).await;
 
-
     // Renaming the ro dir file into the rw dir should fail with permissions error
     let err = ro_dir
         .rename_at(

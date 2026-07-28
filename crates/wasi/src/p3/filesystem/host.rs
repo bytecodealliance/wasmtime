@@ -660,8 +660,7 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
         FutureReader<Result<(), ErrorCode>>,
     )> {
         let (result_tx, result_rx) = oneshot::channel();
-        let stream = match get_dir(store.get().table, &fd)
-        {
+        let stream = match get_dir(store.get().table, &fd) {
             Ok(dir) => {
                 let allow_blocking_current_thread = dir.allow_blocking_current_thread;
                 let dir = Arc::clone(dir.as_dir());

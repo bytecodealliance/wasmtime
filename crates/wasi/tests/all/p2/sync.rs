@@ -419,12 +419,8 @@ fn run_with_readonly_testfile(component_path: &str) {
     std::fs::write(&file, EXPECTED_CONTENTS).expect("write read only test file");
 
     run(component_path, |b| {
-        b.preopened_dir(
-            tempdir.path(),
-            "readonly",
-            FsPerms::ReadOnly,
-        )
-        .unwrap();
+        b.preopened_dir(tempdir.path(), "readonly", FsPerms::ReadOnly)
+            .unwrap();
     })
     .expect("run guest");
 
@@ -467,12 +463,8 @@ fn file_stream_not_permitted(component_path: &str) {
         .expect("write readonly test file");
 
     run(component_path, |b| {
-        b.preopened_dir(
-            readonly.path(),
-            "readonly",
-            FsPerms::ReadOnly,
-        )
-        .unwrap();
+        b.preopened_dir(readonly.path(), "readonly", FsPerms::ReadOnly)
+            .unwrap();
     })
     .expect("run p2_file_stream_not_permitted guest");
 }

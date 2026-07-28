@@ -933,7 +933,6 @@ impl Dir {
         flags: DescriptorFlags,
         allow_blocking_current_thread: bool,
     ) -> Result<Descriptor, ErrorCode> {
-
         // Track whether we are creating file, for permission check:
         let mut create = false;
         // Track open mode, for permission check and recording in created descriptor:
