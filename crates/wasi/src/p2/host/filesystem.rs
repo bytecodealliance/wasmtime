@@ -7,7 +7,6 @@ use crate::p2::bindings::filesystem::types::{
 };
 use crate::p2::filesystem::{FileInputStream, FileOutputStream, ReaddirIterator};
 use crate::p2::{FsError, FsResult};
-use crate::{DirPerms, FilePerms};
 use std::time::SystemTime;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};
@@ -108,9 +107,6 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         offset: types::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
         let f = self.table.get(&fd)?.file()?;
-        if !f.perms.contains(FilePerms::READ) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
 
         let (mut buffer, r) = f
             .run_blocking(move |f| {
@@ -142,7 +138,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         offset: types::Filesize,
     ) -> FsResult<types::Filesize> {
         let f = self.table.get(&fd)?.file()?;
-        if !f.perms.contains(FilePerms::WRITE) {
+        if f.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted.into());
         }
 
@@ -158,9 +154,6 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         fd: Resource<types::Descriptor>,
     ) -> FsResult<Resource<types::DirectoryEntryStream>> {
         let d = self.table.get(&fd)?.dir()?;
-        if !d.perms.contains(DirPerms::READ) {
-            return Err(ErrorCode::NotPermitted.into());
-        }
 
         enum ReaddirError {
             Io(std::io::Error),
@@ -377,10 +370,6 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         // Trap if fd lookup fails:
         let f = self.table.get(&fd)?.file()?;
 
-        if !f.perms.contains(FilePerms::READ) {
-            Err(types::ErrorCode::NotPermitted)?;
-        }
-
         // Create a stream view for it.
         let reader: DynInputStream = Box::new(FileInputStream::new(f, offset));
 
@@ -398,7 +387,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         // Trap if fd lookup fails:
         let f = self.table.get(&fd)?.file()?;
 
-        if !f.perms.contains(FilePerms::WRITE) {
+        if f.perms.write_not_permitted() {
             Err(types::ErrorCode::NotPermitted)?;
         }
 
@@ -419,7 +408,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         // Trap if fd lookup fails:
         let f = self.table.get(&fd)?.file()?;
 
-        if !f.perms.contains(FilePerms::WRITE) {
+        if f.perms.write_not_permitted() {
             Err(types::ErrorCode::NotPermitted)?;
         }
 

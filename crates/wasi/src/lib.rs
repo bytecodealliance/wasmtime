@@ -53,7 +53,7 @@ mod view;
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::error::{I32Exit, TrappableError};
-pub use self::filesystem::{DirPerms, FilePerms, OpenMode};
+pub use self::filesystem::{FsPerms, OpenMode};
 pub use self::random::{Deterministic, thread_rng};
 pub use self::view::{WasiCtxView, WasiView};
 #[doc(no_inline)]
