@@ -1,6 +1,8 @@
 ;;! bulk_memory = true
+;;! exceptions = true
 ;;! function_references = true
 ;;! stack_switching = true
+
 ;; Small continuation resume test
 ;; expected output:
 ;; 1 : i32

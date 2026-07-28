@@ -1,6 +1,8 @@
 ;;! bulk_memory = true
+;;! exceptions = true
 ;;! function_references = true
 ;;! stack_switching = true
+
 (module $foo
   (type $ft (func (result i32)))
   (type $ct (cont $ft))

@@ -1,6 +1,8 @@
 ;;! bulk_memory = true
+;;! exceptions = true
 ;;! function_references = true
 ;;! stack_switching = true
+
 ;; This file tests passing arguments to functions used has continuations and
 ;; returning values from such continuations on ordinary (i.e., non-suspend) exit
 

@@ -1,4 +1,5 @@
 ;;! bulk_memory = true
+;;! exceptions = true
 ;;! function_references = true
 ;;! stack_switching = true
 ;; Continuation is not immediately resumed, we pass it to a different one as an
