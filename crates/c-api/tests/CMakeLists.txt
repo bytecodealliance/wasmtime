@@ -14,6 +14,10 @@ function(add_capi_test name)
   add_executable(test-${name} ${arg_FILES})
   target_link_libraries(test-${name} PRIVATE wasmtime-cpp gtest_main)
   gtest_discover_tests(test-${name}
+    # Discover tests when the tests are run, not as a post-build step. Running a
+    # binary immediately after it's linked is flaky on Windows where the
+    # discovery step can read back an empty test listing and fail the build.
+    DISCOVERY_MODE PRE_TEST
     # GitHub Actions on Windows is pretty slow, let's give it lots more time
     # than the default 5 seconds.
     DISCOVERY_TIMEOUT 60)
