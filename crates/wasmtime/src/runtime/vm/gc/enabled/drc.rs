@@ -1119,14 +1119,11 @@ unsafe impl GcHeap for DrcHeap {
 
     fn alloc_uninit_struct_or_exn(
         &mut self,
+        kind: VMGcKind,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
     ) -> Result<Result<VMGcRef, u64>> {
-        let kind = if layout.is_exception {
-            VMGcKind::ExnRef
-        } else {
-            VMGcKind::StructRef
-        };
+        debug_assert!(matches!(kind, VMGcKind::StructRef | VMGcKind::ExnRef));
         let gc_ref =
             match self.alloc_raw(VMGcHeader::from_kind_and_index(kind, ty), layout.layout())? {
                 Err(n) => return Ok(Err(n)),

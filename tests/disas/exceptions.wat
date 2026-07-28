@@ -31,10 +31,10 @@
 ;;       movq    %r14, 0x28(%rsp)
 ;;       movq    %r15, 0x30(%rsp)
 ;;       movq    %rdi, %rbx
-;;       movq    %rcx, %r13
-;;       movq    %rdx, %r14
+;;       movq    %rcx, %r12
+;;       movq    %rdx, %r13
 ;;       callq   0x401
-;;       movq    %rax, %r12
+;;       movq    %rax, %r14
 ;;       movq    0x20(%rbx), %rdx
 ;;       movl    (%rdx), %esi
 ;;       movl    %esi, %ecx
@@ -53,13 +53,13 @@
 ;;       movl    %eax, 4(%rdi, %rcx)
 ;;       movl    $0x30, %eax
 ;;       movl    %eax, 8(%rdi, %rcx)
-;;       movq    %r14, %rdi
-;;       movl    %edi, 0x18(%rdx)
-;;       movq    %r13, %rcx
-;;       movq    %rcx, 0x20(%rdx)
-;;       movq    %r12, %rax
+;;       movq    %r14, %rax
 ;;       movl    %eax, 0x10(%rdx)
 ;;       movl    $0, 0x14(%rdx)
+;;       movq    %r13, %rdi
+;;       movl    %edi, 0x18(%rdx)
+;;       movq    %r12, %rcx
+;;       movq    %rcx, 0x20(%rdx)
 ;;       movq    %rbx, %rdi
 ;;       movq    %rbx, (%rsp)
 ;;       callq   0x42e
@@ -75,7 +75,7 @@
 ;;       movl    %eax, %edx
 ;;       addq    0x20(%rcx), %rdx
 ;;       movq    %rax, %rsi
-;;       movq    %r14, %rdi
+;;       movq    %r14, %rax
 ;;       jmp     0x8e
 ;;   ea: ud2
 ;;       ud2

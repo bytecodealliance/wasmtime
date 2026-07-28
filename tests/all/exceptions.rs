@@ -156,17 +156,10 @@ fn exception_from_host(config: &mut Config) -> Result<()> {
 
     let functy = FuncType::new(&engine, [ValType::I32], []);
     let tagty = TagType::new(functy.clone());
-    let exnty = ExnType::from_tag_type(&tagty).unwrap();
-    let exnpre = ExnRefPre::new(&mut store, exnty);
     let tag = Tag::new(&mut store, &tagty)?;
+    let exnpre = ExnRefPre::new(&mut store, tag)?;
     let extfunc = Func::new(&mut store, functy, move |mut caller, args, _rets| {
-        let exn = ExnRef::new(
-            &mut caller,
-            &exnpre,
-            &tag,
-            &[Val::I32(args[0].unwrap_i32())],
-        )
-        .unwrap();
+        let exn = ExnRef::new(&mut caller, &exnpre, &[Val::I32(args[0].unwrap_i32())]).unwrap();
         caller.as_context_mut().throw(exn)?;
         Ok(())
     });
@@ -190,17 +183,10 @@ fn exception_across_no_wasm(config: &mut Config) -> Result<()> {
 
     let functy = FuncType::new(&engine, [ValType::I32], []);
     let tagty = TagType::new(functy.clone());
-    let exnty = ExnType::from_tag_type(&tagty).unwrap();
-    let exnpre = ExnRefPre::new(&mut store, exnty);
     let tag = Tag::new(&mut store, &tagty)?;
+    let exnpre = ExnRefPre::new(&mut store, tag)?;
     let extfunc = Func::new(&mut store, functy, move |mut caller, args, _rets| {
-        let exn = ExnRef::new(
-            &mut caller,
-            &exnpre,
-            &tag,
-            &[Val::I32(args[0].unwrap_i32())],
-        )
-        .unwrap();
+        let exn = ExnRef::new(&mut caller, &exnpre, &[Val::I32(args[0].unwrap_i32())]).unwrap();
         caller.as_context_mut().throw(exn)?;
         Ok(())
     });
@@ -233,10 +219,9 @@ fn gc_with_exnref_global(config: &mut Config) -> Result<()> {
 
     let functy = FuncType::new(&engine, [], []);
     let tagty = TagType::new(functy.clone());
-    let exnty = ExnType::from_tag_type(&tagty).unwrap();
-    let exnpre = ExnRefPre::new(&mut store, exnty);
     let tag = Tag::new(&mut store, &tagty)?;
-    let exn = ExnRef::new(&mut store, &exnpre, &tag, &[])?;
+    let exnpre = ExnRefPre::new(&mut store, tag)?;
+    let exn = ExnRef::new(&mut store, &exnpre, &[])?;
 
     let global = instance.get_global(&mut store, "g").unwrap();
     global.set(&mut store, Val::ExnRef(Some(exn)))?;
@@ -326,15 +311,14 @@ fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
     let functy = FuncType::new(&engine, [ValType::I32], []);
     let tagty = TagType::new(functy);
     let t1 = Tag::new(&mut store, &tagty)?;
-    let exnty = ExnType::from_tag_type(&tagty)?;
-    let exnpre_for_t1 = ExnRefPre::new(&mut store, exnty);
+    let exnpre_for_t1 = ExnRefPre::new(&mut store, t1)?;
 
     let throw_t1 = Func::wrap(
         &mut store,
         move |mut caller: Caller<'_, ()>| -> Result<()> {
             let err = {
                 let mut scope = RootScope::new(&mut caller);
-                let exn = ExnRef::new(&mut scope, &exnpre_for_t1, &t1, &[Val::I32(0x1111_1111)])?;
+                let exn = ExnRef::new(&mut scope, &exnpre_for_t1, &[Val::I32(0x1111_1111)])?;
                 scope.as_context_mut().throw::<()>(exn)
             };
             caller.as_context_mut().gc(None)?;
@@ -385,15 +369,14 @@ fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> 
     let functy = FuncType::new(&engine, [ValType::I32], []);
     let tagty = TagType::new(functy);
     let t1 = Tag::new(&mut store, &tagty)?;
-    let exnty = ExnType::from_tag_type(&tagty)?;
-    let exnpre_for_t1 = ExnRefPre::new(&mut store, exnty);
+    let exnpre_for_t1 = ExnRefPre::new(&mut store, t1)?;
 
     let throw_t1 = Func::wrap(
         &mut store,
         move |mut caller: Caller<'_, ()>| -> Result<()> {
             let err = {
                 let mut scope = RootScope::new(&mut caller);
-                let exn = ExnRef::new(&mut scope, &exnpre_for_t1, &t1, &[Val::I32(0x1111_1111)])?;
+                let exn = ExnRef::new(&mut scope, &exnpre_for_t1, &[Val::I32(0x1111_1111)])?;
                 scope.as_context_mut().throw::<()>(exn)
             };
             caller.as_context_mut().gc(None)?;
@@ -440,8 +423,7 @@ fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Resu
     let functy = FuncType::new(&engine, [ValType::EXTERNREF], []);
     let tagty = TagType::new(functy);
     let tag = Tag::new(&mut store, &tagty)?;
-    let exnty = ExnType::from_tag_type(&tagty)?;
-    let exnpre = ExnRefPre::new(&mut store, exnty);
+    let exnpre = ExnRefPre::new(&mut store, tag)?;
 
     let dropped = Arc::new(AtomicBool::new(false));
 
@@ -450,7 +432,7 @@ fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Resu
     {
         let mut scope = RootScope::new(&mut store);
         let r = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
-        let exn1 = ExnRef::new(&mut scope, &exnpre, &tag, &[Val::ExternRef(Some(r))])?;
+        let exn1 = ExnRef::new(&mut scope, &exnpre, &[Val::ExternRef(Some(r))])?;
         let _ = scope.as_context_mut().throw::<()>(exn1);
     }
     eprintln!("a2");
@@ -461,7 +443,7 @@ fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Resu
 
     {
         let mut scope = RootScope::new(&mut store);
-        let exn2 = ExnRef::new(&mut scope, &exnpre, &tag, &[Val::ExternRef(None)])?;
+        let exn2 = ExnRef::new(&mut scope, &exnpre, &[Val::ExternRef(None)])?;
         let _ = scope.as_context_mut().throw::<()>(exn2);
     }
     eprintln!("a3");

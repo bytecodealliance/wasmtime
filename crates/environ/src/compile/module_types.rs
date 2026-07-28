@@ -1,15 +1,13 @@
 use crate::{
     EngineOrModuleTypeIndex, EntityRef, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex,
     ModuleTypes, PanicOnOom as _, TypeConvert, TypeIndex, WasmArrayType, WasmCompositeInnerType,
-    WasmCompositeType, WasmExnType, WasmFieldType, WasmFuncType, WasmHeapType, WasmResult,
-    WasmStorageType, WasmStructType, WasmSubType, WasmValType,
+    WasmCompositeType, WasmFuncType, WasmHeapType, WasmResult, WasmStructType, WasmSubType,
+    WasmValType,
     collections::{TryClone as _, TryCow},
     wasm_unsupported,
 };
-use std::{
-    collections::{HashMap, hash_map::Entry},
-    ops::Index,
-};
+use std::collections::hash_map::Entry;
+use std::{collections::HashMap, ops::Index};
 use wasmparser::{UnpackedIndex, Validator, ValidatorId};
 
 /// A type marking the start of a recursion group's definition.
@@ -319,43 +317,23 @@ impl ModuleTypesBuilder {
         module_interned_index
     }
 
-    /// Define a new exception type when we see a function type used
-    /// in a tag.
+    /// Define the struct type describing the layout of exception objects
+    /// thrown with a tag of the given function type.
     ///
-    /// The returned `ModuleInternedTypeIndex` gives us a Wasmtime
-    /// type which corresponds to the exception object layout, but
-    /// note that these types do not exist in the Wasm spec: at the
-    /// Wasm level, only function types exist (and tags and exception
-    /// instructions reference them). For implementation reasons, we
-    /// need a separate type to describe the exception object layout,
-    /// and this registers and provides that type.
-    pub fn define_exception_type_for_tag(
+    /// The returned `ModuleInternedTypeIndex` gives a Wasmtime type which
+    /// corresponds to the exception object layout, but note that these types do
+    /// not exist in the Wasm spec. To manage `exnref` on the GC heap some type
+    /// index is needed, however, and this synthesizes that.
+    pub fn define_struct_for_tag(
         &mut self,
         for_func_ty: ModuleInternedTypeIndex,
     ) -> ModuleInternedTypeIndex {
         match self.exception_types.entry(for_func_ty) {
             Entry::Occupied(o) => *o.get(),
             Entry::Vacant(v) => {
-                let fields = self.types[for_func_ty]
-                    .unwrap_func()
-                    .params()
-                    .iter()
-                    .map(|valtype| WasmFieldType {
-                        element_type: WasmStorageType::Val(*valtype),
-                        mutable: false,
-                    })
-                    .collect();
-                let idx = self.types.push(WasmSubType {
-                    is_final: true,
-                    supertype: None,
-                    composite_type: WasmCompositeType {
-                        inner: WasmCompositeInnerType::Exn(WasmExnType {
-                            func_ty: EngineOrModuleTypeIndex::Module(for_func_ty),
-                            fields,
-                        }),
-                        shared: false,
-                    },
-                });
+                let params = self.types[for_func_ty].unwrap_func().params();
+                let ty = crate::exn_layout_type(params.iter().copied()).panic_on_oom();
+                let idx = self.types.push(ty);
                 let next = self.types.next_ty();
                 self.types.push_rec_group(idx..next);
                 *v.insert(idx)
@@ -427,25 +405,6 @@ impl ModuleTypesBuilder {
             return Err(wasm_unsupported!("shared arrays are not yet implemented"));
         }
         Ok(composite_type.inner.unwrap_array())
-    }
-
-    /// Get and unwrap a [`WasmExnType`] for the given exception-type index.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the unwrapped type is not an exception type.
-    ///
-    /// # Errors
-    ///
-    /// For now, fails with an unsupported error if the type is shared.
-    pub fn unwrap_exn(&self, interned_ty: ModuleInternedTypeIndex) -> WasmResult<&WasmExnType> {
-        let composite_type = &self.types[interned_ty].composite_type;
-        if composite_type.shared {
-            return Err(wasm_unsupported!(
-                "shared exceptions are not yet implemented"
-            ));
-        }
-        Ok(composite_type.inner.unwrap_exn())
     }
 
     /// Get and unwrap a [`WasmFuncType`] for the given function-type index.
@@ -574,7 +533,6 @@ where
                         WasmCompositeInnerType::Func(_) => WasmHeapType::ConcreteFunc(index),
                         WasmCompositeInnerType::Struct(_) => WasmHeapType::ConcreteStruct(index),
                         WasmCompositeInnerType::Cont(_) => WasmHeapType::ConcreteCont(index),
-                        WasmCompositeInnerType::Exn(_) => WasmHeapType::ConcreteExn(index),
                     }
                 } else if let Some((wasmparser_types, _)) = self.rec_group_context.as_ref() {
                     let wasmparser_ty = &wasmparser_types[id].composite_type;
@@ -615,7 +573,6 @@ where
                         WasmCompositeInnerType::Func(_) => WasmHeapType::ConcreteFunc(index),
                         WasmCompositeInnerType::Struct(_) => WasmHeapType::ConcreteStruct(index),
                         WasmCompositeInnerType::Cont(_) => WasmHeapType::ConcreteCont(index),
-                        WasmCompositeInnerType::Exn(_) => WasmHeapType::ConcreteExn(index),
                     }
                 } else if let Some((parser_types, rec_group)) = self.rec_group_context.as_ref() {
                     let rec_group_index = interned.index() - self.types.types.len_types();

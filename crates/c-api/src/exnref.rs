@@ -1,9 +1,8 @@
 use crate::{
-    WasmtimeStoreContextMut, handle_result, wasm_trap_t, wasmtime_error_t, wasmtime_exn_type_t,
-    wasmtime_val_t,
+    WasmtimeStoreContextMut, handle_result, wasm_trap_t, wasmtime_error_t, wasmtime_val_t,
 };
 use std::mem::MaybeUninit;
-use wasmtime::{AsContextMut, ExnRef, ExnRefPre, ExnType, RootScope, Tag};
+use wasmtime::{AsContextMut, ExnRef, ExnRefPre, RootScope, Tag};
 
 crate::anyref::ref_wrapper!({
     wasmtime: ExnRef,
@@ -25,13 +24,11 @@ pub unsafe extern "C" fn wasmtime_exnref_new(
     let mut scope = RootScope::new(&mut store);
 
     let result = (|| {
-        let tag_ty = tag.ty(&scope);
-        let exn_type = ExnType::from_tag_type(&tag_ty)?;
-        let allocator = ExnRefPre::new(&mut scope, exn_type);
+        let allocator = ExnRefPre::new(&mut scope, *tag)?;
         let raw_fields = crate::slice_from_raw_parts(fields, nfields);
         let field_vals: Vec<wasmtime::Val> =
             raw_fields.iter().map(|f| f.to_val(&mut scope)).collect();
-        ExnRef::new(&mut scope, &allocator, tag, &field_vals)
+        ExnRef::new(&mut scope, &allocator, &field_vals)
     })();
 
     handle_result(result, |rooted| {
@@ -68,8 +65,7 @@ pub extern "C" fn wasmtime_exnref_field_count(
         Some(e) => e.to_rooted(&mut scope),
         None => return 0,
     };
-    let ty = rooted.ty(&scope).unwrap();
-    ty.fields().len()
+    rooted.fields(&mut scope).unwrap().len()
 }
 
 #[unsafe(no_mangle)]
@@ -130,14 +126,4 @@ pub extern "C" fn wasmtime_context_take_exception(
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_context_has_exception(store: WasmtimeStoreContextMut<'_>) -> bool {
     store.has_pending_exception()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_exnref_type(
-    mut cx: WasmtimeStoreContextMut<'_>,
-    exnref: Option<&wasmtime_exnref_t>,
-) -> Option<Box<wasmtime_exn_type_t>> {
-    let exnref = exnref.and_then(|a| a.as_wasmtime())?;
-    let ty = exnref.ty(&mut cx).expect("should be rooted");
-    Some(Box::new(ty.into()))
 }

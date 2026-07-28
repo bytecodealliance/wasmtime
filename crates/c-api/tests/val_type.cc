@@ -75,33 +75,6 @@ TEST(ArrayType, Smoke) {
   ValType vty(engine, rty);
 }
 
-TEST(ExnType, Smoke) {
-  Engine engine;
-  ExnType ety =
-      ExnType::create(engine, {ValType::i32(), ValType::i64()}).unwrap();
-  HeapType hty(ety);
-  auto exn_ty = hty.as_concrete_exn();
-  ASSERT_NE(exn_ty, nullptr);
-  EXPECT_TRUE(hty.is_concrete());
-  EXPECT_FALSE(HeapType::exn().is_concrete());
-
-  TagType tt = exn_ty->tag_type();
-  auto ft = tt->functype();
-  EXPECT_EQ(ft->params().size(), 2);
-  EXPECT_EQ(*ft->params().begin(), ValType::i32());
-
-  RefType rty(true, hty);
-  rty = RefType(false, hty);
-  rty = RefType(false, ety);
-  ValType vty(engine, rty);
-
-  ety = ExnType::create(engine, {}).unwrap();
-  HeapType hty2(ety);
-  auto exn_ty2 = hty2.as_concrete_exn();
-  ASSERT_NE(exn_ty2, nullptr);
-  EXPECT_EQ(exn_ty2->tag_type()->functype()->params().size(), 0);
-}
-
 TEST(StructType, Smoke) {
   Engine engine;
   StructType sty(engine, {});

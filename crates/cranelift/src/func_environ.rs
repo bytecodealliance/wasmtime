@@ -1723,11 +1723,6 @@ impl FuncEnvironment<'_> {
         }
     }
 
-    /// Get the type index associated with an exception object.
-    pub(crate) fn exception_type_from_tag(&self, tag: TagIndex) -> EngineOrModuleTypeIndex {
-        self.module.tags[tag].exception
-    }
-
     /// Get the parameter arity of the associated function type for the given tag.
     pub(crate) fn tag_param_arity(&self, tag: TagIndex) -> usize {
         let func_ty = self.module.tags[tag].signature.unwrap_module_type_index();
@@ -2278,7 +2273,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             | WasmHeapType::Struct
             | WasmHeapType::ConcreteStruct(_)
             | WasmHeapType::Exn
-            | WasmHeapType::ConcreteExn(_)
             | WasmHeapType::NoExn
             | WasmHeapType::Cont
             | WasmHeapType::ConcreteCont(_)

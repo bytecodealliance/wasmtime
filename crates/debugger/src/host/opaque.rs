@@ -4,8 +4,8 @@
 use crate::host::wit;
 use crate::host::{api::WasmValue, bindings::val_type_to_wasm_type};
 use wasmtime::{
-    Engine, ExnRef, ExnRefPre, ExnType, FrameHandle, Func, FuncType, Global, Instance, Memory,
-    Module, OwnedRooted, Result, Table, Tag, TagType, Val, ValType,
+    Engine, ExnRef, ExnRefPre, FrameHandle, Func, FuncType, Global, Instance, Memory, Module,
+    OwnedRooted, Result, Table, Tag, TagType, Val, ValType,
 };
 
 /// Type-erased interface to the `Debugger<T>` implementing all
@@ -474,14 +474,12 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         fields: Vec<WasmValue>,
     ) -> Result<OwnedRooted<ExnRef>> {
         self.with_store(move |mut store| -> Result<OwnedRooted<ExnRef>> {
-            let exn_ty =
-                ExnType::from_tag_type(&tag.ty(&store)).expect("tag type is already validated");
-            let allocator = ExnRefPre::new(&mut store, exn_ty);
+            let allocator = ExnRefPre::new(&mut store, tag).expect("tag type is already validated");
             let field_vals = fields
                 .into_iter()
                 .map(|v| v.into_val(&mut store))
                 .collect::<Vec<_>>();
-            let exn = ExnRef::new(&mut store, &allocator, &tag, &field_vals)
+            let exn = ExnRef::new(&mut store, &allocator, &field_vals)
                 .map_err(|_| wit::Error::AllocFailure)?;
             Ok(exn.to_owned_rooted(&mut store).unwrap())
         })

@@ -51,7 +51,7 @@ fn global_type_accessors() -> Result<()> {
     })
 }
 
-// Note: ExnType::new, StructType::new, and ArrayType::new are not tested under
+// Note: StructType::new and ArrayType::new are not tested under
 // OOM yet because their construction goes through the type registry and GC
 // layout computation which has additional .panic_on_oom() calls deep in
 // crates/environ/src/gc.rs that need to be addressed first.

@@ -41,7 +41,7 @@ TEST(Exception, ConstructAndExamine) {
   EXPECT_EQ(f1.kind(), ValKind::I64);
   EXPECT_EQ(f1.i64(), 100);
 
-  auto fty = exn.ty(cx).tag_type()->functype();
+  auto fty = exn_tag.type(cx)->functype();
   EXPECT_EQ(fty->params().size(), 2);
   EXPECT_EQ(*fty->params().begin(), ValType::i32());
   EXPECT_EQ(*(fty->params().begin() + 1), ValType::i64());
@@ -157,7 +157,8 @@ TEST(Exception, ExnRefRoundTripThroughVal) {
 
   auto exnref = exnref_val.exnref();
   ASSERT_TRUE(exnref);
-  auto fty = exnref->ty(cx).tag_type()->functype();
+  auto exn_tag = exnref->tag(cx).unwrap();
+  auto fty = exn_tag.type(cx)->functype();
   EXPECT_EQ(fty->params().size(), 1);
   EXPECT_EQ(*fty->params().begin(), ValType::i32());
   EXPECT_EQ(fty->results().size(), 0);

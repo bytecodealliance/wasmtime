@@ -10,7 +10,6 @@
 
 #include <wasm.h>
 #include <wasmtime/types/arrayref.h>
-#include <wasmtime/types/exnref.h>
 #include <wasmtime/types/structref.h>
 
 #ifdef __cplusplus
@@ -55,10 +54,8 @@ typedef uint8_t wasmtime_heaptype_kind_t;
 #define WASMTIME_HEAPTYPE_KIND_CONCRETE_STRUCT 12
 /// \brief Heap type for the abstract `exn` type.
 #define WASMTIME_HEAPTYPE_KIND_EXN 13
-/// \brief Heap type for a concrete exception type.
-#define WASMTIME_HEAPTYPE_KIND_CONCRETE_EXN 14
 /// \brief Heap type for the abstract `noexn` type.
-#define WASMTIME_HEAPTYPE_KIND_NOEXN 15
+#define WASMTIME_HEAPTYPE_KIND_NOEXN 14
 
 /// \brief Payload of the `wasmtime_heaptype_t` union.
 typedef union wasmtime_heaptype_union {
@@ -68,8 +65,6 @@ typedef union wasmtime_heaptype_union {
   wasmtime_array_type_t *concrete_array;
   /// \brief Used with `WASMTIME_HEAPTYPE_KIND_CONCRETE_STRUCT`.
   wasmtime_struct_type_t *concrete_struct;
-  /// \brief Used with `WASMTIME_HEAPTYPE_KIND_CONCRETE_EXN`.
-  wasmtime_exn_type_t *concrete_exn;
 } wasmtime_heaptype_union_t;
 
 /// \brief A WebAssembly heap type.

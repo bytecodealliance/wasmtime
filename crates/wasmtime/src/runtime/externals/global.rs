@@ -176,7 +176,7 @@ impl Global {
 
                         HeapType::NoExtern => Ref::Extern(None),
 
-                        HeapType::Exn | HeapType::ConcreteExn(_) => definition
+                        HeapType::Exn => definition
                             .as_gc_ref()
                             .map(|r| {
                                 let r = store.clone_gc_ref(r);

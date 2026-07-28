@@ -16,7 +16,6 @@ impl wasm_limits_t {
 }
 
 mod arrayref;
-mod exn;
 mod export;
 mod r#extern;
 mod func;
@@ -28,7 +27,6 @@ mod table;
 mod tag;
 mod val;
 pub use self::arrayref::*;
-pub use self::exn::*;
 pub use self::export::*;
 pub use self::r#extern::*;
 pub use self::func::*;

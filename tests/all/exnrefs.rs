@@ -21,59 +21,25 @@ fn tag_objects() -> Result<()> {
 }
 
 #[test]
-fn exn_types() -> Result<()> {
-    let mut store = gc_store()?;
-    let engine = store.engine();
-
-    let func_ty = FuncType::new(&engine, [ValType::I32, ValType::I64], []);
-    let tag_ty = TagType::new(func_ty);
-
-    let tag = Tag::new(&mut store, &tag_ty).unwrap();
-
-    assert!(tag.ty(&store).ty().matches(tag_ty.ty()));
-
-    let tag2 = Tag::new(&mut store, &tag_ty).unwrap();
-
-    assert!(!Tag::eq(&tag, &tag2, &store));
-
-    let exntype = ExnType::from_tag_type(&tag_ty).unwrap();
-    let exntype2 = ExnType::new(store.engine(), [ValType::I32, ValType::I64]).unwrap();
-
-    assert!(exntype.matches(&exntype2));
-    assert!(exntype.tag_type().ty().matches(&tag_ty.ty()));
-
-    Ok(())
-}
-
-#[test]
 fn exn_objects() -> Result<()> {
     let mut store = gc_store()?;
-    let exntype = ExnType::new(store.engine(), [ValType::I32, ValType::I64]).unwrap();
+    let engine = store.engine().clone();
+    let tag_ty = TagType::new(FuncType::new(&engine, [ValType::I32, ValType::I64], []));
 
     // Create a tag instance to associate with our exception objects.
-    let tag = Tag::new(&mut store, &exntype.tag_type()).unwrap();
+    let tag = Tag::new(&mut store, &tag_ty).unwrap();
 
-    // Create an allocator for the exn type.
-    let allocator = ExnRefPre::new(&mut store, exntype);
+    // Create an allocator for exception objects thrown with that tag.
+    let allocator = ExnRefPre::new(&mut store, tag)?;
 
     {
         let mut scope = RootScope::new(&mut store);
 
         for i in 0..10 {
-            ExnRef::new(
-                &mut scope,
-                &allocator,
-                &tag,
-                &[Val::I32(i), Val::I64(i64::MAX)],
-            )?;
+            ExnRef::new(&mut scope, &allocator, &[Val::I32(i), Val::I64(i64::MAX)])?;
         }
 
-        let obj = ExnRef::new(
-            &mut scope,
-            &allocator,
-            &tag,
-            &[Val::I32(42), Val::I64(i64::MIN)],
-        )?;
+        let obj = ExnRef::new(&mut scope, &allocator, &[Val::I32(42), Val::I64(i64::MIN)])?;
 
         assert_eq!(obj.fields(&mut scope)?.len(), 2);
         assert_eq!(obj.field(&mut scope, 0)?.unwrap_i32(), 42);
@@ -110,12 +76,12 @@ fn host_exnref_has_trace_info_for_gc() -> Result<()> {
 
         // Allocate a host exnref object in a nested scope and put it into the
         // module that was just allocated.
-        let exn_ty = ExnType::new(&engine, [ValType::I32])?;
-        let exnpre = ExnRefPre::new(&mut store, exn_ty.clone());
-        let tag = Tag::new(&mut store, &exn_ty.tag_type())?;
+        let tag_ty = TagType::new(FuncType::new(&engine, [ValType::I32], []));
+        let tag = Tag::new(&mut store, &tag_ty)?;
+        let exnpre = ExnRefPre::new(&mut store, tag)?;
         {
             let mut scope = RootScope::new(&mut store);
-            let exn = ExnRef::new(&mut scope, &exnpre, &tag, &[Val::I32(43)])?;
+            let exn = ExnRef::new(&mut scope, &exnpre, &[Val::I32(43)])?;
             g.set(&mut scope, Val::ExnRef(Some(exn)))?;
         }
 

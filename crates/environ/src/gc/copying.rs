@@ -192,13 +192,4 @@ impl GcTypeLayouts for CopyingTypeLayouts {
         debug_assert!(layout.size >= MIN_OBJECT_SIZE);
         Ok(layout)
     }
-
-    fn exn_layout(&self, ty: &WasmExnType) -> Result<GcStructLayout, OutOfMemory> {
-        let mut layout = common_exn_layout(ty, HEADER_SIZE, ALIGN)?;
-        layout.size = layout.size.next_multiple_of(ALIGN);
-        debug_assert!(layout.align <= ALIGN);
-        layout.align = ALIGN;
-        debug_assert!(layout.size >= MIN_OBJECT_SIZE);
-        Ok(layout)
-    }
 }

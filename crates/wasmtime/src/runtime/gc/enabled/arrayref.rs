@@ -677,7 +677,7 @@ impl ArrayRef {
         let mut store = AutoAssertNoGc::new(store);
         let data = store
             .require_gc_store_mut()?
-            .gc_object_data(arrayref.as_gc_ref())?;
+            .gc_object_data_mut(arrayref.as_gc_ref())?;
         let copied = data.copy_from_slice(layout.base_size, elems);
 
         // If the copy failed then the array is not fully initialized, so we
@@ -1080,7 +1080,6 @@ unsafe impl WasmTy for Rooted<ArrayRef> {
             | HeapType::ConcreteCont(_)
             | HeapType::Exn
             | HeapType::NoExn
-            | HeapType::ConcreteExn(_)
             | HeapType::None => bail!(
                 "type mismatch: expected `(ref {ty})`, got `(ref {})`",
                 self._ty(store)?,
@@ -1180,7 +1179,6 @@ unsafe impl WasmTy for OwnedRooted<ArrayRef> {
             | HeapType::ConcreteCont(_)
             | HeapType::Exn
             | HeapType::NoExn
-            | HeapType::ConcreteExn(_)
             | HeapType::None => bail!(
                 "type mismatch: expected `(ref {ty})`, got `(ref {})`",
                 self._ty(store)?,

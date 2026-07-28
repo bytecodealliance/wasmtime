@@ -11,7 +11,6 @@
 
 #ifdef WASMTIME_FEATURE_GC
 
-#include <wasmtime/types/exnref.h>
 #include <wasmtime/val.h>
 
 #ifdef __cplusplus
@@ -165,17 +164,6 @@ wasmtime_context_take_exception(wasmtime_context_t *store,
  * \return true if a pending exception is set, false otherwise.
  */
 WASM_API_EXTERN bool wasmtime_context_has_exception(wasmtime_context_t *store);
-
-/**
- * \brief Returns the type of the specified `exnref`.
- *
- * \return If `exnref` is NULL or represents `ref.null exn`, then NULL is
- * returned. Otherwise the type of this value is returned. Callers must delete
- * the returned value.
- */
-WASM_API_EXTERN wasmtime_exn_type_t *
-wasmtime_exnref_type(wasmtime_context_t *context,
-                     const wasmtime_exnref_t *exnref);
 
 #ifdef __cplusplus
 } // extern "C"

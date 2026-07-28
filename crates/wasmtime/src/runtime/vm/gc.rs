@@ -337,7 +337,7 @@ impl GcStore {
         layout: &GcStructLayout,
     ) -> Result<Result<VMStructRef, u64>> {
         self.gc_heap
-            .alloc_uninit_struct_or_exn(ty, layout)
+            .alloc_uninit_struct_or_exn(VMGcKind::StructRef, ty, layout)
             .map(|r| r.map(|r| r.into_structref_unchecked()))
     }
 
@@ -349,7 +349,14 @@ impl GcStore {
     /// Get the data for the given object reference.
     ///
     /// Panics when the structref and its size is out of the GC heap bounds.
-    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcObjectData> {
+    pub fn gc_object_data(&self, gc_ref: &VMGcRef) -> Result<&VMGcObjectData> {
+        self.gc_heap.gc_object_data(gc_ref)
+    }
+
+    /// Get mutable access to the data for the given object reference.
+    ///
+    /// Panics when the object and its size is out of the GC heap bounds.
+    pub fn gc_object_data_mut(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcObjectData> {
         self.gc_heap.gc_object_data_mut(gc_ref)
     }
 
@@ -391,7 +398,7 @@ impl GcStore {
         layout: &GcStructLayout,
     ) -> Result<Result<VMExnRef, u64>> {
         self.gc_heap
-            .alloc_uninit_struct_or_exn(ty, layout)
+            .alloc_uninit_struct_or_exn(VMGcKind::ExnRef, ty, layout)
             .map(|r| r.map(|r| r.into_exnref_unchecked()))
     }
 

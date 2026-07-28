@@ -240,12 +240,11 @@ async fn async_disallows_array_ref_new_fixed() -> Result<()> {
 #[tokio::test]
 async fn async_disallows_exnref_new() -> Result<()> {
     let mut store = async_limiter_store();
-    let ty = ExnType::new(store.engine(), [])?;
-    let pre = ExnRefPre::new(&mut store, ty);
     let fty = FuncType::new(store.engine(), [], []);
     let tag = Tag::new(&mut store, &TagType::new(fty))?;
-    assert!(ExnRef::new(&mut store, &pre, &tag, &[]).is_err());
-    ExnRef::new_async(&mut store, &pre, &tag, &[]).await?;
+    let pre = ExnRefPre::new(&mut store, tag)?;
+    assert!(ExnRef::new(&mut store, &pre, &[]).is_err());
+    ExnRef::new_async(&mut store, &pre, &[]).await?;
     Ok(())
 }
 

@@ -208,9 +208,17 @@ fn issue_13474_create_tag_without_gc_runtime_configured() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let fty = FuncType::new(&engine, [], []);
     let tty1 = TagType::new(fty.clone());
-    let result = Tag::new(&mut store, &tty1.clone());
-    result
-        .unwrap_err()
-        .assert_contains("cannot define `ExnType`s without a GC runtime enabled");
+
+    // Defining a tag does not require a GC runtime: only allocating exception
+    // objects for it does. This must succeed rather than panic.
+    let tag = Tag::new(&mut store, &tty1.clone())?;
+    assert!(tag.ty(&store).ty().matches(&fty));
+
+    // Allocating exception objects for the tag, on the other hand, requires a
+    // GC runtime, and must fail cleanly without one.
+    ExnRefPre::new(&mut store, tag)
+        .err()
+        .expect("should not be able to allocate exception objects without a GC runtime")
+        .assert_contains("cannot allocate exception objects without a GC runtime enabled");
     Ok(())
 }

@@ -17,10 +17,10 @@ use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::{SmallVec, smallvec};
 use wasmtime_environ::{
-    Collector, GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, I31_DISCRIMINANT,
-    ModuleInternedTypeIndex, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
-    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
-    wasm_unsupported,
+    Collector, EXN_ENGINE_FIELDS, EXN_TAG_DEFINED_FIELD, EXN_TAG_INSTANCE_FIELD, GcArrayLayout,
+    GcLayout, GcStructLayout, GcTypeLayouts, I31_DISCRIMINANT, ModuleInternedTypeIndex, TagIndex,
+    TypeIndex, VMGcKind, WasmCompositeInnerType, WasmHeapTopType, WasmHeapType, WasmRefType,
+    WasmResult, WasmStorageType, WasmValType, wasm_unsupported,
 };
 
 /// A trait for different collectors to emit any GC barriers they might require.
@@ -575,7 +575,7 @@ pub fn translate_struct_get(
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
 
-    let struct_layout = func_env.struct_or_exn_layout(interned_type_index);
+    let struct_layout = func_env.struct_layout(interned_type_index);
     let struct_size = struct_layout.size;
 
     let field_offset = struct_layout.fields[field_index].offset;
@@ -624,7 +624,7 @@ pub fn translate_struct_set(
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
 
-    let struct_layout = func_env.struct_or_exn_layout(interned_type_index);
+    let struct_layout = func_env.struct_layout(interned_type_index);
     let struct_size = struct_layout.size;
 
     let field_offset = struct_layout.fields[field_index].offset;
@@ -668,18 +668,23 @@ pub fn translate_exn_unbox(
 
     // Get the GcExceptionLayout associated with this tag's
     // function type, and generate loads for each field.
-    let exception_ty_idx = func_env
-        .exception_type_from_tag(tag_index)
-        .unwrap_module_type_index();
-    let exception_ty = func_env.types.unwrap_exn(exception_ty_idx)?;
-    let exn_layout = func_env.struct_or_exn_layout(exception_ty_idx);
+    let exception_ty_idx = func_env.translation.tag_layouts[tag_index];
+    let exception_ty = func_env.types.unwrap_struct(exception_ty_idx)?;
+    let exn_layout = func_env.exn_layout(exception_ty_idx);
     let exn_size = exn_layout.size;
 
     // Gather accesses first because these require a borrow on
     // `func_env`, which we later mutate below via
-    // `prepare_gc_ref_access()`.
+    // `prepare_gc_ref_access()`. Note that the leading `EXN_ENGINE_FIELDS`
+    // fields hold the exception's tag reference, which is not part of the
+    // payload that gets unboxed here.
     let mut accesses: SmallVec<[_; 4]> = smallvec![];
-    for (field_ty, field_layout) in exception_ty.fields.iter().zip(exn_layout.fields.iter()) {
+    for (field_ty, field_layout) in exception_ty
+        .fields
+        .iter()
+        .zip(exn_layout.fields.iter())
+        .skip(EXN_ENGINE_FIELDS)
+    {
         accesses.push((field_layout.offset, field_ty.element_type));
     }
 
@@ -1226,9 +1231,7 @@ pub fn translate_ref_test(
         // TODO: This check should ideally be done inline, but we don't have a
         // good way to access the `TypeRegistry`'s supertypes arrays from Wasm
         // code at the moment.
-        WasmHeapType::ConcreteArray(ty)
-        | WasmHeapType::ConcreteStruct(ty)
-        | WasmHeapType::ConcreteExn(ty) => {
+        WasmHeapType::ConcreteArray(ty) | WasmHeapType::ConcreteStruct(ty) => {
             let expected_interned_ty = ty.unwrap_module_type_index();
             let expected_shared_ty =
                 func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
@@ -1354,6 +1357,21 @@ fn emit_array_size(
     size
 }
 
+/// Build the full list of field values for a new exception object.
+///
+/// Exception objects are laid out as structs whose leading
+/// `EXN_ENGINE_FIELDS` fields hold the exception's tag reference and whose
+/// remaining fields are the payload values.
+fn exn_field_vals(
+    instance_id: ir::Value,
+    tag: ir::Value,
+    payload: &[ir::Value],
+) -> impl Iterator<Item = ir::Value> {
+    [instance_id, tag]
+        .into_iter()
+        .chain(payload.iter().copied())
+}
+
 /// Common helper for struct-field initialization that can be reused across
 /// collectors.
 fn initialize_struct_fields(
@@ -1363,7 +1381,7 @@ fn initialize_struct_fields(
     raw_ptr_to_struct: ir::Value,
     field_values: &[ir::Value],
 ) -> WasmResult<()> {
-    let struct_layout = func_env.struct_or_exn_layout(struct_ty);
+    let struct_layout = func_env.struct_layout(struct_ty);
     let struct_size = struct_layout.size;
     let field_offsets: SmallVec<[_; 8]> = struct_layout.fields.iter().map(|f| f.offset).collect();
     assert_eq!(field_offsets.len(), field_values.len());
@@ -1371,8 +1389,7 @@ fn initialize_struct_fields(
     assert!(!func_env.types[struct_ty].composite_type.shared);
     let fields = match &func_env.types[struct_ty].composite_type.inner {
         WasmCompositeInnerType::Struct(s) => &s.fields,
-        WasmCompositeInnerType::Exn(e) => &e.fields,
-        _ => panic!("Not a struct or exception type"),
+        _ => panic!("Not a struct type"),
     };
 
     let field_types: SmallVec<[_; 8]> = fields.iter().cloned().collect();
@@ -1428,9 +1445,23 @@ impl FuncEnvironment<'_> {
         Ok(self.gc_layout(type_index).unwrap_array())
     }
 
-    /// Get the `GcStructLayout` for the struct or exception type at the given `type_index`.
-    fn struct_or_exn_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcStructLayout {
+    /// Get the `GcStructLayout` for the struct type at the given `type_index`.
+    fn struct_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcStructLayout {
+        self.gc_layout(type_index).unwrap_struct()
+    }
+
+    /// Get the `GcStructLayout` for the exception type at the given `type_index`.
+    fn exn_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcStructLayout {
+        let compiler = gc_compiler(self).unwrap();
         let result = self.gc_layout(type_index).unwrap_struct();
+        assert_eq!(
+            result.fields[EXN_TAG_INSTANCE_FIELD].offset,
+            compiler.layouts().exception_tag_instance_offset()
+        );
+        assert_eq!(
+            result.fields[EXN_TAG_DEFINED_FIELD].offset,
+            compiler.layouts().exception_tag_defined_offset()
+        );
         result
     }
 
@@ -1609,7 +1640,7 @@ impl FuncEnvironment<'_> {
             // Can only ever be `null`.
             WasmHeapType::NoExtern => false,
 
-            WasmHeapType::Exn | WasmHeapType::ConcreteExn(_) | WasmHeapType::NoExn => false,
+            WasmHeapType::Exn | WasmHeapType::NoExn => false,
 
             // Wrong type hierarchy, and also funcrefs are not GC-managed
             // types. Should have been caught by the assertion at the start of

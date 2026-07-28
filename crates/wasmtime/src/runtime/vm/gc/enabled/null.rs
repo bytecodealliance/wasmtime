@@ -289,14 +289,11 @@ unsafe impl GcHeap for NullHeap {
 
     fn alloc_uninit_struct_or_exn(
         &mut self,
+        kind: VMGcKind,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
     ) -> Result<Result<VMGcRef, u64>> {
-        let kind = if layout.is_exception {
-            VMGcKind::ExnRef
-        } else {
-            VMGcKind::StructRef
-        };
+        debug_assert!(matches!(kind, VMGcKind::StructRef | VMGcKind::ExnRef));
         self.alloc(VMGcHeader::from_kind_and_index(kind, ty), layout.layout())
     }
 

@@ -478,16 +478,16 @@ impl VMGcRef {
         let gcstore = store.require_gc_store_mut()?;
         match val {
             Val::I32(i) if ty.is_i8() => gcstore
-                .gc_object_data(self)?
+                .gc_object_data_mut(self)?
                 .write_i8(offset, truncate_i32_to_i8(i)),
             Val::I32(i) if ty.is_i16() => gcstore
-                .gc_object_data(self)?
+                .gc_object_data_mut(self)?
                 .write_i16(offset, truncate_i32_to_i16(i)),
-            Val::I32(i) => gcstore.gc_object_data(self)?.write_i32(offset, i),
-            Val::I64(i) => gcstore.gc_object_data(self)?.write_i64(offset, i),
-            Val::F32(f) => gcstore.gc_object_data(self)?.write_u32(offset, f),
-            Val::F64(f) => gcstore.gc_object_data(self)?.write_u64(offset, f),
-            Val::V128(v) => gcstore.gc_object_data(self)?.write_v128(offset, v),
+            Val::I32(i) => gcstore.gc_object_data_mut(self)?.write_i32(offset, i),
+            Val::I64(i) => gcstore.gc_object_data_mut(self)?.write_i64(offset, i),
+            Val::F32(f) => gcstore.gc_object_data_mut(self)?.write_u32(offset, f),
+            Val::F64(f) => gcstore.gc_object_data_mut(self)?.write_u64(offset, f),
+            Val::V128(v) => gcstore.gc_object_data_mut(self)?.write_v128(offset, v),
 
             // NB: We don't need to do a write barrier when initializing a
             // field, because there is nothing being overwritten. Therefore, we
@@ -499,7 +499,7 @@ impl VMGcRef {
                 };
                 store
                     .require_gc_store_mut()?
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, x)
             }
             Val::AnyRef(x) => {
@@ -509,7 +509,7 @@ impl VMGcRef {
                 };
                 store
                     .require_gc_store_mut()?
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, x)
             }
             Val::ExnRef(x) => {
@@ -519,7 +519,7 @@ impl VMGcRef {
                 };
                 store
                     .require_gc_store_mut()?
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, x)
             }
 
@@ -528,7 +528,7 @@ impl VMGcRef {
                 let gcstore = store.require_gc_store_mut()?;
                 let id = unsafe { gcstore.func_ref_table.intern(f) };
                 gcstore
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, id.into_raw())
             }
             Val::ContRef(_) => {
@@ -548,7 +548,7 @@ impl VMGcRef {
         val: Val,
     ) -> Result<()> {
         let gcstore = store.require_gc_store_mut()?;
-        let data = gcstore.gc_object_data(self)?;
+        let data = gcstore.gc_object_data_mut(self)?;
         match val {
             Val::I32(i) if ty.is_i8() => data.write_i8(offset, truncate_i32_to_i8(i)),
             Val::I32(i) if ty.is_i16() => data.write_i16(offset, truncate_i32_to_i16(i)),
@@ -579,7 +579,7 @@ impl VMGcRef {
                 };
                 let store = store.require_gc_store_mut()?;
                 store.write_gc_ref(&mut gc_ref, e.as_ref())?;
-                let data = store.gc_object_data(self)?;
+                let data = store.gc_object_data_mut(self)?;
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()))
             }
             Val::AnyRef(a) => {
@@ -591,7 +591,7 @@ impl VMGcRef {
                 };
                 let store = store.require_gc_store_mut()?;
                 store.write_gc_ref(&mut gc_ref, a.as_ref())?;
-                let data = store.gc_object_data(self)?;
+                let data = store.gc_object_data_mut(self)?;
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()))
             }
             Val::ExnRef(e) => {
@@ -603,7 +603,7 @@ impl VMGcRef {
                 };
                 let store = store.require_gc_store_mut()?;
                 store.write_gc_ref(&mut gc_ref, e.as_ref())?;
-                let data = store.gc_object_data(self)?;
+                let data = store.gc_object_data_mut(self)?;
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()))
             }
 
@@ -612,7 +612,7 @@ impl VMGcRef {
                 let gcstore = store.require_gc_store_mut()?;
                 let id = unsafe { gcstore.func_ref_table.intern(f) };
                 gcstore
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, id.into_raw())
             }
             Val::ContRef(_) => {

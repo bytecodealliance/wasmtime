@@ -19,8 +19,8 @@ pub mod null;
 pub mod copying;
 
 use crate::{
-    WasmArrayType, WasmCompositeInnerType, WasmCompositeType, WasmExnType, WasmStorageType,
-    WasmStructType, WasmValType, error::OutOfMemory, prelude::*,
+    WasmArrayType, WasmCompositeInnerType, WasmCompositeType, WasmStorageType, WasmStructType,
+    WasmSubType, WasmValType, error::OutOfMemory, prelude::*,
 };
 use alloc::sync::Arc;
 use core::alloc::Layout;
@@ -53,6 +53,61 @@ pub const VM_GC_HEADER_KIND_OFFSET: u32 = 0;
 
 /// The offset of the `VMSharedTypeIndex` field in the `VMGcHeader`.
 pub const VM_GC_HEADER_TYPE_INDEX_OFFSET: u32 = 4;
+
+/// The index of the field in an exception object's layout that holds the
+/// `InstanceId` of the instance that defines the exception's tag.
+pub const EXN_TAG_INSTANCE_FIELD: usize = 0;
+
+/// The index of the field in an exception object's layout that holds the
+/// `DefinedTagIndex` of the exception's tag within its defining instance.
+pub const EXN_TAG_DEFINED_FIELD: usize = 1;
+
+/// The number of leading fields in an exception object's layout that are
+/// managed by the engine, rather than being payload values supplied by Wasm or
+/// the embedder.
+pub const EXN_ENGINE_FIELDS: usize = 2;
+
+/// The types of the engine-managed leading fields of an exception object's
+/// layout, in order.
+pub const EXN_ENGINE_FIELD_TYPES: [crate::WasmFieldType; EXN_ENGINE_FIELDS] =
+    [crate::WasmFieldType {
+        element_type: WasmStorageType::Val(WasmValType::I32),
+        mutable: false,
+    }; EXN_ENGINE_FIELDS];
+
+/// Build the type describing the layout of exception objects thrown with a tag
+/// whose signature takes `params`.
+///
+/// Note that these types do not exist in the Wasm spec: at the Wasm level, only
+/// function types exist (and tags and exception instructions reference them).
+/// For implementation reasons, we need a separate type to describe the
+/// exception object layout, and this constructs it.
+///
+/// The first [`EXN_ENGINE_FIELDS`] fields of the resulting struct are managed by
+/// the engine and hold the exception's tag reference; the remaining fields are
+/// the exception's payload values, matching `params`. Because types are
+/// interned structurally, exception objects allocated by Wasm and by the host
+/// with the same payload types share the same type.
+pub fn exn_layout_type(
+    params: impl ExactSizeIterator<Item = WasmValType>,
+) -> Result<WasmSubType, OutOfMemory> {
+    let payload = params.map(|ty| crate::WasmFieldType {
+        element_type: WasmStorageType::Val(ty),
+        mutable: false,
+    });
+    let fields = EXN_ENGINE_FIELD_TYPES
+        .into_iter()
+        .chain(payload)
+        .try_collect()?;
+    Ok(WasmSubType {
+        is_final: true,
+        supertype: None,
+        composite_type: WasmCompositeType {
+            shared: false,
+            inner: WasmCompositeInnerType::Struct(WasmStructType { fields }),
+        },
+    })
+}
 
 /// Get the byte size of the given Wasm type when it is stored inside the GC
 /// heap.
@@ -131,15 +186,17 @@ fn common_array_layout(
     }
 }
 
-/// Shared layout code for structs and exception objects, which are
-/// identical except for the tag field (present in
-/// exceptions). Returns `(size, align, fields)`.
+/// Common code to define a GC struct's layout, given the size and alignment of
+/// the collector's GC header and its expected offset of the array length field.
 #[cfg(any(feature = "gc-null", feature = "gc-drc", feature = "gc-copying"))]
-fn common_struct_or_exn_layout(
-    fields: &[crate::WasmFieldType],
+fn common_struct_layout(
+    ty: &WasmStructType,
     header_size: u32,
     header_align: u32,
-) -> Result<(u32, u32, TryVec<GcStructLayoutField>), OutOfMemory> {
+) -> Result<GcStructLayout, OutOfMemory> {
+    assert!(header_size >= crate::VM_GC_HEADER_SIZE);
+    assert!(header_align >= crate::VM_GC_HEADER_ALIGN);
+
     // Process each field, aligning it to its natural alignment.
     //
     // We don't try and do any fancy field reordering to minimize padding (yet?)
@@ -152,7 +209,8 @@ fn common_struct_or_exn_layout(
     let mut size = header_size;
     let mut align = header_align;
 
-    let fields = fields
+    let fields = ty
+        .fields
         .iter()
         .map(|f| {
             let field_size = byte_size_of_wasm_ty_in_gc_heap(&f.element_type);
@@ -167,54 +225,10 @@ fn common_struct_or_exn_layout(
     let align_size_to = align;
     align_up(&mut size, &mut align, align_size_to);
 
-    Ok((size, align, fields))
-}
-
-/// Common code to define a GC struct's layout, given the size and alignment of
-/// the collector's GC header and its expected offset of the array length field.
-#[cfg(any(feature = "gc-null", feature = "gc-drc", feature = "gc-copying"))]
-fn common_struct_layout(
-    ty: &WasmStructType,
-    header_size: u32,
-    header_align: u32,
-) -> Result<GcStructLayout, OutOfMemory> {
-    assert!(header_size >= crate::VM_GC_HEADER_SIZE);
-    assert!(header_align >= crate::VM_GC_HEADER_ALIGN);
-
-    let (size, align, fields) = common_struct_or_exn_layout(&ty.fields, header_size, header_align)?;
-
     Ok(GcStructLayout {
         size,
         align,
         fields,
-        is_exception: false,
-    })
-}
-
-/// Common code to define a GC exception object's layout, given the
-/// size and alignment of the collector's GC header and its expected
-/// offset of the array length field.
-#[cfg(any(feature = "gc-null", feature = "gc-drc", feature = "gc-copying"))]
-fn common_exn_layout(
-    ty: &WasmExnType,
-    header_size: u32,
-    header_align: u32,
-) -> Result<GcStructLayout, OutOfMemory> {
-    assert!(header_size >= crate::VM_GC_HEADER_SIZE);
-    assert!(header_align >= crate::VM_GC_HEADER_ALIGN);
-
-    // Compute a struct layout, with extra header size for the
-    // `(instance_idx, tag_idx)` fields.
-    assert!(header_align >= 8);
-    let header_size = header_size + 2 * u32::try_from(core::mem::size_of::<u32>()).unwrap();
-
-    let (size, align, fields) = common_struct_or_exn_layout(&ty.fields, header_size, header_align)?;
-
-    Ok(GcStructLayout {
-        size,
-        align,
-        fields,
-        is_exception: true,
     })
 }
 
@@ -256,7 +270,6 @@ pub trait GcTypeLayouts {
             WasmCompositeInnerType::Cont(_) => {
                 unimplemented!("Stack switching feature not compatible with GC, yet")
             }
-            WasmCompositeInnerType::Exn(ty) => Ok(Some(Arc::new(self.exn_layout(ty)?).into())),
         }
     }
 
@@ -265,9 +278,6 @@ pub trait GcTypeLayouts {
 
     /// Get this collector's layout for the given struct type.
     fn struct_layout(&self, ty: &WasmStructType) -> Result<GcStructLayout, OutOfMemory>;
-
-    /// Get this collector's layout for the given exception type.
-    fn exn_layout(&self, ty: &WasmExnType) -> Result<GcStructLayout, OutOfMemory>;
 }
 
 /// The layout of a GC-managed object.
@@ -384,10 +394,11 @@ impl GcArrayLayout {
 /// header (for example) is included in the offset.
 ///
 /// Note that these are reused between structs and exceptions to avoid
-/// unnecessary code duplication. In both cases, the objects are
-/// tuples of typed fields with a certain size. The only difference in
-/// practice is that an exception object also carries a tag reference
-/// (at a fixed offset as per `GcTypeLayouts::exception_tag_offset`).
+/// unnecessary code duplication. In both cases, the objects are tuples of typed
+/// fields with a certain size. The only difference in practice is that the
+/// first [`EXN_ENGINE_FIELDS`] fields of an exception object are managed by the
+/// engine (they hold the exception's tag reference) rather than being payload
+/// values.
 #[derive(Debug)]
 pub struct GcStructLayout {
     /// The size (in bytes) of this struct.
@@ -399,9 +410,6 @@ pub struct GcStructLayout {
     /// The fields of this struct. The `i`th entry contains information about
     /// the `i`th struct field's layout.
     pub fields: TryVec<GcStructLayoutField>,
-
-    /// Whether this is an exception object layout.
-    pub is_exception: bool,
 }
 
 impl TryClone for GcStructLayout {
@@ -410,7 +418,6 @@ impl TryClone for GcStructLayout {
             size: self.size,
             align: self.align,
             fields: self.fields.try_clone()?,
-            is_exception: self.is_exception,
         })
     }
 }

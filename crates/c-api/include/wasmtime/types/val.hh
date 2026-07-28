@@ -11,7 +11,6 @@
 #include <wasmtime/types/_structref_class.hh>
 #include <wasmtime/types/_val_class.hh>
 #include <wasmtime/types/arrayref.hh>
-#include <wasmtime/types/exnref.hh>
 #include <wasmtime/types/func.hh>
 #include <wasmtime/types/val.h>
 #include <wasmtime/val.h>
@@ -108,12 +107,6 @@ public:
   /// \brief Constructor for the `exn` heap type
   static HeapType exn() { return HeapType(WASMTIME_HEAPTYPE_KIND_EXN); }
 
-  /// \brief Constructor for a concrete exception heap type.
-  HeapType(const ExnType &ty) {
-    this->ty.kind = WASMTIME_HEAPTYPE_KIND_CONCRETE_EXN;
-    this->ty.of.concrete_exn = ExnType(ty).capi_release();
-  }
-
   /// \brief Constructor for the `noexn` heap type
   static HeapType noexn() { return HeapType(WASMTIME_HEAPTYPE_KIND_NOEXN); }
 
@@ -123,7 +116,6 @@ public:
     case WASMTIME_HEAPTYPE_KIND_CONCRETE_FUNC:
     case WASMTIME_HEAPTYPE_KIND_CONCRETE_ARRAY:
     case WASMTIME_HEAPTYPE_KIND_CONCRETE_STRUCT:
-    case WASMTIME_HEAPTYPE_KIND_CONCRETE_EXN:
       return true;
     default:
       return false;
@@ -193,16 +185,6 @@ public:
 
   /// \brief Is this the abstract `exn` heap type?
   bool is_exn() const { return ty.kind == WASMTIME_HEAPTYPE_KIND_EXN; }
-
-  /// \brief If this is a concrete exception type, returns the underlying
-  /// exception type.
-  const ExnType *as_concrete_exn() const {
-    static_assert(sizeof(ExnType) == sizeof(wasmtime_exn_type_t *));
-    if (ty.kind == WASMTIME_HEAPTYPE_KIND_CONCRETE_EXN) {
-      return reinterpret_cast<const ExnType *>(&ty.of.concrete_exn);
-    }
-    return nullptr;
-  }
 
   /// \brief Is this the abstract `noexn` heap type?
   bool is_noexn() const { return ty.kind == WASMTIME_HEAPTYPE_KIND_NOEXN; }

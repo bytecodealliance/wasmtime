@@ -1,26 +1,28 @@
 //! Implementation of `exnref` in Wasmtime.
 
 use crate::runtime::vm::VMGcRef;
-use crate::store::{Asyncness, StoreId, StoreResourceLimiter};
+use crate::store::{Asyncness, StoreResourceLimiter};
+use crate::type_registry::RegisteredType;
 #[cfg(feature = "async")]
 use crate::vm::VMStore;
 use crate::vm::{self, VMExnRef, VMGcHeader};
 use crate::{
-    AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType, Rooted, Val,
-    ValRaw, ValType, WasmTy,
+    AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType,
+    Rooted, StorageType, StoreContextMut, Tag, Val, ValRaw, ValType, WasmTy,
+    prelude::*,
     store::{AutoAssertNoGc, StoreOpaque},
 };
-use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, prelude::*};
 use alloc::sync::Arc;
 use core::mem;
 use core::mem::MaybeUninit;
 use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
-/// An allocator for a particular Wasm GC exception type.
+/// An allocator for exception objects thrown with a particular tag.
 ///
-/// Every `ExnRefPre` is associated with a particular
-/// [`Store`][crate::Store] and a particular
-/// [ExnType][crate::ExnType].
+/// Every `ExnRefPre` is associated with a particular [`Store`](crate::Store)
+/// and a particular [`Tag`] within that store. The tag determines both the
+/// exception object's payload types and the tag that the resulting exception
+/// objects are thrown with.
 ///
 /// Reusing an allocator across many allocations amortizes some
 /// per-type runtime overheads inside Wasmtime. An `ExnRefPre` is to
@@ -32,33 +34,24 @@ use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 /// use wasmtime::*;
 ///
 /// # fn foo() -> Result<()> {
-/// let mut config = Config::new();
-/// config.wasm_function_references(true);
-/// config.wasm_gc(true);
-///
-/// let engine = Engine::new(&config)?;
+/// let engine = Engine::default();
 /// let mut store = Store::new(&engine, ());
 ///
-/// // Define a exn type.
-/// let exn_ty = ExnType::new(
-///    store.engine(),
-///    [ValType::I32],
-/// )?;
+/// // Create a tag whose exception objects carry a single `i32` payload.
+/// let tag_ty = TagType::new(FuncType::new(&engine, [ValType::I32], []));
+/// let tag = Tag::new(&mut store, &tag_ty)?;
 ///
-/// // Create an allocator for the exn type.
-/// let allocator = ExnRefPre::new(&mut store, exn_ty.clone());
-///
-/// // Create a tag instance to associate with our exception objects.
-/// let tag = Tag::new(&mut store, &exn_ty.tag_type()).unwrap();
+/// // Create an allocator for exception objects thrown with that tag.
+/// let allocator = ExnRefPre::new(&mut store, tag)?;
 ///
 /// {
 ///     let mut scope = RootScope::new(&mut store);
 ///
-///     // Allocate a bunch of instances of our exception type using the same
-///     // allocator! This is faster than creating a new allocator for each
-///     // instance we want to allocate.
+///     // Allocate a bunch of exception objects using the same allocator! This
+///     // is faster than creating a new allocator for each object we want to
+///     // allocate.
 ///     for i in 0..10 {
-///         ExnRef::new(&mut scope, &allocator, &tag, &[Val::I32(i)])?;
+///         ExnRef::new(&mut scope, &allocator, &[Val::I32(i)])?;
 ///     }
 /// }
 /// # Ok(())
@@ -66,33 +59,66 @@ use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 /// # foo().unwrap();
 /// ```
 pub struct ExnRefPre {
-    store_id: StoreId,
-    ty: ExnType,
+    tag: Tag,
+
+    /// The types of this tag's payload values, i.e. the exception object's
+    /// embedder-managed fields.
+    field_tys: Box<[StorageType]>,
+
+    /// The synthetic struct type describing the layout of exception objects
+    /// thrown with `tag`.
+    ty: RegisteredType,
 }
 
 impl ExnRefPre {
-    /// Create a new `ExnRefPre` that is associated with the given store
-    /// and type.
-    pub fn new(mut store: impl AsContextMut, ty: ExnType) -> Self {
-        Self::_new(store.as_context_mut().0, ty)
+    /// Create a new `ExnRefPre` that allocates exception objects for the given
+    /// tag.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the store's engine does not have a GC runtime
+    /// enabled, or if the tag's type has results (exception payloads are
+    /// described by a tag's parameters, so its results must be empty).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tag is not associated with the given store.
+    pub fn new(mut store: impl AsContextMut, tag: Tag) -> Result<Self> {
+        Self::_new(store.as_context_mut().0, tag)
     }
 
-    pub(crate) fn _new(store: &mut StoreOpaque, ty: ExnType) -> Self {
-        store.insert_gc_host_alloc_type(ty.registered_type().clone());
-        let store_id = store.id();
-        ExnRefPre { store_id, ty }
-    }
+    pub(crate) fn _new(store: &mut StoreOpaque, tag: Tag) -> Result<Self> {
+        assert!(
+            tag.comes_from_same_store(store),
+            "tag comes from the wrong store"
+        );
+        ensure!(
+            store.engine().gc_runtime().is_some(),
+            "cannot allocate exception objects without a GC runtime enabled"
+        );
 
-    pub(crate) fn layout(&self) -> &GcStructLayout {
-        self.ty
-            .registered_type()
-            .layout()
-            .expect("exn types have a layout")
-            .unwrap_struct()
-    }
+        let tag_ty = tag._ty(store);
+        let func_ty = tag_ty.ty();
+        ensure!(
+            func_ty.results().len() == 0,
+            "cannot allocate exception objects for a tag whose type has results"
+        );
 
-    pub(crate) fn type_index(&self) -> VMSharedTypeIndex {
-        self.ty.registered_type().index()
+        let field_tys = func_ty
+            .params()
+            .map(|ty| {
+                assert!(ty.comes_from_same_engine(store.engine()));
+                StorageType::ValType(ty)
+            })
+            .try_collect::<Box<[_]>, _>()?;
+
+        let ty = wasmtime_environ::exn_layout_type(
+            field_tys.iter().map(|ty| ty.unpack().to_wasm_type()),
+        )?;
+        let ty = RegisteredType::new(store.engine(), ty)?;
+
+        store.insert_gc_host_alloc_type(ty.clone());
+        Ok(ExnRefPre { tag, field_tys, ty })
     }
 }
 
@@ -204,7 +230,6 @@ impl ExnRef {
     pub fn new(
         mut store: impl AsContextMut,
         allocator: &ExnRefPre,
-        tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
         let (mut limiter, store) = store
@@ -215,7 +240,6 @@ impl ExnRef {
             store,
             limiter.as_mut(),
             allocator,
-            tag,
             fields,
             Asyncness::No,
         ))
@@ -249,67 +273,50 @@ impl ExnRef {
     pub async fn new_async(
         mut store: impl AsContextMut,
         allocator: &ExnRefPre,
-        tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
-        Self::_new_async(
-            store,
-            limiter.as_mut(),
-            allocator,
-            tag,
-            fields,
-            Asyncness::Yes,
-        )
-        .await
+        Self::_new_async(store, limiter.as_mut(), allocator, fields, Asyncness::Yes).await
     }
 
     pub(crate) async fn _new_async(
         store: &mut StoreOpaque,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         allocator: &ExnRefPre,
-        tag: &Tag,
         fields: &[Val],
         asyncness: Asyncness,
     ) -> Result<Rooted<ExnRef>> {
-        Self::type_check_tag_and_fields(store, allocator, tag, fields)?;
+        ensure!(
+            allocator.tag.comes_from_same_store(store),
+            "attempted to use an `ExnRefPre` with the wrong store",
+        );
+        Self::type_check_fields(store, allocator, fields)?;
         store
             .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
-                Self::new_unchecked(store, allocator, tag, fields)
+                Self::new_unchecked(store, allocator, fields)
             })
             .await
     }
 
-    /// Type check the tag instance and field values before allocating
-    /// a new exception object.
-    fn type_check_tag_and_fields(
+    /// Type check the field values before allocating a new exception object.
+    fn type_check_fields(
         store: &mut StoreOpaque,
         allocator: &ExnRefPre,
-        tag: &Tag,
         fields: &[Val],
     ) -> Result<(), Error> {
-        assert!(
-            tag.comes_from_same_store(store),
-            "tag comes from the wrong store"
-        );
-        ensure!(
-            tag.wasmtime_ty(store).signature.unwrap_engine_type_index()
-                == allocator.ty.tag_type().ty().type_index(),
-            "incorrect signature for tag when creating exception object"
-        );
-        let expected_len = allocator.ty.fields().len();
+        assert!(allocator.tag.comes_from_same_store(store));
+        let expected_len = allocator.field_tys.len();
         let actual_len = fields.len();
         ensure!(
             actual_len == expected_len,
             "expected {expected_len} fields, got {actual_len}"
         );
-        for (ty, val) in allocator.ty.fields().zip(fields) {
+        for (ty, val) in allocator.field_tys.iter().zip(fields) {
             assert!(
                 val.comes_from_same_store(store),
                 "field value comes from the wrong store",
             );
-            let ty = ty.element_type().unpack();
-            val.ensure_matches_ty(store, ty)
+            val.ensure_matches_ty(store, ty.unpack())
                 .context("field type mismatch")?;
         }
         Ok(())
@@ -322,20 +329,18 @@ impl ExnRef {
     fn new_unchecked(
         store: &mut StoreOpaque,
         allocator: &ExnRefPre,
-        tag: &Tag,
         fields: &[Val],
     ) -> Result<Rooted<ExnRef>> {
-        assert_eq!(
-            store.id(),
-            allocator.store_id,
-            "attempted to use a `ExnRefPre` with the wrong store"
-        );
-
         // Allocate the exn and write each field value into the appropriate
         // offset.
+        let layout = allocator
+            .ty
+            .layout()
+            .expect("exn layout types have a layout")
+            .unwrap_struct();
         let exnref = store
             .require_gc_store_mut()?
-            .alloc_uninit_exn(allocator.type_index(), &allocator.layout())
+            .alloc_uninit_exn(allocator.ty.index(), &layout)
             .context("unrecoverable error when allocating new `exnref`")?
             .map_err(|n| GcHeapOutOfMemory::new((), n))?;
 
@@ -345,16 +350,10 @@ impl ExnRef {
         // uninitialized fields as a GC reference.
         let mut store = AutoAssertNoGc::new(store);
         match (|| {
-            let (instance, index) = tag.to_raw_indices();
-            exnref.initialize_tag(&mut store, instance, index)?;
-            for (index, (ty, val)) in allocator.ty.fields().zip(fields).enumerate() {
-                exnref.initialize_field(
-                    &mut store,
-                    allocator.layout(),
-                    ty.element_type(),
-                    index,
-                    *val,
-                )?;
+            let (instance, index) = allocator.tag.to_raw_indices();
+            exnref.initialize_tag(&mut store, &layout, instance, index)?;
+            for (index, (ty, val)) in allocator.field_tys.iter().zip(fields).enumerate() {
+                exnref.initialize_field(&mut store, &layout, ty, index, *val)?;
             }
             Ok(())
         })() {
@@ -419,57 +418,6 @@ impl ExnRef {
         self.inner.expose_gc_ref_to_wasm(store).map(|r| r.get())
     }
 
-    /// Get the type of this reference.
-    ///
-    /// # Errors
-    ///
-    /// Return an error if this reference has been unrooted.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this reference is associated with a different store.
-    pub fn ty(&self, store: impl AsContext) -> Result<ExnType> {
-        self._ty(store.as_context().0)
-    }
-
-    pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<ExnType> {
-        assert!(self.comes_from_same_store(store));
-        let index = self.type_index(store)?;
-        Ok(ExnType::from_shared_type_index(store.engine(), index))
-    }
-
-    /// Does this `exnref` match the given type?
-    ///
-    /// That is, is this object's type a subtype of the given type?
-    ///
-    /// # Errors
-    ///
-    /// Return an error if this reference has been unrooted.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this reference is associated with a different store.
-    pub fn matches_ty(&self, store: impl AsContext, ty: &HeapType) -> Result<bool> {
-        self._matches_ty(store.as_context().0, ty)
-    }
-
-    pub(crate) fn _matches_ty(&self, store: &StoreOpaque, ty: &HeapType) -> Result<bool> {
-        assert!(self.comes_from_same_store(store));
-        Ok(HeapType::from(self._ty(store)?).matches(ty))
-    }
-
-    pub(crate) fn ensure_matches_ty(&self, store: &StoreOpaque, ty: &HeapType) -> Result<()> {
-        if !self.comes_from_same_store(store) {
-            bail!("function used with wrong store");
-        }
-        if self._matches_ty(store, ty)? {
-            Ok(())
-        } else {
-            let actual_ty = self._ty(store)?;
-            bail!("type mismatch: expected `(ref {ty})`, found `(ref {actual_ty})`")
-        }
-    }
-
     /// Get the values of this exception object's fields.
     ///
     /// # Errors
@@ -491,15 +439,12 @@ impl ExnRef {
         store: &'a mut StoreOpaque,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         assert!(self.comes_from_same_store(store));
+        let len = self.tag_(store)?._ty(store).ty().params().len();
         let store = AutoAssertNoGc::new(store);
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().matches(VMGcKind::ExnRef));
-
-        let index = header.ty().expect("exnrefs should have concrete types");
-        let ty = ExnType::from_shared_type_index(store.engine(), index);
-        let len = ty.fields().len();
 
         return Ok(Fields {
             exnref: self,
@@ -544,21 +489,21 @@ impl ExnRef {
         }
     }
 
-    fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
-        assert!(self.comes_from_same_store(&store));
+    fn header<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcHeader> {
+        assert!(self.comes_from_same_store(store));
         let gc_ref = self.inner.try_gc_ref(store)?;
         Ok(store.require_gc_store()?.header(gc_ref)?)
     }
 
-    fn exnref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMExnRef> {
-        assert!(self.comes_from_same_store(&store));
+    fn exnref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMExnRef> {
+        assert!(self.comes_from_same_store(store));
         let gc_ref = self.inner.try_gc_ref(store)?;
         debug_assert!(self.header(store)?.kind().matches(VMGcKind::ExnRef));
         Ok(gc_ref.as_exnref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<Arc<GcStructLayout>> {
-        assert!(self.comes_from_same_store(&store));
+    fn layout(&self, store: &StoreOpaque) -> Result<Arc<GcStructLayout>> {
+        assert!(self.comes_from_same_store(store));
         let type_index = self.type_index(store)?;
         let layout = store
             .engine()
@@ -571,12 +516,13 @@ impl ExnRef {
         }
     }
 
-    fn field_ty(&self, store: &StoreOpaque, field: usize) -> Result<FieldType> {
-        let ty = self._ty(store)?;
-        match ty.field(field) {
+    fn field_ty(&self, store: &StoreOpaque, field: usize) -> Result<ValType> {
+        let tag_ty = self.tag_(store)?._ty(store);
+        let mut fields = tag_ty.ty().params();
+        let len = fields.len();
+        match fields.nth(field) {
             Some(f) => Ok(f),
             None => {
-                let len = ty.fields().len();
                 bail!("cannot access field {field}: exn only has {len} fields")
             }
         }
@@ -602,7 +548,7 @@ impl ExnRef {
         let exnref = self.exnref(store)?.unchecked_copy();
         let field_ty = self.field_ty(store, index)?;
         let layout = self.layout(store)?;
-        exnref.read_field(store, &layout, field_ty.element_type(), index)
+        exnref.read_field(store, &layout, &field_ty.into(), index)
     }
 
     /// Get this exception object's associated tag.
@@ -615,11 +561,14 @@ impl ExnRef {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn tag(&self, mut store: impl AsContextMut) -> Result<Tag> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        assert!(self.comes_from_same_store(&store));
-        let exnref = self.exnref(&store)?.unchecked_copy();
-        let (instance, index) = exnref.tag(&mut store)?;
-        Ok(Tag::from_raw_indices(&*store, instance, index))
+        self.tag_(store.as_context_mut().0)
+    }
+
+    fn tag_(&self, store: &StoreOpaque) -> Result<Tag> {
+        assert!(self.comes_from_same_store(store));
+        let exnref = self.exnref(store)?.unchecked_copy();
+        let (instance, index) = exnref.tag(store)?;
+        Ok(Tag::from_raw_indices(store, instance, index))
     }
 }
 
@@ -635,15 +584,9 @@ unsafe impl WasmTy for Rooted<ExnRef> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(
-        &self,
-        _store: &StoreOpaque,
-        _nullable: bool,
-        _ty: &HeapType,
-    ) -> Result<()> {
-        // Wasm can't specify a concrete exn type, so there are no
-        // dynamic checks.
-        Ok(())
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
+        // Wasm cannot name a concrete `exn` type, so this is never reached.
+        unreachable!()
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
@@ -667,22 +610,9 @@ unsafe impl WasmTy for Option<Rooted<ExnRef>> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(
-        &self,
-        store: &StoreOpaque,
-        nullable: bool,
-        ty: &HeapType,
-    ) -> Result<()> {
-        match self {
-            Some(a) => a.ensure_matches_ty(store, ty),
-            None => {
-                ensure!(
-                    nullable,
-                    "expected a non-null reference, but found a null reference"
-                );
-                Ok(())
-            }
-        }
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
+        // Wasm cannot name a concrete `exn` type, so this is never reached.
+        unreachable!()
     }
 
     #[inline]
@@ -711,13 +641,9 @@ unsafe impl WasmTy for OwnedRooted<ExnRef> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(
-        &self,
-        store: &StoreOpaque,
-        _nullable: bool,
-        ty: &HeapType,
-    ) -> Result<()> {
-        self.ensure_matches_ty(store, ty)
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
+        // Wasm cannot name a concrete `exn` type, so this is never reached.
+        unreachable!()
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
@@ -742,22 +668,9 @@ unsafe impl WasmTy for Option<OwnedRooted<ExnRef>> {
     }
 
     #[inline]
-    fn dynamic_concrete_type_check(
-        &self,
-        store: &StoreOpaque,
-        nullable: bool,
-        ty: &HeapType,
-    ) -> Result<()> {
-        match self {
-            Some(a) => a.ensure_matches_ty(store, ty),
-            None => {
-                ensure!(
-                    nullable,
-                    "expected a non-null reference, but found a null reference"
-                );
-                Ok(())
-            }
-        }
+    fn dynamic_concrete_type_check(&self, _: &StoreOpaque, _: bool, _: &HeapType) -> Result<()> {
+        // Wasm cannot name a concrete `exn` type, so this is never reached.
+        unreachable!()
     }
 
     #[inline]

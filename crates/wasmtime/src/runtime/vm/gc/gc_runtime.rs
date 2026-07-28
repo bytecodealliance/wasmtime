@@ -11,7 +11,7 @@ use crate::vm::VMMemoryDefinition;
 use core::ptr::NonNull;
 use core::slice;
 use core::{alloc::Layout, any::Any, marker, mem, ops::Range, ptr};
-use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMSharedTypeIndex};
+use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex};
 
 /// Trait for integrating a garbage collector with the runtime.
 ///
@@ -301,8 +301,12 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///   collection. This could be because, for example, the requested
     ///   allocation is larger than this collector's implementation limit for
     ///   object size.
+    ///
+    /// `kind` must be either `VMGcKind::StructRef` or `VMGcKind::ExnRef`, and
+    /// determines which kind of object is allocated.
     fn alloc_uninit_struct_or_exn(
         &mut self,
+        kind: VMGcKind,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
     ) -> Result<Result<VMGcRef, u64>>;

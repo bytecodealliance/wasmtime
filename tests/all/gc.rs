@@ -3403,7 +3403,6 @@ fn miri_gc_smoke_test() -> Result<()> {
         )?;
         let table_ty = TableType::new(RefType::ANYREF, 1, None);
         let global_ty = GlobalType::new(RefType::ANYREF.into(), Mutability::Var);
-        let exn_ty = ExnType::new(&engine, [ValType::I32])?;
         let func_ty = FuncType::new(&engine, Some(ValType::I32), None);
         let tag_ty = TagType::new(func_ty);
 
@@ -3458,9 +3457,9 @@ fn miri_gc_smoke_test() -> Result<()> {
         // Pending exception root.
         {
             let mut store = RootScope::new(&mut store);
-            let pre = ExnRefPre::new(&mut store, exn_ty);
             let tag = Tag::new(&mut store, &tag_ty)?;
-            let e = ExnRef::new(&mut store, &pre, &tag, &[Val::I32(7)])?;
+            let pre = ExnRefPre::new(&mut store, tag)?;
+            let e = ExnRef::new(&mut store, &pre, &[Val::I32(7)])?;
             let _ = store.as_context_mut().throw::<()>(e);
         }
 

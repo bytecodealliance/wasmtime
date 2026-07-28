@@ -523,19 +523,9 @@ impl Module {
     }
 
     /// Appends a new tag to this module with the given type information.
-    pub fn push_tag(
-        &mut self,
-        signature: impl Into<EngineOrModuleTypeIndex>,
-        exception: impl Into<EngineOrModuleTypeIndex>,
-    ) -> TagIndex {
+    pub fn push_tag(&mut self, signature: impl Into<EngineOrModuleTypeIndex>) -> TagIndex {
         let signature = signature.into();
-        let exception = exception.into();
-        self.tags
-            .push(Tag {
-                signature,
-                exception,
-            })
-            .panic_on_oom()
+        self.tags.push(Tag { signature }).panic_on_oom()
     }
 
     /// Appends a new function to this module with the given type information,

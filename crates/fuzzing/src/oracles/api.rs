@@ -37,8 +37,7 @@ pub fn make_api_calls(api: ApiCalls) {
     let mut array_types: HashMap<usize, ArrayType> = Default::default();
     let mut array_ref_pres: HashMap<usize, (ArrayRefPre, ArrayType, usize)> = Default::default();
     let mut array_refs: HashMap<usize, (OwnedRooted<ArrayRef>, usize)> = Default::default();
-    let mut exn_types: HashMap<usize, ExnType> = Default::default();
-    let mut exn_ref_pres: HashMap<usize, (ExnRefPre, ExnType, usize)> = Default::default();
+    let mut exn_ref_pres: HashMap<usize, (ExnRefPre, Tag, usize)> = Default::default();
     let mut exn_refs: HashMap<usize, (OwnedRooted<ExnRef>, usize)> = Default::default();
 
     for call in api.calls {
@@ -1196,56 +1195,25 @@ pub fn make_api_calls(api: ApiCalls) {
                 array_refs.remove(&id);
             }
 
-            ApiCall::ExnTypeNew { id, ref fields } => {
-                log::trace!("creating exn type {id}");
-                if !gc_enabled {
-                    continue;
-                }
-                match ExnType::new(&engine, fields.iter().map(|f| f.to_wasmtime())) {
-                    Ok(et) => {
-                        exn_types.insert(id, et);
-                    }
-                    Err(_) => continue,
-                }
-            }
-
-            ApiCall::ExnTypeFromTagType { id, tag_ty } => {
-                log::trace!("creating exn type {id} from tag type {tag_ty}");
-                if !gc_enabled {
-                    continue;
-                }
-                let tt = match tag_types.get(&tag_ty) {
-                    Some(t) => t,
+            ApiCall::ExnRefPreNew { id, tag } => {
+                log::trace!("creating exn ref pre {id} for tag {tag}");
+                let (t, store_id) = match tags.get(&tag) {
+                    Some(&x) => x,
                     None => continue,
                 };
-                match ExnType::from_tag_type(tt) {
-                    Ok(et) => {
-                        exn_types.insert(id, et);
-                    }
-                    Err(_) => continue,
-                }
-            }
-
-            ApiCall::ExnTypeDrop { id } => {
-                log::trace!("dropping exn type {id}");
-                exn_types.remove(&id);
-            }
-
-            ApiCall::ExnRefPreNew { id, exn_ty, store } => {
-                log::trace!("creating exn ref pre {id} with type {exn_ty} in store {store}");
-                let ety = match exn_types.get(&exn_ty) {
-                    Some(t) => t.clone(),
-                    None => continue,
-                };
-                let st = match stores.get_mut(&store) {
+                let st = match stores.get_mut(&store_id) {
                     Some(s) => s,
                     None => continue,
                 };
                 if !gc_enabled {
                     continue;
                 }
-                let pre = ExnRefPre::new(&mut *st, ety.clone());
-                exn_ref_pres.insert(id, (pre, ety, store));
+                match ExnRefPre::new(&mut *st, t) {
+                    Ok(pre) => {
+                        exn_ref_pres.insert(id, (pre, t, store_id));
+                    }
+                    Err(_) => continue,
+                }
             }
 
             ApiCall::ExnRefPreDrop { id } => {
@@ -1253,52 +1221,35 @@ pub fn make_api_calls(api: ApiCalls) {
                 exn_ref_pres.remove(&id);
             }
 
-            ApiCall::ExnRefNew { id, pre, tag } => {
-                log::trace!("creating exn ref {id} from pre {pre} with tag {tag}");
-                let (allocator, ety, store_id) = match exn_ref_pres.get(&pre) {
+            ApiCall::ExnRefNew { id, pre } => {
+                log::trace!("creating exn ref {id} from pre {pre}");
+                let (allocator, tag, store_id) = match exn_ref_pres.get(&pre) {
                     Some(x) => x,
                     None => continue,
                 };
                 let store_id = *store_id;
-                let (t, tag_store_id) = match tags.get(&tag) {
-                    Some(&x) => x,
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
                     None => continue,
                 };
-                if store_id != tag_store_id {
-                    continue;
-                }
-                let fields: Option<Vec<Val>> = ety
-                    .fields()
-                    .map(|f| f.element_type().unpack().default_value())
+                // The exception's payload types come from its tag's signature.
+                let fields: Option<Vec<Val>> = tag
+                    .ty(&*st)
+                    .ty()
+                    .params()
+                    .map(|ty| ty.default_value())
                     .collect();
                 let fields = match fields {
                     Some(f) => f,
                     None => continue,
                 };
-                let st = match stores.get_mut(&store_id) {
-                    Some(s) => s,
-                    None => continue,
-                };
                 let mut st = RootScope::new(st);
-                match ExnRef::new(&mut st, allocator, &t, &fields) {
+                match ExnRef::new(&mut st, allocator, &fields) {
                     Ok(r) => {
                         exn_refs.insert(id, (r.to_owned_rooted(st).unwrap(), store_id));
                     }
                     Err(_) => continue,
                 }
-            }
-
-            ApiCall::ExnRefTy { exn_ref } => {
-                log::trace!("getting type of exn ref {exn_ref}");
-                let (r, store_id) = match exn_refs.get(&exn_ref) {
-                    Some(x) => x,
-                    None => continue,
-                };
-                let st = match stores.get(&store_id) {
-                    Some(s) => s,
-                    None => continue,
-                };
-                let _ = r.ty(st);
             }
 
             ApiCall::ExnRefTag { exn_ref } => {

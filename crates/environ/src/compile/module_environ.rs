@@ -182,6 +182,10 @@ pub struct ModuleTranslation<'data> {
     /// This is held here in an `Unprocessed` form during translation, and then
     /// this is later finished with [`ModuleTranslation::finalize_memory_init`].
     pub memory_init: MemoryInit<'data>,
+
+    /// For each tag in this module, the struct type describing the layout of
+    /// exception objects thrown with that tag.
+    pub tag_layouts: PrimaryMap<TagIndex, ModuleInternedTypeIndex>,
 }
 
 /// Different forms of memory initialization that happens for a module.
@@ -242,6 +246,7 @@ impl<'data> ModuleTranslation<'data> {
             table_initialization: Default::default(),
             memory_init: MemoryInit::Unprocessed(Vec::new()),
             passive_data: Default::default(),
+            tag_layouts: Default::default(),
         }
     }
 
@@ -476,14 +481,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         TypeRef::Tag(ty) => {
                             let index = TypeIndex::from_u32(ty.func_type_idx);
                             let signature = self.result.module.types[index];
-                            let exception = self.types.define_exception_type_for_tag(
-                                signature.unwrap_module_type_index(),
-                            );
-                            let tag = Tag {
-                                signature,
-                                exception: EngineOrModuleTypeIndex::Module(exception),
-                            };
+                            let tag = Tag { signature };
                             self.result.module.num_imported_tags += 1;
+                            let exn_struct_layout = self
+                                .types
+                                .define_struct_for_tag(signature.unwrap_module_type_index());
+                            self.result.tag_layouts.push(exn_struct_layout);
                             EntityType::Tag(tag)
                         }
                         TypeRef::FuncExact(_) => {
@@ -555,10 +558,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let sigindex = entry?.func_type_idx;
                     let ty = TypeIndex::from_u32(sigindex);
                     let interned_index = self.result.module.types[ty];
-                    let exception = self
+                    self.result.module.push_tag(interned_index);
+
+                    let exn_struct_layout = self
                         .types
-                        .define_exception_type_for_tag(interned_index.unwrap_module_type_index());
-                    self.result.module.push_tag(interned_index, exception);
+                        .define_struct_for_tag(interned_index.unwrap_module_type_index());
+                    self.result.tag_layouts.push(exn_struct_layout);
                 }
             }
 
