@@ -89,6 +89,12 @@ pub(crate) fn define() -> TargetIsa {
         "AVX512F: CPUID.07H:EBX.AVX512F[bit 16]",
         false,
     );
+    let has_avx512vnni = settings.add_bool(
+        "has_avx512vnni",
+        "Has support for AVX512VNNI.",
+        "AVX512VNNI: CPUID.07H:ECX.AVX512_VNNI[bit 11]",
+        false,
+    );
     let has_popcnt = settings.add_bool(
         "has_popcnt",
         "Has support for POPCNT.",
@@ -267,7 +273,7 @@ pub(crate) fn define() -> TargetIsa {
     let cascadelake = settings.add_preset(
         "cascadelake",
         "Cascade Lake microarchitecture.",
-        preset!(skylake_avx512),
+        preset!(skylake_avx512 && has_avx512vnni),
     );
     settings.add_preset(
         "cooperlake",
@@ -282,7 +288,7 @@ pub(crate) fn define() -> TargetIsa {
     let icelake_client = settings.add_preset(
         "icelake-client",
         "Ice Lake microarchitecture.",
-        preset!(cannonlake && has_avx512bitalg),
+        preset!(cannonlake && has_avx512bitalg && has_avx512vnni),
     );
     // LLVM doesn't use the name "icelake" but Cranelift did in the past; alias it
     settings.add_preset(

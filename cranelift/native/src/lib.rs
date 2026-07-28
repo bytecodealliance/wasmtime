@@ -79,6 +79,9 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
         if std::is_x86_feature_detected!("avxvnni") {
             isa_builder.enable("has_avx_vnni").unwrap();
         }
+        if std::is_x86_feature_detected!("avx512vnni") {
+            isa_builder.enable("has_avx512vnni").unwrap();
+        }
         if std::is_x86_feature_detected!("bmi1") {
             isa_builder.enable("has_bmi1").unwrap();
         }

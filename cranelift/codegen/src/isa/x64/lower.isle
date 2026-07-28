@@ -4065,6 +4065,22 @@
       (if-let true (use_avx_vnni))
       (x64_vpdpbusd c b a))
 
+;; Same fold via EVEX AVX512-VNNI, for hosts with AVX512VNNI but not the VEX
+;; AVX-VNNI. Priority 7 keeps the shorter VEX form (rule 8) preferred when both
+;; are available.
+(rule 7 (lower (has_type $I32X4
+                (iadd _
+                  (iadd_pairwise _
+                    (iadd_pairwise _
+                      (swiden_low _ lo @ (imul _ (swiden_low _ a) (uwiden_low _ b)))
+                      (swiden_high _ lo))
+                    (iadd_pairwise _
+                      (swiden_low _ hi @ (imul _ (swiden_high _ a) (uwiden_high _ b)))
+                      (swiden_high _ hi)))
+                  c)))
+      (if-let true (use_avx512vnni))
+      (x64_vpdpbusd_evex c b a))
+
 ;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; With SSE4.1 use the `pmovsx*` instructions for this. The `pmovsx*`

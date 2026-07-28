@@ -609,6 +609,7 @@ information about this check\
             "has_avx512f" => "avx512f",
             "has_avx512vl" => "avx512vl",
             "has_avx512vbmi" => "avx512vbmi",
+            "has_avx512vnni" => "avx512vnni",
             "has_lzcnt" => "lzcnt",
 
             // pulley features
