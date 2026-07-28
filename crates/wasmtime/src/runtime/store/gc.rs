@@ -535,7 +535,7 @@ impl StoreOpaque {
     ) -> Option<(InstanceId, DefinedTagIndex)> {
         let pending_exnref = self.gc_data.pending_exception.as_ref()?.unchecked_copy();
         debug_assert!(pending_exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
-        let mut store = AutoAssertNoGc::new(self);
+        let store = AutoAssertNoGc::new(self);
 
         // Note that if the GC heap is corrupt this will return an error, and in
         // such as situation we return `None` here pretending that there's no
@@ -543,7 +543,7 @@ impl StoreOpaque {
         // later. This method is primarily called right now to determine if
         // there's a handler for an exception, and by returning `None` here this
         // turns into just any old embedder error.
-        pending_exnref.into_exnref_unchecked().tag(&mut store).ok()
+        pending_exnref.into_exnref_unchecked().tag(&store).ok()
     }
 
     /// Get an owned rooted reference to the pending exception,
