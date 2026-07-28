@@ -554,6 +554,7 @@ impl TypeTrace for WasmHeapType {
             Self::ConcreteFunc(i) => func(i),
             Self::ConcreteStruct(i) => func(i),
             Self::ConcreteCont(i) => func(i),
+            Self::ConcreteExn(i) => func(i),
             _ => Ok(()),
         }
     }
@@ -567,6 +568,7 @@ impl TypeTrace for WasmHeapType {
             Self::ConcreteFunc(i) => func(i),
             Self::ConcreteStruct(i) => func(i),
             Self::ConcreteCont(i) => func(i),
+            Self::ConcreteExn(i) => func(i),
             _ => Ok(()),
         }
     }
