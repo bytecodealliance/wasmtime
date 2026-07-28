@@ -1581,6 +1581,42 @@ where
         )
     }
 
+    /// Load the `VMStoreContext::last_wasm_entry_sp` field.
+    pub fn vmstore_context_last_wasm_entry_sp(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_entry_sp()
+                .into(),
+        )
+    }
+
+    /// Load the `VMStoreContext::last_wasm_entry_trap_handler` field.
+    pub fn vmstore_context_last_wasm_entry_trap_handler(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_entry_trap_handler()
+                .into(),
+        )
+    }
+
     /// Store the `VMStoreContext::last_wasm_entry_fp` field.
     pub fn store_vmstore_context_last_wasm_entry_fp(
         &mut self,
@@ -2710,6 +2746,79 @@ impl<Offsets> AliasRegions<Offsets>
 where
     Offsets: GetPtrSize,
 {
+    /// Load `VMStackLimits::stack_limit`.
+    pub fn stack_limit(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        stack_limits: ir::Value,
+    ) -> ir::Value {
+        let offset = self.offsets.get_ptr_size().vmstack_limits_stack_limit();
+        let region = self.vmcontref_region(cursor.func);
+        cursor.ins().load(
+            self.pointer_type,
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            stack_limits,
+            i32::from(offset),
+        )
+    }
+
+    /// Load `VMStackLimits::last_wasm_entry_fp`.
+    pub fn last_wasm_entry_fp(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        stack_limits: ir::Value,
+    ) -> ir::Value {
+        let offset = self
+            .offsets
+            .get_ptr_size()
+            .vmstack_limits_last_wasm_entry_fp();
+        let region = self.vmcontref_region(cursor.func);
+        cursor.ins().load(
+            self.pointer_type,
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            stack_limits,
+            i32::from(offset),
+        )
+    }
+
+    /// Load `VMStackLimits::last_wasm_entry_sp`.
+    pub fn last_wasm_entry_sp(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        stack_limits: ir::Value,
+    ) -> ir::Value {
+        let offset = self
+            .offsets
+            .get_ptr_size()
+            .vmstack_limits_last_wasm_entry_sp();
+        let region = self.vmcontref_region(cursor.func);
+        cursor.ins().load(
+            self.pointer_type,
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            stack_limits,
+            i32::from(offset),
+        )
+    }
+
+    /// Load `VMStackLimits::last_wasm_entry_trap_handler`.
+    pub fn last_wasm_entry_trap_handler(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        stack_limits: ir::Value,
+    ) -> ir::Value {
+        let offset = self
+            .offsets
+            .get_ptr_size()
+            .vmstack_limits_last_wasm_entry_trap_handler();
+        let region = self.vmcontref_region(cursor.func);
+        cursor.ins().load(
+            self.pointer_type,
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            stack_limits,
+            i32::from(offset),
+        )
+    }
+
     /// Region for a continuation-reference object and its inline
     /// sub-structures.
     ///

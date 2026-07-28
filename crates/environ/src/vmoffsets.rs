@@ -521,6 +521,16 @@ pub trait PtrSize {
         self.size()
     }
 
+    /// Return the offset of `VMStackLimits::last_wasm_entry_sp`.
+    fn vmstack_limits_last_wasm_entry_sp(&self) -> u8 {
+        self.vmstack_limits_last_wasm_entry_fp() + self.size()
+    }
+
+    /// Return the offset of `VMStackLimits::last_wasm_entry_trap_handler`.
+    fn vmstack_limits_last_wasm_entry_trap_handler(&self) -> u8 {
+        self.vmstack_limits_last_wasm_entry_sp() + self.size()
+    }
+
     // Offsets within `VMHostArray`
 
     /// Return the offset of `VMHostArray::length`.
@@ -552,7 +562,7 @@ pub trait PtrSize {
 
     /// Return the offset of `VMCommonStackInformation::state`.
     fn vmcommon_stack_information_state(&self) -> u8 {
-        2 * self.size()
+        4 * self.size()
     }
 
     /// Return the offset of `VMCommonStackInformation::handlers`.

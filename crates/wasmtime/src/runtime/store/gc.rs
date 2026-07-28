@@ -823,8 +823,8 @@ impl StoreOpaque {
                     // either case things should be handled correctly when traversing
                     // further along in the chain, nothing required at this point.
                 }
-                VMStackState::Fresh | VMStackState::Returned => {
-                    // Fresh/Returned continuations have no gc values on their stack.
+                VMStackState::Fresh | VMStackState::Returned | VMStackState::Trapped => {
+                    // Fresh/terminal continuations have no live GC values on their stack.
                 }
             }
         }

@@ -58,6 +58,15 @@ impl ControlEffect {
         Self(val)
     }
 
+    pub fn is_trap(self, builder: &mut FunctionBuilder) -> ir::Value {
+        let signal = self.signal(builder);
+        builder.ins().icmp_imm_u(
+            ir::condcodes::IntCC::Equal,
+            signal,
+            i64::from(wasmtime_environ::CONTROL_EFFECT_TRAP_DISCRIMINANT),
+        )
+    }
+
     /// Returns the payload of the `Suspend` variant
     pub fn handler_index(self, builder: &mut FunctionBuilder) -> ir::Value {
         builder.ins().ireduce(I32, self.0)

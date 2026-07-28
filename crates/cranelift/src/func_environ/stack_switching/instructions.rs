@@ -707,6 +707,15 @@ pub(crate) mod stack_switching_helpers {
             self.set_state_no_payload(env, builder, discriminant);
         }
 
+        pub fn set_state_trapped<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+        ) {
+            let discriminant = wasmtime_environ::STACK_STATE_TRAPPED_DISCRIMINANT;
+            self.set_state_no_payload(env, builder, discriminant);
+        }
+
         /// Checks whether the `VMStackState` reflects that the stack has ever been
         /// active (instead of just having been allocated, but never resumed).
         pub fn was_invoked<'a>(
@@ -764,9 +773,8 @@ pub(crate) mod stack_switching_helpers {
             builder.ins().store(memflags, value, self.address, offset);
         }
 
-        /// Sets `last_wasm_entry_sp` and `stack_limit` fields in
-        /// `VMRuntimelimits` using the values from the `VMStackLimits` of this
-        /// object.
+        /// Restores the stack limit and Wasm entry handler fields in
+        /// `VMStoreContext` from this object's `VMStackLimits`.
         pub fn write_limits_to_vmcontext<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
@@ -775,45 +783,49 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
-            let pointer_type = env.pointer_type();
-            let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
-            let last_wasm_entry_fp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_fp();
-
             // The load side reads this continuation's inline `VMStackLimits`
             // (the `VMContRef` region); the store side targets the
             // `VMStoreContext`.
-            let vmcontref_region = env.alias_regions.vmcontref_region(builder.func);
-            let our_memflags =
-                ir::MemFlagsData::trusted().with_alias_region(Some(vmcontref_region));
-
-            let stack_limit = builder.ins().load(
-                pointer_type,
-                our_memflags,
-                stack_limits_ptr,
-                i32::from(stack_limit_offset),
-            );
+            let stack_limit = env
+                .alias_regions
+                .stack_limit(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions.store_vmstore_context_stack_limit(
                 &mut builder.cursor(),
                 vmruntime_limits_ptr,
                 stack_limit,
             );
 
-            let last_wasm_entry_fp = builder.ins().load(
-                pointer_type,
-                our_memflags,
-                stack_limits_ptr,
-                i32::from(last_wasm_entry_fp_offset),
-            );
+            let last_wasm_entry_fp = env
+                .alias_regions
+                .last_wasm_entry_fp(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions.store_vmstore_context_last_wasm_entry_fp(
                 &mut builder.cursor(),
                 vmruntime_limits_ptr,
                 last_wasm_entry_fp,
             );
+
+            let last_wasm_entry_sp = env
+                .alias_regions
+                .last_wasm_entry_sp(&mut builder.cursor(), stack_limits_ptr);
+            env.alias_regions.store_vmstore_context_last_wasm_entry_sp(
+                &mut builder.cursor(),
+                vmruntime_limits_ptr,
+                last_wasm_entry_sp,
+            );
+
+            let last_wasm_entry_trap_handler = env
+                .alias_regions
+                .last_wasm_entry_trap_handler(&mut builder.cursor(), stack_limits_ptr);
+            env.alias_regions
+                .store_vmstore_context_last_wasm_entry_trap_handler(
+                    &mut builder.cursor(),
+                    vmruntime_limits_ptr,
+                    last_wasm_entry_trap_handler,
+                );
         }
 
-        /// Overwrites the `last_wasm_entry_fp` field of the `VMStackLimits`
-        /// object in the `VMStackLimits` of this object by loading the
-        /// corresponding field from the `VMStoreContext`.
+        /// Saves the Wasm entry handler fields from `VMStoreContext` into this
+        /// object's `VMStackLimits`.
         ///
         /// If `load_stack_limit` is true, we do the same for the `stack_limit`
         /// field.
@@ -826,21 +838,45 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
-            // The load side reads the `VMStoreContext`...
+            // Loads read the `VMStoreContext`; stores write this
+            // continuation's inline `VMStackLimits`.
             let last_wasm_entry_fp = env
                 .alias_regions
                 .vmstore_context_last_wasm_entry_fp(&mut builder.cursor(), vmruntime_limits_ptr);
+            let last_wasm_entry_sp = env
+                .alias_regions
+                .vmstore_context_last_wasm_entry_sp(&mut builder.cursor(), vmruntime_limits_ptr);
+            let last_wasm_entry_trap_handler = env
+                .alias_regions
+                .vmstore_context_last_wasm_entry_trap_handler(
+                    &mut builder.cursor(),
+                    vmruntime_limits_ptr,
+                );
 
-            // ...and store to this continuation's inline `VMStackLimits`.
             let vmcontref_region = env.alias_regions.vmcontref_region(builder.func);
             let our_memflags =
                 ir::MemFlagsData::trusted().with_alias_region(Some(vmcontref_region));
-            let last_wasm_entry_fp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_fp();
             builder.ins().store(
                 our_memflags,
                 last_wasm_entry_fp,
                 stack_limits_ptr,
-                i32::from(last_wasm_entry_fp_offset),
+                i32::from(env.offsets.ptr.vmstack_limits_last_wasm_entry_fp()),
+            );
+            builder.ins().store(
+                our_memflags,
+                last_wasm_entry_sp,
+                stack_limits_ptr,
+                i32::from(env.offsets.ptr.vmstack_limits_last_wasm_entry_sp()),
+            );
+            builder.ins().store(
+                our_memflags,
+                last_wasm_entry_trap_handler,
+                stack_limits_ptr,
+                i32::from(
+                    env.offsets
+                        .ptr
+                        .vmstack_limits_last_wasm_entry_trap_handler(),
+                ),
             );
 
             if load_stack_limit {
@@ -1299,18 +1335,17 @@ pub(crate) fn translate_resume<'a>(
     //              |
     //              |
     //        resume_block
-    //         /           \
-    //        /             \
-    //        |             |
-    //  return_block        |
-    //                suspend block
-    //                      |
-    //                dispatch block
+    //       /      |      \
+    //      /       |       \
+    // return    suspend    trap
+    //  block     block     block
+    //              |
+    //       dispatch block
     //
     // * resume_block handles continuation arguments and performs
     //   actual stack switch. On ordinary return from resume, it jumps
-    //   to the `return_block`, whereas on suspension it jumps to the
-    //   `suspend_block`.
+    //   to the `return_block`; on suspension it jumps to the
+    //   `suspend_block`; and on a terminal trap it jumps to `trap_block`.
     // * suspend_block is used on suspension, jumps onward to
     //   `dispatch_block`.
     // * dispatch_block uses a jump table to dispatch to actual
@@ -1325,6 +1360,8 @@ pub(crate) fn translate_resume<'a>(
     let resume_block = builder.create_block();
     let return_block = builder.create_block();
     let suspend_block = builder.create_block();
+    let trap_block = builder.create_block();
+    let nontrap_block = builder.create_block();
     let dispatch_block = builder.create_block();
 
     let vmctx = env.vmctx_val(&mut builder.cursor());
@@ -1385,14 +1422,14 @@ pub(crate) fn translate_resume<'a>(
         // We mark `resume_contref` as the currently running one
         vmctx_set_active_continuation(env, builder, vmctx, resume_contref);
 
-        // Note that the resume_contref libcall a few lines further below
-        // manipulates the stack limits as follows:
-        // 1. Copy stack_limit, last_wasm_entry_sp and last_wasm_exit* values from
-        // VMRuntimeLimits into the currently active continuation (i.e., the
-        // one that will become the parent of the to-be-resumed one)
+        // The code below manipulates the per-stack runtime state as follows:
         //
-        // 2. Copy `stack_limit` and `last_wasm_entry_sp` in the
-        // `VMStackLimits` of `resume_contref` into the `VMRuntimeLimits`.
+        // 1. Copy the stack limit and Wasm entry handler from
+        // `VMStoreContext` into the currently active stack (i.e., the
+        // one that will become the parent of the to-be-resumed one).
+        //
+        // 2. Copy the corresponding fields from the resumed
+        // continuation into `VMStoreContext`.
         //
         // See the comment on `wasmtime_environ::VMStackChain` for a
         // description of the invariants that we maintain for the various stack
@@ -1484,12 +1521,17 @@ pub(crate) fn translate_resume<'a>(
         handler_list.clear(env, builder, true);
         parent_csi.set_first_switch_handler_index(env, builder, zero);
 
-        // Extract the result and signal bit.
+        // First distinguish terminal traps from ordinary returns and
+        // suspensions.
         let result = ControlEffect::from_u64(result);
-        let signal = result.signal(builder);
+        let is_trap = result.is_trap(builder);
+        builder
+            .ins()
+            .brif(is_trap, trap_block, &[], nontrap_block, &[]);
 
-        // Jump to the return block if the result signal is 0, otherwise jump to
-        // the suspend block.
+        builder.switch_to_block(nontrap_block);
+        builder.seal_block(nontrap_block);
+        let signal = result.signal(builder);
         builder
             .ins()
             .brif(signal, suspend_block, &[], return_block, &[]);
@@ -1501,6 +1543,40 @@ pub(crate) fn translate_resume<'a>(
             new_stack_chain,
         )
     };
+
+    // A Wasm trap terminates the child continuation. The user code
+    // cannot handle this trap, thus we restore the parent stack's
+    // entry handler and retrap there. Its array trampoline will
+    // return the failure through `fiber_start`, propagating the
+    // terminal control effect until the nearest host/engine frame
+    // delimiting this Wasm invocation is reached.
+    {
+        builder.switch_to_block(trap_block);
+        builder.seal_block(trap_block);
+        builder.set_cold_block(trap_block);
+
+        let trapped_continuation = new_stack_chain.unchecked_get_continuation();
+        let trapped_continuation = helpers::VMContRef::new(trapped_continuation);
+        let trapped_csi = trapped_continuation.common_stack_information(env, builder);
+        trapped_csi.set_state_trapped(env, builder);
+
+        let parent_csi = original_stack_chain.get_common_stack_information(env, builder);
+        parent_csi.write_limits_to_vmcontext(env, builder, vm_runtime_limits_ptr);
+
+        let args = trapped_continuation.args(env, builder);
+        args.clear(env, builder, true);
+        let values = trapped_continuation.values(env, builder);
+        values.clear(env, builder, true);
+
+        let raise = env.builtin_functions.raise(&mut builder.func);
+        builder.ins().call(raise, &[vmctx]);
+        // We do not anticipate the call to `raise`
+        // returning. However, viewed through cranelift's lens it is
+        // not a block terminating instruction, therefore we insert a
+        // trap to make the current block structurally complete and
+        // catch any unexpected returns from `raise`.
+        builder.ins().trap(crate::TRAP_INTERNAL_ASSERT);
+    }
 
     // The suspend block: Only used when we suspended, not for returns.
     // Here we extract the index of the handler to use.
