@@ -65,6 +65,6 @@ pub fn list() -> Vec<Inst> {
         // * cvttpd2pi
         // * cvttps2pi
 
-        inst("vcvtudq2ps", fmt("A", [w(xmm1), r(xmm_m128)]), evex(L128, Full)._f2()._0f().w0().op(0x7A).r(), _64b | avx512vl | avx512f),
+        inst("vcvtudq2ps", fmt("A", [w(xmm1), r(xmm_m128)]), evex(L128, Full)._f2()._0f().w0().op(0x7A).r(), (_64b | compat) & avx512vl & avx512f),
     ]
 }
