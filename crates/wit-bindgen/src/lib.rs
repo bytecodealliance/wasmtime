@@ -196,6 +196,15 @@ pub struct Opts {
     pub imports: FunctionConfig,
     /// TODO
     pub exports: FunctionConfig,
+
+    /// Whether to emit a `COMPONENT_TYPE` constant containing a
+    /// binary-encoded description of the world that bindings were
+    /// generated for.
+    ///
+    /// This can be decoded with `wit_parser::decoding::decode_world` to recover
+    /// the `Resolve` and `WorldId` used to generate the bindings, without
+    /// requiring separate bookkeeping of the original WIT files.
+    pub include_component_type: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1152,6 +1161,26 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
 
         let named_imports = mem::take(&mut self.named_import_modules);
         self.emit_modules(named_imports);
+
+        if self.opts.include_component_type {
+            let encoded = wit_component::metadata::encode(
+                resolve,
+                world,
+                wit_component::StringEncoding::UTF8,
+                None,
+            )?;
+            uwriteln!(
+                self.src,
+                "/// A binary-encoded description of the WIT world that these \
+                 bindings were generated from.\n\
+                 ///\n\
+                 /// This can be decoded with the `wit_parser::decoding::decode_world` \
+                 function to recover the WIT `Resolve` and `WorldId` that were used \
+                 to generate these bindings.\n\
+                 pub const COMPONENT_TYPE: &[u8] = b\"{}\";",
+                encoded.escape_ascii(),
+            );
+        }
 
         let mut src = mem::take(&mut self.src);
         if self.opts.rustfmt {

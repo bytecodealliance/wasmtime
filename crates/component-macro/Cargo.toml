@@ -38,6 +38,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 prettyplease = "0.2.31"
 similar = { workspace = true }
+wit-parser = { workspace = true, features = ["decoding"] }
 
 [features]
 async = ['wasmtime-wit-bindgen/async']
