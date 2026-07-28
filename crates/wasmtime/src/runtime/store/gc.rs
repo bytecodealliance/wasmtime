@@ -795,22 +795,37 @@ impl StoreOpaque {
 
     #[cfg(feature = "stack-switching")]
     fn trace_wasm_continuation_roots(&mut self, gc_roots_list: &mut GcRootsList) {
-        use crate::vm::VMStackState;
+        use crate::vm::{VMPayloads, VMStackState};
+
+        unsafe fn trace_payload_roots(gc_roots_list: &mut GcRootsList, payloads: &VMPayloads) {
+            let gc_ref_data = payloads.gc_ref_data;
+            let payloads = &payloads.buffer;
+            assert!(payloads.length <= payloads.capacity);
+            if gc_ref_data.is_null() {
+                return;
+            }
+
+            for index in 0..usize::try_from(payloads.length).unwrap() {
+                let marker = unsafe { gc_ref_data.add(index).read() };
+                if marker == wasmtime_environ::CONTINUATION_PAYLOAD_GC_REF {
+                    let slot = unsafe { payloads.data.add(index).cast::<u32>() };
+                    unsafe {
+                        StoreOpaque::trace_wasm_stack_slot(gc_roots_list, slot);
+                    }
+                }
+            }
+        }
 
         log::trace!("Begin trace GC roots :: continuations");
 
         for continuation in &self.continuations {
             let state = continuation.common_stack_information.state;
 
-            // FIXME(frank-emrich) In general, it is not enough to just trace
-            // through the stacks of continuations; we also need to look through
-            // their `cont.bind` arguments. However, we don't currently have
-            // enough RTTI information to check if any of the values in the
-            // buffers used by `cont.bind` are GC values. As a workaround, note
-            // that we currently disallow cont.bind-ing GC values altogether.
-            // This way, it is okay not to check them here.
             match state {
                 VMStackState::Suspended => {
+                    unsafe {
+                        trace_payload_roots(gc_roots_list, &continuation.values);
+                    }
                     Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
                         Self::trace_wasm_stack_frame(self.modules(), gc_roots_list, frame);
                         core::ops::ControlFlow::Continue(())
@@ -824,8 +839,11 @@ impl StoreOpaque {
                     // either case things should be handled correctly when traversing
                     // further along in the chain, nothing required at this point.
                 }
-                VMStackState::Fresh | VMStackState::Returned | VMStackState::Trapped => {
-                    // Fresh/terminal continuations have no live GC values on their stack.
+                VMStackState::Fresh => unsafe {
+                    trace_payload_roots(gc_roots_list, &continuation.args);
+                },
+                VMStackState::Returned | VMStackState::Trapped => {
+                    // Terminal continuations have no live GC values.
                 }
             }
         }

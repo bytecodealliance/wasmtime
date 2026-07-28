@@ -526,6 +526,23 @@ pub trait PtrSize {
         8 + self.size()
     }
 
+    // Offsets within `VMPayloads`
+
+    /// Return the offset of `VMPayloads::buffer`.
+    fn vmpayloads_buffer(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMPayloads::gc_ref_data`.
+    fn vmpayloads_gc_ref_data(&self) -> u8 {
+        self.size_of_vmhostarray()
+    }
+
+    /// Return the size of `VMPayloads`.
+    fn size_of_vmpayloads(&self) -> u8 {
+        self.size_of_vmhostarray() + if cfg!(feature = "gc") { self.size() } else { 0 }
+    }
+
     // Offsets within `VMCommonStackInformation`
 
     /// Return the offset of `VMCommonStackInformation::limits`.
@@ -622,7 +639,7 @@ pub trait PtrSize {
 
     /// Return the offset of `VMContRef::values`.
     fn vmcontref_values(&self) -> u8 {
-        self.vmcontref_args() + self.size_of_vmhostarray()
+        self.vmcontref_args() + self.size_of_vmpayloads()
     }
 
     /// Return the offset of the `over_approximated_stack_roots` field within

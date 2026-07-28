@@ -50,7 +50,7 @@ pub const CONTROL_EFFECT_TRAP_ENCODING: u64 =
 /// (i.e., the one pointed to by the VMContObj) has a pointer to the
 /// other end of the chain (i.e., its last ancestor).
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VMContObj {
     pub contref: NonNull<VMContRef>,
     pub revision: usize,
@@ -164,6 +164,14 @@ impl VMStackLimits {
 #[derive(Debug, Clone)]
 /// Reference to a stack-allocated buffer ("array"), storing data of some type
 /// `T`.
+///
+/// The core invariants of this type are:
+///
+/// * `length <= capacity`.
+/// * When `capacity > 0`, `data` points to storage for at least `capacity`
+///   properly aligned values of `T` and remains valid while this descriptor is
+///   in use.
+/// * Only the first `length` entries are initialized and logically occupied.
 pub struct VMHostArray<T> {
     /// Number of currently occupied slots.
     pub length: u32,
@@ -190,10 +198,55 @@ impl<T> VMHostArray<T> {
     }
 }
 
-/// Type used for passing payloads to and from continuations. The actual type
-/// argument should be wasmtime::runtime::vm::vmcontext::ValRaw, but we don't
-/// have access to that here.
-pub type VMPayloads = VMHostArray<u128>;
+/// Payload values exchanged with a continuation and the metadata needed to
+/// trace GC references among them.
+///
+/// In addition to the [`VMHostArray`] invariants, this type maintains the
+/// following core invariants:
+///
+/// * A null `gc_ref_data` means that no occupied slot contains a
+///   GC-managed reference that needs tracing.
+/// * A non-null `gc_ref_data` points to at least `buffer.capacity`
+///   marker bytes and remains valid for as long as `buffer.data` is
+///   valid.
+/// * For every occupied slot, its marker records whether the slot
+///   contains a GC-managed reference. Unoccupied marker bytes are
+///   ignored.
+/// * A non-null `gc_ref_data` is invalidated when the storage is
+/// cleared or the containing continuation enters a terminal state in
+/// which payloads are no longer traced.
+///
+/// The actual buffer element type should be
+/// `wasmtime::runtime::vm::vmcontext::ValRaw`, but we don't have
+/// access to that type here. A `u128` supplies the required 16-byte
+/// slot size, and the type parameter does not affect the layout of
+/// the `VMHostArray` descriptor.
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct VMPayloads {
+    pub buffer: VMHostArray<u128>,
+
+    #[cfg(feature = "gc")]
+    pub gc_ref_data: *mut u8,
+}
+
+impl VMPayloads {
+    pub fn empty() -> Self {
+        Self {
+            buffer: VMHostArray::empty(),
+            #[cfg(feature = "gc")]
+            gc_ref_data: core::ptr::null_mut(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+        #[cfg(feature = "gc")]
+        {
+            self.gc_ref_data = core::ptr::null_mut();
+        }
+    }
+}
 
 /// Type for a list of handlers, represented by the handled tag. Thus, the
 /// stored data is actually `*mut VMTagDefinition`, but we don't have access to
@@ -227,7 +280,7 @@ pub struct VMContRef {
     /// 1. The arguments to the function passed to cont.new
     /// 2. The return values of that function
     ///
-    /// Note that the actual data buffer (i.e., the one `args.data` points
+    /// Note that the actual data buffer (i.e., the one `args.buffer.data` points
     /// to) is always allocated on this continuation's stack.
     pub args: VMPayloads,
 
@@ -238,7 +291,7 @@ pub struct VMContRef {
     /// - Pass payloads to a continuation using cont.bind or resume
     /// - Pass payloads to the continuation being switched to when using switch.
     ///
-    /// Note that the actual data buffer (i.e., the one `values.data` points
+    /// Note that the actual data buffer (i.e., the one `values.buffer.data` points
     /// to) is always allocated on this continuation's stack.
     pub values: VMPayloads,
 
@@ -310,7 +363,7 @@ unsafe impl Sync for VMContRef {}
 /// Implements `cont.new` instructions (i.e., creation of continuations).
 #[cfg(feature = "stack-switching")]
 #[inline(always)]
-pub fn cont_new(
+pub fn cont_new<const GC_REFS: bool>(
     store: &mut dyn crate::vm::VMStore,
     instance: crate::store::InstanceId,
     func: *mut u8,
@@ -333,9 +386,8 @@ pub fn cont_new(
 
     // The initialization function will allocate the actual args/return value buffer and
     // update this object (if needed).
-    let contref_args_ptr = &mut contref.args as *mut _ as *mut VMHostArray<crate::ValRaw>;
-
-    contref.stack.initialize(
+    let contref_args_ptr = &mut contref.args as *mut VMPayloads;
+    contref.stack.initialize::<GC_REFS>(
         func.cast::<crate::vm::VMFuncRef>(),
         caller_vmctx.as_ptr(),
         contref_args_ptr,
@@ -645,6 +697,25 @@ mod tests {
         assert_eq!(
             offset_of!(VMHostArray<()>, data),
             usize::from(offsets.ptr.vmhostarray_data())
+        );
+    }
+
+    #[test]
+    fn check_vm_payloads_offsets() {
+        let module = Module::new(StaticModuleIndex::from_u32(0));
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            size_of::<VMPayloads>(),
+            usize::from(offsets.ptr.size_of_vmpayloads())
+        );
+        assert_eq!(
+            offset_of!(VMPayloads, buffer),
+            usize::from(offsets.ptr.vmpayloads_buffer())
+        );
+        #[cfg(feature = "gc")]
+        assert_eq!(
+            offset_of!(VMPayloads, gc_ref_data),
+            usize::from(offsets.ptr.vmpayloads_gc_ref_data())
         );
     }
 

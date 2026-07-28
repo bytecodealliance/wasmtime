@@ -34,6 +34,7 @@ pub fn wasmtime_continuation_start_address() -> *const () {
 // values in various registers when execution of wasmtime_continuation_start begins:
 //
 // RSP: TOS - 0x40 - (16 * `args_capacity`)
+//                  - align_up(`args_capacity`, 16)
 // RBP: TOS - 0x10
 
 #[unsafe(naked)]
