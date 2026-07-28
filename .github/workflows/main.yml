@@ -717,6 +717,12 @@ jobs:
       env:
         RUSTFLAGS: "--cfg arc_try_new"
 
+    # Check the x64 assembler against the Intel XED disassembler, which knows
+    # about newer encodings that the bundled Capstone cannot decode. This is
+    # opt-in via `fuzz-xed` because XED is built from source; the C compiler and
+    # Python that requires are already present on this runner.
+    - run: cargo test -p cranelift-assembler-x64 --features fuzz-xed
+
     # Smoke test the coverage script.
     - run: rustup target add wasm32-unknown-unknown
     - run: rustup component add llvm-tools
