@@ -435,7 +435,7 @@ async fn p2_file_truncation_readonly() {
 
 async fn run_with_readonly_testfile(component_path: &str) {
     use std::path::PathBuf;
-    use wasmtime_wasi::{DirPerms, FilePerms};
+    use wasmtime_wasi::FsPerms;
 
     let prefix = "wasi_components_ro_";
     let tempdir = tempfile::Builder::new()
@@ -452,8 +452,7 @@ async fn run_with_readonly_testfile(component_path: &str) {
         b.preopened_dir(
             tempdir.path(),
             "readonly",
-            DirPerms::READ | DirPerms::MUTATE,
-            FilePerms::READ,
+            FsPerms::ReadOnly,
         )
         .unwrap();
     })
