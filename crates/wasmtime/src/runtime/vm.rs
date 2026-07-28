@@ -297,26 +297,25 @@ pub enum ModuleRuntimeInfo {
 /// cases where a purpose-built environ::Module is used and a full
 /// CompiledModule does not exist (for example, for tests or for the
 /// default-callee instance).
-#[derive(Clone)]
 pub struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
     offsets: VMOffsets<HostPtr>,
-    _registered_type: Option<RegisteredType>,
+    _registered_types: TryVec<RegisteredType>,
 }
 
 impl ModuleRuntimeInfo {
     pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Result<Self, OutOfMemory> {
-        ModuleRuntimeInfo::bare_with_registered_type(module, None)
+        ModuleRuntimeInfo::bare_with_registered_types(module, None)
     }
 
-    pub(crate) fn bare_with_registered_type(
+    pub(crate) fn bare_with_registered_types(
         module: Arc<wasmtime_environ::Module>,
-        registered_type: Option<RegisteredType>,
+        registered_types: impl IntoIterator<Item = RegisteredType>,
     ) -> Result<Self, OutOfMemory> {
         let info = try_new(BareModuleInfo {
             offsets: VMOffsets::new(HostPtr, &module),
             module,
-            _registered_type: registered_type,
+            _registered_types: registered_types.into_iter().try_collect()?,
         })?;
         Ok(ModuleRuntimeInfo::Bare(info))
     }

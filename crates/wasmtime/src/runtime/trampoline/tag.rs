@@ -42,12 +42,19 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
         // doesn't allocate tables or memories meaning it shouldn't need a
         // resource limiter so `None` is passed. As a result no `await` points
         // should ever be hit.
+        //
+        // Both the tag's signature type and its exception type are
+        // referred to by engine-level type index from the dummy
+        // module's `Tag`, so both `RegisteredType`s must be handed to
+        // the instance's runtime info to keep those indices rooted in
+        // the engine's type registry for as long as the instance (and
+        // thus the store) is alive.
         vm::assert_ready(store.allocate_instance(
             None,
             AllocateInstanceKind::Dummy {
                 allocator: &allocator,
             },
-            &ModuleRuntimeInfo::bare_with_registered_type(module, Some(func_ty))?,
+            &ModuleRuntimeInfo::bare_with_registered_types(module, [func_ty, exn_ty])?,
             imports,
         ))
     }
