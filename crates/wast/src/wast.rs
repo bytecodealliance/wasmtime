@@ -66,7 +66,7 @@ enum Results {
     Component(Vec<component::Val>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ModuleKind {
     Core(Module),
     #[cfg(feature = "component-model")]
@@ -415,10 +415,7 @@ impl WastContext {
     /// This will not register the name within `self.modules`.
     fn module_definition(&mut self, file: &WasmFile) -> Result<ModuleKind> {
         let name = match file.module_type {
-            WasmFileType::Text => file
-                .binary_filename
-                .as_ref()
-                .ok_or_else(|| format_err!("cannot compile module that isn't a valid binary"))?,
+            WasmFileType::Text => file.binary_filename.as_ref().unwrap_or(&file.filename),
             WasmFileType::Binary => &file.filename,
         };
 
@@ -741,21 +738,17 @@ impl WastContext {
                 file,
                 text,
                 line: _,
+            }
+            | AssertMalformed {
+                file,
+                text,
+                line: _,
             } => {
                 let err = match self.module_definition(&file) {
                     Ok(_) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
                 self.match_error_message(&text, err)?;
-            }
-            AssertMalformed {
-                file,
-                text: _,
-                line: _,
-            } => {
-                if let Ok(_) = self.module_definition(&file) {
-                    bail!("expected malformed module to fail to instantiate");
-                }
             }
             AssertUnlinkable {
                 file,
