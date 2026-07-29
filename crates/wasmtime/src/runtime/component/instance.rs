@@ -573,6 +573,7 @@ impl Instance {
         }
     }
 
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn from_runtime_instance(store: &StoreOpaque, instance: RuntimeInstance) -> Self {
         let id = StoreComponentInstanceId::new(store.id(), instance.instance);
         Instance { id }
