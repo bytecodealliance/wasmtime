@@ -15,7 +15,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
 use wasmtime::component::{
-    self, Accessor, AsAccessor, Component, ComponentNamedList, Lift, Linker, Lower, Val,
+    self, Accessor, Component, ComponentNamedList, Lift, Linker, Lower, Val,
 };
 use wasmtime::{AsContextMut, Enabled, Engine, Result, Store, StoreContextMut};
 use wasmtime_test_util::component_fuzz::{
@@ -289,31 +289,20 @@ where
         Ok(result.clone())
     }
 
-    async fn host_function_async<P, R>(
-        cx: &Accessor<Box<dyn Any + Send>>,
-        params: P,
-    ) -> wasmtime::Result<R>
-    where
-        P: Debug + PartialEq + 'static,
-        R: Debug + Clone + 'static,
-    {
-        cx.with(|mut a| {
-            let store = a.as_context_mut();
-            log::trace!("received parameters {params:?}");
-            let data: &(P, R) = store.data().downcast_ref().unwrap();
-            let (expected_params, result) = data;
-            assert_eq!(params, *expected_params);
-            log::trace!("returning result {result:?}");
-            Ok(result.clone())
-        })
-        .await
-    }
-
     if declarations.options.host_async {
         linker
             .root()
             .func_wrap_concurrent(IMPORT_FUNCTION, |a, params| {
-                Box::pin(async move { host_function_async::<P, R>(a, params).await })
+                Box::pin(async move {
+                    // `Accessor::with` is `async` but resolves synchronously, and
+                    // holding its future across an `.await` here trips Send
+                    // inference (the closure's higher-ranked lifetime). Drive it
+                    // with `now_or_never` so no future is held across a suspend
+                    // point; `host_function` itself does no async work.
+                    a.with(|mut cx| host_function::<P, R>(cx.as_context_mut(), params))
+                        .now_or_never()
+                        .expect("`Accessor::with` resolves synchronously")
+                })
             })
             .unwrap();
     } else {
