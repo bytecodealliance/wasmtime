@@ -3,7 +3,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::{fs::File, path::Path, time::Instant};
 use wasmtime::{Engine, Linker, Module, Store, TypedFunc};
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, p1::WasiP1Ctx};
+use wasmtime_wasi::{FsPerms, WasiCtx, p1::WasiP1Ctx};
 
 criterion_group!(benches, bench_wasi);
 criterion_main!(benches);
@@ -74,7 +74,7 @@ fn wasi_context() -> WasiP1Ctx {
             "--flag3".to_string(),
             "--flag4".to_string(),
         ])
-        .preopened_dir("benches/wasi", "/", DirPerms::READ, FilePerms::READ)
+        .preopened_dir("benches/wasi", "/", FsPerms::ReadOnly)
         .unwrap()
         .build_p1()
 }
