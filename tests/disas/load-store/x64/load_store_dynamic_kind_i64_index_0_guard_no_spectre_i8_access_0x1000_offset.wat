@@ -22,7 +22,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    0x40(%rdi), %rsi
-;;       subq    $0x1001, %rsi
+;;       addq    $-0x1001, %rsi
 ;;       cmpq    %rsi, %rdx
 ;;       ja      0x29
 ;;   18: movq    0x38(%rdi), %r8
@@ -36,7 +36,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    0x40(%rdi), %rsi
-;;       subq    $0x1001, %rsi
+;;       addq    $-0x1001, %rsi
 ;;       cmpq    %rsi, %rdx
 ;;       ja      0x6a
 ;;   58: movq    0x38(%rdi), %r8
