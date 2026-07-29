@@ -572,6 +572,11 @@ impl Instance {
             index,
         }
     }
+
+    pub(crate) fn from_runtime_instance(store: &StoreOpaque, instance: RuntimeInstance) -> Self {
+        let id = StoreComponentInstanceId::new(store.id(), instance.instance);
+        Instance { id }
+    }
 }
 
 /// Translates a `CoreDef`, a definition of a core wasm item, to an

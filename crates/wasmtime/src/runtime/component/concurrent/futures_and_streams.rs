@@ -6,8 +6,8 @@ use crate::component::matching::InstanceType;
 use crate::component::types;
 use crate::component::values::ErrorContextAny;
 use crate::component::{
-    AsAccessor, ComponentInstanceId, ComponentType, FutureAny, Instance, Lift, Lower, StreamAny,
-    Val, WasmList,
+    AsAccessor, ComponentInstanceId, ComponentType, FutureAny, Instance, Lift, Lower,
+    RuntimeInstance, StreamAny, Val, WasmList,
 };
 use crate::prelude::*;
 use crate::store::{StoreOpaque, StoreToken};
@@ -3265,13 +3265,11 @@ impl Instance {
     fn copy<T: 'static>(
         store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
-        write_instance: Instance,
-        write_caller_instance: RuntimeComponentInstanceIndex,
+        write_runtime_instance: RuntimeInstance,
         write_ty: TransmitIndex,
         write_options: OptionsIndex,
         write_address: usize,
-        read_instance: Instance,
-        read_caller_instance: RuntimeComponentInstanceIndex,
+        read_runtime_instance: RuntimeInstance,
         read_caller_thread: QualifiedThreadId,
         read_ty: TransmitIndex,
         read_options: OptionsIndex,
@@ -3279,6 +3277,8 @@ impl Instance {
         count: ItemCount,
         rep: u32,
     ) -> Result<()> {
+        let write_instance = Instance::from_runtime_instance(store.0, write_runtime_instance);
+        let read_instance = Instance::from_runtime_instance(store.0, read_runtime_instance);
         let (write_component, store) = write_instance.component_and_store_mut(store.0);
         let (read_component, mut store) = read_instance.component_and_store_mut(store);
         let write_types = write_component.types();
@@ -3327,7 +3327,7 @@ impl Instance {
                 .ok_or_else(|| crate::format_err!("read pointer out of bounds"))?;
         }
 
-        if write_caller_instance == read_caller_instance
+        if write_runtime_instance == read_runtime_instance
             && !allow_intra_component_read_write(write_payload_ty)
         {
             bail!(
@@ -3610,13 +3610,11 @@ impl Instance {
                 Instance::copy(
                     store.as_context_mut(),
                     flat_abi,
-                    self,
-                    caller,
+                    self.runtime_instance(caller),
                     ty,
                     options,
                     address,
-                    read_instance,
-                    read_caller_instance,
+                    read_instance.runtime_instance(read_caller_instance),
                     read_caller_thread,
                     read_ty,
                     read_options,
@@ -3848,13 +3846,11 @@ impl Instance {
                 Instance::copy(
                     store.as_context_mut(),
                     flat_abi,
-                    write_instance,
-                    write_caller,
+                    write_instance.runtime_instance(write_caller),
                     write_ty,
                     write_options,
                     write_address,
-                    self,
-                    caller_instance,
+                    self.runtime_instance(caller_instance),
                     caller_thread,
                     ty,
                     options,
