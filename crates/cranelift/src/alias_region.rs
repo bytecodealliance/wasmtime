@@ -38,6 +38,11 @@ enum VmType {
     VMCopyingHeapData,
     VMNullHeapData,
     VMDeferredThread,
+    #[allow(
+        dead_code,
+        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
+    )]
+    VMLazyThread,
     VMContRef,
     ContinuationStackMemory,
     VMFunctionImport,
@@ -185,6 +190,7 @@ impl AliasRegionKey {
     const DATA_SEGMENT_KIND: u32 = Self::new_kind(0b100000);
     const VM_GLOBAL_DEFINITION_KIND: u32 = Self::new_kind(0b100001);
     const VM_TAG_DEFINITION_KIND: u32 = Self::new_kind(0b100010);
+    const VM_LAZY_THREAD_KIND: u32 = Self::new_kind(0b100011);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -204,6 +210,7 @@ impl AliasRegionKey {
                     VmType::VMCopyingHeapData => Self::VM_COPYING_HEAP_DATA_KIND,
                     VmType::VMNullHeapData => Self::VM_NULL_HEAP_DATA_KIND,
                     VmType::VMDeferredThread => Self::VM_DEFERRED_THREAD_KIND,
+                    VmType::VMLazyThread => Self::VM_LAZY_THREAD_KIND,
                     VmType::VMContRef => Self::VM_CONTREF_KIND,
                     VmType::ContinuationStackMemory => Self::CONTINUATION_STACK_MEMORY_KIND,
                     VmType::VMFunctionImport => Self::VM_FUNCTION_IMPORT_KIND,
@@ -538,12 +545,29 @@ impl<'a, Offsets> Field<'a, Offsets> {
               uniformly but not exercised until a VM type uses those markers"
 )]
 macro_rules! define_vm_type_alias_region_helpers {
+    // `UnsafeCell<T>` is `repr(transparent)` and is accessed exactly as its `T`
+    // would be; delegate to the inner type.
+    (@field_ty $pt:expr, UnsafeCell < $inner:tt >) => {
+        define_vm_type_alias_region_helpers!(@field_ty $pt, $inner)
+    };
+
     // Classify a field type to its Cranelift `ir::Type`, given `$pt` (the
     // target pointer type as an `ir::Type`).
+    //
+    // Note that there is deliberately no arm for a composite field (a nested
+    // struct, an array, or a range): such a field has no single Cranelift type,
+    // and is marked `#[aggregate]` in `for_each_vm_type!` so that no accessor is
+    // generated for it at all.
     (@field_ty $pt:expr, VmPtr < $g:ty >) => { $pt };
     (@field_ty $pt:expr, Option < VmPtr < $g:ty >>) => { $pt };
     (@field_ty $pt:expr, AtomicUsize) => { $pt };
     (@field_ty $pt:expr, usize) => { $pt };
+    (@field_ty $pt:expr, i64) => { ir::types::I64 };
+    (@field_ty $pt:expr, u64) => { ir::types::I64 };
+    (@field_ty $pt:expr, u32) => { ir::types::I32 };
+    // `VMLazyThread` is a pointer-sized bitpacked integer; see its definition in
+    // `for_each_vm_type!`.
+    (@field_ty $pt:expr, VMLazyThread) => { $pt };
     (@field_ty $pt:expr, [u8; 16]) => { ir::types::I8X16 };
     (@field_ty $pt:expr, VMSharedTypeIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, DefinedTableIndex) => { ir::types::I32 };
@@ -632,25 +656,34 @@ macro_rules! define_vm_type_alias_region_helpers {
     // >)?` within a repetition) is what lets each field's type reach the
     // `@field_ty` classifier as raw tokens, so it can require `Option`s to
     // specifically be `Option<VmPtr<_>>`.
-    (@munch $Name:ident $snake:ident { $($groups:tt)* } [ $($pend:tt)* ]) => {
+    (@munch $Name:ident $snake:ident { $($groups:tt)* }) => {
         define_vm_type_alias_region_helpers!(@emit $Name $snake { $($groups)* });
     };
-    // Stash a field attribute's bracket group (`[readonly]`, `[can_move]`,
-    // `[doc = ...]`) as pending for the next field.
-    (@munch $Name:ident $snake:ident { $($groups:tt)* } [ $($pend:tt)* ] # $fattr:tt $($rest:tt)*) => {
-        define_vm_type_alias_region_helpers!(@munch $Name $snake { $($groups)* } [ $($pend)* $fattr ] $($rest)*);
+    // A field marked `#[aggregate]` is a composite (a nested struct or array)
+    // that is not accessed as a whole by Wasm code, but piecewise
+    // instead. Therefore, there is no single Cranelift type for such fields, so
+    // no accessors are generated for them; interior accesses are computed from
+    // the field's offset instead, which the generated `offsets::*` methods
+    // still provide.
+    (@munch $Name:ident $snake:ident { $($groups:tt)* }
+        $(#[doc = $fdoc:literal])* #[aggregate] $fvis:vis $fname:ident : $fty:ty , $($rest:tt)*
+    ) => {
+        define_vm_type_alias_region_helpers!(@munch $Name $snake { $($groups)* } $($rest)*);
     };
-    // Consume a field's visibility and name, then collect its type tokens.
-    (@munch $Name:ident $snake:ident { $($groups:tt)* } [ $($pend:tt)* ] $fvis:vis $fname:ident : $($rest:tt)*) => {
-        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fname [ $($pend)* ] [] $($rest)*);
+    // Consume one field's attributes, visibility, and name, then collect its
+    // type tokens.
+    (@munch $Name:ident $snake:ident { $($groups:tt)* }
+        $(# $fattr:tt)* $fvis:vis $fname:ident : $($rest:tt)*
+    ) => {
+        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fname [ $($fattr)* ] [] $($rest)*);
     };
     // Accumulate one field's type tokens up to its terminating comma, then
-    // append the completed group and reset the pending attributes.
-    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fname:ident [ $($pend:tt)* ] [ $($fty:tt)* ] , $($rest:tt)*) => {
-        define_vm_type_alias_region_helpers!(@munch $Name $snake { $($groups)* { $fname [ $($pend)* ] [ $($fty)* ] } } [] $($rest)*);
+    // append the completed group.
+    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] , $($rest:tt)*) => {
+        define_vm_type_alias_region_helpers!(@munch $Name $snake { $($groups)* { $fname [ $($fattr)* ] [ $($fty)* ] } } $($rest)*);
     };
-    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fname:ident [ $($pend:tt)* ] [ $($fty:tt)* ] $tok:tt $($rest:tt)*) => {
-        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fname [ $($pend)* ] [ $($fty)* $tok ] $($rest)*);
+    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] $tok:tt $($rest:tt)*) => {
+        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fname [ $($fattr)* ] [ $($fty)* $tok ] $($rest)*);
     };
 
     // Top-level entry: the list of `VM*` type definitions.
@@ -664,7 +697,7 @@ macro_rules! define_vm_type_alias_region_helpers {
         }
     )* ) => {
         $(
-            define_vm_type_alias_region_helpers!(@munch $Name $snake {} [] $($body)*);
+            define_vm_type_alias_region_helpers!(@munch $Name $snake {} $($body)*);
         )*
     };
 }
@@ -1323,7 +1356,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_store_data()
+                .vm_store_context()
+                .store_data()
                 .into(),
         )
     }
@@ -1341,7 +1375,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_execution_version()
+                .vm_store_context()
+                .execution_version()
                 .into(),
         )
     }
@@ -1359,7 +1394,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_execution_version()
+                .vm_store_context()
+                .execution_version()
                 .into(),
             new_version,
         )
@@ -1378,7 +1414,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_fuel_consumed()
+                .vm_store_context()
+                .fuel_consumed()
                 .into(),
         )
     }
@@ -1396,7 +1433,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_fuel_consumed()
+                .vm_store_context()
+                .fuel_consumed()
                 .into(),
             fuel_consumed,
         )
@@ -1415,7 +1453,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_epoch_deadline()
+                .vm_store_context()
+                .epoch_deadline()
                 .into(),
         )
     }
@@ -1425,7 +1464,8 @@ where
         let offset = self
             .offsets
             .get_ptr_size()
-            .vmstore_context_stack_limit()
+            .vm_store_context()
+            .stack_limit()
             .into();
         let region = self.vmstore_context_region(func, offset);
         Load {
@@ -1458,7 +1498,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_stack_limit()
+                .vm_store_context()
+                .stack_limit()
                 .into(),
             stack_limit,
         )
@@ -1478,7 +1519,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_current_thread()
+                .vm_store_context()
+                .current_thread()
                 .into(),
         )
     }
@@ -1496,7 +1538,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_current_thread()
+                .vm_store_context()
+                .current_thread()
                 .into(),
             new_thread,
         )
@@ -1514,7 +1557,8 @@ where
         let offset = self
             .offsets
             .get_ptr_size()
-            .vmstore_context_gc_heap_base()
+            .vm_store_context()
+            .gc_heap_base()
             .into();
         let region = self.vmstore_context_region(func, offset);
         Load {
@@ -1543,7 +1587,8 @@ where
         let offset = self
             .offsets
             .get_ptr_size()
-            .vmstore_context_gc_heap_current_length()
+            .vm_store_context()
+            .gc_heap_current_length()
             .into();
         let region = self.vmstore_context_region(func, offset);
         Load {
@@ -1576,7 +1621,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_last_wasm_entry_fp()
+                .vm_store_context()
+                .last_wasm_entry_fp()
                 .into(),
         )
     }
@@ -1594,7 +1640,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_last_wasm_entry_sp()
+                .vm_store_context()
+                .last_wasm_entry_sp()
                 .into(),
         )
     }
@@ -1612,7 +1659,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_last_wasm_entry_trap_handler()
+                .vm_store_context()
+                .last_wasm_entry_trap_handler()
                 .into(),
         )
     }
@@ -1630,7 +1678,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_last_wasm_entry_fp()
+                .vm_store_context()
+                .last_wasm_entry_fp()
                 .into(),
             fp,
         )
@@ -1649,7 +1698,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_last_wasm_entry_sp()
+                .vm_store_context()
+                .last_wasm_entry_sp()
                 .into(),
             sp,
         )
@@ -1668,7 +1718,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_last_wasm_entry_trap_handler()
+                .vm_store_context()
+                .last_wasm_entry_trap_handler()
                 .into(),
             trap_handler,
         )
@@ -1687,7 +1738,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_last_wasm_exit_trampoline_fp()
+                .vm_store_context()
+                .last_wasm_exit_trampoline_fp()
                 .into(),
             fp,
         )
@@ -1706,7 +1758,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_last_wasm_exit_pc()
+                .vm_store_context()
+                .last_wasm_exit_pc()
                 .into(),
             pc,
         )
@@ -1721,7 +1774,7 @@ where
         &mut self,
         func: &mut ir::Function,
     ) -> ir::AliasRegion {
-        let offset = self.offsets.get_ptr_size().vmstore_context_stack_chain();
+        let offset = self.offsets.get_ptr_size().vm_store_context().stack_chain();
         self.vmstore_context_region(func, offset.into())
     }
 
@@ -1743,7 +1796,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_component_context_slot(slot)
+                .vm_store_context()
+                .component_context_slot(slot)
                 .into(),
         )
     }
@@ -1765,7 +1819,8 @@ where
             vmstore_ctx,
             self.offsets
                 .get_ptr_size()
-                .vmstore_context_component_context_slot(slot)
+                .vm_store_context()
+                .component_context_slot(slot)
                 .into(),
             val,
         )
@@ -1838,7 +1893,8 @@ where
             vmdeferred_thread_ptr,
             self.offsets
                 .get_ptr_size()
-                .vmdeferred_thread_parent()
+                .vm_deferred_thread()
+                .parent()
                 .into(),
         )
     }
@@ -1856,7 +1912,8 @@ where
             vmdeferred_thread_ptr,
             self.offsets
                 .get_ptr_size()
-                .vmdeferred_thread_parent()
+                .vm_deferred_thread()
+                .parent()
                 .into(),
             parent,
         )
@@ -1875,7 +1932,8 @@ where
             vmdeferred_thread_ptr,
             self.offsets
                 .get_ptr_size()
-                .vmdeferred_thread_caller_instance()
+                .vm_deferred_thread()
+                .caller_instance()
                 .into(),
             caller_instance,
         )
@@ -1894,7 +1952,8 @@ where
             vmdeferred_thread_ptr,
             self.offsets
                 .get_ptr_size()
-                .vmdeferred_thread_callee_async()
+                .vm_deferred_thread()
+                .callee_async()
                 .into(),
             callee_async,
         )
@@ -1913,7 +1972,8 @@ where
             vmdeferred_thread_ptr,
             self.offsets
                 .get_ptr_size()
-                .vmdeferred_thread_callee_instance()
+                .vm_deferred_thread()
+                .callee_instance()
                 .into(),
             callee_instance,
         )
@@ -1934,7 +1994,8 @@ where
             vmdeferred_thread_ptr,
             self.offsets
                 .get_ptr_size()
-                .vmdeferred_thread_saved_context(i)
+                .vm_deferred_thread()
+                .saved_context_slot(i)
                 .into(),
         )
     }
@@ -1953,7 +2014,8 @@ where
             vmdeferred_thread_ptr,
             self.offsets
                 .get_ptr_size()
-                .vmdeferred_thread_saved_context(i)
+                .vm_deferred_thread()
+                .saved_context_slot(i)
                 .into(),
             val,
         )

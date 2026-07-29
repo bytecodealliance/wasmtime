@@ -1985,7 +1985,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let ptr = self.env.offsets.ptr;
 
         // Allocate the on-stack `VMDeferredThread`.
-        let size = u32::from(ptr.size_of_vmdeferred_thread());
+        let size = u32::from(ptr.vm_deferred_thread().size());
         let align_shift = u8::try_from(ptr.size().trailing_zeros()).unwrap();
         let slot = self
             .builder
