@@ -124,12 +124,22 @@ jobs:
         crate: cargo-vet
         version: 0.10.2
     - id: vet
-      run: cargo vet --locked
+      run: |
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          cargo vet --locked && break
+          sleep 5
+        done
       continue-on-error: ${{ github.event_name == 'pull_request' }}
 
     # Double-check that if versions are bumped that `cargo vet` still works.
     # This is intended to weed out mistakes such as #9115 from happening again.
-    - run: rustc scripts/publish.rs && ./publish bump-patch && cargo vet
+    - run: |
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          rustc scripts/publish.rs && ./publish bump-patch && cargo vet && break
+          sleep 5
+        done
       name: Ensure `cargo vet` works if versions are bumped
 
   cargo_vet_failure_for_prs:
