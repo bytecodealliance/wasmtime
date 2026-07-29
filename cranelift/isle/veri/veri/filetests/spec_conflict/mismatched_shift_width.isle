@@ -1,0 +1,29 @@
+; Regression test for silently unverified expansions.
+;
+; The spec below is ill-typed: type inference rejects every candidate
+; instantiation, so no query ever reaches the solver.
+
+; 8-bit value type
+(type Value (primitive Value))
+(model Value (type (bv 8)))
+
+; Top-level test term asserts equality
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+
+; Shift left.
+(decl shl (Value Value) Value)
+(extern extractor shl shl)
+(spec (shl x y) (provide (= result (bvshl x y))))
+
+; Shift left, with the amount widened first.
+;
+; The width operand of `zero_ext` is the *result* width, so the shift amount
+; here is 16 bits wide, while `bvshl` requires it to match the 8-bit value being
+; shifted. Both are bit vectors, so this is a width conflict between compatible
+; types: type inference reports it as inapplicable rather than a type error.
+(decl shl_ext (Value Value) Value)
+(extern constructor shl_ext shl_ext)
+(spec (shl_ext x y) (provide (= result (bvshl x (zero_ext 16 y)))))
+
+(rule test (test (shl x y)) (shl_ext x y))
