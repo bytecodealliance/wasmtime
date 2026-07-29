@@ -1062,3 +1062,123 @@ async fn async_call_stack() -> Result<()> {
         .await??;
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn inter_component_stream_is_not_intra_component() -> Result<()> {
+    let engine = Engine::default();
+
+    let writer = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc
+    (memory (export "m") 1)
+    (data (i32.const 0x100) "hello")
+  )
+  (core instance $libc (instantiate $libc))
+
+  (type $s (stream string))
+  (core func $stream.new (canon stream.new $s))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "m"))))
+
+  (core module $m
+    (import "" "m" (memory 1))
+    (import "" "stream.new" (func $stream.new (result i64)))
+    (import "" "stream.write" (func $stream.write (param i32 i32 i32) (result i32)))
+
+    (global $w (mut i32) (i32.const 0))
+
+    (func (export "mk") (result i32)
+      (local $tmp i64)
+      (local.set $tmp (call $stream.new))
+      (global.set $w (i32.wrap_i64 (i64.shr_u (local.get $tmp) (i64.const 32))))
+      (i32.wrap_i64 (local.get $tmp))
+    )
+
+    (func (export "write")
+      ;; store ptr/len at 0x10
+      (i32.store (i32.const 0x10) (i32.const 0x100))
+      (i32.store (i32.const 0x14) (i32.const 5))
+
+      (call $stream.write (global.get $w) (i32.const 0x10) (i32.const 1))
+      i32.const -1 ;; BLOCKED
+      i32.ne
+      if unreachable end
+    )
+  )
+
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "m" (memory $libc "m"))
+      (export "stream.new" (func $stream.new))
+      (export "stream.write" (func $stream.write))
+    ))
+  ))
+
+  (func (export "mk") (result $s) (canon lift (core func $i "mk")))
+  (func (export "write") (canon lift (core func $i "write")))
+)
+        "#,
+    )?;
+
+    let reader = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc
+    (memory (export "m") 1)
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+      (i32.const 0x200)
+    )
+  )
+  (core instance $libc (instantiate $libc))
+
+  (type $s (stream string))
+  (core func $stream.read
+    (canon stream.read $s async
+      (memory (core memory $libc "m"))
+      (realloc (core func $libc "realloc"))))
+
+  (core module $m
+    (import "" "m" (memory 1))
+    (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+
+    (func (export "read") (param $r i32) (result i32)
+      (call $stream.read (local.get $r) (i32.const 0x10) (i32.const 1))
+      i32.const 0x10 ;; COMPLETED | (1 << 4)
+      i32.ne
+      if unreachable end
+
+      i32.const 0x10
+    )
+  )
+
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "m" (memory $libc "m"))
+      (export "stream.read" (func $stream.read))
+    ))
+  ))
+
+  (func (export "read") (param "s" $s) (result string)
+    (canon lift (core func $i "read") (memory (core memory $libc "m"))))
+)
+        "#,
+    )?;
+
+    let linker = Linker::new(&engine);
+    let mut store = Store::new(&engine, ());
+    let writer = linker.instantiate(&mut store, &writer)?;
+    let reader = linker.instantiate(&mut store, &reader)?;
+
+    let mk = writer.get_typed_func::<(), (StreamReader<String>,)>(&mut store, "mk")?;
+    let write = writer.get_typed_func::<(), ()>(&mut store, "write")?;
+    let read = reader.get_typed_func::<(StreamReader<String>,), (String,)>(&mut store, "read")?;
+
+    let (stream,) = mk.call(&mut store, ())?;
+    write.call(&mut store, ())?;
+    assert_eq!(read.call(&mut store, (stream,))?, ("hello".to_string(),));
+
+    Ok(())
+}
