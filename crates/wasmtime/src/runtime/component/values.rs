@@ -718,7 +718,7 @@ impl Val {
                 }
                 let elemsize = cx.types.canonical_abi(&ty.element).size32 as usize;
                 for (n, value) in values.iter().enumerate() {
-                    value.store(cx, ty.element, elemsize * n)?;
+                    value.store(cx, ty.element, offset + elemsize * n)?;
                 }
                 Ok(())
             }
