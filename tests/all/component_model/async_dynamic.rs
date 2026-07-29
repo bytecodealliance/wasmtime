@@ -271,7 +271,7 @@ async fn stream_any_smoke() -> Result<()> {
                     wasmtime::error::Ok(())
                 },
                 async {
-                    store.with(|store| stream.close(store))?;
+                    store.with(|store| stream.close(store)).await?;
                     wasmtime::error::Ok(())
                 }
             }?;

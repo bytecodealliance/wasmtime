@@ -71,10 +71,17 @@ impl<T> HostWithStore<T> for WasiHttp {
                     Box::into_pin(fut).await
                 }),
             ))
-        })?;
-        let (res, io) = Box::into_pin(fut)
-            .await
-            .map_err(|e| store.with(|mut store| store.get().error_to_p3(&e)))?;
+        })
+        .await?;
+        let (res, io) = match Box::into_pin(fut).await {
+            Ok(res) => res,
+            Err(e) => {
+                return Err(store
+                    .with(|mut store| store.get().error_to_p3(&e))
+                    .await
+                    .into());
+            }
+        };
         let (
             http::response::Parts {
                 status, headers, ..
@@ -83,10 +90,19 @@ impl<T> HostWithStore<T> for WasiHttp {
         ) = res.into_parts();
 
         let mut io = Box::into_pin(io);
-        let body = match io.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+        // Poll the I/O future in its own statement so the temporary `Context`
+        // (which is `!Send` due to its `LocalWaker`) is dropped before the
+        // `.await` in the error arm below. Temporaries in a `match` scrutinee
+        // otherwise live until the end of the whole `match`, which would hold
+        // this `!Send` value across the await and make `send`'s future `!Send`.
+        let io_poll = io.as_mut().poll(&mut Context::from_waker(Waker::noop()));
+        let body = match io_poll {
             Poll::Ready(Ok(())) => body,
             Poll::Ready(Err(e)) => {
-                return Err(store.with(|mut store| store.get().error_to_p3(&e)).into());
+                return Err(store
+                    .with(|mut store| store.get().error_to_p3(&e))
+                    .await
+                    .into());
             }
             Poll::Pending => {
                 // I/O driver still needs to be polled, spawn a task and send handles to it
@@ -118,6 +134,7 @@ impl<T> HostWithStore<T> for WasiHttp {
                 .context("failed to push response to table")
                 .map_err(HttpError::trap)
         })
+        .await
     }
 }
 

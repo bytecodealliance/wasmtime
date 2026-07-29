@@ -63,9 +63,9 @@ impl<T> bindings::local::local::ready::HostThingWithStore<T> for Ctx {
         accessor: &Accessor<T, Self>,
         thing: Resource<Thing>,
     ) -> wasmtime::Result<()> {
-        let wakers = accessor.with(|mut view| {
-            Ok::<_, wasmtime::Error>(view.get().table.get(&thing)?.wakers.clone())
-        })?;
+        let wakers = accessor
+            .with(|mut view| Ok::<_, wasmtime::Error>(view.get().table.get(&thing)?.wakers.clone()))
+            .await?;
 
         future::poll_fn(move |cx| {
             let mut wakers = wakers.lock().unwrap();

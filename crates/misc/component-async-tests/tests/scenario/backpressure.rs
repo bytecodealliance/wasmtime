@@ -1,4 +1,5 @@
 use component_async_tests::Ctx;
+use futures::FutureExt as _;
 use std::{
     env, future,
     pin::Pin,
@@ -75,7 +76,15 @@ pub async fn async_backpressure_callee() -> Result<()> {
 
             let mut backpressure_is_set = true;
             future::poll_fn(move |cx| {
-                let instance_ready = accessor.poll_ready_for_concurrent_call(func, cx).is_ready();
+                // `poll_ready_for_concurrent_call` is `async` but resolves
+                // synchronously (its body just drives `Accessor::with`), so
+                // extract the `Poll` with `now_or_never`; the real `cx` still
+                // registers the waker on `Pending`.
+                let instance_ready = accessor
+                    .poll_ready_for_concurrent_call(func, cx)
+                    .now_or_never()
+                    .expect("`Accessor::with` resolves synchronously")
+                    .is_ready();
                 let a_ready = is_ready(cx, &mut a);
                 let b_ready = is_ready(cx, &mut b);
                 let c_ready = is_ready(cx, &mut c);

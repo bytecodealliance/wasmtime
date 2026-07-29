@@ -1425,8 +1425,11 @@ impl<T> FutureReader<T> {
     }
 
     /// Convenience method around [`Self::close`].
-    pub fn close_with(&mut self, accessor: impl AsAccessor) -> Result<()> {
-        accessor.as_accessor().with(|access| self.close(access))
+    pub async fn close_with(&mut self, accessor: impl AsAccessor) -> Result<()> {
+        accessor
+            .as_accessor()
+            .with(|access| self.close(access))
+            .await
     }
 
     /// Returns a [`GuardedFutureReader`] which will auto-close this future on
@@ -1434,11 +1437,11 @@ impl<T> FutureReader<T> {
     ///
     /// Note that the `accessor` provided must own this future and is
     /// additionally transferred to the `GuardedFutureReader` return value.
-    pub fn guard<A>(self, accessor: A) -> GuardedFutureReader<T, A>
+    pub async fn guard<A>(self, accessor: A) -> GuardedFutureReader<T, A>
     where
         A: AsAccessor,
     {
-        GuardedFutureReader::new(accessor, self)
+        GuardedFutureReader::new(accessor, self).await
     }
 
     /// Attempts to convert this [`FutureReader<T>`] to a [`FutureAny`].
@@ -1607,11 +1610,12 @@ where
     /// Panics if [`Config::concurrency_support`] is not enabled.
     ///
     /// [`Config::concurrency_support`]: crate::Config::concurrency_support
-    pub fn new(accessor: A, reader: FutureReader<T>) -> Self {
+    pub async fn new(accessor: A, reader: FutureReader<T>) -> Self {
         assert!(
             accessor
                 .as_accessor()
                 .with(|a| a.as_context().0.concurrency_support())
+                .await
         );
         Self {
             reader: Some(reader),
@@ -1643,8 +1647,9 @@ where
         if let Some(reader) = &mut self.reader {
             // Currently this can only fail if the future is closed twice, which
             // this guard prevents, so this error shouldn't happen.
-            let result = reader.close_with(&self.accessor);
-            debug_assert!(result.is_ok());
+            todo!()
+            // let result = reader.close_with(&self.accessor);
+            // debug_assert!(result.is_ok());
         }
     }
 }
@@ -1784,8 +1789,11 @@ impl<T> StreamReader<T> {
     }
 
     /// Convenience method around [`Self::close`].
-    pub fn close_with(&mut self, accessor: impl AsAccessor) -> Result<()> {
-        accessor.as_accessor().with(|access| self.close(access))
+    pub async fn close_with(&mut self, accessor: impl AsAccessor) -> Result<()> {
+        accessor
+            .as_accessor()
+            .with(|access| self.close(access))
+            .await
     }
 
     /// Returns a [`GuardedStreamReader`] which will auto-close this stream on
@@ -1793,11 +1801,11 @@ impl<T> StreamReader<T> {
     ///
     /// Note that the `accessor` provided must own this future and is
     /// additionally transferred to the `GuardedStreamReader` return value.
-    pub fn guard<A>(self, accessor: A) -> GuardedStreamReader<T, A>
+    pub async fn guard<A>(self, accessor: A) -> GuardedStreamReader<T, A>
     where
         A: AsAccessor,
     {
-        GuardedStreamReader::new(accessor, self)
+        GuardedStreamReader::new(accessor, self).await
     }
 
     /// Attempts to convert this [`StreamReader<T>`] to a [`StreamAny`].
@@ -1967,11 +1975,12 @@ where
     /// Panics if [`Config::concurrency_support`] is not enabled.
     ///
     /// [`Config::concurrency_support`]: crate::Config::concurrency_support
-    pub fn new(accessor: A, reader: StreamReader<T>) -> Self {
+    pub async fn new(accessor: A, reader: StreamReader<T>) -> Self {
         assert!(
             accessor
                 .as_accessor()
                 .with(|a| a.as_context().0.concurrency_support())
+                .await
         );
         Self {
             reader: Some(reader),
@@ -2003,8 +2012,9 @@ where
         if let Some(reader) = &mut self.reader {
             // Currently this can only fail if the future is closed twice, which
             // this guard prevents, so this error shouldn't happen.
-            let result = reader.close_with(&self.accessor);
-            debug_assert!(result.is_ok());
+            todo!();
+            // let result = reader.close_with(&self.accessor);
+            // debug_assert!(result.is_ok());
         }
     }
 }

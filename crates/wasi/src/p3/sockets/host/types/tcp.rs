@@ -9,6 +9,7 @@ use bytes::BytesMut;
 use core::iter;
 use core::pin::Pin;
 use core::task::{Context, Poll};
+use futures::FutureExt as _;
 use std::net::SocketAddr;
 use tokio::sync::oneshot;
 use wasmtime::component::{
@@ -207,17 +208,29 @@ impl<T: Send> HostTcpSocketWithStore<T> for WasiSockets {
     ) -> SocketResult<()> {
         let remote_address = SocketAddr::from(remote_address);
 
-        store.with(|mut store| {
-            let socket = get_socket_mut(store.get().table, &socket)?;
-            let socket = socket.start_connect(remote_address)?;
-            SocketResult::Ok(socket)
-        })?;
+        store
+            .with(|mut store| {
+                let socket = get_socket_mut(store.get().table, &socket)?;
+                let socket = socket.start_connect(remote_address)?;
+                SocketResult::Ok(socket)
+            })
+            .await?;
 
         std::future::poll_fn(|cx| {
-            store.with(|mut store| -> Poll<SocketResult<()>> {
-                let socket = get_socket_mut(store.get().table, &socket)?;
-                socket.poll_finish_connect(cx).map_err(SocketError::from)
-            })
+            // `Accessor::with` is an `async` method, but its body is fully
+            // synchronous, so the future it returns is always immediately
+            // ready. Drive it to completion with `now_or_never` to obtain
+            // synchronous access to the store from within this poll context.
+            // The real `cx` is threaded through to `poll_finish_connect`, so
+            // when the connection is still pending the real waker is registered
+            // and `Poll::Pending` propagates out of this `poll_fn` as usual.
+            store
+                .with(|mut store| -> Poll<SocketResult<()>> {
+                    let socket = get_socket_mut(store.get().table, &socket)?;
+                    socket.poll_finish_connect(cx).map_err(SocketError::from)
+                })
+                .now_or_never()
+                .expect("`Accessor::with` resolves synchronously")
         })
         .await
     }

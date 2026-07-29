@@ -271,9 +271,14 @@ async fn test_round_trip_recurse(component: &str, same_instance: bool) -> Result
         for MyCtx
     {
         async fn foo(accessor: &Accessor<T, Self>, s: String) -> wasmtime::Result<String> {
-            if let Some(instance) = accessor.with(|mut access| access.get().instance.take()) {
+            if let Some(instance) = accessor
+                .with(|mut access| access.get().instance.take())
+                .await
+            {
                 run(accessor, &instance).await?;
-                accessor.with(|mut access| access.get().instance = Some(instance));
+                accessor
+                    .with(|mut access| access.get().instance = Some(instance))
+                    .await;
             }
             Ok(format!("{s} - entered host - exited host"))
         }
@@ -282,9 +287,11 @@ async fn test_round_trip_recurse(component: &str, same_instance: bool) -> Result
     impl component_async_tests::round_trip::bindings::local::local::baz::Host for MyCtx {}
 
     async fn run<T: Send>(accessor: &Accessor<T, MyCtx>, instance: &Instance) -> Result<()> {
-        let round_trip = accessor.with(|mut access| {
-            component_async_tests::round_trip::bindings::RoundTrip::new(&mut access, &instance)
-        })?;
+        let round_trip = accessor
+            .with(|mut access| {
+                component_async_tests::round_trip::bindings::RoundTrip::new(&mut access, &instance)
+            })
+            .await?;
 
         let input = "hello, world!";
         let expected = "hello, world! - entered guest - entered host - exited host - exited guest";
@@ -424,12 +431,14 @@ pub async fn test_round_trip(
 
             impl AccessorTask<Ctx, HasSelf<Ctx>> for Task {
                 async fn run(self, accessor: &Accessor<Ctx>) -> Result<()> {
-                    let round_trip = accessor.with(|mut store| {
-                        component_async_tests::round_trip::bindings::RoundTrip::new(
-                            &mut store,
-                            &self.instance,
-                        )
-                    })?;
+                    let round_trip = accessor
+                        .with(|mut store| {
+                            component_async_tests::round_trip::bindings::RoundTrip::new(
+                                &mut store,
+                                &self.instance,
+                            )
+                        })
+                        .await?;
 
                     let mut futures = FuturesUnordered::new();
                     for (input, output) in &self.inputs_and_outputs {

@@ -461,7 +461,7 @@ where
     /// accessor already in scope. For example if `with` is called within `fun`,
     /// then this function will panic. It is up to the embedder to ensure that
     /// this does not happen.
-    pub fn with<R>(&self, fun: impl FnOnce(Access<'_, T, D>) -> R) -> R {
+    pub async fn with<R>(&self, fun: impl FnOnce(Access<'_, T, D>) -> R) -> R {
         tls::get(|vmstore| {
             fun(Access {
                 store: self.token.as_context_mut(vmstore),
@@ -517,12 +517,13 @@ where
     /// Panics if called within a closure provided to the [`Accessor::with`]
     /// function. This can only be called outside an active invocation of
     /// [`Accessor::with`].
-    pub fn spawn(&self, task: impl AccessorTask<T, D>) -> Result<JoinHandle>
+    pub async fn spawn(&self, task: impl AccessorTask<T, D>) -> Result<JoinHandle>
     where
         T: 'static,
     {
         let accessor = self.clone_for_spawn();
         self.with(|mut access| access.as_context_mut().spawn_with_accessor(accessor, task))
+            .await
     }
 
     fn clone_for_spawn(&self) -> Self {
@@ -567,7 +568,7 @@ where
     /// Note that at this time spawned threads within a task are always
     /// considered uninteresting. If this function returns ready, then spawned
     /// threads may still be in the store.
-    pub fn poll_no_interesting_tasks(&self, cx: &mut Context<'_>) -> Poll<()> {
+    pub async fn poll_no_interesting_tasks(&self, cx: &mut Context<'_>) -> Poll<()> {
         self.with(|mut access| {
             let store = access.as_context_mut().0;
             let state = store.concurrent_state_mut_without_forcing_current_thread();
@@ -578,6 +579,7 @@ where
                 Poll::Pending
             }
         })
+        .await
     }
 
     /// Poll to see if the component instance corresponding to the specified
@@ -596,7 +598,11 @@ where
     /// may be notified when _any_ instance becomes callable (i.e. not
     /// necessarily the last one polled), so this function must be called again
     /// to determine if the instance of interest is ready.
-    pub fn poll_ready_for_concurrent_call(&self, func: Func, cx: &mut Context<'_>) -> Poll<()> {
+    pub async fn poll_ready_for_concurrent_call(
+        &self,
+        func: Func,
+        cx: &mut Context<'_>,
+    ) -> Poll<()> {
         self.with(|mut access| {
             let store = access.as_context_mut().0;
             let (_, _, _, raw_options) = func.abi_info(store);
@@ -611,6 +617,7 @@ where
                 Poll::Pending
             }
         })
+        .await
     }
 }
 

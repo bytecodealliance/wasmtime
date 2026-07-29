@@ -1,6 +1,7 @@
 #![cfg(not(miri))]
 
 use super::REALLOC_AND_FREE;
+use futures::FutureExt as _;
 use std::ops::Deref;
 use wasmtime::Result;
 use wasmtime::component::*;
@@ -757,7 +758,10 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 WasmStr,
                 WasmStr,
             ),)| {
-                accessor.with(|v| assert_eq!(arg.0.to_str(&v).unwrap(), "abc"));
+                accessor
+                    .with(|v| assert_eq!(arg.0.to_str(&v).unwrap(), "abc"))
+                    .now_or_never()
+                    .expect("`Accessor::with` resolves synchronously");
                 Box::pin(async { Ok((3u32,)) })
             },
         )?;
@@ -781,7 +785,10 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 WasmStr,
                 WasmStr,
             ),)| {
-                accessor.with(|v| assert_eq!(arg.0.to_str(&v).unwrap(), "abc"));
+                accessor
+                    .with(|v| assert_eq!(arg.0.to_str(&v).unwrap(), "abc"))
+                    .now_or_never()
+                    .expect("`Accessor::with` resolves synchronously");
                 Box::pin(async { Ok(("xyz".to_string(),)) })
             },
         )?;

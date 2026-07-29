@@ -1,4 +1,5 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
+use futures::FutureExt as _;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use wasmtime::Result;
@@ -455,12 +456,19 @@ async fn run_wasm_in_call_async() -> Result<()> {
         .root()
         .func_wrap_concurrent("a", |accessor: &Accessor<State>, (): ()| {
             Box::pin(async move {
-                let func = accessor.with(|mut access| {
-                    access
-                        .get()
-                        .unwrap()
-                        .get_typed_func::<(), ()>(&mut access, "run")
-                })?;
+                // `Accessor::with` is `async` but resolves synchronously;
+                // holding its future across an `.await` inside this
+                // `Send`-required concurrent closure trips Send inference, so
+                // drive it with `now_or_never` instead.
+                let func = accessor
+                    .with(|mut access| {
+                        access
+                            .get()
+                            .unwrap()
+                            .get_typed_func::<(), ()>(&mut access, "run")
+                    })
+                    .now_or_never()
+                    .expect("`Accessor::with` resolves synchronously")?;
                 func.call_concurrent(accessor, ()).await?;
                 Ok(())
             })
@@ -658,11 +666,14 @@ async fn sync_lower_async_host_does_not_leak() -> Result<()> {
 
                 // Keep track of the maximum size of the table in
                 // concurrent_state.
-                accessor.with(|mut s| {
-                    let cur = s.as_context_mut().concurrent_state_table_size();
-                    let max = s.data_mut();
-                    *max = (*max).max(cur);
-                });
+                accessor
+                    .with(|mut s| {
+                        let cur = s.as_context_mut().concurrent_state_table_size();
+                        let max = s.data_mut();
+                        *max = (*max).max(cur);
+                    })
+                    .now_or_never()
+                    .expect("`Accessor::with` resolves synchronously");
                 Ok(())
             })
         })?;
@@ -896,10 +907,18 @@ async fn concurrent_sync_calls_to_async_host() -> Result<()> {
         .root()
         .func_wrap_concurrent("await-three-calls", |accessor, (): ()| {
             Box::pin(async move {
-                accessor.with(|mut s| {
-                    *s.data_mut() += 1;
-                });
-                while accessor.with(|mut s| *s.data_mut()) < 3 {
+                accessor
+                    .with(|mut s| {
+                        *s.data_mut() += 1;
+                    })
+                    .now_or_never()
+                    .expect("`Accessor::with` resolves synchronously");
+                while accessor
+                    .with(|mut s| *s.data_mut())
+                    .now_or_never()
+                    .expect("`Accessor::with` resolves synchronously")
+                    < 3
+                {
                     tokio::task::yield_now().await;
                 }
                 Ok(())

@@ -10,6 +10,7 @@ use crate::block_on;
 use crate::generators::{self, CompilerStrategy, InstanceAllocationStrategy};
 use crate::oracles::log_wasm;
 use arbitrary::{Arbitrary, Unstructured};
+use futures::FutureExt as _;
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
@@ -293,7 +294,14 @@ where
             .root()
             .func_wrap_concurrent(IMPORT_FUNCTION, |a, params| {
                 Box::pin(async move {
+                    // `Accessor::with` is `async` but resolves synchronously, and
+                    // holding its future across an `.await` here trips Send
+                    // inference (the closure's higher-ranked lifetime). Drive it
+                    // with `now_or_never` so no future is held across a suspend
+                    // point; `host_function` itself does no async work.
                     a.with(|mut cx| host_function::<P, R>(cx.as_context_mut(), params))
+                        .now_or_never()
+                        .expect("`Accessor::with` resolves synchronously")
                 })
             })
             .unwrap();
@@ -381,7 +389,12 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
             .func_new_concurrent(IMPORT_FUNCTION, {
                 move |cx: &Accessor<_, _>, _, params: &[Val], results: &mut [Val]| {
                     Box::pin(async move {
+                        // See the note above: drive the always-ready
+                        // `Accessor::with` future with `now_or_never` rather than
+                        // `.await` to avoid tripping Send inference.
                         cx.with(|mut store| host_function(store.as_context_mut(), params, results))
+                            .now_or_never()
+                            .expect("`Accessor::with` resolves synchronously")
                     })
                 }
             })

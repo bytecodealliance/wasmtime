@@ -274,7 +274,7 @@ mod one_import_concurrent {
 
         impl<T> foo::HostWithStore<T> for MyImports {
             async fn foo(accessor: &Accessor<T, Self>) {
-                accessor.with(|mut view| view.get().hit = true);
+                accessor.with(|mut view| view.get().hit = true).await;
             }
         }
 

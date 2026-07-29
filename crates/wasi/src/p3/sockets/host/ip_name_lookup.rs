@@ -10,7 +10,9 @@ impl<U> HostWithStore<U> for WasiSockets {
         store: &Accessor<U, Self>,
         name: String,
     ) -> wasmtime::Result<Result<Vec<types::IpAddress>, ErrorCode>> {
-        let fut = store.with(|mut view| resolve_addresses(&view.get().ctx, name));
+        let fut = store
+            .with(|mut view| resolve_addresses(&view.get().ctx, name))
+            .await;
         Ok(match fut.await {
             Ok(addrs) => Ok(addrs.into_iter().map(|addr| addr.into()).collect()),
             Err(err) => Err(err.into()),
