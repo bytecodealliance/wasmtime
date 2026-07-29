@@ -324,12 +324,12 @@ impl RunCommon {
 
         if self.common.wasi.inherit_env == Some(true) {
             for (k, v) in std::env::vars_os() {
-                let k = k
-                    .to_str()
-                    .ok_or_else(|| format_err!("environment variable name {k:?} not valid utf-8"))?;
-                let v = v
-                    .to_str()
-                    .ok_or_else(|| format_err!("environment variable {k:?} value {v:?} not valid utf-8"))?;
+                let k = k.to_str().ok_or_else(|| {
+                    format_err!("environment variable name {k:?} not valid utf-8")
+                })?;
+                let v = v.to_str().ok_or_else(|| {
+                    format_err!("environment variable {k:?} value {v:?} not valid utf-8")
+                })?;
                 builder.env(&k, &v);
             }
         }
