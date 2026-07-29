@@ -639,8 +639,6 @@ impl Config {
     ///
     /// By default this option is `false`.
     ///
-    /// **Note** Enabling this option is not compatible with the Winch compiler.
-    ///
     /// [`Store`]: crate::Store
     pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
         self.tunables.consume_fuel = Some(enable);
