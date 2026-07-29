@@ -3590,3 +3590,64 @@ fn hot_blocks_fib() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg(unix)]
+fn non_utf8_raises_error() -> Result<()> {
+    use std::ffi::{OsStr, OsString};
+    use std::os::unix::prelude::*;
+
+    let invalid_utf8 = OsStr::from_bytes(b"\xFF");
+
+    // If everything is valid this should succeed...
+    {
+        let mut cmd = get_wasmtime_command()?;
+        cmd.arg("-Sinherit-env")
+            .arg("tests/all/cli_tests/simple.wat");
+        let output = cmd.output()?;
+        assert!(output.status.success());
+    }
+
+    // -Sinherit-env
+    {
+        let mut cmd = get_wasmtime_command()?;
+        cmd.arg("-Sinherit-env")
+            .arg("tests/all/cli_tests/simple.wat");
+        cmd.env("HI", invalid_utf8);
+        let output = cmd.output()?;
+        if output.status.success() {
+            bail!("should have failed: {output:?}")
+        }
+    }
+    // --env=HI
+    {
+        let mut cmd = get_wasmtime_command()?;
+        cmd.arg("--env=HI").arg("tests/all/cli_tests/simple.wat");
+        cmd.env("HI", invalid_utf8);
+        let output = cmd.output()?;
+        if output.status.success() {
+            bail!("should have failed: {output:?}")
+        }
+    }
+    // --env=HI=$bad
+    {
+        let mut cmd = get_wasmtime_command()?;
+        let mut bad = OsString::from("--env=HI=");
+        bad.push(invalid_utf8);
+        cmd.arg(&bad).arg("tests/all/cli_tests/simple.wat");
+        let output = cmd.output()?;
+        if output.status.success() {
+            bail!("should have failed: {output:?}")
+        }
+    }
+    // $bad (bare argument)
+    {
+        let mut cmd = get_wasmtime_command()?;
+        cmd.arg("tests/all/cli_tests/simple.wat").arg(invalid_utf8);
+        let output = cmd.output()?;
+        if output.status.success() {
+            bail!("should have failed: {output:?}")
+        }
+    }
+    Ok(())
+}
