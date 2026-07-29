@@ -103,7 +103,9 @@ pub enum FsPerms {
 }
 
 impl FsPerms {
-    /// Convenience function, t
+    /// Tests whether writes are not permitted, returning a boolean. Shorthand
+    /// for matches!(perms, FsPerms::ReadOnly), used frequently in
+    /// if-statements.
     pub fn write_not_permitted(&self) -> bool {
         matches!(self, Self::ReadOnly)
     }
