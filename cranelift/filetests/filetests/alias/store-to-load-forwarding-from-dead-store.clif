@@ -2,6 +2,11 @@ test optimize precise-output
 set opt_level=speed
 target aarch64
 
+;; TODO: we cannot do both store-to-load forwarding and dead-store elimination
+;; for the same store yet. This would require multiple iterations of the
+;; analysis: whether a store is observed is computed up front, over the original
+;; code, so the load below counts as observing the first store even though
+;; store-to-load forwarding subsequently removes that load.
 function %f(i64, i64) -> i64 {
     region0 = 0 "R0"
 block0(v0: i64, v1: i64):
@@ -9,10 +14,9 @@ block0(v0: i64, v1: i64):
     v3 = iadd v1, v2
     store notrap aligned region0 v3, v0
 
-    ;; `v4` should be rewritten into an alias of `v3` via store-to-load
-    ;; forwarding, and should NOT mark `region0` as observed. Then, when we
-    ;; process the second store below, we should be able to eliminate the first
-    ;; store as dead.
+    ;; `v4` is rewritten into an alias of `v3` via store-to-load forwarding, but
+    ;; it has already marked the first store as observed, so we cannot eliminate
+    ;; that store as dead when we process the second store below.
     v4 = load.i64 notrap aligned region0 v0
 
     v5 = iadd v3, v2
@@ -25,16 +29,16 @@ block0(v0: i64, v1: i64):
 ;     region0 = 0 "R0"
 ;
 ; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 1
+;     v3 = iadd v1, v2  ; v2 = 1
+;     store notrap aligned region0 v3, v0
 ;     v7 = iconst.i64 2
 ;     v12 = iadd v1, v7  ; v7 = 2
 ;     store notrap aligned region0 v12, v0
-;     v2 = iconst.i64 1
-;     v3 = iadd v1, v2  ; v2 = 1
 ;     return v3
 ; }
 
-;; TODO: we cannot do both store-to-load forwarding and dead-store elimination
-;; across blocks yet. This would require multiple iterations of the analysis.
+;; Same as above, but with the load and stores spread across blocks.
 function %f(i64, i64) -> i64 {
     region0 = 0 "R0"
 block0(v0: i64, v1: i64):

@@ -1,0 +1,30 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; The two stores below are to the same address, so the first one is
+;; dead. However, `v2` and `v3` are still distinct values when
+;; `AliasAnalysis::observed_stores` is computed, because that happens up front,
+;; before the egraph has GVN'd anything. We can nonetheless eliminate the first
+;; store because we never ask whether one store overwrites another while
+;; computing the set of observed stores; we only ask that at the point where we
+;; actually eliminate a dead store, by which time GVN has run.
+function %pre_gvn_address(i64, i64) {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = iconst.i64 0
+    store notrap aligned region0 v1, v2
+    store notrap aligned region0 v0, v3
+    return
+}
+
+; function %pre_gvn_address(i64, i64) fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 0
+;     store notrap aligned region0 v0, v2  ; v2 = 0
+;     return
+; }

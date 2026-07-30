@@ -1,0 +1,182 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; With the following CFG:
+;;
+;;              block0
+;;             /      \
+;;         block1     block2
+;;          |   \     /   |
+;;          |    \   /    |
+;;          |     \ /     |
+;;          |      X      |
+;;          |     / \     |
+;;          |    /   \    |
+;;          |   /     \   |
+;;         block3     block4
+;;             \      /
+;;              block5
+;;
+;; Both `block1` and `block2` branch to both `block3` and `block4`, so a single
+;; pass over the blocks, in whatever order our worklist happens to pop them, can
+;; reach a merge block before it has seen all of that block's predecessors, and
+;; can reach a store's observers only after it has already processed the block
+;; that could otherwise have removed that store. Note that `block5`
+;; post-dominates every other block, so its store is a dead-store-elimination
+;; candidate for the stores in all of the blocks above it.
+;;
+;; The store in `block0` is observed by the load in `block3`, and so it is not
+;; dead, despite being fully overwritten by the store in `block5`.
+function %observed_after_crossing_merges(i64, i32, i32, i32) -> i32 {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store notrap aligned region0 v1, v0
+    brif v1, block1, block2
+
+block1:
+    brif v2, block3, block4
+
+block2:
+    brif v3, block3, block4
+
+block3:
+    ;; (Different static offset to avoid being store-to-load forwarded away.)
+    v4 = load.i32 notrap aligned region0 v0+8
+    jump block5(v4)
+
+block4:
+    jump block5(v1)
+
+block5(v5: i32):
+    store notrap aligned region0 v2, v0
+    return v5
+}
+
+; function %observed_after_crossing_merges(i64, i32, i32, i32) -> i32 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store notrap aligned region0 v1, v0
+;     brif v1, block1, block2
+;
+; block1:
+;     brif.i32 v2, block3, block4
+;
+; block2:
+;     brif.i32 v3, block3, block4
+;
+; block3:
+;     v4 = load.i32 notrap aligned region0 v0+8
+;     jump block5(v4)
+;
+; block4:
+;     jump block5(v1)
+;
+; block5(v5: i32):
+;     store.i32 notrap aligned region0 v2, v0
+;     return v5
+; }
+
+;; Same as above, but without the load in `block3`. Nothing observes the store in
+;; `block0` now, so the store in `block5` does make it dead, even though the two
+;; stores are separated by these control-flow merges.
+function %dead_across_crossing_merges(i64, i32, i32, i32) {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store notrap aligned region0 v1, v0
+    brif v1, block1, block2
+
+block1:
+    brif v2, block3, block4
+
+block2:
+    brif v3, block3, block4
+
+block3:
+    jump block5
+
+block4:
+    jump block5
+
+block5:
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %dead_across_crossing_merges(i64, i32, i32, i32) fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     brif v1, block1, block2
+;
+; block1:
+;     brif.i32 v2, block3, block4
+;
+; block2:
+;     brif.i32 v3, block3, block4
+;
+; block3:
+;     jump block5
+;
+; block4:
+;     jump block5
+;
+; block5:
+;     store.i32 notrap aligned region0 v2, v0
+;     return
+; }
+
+;; The store is in `block2` this time, i.e. on only one of the two paths into
+;; `block3`, where the load that observes it lives. It is still not dead.
+function %store_in_one_predecessor(i64, i32, i32, i32) -> i32 {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    brif v1, block1, block2
+
+block1:
+    brif v2, block3, block4
+
+block2:
+    store notrap aligned region0 v1, v0
+    brif v3, block3, block4
+
+block3:
+    v4 = load.i32 notrap aligned region0 v0
+    jump block5(v4)
+
+block4:
+    jump block5(v1)
+
+block5(v5: i32):
+    store notrap aligned region0 v2, v0
+    return v5
+}
+
+; function %store_in_one_predecessor(i64, i32, i32, i32) -> i32 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     brif v1, block1, block2
+;
+; block1:
+;     brif.i32 v2, block3, block4
+;
+; block2:
+;     store.i32 notrap aligned region0 v1, v0
+;     brif.i32 v3, block3, block4
+;
+; block3:
+;     v4 = load.i32 notrap aligned region0 v0
+;     jump block5(v4)
+;
+; block4:
+;     jump block5(v1)
+;
+; block5(v5: i32):
+;     store.i32 notrap aligned region0 v2, v0
+;     return v5
+; }

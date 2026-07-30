@@ -1,0 +1,26 @@
+test alias-analysis
+set opt_level=speed
+target aarch64
+
+;; Removing a dead store must leave the last-store state pointing at the
+;; overwriter, not at the store we just removed. Without that, the last store
+;; for `region0` would still be the store we just removed when we reached the
+;; next store, so we could only ever unwind the first link of a chain of dead
+;; stores.
+function %stale_after_dead_store(i64, i32, i32, i32) {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store notrap aligned region0 v1, v0
+    store notrap aligned region0 v2, v0
+    store notrap aligned region0 v3, v0
+    store notrap aligned region0 v3, v0+8
+    return
+}
+
+;; Every store to `v0` but the last is dead.
+; not: store notrap aligned region0 v1, v0
+; not: store notrap aligned region0 v2, v0
+; check: store notrap aligned region0 v3, v0
+; check: store notrap aligned region0 v3, v0+8
+; not: store
