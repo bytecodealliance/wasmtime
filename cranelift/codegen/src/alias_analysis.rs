@@ -150,6 +150,21 @@ struct RegionState {
 
 /// For a given program point, the vector of last-store instruction
 /// indices for each disjoint category of abstract state.
+///
+/// ### Instructions In `LastStores` Might Not Be In The Function's `Layout`
+///
+/// The instructions named here (`regions[r].last_store`, `other`, `last_fence`)
+/// are *not* guaranteed to still be in the layout (unlike `mem_values`, this
+/// state does not maintain that invariant). A slot can name a store we already
+/// removed because, e.g., `block_input` snapshots are computed once up front
+/// (in `compute_block_input_states`) and can name a store a later-visited block
+/// deletes.
+///
+/// We tolerate this, rather than enforce the invariant, because enforcing it
+/// would mean repairing a precomputed fixpoint's references across
+/// not-yet-visited blocks, which would result in more work and more complicated
+/// code than simply checking whether an instruction is in the layout at a
+/// couple sites.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LastStores {
     /// Last store (and whether it has been observed) for each named alias
@@ -499,8 +514,12 @@ impl<'a> AliasAnalysis<'a> {
         overwriter: Inst,
         maybe_dead: Inst,
     ) -> bool {
-        let overwriter_block = func.layout.inst_block(overwriter).unwrap();
-        let maybe_dead_block = func.layout.inst_block(maybe_dead).unwrap();
+        let (Some(overwriter_block), Some(maybe_dead_block)) = (
+            func.layout.inst_block(overwriter),
+            func.layout.inst_block(maybe_dead),
+        ) else {
+            return false;
+        };
 
         // When our instructions are in the same block, we do not need to
         // force computation of the whole post-dominator tree: `overwriter`
@@ -615,20 +634,26 @@ impl<'a> AliasAnalysis<'a> {
                         // overwrites (same region, address, offset,
                         // type, and width).
                         && fully_overwrites(func, last_store, inst, address, offset, ty)
-                        // We can't remove dead stores if they've
-                        // already been removed, and `post_dominates`
-                        // requires that `last_store` is in the
-                        // layout.
-                        && func.layout.inst_block(last_store).is_some()
-                        // The last store is only dead if all paths
-                        // out of the function from it go through this
-                        // instruction.
+                        // The last store is only dead if all paths out of the
+                        // function from it go through this instruction.
                         && self.post_dominates_maybe_dead_store(func, cfg, inst, last_store)
                     {
                         trace!(
                             "  --> discovered dead store at {last_store}: {}",
                             func.dfg.display_inst(last_store)
                         );
+                        // The dead store is about to be removed from the
+                        // layout, so drop its entry from `mem_values`. This
+                        // maintains the invariant that `mem_values` only ever
+                        // references instructions that are still in the layout.
+                        let dead_loc = MemoryLoc {
+                            last_store: last_store.into(),
+                            address,
+                            offset,
+                            ty,
+                            extending_opcode: get_ext_opcode(opcode),
+                        };
+                        self.mem_values.remove(&dead_loc);
                         return OptResult::DeadStore {
                             dead: last_store,
                             overwriter: inst,
@@ -648,10 +673,6 @@ impl<'a> AliasAnalysis<'a> {
                     // storing the exact same value back to a location
                     // that already has that value.
                     if known_value == store_data
-                        // We cannot remove an idempotent store if we already
-                        // removed the original store instruction (perhaps
-                        // because this instruction made it dead).
-                        && func.layout.inst_block(def_inst).is_some()
                         // We cannot remove this store unless all control-flow
                         // paths leading to it go through the original store
                         // instruction.
