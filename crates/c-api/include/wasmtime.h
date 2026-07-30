@@ -229,7 +229,7 @@
 /**
  * \brief Wasmtime version string.
  */
-#define WASMTIME_VERSION "49.0.0"
+#define WASMTIME_VERSION "49.0.0-dev"
 /**
  * \brief Wasmtime major version number.
  */

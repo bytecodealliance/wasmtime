@@ -137,7 +137,7 @@ jobs:
     - run: |
         for attempt in 1 2 3 4 5; do
           [ "$attempt" = "5" ] && exit 1
-          rustc scripts/publish.rs && ./publish bump-patch && cargo vet && break
+          cargo run -p wasmtime-publish bump-patch && cargo vet && break
           sleep 5
         done
       name: Ensure `cargo vet` works if versions are bumped
@@ -1305,11 +1305,10 @@ jobs:
         rm sccache.tar.gz
         echo "`pwd`/sccache-0.2.13-x86_64-unknown-linux-musl" >> $GITHUB_PATH
         echo RUSTC_WRAPPER=sccache >> $GITHUB_ENV
-    - run: rustc scripts/publish.rs
     # Make sure the tree is publish-able as-is
-    - run: ./publish verify
+    - run: cargo run -p wasmtime-publish verify
     # Make sure we can bump version numbers for the next release
-    - run: ./publish bump
+    - run: cargo run -p wasmtime-publish bump-major
 
   # Run a subset of tests under MIRI on CI to help check the `unsafe` code in
   # Wasmtime to make sure it's at least not obviously incorrect for basic usage.

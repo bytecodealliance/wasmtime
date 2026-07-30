@@ -5,9 +5,9 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-cranelift-isle = { version = "*", path = "../../isle/", features = ["fancy-errors", "logging"] }
+cranelift-isle = { path = "../../isle/", features = ["fancy-errors", "logging"] }
 cranelift-isle-veri-caching = { path = "../caching" }
-cranelift-codegen-meta = { version = "*", path = "../../../codegen/meta", features = ["spec"] }
+cranelift-codegen-meta = { path = "../../../codegen/meta", features = ["spec"] }
 log = { workspace = true }
 env_logger = { workspace = true }
 anyhow = { workspace = true, features = ['std', 'backtrace'] }

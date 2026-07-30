@@ -290,10 +290,6 @@ criteria = "safe-to-deploy"
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.fallible-iterator]]
-version = "0.2.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.futures-task]]
 version = "0.3.27"
 criteria = "safe-to-deploy"
@@ -334,10 +330,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.libloading]]
 version = "0.7.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.listenfd]]
-version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.logos]]
@@ -473,10 +465,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.security-framework-sys]]
 version = "2.14.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.target-lexicon]]
-version = "0.12.16"
 criteria = "safe-to-deploy"
 
 [[exemptions.tempfile]]
