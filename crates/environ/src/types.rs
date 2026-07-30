@@ -555,7 +555,22 @@ impl TypeTrace for WasmHeapType {
             Self::ConcreteStruct(i) => func(i),
             Self::ConcreteCont(i) => func(i),
             Self::ConcreteExn(i) => func(i),
-            _ => Ok(()),
+            // Top/bottom lattice elements have no inner type
+            // reference.
+            Self::Extern
+            | Self::NoExtern
+            | Self::Func
+            | Self::NoFunc
+            | Self::Cont
+            | Self::NoCont
+            | Self::Any
+            | Self::Eq
+            | Self::I31
+            | Self::Array
+            | Self::Struct
+            | Self::Exn
+            | Self::NoExn
+            | Self::None => Ok(()),
         }
     }
 
@@ -569,7 +584,22 @@ impl TypeTrace for WasmHeapType {
             Self::ConcreteStruct(i) => func(i),
             Self::ConcreteCont(i) => func(i),
             Self::ConcreteExn(i) => func(i),
-            _ => Ok(()),
+            // Top/bottom lattice elements have no inner type
+            // reference.
+            Self::Extern
+            | Self::NoExtern
+            | Self::Func
+            | Self::NoFunc
+            | Self::Cont
+            | Self::NoCont
+            | Self::Any
+            | Self::Eq
+            | Self::I31
+            | Self::Array
+            | Self::Struct
+            | Self::Exn
+            | Self::NoExn
+            | Self::None => Ok(()),
         }
     }
 }
