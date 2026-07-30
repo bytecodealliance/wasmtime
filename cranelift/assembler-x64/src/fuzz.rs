@@ -53,7 +53,7 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
 /// # Panics
 ///
 /// See [`roundtrip`].
-#[cfg(feature = "fuzz-xed")]
+#[cfg(all(feature = "fuzz-xed", target_arch = "x86_64", target_os = "linux"))]
 pub fn roundtrip_xed(inst: &Inst<FuzzRegs>) {
     roundtrip_with(inst, "xed", disassemble_xed, xed_matches, |i| {
         format!("{i:#}")
@@ -228,7 +228,7 @@ fn disassemble_capstone(assembled: &[u8], original: &Inst<FuzzRegs>) -> String {
 /// same shape as [`disassemble_capstone`] (a leading offset token, a space,
 /// then the AT&T-syntax instruction) so that [`roundtrip_with`] can compare it
 /// uniformly.
-#[cfg(feature = "fuzz-xed")]
+#[cfg(all(feature = "fuzz-xed", target_arch = "x86_64", target_os = "linux"))]
 fn disassemble_xed(assembled: &[u8], original: &Inst<FuzzRegs>) -> String {
     use core::ffi::c_void;
     use std::sync::Once;
@@ -421,7 +421,7 @@ fn fix_up(dis: &str) -> alloc::borrow::Cow<'_, str> {
 /// The assembler renders the instruction in XED's own dialect (`{inst:#}`), so
 /// the two strings agree exactly apart from the extra padding XED inserts after
 /// the mnemonic.
-#[cfg(feature = "fuzz-xed")]
+#[cfg(all(feature = "fuzz-xed", target_arch = "x86_64", target_os = "linux"))]
 fn xed_matches(expected: &str, actual: &str) -> bool {
     expected.split_whitespace().eq(actual.split_whitespace())
 }
@@ -577,7 +577,7 @@ mod test {
     /// The instruction is printed in XED's dialect (`{inst:#}`) so that the two
     /// can be compared directly. Run explicitly with
     /// `cargo test --features fuzz-xed -- smoke_xed`.
-    #[cfg(feature = "fuzz-xed")]
+    #[cfg(all(feature = "fuzz-xed", target_arch = "x86_64", target_os = "linux"))]
     #[test]
     fn smoke_xed() {
         let count = AtomicUsize::new(0);

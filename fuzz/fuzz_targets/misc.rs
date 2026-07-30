@@ -93,13 +93,13 @@ fn assembler_roundtrip(u: Unstructured<'_>) -> Result<()> {
 /// `run_fuzzers!` regardless so that the input-byte discriminants of the other
 /// fuzzers stay stable.
 fn assembler_roundtrip_xed(u: Unstructured<'_>) -> Result<()> {
-    #[cfg(feature = "fuzz-xed")]
+    #[cfg(all(feature = "fuzz-xed", target_arch = "x86_64", target_os = "linux"))]
     {
         use cranelift_assembler_x64::{Inst, fuzz};
         let inst: Inst<fuzz::FuzzRegs> = Arbitrary::arbitrary_take_rest(u)?;
         fuzz::roundtrip_xed(&inst);
     }
-    #[cfg(not(feature = "fuzz-xed"))]
+    #[cfg(not(all(feature = "fuzz-xed", target_arch = "x86_64", target_os = "linux")))]
     let _ = u;
     Ok(())
 }
