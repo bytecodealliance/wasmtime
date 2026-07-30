@@ -18,26 +18,26 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
         "
       // Save all callee-saved registers on the stack since we're
       // assuming they're clobbered as a result of the stack switch.
-      st.d $ra, $sp, -0x08
-      st.d $fp, $sp, -0x10
-      st.d $s0, $sp, -0x18
-      st.d $s1, $sp, -0x20
-      st.d $s2, $sp, -0x28
-      st.d $s3, $sp, -0x30
-      st.d $s4, $sp, -0x38
-      st.d $s5, $sp, -0x40
-      st.d $s6, $sp, -0x48
-      st.d $s7, $sp, -0x50
-      st.d $s8, $sp, -0x58
-      fst.d $fs0, $sp, -0x60
-      fst.d $fs1, $sp, -0x68
-      fst.d $fs2, $sp, -0x70
-      fst.d $fs3, $sp, -0x78
-      fst.d $fs4, $sp, -0x80
-      fst.d $fs5, $sp, -0x88
-      fst.d $fs6, $sp, -0x90
-      fst.d $fs7, $sp, -0x98
       addi.d $sp, $sp, -0xa0
+      st.d $ra, $sp, 0x98
+      st.d $fp, $sp, 0x90
+      st.d $s0, $sp, 0x88
+      st.d $s1, $sp, 0x80
+      st.d $s2, $sp, 0x78
+      st.d $s3, $sp, 0x70
+      st.d $s4, $sp, 0x68
+      st.d $s5, $sp, 0x60
+      st.d $s6, $sp, 0x58
+      st.d $s7, $sp, 0x50
+      st.d $s8, $sp, 0x48
+      fst.d $fs0, $sp, 0x40
+      fst.d $fs1, $sp, 0x38
+      fst.d $fs2, $sp, 0x30
+      fst.d $fs3, $sp, 0x28
+      fst.d $fs4, $sp, 0x20
+      fst.d $fs5, $sp, 0x18
+      fst.d $fs6, $sp, 0x10
+      fst.d $fs7, $sp, 0x08
 
       // Load our previously saved stack pointer to resume to, and save
       // off our current stack pointer on where to come back to
