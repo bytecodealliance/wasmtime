@@ -104,6 +104,11 @@ macro_rules! define_vm_type_offsets {
 
     // Classify a field type to its alignment in bytes as a `u32`, given `$p`
     // (the target pointer size as a `u8`).
+    //
+    // NB: 64-bit integers are assumed to be 8-aligned, which holds everywhere except
+    // `i686-unknown-linux-gnu`, and the pointer size alone can't tell those apart. Types
+    // with 64-bit fields must therefore put them first and force their own alignment with
+    // `#[repr(C, align(8))]`, as `VMStoreContext` does.
     (@align ($p:expr) VmPtr < $g:ty >) => { u32::from($p) };
     (@align ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@align ($p:expr) AtomicUsize) => { u32::from($p) };

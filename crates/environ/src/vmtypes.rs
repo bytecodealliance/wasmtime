@@ -247,7 +247,11 @@ macro_rules! for_each_vm_type {
             /// `wasmtime::Store`, multiple `VMContext`s hold a pointer to the same
             /// `VMStoreContext` when they are associated with the same `wasmtime::Store`.
             #[derive(Debug)]
-            #[repr(C)]
+            // NB: `align(8)` is forced rather than inferred because the i386
+            // System V ABI aligns 64-bit integers to 4 bytes, and `VMOffsets`
+            // can't tell that target apart from the ones that align them to 8,
+            // since it only knows the target's pointer width.
+            #[repr(C, align(8))]
             #[snake_name = vm_store_context]
             pub struct VMStoreContext {
                 // NB: 64-bit integer fields are located first with pointer-sized fields
