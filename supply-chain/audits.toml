@@ -7528,13 +7528,19 @@ end = "2026-10-10"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2021-09-13"
-end = "2025-02-12"
+end = "2027-07-20"
 
 [[trusted.toml_parser]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2025-07-08"
 end = "2026-10-10"
+
+[[trusted.toml_write]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2025-04-25"
+end = "2027-07-20"
 
 [[trusted.toml_writer]]
 criteria = "safe-to-deploy"

@@ -2,8 +2,9 @@
 # much as possible. This specific workflow is responsible for a few timed parts
 # of the process:
 #
-# * On the 5th of every month a new release branch is automatically created and
-#   the version number of the `main` branch is increased
+# * On the 5th of every month a new release branch is automatically created,
+#   the version number of the `main` branch is increased, and the first release
+#   candidate of the new release branch is prepared.
 # * On the 20th of every month the previous release branch is published.
 #
 # This automation is all done through PRs except for the creation of the release
@@ -12,7 +13,9 @@
 # other steps of the way.
 #
 # Note that this script also helps manage patch releases by sending a PR to the
-# release branch with a bumped version number for all crates with a patch-bump.
+# release branch with a bumped version number for all crates with a patch-bump,
+# as well as publishing additional release candidates for a release branch which
+# hasn't been released yet.
 
 name: "Automated Release Process"
 on:
@@ -28,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Publish script argument: "cut", "release-latest", or "release-patch"'
+        description: 'Publish script argument: "cut", "release-latest", "release-rc", or "release-patch"'
         required: false
         default: 'cut'
 
@@ -46,7 +49,6 @@ jobs:
           submodules: true
       - name: Setup
         run: |
-          rustc scripts/publish.rs
           git config user.name 'Wasmtime Publish'
           git config user.email 'wasmtime-publish@users.noreply.github.com'
           git remote set-url origin https://git:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}
@@ -58,16 +60,30 @@ jobs:
           version: 0.10.2
 
       - name: Bump major version number
+        if: >-
+          github.event.schedule == '0 0 5 * *' ||
+          github.event.inputs.action == 'cut'
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           set -ex
+          # The `main` branch always carries a `-dev` version. Strip that suffix
+          # to get the version that's about to be released.
+          cur_dev=$(./ci/print-current-version.sh)
+          cur=${cur_dev%-dev}
+          branch=release-${cur_dev%-dev}
+
+          # Remember where the release branch starts so that the release
+          # candidate below can be built from exactly this commit.
+          base=$(git rev-parse HEAD)
+
           # Push the current contents of `main` to a new release branch
-          cur=$(./ci/print-current-version.sh)
-          git push origin HEAD:release-$cur
+          git push origin HEAD:$branch
 
           # Update version numbers and make a commit indicating that. Note that
           # on merge this will not trigger a publish.
-          ./publish bump
-          num=$(./ci/print-current-version.sh)
+          cargo run -p wasmtime-publish bump-major
+          num=$(./ci/print-current-version.sh | sed 's/-dev$//')
 
           # Remove all release notes for the current version now that the
           # release branch has been created. Additionally add an entry in the
@@ -75,7 +91,7 @@ jobs:
           # created branch.
           sed -i '0,/-----------/d' RELEASES.md
           version_with_trailing_x=$(echo $cur | sed 's/.$/x/')
-          sed -i "/ARCHIVE_START/a * [$version_with_trailing_x](https://github.com/${{ github.repository }}/blob/release-$cur/RELEASES.md)" RELEASES.md
+          sed -i "/ARCHIVE_START/a * [$version_with_trailing_x](https://github.com/${{ github.repository }}/blob/$branch/RELEASES.md)" RELEASES.md
 
           # Use `RELEASES-template.md` as the new release notes and then append
           # the archive of all historical releases to the end of it.
@@ -90,43 +106,72 @@ jobs:
           # Commit all of the above changes.
           git commit -am "Bump Wasmtime to $num"
 
-          # Push the result to a branch and setup metadata for the step below
-          # that creates a PR
+          # Push the result to a branch and open a PR against `main`.
           git push origin HEAD:ci/bump-to-$num
-          echo "PR_HEAD=ci/bump-to-$num" >> $GITHUB_ENV
-          echo "PR_TITLE=Bump Wasmtime to $num" >> $GITHUB_ENV
-          echo "PR_BASE=main" >> $GITHUB_ENV
-          cat > pr-body <<-EOF
-          This is an [automated pull request][process] from CI which indicates that the next [\`release-$cur\` branch][branch] has been created and the \`main\` branch is getting its version number bumped from $cur to $num.
+          cat > pr-body-main <<-EOF
+          This is an [automated pull request][process] from CI which indicates that the next [\`$branch\` branch][branch] has been created and the \`main\` branch is getting its version number bumped from $cur to $num.
 
           Maintainers should take a moment to review the [release notes][RELEASES.md] for $cur and any updates should be made directly to the [release branch][branch].
 
-          Another automated PR will be made in roughly 2 weeks time when for the actual release itself.
+          A second automated PR has been opened against the [release branch][branch] to publish \`$cur-rc.1\` as a release candidate, and another automated PR will be made in roughly 2 weeks time for the actual release itself.
 
-          If any issues arise on the \`main\` branch before the release is made then the issue should first be fixed on \`main\` and then backport to the \`release-$cur\` branch.
+          If any issues arise on the \`main\` branch before the release is made then the issue should first be fixed on \`main\` and then backport to the \`$branch\` branch.
 
-          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/release-$cur/RELEASES.md
-          [branch]: https://github.com/${{ github.repository }}/tree/release-$cur
+          [RELEASES.md]: https://github.com/${{ github.repository }}/blob/$branch/RELEASES.md
+          [branch]: https://github.com/${{ github.repository }}/tree/$branch
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
           EOF
-        if: >-
-          github.event.schedule == '0 0 5 * *' ||
-          github.event.inputs.action == 'cut'
+          gh pr create --repo ${{ github.repository }} \
+            --head ci/bump-to-$num \
+            --base main \
+            --title "Bump Wasmtime to $num" \
+           --body-file pr-body-main
+
+          # Now go back to where the release branch was cut and prepare the
+          # first release candidate for it.
+          git reset --hard $base
+          git submodule update --init --recursive
+          cargo run -p wasmtime-publish bump-rc
+          rc=$(./ci/print-current-version.sh)
+          cargo vet
+          git commit -a -F-<<EOF
+          Release Wasmtime $rc
+
+          [automatically-tag-and-release-this-commit]
+          EOF
+
+          git push origin HEAD:ci/rc-$rc
+          cat > pr-body-rc <<-EOF
+          This is an [automated pull request][process] from CI which will publish \`$rc\` as a release candidate for the upcoming $cur release. When this PR is merged a \`v$rc\` tag will be created, the crates will be published to crates.io, and a GitHub pre-release will be produced.
+
+          [process]: https://docs.wasmtime.dev/contributing-release-process.html
+          EOF
+          gh pr create --repo ${{ github.repository }} \
+            --head ci/rc-$rc \
+            --base $branch \
+            --title "Release Wasmtime $rc" \
+            --body-file pr-body-rc
 
       - name: Perform latest release
+        if: >-
+          github.event.schedule == '0 0 20 * *' ||
+          github.event.inputs.action == 'release-latest'
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           set -ex
           git fetch origin
 
           # Determine the latest release branch
-          rustc ci/find-latest-release.rs -o /tmp/find-latest-release
-          cur=`/tmp/find-latest-release`
+          cur=$(cargo run -q -p wasmtime-publish latest-release)
 
-          # Move to the most recent release branch, update the release date and
-          # commit it, indicating that the commit is what will get tagged and
-          # released
+          # Move to the most recent release branch, drop the release-candidate
+          # suffix from all version numbers, update the release date and commit
+          # it, indicating that the commit is what will get tagged and released.
           git reset --hard origin/release-$cur
           git submodule update --init --recursive
+          cargo run -p wasmtime-publish bump-drop-rc
+          cargo vet
           sed -i "s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
           git commit --allow-empty -a -F-<<EOF
           Release Wasmtime $cur
@@ -134,32 +179,64 @@ jobs:
           [automatically-tag-and-release-this-commit]
           EOF
 
-          # Push the result to a branch and setup metadata for the step below
-          # that creates a PR
+          # Push the result to a branch and open a PR for it
           git push origin HEAD:ci/release-$cur
-          echo "PR_HEAD=ci/release-$cur" >> $GITHUB_ENV
-          echo "PR_TITLE=Release Wasmtime $cur" >> $GITHUB_ENV
-          echo "PR_BASE=release-$cur" >> $GITHUB_ENV
           cat > pr-body <<-EOF
           This is an [automated pull request][process] from CI which is intended to notify maintainers that it's time to release Wasmtime $cur. The [release branch][branch] was created roughly two weeks ago and it's now time for it to be published and released.
 
-          It's recommended that maintainers double-check that [RELEASES.md] is up-to-date and that there are no known issues before merging this PR. When this PR is merged a release tag will automatically created, crates will be published, and CI artifacts will be produced.
+          It's recommended that maintainers double-check that [RELEASES.md] is up-to-date and that there are no known issues before merging this PR. When this PR is merged a release tag will automatically created, crates will be published, CI artifacts will be produced, and the final release candidate will be yanked from crates.io.
 
           [RELEASES.md]: https://github.com/${{ github.repository }}/blob/release-$cur/RELEASES.md
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
           [branch]: https://github.com/${{ github.repository }}/tree/release-$cur
           EOF
-        if: >-
-          github.event.schedule == '0 0 20 * *' ||
-          github.event.inputs.action == 'release-latest'
+          gh pr create --repo ${{ github.repository }} \
+            --head ci/release-$cur \
+            --base release-$cur \
+            --title "Release Wasmtime $cur" \
+            --body-file pr-body
+
+      - name: Release a new release candidate
+        if: github.event.inputs.action == 'release-rc'
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |
+          set -ex
+          # Move to the next release candidate for this branch. Note that this
+          # commit message indicates that on-merge a release will be made.
+          cargo run -p wasmtime-publish bump-rc
+          # Update `cargo vet` entries for all the new crate versions
+          cargo vet
+          rc=$(./ci/print-current-version.sh)
+          git commit -a -F-<<EOF
+          Release Wasmtime $rc
+
+          [automatically-tag-and-release-this-commit]
+          EOF
+
+          # Push the result to a branch and open a PR for it
+          git push origin HEAD:ci/rc-$rc
+          cat > pr-body <<-EOF
+          This is an [automated pull request][process] from CI to publish \`$rc\` as a new release candidate, requested by @${{ github.actor }}. When this PR is merged a \`v$rc\` tag will be created, the crates will be published to crates.io, a GitHub pre-release will be produced, and the previous release candidate will be yanked from crates.io.
+
+          [process]: https://docs.wasmtime.dev/contributing-release-process.html
+          EOF
+          gh pr create --repo ${{ github.repository }} \
+            --head ci/rc-$rc \
+            --base ${{ github.ref_name }} \
+            --title "Release Wasmtime $rc" \
+            --body-file pr-body
 
       - name: Bump and release patch version number
+        if: github.event.inputs.action == 'release-patch'
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: |
           set -ex
           # Update version numbers on a patch basis and update RELEASES.md if a
           # patch release marker is already in there. Note that this commit
           # message indicates that on-merge a release will be made.
-          ./publish bump-patch
+          cargo run -p wasmtime-publish bump-patch
           # Update `cargo vet` entries for all the new crate versions
           cargo vet
           sed -i "s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
@@ -170,12 +247,8 @@ jobs:
           [automatically-tag-and-release-this-commit]
           EOF
 
-          # Push the result to a branch and setup metadata for the step below
-          # that creates a PR
+          # Push the result to a branch and open a PR for it
           git push origin HEAD:ci/bump-to-$num
-          echo "PR_HEAD=ci/bump-to-$num" >> $GITHUB_ENV
-          echo "PR_TITLE=Release Wasmtime $num" >> $GITHUB_ENV
-          echo "PR_BASE=${{ github.ref_name }}" >> $GITHUB_ENV
           cat > pr-body <<-EOF
           This is an [automated pull request][process] from CI to create a patch release for Wasmtime $num, requested by @${{ github.actor }}.
 
@@ -184,28 +257,8 @@ jobs:
           [RELEASES.md]: https://github.com/${{ github.repository }}/blob/release-$num/RELEASES.md
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
           EOF
-
-        if: github.event.inputs.action == 'release-patch'
-
-      - name: Make a PR
-        # Note that the syntax here is kinda funky, and the general gist is that
-        # I couldn't figure out a good way to have a multiline string-literal
-        # become a json-encoded string literal to send to GitHub. This
-        # represents my best attempt.
-        run: |
-          set -ex
-          body=$(jq -sR < ./pr-body)
-
-          curl --include --request POST \
-            https://api.github.com/repos/${{ github.repository }}/pulls \
-            --header "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-            --data @- << EOF
-          {
-            "head": "$PR_HEAD",
-            "base": "$PR_BASE",
-            "title": "$PR_TITLE",
-            "body": $body,
-            "maintainer_can_modify": true
-
-          }
-          EOF
+          gh pr create --repo ${{ github.repository }} \
+            --head ci/bump-to-$num \
+            --base ${{ github.ref_name }} \
+            --title "Release Wasmtime $num" \
+            --body-file pr-body

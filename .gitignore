@@ -18,7 +18,6 @@ target
 .z3-trace
 foo
 .cargo
-publish
 vendor
 examples/build
 examples/.cache
