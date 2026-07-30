@@ -678,6 +678,70 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.fuel_check(builder);
     }
 
+    /// Consumes `units * cost_per_unit` fuel, saturating the charge at
+    /// `i64::MAX` so that an oversized unsigned operand cannot wrap around and
+    /// add fuel instead.
+    fn consume_variable_fuel(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        units: ir::Value,
+        cost_per_unit: u8,
+    ) {
+        let may_exceed_i64_max = match builder.func.dfg.value_type(units) {
+            I32 => false,
+            I64 => true,
+            ty => unreachable!("unsupported variable fuel unit type: {ty}"),
+        };
+        self.consume_variable_fuel_impl(builder, units, cost_per_unit, may_exceed_i64_max);
+    }
+
+    /// Like [`Self::consume_variable_fuel`], but for a unit count whose product
+    /// with `cost_per_unit` is statically known to fit in an `i64`.
+    fn consume_bounded_variable_fuel(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        units: ir::Value,
+        cost_per_unit: u8,
+    ) {
+        self.consume_variable_fuel_impl(builder, units, cost_per_unit, false);
+    }
+
+    fn consume_variable_fuel_impl(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        units: ir::Value,
+        cost_per_unit: u8,
+        may_exceed_i64_max: bool,
+    ) {
+        if !self.tunables.consume_fuel || cost_per_unit == 0 {
+            return;
+        }
+
+        let units = match builder.func.dfg.value_type(units) {
+            I32 => builder.ins().uextend(I64, units),
+            I64 => units,
+            ty => unreachable!("unsupported variable fuel unit type: {ty}"),
+        };
+        let fuel = if cost_per_unit == 1 {
+            units
+        } else {
+            builder.ins().imul_imm_s(units, i64::from(cost_per_unit))
+        };
+        let fuel = if may_exceed_i64_max {
+            let max = builder.ins().iconst(I64, i64::MAX);
+            let max_units = builder
+                .ins()
+                .iconst(I64, i64::MAX / i64::from(cost_per_unit));
+            let saturate = builder
+                .ins()
+                .icmp(IntCC::UnsignedGreaterThan, units, max_units);
+            builder.ins().select(saturate, max, fuel)
+        } else {
+            fuel
+        };
+        self.manual_fuel_check(builder, fuel);
+    }
+
     fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
         debug_assert!(self.epoch_deadline_var.is_reserved_value());
         self.epoch_deadline_var = builder.declare_var(ir::types::I64);
@@ -2626,6 +2690,11 @@ impl FuncEnvironment<'_> {
             self.table_vmctx_and_defined_index(&mut pos, table_index);
         let index_type = table.idx_type;
         let delta64 = self.cast_index_to_i64(&mut pos, delta, index_type);
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .table_grow_per_element;
 
         // Call out to the host to perform the actual growth of the underlying
         // table. This will initialize table slots as all null. Afterwards the
@@ -2649,22 +2718,48 @@ impl FuncEnvironment<'_> {
         // Conditionally call that on growth success, and otherwise fall through
         // to continue to yield -1 for this growth operation.
         let current_block = builder.current_block().unwrap();
+        let failed_block = builder.create_block();
         let fill_block = builder.create_block();
         let done_block = builder.create_block();
 
-        builder.insert_block_after(fill_block, current_block);
+        builder.insert_block_after(failed_block, current_block);
+        builder.insert_block_after(fill_block, failed_block);
         builder.insert_block_after(done_block, fill_block);
 
+        // Commit the operator's flat cost before branching so translating the
+        // failed path cannot consume fuel that also belongs to the success path.
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+        }
         let failure = builder.ins().iconst(index_type_to_ir_type(index_type), -1);
         let failed = builder.ins().icmp(IntCC::Equal, result_idx, failure);
-        builder.ins().brif(failed, done_block, &[], fill_block, &[]);
+        builder
+            .ins()
+            .brif(failed, failed_block, &[], fill_block, &[]);
+
+        // A failed attempt performs no initialization loop, but still charge
+        // for the requested growth so repeated failures are not free.
+        builder.switch_to_block(failed_block);
+        self.consume_variable_fuel(builder, delta, cost);
+        builder.ins().jump(done_block, &[]);
 
         builder.switch_to_block(fill_block);
-        self.translate_table_fill(builder, table_index, result_idx, init_value, delta)?;
+        self.translate_entity_fill(
+            builder,
+            CheckedEntity::Table {
+                table: table_index,
+                initialized: true,
+            },
+            result_idx,
+            init_value,
+            delta,
+            cost,
+        )?;
         builder.ins().jump(done_block, &[]);
 
         builder.switch_to_block(done_block);
 
+        builder.seal_block(failed_block);
         builder.seal_block(fill_block);
         builder.seal_block(done_block);
 
@@ -2807,6 +2902,11 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .table_fill_per_element;
         self.translate_entity_fill(
             builder,
             CheckedEntity::Table {
@@ -2816,6 +2916,7 @@ impl FuncEnvironment<'_> {
             dst,
             val,
             len,
+            cost,
         )
     }
 
@@ -2952,7 +3053,8 @@ impl FuncEnvironment<'_> {
         elem: ir::Value,
         len: ir::Value,
     ) -> WasmResult<ir::Value> {
-        gc::translate_array_new(self, builder, array_type_index, elem, len)
+        let cost = self.tunables.operator_cost.variable().array_new_per_element;
+        gc::translate_array_new(self, builder, array_type_index, elem, len, cost)
     }
 
     pub fn translate_array_new_default(
@@ -2961,7 +3063,12 @@ impl FuncEnvironment<'_> {
         array_type_index: TypeIndex,
         len: ir::Value,
     ) -> WasmResult<ir::Value> {
-        gc::translate_array_new_default(self, builder, array_type_index, len)
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .array_new_default_per_element;
+        gc::translate_array_new_default(self, builder, array_type_index, len, cost)
     }
 
     pub fn translate_array_new_fixed(
@@ -2983,6 +3090,11 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<ir::Value> {
         let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
         let array_layout = self.array_layout(interned_type_index)?.clone();
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .array_new_data_per_element;
         gc::translate_array_new_entity(
             self,
             builder,
@@ -2993,6 +3105,7 @@ impl FuncEnvironment<'_> {
             },
             data_offset,
             len,
+            cost,
         )
     }
 
@@ -3004,6 +3117,11 @@ impl FuncEnvironment<'_> {
         elem_offset: ir::Value,
         len: ir::Value,
     ) -> WasmResult<ir::Value> {
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .array_new_elem_per_element;
         gc::translate_array_new_entity(
             self,
             builder,
@@ -3011,6 +3129,7 @@ impl FuncEnvironment<'_> {
             CheckedEntity::Elem(elem_index),
             elem_offset,
             len,
+            cost,
         )
     }
 
@@ -3027,6 +3146,11 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let dst_ty = self.module.types[dst_array_type_index].unwrap_module_type_index();
         let src_ty = self.module.types[src_array_type_index].unwrap_module_type_index();
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .array_copy_per_element;
         self.translate_entity_copy(
             builder,
             CheckedEntity::Array {
@@ -3042,6 +3166,7 @@ impl FuncEnvironment<'_> {
             dst_index,
             src_index,
             len,
+            cost,
         )
     }
 
@@ -3055,6 +3180,11 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) -> WasmResult<()> {
         let ty = self.module.types[array_type_index].unwrap_module_type_index();
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .array_fill_per_element;
         self.translate_entity_fill(
             builder,
             CheckedEntity::Array {
@@ -3065,6 +3195,7 @@ impl FuncEnvironment<'_> {
             index,
             value,
             len,
+            cost,
         )
     }
 
@@ -3080,6 +3211,11 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let ty = self.module.types[array_type_index].unwrap_module_type_index();
         let array_layout = self.array_layout(ty)?.clone();
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .array_init_data_per_element;
         self.translate_entity_copy(
             builder,
             CheckedEntity::Array {
@@ -3094,6 +3230,7 @@ impl FuncEnvironment<'_> {
             dst_index,
             data_offset,
             len,
+            cost,
         )
     }
 
@@ -3108,6 +3245,11 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) -> WasmResult<()> {
         let ty = self.module.types[array_type_index].unwrap_module_type_index();
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .array_init_elem_per_element;
         self.translate_entity_copy(
             builder,
             CheckedEntity::Array {
@@ -3119,6 +3261,7 @@ impl FuncEnvironment<'_> {
             dst_index,
             elem_offset,
             len,
+            cost,
         )
     }
 
@@ -3490,6 +3633,9 @@ impl FuncEnvironment<'_> {
             self.memory_vmctx_and_defined_index(&mut pos, index);
 
         let index_type = self.memory(index).idx_type;
+        let cost = self.tunables.operator_cost.variable().memory_grow_per_page;
+        self.consume_variable_fuel(builder, val, cost);
+        let mut pos = builder.cursor();
         let val = self.cast_index_to_i64(&mut pos, val, index_type);
         let call_inst = pos
             .ins()
@@ -3586,7 +3732,8 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        self.translate_entity_copy(builder, dst_index, src_index, dst, src, len)
+        let cost = self.tunables.operator_cost.variable().memory_copy_per_byte;
+        self.translate_entity_copy(builder, dst_index, src_index, dst, src, len, cost)
     }
 
     /// Perform a raw bulk-memory-like libcall.
@@ -3611,12 +3758,15 @@ impl FuncEnvironment<'_> {
             const_len: Some(bytes),
             src_entity,
             dst_entity,
+            fuel,
             ..
         } = op
         {
             if bytes <= INLINE_COPY_MAX_BYTES {
                 if self.tunables.consume_fuel {
-                    self.fuel_consumed += bytes as i64;
+                    let units = bytes / u64::from(fuel.bytes_per_unit);
+                    self.fuel_consumed +=
+                        i64::try_from(units * u64::from(fuel.cost_per_unit)).unwrap();
                 }
                 let src_region = self.bulk_copy_alias_region(builder.func, src_entity);
                 let dst_region = self.bulk_copy_alias_region(builder.func, dst_entity);
@@ -3636,36 +3786,35 @@ impl FuncEnvironment<'_> {
         let pointer_type = self.pointer_type();
 
         // Performs a raw call to the actual libcall, as dictated by the
-        // provided `op`. This unconditionally inserts epoch/fuel checks for all
-        // calls.
+        // provided `op`. This inserts configured epoch/fuel checks before the
+        // call.
         let raw_call =
-            |env: &mut FuncEnvironment<'_>, builder: &mut FunctionBuilder<'_>, op: &_| {
+            |env: &mut FuncEnvironment<'_>, builder: &mut FunctionBuilder<'_>, op: &BulkOp| {
                 if env.tunables.epoch_interruption {
                     env.epoch_check(builder);
                 }
+                let fuel = op.fuel();
+                if env.tunables.consume_fuel && fuel.cost_per_unit != 0 {
+                    let byte_len = op.len();
+                    debug_assert!(fuel.bytes_per_unit.is_power_of_two());
+                    let units = if fuel.bytes_per_unit == 1 {
+                        byte_len
+                    } else {
+                        builder
+                            .ins()
+                            .ushr_imm_u(byte_len, i64::from(fuel.bytes_per_unit.trailing_zeros()))
+                    };
+                    // With fuel enabled all calls emitted below are limited to
+                    // `UNINTERRUPTABLE_CHUNK_SIZE`, so this multiplication
+                    // cannot exceed `i64::MAX` even at the maximum `u8` rate.
+                    env.consume_bounded_variable_fuel(builder, units, fuel.cost_per_unit);
+                }
                 match *op {
                     BulkOp::MemoryCopy { dst, src, len, .. } => {
-                        if env.tunables.consume_fuel {
-                            // Note that fuel is always a 64-bit counter.
-                            let fuel_consumed = match env.pointer_type() {
-                                ir::types::I32 => builder.ins().uextend(ir::types::I64, len),
-                                ir::types::I64 => len,
-                                _ => unreachable!(),
-                            };
-                            env.manual_fuel_check(builder, fuel_consumed);
-                        }
                         let memory_copy = env.builtin_functions.memory_copy(&mut builder.func);
                         builder.ins().call(memory_copy, &[vmctx, dst, src, len]);
                     }
-                    BulkOp::MemoryFill { dst, val, len } => {
-                        if env.tunables.consume_fuel {
-                            let fuel_consumed = match env.pointer_type() {
-                                ir::types::I32 => builder.ins().uextend(ir::types::I64, len),
-                                ir::types::I64 => len,
-                                _ => unreachable!(),
-                            };
-                            env.manual_fuel_check(builder, fuel_consumed);
-                        }
+                    BulkOp::MemoryFill { dst, val, len, .. } => {
                         let memory_fill = env.builtin_functions.memory_fill(&mut builder.func);
                         builder.ins().call(memory_fill, &[vmctx, dst, val, len]);
                     }
@@ -3879,6 +4028,7 @@ impl FuncEnvironment<'_> {
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
+        cost_per_unit: u8,
     ) -> WasmResult<()> {
         let entity = entity.into();
         let idx_type = entity.index_type(self);
@@ -3899,11 +4049,22 @@ impl FuncEnvironment<'_> {
                         dst: raw_dst_addr,
                         val,
                         len: len_ptr,
+                        fuel: BulkFuel {
+                            cost_per_unit,
+                            bytes_per_unit: 1,
+                        },
                     },
                 );
             }
             CheckedEntity::Table { .. } | CheckedEntity::Array { .. } => {
-                self.emit_raw_array_or_table_fill(builder, entity, raw_dst_addr, val, len_ptr)?;
+                self.emit_raw_array_or_table_fill(
+                    builder,
+                    entity,
+                    raw_dst_addr,
+                    val,
+                    len_ptr,
+                    cost_per_unit,
+                )?;
             }
             // Not allowed to be written to in wasm.
             CheckedEntity::Data { .. } | CheckedEntity::Elem(_) | CheckedEntity::RuntimeData(_) => {
@@ -3935,6 +4096,7 @@ impl FuncEnvironment<'_> {
         dst_elem_addr: ir::Value,
         value: ir::Value,
         copy_len: ir::Value,
+        cost_per_element: u8,
     ) -> WasmResult<()> {
         let pointer_ty = self.pointer_type();
 
@@ -3960,6 +4122,10 @@ impl FuncEnvironment<'_> {
                     dst: dst_elem_addr,
                     val: value,
                     len: copy_byte_len,
+                    fuel: BulkFuel {
+                        cost_per_unit: cost_per_element,
+                        bytes_per_unit: u8::try_from(elem_size).unwrap(),
+                    },
                 },
             );
             return Ok(());
@@ -4026,9 +4192,9 @@ impl FuncEnvironment<'_> {
         // by the element size, then see if we turn again or exit.
         builder.switch_to_block(loop_block);
         let elem_addr = builder.append_block_param(loop_block, pointer_ty);
-        // Consume one unit of fuel per loop iteration.
+        // Consume the configured cost for this element before writing it.
         if self.tunables.consume_fuel {
-            self.fuel_consumed += 1;
+            self.fuel_consumed += i64::from(cost_per_element);
         }
         self.translate_loop_header(builder)?;
         match entity {
@@ -4145,7 +4311,8 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        self.translate_entity_fill(builder, memory_index, dst, val, len)
+        let cost = self.tunables.operator_cost.variable().memory_fill_per_byte;
+        self.translate_entity_fill(builder, memory_index, dst, val, len, cost)
     }
 
     pub fn translate_memory_init(
@@ -4158,6 +4325,7 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) -> WasmResult<()> {
         let seg_index = DataIndex::from_u32(seg_index);
+        let cost = self.tunables.operator_cost.variable().memory_init_per_byte;
         self.translate_entity_copy(
             builder,
             memory_index,
@@ -4168,6 +4336,7 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             len,
+            cost,
         )
     }
 
@@ -4218,6 +4387,7 @@ impl FuncEnvironment<'_> {
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
+        cost_per_unit: u8,
     ) -> WasmResult<()> {
         let dst_entity = dst_entity.into();
         let src_entity = src_entity.into();
@@ -4279,6 +4449,10 @@ impl FuncEnvironment<'_> {
                         const_len: const_count,
                         src_entity,
                         dst_entity,
+                        fuel: BulkFuel {
+                            cost_per_unit,
+                            bytes_per_unit: 1,
+                        },
                     },
                 );
                 Ok(())
@@ -4296,6 +4470,7 @@ impl FuncEnvironment<'_> {
                     len_ptr,
                     src,
                     const_count,
+                    cost_per_unit,
                 ),
 
             // Cannot copy into a data or element segment in wasm.
@@ -4506,6 +4681,11 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .table_copy_per_element;
         self.translate_entity_copy(
             builder,
             CheckedEntity::Table {
@@ -4519,6 +4699,7 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             len,
+            cost,
         )
     }
 
@@ -4548,6 +4729,7 @@ impl FuncEnvironment<'_> {
         copy_len: ir::Value,
         src_index: ir::Value,
         const_count: Option<u64>,
+        cost_per_element: u8,
     ) -> WasmResult<()> {
         let pointer_type = self.pointer_type();
         assert_eq!(builder.func.dfg.value_type(dst_elem_addr), pointer_type);
@@ -4635,6 +4817,10 @@ impl FuncEnvironment<'_> {
                     const_len,
                     src_entity,
                     dst_entity,
+                    fuel: BulkFuel {
+                        cost_per_unit: cost_per_element,
+                        bytes_per_unit: u8::try_from(dst_element_size).unwrap(),
+                    },
                 },
             );
             return Ok(());
@@ -4651,6 +4837,7 @@ impl FuncEnvironment<'_> {
             src_elem_addr,
             copy_len,
             src_index,
+            cost_per_element,
             &|this, builder, dst, src, src_index| {
                 let write_ty = dst_entity.storage_type(this);
                 let val = match src_entity {
@@ -4857,6 +5044,7 @@ impl FuncEnvironment<'_> {
         src_elem_addr: ir::Value,
         copy_len: ir::Value,
         src_index: ir::Value,
+        cost_per_element: u8,
         copy_one: &dyn Fn(
             &mut Self,
             &mut FunctionBuilder<'_>,
@@ -5004,9 +5192,9 @@ impl FuncEnvironment<'_> {
         let src_cur = builder.append_block_param(forward_block, self.pointer_type());
         let src_index = builder.append_block_param(forward_block, src_index_ty);
         let forward_keepalives = append_keepalive_params(builder, forward_block);
-        // Consume a single unit of fuel on each iteration of the loop.
+        // Consume the configured cost for this element before copying it.
         if self.tunables.consume_fuel {
-            self.fuel_consumed += 1;
+            self.fuel_consumed += i64::from(cost_per_element);
         }
         self.translate_loop_header(builder)?;
         copy_one(self, builder, dst_cur, src_cur, src_index)?;
@@ -5035,7 +5223,7 @@ impl FuncEnvironment<'_> {
         let src_index = builder.append_block_param(backwards_block, src_index_ty);
         let backward_keepalives = append_keepalive_params(builder, backwards_block);
         if self.tunables.consume_fuel {
-            self.fuel_consumed += 1;
+            self.fuel_consumed += i64::from(cost_per_element);
         }
         self.translate_loop_header(builder)?;
         let dst_cur = {
@@ -5088,6 +5276,11 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .table_init_per_element;
         self.translate_entity_copy(
             builder,
             CheckedEntity::Table {
@@ -5098,6 +5291,7 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             len,
+            cost,
         )
     }
 
@@ -5996,6 +6190,11 @@ impl FuncEnvironment<'_> {
             index_type_to_ir_type(ty.idx_type),
             ty.limits.min.cast_signed(),
         );
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .table_fill_per_element;
         self.translate_entity_fill(
             builder,
             CheckedEntity::Table {
@@ -6005,6 +6204,7 @@ impl FuncEnvironment<'_> {
             dst,
             val,
             len,
+            cost,
         )
     }
 
@@ -6035,6 +6235,12 @@ impl FuncEnvironment<'_> {
             offset,
             segment_len,
         )?;
+        let cost = self
+            .tunables
+            .operator_cost
+            .variable()
+            .table_init_per_element;
+        self.consume_variable_fuel(builder, segment_len, cost);
 
         // Re-use the `table.set` translation for making this a simple function
         // to define. That re-executes the bounds check which is a bit
@@ -6106,7 +6312,8 @@ impl FuncEnvironment<'_> {
         // Model the initialization here as a `memory.init`.
         let len = self.load_runtime_data_length(builder, data);
         let start = builder.ins().iconst(I32, 0);
-        self.translate_entity_copy(builder, memory, data, offset, start, len)?;
+        let cost = self.tunables.operator_cost.variable().memory_init_per_byte;
+        self.translate_entity_copy(builder, memory, data, offset, start, len, cost)?;
 
         // Finalize control-flow for the `MemorySegmentOffset::Static` case
         // above.
@@ -6276,6 +6483,7 @@ enum BulkOp {
         const_len: Option<u64>,
         src_entity: CheckedEntity,
         dst_entity: CheckedEntity,
+        fuel: BulkFuel,
     },
 
     /// A `memory.fill` operation, setting all bytes of `dst` to `val`.
@@ -6288,7 +6496,29 @@ enum BulkOp {
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
+        fuel: BulkFuel,
     },
+}
+
+impl BulkOp {
+    fn len(&self) -> ir::Value {
+        match self {
+            BulkOp::MemoryCopy { len, .. } | BulkOp::MemoryFill { len, .. } => *len,
+        }
+    }
+
+    fn fuel(&self) -> BulkFuel {
+        match self {
+            BulkOp::MemoryCopy { fuel, .. } | BulkOp::MemoryFill { fuel, .. } => *fuel,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+struct BulkFuel {
+    cost_per_unit: u8,
+    /// Number of copied bytes represented by one billable unit.
+    bytes_per_unit: u8,
 }
 
 /// A list of entities which can participate in various kinds of bulk operations

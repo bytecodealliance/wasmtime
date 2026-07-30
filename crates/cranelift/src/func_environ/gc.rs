@@ -771,6 +771,7 @@ pub fn translate_array_new(
     array_type_index: TypeIndex,
     elem: ir::Value,
     len: ir::Value,
+    cost_per_element: u8,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new({array_type_index:?}, {elem:?}, {len:?})");
     let result =
@@ -787,6 +788,7 @@ pub fn translate_array_new(
         zero,
         elem,
         len,
+        cost_per_element,
     )?;
     log::trace!("translate_array_new(..) -> {result:?}");
     Ok(result)
@@ -797,6 +799,7 @@ pub fn translate_array_new_default(
     builder: &mut FunctionBuilder,
     array_type_index: TypeIndex,
     len: ir::Value,
+    cost_per_element: u8,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new_default({array_type_index:?}, {len:?})");
 
@@ -817,6 +820,7 @@ pub fn translate_array_new_default(
         zero,
         elem,
         len,
+        cost_per_element,
     )?;
     Ok(result)
 }
@@ -1720,6 +1724,7 @@ pub fn translate_array_new_entity(
     entity: CheckedEntity,
     entity_offset: ir::Value,
     len: ir::Value,
+    cost_per_element: u8,
 ) -> WasmResult<ir::Value> {
     // Before actually allocating this array first do a bounds-check on the
     // passive entity itself.
@@ -1739,6 +1744,7 @@ pub fn translate_array_new_entity(
         dst,
         entity_offset,
         len,
+        cost_per_element,
     )?;
 
     Ok(array)

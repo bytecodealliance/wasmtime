@@ -693,3 +693,279 @@ fn custom_operator_cost(config: &mut Config) -> Result<()> {
 
     Ok(())
 }
+
+#[wasmtime_test(wasm_features(bulk_memory, reference_types, gc, function_references))]
+#[cfg_attr(miri, ignore)]
+fn custom_variable_operator_cost(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+
+    let mut op_cost = OperatorCost {
+        I32Const: 0,
+        I64Const: 0,
+        RefNull: 0,
+        LocalGet: 0,
+        LocalSet: 0,
+        MemoryCopy: 59,
+        MemoryFill: 0,
+        MemoryInit: 0,
+        MemoryGrow: 61,
+        TableCopy: 0,
+        TableFill: 67,
+        TableInit: 0,
+        TableGrow: 0,
+        ArrayCopy: 73,
+        ArrayFill: 0,
+        ArrayNewData: 71,
+        ArrayInitData: 0,
+        ArrayNewElem: 0,
+        ArrayInitElem: 0,
+        ArrayNewDefault: 0,
+        ArrayNew: 0,
+        ..Default::default()
+    };
+    op_cost.variable = VariableOperatorCost {
+        memory_copy_per_byte: 2,
+        memory_fill_per_byte: 3,
+        memory_init_per_byte: 5,
+        memory_grow_per_page: 7,
+        table_copy_per_element: 11,
+        table_fill_per_element: 13,
+        table_init_per_element: 17,
+        table_grow_per_element: 19,
+        array_copy_per_element: 23,
+        array_fill_per_element: 29,
+        array_new_data_per_element: 31,
+        array_init_data_per_element: 37,
+        array_new_elem_per_element: 41,
+        array_init_elem_per_element: 43,
+        array_new_default_per_element: 47,
+        array_new_per_element: 53,
+    };
+    config.operator_cost(op_cost.clone());
+
+    let wasm = wat::parse_str(
+        r#"(module
+            (type $i64_array (array (mut i64)))
+            (type $i32_array (array (mut i32)))
+            (type $ref_array (array (mut funcref)))
+            (memory 1 6)
+            (table 5 10 funcref)
+            (data $data "abcdefghijklmnopqrstuvwxyz")
+            (func $f)
+            (elem $elem func $f $f $f $f $f)
+
+            (func (export "main")
+                (local $i64_values (ref null $i64_array))
+                (local $i32_values (ref null $i32_array))
+                (local $ref_values (ref null $ref_array))
+
+                i32.const 0 i32.const 0 i32.const 5 memory.copy
+                i32.const 0 i32.const 0 i32.const 5 memory.fill
+                i32.const 0 i32.const 0 i32.const 5 memory.init $data
+                i32.const 5 memory.grow drop
+
+                i32.const 0 i32.const 0 i32.const 5 table.copy
+                i32.const 0 ref.null func i32.const 5 table.fill
+                i32.const 0 i32.const 0 i32.const 5 table.init $elem
+                ref.null func i32.const 5 table.grow drop
+
+                i64.const 0 i32.const 5 array.new $i64_array
+                local.set $i64_values
+                i32.const 5 array.new_default $i64_array drop
+                i32.const 0 i32.const 5 array.new_data $i32_array $data
+                local.set $i32_values
+                i32.const 0 i32.const 5 array.new_elem $ref_array $elem
+                local.set $ref_values
+
+                local.get $i64_values i32.const 0
+                local.get $i64_values i32.const 0
+                i32.const 5 array.copy $i64_array $i64_array
+                local.get $i64_values i32.const 0 i64.const 0 i32.const 5
+                array.fill $i64_array
+                local.get $i32_values i32.const 0 i32.const 0 i32.const 5
+                array.init_data $i32_array $data
+                local.get $ref_values i32.const 0 i32.const 0 i32.const 5
+                array.init_elem $ref_array $elem)
+        )"#,
+    )?;
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, wasm)?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(10_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+    let initial_fuel = store.get_fuel()?;
+    main.call(&mut store, ())?;
+    let consumed = initial_fuel - store.get_fuel()?;
+
+    const UNITS: u64 = 5;
+    let variable = &op_cost.variable;
+    let base_cost = u64::from(op_cost.MemoryCopy)
+        + u64::from(op_cost.MemoryGrow)
+        + u64::from(op_cost.TableFill)
+        + u64::from(op_cost.ArrayCopy)
+        + u64::from(op_cost.ArrayNewData);
+    let cost_of_execution = base_cost
+        + UNITS
+            * (u64::from(variable.memory_copy_per_byte)
+                + u64::from(variable.memory_fill_per_byte)
+                + u64::from(variable.memory_init_per_byte)
+                + u64::from(variable.memory_grow_per_page)
+                + u64::from(variable.table_copy_per_element)
+                + u64::from(variable.table_fill_per_element)
+                + u64::from(variable.table_init_per_element)
+                + u64::from(variable.table_grow_per_element)
+                + u64::from(variable.array_copy_per_element)
+                + u64::from(variable.array_fill_per_element)
+                + u64::from(variable.array_new_data_per_element)
+                + u64::from(variable.array_init_data_per_element)
+                + u64::from(variable.array_new_elem_per_element)
+                + u64::from(variable.array_init_elem_per_element)
+                + u64::from(variable.array_new_default_per_element)
+                + u64::from(variable.array_new_per_element))
+        + 1;
+    assert_eq!(consumed, cost_of_execution);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn variable_operator_cost_failed_growth(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let mut op_cost = OperatorCost {
+        I32Const: 0,
+        RefNull: 0,
+        MemoryGrow: 0,
+        TableGrow: 0,
+        ..Default::default()
+    };
+    op_cost.variable.memory_grow_per_page = 7;
+    op_cost.variable.table_grow_per_element = 19;
+    config.operator_cost(op_cost.clone());
+
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (memory 1 1)
+            (table 0 0 funcref)
+            (func (export "main")
+                ;; these exceed the max limits so they fail
+                i32.const 5 memory.grow drop
+                ref.null func i32.const 5 table.grow drop)
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(1_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+
+    let initial_fuel = store.get_fuel()?;
+    main.call(&mut store, ())?;
+    let cost_of_execution = 5 * u64::from(op_cost.variable.memory_grow_per_page)
+        + 5 * u64::from(op_cost.variable.table_grow_per_element)
+        + 1;
+    assert_eq!(store.get_fuel()?, initial_fuel - cost_of_execution);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let op_cost = OperatorCost {
+        I32Const: 0,
+        MemoryFill: 0,
+        variable: VariableOperatorCost {
+            memory_fill_per_byte: 7,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    config.operator_cost(op_cost);
+
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (memory 1)
+            (func (export "main")
+                ;; out of bounds fill
+                i32.const 65535 i32.const 0 i32.const 5 memory.fill)
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(1_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+
+    let initial_fuel = store.get_fuel()?;
+    let error = main.call(&mut store, ()).unwrap_err();
+    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
+    // The operation traps during bounds validation, before its five-byte
+    // variable charge or the pending function-entry unit is flushed.
+    assert_eq!(store.get_fuel()?, initial_fuel);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(memory64), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn memory64_variable_operator_cost_saturates(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let mut operator_cost = OperatorCost::default();
+    operator_cost.variable.memory_grow_per_page = 2;
+    config.operator_cost(operator_cost);
+
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (memory i64 0 0)
+            (func (export "grow") (param i64) (result i64)
+                local.get 0 memory.grow)
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(10_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let grow = instance.get_typed_func::<i64, i64>(&mut store, "grow")?;
+
+    // i64::MAX * 2 must saturate at i64::MAX rather than wrap to -2.
+    let error = grow.call(&mut store, i64::MAX).unwrap_err();
+    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(memory64, reference_types), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+#[cfg(target_pointer_width = "64")]
+fn table64_variable_operator_cost_saturates(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let mut operator_cost = OperatorCost::default();
+    operator_cost.variable.table_grow_per_element = 2;
+    config.operator_cost(operator_cost);
+
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (table i64 0 0 funcref)
+            (func (export "grow") (param i64) (result i64)
+                ref.null func local.get 0 table.grow)
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(10_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let grow = instance.get_typed_func::<i64, i64>(&mut store, "grow")?;
+
+    // i64::MAX * 2 must saturate at i64::MAX rather than wrap to -2.
+    let error = grow.call(&mut store, i64::MAX).unwrap_err();
+    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
+
+    Ok(())
+}
