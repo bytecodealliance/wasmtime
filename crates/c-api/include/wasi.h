@@ -227,8 +227,8 @@ typedef size_t wasi_file_perms;
  * The `host_path` argument here is a path name on the host filesystem, and
  * `guest_path` is the name by which it will be known in wasm.
  *
- * The `fs_mutable` argument is the permissions that wasm will have to operate on
- * `guest_path`. If true, operations that mutate the filesystem will be
+ * The `fs_mutable` argument is the permissions that wasm will have to operate
+ * on `guest_path`. If true, operations that mutate the filesystem will be
  * permitted under that path. If false, only read operations will be permitted
  * on under that path.
  */
