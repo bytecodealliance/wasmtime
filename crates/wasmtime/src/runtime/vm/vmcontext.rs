@@ -204,6 +204,7 @@ macro_rules! define_vm_types {
         $svis:vis struct $Name:ident {
             $(
                 $(#[doc = $fdoc:literal])*
+                $(#[aggregate])?
                 $(#[readonly])?
                 $(#[can_move])?
                 $fvis:vis $fname:ident : $fty:tt $(< $fgen:ty >)? ,
@@ -719,178 +720,6 @@ const _: () = {
     )
 };
 
-/// Structure that holds all mutable context that is shared across all instances
-/// in a store, for example data related to fuel or epochs.
-///
-/// `VMStoreContext`s are one-to-one with `wasmtime::Store`s, the same way that
-/// `VMContext`s are one-to-one with `wasmtime::Instance`s. And the same way
-/// that multiple `wasmtime::Instance`s may be associated with the same
-/// `wasmtime::Store`, multiple `VMContext`s hold a pointer to the same
-/// `VMStoreContext` when they are associated with the same `wasmtime::Store`.
-#[derive(Debug)]
-#[repr(C)]
-pub struct VMStoreContext {
-    // NB: 64-bit integer fields are located first with pointer-sized fields
-    // trailing afterwards. That makes the offsets in this structure easier to
-    // calculate on 32-bit platforms as we don't have to worry about the
-    // alignment of 64-bit integers.
-    //
-    /// Indicator of how much fuel has been consumed and is remaining to
-    /// WebAssembly.
-    ///
-    /// This field is typically negative and increments towards positive. Upon
-    /// turning positive a wasm trap will be generated. This field is only
-    /// modified if wasm is configured to consume fuel.
-    pub fuel_consumed: UnsafeCell<i64>,
-
-    /// Deadline epoch for interruption: if epoch-based interruption
-    /// is enabled and the global (per engine) epoch counter is
-    /// observed to reach or exceed this value, the guest code will
-    /// yield if running asynchronously.
-    pub epoch_deadline: UnsafeCell<u64>,
-
-    /// The "store version".
-    ///
-    /// This is used to test whether stack-frame handles referring to
-    /// suspended stack frames remain valid.
-    ///
-    /// The invariant that this upward-counting number must satisfy
-    /// is: the number must be incremented whenever execution starts
-    /// or resumes in the `Store` or when any stack is
-    /// dropped/freed. That way, if we take a reference to some
-    /// suspended stack frame and track the "version" at the time we
-    /// took that reference, if the version still matches, we can be
-    /// sure that nothing could have unwound the referenced Wasm
-    /// frame.
-    ///
-    /// This version number is incremented in exactly one place: the
-    /// Wasm-to-host trampolines, after return from host code. Note
-    /// that this captures both the normal "return into Wasm" case
-    /// (where Wasm frames can subsequently return normally and thus
-    /// invalidate frames), and the "trap/exception unwinds Wasm
-    /// frames" case, which is done internally via the `raise` libcall
-    /// invoked after the main hostcall returns an error, and after we
-    /// increment this version number.
-    ///
-    /// Note that this also handles the fiber/future-drop case because
-    /// because we *always* return into the trampoline to clean up;
-    /// that trampoline immediately raises an error and uses the
-    /// longjmp-like unwind within Cranelift frames to skip over all
-    /// the guest Wasm frames, but not before it increments the
-    /// store's execution version number.
-    ///
-    /// This field is in use only if guest debugging is enabled.
-    pub execution_version: u64,
-
-    /// Current stack limit of the wasm module.
-    ///
-    /// For more information see `crates/cranelift/src/lib.rs`.
-    pub stack_limit: UnsafeCell<usize>,
-
-    /// The `VMMemoryDefinition` for this store's GC heap.
-    pub gc_heap: UnsafeCell<VMMemoryDefinition>,
-
-    /// The value of the frame pointer register in the trampoline used
-    /// to call from Wasm to the host.
-    ///
-    /// Maintained by our Wasm-to-host trampoline, and cleared just
-    /// before calling into Wasm in `catch_traps`.
-    ///
-    /// This member is `0` when Wasm is actively running and has not called out
-    /// to the host.
-    ///
-    /// Used to find the start of a contiguous sequence of Wasm frames
-    /// when walking the stack. Note that we record the FP of the
-    /// *trampoline*'s frame, not the last Wasm frame, because we need
-    /// to know the SP (bottom of frame) of the last Wasm frame as
-    /// well in case we need to resume to an exception handler in that
-    /// frame. The FP of the last Wasm frame can be recovered by
-    /// loading the saved FP value at this FP address.
-    pub last_wasm_exit_trampoline_fp: UnsafeCell<usize>,
-
-    /// The last Wasm program counter before we called from Wasm to the host.
-    ///
-    /// Maintained by our Wasm-to-host trampoline, and cleared just before
-    /// calling into Wasm in `catch_traps`.
-    ///
-    /// This member is `0` when Wasm is actively running and has not called out
-    /// to the host.
-    ///
-    /// Used when walking a contiguous sequence of Wasm frames.
-    pub last_wasm_exit_pc: UnsafeCell<usize>,
-
-    /// The last host stack pointer before we called into Wasm from the host.
-    ///
-    /// Maintained by our host-to-Wasm trampoline. This member is `0` when Wasm
-    /// is not running, and it's set to nonzero once a host-to-wasm trampoline
-    /// is executed.
-    ///
-    /// When a host function is wrapped into a `wasmtime::Func`, and is then
-    /// called from the host, then this member is not changed meaning that the
-    /// previous activation in pointed to by `last_wasm_exit_trampoline_fp` is
-    /// still the last wasm set of frames on the stack.
-    ///
-    /// This field is saved/restored during fiber suspension/resumption
-    /// resumption as part of `CallThreadState::swap`.
-    ///
-    /// This field is used to find the end of a contiguous sequence of Wasm
-    /// frames when walking the stack. Additionally it's used when a trap is
-    /// raised as part of the set of parameters used to resume in the entry
-    /// trampoline's "catch" block.
-    pub last_wasm_entry_sp: UnsafeCell<usize>,
-
-    /// Same as `last_wasm_entry_sp`, but for the `fp` of the trampoline.
-    pub last_wasm_entry_fp: UnsafeCell<usize>,
-
-    /// The last trap handler from a host-to-wasm entry trampoline on the stack.
-    ///
-    /// This field is configured when the host calls into wasm by the trampoline
-    /// itself. It stores the `pc` of an exception handler suitable to handle
-    /// all traps (or uncaught exceptions).
-    pub last_wasm_entry_trap_handler: UnsafeCell<usize>,
-
-    /// Stack information used by stack switching instructions. See documentation
-    /// on `VMStackChain` for details.
-    pub stack_chain: UnsafeCell<VMStackChain>,
-
-    /// A pointer to the embedder's `T` inside a `Store<T>`, for use with the
-    /// `store-data-address` unsafe intrinsic.
-    pub store_data: VmPtr<()>,
-
-    /// The range, in addresses, of the guard page that is currently in use.
-    ///
-    /// This field is used when signal handlers are run to determine whether a
-    /// faulting address lies within the guard page of an async stack for
-    /// example. If this happens then the signal handler aborts with a stack
-    /// overflow message similar to what would happen had the stack overflow
-    /// happened on the main thread. This field is, by default a null..null
-    /// range indicating that no async guard is in use (aka no fiber). In such a
-    /// situation while this field is read it'll never classify a fault as an
-    /// guard page fault.
-    pub async_guard_range: Range<*mut u8>,
-
-    /// The `context.{get,set}` values for the current thread in the component
-    /// model. This is only used for `component-model-async` and slot[1] is only
-    /// used for `component-model-threading`. Despite the conditional use nature
-    /// this is unconditionally present as it avoids the need to make logic in
-    /// `VMOffsets` conditional.
-    ///
-    /// This is saved/restored when threads are swapped in the component model.
-    ///
-    /// NB: `UnsafeCell` because JIT code writes to the slots.
-    pub component_context: UnsafeCell<[u32; NUM_COMPONENT_CONTEXT_SLOTS]>,
-
-    /// JIT-visible current thread for the component model's sync-to-sync
-    /// adapter fast path.
-    ///
-    /// Like `component_context`, this is unconditionally present to keep
-    /// `VMOffsets` logic unconditional even though it is only used when
-    /// `component-model-async` is enabled.
-    ///
-    /// NB: `UnsafeCell` because JIT code writes to this field.
-    pub current_thread: UnsafeCell<VMLazyThread>,
-}
-
 impl VMStoreContext {
     /// From the current saved trampoline FP, get the FP of the last
     /// Wasm frame. If the current saved trampoline FP is null, return
@@ -995,79 +824,33 @@ mod test_vmstore_context {
     use core::mem::offset_of;
     use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
 
+    /// Check the `VMStoreContext` offsets that `for_each_vm_type!` does *not*
+    /// generate: the offsets reaching into the inlined `gc_heap`, and the
+    /// indexed `component_context` slot accessor.
+    ///
+    /// Every plain field offset, plus the size and alignment of the type, is
+    /// already checked by the generated `test_vm_type_layouts::vm_store_context`.
     #[test]
-    fn field_offsets() {
+    fn derived_field_offsets() {
         let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
-            offset_of!(VMStoreContext, stack_limit),
-            usize::from(offsets.ptr.vmstore_context_stack_limit())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, fuel_consumed),
-            usize::from(offsets.ptr.vmstore_context_fuel_consumed())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, epoch_deadline),
-            usize::from(offsets.ptr.vmstore_context_epoch_deadline())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, execution_version),
-            usize::from(offsets.ptr.vmstore_context_execution_version())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, gc_heap),
-            usize::from(offsets.ptr.vmstore_context_gc_heap())
-        );
-        assert_eq!(
             offset_of!(VMStoreContext, gc_heap) + offset_of!(VMMemoryDefinition, base),
-            usize::from(offsets.ptr.vmstore_context_gc_heap_base())
+            usize::from(offsets.ptr.vm_store_context().gc_heap_base())
         );
         assert_eq!(
             offset_of!(VMStoreContext, gc_heap) + offset_of!(VMMemoryDefinition, current_length),
-            usize::from(offsets.ptr.vmstore_context_gc_heap_current_length())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, last_wasm_exit_trampoline_fp),
-            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_trampoline_fp())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, last_wasm_exit_pc),
-            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_pc())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, last_wasm_entry_fp),
-            usize::from(offsets.ptr.vmstore_context_last_wasm_entry_fp())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, last_wasm_entry_sp),
-            usize::from(offsets.ptr.vmstore_context_last_wasm_entry_sp())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, last_wasm_entry_trap_handler),
-            usize::from(offsets.ptr.vmstore_context_last_wasm_entry_trap_handler())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, stack_chain),
-            usize::from(offsets.ptr.vmstore_context_stack_chain())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, store_data),
-            usize::from(offsets.ptr.vmstore_context_store_data())
+            usize::from(offsets.ptr.vm_store_context().gc_heap_current_length())
         );
         assert_eq!(
             offset_of!(VMStoreContext, component_context),
-            usize::from(offsets.ptr.vmstore_context_component_context_slot(0))
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, current_thread),
-            usize::from(offsets.ptr.vmstore_context_current_thread())
+            usize::from(offsets.ptr.vm_store_context().component_context_slot(0))
         );
 
         // Make sure that the calculation for the size of a slot is also
         // accurate.
-        let slot_width = offsets.ptr.vmstore_context_component_context_slot(1)
-            - offsets.ptr.vmstore_context_component_context_slot(0);
+        let slot_width = offsets.ptr.vm_store_context().component_context_slot(1)
+            - offsets.ptr.vm_store_context().component_context_slot(0);
         let mut default = VMStoreContext::default();
         assert_eq!(
             size_of_val(&default.component_context.get_mut()[0]),
@@ -1075,45 +858,6 @@ mod test_vmstore_context {
         );
     }
 }
-
-/// JIT-visible representation of the store's current thread for the component
-/// model, encoded as a single pointer-sized integer so that generated JIT code
-/// can load, store, and compare it with a handful of instructions.
-///
-/// This is the inline fast-path counterpart to the host-side `CurrentThread`: a
-/// fused sync-to-sync adapter records a lazy deferred thread here (a pointer to
-/// a `VMDeferredThread` on its own stack frame) instead of eagerly allocating a
-/// `GuestTask`/`GuestThread` in the host. Host code promotes the deferred
-/// thread into a real one only when it actually needs it; see
-/// `StoreOpaque::force_current_thread`.
-///
-/// This type is a bitpacked equivalent of the following logical `enum`:
-///
-/// ```ignore
-/// enum VMLazyThread {
-///     /// No thread.
-///     None,
-///
-///     /// The lazy thread was promoted and materialized; get it from
-///     /// `ConcurrentState::current_thread`.
-///     Forced,
-///
-///     /// The lazy thread has not been materialized, here is a pointer to the
-///     /// stack-allocated data needed to do force that promotion.
-///     Deferred(*mut VMDeferredThread),
-/// }
-/// ```
-//
-// Bitpacking details:
-//
-// * `None`: `0`
-//
-// * `Forced`: A non-zero value with its low-bit set.
-//
-// * `Deferred`: A non-zero value with its low-bit clear.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct VMLazyThread(Option<VmPtr<VMDeferredThread>>);
 
 impl VMLazyThread {
     const _ASSERT_SIZE: () = assert!(
@@ -1127,40 +871,44 @@ impl VMLazyThread {
 
     /// There is no current thread.
     pub const fn none() -> Self {
-        Self(None)
+        Self { thread: None }
     }
 
     /// A lazy thread that has already been promoted.
     pub const fn forced() -> Self {
-        Self(Some(Self::FORCED))
+        Self {
+            thread: Some(Self::FORCED),
+        }
     }
 
     /// A deferred thread referencing the given on-stack [`VMDeferredThread`].
     pub fn deferred(ptr: NonNull<VMDeferredThread>) -> Self {
         debug_assert_eq!(ptr.addr().get() & Self::FORCED.addr().get(), 0);
-        Self(Some(ptr.into()))
+        Self {
+            thread: Some(ptr.into()),
+        }
     }
 
     /// Returns `true` if there is no current thread.
     pub fn is_none(self) -> bool {
-        self.0.is_none()
+        self.thread.is_none()
     }
 
     /// Returns `true` if a deferred thread has been forced/promoted.
     pub fn is_forced(self) -> bool {
-        self.0.is_some_and(|p| p == Self::FORCED)
+        self.thread.is_some_and(|p| p == Self::FORCED)
     }
 
     /// Returns `true` if this is a deferred thread (i.e. neither `None` nor
     /// forced).
     pub fn is_deferred(self) -> bool {
-        self.0.is_some_and(|p| p != Self::FORCED)
+        self.thread.is_some_and(|p| p != Self::FORCED)
     }
 
     /// Returns the deferred [`VMDeferredThread`] pointer if this is a deferred
     /// thread.
     pub fn as_deferred(self) -> Option<VmPtr<VMDeferredThread>> {
-        self.0
+        self.thread
             .and_then(|p| if p == Self::FORCED { None } else { Some(p) })
     }
 }
@@ -1172,37 +920,10 @@ mod test_vmlazy_thread {
     #[test]
     fn vmlazy_thread_forced() {
         assert_eq!(
-            VMLazyThread::forced().0.unwrap().addr().get(),
+            VMLazyThread::forced().thread.unwrap().addr().get(),
             usize::try_from(wasmtime_environ::VM_LAZY_THREAD_FORCED).unwrap()
         );
     }
-}
-
-/// A deferred component-model thread.
-///
-/// This is an on-stack record pushed by a fused sync-to-sync adapter's fast
-/// path to defer the work that the `enter_sync_call` libcall would otherwise do
-/// eagerly.
-///
-/// The adapter allocates one of these in its own stack frame, links the
-/// previous current-thread value to it via `parent`, and finally points
-/// `VMStoreContext::current_thread` at it. When host code actually needs the
-/// real thread, it walks the `parent` chain to materialize thread state (see
-/// `StoreOpaque::force_current_thread`).
-#[derive(Debug)]
-#[repr(C)]
-pub struct VMDeferredThread {
-    /// The previous value of `VMStoreContext::current_thread`.
-    pub parent: VMLazyThread,
-    /// The caller component instance (a deferred `enter_sync_call` argument).
-    pub caller_instance: u32,
-    /// Whether the callee is async-lifted (a deferred `enter_sync_call` arg).
-    pub callee_async: u32,
-    /// The callee component instance (a deferred `enter_sync_call` argument).
-    pub callee_instance: u32,
-    /// The caller thread's `context.{get,set}` slots, saved on entry and
-    /// restored on the fast-path exit (or recovered while forcing).
-    pub saved_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
 }
 
 #[cfg(test)]
@@ -1211,34 +932,20 @@ mod test_vmdeferred_thread {
     use core::mem::offset_of;
     use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
 
+    /// Check the indexed `saved_context` slot accessor, which
+    /// `for_each_vm_type!` does not generate.
+    ///
+    /// Every plain field offset, plus the size and alignment of the type, is
+    /// already checked by the generated
+    /// `test_vm_type_layouts::vm_deferred_thread`.
     #[test]
-    fn deferred_thread_field_offsets() {
+    fn deferred_thread_derived_field_offsets() {
         let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
         let ptr = offsets.ptr;
         assert_eq!(
-            offset_of!(VMDeferredThread, parent),
-            usize::from(ptr.vmdeferred_thread_parent())
-        );
-        assert_eq!(
-            offset_of!(VMDeferredThread, caller_instance),
-            usize::from(ptr.vmdeferred_thread_caller_instance())
-        );
-        assert_eq!(
-            offset_of!(VMDeferredThread, callee_async),
-            usize::from(ptr.vmdeferred_thread_callee_async())
-        );
-        assert_eq!(
-            offset_of!(VMDeferredThread, callee_instance),
-            usize::from(ptr.vmdeferred_thread_callee_instance())
-        );
-        assert_eq!(
             offset_of!(VMDeferredThread, saved_context),
-            usize::from(ptr.vmdeferred_thread_saved_context(0))
-        );
-        assert_eq!(
-            size_of::<VMDeferredThread>(),
-            usize::from(ptr.size_of_vmdeferred_thread())
+            usize::from(ptr.vm_deferred_thread().saved_context_slot(0))
         );
     }
 }

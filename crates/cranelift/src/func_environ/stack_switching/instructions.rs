@@ -1027,7 +1027,7 @@ pub fn vmctx_load_stack_chain<'a>(
     builder: &mut FunctionBuilder,
     vmctx: ir::Value,
 ) -> VMStackChain {
-    let stack_chain_offset = env.offsets.ptr.vmstore_context_stack_chain().into();
+    let stack_chain_offset = env.offsets.ptr.vm_store_context().stack_chain().into();
 
     // First we need to get the `VMStoreContext`.
     let vm_store_context = env
@@ -1055,7 +1055,7 @@ pub fn vmctx_store_stack_chain<'a>(
     vmctx: ir::Value,
     stack_chain: &VMStackChain,
 ) {
-    let stack_chain_offset = env.offsets.ptr.vmstore_context_stack_chain().into();
+    let stack_chain_offset = env.offsets.ptr.vm_store_context().stack_chain().into();
 
     // First we need to get the `VMStoreContext`.
     let vm_store_context = env

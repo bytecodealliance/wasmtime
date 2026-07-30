@@ -198,7 +198,7 @@ impl Masm for MacroAssembler {
                     masm.load_ptr(
                         Address::offset(
                             scratch_stk_limit.inner(),
-                            ptr_size_u8.vmstore_context_stack_limit().into(),
+                            ptr_size_u8.vm_store_context().stack_limit().into(),
                         ),
                         scratch_stk_limit.writable(),
                     )?;

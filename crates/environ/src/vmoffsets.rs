@@ -66,6 +66,10 @@ fn align(offset: u32, width: u32) -> u32 {
 /// `VM*` type, with a method per field returning that field's offset, plus
 /// `size` and `align` methods.
 macro_rules! define_vm_type_offsets {
+    // `UnsafeCell<T>` is `repr(transparent)`, so it has exactly `T`'s layout;
+    // delegate to the inner type.
+    (@size ($p:expr) UnsafeCell < $inner:tt >) => { define_vm_type_offsets!(@size ($p) $inner) };
+
     // Classify a field type to its size in bytes as a `u32`, given `$p` (the
     // target pointer size as a `u8`). All `VmPtr<_>` and `Option<VmPtr<_>>`
     // fields are pointer-sized; the `Defined*Index` types are `u32` entity
@@ -75,28 +79,58 @@ macro_rules! define_vm_type_offsets {
     (@size ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@size ($p:expr) AtomicUsize) => { u32::from($p) };
     (@size ($p:expr) usize) => { u32::from($p) };
+    (@size ($p:expr) i64) => { 8u32 };
+    (@size ($p:expr) u64) => { 8u32 };
+    (@size ($p:expr) u32) => { 4u32 };
     (@size ($p:expr) [u8; 16]) => { 16u32 };
+    (@size ($p:expr) [u32; $n:expr]) => { 4u32 * u32::try_from($n).unwrap() };
     (@size ($p:expr) VMSharedTypeIndex) => { u32::from(($p).size_of_vmshared_type_index()) };
     (@size ($p:expr) DefinedTableIndex) => { 4u32 };
     (@size ($p:expr) DefinedMemoryIndex) => { 4u32 };
     (@size ($p:expr) DefinedTagIndex) => { 4u32 };
     (@size ($p:expr) VMGlobalKind) => { 8u32 };
+    // `Range<T>` is a two-field `{ start: T, end: T }` struct.
+    (@size ($p:expr) Range < *mut u8 >) => { 2u32 * u32::from($p) };
+    // Nested `VM*` types recurse through their own generated offsets, keeping
+    // this macro the single source of truth for their layout too.
+    (@size ($p:expr) VMMemoryDefinition) => { u32::from(($p).vm_memory_definition().size()) };
+    (@size ($p:expr) VMLazyThread) => { u32::from(($p).vm_lazy_thread().size()) };
+    // `VMStackChain` is a `repr(usize, C)` enum, and is not itself defined by
+    // `for_each_vm_type!`.
+    (@size ($p:expr) VMStackChain) => { u32::from(($p).size_of_vmstack_chain()) };
+
+    // As with `@size` above, `UnsafeCell<T>` has exactly `T`'s alignment.
+    (@align ($p:expr) UnsafeCell < $inner:tt >) => { define_vm_type_offsets!(@align ($p) $inner) };
 
     // Classify a field type to its alignment in bytes as a `u32`, given `$p`
     // (the target pointer size as a `u8`).
+    //
+    // NB: 64-bit integers are assumed to be 8-aligned, which holds everywhere except
+    // `i686-unknown-linux-gnu`, and the pointer size alone can't tell those apart. Types
+    // with 64-bit fields must therefore put them first and force their own alignment with
+    // `#[repr(C, align(8))]`, as `VMStoreContext` does.
     (@align ($p:expr) VmPtr < $g:ty >) => { u32::from($p) };
     (@align ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@align ($p:expr) AtomicUsize) => { u32::from($p) };
     (@align ($p:expr) usize) => { u32::from($p) };
+    (@align ($p:expr) i64) => { 8u32 };
+    (@align ($p:expr) u64) => { 8u32 };
+    (@align ($p:expr) u32) => { 4u32 };
     (@align ($p:expr) [u8; 16]) => { 16u32 };
+    (@align ($p:expr) [u32; $n:expr]) => { 4u32 };
     (@align ($p:expr) VMSharedTypeIndex) => { u32::from(($p).align_of_vmshared_type_index()) };
     (@align ($p:expr) DefinedTableIndex) => { 4u32 };
     (@align ($p:expr) DefinedMemoryIndex) => { 4u32 };
     (@align ($p:expr) DefinedTagIndex) => { 4u32 };
     (@align ($p:expr) VMGlobalKind) => { 4u32 };
+    (@align ($p:expr) Range < *mut u8 >) => { u32::from($p) };
+    (@align ($p:expr) VMMemoryDefinition) => { u32::from(($p).vm_memory_definition().align()) };
+    (@align ($p:expr) VMLazyThread) => { u32::from(($p).vm_lazy_thread().align()) };
+    (@align ($p:expr) VMStackChain) => { u32::from($p) };
 
     // Classify a `#[repr(...)]` to the minimum alignment it forces, as a `u32`.
     (@repr_align C) => { 1u32 };
+    (@repr_align transparent) => { 1u32 };
     (@repr_align C, align($n:literal)) => {{ let align: u32 = $n; align }};
 
     // Emit a `pub fn` per field returning that field's offset, computed by
@@ -181,12 +215,13 @@ macro_rules! define_vm_type_offsets {
             }
         }
     };
-    // Skip a field attribute (`#[doc = ...]`, `#[readonly]`, `#[can_move]`).
-    (@impl $Name:ident $repr:tt { $($groups:tt)* } #[$($attr:tt)*] $($rest:tt)*) => {
-        define_vm_type_offsets!(@impl $Name $repr { $($groups)* } $($rest)*);
-    };
-    // Consume a field's visibility and name, then collect its type tokens.
-    (@impl $Name:ident $repr:tt { $($groups:tt)* } $fvis:vis $fname:ident : $($rest:tt)*) => {
+    // Consume one field's attributes, visibility, and name, then collect its
+    // type tokens. None of the field attributes (doc comments and the
+    // `#[aggregate]`/`#[readonly]`/`#[can_move]` markers) affect layout, so they
+    // are all discarded here.
+    (@impl $Name:ident $repr:tt { $($groups:tt)* }
+        $(#[$($attr:tt)*])* $fvis:vis $fname:ident : $($rest:tt)*
+    ) => {
         define_vm_type_offsets!(@impl_ty $Name $repr { $($groups)* } $fname [] $($rest)*);
     };
     // Accumulate one field's type tokens up to its terminating comma, then
@@ -215,7 +250,7 @@ macro_rules! define_vm_type_offsets {
         /// These types are namespaced within their own module so that they never
         /// collide with the real definitions of the `VM*` types themselves.
         pub mod offsets {
-            use super::{align, PtrSize};
+            use super::{align, PtrSize, NUM_COMPONENT_CONTEXT_SLOTS};
 
             $(
                 #[doc = concat!("Offsets of fields within the `", stringify!($Name), "` type.")]
@@ -228,6 +263,46 @@ macro_rules! define_vm_type_offsets {
 }
 for_each_vm_type!(define_vm_type_offsets);
 
+/// The size, in bytes, of one `context.{get,set}` slot. These slots are `u32`s,
+/// both in `VMStoreContext::component_context` and in
+/// `VMDeferredThread::saved_context`.
+const COMPONENT_CONTEXT_SLOT_SIZE: u8 = 4;
+
+/// Offsets within a `VMStoreContext` that are not simply the offset of one of
+/// its fields, and so are not generated by `for_each_vm_type!`.
+impl<P: PtrSize> offsets::VMStoreContext<P> {
+    /// The offset of the `gc_heap.base` field within a `VMStoreContext`.
+    pub fn gc_heap_base(&self) -> u8 {
+        let offset = self.gc_heap() + self.0.vm_memory_definition().base();
+        debug_assert!(offset < self.last_wasm_exit_trampoline_fp());
+        offset
+    }
+
+    /// The offset of the `gc_heap.current_length` field within a
+    /// `VMStoreContext`.
+    pub fn gc_heap_current_length(&self) -> u8 {
+        let offset = self.gc_heap() + self.0.vm_memory_definition().current_length();
+        debug_assert!(offset < self.last_wasm_exit_trampoline_fp());
+        offset
+    }
+
+    /// The offset of the `component_context[i]` slot within a `VMStoreContext`.
+    pub fn component_context_slot(&self, i: u8) -> u8 {
+        assert!(usize::from(i) < NUM_COMPONENT_CONTEXT_SLOTS);
+        self.component_context() + i * COMPONENT_CONTEXT_SLOT_SIZE
+    }
+}
+
+/// Offsets within a `VMDeferredThread` that are not simply the offset of one of
+/// its fields, and so are not generated by `for_each_vm_type!`.
+impl<P: PtrSize> offsets::VMDeferredThread<P> {
+    /// The offset of the `saved_context[i]` slot within a `VMDeferredThread`.
+    pub fn saved_context_slot(&self, i: u8) -> u8 {
+        assert!(usize::from(i) < NUM_COMPONENT_CONTEXT_SLOTS);
+        self.saved_context() + i * COMPONENT_CONTEXT_SLOT_SIZE
+    }
+}
+
 /// Add a `fn vm_foo(&self) -> offsets::VMFoo<&Self>` accessor to [`PtrSize`] for
 /// each `VM*` type, using the `#[snake_name = ...]` attribute for the method
 /// name.
@@ -238,12 +313,9 @@ macro_rules! define_ptr_size_vm_type_accessors {
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
         $svis:vis struct $Name:ident {
-            $(
-                $(#[doc = $fdoc:literal])*
-                $(#[readonly])?
-                $(#[can_move])?
-                $fvis:vis $fname:ident : $fty:tt $(< $fgen:ty >)? ,
-            )*
+            // This macro only needs each type's name and snake name, so the
+            // body is captured raw rather than parsed into fields.
+            $($body:tt)*
         }
     )* ) => {
         $(
@@ -348,143 +420,6 @@ pub trait PtrSize {
     #[inline]
     fn maximum_value_size(&self) -> u8 {
         self.vm_global_definition().size()
-    }
-
-    // Offsets within `VMStoreContext`
-
-    /// Return the offset of the `fuel_consumed` field of `VMStoreContext`
-    #[inline]
-    fn vmstore_context_fuel_consumed(&self) -> u8 {
-        0
-    }
-
-    /// Return the offset of the `epoch_deadline` field of `VMStoreContext`
-    #[inline]
-    fn vmstore_context_epoch_deadline(&self) -> u8 {
-        self.vmstore_context_fuel_consumed() + 8
-    }
-
-    /// Return the offset of the `execution_version` field of
-    /// `VMStoreContext`
-    #[inline]
-    fn vmstore_context_execution_version(&self) -> u8 {
-        self.vmstore_context_epoch_deadline() + 8
-    }
-
-    /// Return the offset of the `stack_limit` field of `VMStoreContext`
-    #[inline]
-    fn vmstore_context_stack_limit(&self) -> u8 {
-        self.vmstore_context_execution_version() + 8
-    }
-
-    /// Return the offset of the `gc_heap` field of `VMStoreContext`.
-    #[inline]
-    fn vmstore_context_gc_heap(&self) -> u8 {
-        self.vmstore_context_stack_limit() + self.size()
-    }
-
-    /// Return the offset of the `gc_heap.base` field within a `VMStoreContext`.
-    fn vmstore_context_gc_heap_base(&self) -> u8 {
-        let offset = self.vmstore_context_gc_heap() + self.vm_memory_definition().base();
-        debug_assert!(offset < self.vmstore_context_last_wasm_exit_trampoline_fp());
-        offset
-    }
-
-    /// Return the offset of the `gc_heap.current_length` field within a `VMStoreContext`.
-    fn vmstore_context_gc_heap_current_length(&self) -> u8 {
-        let offset = self.vmstore_context_gc_heap() + self.vm_memory_definition().current_length();
-        debug_assert!(offset < self.vmstore_context_last_wasm_exit_trampoline_fp());
-        offset
-    }
-
-    /// Return the offset of the `last_wasm_exit_trampoline_fp` field
-    /// of `VMStoreContext`.
-    fn vmstore_context_last_wasm_exit_trampoline_fp(&self) -> u8 {
-        self.vmstore_context_gc_heap() + self.vm_memory_definition().size()
-    }
-
-    /// Return the offset of the `last_wasm_exit_pc` field of `VMStoreContext`.
-    fn vmstore_context_last_wasm_exit_pc(&self) -> u8 {
-        self.vmstore_context_last_wasm_exit_trampoline_fp() + self.size()
-    }
-
-    /// Return the offset of the `last_wasm_entry_sp` field of `VMStoreContext`.
-    fn vmstore_context_last_wasm_entry_sp(&self) -> u8 {
-        self.vmstore_context_last_wasm_exit_pc() + self.size()
-    }
-
-    /// Return the offset of the `last_wasm_entry_fp` field of `VMStoreContext`.
-    fn vmstore_context_last_wasm_entry_fp(&self) -> u8 {
-        self.vmstore_context_last_wasm_entry_sp() + self.size()
-    }
-
-    /// Return the offset of the `last_wasm_entry_trap_handler` field of `VMStoreContext`.
-    fn vmstore_context_last_wasm_entry_trap_handler(&self) -> u8 {
-        self.vmstore_context_last_wasm_entry_fp() + self.size()
-    }
-
-    /// Return the offset of the `stack_chain` field of `VMStoreContext`.
-    fn vmstore_context_stack_chain(&self) -> u8 {
-        self.vmstore_context_last_wasm_entry_trap_handler() + self.size()
-    }
-
-    /// Return the offset of the `stack_chain` field of `VMStoreContext`.
-    fn vmstore_context_store_data(&self) -> u8 {
-        self.vmstore_context_stack_chain() + self.size_of_vmstack_chain()
-    }
-
-    /// Return the offset of the `async_guard_range` field of `VMStoreContext`.
-    fn vmstore_context_async_guard_range(&self) -> u8 {
-        self.vmstore_context_store_data() + self.size()
-    }
-
-    /// Return the offset of the `component_context[i]` field of
-    /// `VMStoreContext`.
-    fn vmstore_context_component_context_slot(&self, i: u8) -> u8 {
-        assert!(usize::from(i) < NUM_COMPONENT_CONTEXT_SLOTS);
-        let base = self.vmstore_context_async_guard_range() + 2 * self.size();
-        let slot_size = 4;
-        base + i * slot_size
-    }
-
-    /// Return the offset of the `current_thread` field of `VMStoreContext`.
-    fn vmstore_context_current_thread(&self) -> u8 {
-        self.vmstore_context_component_context_slot(0) + (NUM_COMPONENT_CONTEXT_SLOTS as u8) * 4
-    }
-
-    // Offsets within `VMDeferredThread`
-
-    /// Offset of `VMDeferredThread::parent`.
-    fn vmdeferred_thread_parent(&self) -> u8 {
-        0
-    }
-
-    /// Offset of `VMDeferredThread::caller_instance`.
-    fn vmdeferred_thread_caller_instance(&self) -> u8 {
-        self.size()
-    }
-
-    /// Offset of `VMDeferredThread::callee_async`.
-    fn vmdeferred_thread_callee_async(&self) -> u8 {
-        self.vmdeferred_thread_caller_instance() + 4
-    }
-
-    /// Offset of `VMDeferredThread::callee_instance`.
-    fn vmdeferred_thread_callee_instance(&self) -> u8 {
-        self.vmdeferred_thread_callee_async() + 4
-    }
-
-    /// Offset of `VMDeferredThread::saved_context[i]`.
-    fn vmdeferred_thread_saved_context(&self, i: u8) -> u8 {
-        assert!(usize::from(i) < NUM_COMPONENT_CONTEXT_SLOTS);
-        self.vmdeferred_thread_callee_instance() + 4 + i * 4
-    }
-
-    /// Return the size of `VMDeferredThread`, rounded up to pointer alignment.
-    fn size_of_vmdeferred_thread(&self) -> u8 {
-        let unaligned =
-            self.vmdeferred_thread_callee_instance() + 4 + (NUM_COMPONENT_CONTEXT_SLOTS as u8) * 4;
-        align(u32::from(unaligned), u32::from(self.size())) as u8
     }
 
     /// Return the size of `*mut VMMemoryDefinition`.
