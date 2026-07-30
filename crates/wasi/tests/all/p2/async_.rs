@@ -372,6 +372,9 @@ async fn p2_udp_connect() {
     run(P2_UDP_CONNECT_COMPONENT, |_| {}).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+// See the comment on the `p2::sync` variation of this test; for why this is
+// ignored on macos
+#[cfg_attr(target_os = "macos", ignore)]
 async fn p2_udp_send_to_closed_receiver() {
     run(P2_UDP_SEND_TO_CLOSED_RECEIVER_COMPONENT, |_| {})
         .await

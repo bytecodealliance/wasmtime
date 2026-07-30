@@ -350,6 +350,11 @@ fn p2_udp_connect() {
 // consistently fails when run in combination with the `p2::async_` variation,
 // and we've thus far been unable to determine the reason.
 #[cfg_attr(windows, ignore = "This test is flaky on Windows.")]
+// This test is flaky on macOS in CI. One possible reason is that this relies on
+// a port being closed which concurrent tests can otherwise re-bind. Another
+// reason is that maybe this is just flaky on macOS (LLMs say something about
+// the OS rate-limiting ICMP messages if they're to be believed).
+#[cfg_attr(target_os = "macos", ignore = "This test is flaky on macOS.")]
 fn p2_udp_send_to_closed_receiver() {
     run(P2_UDP_SEND_TO_CLOSED_RECEIVER_COMPONENT, |_| {}).unwrap()
 }
