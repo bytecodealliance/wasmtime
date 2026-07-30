@@ -146,6 +146,9 @@ impl SharedMemory {
         assert!(std::mem::size_of::<AtomicU32>() == 4);
         assert!(std::mem::align_of::<AtomicU32>() <= 4);
         let atomic = unsafe { AtomicU32::from_ptr(addr.cast()) };
+        // Wasm linear memory is always little-endian, but `AtomicU32` uses the
+        // host's native endianness.
+        let expected = expected.to_le();
 
         // Note that `checked_add` is used such that when `timeout` is too large
         // it'll cause there to be no timeout at all if we can't represent the
@@ -175,6 +178,9 @@ impl SharedMemory {
         assert!(std::mem::size_of::<AtomicU64>() == 8);
         assert!(std::mem::align_of::<AtomicU64>() <= 8);
         let atomic = unsafe { AtomicU64::from_ptr(addr.cast()) };
+        // Wasm linear memory is always little-endian, but `AtomicU64` uses the
+        // host's native endianness.
+        let expected = expected.to_le();
 
         // See `atomic_wait32` for why this is using `checked_add`.
         let deadline = timeout.and_then(|d| Instant::now().checked_add(d));

@@ -536,6 +536,7 @@ impl WastTest {
                 // shared memories + pooling allocator aren't supported yet
                 "misc_testsuite/memory-combos.wast",
                 "misc_testsuite/threads/atomics-end-of-memory.wast",
+                "misc_testsuite/threads/atomic_wait_endianness.wast",
                 "misc_testsuite/threads/LB.wast",
                 "misc_testsuite/threads/LB_atomic.wast",
                 "misc_testsuite/threads/MP.wast",

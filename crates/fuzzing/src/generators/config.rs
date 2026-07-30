@@ -200,7 +200,8 @@ impl Config {
             || self.module_config.function_references_enabled
             || reference_types.unwrap_or(false);
         config.extended_const_enabled = extended_const.unwrap_or(false);
-        config.exceptions_enabled = exceptions.unwrap_or(false);
+        config.exceptions_enabled =
+            self.module_config.stack_switching || exceptions.unwrap_or(false);
         if multi_memory.unwrap_or(false) {
             config.max_memories = limits::MEMORIES_PER_MODULE as usize;
         } else {
