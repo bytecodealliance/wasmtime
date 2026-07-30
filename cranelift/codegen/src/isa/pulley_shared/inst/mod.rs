@@ -547,12 +547,8 @@ where
 
     fn rc_for_type(ty: &Type) -> CodegenResult<(&[RegClass], &[Type])> {
         match *ty {
-            I8 => Ok((&[RegClass::Int], &[I8])),
-            I16 => Ok((&[RegClass::Int], &[I16])),
-            I32 => Ok((&[RegClass::Int], &[I32])),
-            I64 => Ok((&[RegClass::Int], &[I64])),
-            F32 => Ok((&[RegClass::Float], &[F32])),
-            F64 => Ok((&[RegClass::Float], &[F64])),
+            I8 | I16 | I32 | I64 => Ok((&[RegClass::Int], core::slice::from_ref(ty))),
+            F32 | F64 => Ok((&[RegClass::Float], core::slice::from_ref(ty))),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
             _ if ty.is_vector() => {
                 debug_assert!(ty.bits() <= 512);
