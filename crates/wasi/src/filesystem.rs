@@ -76,11 +76,38 @@ pub trait WasiFilesystemView: Send {
     fn filesystem(&mut self) -> WasiFilesystemCtxView<'_>;
 }
 
-bitflags::bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-    pub struct FilePerms: usize {
-        const READ = 0b1;
-        const WRITE = 0b10;
+/// Permission bits for operating on filesystem, specified per preopen,
+/// as enforced by wasmtime-wasi.
+///
+/// Filesystems can deny all mutation operations (read-only) or permit
+/// mutations (read-write).
+///
+/// Read-only permissions allow reading the contents
+/// of any file or directory reachable under the preopen, as well as reading
+/// any file metadata. Changing, appending, or truncating files is not
+/// permitted. Creating or deleting files, directories, symbolic links, and
+/// hard links are not permitted.
+///
+/// Read-write permissions include changing the contents of any reachable
+/// file, creating and deleting files, directories, symbolic links, and
+/// creating hard links, as well as mutating any file metadata.
+///
+/// These permissions are enforced by wasmtime-wasi. The host filesystem may
+/// enforce additional restrictions not covered by these.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum FsPerms {
+    // Only read operations are permitted - no mutation permitted
+    ReadOnly,
+    // All operations are permitted.
+    ReadWrite,
+}
+
+impl FsPerms {
+    /// Tests whether writes are not permitted, returning a boolean. Shorthand
+    /// for matches!(perms, FsPerms::ReadOnly), used frequently in
+    /// if-statements.
+    pub fn write_not_permitted(&self) -> bool {
+        matches!(self, Self::ReadOnly)
     }
 }
 
@@ -89,23 +116,6 @@ bitflags::bitflags! {
     pub struct OpenMode: usize {
         const READ = 0b1;
         const WRITE = 0b10;
-    }
-}
-
-bitflags::bitflags! {
-    /// Permission bits for operating on a directory.
-    ///
-    /// Directories can be limited to being readonly. This will restrict what
-    /// can be done with them, for example preventing creation of new files.
-    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-    pub struct DirPerms: usize {
-        /// This directory can be read, for example its entries can be iterated
-        /// over and files can be opened.
-        const READ = 0b1;
-
-        /// This directory can be mutated, for example by creating new files
-        /// within it.
-        const MUTATE = 0b10;
     }
 }
 
@@ -573,14 +583,14 @@ impl Descriptor {
         }
         match self {
             Self::File(f) => {
-                if !f.perms.contains(FilePerms::WRITE) {
+                if f.perms.write_not_permitted() {
                     return Err(ErrorCode::NotPermitted);
                 }
                 f.run_blocking(move |f| f.set_times(times)).await?;
                 Ok(())
             }
             Self::Dir(d) => {
-                if !d.perms.contains(DirPerms::MUTATE) {
+                if d.perms.write_not_permitted() {
                     return Err(ErrorCode::NotPermitted);
                 }
                 d.run_blocking(move |d| d.set_times(times)).await?;
@@ -664,9 +674,10 @@ pub struct File {
     /// `spawn_blocking`.
     pub file: Arc<std::fs::File>,
     /// Permissions to enforce on access to the file. These permissions are
-    /// specified by a user of the `crate::WasiCtxBuilder`, and are
-    /// enforced prior to any enforced by the underlying operating system.
-    pub perms: FilePerms,
+    /// specified to the parent preopen by a user of the
+    /// `crate::WasiCtxBuilder`, and are enforced prior to any enforced by the
+    /// underlying operating system.
+    pub perms: FsPerms,
     /// The mode the file was opened under: bits for reading, and writing.
     /// Required to correctly report the DescriptorFlags, because
     /// cap-primitives doesn't presently provide a cross-platform equivalent
@@ -679,7 +690,7 @@ pub struct File {
 impl File {
     pub fn new(
         file: std::fs::File,
-        perms: FilePerms,
+        perms: FsPerms,
         open_mode: OpenMode,
         allow_blocking_current_thread: bool,
     ) -> Self {
@@ -754,7 +765,7 @@ impl File {
     }
 
     pub(crate) async fn set_size(&self, size: u64) -> Result<(), ErrorCode> {
-        if !self.perms.contains(FilePerms::WRITE) {
+        if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
         self.run_blocking(move |f| f.set_len(size)).await?;
@@ -772,15 +783,13 @@ pub struct Dir {
     ///
     /// Wrapped in an Arc because a copy is needed for `run_blocking`.
     pub dir: Arc<std::fs::File>,
-    /// Permissions to enforce on access to this directory. These permissions
-    /// are specified by a user of the `crate::WasiCtxBuilder`, and
+    /// Permissions to enforce on access to the filesystem under this
+    /// directory are specified by a user of the `crate::WasiCtxBuilder`, and
     /// are enforced prior to any enforced by the underlying operating system.
     ///
     /// These permissions are also enforced on any directories opened under
     /// this directory.
-    pub perms: DirPerms,
-    /// Permissions to enforce on any files opened under this directory.
-    pub file_perms: FilePerms,
+    pub perms: FsPerms,
     /// The mode the directory was opened under: bits for reading, and writing.
     /// Required to correctly report the DescriptorFlags, because
     /// cap-primitives doesn't presently provide a cross-platform equivalent
@@ -793,15 +802,13 @@ pub struct Dir {
 impl Dir {
     pub fn new(
         dir: std::fs::File,
-        perms: DirPerms,
-        file_perms: FilePerms,
+        perms: FsPerms,
         open_mode: OpenMode,
         allow_blocking_current_thread: bool,
     ) -> Self {
         Dir {
             dir: Arc::new(dir),
             perms,
-            file_perms,
             open_mode,
             allow_blocking_current_thread,
         }
@@ -841,7 +848,7 @@ impl Dir {
     }
 
     pub(crate) async fn create_directory_at(&self, path: String) -> Result<(), ErrorCode> {
-        if !self.perms.contains(DirPerms::MUTATE) {
+        if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
         self.run_blocking(move |d| {
@@ -856,10 +863,6 @@ impl Dir {
         path_flags: PathFlags,
         path: String,
     ) -> Result<DescriptorStat, ErrorCode> {
-        if !self.perms.contains(DirPerms::READ) {
-            return Err(ErrorCode::NotPermitted);
-        }
-
         let follow = if path_flags.contains(PathFlags::SYMLINK_FOLLOW) {
             FollowSymlinks::Yes
         } else {
@@ -878,7 +881,7 @@ impl Dir {
         atim: Option<SystemTime>,
         mtim: Option<SystemTime>,
     ) -> Result<(), ErrorCode> {
-        if !self.perms.contains(DirPerms::MUTATE) {
+        if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
         let atim =
@@ -904,16 +907,16 @@ impl Dir {
         new_dir: &Self,
         new_path: String,
     ) -> Result<(), ErrorCode> {
-        if !self.perms.contains(DirPerms::MUTATE) {
+        if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
-        if !new_dir.perms.contains(DirPerms::MUTATE) {
+        if new_dir.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
         if old_path_flags.contains(PathFlags::SYMLINK_FOLLOW) {
             return Err(ErrorCode::Invalid);
         }
-        if self.perms != new_dir.perms || self.file_perms != new_dir.file_perms {
+        if self.perms != new_dir.perms {
             return Err(ErrorCode::NotPermitted);
         }
         let new_dir_handle = Arc::clone(&new_dir.dir);
@@ -932,19 +935,6 @@ impl Dir {
         flags: DescriptorFlags,
         allow_blocking_current_thread: bool,
     ) -> Result<Descriptor, ErrorCode> {
-        if !self.perms.contains(DirPerms::READ) {
-            return Err(ErrorCode::NotPermitted);
-        }
-
-        if !self.perms.contains(DirPerms::MUTATE) {
-            if oflags.contains(OpenFlags::CREATE) || oflags.contains(OpenFlags::TRUNCATE) {
-                return Err(ErrorCode::NotPermitted);
-            }
-            if flags.contains(DescriptorFlags::WRITE) {
-                return Err(ErrorCode::NotPermitted);
-            }
-        }
-
         // Track whether we are creating file, for permission check:
         let mut create = false;
         // Track open mode, for permission check and recording in created descriptor:
@@ -1014,11 +1004,10 @@ impl Dir {
 
         // Now enforce this WasiCtx's permissions before letting the OS have
         // its shot:
-        if !self.perms.contains(DirPerms::MUTATE) && create {
-            return Err(ErrorCode::NotPermitted);
-        }
-        if !self.file_perms.contains(FilePerms::WRITE) && open_mode.contains(OpenMode::WRITE) {
-            return Err(ErrorCode::NotPermitted);
+        if self.perms.write_not_permitted() {
+            if create || open_mode.contains(OpenMode::WRITE) {
+                return Err(ErrorCode::NotPermitted);
+            }
         }
 
         // Represents each possible outcome from the spawn_blocking operation.
@@ -1055,14 +1044,13 @@ impl Dir {
             OpenResult::Dir(dir) => Ok(Descriptor::Dir(Dir::new(
                 dir,
                 self.perms,
-                self.file_perms,
                 open_mode,
                 allow_blocking_current_thread,
             ))),
 
             OpenResult::File(file) => Ok(Descriptor::File(File::new(
                 file,
-                self.file_perms,
+                self.perms,
                 open_mode,
                 allow_blocking_current_thread,
             ))),
@@ -1072,9 +1060,6 @@ impl Dir {
     }
 
     pub(crate) async fn readlink_at(&self, path: String) -> Result<String, ErrorCode> {
-        if !self.perms.contains(DirPerms::READ) {
-            return Err(ErrorCode::NotPermitted);
-        }
         let link = self
             .run_blocking(move |d| cap_primitives::fs::read_link(d, path.as_ref()))
             .await?;
@@ -1084,7 +1069,7 @@ impl Dir {
     }
 
     pub(crate) async fn remove_directory_at(&self, path: String) -> Result<(), ErrorCode> {
-        if !self.perms.contains(DirPerms::MUTATE) {
+        if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
         self.run_blocking(move |d| cap_primitives::fs::remove_dir(d, path.as_ref()))
@@ -1098,13 +1083,13 @@ impl Dir {
         new_dir: &Self,
         new_path: String,
     ) -> Result<(), ErrorCode> {
-        if !self.perms.contains(DirPerms::MUTATE) {
+        if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
-        if !new_dir.perms.contains(DirPerms::MUTATE) {
+        if new_dir.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
-        if self.perms != new_dir.perms || self.file_perms != new_dir.file_perms {
+        if self.perms != new_dir.perms {
             return Err(ErrorCode::NotPermitted);
         }
         let new_dir_handle = Arc::clone(&new_dir.dir);
@@ -1120,7 +1105,7 @@ impl Dir {
         src_path: String,
         dest_path: String,
     ) -> Result<(), ErrorCode> {
-        if !self.perms.contains(DirPerms::MUTATE) {
+        if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
         self.run_blocking(move |d| sys::symlink(src_path.as_ref(), d, dest_path.as_ref()))
@@ -1129,7 +1114,7 @@ impl Dir {
     }
 
     pub(crate) async fn unlink_file_at(&self, path: String) -> Result<(), ErrorCode> {
-        if !self.perms.contains(DirPerms::MUTATE) {
+        if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
         self.run_blocking(move |d| sys::remove_file_or_symlink(d, path.as_ref()))

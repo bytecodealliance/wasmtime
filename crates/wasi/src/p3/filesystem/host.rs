@@ -7,7 +7,6 @@ use crate::p3::bindings::filesystem::types::{
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
 use crate::p3::{DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer};
-use crate::{DirPerms, FilePerms};
 use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -523,15 +522,6 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
         offset: Filesize,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
         let file = get_file(store.get().table, &fd)?;
-        if !file.perms.contains(FilePerms::READ) {
-            return Ok((
-                StreamReader::new(&mut store, iter::empty())?,
-                FutureReader::new(&mut store, async {
-                    wasmtime::error::Ok(Err(ErrorCode::NotPermitted))
-                })?,
-            ));
-        }
-
         let file = file.clone();
         let (result_tx, result_rx) = oneshot::channel();
         Ok((
@@ -556,7 +546,7 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
     ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let (result_tx, result_rx) = oneshot::channel();
         match get_file(store.get().table, &fd).and_then(|file| {
-            if !file.perms.contains(FilePerms::WRITE) {
+            if file.perms.write_not_permitted() {
                 Err(ErrorCode::NotPermitted.into())
             } else {
                 Ok(file.clone())
@@ -583,7 +573,7 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
     ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let (result_tx, result_rx) = oneshot::channel();
         match get_file(store.get().table, &fd).and_then(|file| {
-            if !file.perms.contains(FilePerms::WRITE) {
+            if file.perms.write_not_permitted() {
                 Err(ErrorCode::NotPermitted.into())
             } else {
                 Ok(file.clone())
@@ -670,13 +660,7 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
         FutureReader<Result<(), ErrorCode>>,
     )> {
         let (result_tx, result_rx) = oneshot::channel();
-        let stream = match get_dir(store.get().table, &fd).and_then(|dir| {
-            if !dir.perms.contains(DirPerms::READ) {
-                Err(ErrorCode::NotPermitted.into())
-            } else {
-                Ok(dir)
-            }
-        }) {
+        let stream = match get_dir(store.get().table, &fd) {
             Ok(dir) => {
                 let allow_blocking_current_thread = dir.allow_blocking_current_thread;
                 let dir = Arc::clone(dir.as_dir());

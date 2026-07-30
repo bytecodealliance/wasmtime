@@ -47,37 +47,4 @@ fn main() {
     drop(stream);
     drop(file);
     assert_eq!(contents, b"stream permission test\n");
-
-    // --- writeonly preopen: read stream denied, write stream allowed ---
-    let (writeonly_dir, _) = preopens
-        .iter()
-        .find(|(_, path)| path == "writeonly")
-        .expect("find preopen named writeonly");
-
-    let file = writeonly_dir
-        .open_at(
-            PathFlags::empty(),
-            "stream-write.txt",
-            OpenFlags::empty(),
-            DescriptorFlags::WRITE,
-        )
-        .expect("open for writing");
-
-    let err = file
-        .read_via_stream(0)
-        .expect_err("read_via_stream without read permission");
-    assert_eq!(
-        err,
-        ErrorCode::NotPermitted,
-        "read_via_stream should return not-permitted, got {err:?}"
-    );
-
-    let stream = file
-        .write_via_stream(0)
-        .expect("write_via_stream with write permission");
-    stream
-        .blocking_write_and_flush(b"ok")
-        .expect("write stream contents");
-    drop(stream);
-    drop(file);
 }

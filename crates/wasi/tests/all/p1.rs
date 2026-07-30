@@ -300,7 +300,7 @@ async fn p1_file_truncation_readonly() {
 
 async fn run_with_readonly_testfile(component_path: &str) {
     use std::path::PathBuf;
-    use wasmtime_wasi::{DirPerms, FilePerms};
+    use wasmtime_wasi::FsPerms;
 
     let prefix = format!("wasi_components_ro_");
     let tempdir = tempfile::Builder::new()
@@ -314,13 +314,8 @@ async fn run_with_readonly_testfile(component_path: &str) {
     std::fs::write(&file, EXPECTED_CONTENTS).expect("write truncation test file");
 
     run(component_path, |b| {
-        b.preopened_dir(
-            tempdir.path(),
-            "readonly",
-            DirPerms::READ | DirPerms::MUTATE,
-            FilePerms::READ,
-        )
-        .unwrap();
+        b.preopened_dir(tempdir.path(), "readonly", FsPerms::ReadOnly)
+            .unwrap();
     })
     .await
     .expect("run guest");

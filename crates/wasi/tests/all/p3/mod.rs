@@ -4,7 +4,7 @@ use test_programs_artifacts::*;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Result, error::Context as _, format_err};
 use wasmtime_wasi::p3::bindings::Command;
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
+use wasmtime_wasi::{FsPerms, WasiCtxBuilder};
 
 async fn run(path: &str) -> Result<()> {
     run_allow_blocking_current_thread(path, false).await
@@ -203,12 +203,7 @@ async fn run_with_readonly_testfile(component_path: &str) -> wasmtime::Result<()
 
     run_with_builder(component_path, false, |builder| {
         builder
-            .preopened_dir(
-                tempdir.path(),
-                "readonly",
-                DirPerms::READ | DirPerms::MUTATE,
-                FilePerms::READ,
-            )
+            .preopened_dir(tempdir.path(), "readonly", FsPerms::ReadOnly)
             .unwrap();
     })
     .await?;

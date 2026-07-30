@@ -19,7 +19,7 @@ TEST(WasiConfig, Smoke) {
   config.inherit_stderr();
 
   WasiConfig config2;
-  if (config2.preopen_dir("nonexistent", "nonexistent", 0, 0)) {
+  if (config2.preopen_dir("nonexistent", "nonexistent", 0)) {
     Engine engine;
     Store store(engine);
     EXPECT_FALSE(store.context().set_wasi(std::move(config2)));

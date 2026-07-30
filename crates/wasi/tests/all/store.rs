@@ -3,7 +3,7 @@ use wasmtime::Result;
 use wasmtime::component::ResourceTable;
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::{
-    DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe,
+    FsPerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe,
 };
 
 pub struct Ctx<T> {
@@ -52,7 +52,7 @@ impl<T> Ctx<T> {
             .allow_udp(true)
             .allow_ip_name_lookup(true);
         println!("preopen: {workspace:?}");
-        builder.preopened_dir(workspace.path(), ".", DirPerms::all(), FilePerms::all())?;
+        builder.preopened_dir(workspace.path(), ".", FsPerms::ReadWrite)?;
         for (var, val) in test_programs_artifacts::wasi_tests_environment() {
             builder.env(var, val);
         }

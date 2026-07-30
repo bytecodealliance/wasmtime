@@ -7,8 +7,7 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p2::add_to_linker_async;
 use wasmtime_wasi::p2::bindings::{Command, clocks::wall_clock, filesystem::types as filesystem};
 use wasmtime_wasi::{
-    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiCtxView,
-    WasiView,
+    FsPerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView,
 };
 
 struct CommandCtx {
@@ -96,7 +95,7 @@ async fn p2_api_read_only() -> Result<()> {
 
     let table = ResourceTable::new();
     let wasi = WasiCtxBuilder::new()
-        .preopened_dir(dir.path(), "/", DirPerms::READ, FilePerms::READ)?
+        .preopened_dir(dir.path(), "/", FsPerms::ReadOnly)?
         .build();
 
     let (mut store, command) =

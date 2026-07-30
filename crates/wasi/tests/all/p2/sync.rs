@@ -405,7 +405,7 @@ fn p2_file_truncation_readonly() {
 
 fn run_with_readonly_testfile(component_path: &str) {
     use std::path::PathBuf;
-    use wasmtime_wasi::{DirPerms, FilePerms};
+    use wasmtime_wasi::FsPerms;
 
     let prefix = "wasi_components_ro_";
     let tempdir = tempfile::Builder::new()
@@ -419,13 +419,8 @@ fn run_with_readonly_testfile(component_path: &str) {
     std::fs::write(&file, EXPECTED_CONTENTS).expect("write read only test file");
 
     run(component_path, |b| {
-        b.preopened_dir(
-            tempdir.path(),
-            "readonly",
-            DirPerms::READ | DirPerms::MUTATE,
-            FilePerms::READ,
-        )
-        .unwrap();
+        b.preopened_dir(tempdir.path(), "readonly", FsPerms::ReadOnly)
+            .unwrap();
     })
     .expect("run guest");
 
@@ -456,38 +451,20 @@ fn p2_file_stream_not_permitted() {
 }
 
 fn file_stream_not_permitted(component_path: &str) {
-    use wasmtime_wasi::{DirPerms, FilePerms};
+    use wasmtime_wasi::FsPerms;
 
     let readonly = tempfile::Builder::new()
         .prefix("wasi_components_stream_np_ro_")
         .tempdir()
         .expect("create readonly tempdir");
-    let writeonly = tempfile::Builder::new()
-        .prefix("wasi_components_stream_np_wo_")
-        .tempdir()
-        .expect("create writeonly tempdir");
 
     const RO_CONTENTS: &[u8] = b"stream permission test\n";
     std::fs::write(readonly.path().join("stream-perms.txt"), RO_CONTENTS)
         .expect("write readonly test file");
-    std::fs::write(writeonly.path().join("stream-write.txt"), b"")
-        .expect("create writeonly test file");
 
     run(component_path, |b| {
-        b.preopened_dir(
-            readonly.path(),
-            "readonly",
-            DirPerms::READ | DirPerms::MUTATE,
-            FilePerms::READ,
-        )
-        .unwrap();
-        b.preopened_dir(
-            writeonly.path(),
-            "writeonly",
-            DirPerms::READ | DirPerms::MUTATE,
-            FilePerms::WRITE,
-        )
-        .unwrap();
+        b.preopened_dir(readonly.path(), "readonly", FsPerms::ReadOnly)
+            .unwrap();
     })
     .expect("run p2_file_stream_not_permitted guest");
 }
