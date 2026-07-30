@@ -235,7 +235,7 @@ typedef size_t wasi_file_perms;
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t *config,
                                              const char *host_path,
                                              const char *guest_path,
-                                             bool_t fs_mutable);
+                                             bool fs_mutable);
 
 #undef own
 
