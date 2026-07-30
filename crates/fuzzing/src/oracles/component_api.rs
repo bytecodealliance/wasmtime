@@ -10,8 +10,6 @@ use crate::block_on;
 use crate::generators::{self, CompilerStrategy, InstanceAllocationStrategy};
 use crate::oracles::log_wasm;
 use arbitrary::{Arbitrary, Unstructured};
-use futures::FutureExt as _;
-use std::any::Any;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
 use wasmtime::component::{
@@ -265,16 +263,16 @@ where
 {
     crate::init_fuzzing();
 
-    let mut store = store::<Box<dyn Any + Send>>(input, Box::new(()))?;
+    let mut store = store::<Option<(P, R)>>(input, None)?;
     let engine = store.engine();
     let wat = declarations.make_component();
     let wat = wat.as_bytes();
     crate::oracles::log_wasm(wat);
     let component = Component::new(&engine, wat).unwrap();
-    let mut linker = Linker::new(&engine);
+    let mut linker: Linker<Option<(P, R)>> = Linker::new(&engine);
 
     fn host_function<P, R>(
-        cx: StoreContextMut<'_, Box<dyn Any + Send>>,
+        cx: StoreContextMut<'_, Option<(P, R)>>,
         params: P,
     ) -> wasmtime::Result<R>
     where
@@ -282,7 +280,7 @@ where
         R: Debug + Clone + 'static,
     {
         log::trace!("received parameters {params:?}");
-        let data: &(P, R) = cx.data().downcast_ref().unwrap();
+        let data: &(P, R) = cx.data().as_ref().unwrap();
         let (expected_params, result) = data;
         assert_eq!(params, *expected_params);
         log::trace!("returning result {result:?}");
@@ -292,16 +290,10 @@ where
     if declarations.options.host_async {
         linker
             .root()
-            .func_wrap_concurrent(IMPORT_FUNCTION, |a, params| {
+            .func_wrap_concurrent(IMPORT_FUNCTION, |a, params: P| {
                 Box::pin(async move {
-                    // `Accessor::with` is `async` but resolves synchronously, and
-                    // holding its future across an `.await` here trips Send
-                    // inference (the closure's higher-ranked lifetime). Drive it
-                    // with `now_or_never` so no future is held across a suspend
-                    // point; `host_function` itself does no async work.
-                    a.with(|mut cx| host_function::<P, R>(cx.as_context_mut(), params))
-                        .now_or_never()
-                        .expect("`Accessor::with` resolves synchronously")
+                    a.with(|mut cx| host_function(cx.as_context_mut(), params))
+                        .await
                 })
             })
             .unwrap();
@@ -327,7 +319,7 @@ where
         while iters.next().is_some() && input.arbitrary()? {
             let params = input.arbitrary::<P>()?;
             let result = input.arbitrary::<R>()?;
-            *store.data_mut() = Box::new((params.clone(), result.clone()));
+            *store.data_mut() = Some((params.clone(), result.clone()));
             log::trace!("passing in parameters {params:?}");
             let actual = if declarations.options.guest_caller_async {
                 store
@@ -393,8 +385,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
                         // `Accessor::with` future with `now_or_never` rather than
                         // `.await` to avoid tripping Send inference.
                         cx.with(|mut store| host_function(store.as_context_mut(), params, results))
-                            .now_or_never()
-                            .expect("`Accessor::with` resolves synchronously")
+                            .await
                     })
                 }
             })
