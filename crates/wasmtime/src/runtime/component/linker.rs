@@ -208,7 +208,14 @@ impl<T> Linker<T> {
     /// Returns an error if this linker doesn't define a name that the
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
+    ///
+    /// Returns an error if `component` was not compiled by the same
+    /// [`Engine`](crate::Engine) as this linker.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
+        ensure!(
+            Engine::same(&self.engine, component.engine()),
+            "cross-`Engine` instantiation is not currently supported"
+        );
         self.typecheck(&component)?;
 
         // Now that all imports are known to be defined and satisfied by this

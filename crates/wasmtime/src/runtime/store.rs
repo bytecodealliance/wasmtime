@@ -1312,9 +1312,11 @@ impl StoreOpaque {
         &self.modules
     }
 
+    /// Get this store's module registry along with the engine that everything
+    /// registered in it must have been compiled by.
     #[inline]
-    pub(crate) fn modules_mut(&mut self) -> &mut ModuleRegistry {
-        &mut self.modules
+    pub(crate) fn modules_and_engine_mut(&mut self) -> (&mut ModuleRegistry, &Engine) {
+        (&mut self.modules, &self.engine)
     }
 
     pub(crate) fn func_refs(&mut self) -> &mut FuncRefs {
