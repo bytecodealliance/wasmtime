@@ -1,5 +1,4 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
-use futures::FutureExt as _;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use wasmtime::Result;
@@ -456,10 +455,6 @@ async fn run_wasm_in_call_async() -> Result<()> {
         .root()
         .func_wrap_concurrent("a", |accessor: &Accessor<State>, (): ()| {
             Box::pin(async move {
-                // `Accessor::with` is `async` but resolves synchronously;
-                // holding its future across an `.await` inside this
-                // `Send`-required concurrent closure trips Send inference, so
-                // drive it with `now_or_never` instead.
                 let func = accessor
                     .with(|mut access| {
                         access
@@ -467,8 +462,7 @@ async fn run_wasm_in_call_async() -> Result<()> {
                             .unwrap()
                             .get_typed_func::<(), ()>(&mut access, "run")
                     })
-                    .now_or_never()
-                    .expect("`Accessor::with` resolves synchronously")?;
+                    .await?;
                 func.call_concurrent(accessor, ()).await?;
                 Ok(())
             })
@@ -672,8 +666,7 @@ async fn sync_lower_async_host_does_not_leak() -> Result<()> {
                         let max = s.data_mut();
                         *max = (*max).max(cur);
                     })
-                    .now_or_never()
-                    .expect("`Accessor::with` resolves synchronously");
+                    .await;
                 Ok(())
             })
         })?;
@@ -911,14 +904,8 @@ async fn concurrent_sync_calls_to_async_host() -> Result<()> {
                     .with(|mut s| {
                         *s.data_mut() += 1;
                     })
-                    .now_or_never()
-                    .expect("`Accessor::with` resolves synchronously");
-                while accessor
-                    .with(|mut s| *s.data_mut())
-                    .now_or_never()
-                    .expect("`Accessor::with` resolves synchronously")
-                    < 3
-                {
+                    .await;
+                while accessor.with(|mut s| *s.data_mut()).await < 3 {
                     tokio::task::yield_now().await;
                 }
                 Ok(())

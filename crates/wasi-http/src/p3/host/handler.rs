@@ -52,27 +52,28 @@ impl<T> HostWithStore<T> for WasiHttp {
         let (res_result_tx, res_result_rx) = oneshot::channel();
 
         let getter = store.getter();
-        let fut = store.with(|mut store| {
-            let WasiHttpCtxView { table, .. } = store.get();
-            let req = table
-                .delete(req)
-                .context("failed to delete request from table")
-                .map_err(HttpError::trap)?;
-            let (req, options) =
-                req.into_http_with_getter(&mut store, io_task_result(io_result_rx), getter)?;
-            HttpResult::Ok(store.get().hooks.send_request(
-                req.map(|body| body.with_state(io_task_rx).boxed_unsync()),
-                options.as_deref().copied(),
-                Box::new(async {
-                    // Forward the response processing result to `WasiHttpCtx` implementation
-                    let Ok(fut) = res_result_rx.await else {
-                        return Ok(());
-                    };
-                    Box::into_pin(fut).await
-                }),
-            ))
-        })
-        .await?;
+        let fut = store
+            .with(|mut store| {
+                let WasiHttpCtxView { table, .. } = store.get();
+                let req = table
+                    .delete(req)
+                    .context("failed to delete request from table")
+                    .map_err(HttpError::trap)?;
+                let (req, options) =
+                    req.into_http_with_getter(&mut store, io_task_result(io_result_rx), getter)?;
+                HttpResult::Ok(store.get().hooks.send_request(
+                    req.map(|body| body.with_state(io_task_rx).boxed_unsync()),
+                    options.as_deref().copied(),
+                    Box::new(async {
+                        // Forward the response processing result to `WasiHttpCtx` implementation
+                        let Ok(fut) = res_result_rx.await else {
+                            return Ok(());
+                        };
+                        Box::into_pin(fut).await
+                    }),
+                ))
+            })
+            .await?;
         let (res, io) = match Box::into_pin(fut).await {
             Ok(res) => res,
             Err(e) => {
@@ -90,11 +91,6 @@ impl<T> HostWithStore<T> for WasiHttp {
         ) = res.into_parts();
 
         let mut io = Box::into_pin(io);
-        // Poll the I/O future in its own statement so the temporary `Context`
-        // (which is `!Send` due to its `LocalWaker`) is dropped before the
-        // `.await` in the error arm below. Temporaries in a `match` scrutinee
-        // otherwise live until the end of the whole `match`, which would hold
-        // this `!Send` value across the await and make `send`'s future `!Send`.
         let io_poll = io.as_mut().poll(&mut Context::from_waker(Waker::noop()));
         let body = match io_poll {
             Poll::Ready(Ok(())) => body,
@@ -118,23 +114,24 @@ impl<T> HostWithStore<T> for WasiHttp {
                 body.with_state(io).boxed_unsync()
             }
         };
-        store.with(|mut store| {
-            let res = Response {
-                status,
-                headers: FieldMap::new_immutable(store.get().hooks, headers),
-                body: Body::Host {
-                    body,
-                    result_tx: res_result_tx,
-                },
-            };
-            store
-                .get()
-                .table
-                .push(res)
-                .context("failed to push response to table")
-                .map_err(HttpError::trap)
-        })
-        .await
+        store
+            .with(|mut store| {
+                let res = Response {
+                    status,
+                    headers: FieldMap::new_immutable(store.get().hooks, headers),
+                    body: Body::Host {
+                        body,
+                        result_tx: res_result_tx,
+                    },
+                };
+                store
+                    .get()
+                    .table
+                    .push(res)
+                    .context("failed to push response to table")
+                    .map_err(HttpError::trap)
+            })
+            .await
     }
 }
 
