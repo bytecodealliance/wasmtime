@@ -1306,7 +1306,7 @@ block0(v0: i64, v1: i16):
 ;   mov x25, x0
 ;   mov x26, x1
 ;   ldaxrh w27, [x25] ; trap: heap_oob
-;   cmp w27, w26
+;   cmp w27, w26, uxth
 ;   csel x28, x27, x26, hi
 ;   stlxrh w24, w28, [x25] ; trap: heap_oob
 ;   cbnz x24, #0x1c
@@ -1349,7 +1349,7 @@ block0(v0: i64, v1: i8):
 ;   mov x25, x0
 ;   mov x26, x1
 ;   ldaxrb w27, [x25] ; trap: heap_oob
-;   cmp w27, w26
+;   cmp w27, w26, uxtb
 ;   csel x28, x27, x26, hi
 ;   stlxrb w24, w28, [x25] ; trap: heap_oob
 ;   cbnz x24, #0x1c
@@ -1652,7 +1652,7 @@ block0(v0: i64, v1: i16):
 ;   mov x25, x0
 ;   mov x26, x1
 ;   ldaxrh w27, [x25] ; trap: heap_oob
-;   cmp w27, w26
+;   cmp w27, w26, uxth
 ;   csel x28, x27, x26, lo
 ;   stlxrh w24, w28, [x25] ; trap: heap_oob
 ;   cbnz x24, #0x1c
@@ -1695,7 +1695,7 @@ block0(v0: i64, v1: i8):
 ;   mov x25, x0
 ;   mov x26, x1
 ;   ldaxrb w27, [x25] ; trap: heap_oob
-;   cmp w27, w26
+;   cmp w27, w26, uxtb
 ;   csel x28, x27, x26, lo
 ;   stlxrb w24, w28, [x25] ; trap: heap_oob
 ;   cbnz x24, #0x1c

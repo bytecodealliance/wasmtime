@@ -1508,7 +1508,14 @@ impl MachInstEmit for Inst {
                     },
                     _ => None,
                 };
-
+                let zero_ext = match op {
+                    AtomicRMWLoopOp::Umin | AtomicRMWLoopOp::Umax => match ty {
+                        I16 => Some(ExtendOp::UXTH),
+                        I8 => Some(ExtendOp::UXTB),
+                        _ => None,
+                    },
+                    _ => None,
+                };
                 // sxt{b|h} the loaded result if necessary.
                 if sign_ext.is_some() {
                     let (_, from_bits) = sign_ext.unwrap();
@@ -1561,8 +1568,7 @@ impl MachInstEmit for Inst {
                             _ => unreachable!(),
                         };
 
-                        if sign_ext.is_some() {
-                            let (extendop, _) = sign_ext.unwrap();
+                        if let Some(extendop) = sign_ext.map(|(op, _)| op).or(zero_ext) {
                             Inst::AluRRRExtend {
                                 alu_op: ALUOp::SubS,
                                 size,
