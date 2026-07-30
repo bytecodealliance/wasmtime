@@ -468,6 +468,11 @@
 (rule (put_in_xreg val) (xreg_new (put_in_reg val)))
 (convert Value XReg put_in_xreg)
 
+;; Returns `Value` in an `XReg` if it's <=64 bits, or the low 64-bits if
+;; it's an i128.
+(decl lo_xreg (Value) XReg)
+(rule (lo_xreg val) (xreg_new (lo_reg val)))
+
 ;; Construct an `InstOutput` out of a single XReg register.
 (decl output_xreg (XReg) InstOutput)
 (rule (output_xreg x) (output_reg x))

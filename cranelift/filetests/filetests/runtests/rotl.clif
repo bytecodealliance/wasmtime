@@ -231,6 +231,65 @@ block0(v0: i8, v1: i8):
 ; run: %rotl_i8_i8(0xe4, 66) == 0x93
 
 
+function %rotl_i64_i128(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = rotl.i64 v0, v3
+    return v4
+}
+; run: %rotl_i64_i128(0xe0000000_00000000, 0, 0) == 0xe0000000_00000000
+; run: %rotl_i64_i128(0xe0000000_00000000, 1, 0) == 0xc0000000_00000001
+; run: %rotl_i64_i128(0xe000000f_0000000f, 0, 0) == 0xe000000f_0000000f
+; run: %rotl_i64_i128(0xe000000f_0000000f, 4, 0) == 0x000000f0_000000fe
+; run: %rotl_i64_i128(0xe0000000_00000004, 64, 0) == 0xe0000000_00000004
+; run: %rotl_i64_i128(0xe0000000_00000004, 65, 0) == 0xc0000000_00000009
+; run: %rotl_i64_i128(0xe0000000_00000004, 66, 0) == 0x80000000_00000013
+; run: %rotl_i64_i128(0xe0000000_00000004, 66, 0xffffffff_ffffffff) == 0x80000000_00000013
+
+function %rotl_i32_i128(i32, i64, i64) -> i32 {
+block0(v0: i32, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = rotl.i32 v0, v3
+    return v4
+}
+; run: %rotl_i32_i128(0xe0000000, 0, 0) == 0xe0000000
+; run: %rotl_i32_i128(0xe0000000, 1, 0) == 0xc0000001
+; run: %rotl_i32_i128(0xe00f000f, 0, 0) == 0xe00f000f
+; run: %rotl_i32_i128(0xe00f000f, 4, 0) == 0x00f000fe
+; run: %rotl_i32_i128(0xe0000004, 64, 0) == 0xe0000004
+; run: %rotl_i32_i128(0xe0000004, 65, 0) == 0xc0000009
+; run: %rotl_i32_i128(0xe0000004, 66, 0) == 0x80000013
+; run: %rotl_i32_i128(0xe0000004, 66, 0xffffffff_ffffffff) == 0x80000013
+
+function %rotl_i16_i128(i16, i64, i64) -> i16 {
+block0(v0: i16, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = rotl.i16 v0, v3
+    return v4
+}
+; run: %rotl_i16_i128(0xe000, 0, 0) == 0xe000
+; run: %rotl_i16_i128(0xe000, 1, 0) == 0xc001
+; run: %rotl_i16_i128(0xef0f, 0, 0) == 0xef0f
+; run: %rotl_i16_i128(0xef0f, 4, 0) == 0xf0fe
+; run: %rotl_i16_i128(0xe004, 64, 0) == 0xe004
+; run: %rotl_i16_i128(0xe004, 65, 0) == 0xc009
+; run: %rotl_i16_i128(0xe004, 66, 0) == 0x8013
+; run: %rotl_i16_i128(0xe004, 66, 0xffffffff_ffffffff) == 0x8013
+
+function %rotl_i8_i128(i8, i64, i64) -> i8 {
+block0(v0: i8, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = rotl.i8 v0, v3
+    return v4
+}
+; run: %rotl_i8_i128(0xe0, 0, 0) == 0xe0
+; run: %rotl_i8_i128(0xe0, 1, 0) == 0xc1
+; run: %rotl_i8_i128(0xef, 0, 0) == 0xef
+; run: %rotl_i8_i128(0xef, 4, 0) == 0xfe
+; run: %rotl_i8_i128(0xe4, 64, 0) == 0xe4
+; run: %rotl_i8_i128(0xe4, 65, 0) == 0xc9
+; run: %rotl_i8_i128(0xe4, 66, 0) == 0x93
+; run: %rotl_i8_i128(0xe4, 66, 0xffffffff_ffffffff) == 0x93
 
 ;; This is a regression test for rotates on x64
 ;; See: https://github.com/bytecodealliance/wasmtime/pull/3610

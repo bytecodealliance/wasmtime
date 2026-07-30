@@ -789,7 +789,7 @@
 
 (decl mask_xmm_shift (Type Value) RegMemImm)
 (rule (mask_xmm_shift ty amt)
-      (gpr_to_reg (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
+      (gpr_to_reg (x64_and $I64 (lo_gpr amt) (RegMemImm.Imm (shift_mask ty)))))
 (rule 1 (mask_xmm_shift ty (iconst _ n))
       (RegMemImm.Imm (shift_amount_masked ty n)))
 
@@ -855,7 +855,7 @@
 ;;   hi.i16x8 = [(s8, s8), (s9, s9), ..., (s15, s15)]
 ;;   shifted_hi.i16x8 = shift each lane of `high`
 ;;   result = [s0'', s1'', ..., s15'']
-(rule (lower (sshr ty @ $I8X16 src amt @ (value_type amt_ty)))
+(rule (lower (sshr ty @ $I8X16 src amt))
       (let ((src_ Xmm (put_in_xmm src))
             ;; Mask the amount to ensure wrapping behaviour
             (masked_amt RegMemImm (mask_xmm_shift ty amt))
@@ -864,21 +864,24 @@
             ;; fill in the upper bits appropriately.
             (lo Xmm (x64_punpcklbw src_ src_))
             (hi Xmm (x64_punpckhbw src_ src_))
-            (amt_ XmmMemImm (sshr_i8x16_bigger_shift amt_ty masked_amt))
+            (amt_ XmmMemImm (sshr_i8x16_bigger_shift masked_amt))
             (shifted_lo Xmm (x64_psraw lo amt_))
             (shifted_hi Xmm (x64_psraw hi amt_)))
         (x64_packsswb shifted_lo shifted_hi)))
 
-(decl sshr_i8x16_bigger_shift (Type RegMemImm) XmmMemImm)
-(rule (sshr_i8x16_bigger_shift _ty (RegMemImm.Imm i))
+;; NB: the amount here has already been masked to at most 7 by `mask_xmm_shift`,
+;; so the addition is always done at `$I32` regardless of the type of the
+;; original shift amount
+(decl sshr_i8x16_bigger_shift (RegMemImm) XmmMemImm)
+(rule (sshr_i8x16_bigger_shift (RegMemImm.Imm i))
       (xmm_mem_imm_new (RegMemImm.Imm (u32_wrapping_add i 8))))
-(rule (sshr_i8x16_bigger_shift ty (RegMemImm.Reg r))
-      (mov_rmi_to_xmm (RegMemImm.Reg (x64_add ty
+(rule (sshr_i8x16_bigger_shift (RegMemImm.Reg r))
+      (mov_rmi_to_xmm (RegMemImm.Reg (x64_add $I32
                                           r
                                           (RegMemImm.Imm 8)))))
-(rule (sshr_i8x16_bigger_shift ty rmi @ (RegMemImm.Mem _m))
-      (mov_rmi_to_xmm (RegMemImm.Reg (x64_add ty
-                                          (imm ty 8)
+(rule (sshr_i8x16_bigger_shift rmi @ (RegMemImm.Mem _m))
+      (mov_rmi_to_xmm (RegMemImm.Reg (x64_add $I32
+                                          (imm $I32 8)
                                           rmi))))
 
 ;; `sshr.{i16x8,i32x4}` can be a simple `psra{w,d}`, we just have to make sure
@@ -901,14 +904,14 @@
 (rule 2 (lower (sshr ty @ $I64X2 src amt))
         (if-let true (has_avx512vl))
         (if-let true (has_avx512f))
-        (let ((masked Gpr (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
+        (let ((masked Gpr (x64_and $I64 (lo_gpr amt) (RegMemImm.Imm (shift_mask ty)))))
           (x64_vpsraq src (x64_movd_to_xmm masked))))
 
 (rule 1 (lower (sshr $I64X2 src (u32_from_iconst amt)))
         (lower_i64x2_sshr_imm src (u32_and amt 63)))
 
 (rule (lower (sshr $I64X2 src amt))
-      (lower_i64x2_sshr_gpr src (x64_and $I64 amt (RegMemImm.Imm 63))))
+      (lower_i64x2_sshr_gpr src (x64_and $I64 (lo_gpr amt) (RegMemImm.Imm 63))))
 
 (decl lower_i64x2_sshr_imm (Xmm u32) Xmm)
 
@@ -4513,7 +4516,7 @@
           (x64_shrq_mi result 8)))
 
 ;; Same as the above rule but for 16-to-64 bit types.
-(rule 2 (lower (srem _ a @ (value_type ty) (iconst _ imm)))
+(rule 2 (lower (srem _ a @ (value_type (fits_in_64 ty)) (iconst _ imm)))
         (if-let n (safe_divisor_from_imm64 ty imm))
         (let (
             (a Gpr a)
@@ -4526,7 +4529,7 @@
 (rule 1 (lower (srem _ a @ (value_type $I8) b))
   (x64_shrq_mi (x64_checked_srem_seq8 (x64_cbtw_zo a) b) 8))
 
-(rule (lower (srem _ a @ (value_type ty) b))
+(rule (lower (srem _ a @ (value_type (fits_in_64 ty)) b))
       (let (
           (a Gpr a)
           (size OperandSize (raw_operand_size_of_type ty))
