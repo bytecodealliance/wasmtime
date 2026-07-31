@@ -817,7 +817,7 @@ struct HostWorkerState {
 
 impl WorkerState for HostWorkerState {
     type StoreData = Host;
-    type RequestId = u64;
+    type RequestData = u64;
 
     fn should_accept_request(&self, concurrent_count: usize, total_count: usize) -> ShouldAccept {
         if total_count >= self.max_instance_reuse_count {
