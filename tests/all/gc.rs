@@ -3788,3 +3788,107 @@ fn initial_size_larger_than_reservation() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_fill_i64_gc_during_epoch() -> Result<()> {
+    gc_during_epoch(
+        r#"
+        (module
+          (type $arr (array (mut i64)))
+          (type $box (struct (field i32)))
+          (func (export "run") (param $n i32) (result i32)
+            (local $a (ref null $arr)) (local $i i32) (local $s i32)
+            (local.set $a (array.new_default $arr (local.get $n)))
+            ;; Keep the collector busy so it has something to move.
+            (drop (struct.new $box (i32.const 1)))
+            (array.fill $arr (local.get $a) (i32.const 0) (i64.const 7) (local.get $n))
+            (block $done (loop $l
+              (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+              (local.set $s (i32.add (local.get $s)
+                (i32.wrap_i64 (array.get $arr (local.get $a) (local.get $i)))))
+              (local.set $i (i32.add (local.get $i) (i32.const 1)))
+              (br $l)))
+            (local.get $s)))
+    "#,
+    )
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_new_gc_during_epoch() -> Result<()> {
+    gc_during_epoch(
+        r#"
+        (module
+          (type $box (struct (field i32)))
+          (type $arr (array (mut (ref null $box))))
+          (func (export "run") (param $n i32) (result i32)
+            (local $a (ref null $arr)) (local $i i32) (local $s i32)
+            (local.set $a (array.new $arr (struct.new $box (i32.const 7)) (local.get $n)))
+            (block $done (loop $l
+              (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+              (local.set $s (i32.add (local.get $s)
+                (struct.get $box 0 (ref.as_non_null
+                  (array.get $arr (local.get $a) (local.get $i))))))
+              (local.set $i (i32.add (local.get $i) (i32.const 1)))
+              (br $l)))
+            (local.get $s)))
+    "#,
+    )
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_copy_gc_during_epoch() -> Result<()> {
+    gc_during_epoch(
+        r#"
+        (module
+          (type $box (struct (field i32)))
+          (type $arr (array (mut (ref null $box))))
+          (func (export "run") (param $n i32) (result i32)
+            (local $a (ref null $arr)) (local $b (ref null $arr))
+            (local $i i32) (local $s i32)
+            (local.set $a (array.new_default $arr (local.get $n)))
+            (local.set $b (array.new_default $arr (local.get $n)))
+            (array.fill $arr (local.get $b) (i32.const 0)
+                        (struct.new $box (i32.const 7)) (local.get $n))
+            (array.copy $arr $arr (local.get $a) (i32.const 0)
+                                  (local.get $b) (i32.const 0) (local.get $n))
+            (block $done (loop $l
+              (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+              (local.set $s (i32.add (local.get $s)
+                (struct.get $box 0 (ref.as_non_null
+                  (array.get $arr (local.get $a) (local.get $i))))))
+              (local.set $i (i32.add (local.get $i) (i32.const 1)))
+              (br $l)))
+            (local.get $s)))
+    "#,
+    )
+}
+
+fn gc_during_epoch(wat: &str) -> Result<()> {
+    let mut config = Config::new();
+    config.epoch_interruption(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, wat)?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_callback(|mut caller| {
+        caller.gc(None)?;
+        Ok(UpdateDeadline::Continue(0))
+    });
+    engine.increment_epoch();
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<u32, u32>(&mut store, "run")?;
+
+    let n = 100;
+    for i in 0..5 {
+        match f.call(&mut store, n) {
+            Ok(got) => assert_eq!(got, 7 * n, "iteration {i} read back {got}"),
+            Err(e) => panic!("iteration {i} failed: {e:?}"),
+        }
+    }
+    Ok(())
+}

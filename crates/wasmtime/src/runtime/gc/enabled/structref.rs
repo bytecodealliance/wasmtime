@@ -70,6 +70,11 @@ pub struct StructRefPre {
 impl StructRefPre {
     /// Create a new `StructRefPre` that is associated with the given store
     /// and type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ty` was not created with the same
+    /// [`Engine`](crate::Engine) as `store`.
     pub fn new(mut store: impl AsContextMut, ty: StructType) -> Self {
         Self::_new(store.as_context_mut().0, ty)
     }
