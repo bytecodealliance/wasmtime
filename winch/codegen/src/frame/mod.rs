@@ -241,7 +241,15 @@ impl Frame<Prologue> {
                 LocalSlot::new(*ty, *next_stack)
             }
             // Create a local slot, with an offset from the arguments base in
-            // the stack; which is the frame pointer + return address.
+            // the stack; which is the frame pointer + return address. GC
+            // references are re-homed into a frame slot by the prologue so
+            // that stack maps cover them: the caller's outgoing argument
+            // area is not visited by the collector, so a reference left
+            // there goes stale across a collection.
+            ABIOperand::Stack { ty, size, .. } if ty.is_vmgcref_type_and_not_i31() => {
+                *next_stack = align_to(*next_stack, *size) + *size;
+                LocalSlot::new(*ty, *next_stack)
+            }
             ABIOperand::Stack { ty, offset, .. } => {
                 LocalSlot::stack_arg(*ty, offset + arg_base_offset)
             }
@@ -250,6 +258,12 @@ impl Frame<Prologue> {
 }
 
 impl Frame<Emission> {
+    /// Returns an iterator over all the [`LocalSlot`]s in the frame,
+    /// including the [`SpecialLocals`].
+    pub fn locals(&self) -> impl Iterator<Item = &LocalSlot> {
+        self.special_locals.iter().chain(self.wasm_locals.iter())
+    }
+
     /// Get the [`LocalSlot`] for a WebAssembly local.
     /// This method assumes that the index is bound to u32::MAX, representing
     /// the index space for WebAssembly locals.

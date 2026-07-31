@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    abi::{ABIOperand, ABISig, RetArea, vmctx},
+    abi::{ABI, ABIOperand, ABISig, LocalSlot, RetArea, vmctx},
     bail,
     codegen::BlockSig,
     ensure, format_err,
@@ -231,6 +231,25 @@ where
                             _ => bail!(CodeGenError::unsupported_wasm_type()),
                         },
                     }
+                }
+                // GC references passed on the stack are re-homed into the
+                // frame so stack maps cover them; everything else stays in
+                // the caller's argument area.
+                (ABIOperand::Stack { ty, offset, .. }, slot)
+                    if ty.is_vmgcref_type_and_not_i31() =>
+                {
+                    ensure!(
+                        slot.addressed_from_sp(),
+                        CodeGenError::sp_addressing_expected(),
+                    );
+                    let arg_base = u32::from(<M::ABI as ABI>::arg_base_offset());
+                    let src = LocalSlot::stack_arg(*ty, offset + arg_base);
+                    let src_addr = self.masm.local_address(&src)?;
+                    let dst_addr = self.masm.local_address(slot)?;
+                    self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+                        masm.load(src_addr, scratch.writable(), OperandSize::S32)?;
+                        masm.store(scratch.inner().into(), dst_addr, OperandSize::S32)
+                    })?;
                 }
                 // Skip non-register arguments
                 _ => {}

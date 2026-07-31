@@ -1344,6 +1344,16 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[u32]) -> Result<()> {
+        let frame_size = sp_offset.as_u32() + u32::from(SHADOW_STACK_POINTER_SLOT_SIZE);
+        let return_addr = self.asm.buffer().cur_offset();
+        let map = cranelift_codegen::ir::UserStackMap::from_sp_offsets(offsets.iter().copied());
+        self.asm
+            .buffer_mut()
+            .push_user_stack_map_sp_relative(return_addr, frame_size, map);
+        Ok(())
+    }
+
     fn current_code_offset(&self) -> Result<CodeOffset> {
         Ok(self.asm.buffer().cur_offset())
     }
