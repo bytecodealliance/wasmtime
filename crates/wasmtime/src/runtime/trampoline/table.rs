@@ -30,20 +30,22 @@ pub async fn create_table(
 
     let imports = Imports::default();
 
+    let runtime_info = ModuleRuntimeInfo::bare_with_registered_types(
+        try_new::<Arc<_>>(module)?,
+        store.engine(),
+        table.element().clone().into_registered_type(),
+    )?;
+
     unsafe {
         let allocator =
             OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
-        let module = try_new::<Arc<_>>(module)?;
         store
             .allocate_instance(
                 limiter,
                 AllocateInstanceKind::Dummy {
                     allocator: &allocator,
                 },
-                &ModuleRuntimeInfo::bare_with_registered_types(
-                    module,
-                    table.element().clone().into_registered_type(),
-                )?,
+                &runtime_info,
                 imports,
             )
             .await

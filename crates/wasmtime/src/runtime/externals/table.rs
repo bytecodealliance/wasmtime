@@ -56,6 +56,9 @@ impl Table {
     /// Returns an error if `init` does not match the element type of the table,
     /// or if `init` does not belong to the `store` provided.
     ///
+    /// Returns an error if the element type of `ty` was not created with the
+    /// same [`Engine`](crate::Engine) as `store`.
+    ///
     /// This function will also return an error when used with a
     /// [`Store`](`crate::Store`) which has a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
@@ -106,6 +109,9 @@ impl Table {
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
     /// # Errors
+    ///
+    /// Returns an error if the element type of `ty` was not created with the
+    /// same [`Engine`](crate::Engine) as `store`.
     ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
