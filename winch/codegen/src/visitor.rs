@@ -1663,7 +1663,9 @@ where
         match slot.ty {
             I32 | I64 | F32 | F64 | V128 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func => context.stack.push(Val::local(index, slot.ty)),
+                WasmHeapType::Func | WasmHeapType::Extern => {
+                    context.stack.push(Val::local(index, slot.ty))
+                }
                 _ => bail!(CodeGenError::unsupported_wasm_type()),
             },
         }
@@ -2128,6 +2130,10 @@ where
                     WasmValType::I32 => self.context.stack.push(Val::i32(0)),
                     _ => bail!(CodeGenError::unsupported_wasm_type()),
                 }
+                Ok(())
+            }
+            HeapType::EXTERN => {
+                self.context.stack.push(Val::i32(0));
                 Ok(())
             }
             _ => Err(format_err!(CodeGenError::unsupported_wasm_type())),
@@ -4620,7 +4626,7 @@ impl TryFrom<WasmValType> for OperandSize {
                     // to be updated in such a way that the calculation of the
                     // OperandSize will depend on the target's  pointer size.
                     WasmHeapType::Func => OperandSize::S64,
-                    WasmHeapType::Extern => OperandSize::S64,
+                    WasmHeapType::Extern => OperandSize::S32,
                     _ => bail!(CodeGenError::unsupported_wasm_type()),
                 }
             }

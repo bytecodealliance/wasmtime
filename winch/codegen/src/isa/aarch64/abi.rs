@@ -131,6 +131,7 @@ impl ABI for Aarch64ABI {
         match ty {
             WasmValType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => Self::word_bytes(),
+                WasmHeapType::Extern => Self::word_bytes() / 2,
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
             WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),
@@ -211,6 +212,22 @@ mod tests {
         WasmFuncType,
         WasmValType::{self, *},
     };
+
+    #[test]
+    fn ref_sizes_match_cranelift_representation() {
+        use wasmtime_environ::{WasmHeapType, WasmRefType};
+        let ty = |heap_type| {
+            WasmValType::Ref(WasmRefType {
+                nullable: true,
+                heap_type,
+            })
+        };
+        assert_eq!(
+            Aarch64ABI::sizeof(&ty(WasmHeapType::Func)),
+            Aarch64ABI::word_bytes()
+        );
+        assert_eq!(Aarch64ABI::sizeof(&ty(WasmHeapType::Extern)), 4);
+    }
 
     #[test]
     fn xreg_abi_sig() -> Result<()> {
