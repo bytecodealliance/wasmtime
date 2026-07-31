@@ -45,3 +45,6 @@ pub const CONTROL_EFFECT_SWITCH_DISCRIMINANT: u32 = 3;
 /// Discriminant of variant `Trap` in
 /// `runtime::vm::ControlEffect`.
 pub const CONTROL_EFFECT_TRAP_DISCRIMINANT: u32 = 4;
+/// Discriminant used to resume a suspended continuation by throwing an
+/// exception at its suspension point.
+pub const CONTROL_EFFECT_RESUME_THROW_DISCRIMINANT: u32 = 5;
