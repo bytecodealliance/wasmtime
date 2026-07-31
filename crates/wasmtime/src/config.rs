@@ -4681,6 +4681,7 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
             "paca" => Some(std::arch::is_aarch64_feature_detected!("paca")),
             "fp16" => Some(std::arch::is_aarch64_feature_detected!("fp16")),
             "dotprod" => Some(std::arch::is_aarch64_feature_detected!("dotprod")),
+            "i8mm" => Some(std::arch::is_aarch64_feature_detected!("i8mm")),
 
             _ => None,
         };
