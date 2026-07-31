@@ -181,6 +181,7 @@ opt-level = 0
 resolver = '2'
 members = [
   "cranelift",
+  "cranelift/filetests/wast-arm-runtest",
   "cranelift/assembler-x64/fuzz",
   "cranelift/isle/fuzz",
   "cranelift/isle/islec",
