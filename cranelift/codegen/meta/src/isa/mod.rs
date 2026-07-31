@@ -2,6 +2,7 @@
 use crate::cdsl::isa::TargetIsa;
 use std::fmt;
 
+mod arm32;
 mod arm64;
 mod pulley;
 mod riscv64;
@@ -13,6 +14,7 @@ pub(crate) mod x86;
 pub enum Isa {
     X86,
     Arm64,
+    Arm32,
     S390x,
     Riscv64,
     Pulley32,
@@ -31,6 +33,7 @@ impl Isa {
     /// Creates isa target from arch.
     pub fn from_arch(arch: &str) -> Option<Self> {
         match arch {
+            "arm" => Some(Isa::Arm32),
             "aarch64" => Some(Isa::Arm64),
             "s390x" => Some(Isa::S390x),
             x if ["x86_64", "i386", "i586", "i686"].contains(&x) => Some(Isa::X86),
@@ -46,6 +49,7 @@ impl Isa {
         &[
             Isa::X86,
             Isa::Arm64,
+            Isa::Arm32,
             Isa::S390x,
             Isa::Riscv64,
             Isa::Pulley32,
@@ -60,6 +64,7 @@ impl fmt::Display for Isa {
         match *self {
             Isa::X86 => write!(f, "x86"),
             Isa::Arm64 => write!(f, "arm64"),
+            Isa::Arm32 => write!(f, "arm32"),
             Isa::S390x => write!(f, "s390x"),
             Isa::Riscv64 => write!(f, "riscv64"),
             Isa::Pulley32 => write!(f, "pulley32"),
@@ -73,6 +78,7 @@ pub(crate) fn define(isas: &[Isa]) -> Vec<TargetIsa> {
         .map(|isa| match isa {
             Isa::X86 => x86::define(),
             Isa::Arm64 => arm64::define(),
+            Isa::Arm32 => arm32::define(),
             Isa::S390x => s390x::define(),
             Isa::Riscv64 => riscv64::define(),
             Isa::Pulley32 | Isa::Pulley64 => pulley::define(),

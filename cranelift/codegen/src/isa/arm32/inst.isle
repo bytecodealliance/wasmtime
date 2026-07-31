@@ -1,0 +1,30 @@
+;; ARM32 machine instruction definitions (MInst) and helper constructors.
+;; Mirrors the Rust Inst enum in inst/mod.rs.
+
+;; Register bitmask for push/pop instructions.
+(type PushMask (primitive u16))
+
+;;;;;;;; MInst type definition ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type MInst
+    (enum
+        ;; Return — ends the function
+        (Ret)
+
+        ;; Args -- pseudo-instruction defining incoming argument registers.
+        ;; Each pair binds a vreg to its incoming arg preg (r0, r1, ...).
+        (Args (args VecArgPair))
+
+        ;; Return with register constraints for return values.
+        ;; Each pair maps a vreg to its designated return preg.
+        (Rets (rets VecRetPair))
+
+        ;; Push registers to the stack: PUSH {Rn, ...} wide STMDB.W sp!, {list}.
+        ;; The `rs` field encodes register bitmask as u16 (bits 0-12 for R0-R12; bit 14=LR).
+        (Push (rs PushMask))
+
+        ;; Pop registers from the stack: POP {Rt, ...} wide LDMIA.W sp!, {list}.
+        ;; The `rt` field encodes register bitmask as u16.
+        (Pop (rt PushMask))
+
+    ))

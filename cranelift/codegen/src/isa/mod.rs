@@ -70,6 +70,9 @@ pub mod x64;
 #[cfg(feature = "arm64")]
 pub mod aarch64;
 
+#[cfg(feature = "arm32")]
+pub mod arm32;
+
 #[cfg(feature = "riscv64")]
 pub mod riscv64;
 
@@ -106,11 +109,15 @@ macro_rules! isa_builder {
 /// Look for an ISA for the given `triple`.
 /// Return a builder that can create a corresponding `TargetIsa`.
 pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
+    use target_lexicon::ArmArchitecture::{Armv6m, Armv7m, Thumbv6m, Thumbv7em, Thumbv7m};
     match triple.architecture {
         Architecture::X86_64 => {
             isa_builder!(x64, (feature = "x86"), triple)
         }
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
+        Architecture::Arm(Armv6m | Armv7m | Thumbv6m | Thumbv7m | Thumbv7em) => {
+            isa_builder!(arm32, (feature = "arm32"), triple)
+        }
         Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),
         Architecture::Riscv64 { .. } => isa_builder!(riscv64, (feature = "riscv64"), triple),
         Architecture::Pulley32 | Architecture::Pulley32be => {
@@ -126,7 +133,7 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
 /// The string names of all the supported, but possibly not enabled, architectures. The elements of
 /// this slice are suitable to be passed to the [lookup_by_name] function to obtain the default
 /// configuration for that architecture.
-pub const ALL_ARCHITECTURES: &[&str] = &["x86_64", "aarch64", "s390x", "riscv64"];
+pub const ALL_ARCHITECTURES: &[&str] = &["x86_64", "aarch64", "s390x", "riscv64", "arm32"];
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
