@@ -295,6 +295,25 @@
 (decl splat64 (u64) Constant)
 (extern constructor splat64 splat64)
 
+
+;; `scalar_to_vector` places its scalar in lane zero and clears every other
+;; lane. A scalar constant can therefore become a vector constant with the
+;; scalar's bits in its lowest lane.
+(rule (simplify (scalar_to_vector (ty_vec128_int dst) (iconst ty n)))
+      (vconst dst (scalar_to_vector_const64 (u64_uextend_imm64 ty n))))
+(rule (simplify
+       (scalar_to_vector (ty_vec128 dst) (f16const _ (u16_from_ieee16 n))))
+      (vconst dst (scalar_to_vector_const64 (u16_into_u64 n))))
+(rule (simplify
+       (scalar_to_vector (ty_vec128 dst) (f32const _ (u32_from_ieee32 n))))
+      (vconst dst (scalar_to_vector_const64 (u32_into_u64 n))))
+(rule (simplify
+       (scalar_to_vector (ty_vec128 dst) (f64const _ (u64_from_ieee64 n))))
+      (vconst dst (scalar_to_vector_const64 n)))
+
+(decl scalar_to_vector_const64 (u64) Constant)
+(extern constructor scalar_to_vector_const64 scalar_to_vector_const64)
+
 ;; Reassociate nested shifts of constants to put constants together for cprop.
 ;;
 ;; ((A shift b) shift C) ==> ((A shift C) shift b)

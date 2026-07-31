@@ -309,6 +309,11 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         self.ctx.func.dfg.constants.insert(imm.into())
     }
 
+    fn scalar_to_vector_const64(&mut self, val: u64) -> Constant {
+        let imm = V128Imm(u128::from(val).to_le_bytes());
+        self.ctx.func.dfg.constants.insert(imm.into())
+    }
+
     type sextend_maybe_etor_returns = MaybeUnaryEtorIter<'a, 'b, 'c>;
     fn sextend_maybe_etor(&mut self, value: Value, returns: &mut Self::sextend_maybe_etor_returns) {
         *returns = MaybeUnaryEtorIter::new(Opcode::Sextend, value);

@@ -1,0 +1,108 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %i8x16() -> i8x16 {
+block0:
+    v0 = iconst.i8 -2
+    v1 = scalar_to_vector.i8x16 v0
+    return v1
+}
+
+; function %i8x16() -> i8x16 fast {
+;     const0 = 0x000000000000000000000000000000fe
+;
+; block0:
+;     v2 = vconst.i8x16 const0
+;     return v2  ; v2 = const0
+; }
+
+function %i16x8() -> i16x8 {
+block0:
+    v0 = iconst.i16 0x1234
+    v1 = scalar_to_vector.i16x8 v0
+    return v1
+}
+
+; function %i16x8() -> i16x8 fast {
+;     const0 = 0x00000000000000000000000000001234
+;
+; block0:
+;     v2 = vconst.i16x8 const0
+;     return v2  ; v2 = const0
+; }
+
+function %i32x4() -> i32x4 {
+block0:
+    v0 = iconst.i32 0
+    v1 = scalar_to_vector.i32x4 v0
+    return v1
+}
+
+; function %i32x4() -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0:
+;     v2 = vconst.i32x4 const0
+;     return v2  ; v2 = const0
+; }
+
+function %i64x2() -> i64x2 {
+block0:
+    v0 = iconst.i64 0x0123456789abcdef
+    v1 = scalar_to_vector.i64x2 v0
+    return v1
+}
+
+; function %i64x2() -> i64x2 fast {
+;     const0 = 0x00000000000000000123456789abcdef
+;
+; block0:
+;     v2 = vconst.i64x2 const0
+;     return v2  ; v2 = const0
+; }
+
+function %f16x8() -> f16x8 {
+block0:
+    v0 = f16const 0x1.5p2
+    v1 = scalar_to_vector.f16x8 v0
+    return v1
+}
+
+; function %f16x8() -> f16x8 fast {
+;     const0 = 0x00000000000000000000000000004540
+;
+; block0:
+;     v2 = vconst.f16x8 const0
+;     return v2  ; v2 = const0
+; }
+
+function %f32x4() -> f32x4 {
+block0:
+    v0 = f32const -0x1.5p0
+    v1 = scalar_to_vector.f32x4 v0
+    return v1
+}
+
+; function %f32x4() -> f32x4 fast {
+;     const0 = 0x000000000000000000000000bfa80000
+;
+; block0:
+;     v2 = vconst.f32x4 const0
+;     return v2  ; v2 = const0
+; }
+
+function %f64x2() -> f64x2 {
+block0:
+    v0 = f64const 0x1.5p2
+    v1 = scalar_to_vector.f64x2 v0
+    return v1
+}
+
+; function %f64x2() -> f64x2 fast {
+;     const0 = 0x00000000000000004015000000000000
+;
+; block0:
+;     v2 = vconst.f64x2 const0
+;     return v2  ; v2 = const0
+; }
