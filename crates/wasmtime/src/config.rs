@@ -2454,7 +2454,6 @@ impl Config {
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL
-                    | WasmFeatures::GC_TYPES
                     | WasmFeatures::EXCEPTIONS
                     | WasmFeatures::LEGACY_EXCEPTIONS
                     | WasmFeatures::STACK_SWITCHING;
@@ -2730,6 +2729,16 @@ impl Config {
         } else {
             None
         };
+
+        #[cfg(feature = "gc")]
+        if tunables.winch_callable
+            && tunables.collector == Some(wasmtime_environ::Collector::DeferredReferenceCounting)
+        {
+            bail!(
+                "Winch does not support the deferred reference-counting \
+                 collector; use the null or copying collector"
+            );
+        }
 
         if tunables.debug_guest {
             ensure!(
