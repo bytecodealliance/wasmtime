@@ -3805,16 +3805,16 @@
 
 ;; Rules for `fcvt_to_uint` and `fcvt_to_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (fcvt_to_uint out_ty val @ (value_type (ty_scalar_float _))))
+(rule (lower (fcvt_to_uint (fits_in_64 out_ty) val @ (value_type (ty_scalar_float _))))
       (cvt_float_to_uint_seq out_ty val false))
 
-(rule (lower (fcvt_to_uint_sat out_ty val @ (value_type (ty_scalar_float _))))
+(rule (lower (fcvt_to_uint_sat (fits_in_64 out_ty) val @ (value_type (ty_scalar_float _))))
       (cvt_float_to_uint_seq out_ty val true))
 
-(rule (lower (fcvt_to_sint out_ty val @ (value_type (ty_scalar_float _))))
+(rule (lower (fcvt_to_sint (fits_in_64 out_ty) val @ (value_type (ty_scalar_float _))))
       (cvt_float_to_sint_seq out_ty val false))
 
-(rule (lower (fcvt_to_sint_sat out_ty val @ (value_type (ty_scalar_float _))))
+(rule (lower (fcvt_to_sint_sat (fits_in_64 out_ty) val @ (value_type (ty_scalar_float _))))
       (cvt_float_to_sint_seq out_ty val true))
 
 ;; The x64 backend currently only supports these two type combinations.
