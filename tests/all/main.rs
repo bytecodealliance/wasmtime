@@ -6,6 +6,7 @@ mod cli_tests;
 mod code_too_large;
 mod component_model;
 mod coredump;
+mod cross_engine;
 mod debug;
 mod defaults;
 mod epoch_interruption;
@@ -100,4 +101,18 @@ pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
     config.total_stacks(1);
 
     config
+}
+
+trait ErrorExt {
+    fn assert_contains(&self, msg: &str);
+}
+
+impl ErrorExt for wasmtime::Error {
+    fn assert_contains(&self, msg: &str) {
+        if self.chain().any(|e| e.to_string().contains(msg)) {
+            return;
+        }
+
+        panic!("failed to find:\n{msg}\n\nwithin error message:\n{self:?}")
+    }
 }

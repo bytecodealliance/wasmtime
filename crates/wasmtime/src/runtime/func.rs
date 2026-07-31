@@ -2452,6 +2452,11 @@ impl HostFunc {
         );
     }
 
+    /// The engine that this function's type is registered with.
+    pub(crate) fn engine(&self) -> &Engine {
+        &self.engine
+    }
+
     pub(crate) fn sig_index(&self) -> VMSharedTypeIndex {
         self.func_ref().type_index
     }

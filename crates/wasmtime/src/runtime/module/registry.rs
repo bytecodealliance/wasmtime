@@ -6,7 +6,7 @@ use crate::component::Component;
 use crate::prelude::*;
 use crate::runtime::vm::VMWasmCallFunction;
 use crate::sync::{OnceLock, RwLock};
-use crate::{code_memory::CodeMemory, FrameInfo, Module};
+use crate::{code_memory::CodeMemory, Engine, FrameInfo, Module};
 use alloc::collections::btree_map::{BTreeMap, Entry};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
@@ -40,6 +40,45 @@ struct LoadedCode {
     /// Modules found within `self.code`, keyed by start address here of the
     /// address of the first function in the module.
     modules: BTreeMap<usize, Module>,
+}
+
+/// Either of the two kinds of thing that can be registered with a
+/// `ModuleRegistry`.
+enum ModuleOrComponent<'a> {
+    Module(&'a Module),
+    #[cfg(feature = "component-model")]
+    Component(&'a Component),
+}
+
+impl<'a> ModuleOrComponent<'a> {
+    /// The engine this was compiled by.
+    fn engine(&self) -> &'a Engine {
+        match self {
+            ModuleOrComponent::Module(m) => m.engine(),
+            #[cfg(feature = "component-model")]
+            ModuleOrComponent::Component(c) => c.engine(),
+        }
+    }
+
+    fn code_object(&self) -> &'a Arc<CodeObject> {
+        match self {
+            ModuleOrComponent::Module(m) => m.code_object(),
+            #[cfg(feature = "component-model")]
+            ModuleOrComponent::Component(c) => c.code_object(),
+        }
+    }
+
+    /// The `Module` to record in the registry, if any.
+    ///
+    /// Components do not have one: their code object holds the text of every
+    /// core module inside them, but none of those are registered individually.
+    fn module(&self) -> Option<&'a Module> {
+        match self {
+            ModuleOrComponent::Module(m) => Some(m),
+            #[cfg(feature = "component-model")]
+            ModuleOrComponent::Component(_) => None,
+        }
+    }
 }
 
 /// An identifier of a module that has previously been inserted into a
@@ -93,21 +132,42 @@ impl ModuleRegistry {
     }
 
     /// Registers a new module with the registry.
-    pub fn register_module(&mut self, module: &Module) -> RegisteredModuleId {
-        self.register(module.code_object(), Some(module)).unwrap()
+    ///
+    /// The `engine` must be the engine of the store that owns this registry.
+    pub fn register_module(
+        &mut self,
+        module: &Module,
+        engine: &Engine,
+    ) -> Result<RegisteredModuleId> {
+        Ok(self
+            .register(ModuleOrComponent::Module(module), engine)?
+            .unwrap())
     }
 
+    /// Registers a new component with the registry.
+    ///
+    /// The `engine` must be the engine of the store that owns this registry.
     #[cfg(feature = "component-model")]
-    pub fn register_component(&mut self, component: &Component) {
-        self.register(component.code_object(), None);
+    pub fn register_component(&mut self, component: &Component, engine: &Engine) -> Result<()> {
+        self.register(ModuleOrComponent::Component(component), engine)?;
+        Ok(())
     }
 
-    /// Registers a new module with the registry.
+    /// Registers a new module or component with the registry.
     fn register(
         &mut self,
-        code: &Arc<CodeObject>,
-        module: Option<&Module>,
-    ) -> Option<RegisteredModuleId> {
+        module_or_component: ModuleOrComponent<'_>,
+        engine: &Engine,
+    ) -> Result<Option<RegisteredModuleId>> {
+        // Nothing below here may run for a foreign module or component: the
+        // type indices it carries mean something else entirely in this engine.
+        ensure!(
+            Engine::same(engine, module_or_component.engine()),
+            "cross-`Engine` usage is not supported"
+        );
+
+        let module = module_or_component.module();
+        let code = module_or_component.code_object();
         let text = code.code_memory().text();
 
         // If there's not actually any functions in this module then we may
@@ -117,11 +177,11 @@ impl ModuleRegistry {
         // module in the future. For that reason we continue to register empty
         // modules and retain them.
         if text.is_empty() {
-            return module.map(|module| {
+            return Ok(module.map(|module| {
                 let id = RegisteredModuleId::WithoutCode(self.modules_without_code.len());
                 self.modules_without_code.push(module.clone());
                 id
-            });
+            }));
         }
 
         // The module code range is exclusive for end, so make it inclusive as
@@ -139,7 +199,7 @@ impl ModuleRegistry {
             if let Some(module) = module {
                 prev.push_module(module);
             }
-            return id;
+            return Ok(id);
         }
 
         // Assert that this module's code doesn't collide with any other
@@ -160,7 +220,7 @@ impl ModuleRegistry {
         }
         let prev = self.loaded_code.insert(end_addr, (start_addr, item));
         assert!(prev.is_none());
-        id
+        Ok(id)
     }
 
     /// Fetches frame information about a program counter in a backtrace.
