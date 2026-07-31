@@ -2773,6 +2773,30 @@ start a print 1234
         .await
     }
 
+    // Shows that MMU interruption interrupts busy loops during `wasmtime serve`
+    // and thus allows them to time out promptly. (Timeout is actuated by
+    // wasi-http in response to what it gets back from
+    // `HostWorkerExpiration::poll()`.)
+    //
+    // MMU interruption is available on only certain hosts. However, we define
+    // it unconditionally so `foreach_cli!`'s assertion below is satisfied:
+    // every `p2_cli_*` Wasm program has a corresponding test.
+    #[tokio::test]
+    async fn p2_cli_serve_busy_loop() -> Result<()> {
+        #[cfg(has_mmu_interruption)]
+        cli_serve_sleep(
+            P2_CLI_SERVE_BUSY_LOOP_COMPONENT,
+            CONNECTION_COUNT_MANY,
+            REQUESTS_PER_CONNECTION_MANY,
+            |cmd| {
+                cmd.arg("-Scli");
+                cmd.arg("-Wmmu-interruption=y");
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     async fn cli_serve_sleep(
         component: &str,
         connection_count: usize,
