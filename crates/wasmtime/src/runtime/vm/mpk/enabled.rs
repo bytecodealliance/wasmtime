@@ -108,6 +108,35 @@ impl ProtectionKey {
     pub fn as_stripe(&self) -> usize {
         self.stripe as usize
     }
+
+    /// Re-apply this [`ProtectionKey`] to a region that has just been re-mapped.
+    ///
+    /// A fresh `mmap` over a region discards that region's protection key,
+    /// leaving it associated with the default key 0 which is always accessible.
+    /// Any code that maps over pkey-protected memory must therefore call this
+    /// afterwards to restore the key, otherwise the memory becomes readable and
+    /// writable from any stripe.
+    ///
+    /// Note that `mprotect` (unlike `mmap`) preserves the existing key, so only
+    /// `mmap` call sites need this.
+    ///
+    /// # Safety
+    ///
+    /// `addr` must be page-aligned and `addr..addr + len` must describe a mapped
+    /// region owned by the caller. `readwrite` must match the page protections
+    /// the region was just mapped with, since this overwrites them.
+    pub unsafe fn reprotect(&self, addr: usize, len: usize, readwrite: bool) -> Result<()> {
+        let prot = if readwrite {
+            sys::PROT_READ | sys::PROT_WRITE
+        } else {
+            sys::PROT_NONE
+        };
+        sys::pkey_mprotect(addr, len, prot, self.id).with_context(|| {
+            format!(
+                "failed to restore pkey on region (addr = {addr:#x}, len = {len}, prot = {prot:#b})"
+            )
+        })
+    }
 }
 
 /// A bit field indicating which protection keys should be allowed and disabled.

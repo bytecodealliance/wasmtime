@@ -589,6 +589,19 @@ impl MemoryPool {
         self.mapping.offset(offset).expect("offset is in bounds")
     }
 
+    /// Return the protection key that this slot's memory was striped with when
+    /// the pool was created, if any.
+    ///
+    /// This mirrors the striping performed in `new`: memory is only colored
+    /// when there are at least two stripes, and slot `i` is colored with the
+    /// `i % num_stripes`th key.
+    fn pkey_for_slot(&self, allocation_index: MemoryAllocationIndex) -> Option<ProtectionKey> {
+        if self.stripes.len() < 2 {
+            return None;
+        }
+        self.stripes[allocation_index.index() % self.stripes.len()].pkey
+    }
+
     /// Take ownership of the given image slot.
     ///
     /// This method is used when a `MemoryAllocationIndex` has been allocated
@@ -620,6 +633,7 @@ impl MemoryPool {
                 self.get_base(allocation_index),
                 HostAlignedByteCount::ZERO,
                 self.layout.max_memory_bytes.byte_count(),
+                self.pkey_for_slot(allocation_index),
             )
         });
 
