@@ -60,6 +60,7 @@ impl dsl::Inst {
             self.generate_new_function(f);
             f.empty_line();
             self.generate_mnemonic_function(f);
+            self.generate_xed_mnemonic_function(f);
             f.empty_line();
             self.generate_encode_function(f);
             f.empty_line();
@@ -113,6 +114,38 @@ impl dsl::Inst {
                     fmtln!(f, "crate::custom::mnemonic::{}(self)", self.name());
                 } else {
                     fmtln!(f, "alloc::borrow::Cow::Borrowed(\"{}\")", self.mnemonic);
+                }
+            },
+        );
+    }
+
+    /// `fn xed_mnemonic(&self) -> Cow<'static, str> { ... }`
+    ///
+    /// This is the mnemonic Intel XED prints for this encoding; it differs from
+    /// [`Self::generate_mnemonic_function`] often enough that the fuzzer's XED
+    /// oracle compares against it rather than reconciling the two after the
+    /// fact. See [`dsl::Inst::xed_mnemonics`].
+    pub fn generate_xed_mnemonic_function(&self, f: &mut Formatter) {
+        let (reg, mem) = self.xed_mnemonics();
+        fmtln!(f, "#[must_use]");
+        fmtln!(f, "#[inline]");
+        f.add_block(
+            &format!("pub fn xed_mnemonic(&self) -> alloc::borrow::Cow<'static, str>"),
+            |f| {
+                let borrow = |m| format!("alloc::borrow::Cow::Borrowed(\"{m}\")");
+                let loc = self.format.uses_memory();
+                match loc {
+                    // The marker is only appended when the `r/m` operand holds
+                    // memory; a memory-only operand always does.
+                    Some(loc) if reg != mem && !loc.is_memory_only() => {
+                        fmtln!(f, "if self.{loc}.is_memory() {{");
+                        f.indent(|f| fmtln!(f, "{}", borrow(&mem)));
+                        fmtln!(f, "}} else {{");
+                        f.indent(|f| fmtln!(f, "{}", borrow(&reg)));
+                        fmtln!(f, "}}");
+                    }
+                    Some(_) if reg != mem => fmtln!(f, "{}", borrow(&mem)),
+                    _ => fmtln!(f, "{}", borrow(&reg)),
                 }
             },
         );
@@ -275,7 +308,7 @@ impl dsl::Inst {
                             return;
                         }
 
-                        fmtln!(f, "let name = self.mnemonic();");
+                        fmtln!(f, "let name = if f.alternate() {{ self.xed_mnemonic() }} else {{ self.mnemonic() }};");
                         if self.format.operands.is_empty() {
                             fmtln!(f, "f.write_str(&name)");
                             return;
@@ -283,9 +316,16 @@ impl dsl::Inst {
                         for op in self.format.operands.iter() {
                             let location = op.location;
                             let to_string = location.generate_to_string(op.extension);
-                            fmtln!(f, "let {location} = {to_string};");
+                            match location.generate_to_string_xed(op.extension) {
+                                Some(xed) => fmtln!(
+                                    f,
+                                    "let {location} = if f.alternate() {{ {xed} }} else {{ {to_string} }};"
+                                ),
+                                None => fmtln!(f, "let {location} = {to_string};"),
+                            }
                         }
                         let ordered_ops = self.format.generate_att_style_operands();
+                        let xed_ops = self.format.generate_xed_style_operands();
                         let mut implicit_ops = self.format.generate_implicit_operands();
                         if self.has_trap {
                             fmtln!(f, "let trap = self.trap;");
@@ -295,7 +335,20 @@ impl dsl::Inst {
                                 implicit_ops.push_str(", {trap}");
                             }
                         }
-                        fmtln!(f, "write!(f, \"{{name}} {ordered_ops}{implicit_ops}\")");
+                        if implicit_ops.is_empty() && xed_ops == ordered_ops {
+                            fmtln!(f, "write!(f, \"{{name}} {ordered_ops}\")");
+                        } else {
+                            // The implicit-operand and trap annotations are
+                            // ours; XED has no equivalent, and it leaves the
+                            // fixed `%xmm0` mask implicit too.
+                            fmtln!(f, "if f.alternate() {{");
+                            f.indent(|f| fmtln!(f, "write!(f, \"{{name}} {xed_ops}\")"));
+                            fmtln!(f, "}} else {{");
+                            f.indent(|f| {
+                                fmtln!(f, "write!(f, \"{{name}} {ordered_ops}{implicit_ops}\")")
+                            });
+                            fmtln!(f, "}}");
+                        }
                     },
                 );
             },

@@ -113,6 +113,162 @@ impl Inst {
         });
         self
     }
+
+    /// The mnemonics XED prints for this encoding: `(register form, memory
+    /// form)`. XED picks a different spelling than we do in three systematic
+    /// ways, all handled here:
+    ///
+    /// 1. it drops the AT&T operand-size suffix we carry (`addl` -> `add`);
+    /// 2. it prefers a different condition-code alias (`cmovae` -> `cmovnb`);
+    /// 3. it appends a width marker when an operand is *memory*, sized by that
+    ///    operand (`addsd` -> `addsdq`, `cmovnb` -> `cmovnbl`).
+    ///
+    /// The two forms differ only when (3) applies, which is why this returns a
+    /// pair: the choice is made at runtime from the `r/m` operand.
+    #[must_use]
+    pub fn xed_mnemonics(&self) -> (String, String) {
+        // `lock_addb` is printed `lock addb`; see `custom::mnemonic`.
+        let mut base = match self.mnemonic.strip_prefix("lock_") {
+            Some(rest) => format!("lock {rest}"),
+            None => self.mnemonic.clone(),
+        };
+
+        // (1) Drop our size suffix when it matches the width of some operand.
+        // Mnemonics XED spells differently outright keep their suffix (it is
+        // part of the name), as do condition-code mnemonics whose trailing
+        // letter is the condition itself (`setb`) rather than a size.
+        if !is_exception(&base) && !is_condition_family(&base) && !keeps_suffix(&base, &self.format)
+        {
+            let widths: Vec<_> = self
+                .format
+                .locations()
+                .map(|l| width_marker(l.bits()))
+                .collect();
+            if base.len() > 2 && widths.iter().any(|w| base.ends_with(w)) {
+                base.truncate(base.len() - 1);
+            }
+        }
+
+        // (2) XED's preferred spelling for the families that have aliases.
+        base = rename(&base);
+
+        // (3) A width marker is appended when the operand is memory, sized by
+        // that operand. `lea` names an address rather than accessing it, so
+        // never takes one; `push`/`pop` always do, even for registers; and for
+        // mnemonics that already name their width the marker repeats it
+        // (`pextrb` -> `pextrbb`).
+        if matches!(base.as_str(), "push" | "pop") {
+            let bits = self.format.locations().next().map_or(64, Location::bits);
+            let m = format!("{base}{}", width_marker(bits));
+            return (m.clone(), m);
+        }
+        let mem = match self.format.uses_memory() {
+            Some(_) if base == "lea" => base.clone(),
+            Some(_) if keeps_suffix(&base, &self.format) => {
+                // The mnemonic already names its width; XED repeats it using
+                // its own letter (`pextrd` is 32-bit, so `pextrdl`).
+                let named = match &base[base.len() - 1..] {
+                    "b" => 8,
+                    "w" => 16,
+                    "d" => 32,
+                    _ => 64,
+                };
+                format!("{base}{}", width_marker(named))
+            }
+            Some(loc) => format!("{base}{}", width_marker(loc.bits())),
+            None => base.clone(),
+        };
+        (base, mem)
+    }
+}
+
+/// XED's single-letter marker for an operand width.
+fn width_marker(bits: u16) -> &'static str {
+    match bits {
+        8 => "b",
+        16 => "w",
+        32 => "l",
+        64 => "q",
+        128 => "x",
+        256 => "y",
+        512 => "z",
+        b => unreachable!("no XED width marker for {b} bits"),
+    }
+}
+
+/// Mnemonics XED spells differently outright.
+const XED_RENAMES: &[(&str, &str)] = &[
+    ("cbtw", "data16 cbw"),
+    ("cltd", "cdq"),
+    ("cltq", "cdqe"),
+    ("cqto", "cqo"),
+    ("cwtd", "data16 cwd"),
+    ("cwtl", "cwde"),
+    ("movabsq", "mov"),
+    ("movslq", "movsxd"),
+];
+
+fn is_exception(m: &str) -> bool {
+    XED_RENAMES.iter().any(|(o, _)| *o == m)
+}
+
+/// The sixteen x64 condition codes, as spelled in our mnemonics.
+const CONDITIONS: &[&str] = &[
+    "a", "ae", "b", "be", "e", "g", "ge", "l", "le", "ne", "no", "np", "ns", "o", "p", "s",
+];
+
+/// Whether `m` is a `cmov`/`set`/`j` mnemonic carrying a valid condition code.
+fn is_condition_family(m: &str) -> bool {
+    ["cmov", "set", "j"]
+        .iter()
+        .filter_map(|p| m.strip_prefix(p))
+        .any(|cc| CONDITIONS.contains(&cc))
+}
+
+/// Mnemonics whose trailing size letter names the instruction (`pextrb`
+/// extracts a *byte*) rather than decorating it in the AT&T style.
+fn keeps_suffix(m: &str, format: &Format) -> bool {
+    const INTRINSIC: &str =
+        "pextr pinsr vpextr vpinsr vpbroadcast pmovsxd pmovzxd vpmovsxd vpmovzxd";
+    INTRINSIC.split(' ').any(|p| m.starts_with(p))
+        // `movq` is a GPR move (suffix) or an XMM move (name) by operand type.
+        || (matches!(m, "movq" | "vmovq") && format.locations().any(|l| l.bits() == 128))
+}
+
+/// Rewrite a suffix-stripped mnemonic into XED's preferred spelling.
+fn rename(base: &str) -> String {
+    if let Some((_, x)) = XED_RENAMES.iter().find(|(o, _)| *o == base) {
+        return (*x).to_string();
+    }
+
+    // `movzbl`/`movswq`/... collapse to plain `movzx`/`movsx`; after the size
+    // suffix is stripped a single source-width letter remains.
+    for (prefix, xed) in [("movz", "movzx"), ("movs", "movsx")] {
+        if let Some(rest) = base.strip_prefix(prefix) {
+            if rest.len() == 1 && "bwlq".contains(rest) {
+                return xed.to_string();
+            }
+        }
+    }
+
+    // Condition-code families: XED prefers the negated spelling for six of the
+    // sixteen conditions.
+    for prefix in ["cmov", "set", "j"] {
+        if let Some(cc) = base.strip_prefix(prefix) {
+            let renamed = match cc {
+                "a" => "nbe",
+                "ae" => "nb",
+                "e" => "z",
+                "g" => "nle",
+                "ge" => "nl",
+                "ne" => "nz",
+                _ => return base.to_string(),
+            };
+            return format!("{prefix}{renamed}");
+        }
+    }
+
+    base.to_string()
 }
 
 impl core::fmt::Display for Inst {
