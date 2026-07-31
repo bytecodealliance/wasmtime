@@ -5,13 +5,17 @@
 ; The lanes are summed to a scalar before returning: a vector return does
 ; not fit in registers on every target, and the per-lane result is already
 ; pinned by the precise-output test in isa/aarch64.
+;
+; riscv64 is not listed: its vector backend has no lowering for the lane
+; extraction this reduction needs (and no vector return either), both
+; unrelated to the dot itself. The interpreter plus the three remaining
+; targets cover the semantics.
 test interpret
 test run
 target aarch64
 target aarch64 has_i8mm
 target x86_64
 target s390x
-target riscv64
 
 function %usdot_mixed(i32x4, i8x16, i8x16) -> i32 {
 block0(v0: i32x4, v1: i8x16, v2: i8x16):
