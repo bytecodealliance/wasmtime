@@ -485,6 +485,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.fuel_save_from_var(builder);
     }
 
+    /// Allocating space for locals incurs a cost, even when the locals are
+    /// never used via local.set/get ops.
+    pub(crate) fn charge_fuel_for_locals(&mut self, num_locals: u32) {
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += i64::from(num_locals);
+        }
+    }
+
     fn fuel_before_op(
         &mut self,
         op: &Operator<'_>,

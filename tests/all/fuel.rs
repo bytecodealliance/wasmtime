@@ -823,7 +823,9 @@ fn custom_variable_operator_cost(config: &mut Config) -> Result<()> {
                 + u64::from(variable.array_init_elem_per_element)
                 + u64::from(variable.array_new_default_per_element)
                 + u64::from(variable.array_new_per_element))
-        + 1;
+        + 1
+        // 3 locals declared, charged at function entry.
+        + 3;
     assert_eq!(consumed, cost_of_execution);
 
     Ok(())

@@ -196,15 +196,18 @@ fn parse_local_decls(
 ) -> WasmResult<()> {
     let mut next_local = num_params;
     let local_count = reader.read_var_u32()?;
+    let mut overall_local_count = 0;
 
     for _ in 0..local_count {
         builder.set_srcloc(cur_srcloc(reader));
         let pos = reader.original_position();
         let count = reader.read_var_u32()?;
+        overall_local_count += count;
         let ty = reader.read()?;
         validator.define_locals(pos, count, ty)?;
         declare_locals(builder, count, ty, &mut next_local, environ)?;
     }
+    environ.charge_fuel_for_locals(overall_local_count);
 
     Ok(())
 }

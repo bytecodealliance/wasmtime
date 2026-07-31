@@ -190,7 +190,7 @@
       end
     )
     (start $f)))
-(assert_fuel 55 ;; 5 loop instructions, 10 iterations, 2 header instrs, 1 func
+(assert_fuel 56 ;; 5 loop instructions, 10 iterations, 2 header instrs, 1 func, 1 local
   (module
     (func $f
       (local i32)
@@ -383,5 +383,22 @@
       i32.const 100
       array.new $a
       drop
+    )
+    (start $f)))
+
+;; Declaring locals costs 1 fuel each, even when they're never used. An
+;; empty function costs 3 fuel, so N locals cost 3 + N.
+(assert_fuel 4
+  (module
+    (func $f (local i32))
+    (start $f)))
+
+(assert_fuel 8
+  (module
+    (func $f
+      (local i32 i32)
+      (local i64)
+      (local f64)
+      (local funcref)
     )
     (start $f)))
