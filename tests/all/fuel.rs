@@ -742,6 +742,7 @@ fn huge_table64_grow_cannot_mint_fuel_impl(wat: &str) -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn fuel_around_table_grow() -> Result<()> {
     let mut config = Config::new();
     config.wasm_function_references(true);
