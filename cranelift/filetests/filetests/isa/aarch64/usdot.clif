@@ -1,0 +1,35 @@
+test compile precise-output
+set unwind_info=false
+target aarch64 has_i8mm
+
+;; The mixed unsigned-by-signed i8 dot tree folds into a single `usdot`:
+;; `a` widens unsigned, `b` widens signed.
+function %usdot_i8x16(i32x4, i8x16, i8x16) -> i32x4 {
+block0(v0: i32x4, v1: i8x16, v2: i8x16):
+    v3 = uwiden_low v1
+    v4 = swiden_low v2
+    v5 = imul v3, v4
+    v6 = swiden_low v5
+    v7 = swiden_high v5
+    v8 = iadd_pairwise v6, v7
+    v9 = uwiden_high v1
+    v10 = swiden_high v2
+    v11 = imul v9, v10
+    v12 = swiden_low v11
+    v13 = swiden_high v11
+    v14 = iadd_pairwise v12, v13
+    v15 = iadd_pairwise v8, v14
+    v16 = iadd v15, v0
+    return v16
+}
+
+; VCode:
+; block0:
+;   usdot v0.4s, v0.4s, v1.4s, v2.4s
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   usdot v0.4s, v1.16b, v2.16b
+;   ret
+

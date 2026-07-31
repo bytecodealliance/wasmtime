@@ -126,6 +126,10 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
             isa_builder.enable("has_dotprod").unwrap();
         }
 
+        if std::arch::is_aarch64_feature_detected!("i8mm") {
+            isa_builder.enable("has_i8mm").unwrap();
+        }
+
         if cfg!(target_os = "macos") {
             // Pointer authentication is always available on Apple Silicon.
             isa_builder.enable("sign_return_address").unwrap();
