@@ -171,6 +171,23 @@ impl UserStackMap {
         }
     }
 
+    /// Construct a stack map from offsets that are already relative to the
+    /// stack pointer at the safepoint.
+    pub fn from_sp_offsets(offsets: impl IntoIterator<Item = u32>) -> Self {
+        let offsets: alloc::vec::Vec<u32> = offsets.into_iter().collect();
+        let max = offsets.iter().max().copied().unwrap_or(0);
+        let mut bitset = CompoundBitSet::with_capacity(usize::try_from(max).unwrap() + 1);
+        for offset in offsets {
+            bitset.insert(usize::try_from(offset).unwrap());
+        }
+        let mut by_type = SmallVec::<[(ir::Type, CompoundBitSet); 1]>::default();
+        by_type.push((ir::types::I32, bitset));
+        UserStackMap {
+            by_type,
+            sp_to_sized_stack_slots: Some(0),
+        }
+    }
+
     /// Finalize this stack map by filling in the SP-to-stack-slots offset.
     pub(crate) fn finalize(&mut self, sp_to_sized_stack_slots: u32) {
         debug_assert!(self.sp_to_sized_stack_slots.is_none());
@@ -195,5 +212,33 @@ impl UserStackMap {
                 )
             })
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_sp_offsets_roundtrip() {
+        let map = UserStackMap::from_sp_offsets([8, 16, 40]);
+        let entries: alloc::vec::Vec<_> = map.entries().collect();
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0], (ir::types::I32, 8));
+        assert_eq!(entries[1], (ir::types::I32, 16));
+        assert_eq!(entries[2], (ir::types::I32, 40));
+    }
+
+    #[test]
+    fn from_sp_offsets_empty() {
+        let map = UserStackMap::from_sp_offsets([]);
+        assert_eq!(map.entries().count(), 0);
+    }
+
+    #[test]
+    fn from_sp_offsets_dedups_and_sorts() {
+        let map = UserStackMap::from_sp_offsets([40, 8, 8, 16]);
+        let offsets: alloc::vec::Vec<u32> = map.entries().map(|(_, o)| o).collect();
+        assert_eq!(offsets, [8, 16, 40]);
     }
 }
