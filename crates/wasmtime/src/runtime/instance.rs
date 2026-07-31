@@ -160,7 +160,7 @@ impl Instance {
             }
         }
 
-        typecheck(module, imports, |cx, ty, item| {
+        typecheck(store.engine(), module, imports, |cx, ty, item| {
             let item = DefinitionType::from(store, item);
             cx.definition(ty, &item)
         })?;
@@ -174,7 +174,8 @@ impl Instance {
         // Note that under normal operation this shouldn't do much as the list
         // of funcs-with-holes should generally be empty. As a result the
         // process of filling this out is not super optimized at this point.
-        store.modules_mut().register_module(module);
+        let (modules, engine) = store.modules_and_engine_mut();
+        modules.register_module(module, engine)?;
         let (funcrefs, modules) = store.func_refs_and_modules();
         funcrefs.fill(modules);
 
@@ -281,7 +282,8 @@ impl Instance {
 
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
-        let module_id = store.modules_mut().register_module(module);
+        let (modules, engine) = store.modules_and_engine_mut();
+        let module_id = modules.register_module(module, engine)?;
 
         // The first thing we do is issue an instance allocation request
         // to the instance allocator. This, on success, will give us an
@@ -764,19 +766,31 @@ impl<T: 'static> InstancePre<T> {
     /// Creates a new `InstancePre` which type-checks the `items` provided and
     /// on success is ready to instantiate a new instance.
     ///
+    /// `engine` is the engine that `items` belong to, and this returns an error
+    /// if that is not also `module`'s engine. This also returns an error if an
+    /// individual item within `items` reports an engine of its own that is not
+    /// `engine`, which happens when that item was taken from a store belonging
+    /// to a different engine than the linker it was defined in.
+    ///
     /// # Unsafety
     ///
     /// This method is unsafe as the `T` of the `InstancePre<T>` is not
     /// guaranteed to be the same as the `T` within the `Store`, the caller must
     /// verify that.
-    pub(crate) unsafe fn new(module: &Module, items: Vec<Definition>) -> Result<InstancePre<T>> {
-        typecheck(module, &items, |cx, ty, item| cx.definition(ty, &item.ty()))?;
+    pub(crate) unsafe fn new(
+        engine: &Engine,
+        module: &Module,
+        items: Vec<Definition>,
+    ) -> Result<InstancePre<T>> {
+        typecheck(engine, module, &items, |cx, ty, item| {
+            cx.definition(ty, &item.ty())
+        })?;
 
         let mut func_refs = vec![];
         let mut host_funcs = 0;
         for item in &items {
             match item {
-                Definition::Extern(_, _) => {}
+                Definition::Extern { .. } => {}
                 Definition::HostFunc(f) => {
                     host_funcs += 1;
                     if f.func_ref().wasm_call.is_none() {
@@ -889,7 +903,8 @@ fn pre_instantiate_raw(
 ) -> Result<OwnedImports> {
     // Register this module and use it to fill out any funcref wasm_call holes
     // we can. For more comments on this see `typecheck_externs`.
-    store.modules_mut().register_module(module);
+    let (modules, engine) = store.modules_and_engine_mut();
+    modules.register_module(module, engine)?;
     let (funcrefs, modules) = store.func_refs_and_modules();
     funcrefs.fill(modules);
 
@@ -919,7 +934,7 @@ fn pre_instantiate_raw(
         // `T` of the store. Additionally the rooting necessary has happened
         // above.
         let item = match import {
-            Definition::Extern(e, _) => e.clone(),
+            Definition::Extern { item, .. } => item.clone(),
             Definition::HostFunc(func) => unsafe {
                 func.to_func_store_rooted(
                     store,
@@ -938,11 +953,62 @@ fn pre_instantiate_raw(
     Ok(imports)
 }
 
+/// An item that can be supplied as an import argument during instantiation.
+///
+/// # Safety
+///
+/// Implementations must return an associated engine if they own a handle to
+/// one. Failure to do so may allow cross-`Engine` type confusion.
+///
+/// (Items that are just identifiers indexing into a store, for example
+/// `Extern::Global(wasmtime::Global)`, do not have their own handle to an
+/// engine. Their engine is the engine of the store they belong to, and it is
+/// the store, not them, that holds an owning handle to the engine.)
+unsafe trait ImportArg {
+    fn engine(&self) -> Option<&Engine>;
+}
+
+// SAFETY: `Extern::SharedMemory` is the only variant with an `Engine` handle.
+unsafe impl ImportArg for Extern {
+    fn engine(&self) -> Option<&Engine> {
+        match self {
+            Extern::SharedMemory(m) => Some(m.engine()),
+            Extern::Func(_)
+            | Extern::Global(_)
+            | Extern::Table(_)
+            | Extern::Memory(_)
+            | Extern::Tag(_) => None,
+        }
+    }
+}
+
+// SAFETY: `Definition::engine` is complete.
+unsafe impl ImportArg for Definition {
+    fn engine(&self) -> Option<&Engine> {
+        Some(Definition::engine(self))
+    }
+}
+
+/// Type check the `import_args` against the imports that `module` declares.
+///
+/// `engine` is the engine that the `import_args` belong to. It must be the same
+/// engine as `module`'s: entity types are compared by `VMSharedTypeIndex`, which
+/// only means anything within the engine that assigned it, so checking one
+/// engine's items against another engine's module would compare unrelated types
+/// and consider them equal.
 fn typecheck<I>(
+    engine: &Engine,
     module: &Module,
     import_args: &[I],
     check: impl Fn(&matching::MatchCx<'_>, &EntityType, &I) -> Result<()>,
-) -> Result<()> {
+) -> Result<()>
+where
+    I: ImportArg,
+{
+    ensure!(
+        Engine::same(engine, module.engine()),
+        "cross-`Engine` instantiation is not currently supported"
+    );
     let env_module = module.compiled_module().module();
     let expected_len = env_module.imports().count();
     let actual_len = import_args.len();
@@ -952,6 +1018,14 @@ fn typecheck<I>(
     let cx = matching::MatchCx::new(module.engine());
     for ((name, field, expected_ty), actual) in env_module.imports().zip(import_args) {
         debug_assert!(expected_ty.is_canonicalized_for_runtime_usage());
+        if let Some(actual_engine) = actual.engine() {
+            ensure!(
+                Engine::same(actual_engine, engine),
+                "cross-`Engine` instantiation is not currently supported: \
+                 the item provided for `{name}::{field}` belongs to a \
+                 different engine than the module being instantiated"
+            );
+        }
         check(&cx, &expected_ty, actual)
             .with_context(|| format!("incompatible import type for `{name}::{field}`"))?;
     }

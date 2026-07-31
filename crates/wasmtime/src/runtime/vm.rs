@@ -341,10 +341,31 @@ pub struct BareModuleInfo {
 
 impl ModuleRuntimeInfo {
     pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Self {
-        ModuleRuntimeInfo::bare_with_registered_type(module, None)
+        ModuleRuntimeInfo::new_bare(module, None)
     }
 
+    /// Same as [`ModuleRuntimeInfo::bare`], but additionally keeps
+    /// `registered_type` alive for as long as the resulting instance.
+    ///
+    /// This is the choke point at which a host-allocated table or tag holds a
+    /// `VMSharedTypeIndex` alive on behalf of a store, so it is where we check
+    /// that the type belongs to that store's engine. Returns an error if
+    /// `registered_type` was not registered with `engine`.
     pub(crate) fn bare_with_registered_type(
+        module: Arc<wasmtime_environ::Module>,
+        engine: &crate::Engine,
+        registered_type: Option<RegisteredType>,
+    ) -> Result<Self> {
+        if let Some(ty) = registered_type.as_ref() {
+            ensure!(
+                crate::Engine::same(engine, ty.engine()),
+                "type used with wrong engine"
+            );
+        }
+        Ok(ModuleRuntimeInfo::new_bare(module, registered_type))
+    }
+
+    fn new_bare(
         module: Arc<wasmtime_environ::Module>,
         registered_type: Option<RegisteredType>,
     ) -> Self {

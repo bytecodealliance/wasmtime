@@ -1254,9 +1254,11 @@ impl StoreOpaque {
         &self.modules
     }
 
+    /// Get this store's module registry along with the engine that everything
+    /// registered in it must have been compiled by.
     #[inline]
-    pub(crate) fn modules_mut(&mut self) -> &mut ModuleRegistry {
-        &mut self.modules
+    pub(crate) fn modules_and_engine_mut(&mut self) -> (&mut ModuleRegistry, &Engine) {
+        (&mut self.modules, &self.engine)
     }
 
     pub(crate) fn func_refs_and_modules(&mut self) -> (&mut FuncRefs, &ModuleRegistry) {
@@ -1721,8 +1723,18 @@ impl StoreOpaque {
     /// type in this store, and we don't have to worry about the type being
     /// reclaimed (since it is possible that none of the Wasm modules in this
     /// store are holding it alive).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ty` was not registered with this store's engine. The types
+    /// here are keyed by their `VMSharedTypeIndex`, which only means anything
+    /// within the engine that assigned it.
     #[cfg(feature = "gc")]
     pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: crate::type_registry::RegisteredType) {
+        assert!(
+            Engine::same(self.engine(), ty.engine()),
+            "type used with wrong engine"
+        );
         self.gc_host_alloc_types.insert(ty);
     }
 

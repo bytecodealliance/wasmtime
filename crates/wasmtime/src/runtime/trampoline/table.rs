@@ -25,18 +25,20 @@ pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<Instan
 
     let imports = Imports::default();
 
+    let runtime_info = ModuleRuntimeInfo::bare_with_registered_type(
+        Arc::new(module),
+        store.engine(),
+        table.element().clone().into_registered_type(),
+    )?;
+
     unsafe {
         let allocator =
             OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
-        let module = Arc::new(module);
         store.allocate_instance(
             AllocateInstanceKind::Dummy {
                 allocator: &allocator,
             },
-            &ModuleRuntimeInfo::bare_with_registered_type(
-                module,
-                table.element().clone().into_registered_type(),
-            ),
+            &runtime_info,
             imports,
         )
     }

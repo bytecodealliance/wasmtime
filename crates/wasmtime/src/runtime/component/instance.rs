@@ -607,13 +607,15 @@ pub(crate) enum RuntimeImport {
 pub type ImportedResources = PrimaryMap<ResourceIndex, ResourceType>;
 
 impl<'a> Instantiator<'a> {
+    /// Returns an error if `component` was not compiled by `store`'s engine.
     fn new(
         component: &'a Component,
         store: &mut StoreOpaque,
         imports: &'a Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-    ) -> Instantiator<'a> {
+    ) -> Result<Instantiator<'a>> {
         let env_component = component.env_component();
-        store.modules_mut().register_component(component);
+        let (modules, engine) = store.modules_and_engine_mut();
+        modules.register_component(component, engine)?;
         let imported_resources: ImportedResources =
             PrimaryMap::with_capacity(env_component.imported_resources.len());
 
@@ -626,12 +628,12 @@ impl<'a> Instantiator<'a> {
         );
         let id = store.store_data_mut().push_component_instance(instance);
 
-        Instantiator {
+        Ok(Instantiator {
             component,
             imports,
             core_imports: OwnedImports::empty(),
             id,
-        }
+        })
     }
 
     fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
@@ -1020,7 +1022,16 @@ impl<T: 'static> InstancePre<T> {
             .engine()
             .allocator()
             .increment_component_instance_count()?;
-        let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports);
+        let mut instantiator = match Instantiator::new(&self.component, store.0, &self.imports) {
+            Ok(instantiator) => instantiator,
+            Err(e) => {
+                store
+                    .engine()
+                    .allocator()
+                    .decrement_component_instance_count();
+                return Err(e);
+            }
+        };
         instantiator.run(&mut store).map_err(|e| {
             store
                 .engine()

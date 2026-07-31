@@ -1,3 +1,14 @@
+## 36.0.13
+
+Released 2026-07-31.
+
+### Fixed
+
+* Stores can mix up type indices between engines.
+  [GHSA-hgjw-h833-99q9](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hgjw-h833-99q9)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.12
 
 Released 2026-06-24.
@@ -37,7 +48,7 @@ Released 2026-05-05.
 
 ### Fixed
 
-* Cranelift's timing infrastructure is now more robust in the face of buggy system clocks. 
+* Cranelift's timing infrastructure is now more robust in the face of buggy system clocks.
   [#12709](https://github.com/bytecodealliance/wasmtime/pull/12709)
   [#13253](https://github.com/bytecodealliance/wasmtime/pull/13253)
 

@@ -1,4 +1,4 @@
-use super::gc_store;
+use super::{gc_engine, gc_store};
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
@@ -77,10 +77,11 @@ fn struct_new_cross_store_field() {
 #[test]
 #[should_panic = "wrong store"]
 fn struct_new_cross_store_pre() {
-    let mut store = gc_store().unwrap();
-    let struct_ty = StructType::new(store.engine(), []).unwrap();
+    let engine = gc_engine().unwrap();
+    let mut store = Store::new(&engine, ());
+    let struct_ty = StructType::new(&engine, []).unwrap();
 
-    let mut other_store = gc_store().unwrap();
+    let mut other_store = Store::new(&engine, ());
     let pre = StructRefPre::new(&mut other_store, struct_ty);
 
     // This should panic.

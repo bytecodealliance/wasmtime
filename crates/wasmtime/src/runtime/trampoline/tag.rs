@@ -26,15 +26,24 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
 
     let imports = Imports::default();
 
+    // The tag's signature type is referred to by engine-level type index from
+    // the dummy module's `Tag`, so its `RegisteredType` must be handed to the
+    // instance's runtime info to keep that index rooted in the engine's type
+    // registry for as long as the instance (and thus the store) is alive.
+    let runtime_info = ModuleRuntimeInfo::bare_with_registered_type(
+        Arc::new(module),
+        store.engine(),
+        Some(func_ty),
+    )?;
+
     unsafe {
         let allocator =
             OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
-        let module = Arc::new(module);
         store.allocate_instance(
             AllocateInstanceKind::Dummy {
                 allocator: &allocator,
             },
-            &ModuleRuntimeInfo::bare_with_registered_type(module, Some(func_ty)),
+            &runtime_info,
             imports,
         )
     }
