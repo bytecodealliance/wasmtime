@@ -36,6 +36,16 @@ impl ControlEffect {
         Self(val)
     }
 
+    pub fn encode_resume_throw(builder: &mut FunctionBuilder) -> Self {
+        let discriminant = builder.ins().iconst(
+            I64,
+            i64::from(wasmtime_environ::CONTROL_EFFECT_RESUME_THROW_DISCRIMINANT),
+        );
+        let val = builder.ins().ishl_imm_u(discriminant, 32);
+
+        Self(val)
+    }
+
     pub fn encode_switch(builder: &mut FunctionBuilder) -> Self {
         let discriminant = builder.ins().iconst(
             I64,
@@ -64,6 +74,15 @@ impl ControlEffect {
             ir::condcodes::IntCC::Equal,
             signal,
             i64::from(wasmtime_environ::CONTROL_EFFECT_TRAP_DISCRIMINANT),
+        )
+    }
+
+    pub fn is_resume_throw(self, builder: &mut FunctionBuilder) -> ir::Value {
+        let signal = self.signal(builder);
+        builder.ins().icmp_imm_u(
+            ir::condcodes::IntCC::Equal,
+            signal,
+            i64::from(wasmtime_environ::CONTROL_EFFECT_RESUME_THROW_DISCRIMINANT),
         )
     }
 
