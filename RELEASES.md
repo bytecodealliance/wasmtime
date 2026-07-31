@@ -1,3 +1,17 @@
+## 46.0.2
+
+Released 2026-07-31.
+
+### Fixed
+
+* Stores can mix up type indices between engines.
+  [GHSA-hgjw-h833-99q9](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hgjw-h833-99q9)
+
+* Preemption and traps during bulk operations enable breaking internal VM state.
+  [GHSA-2hw9-mc66-jc2q](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-2hw9-mc66-jc2q)
+
+--------------------------------------------------------------------------------
+
 ## 46.0.1
 
 Released 2026-06-24.

@@ -773,6 +773,8 @@ pub fn translate_array_new(
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new({array_type_index:?}, {elem:?}, {len:?})");
+    func_env.pre_translate_bulk_op(builder, len)?;
+
     let result =
         gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
     let zero = builder.ins().iconst(ir::types::I32, 0);
@@ -799,6 +801,7 @@ pub fn translate_array_new_default(
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new_default({array_type_index:?}, {len:?})");
+    func_env.pre_translate_bulk_op(builder, len)?;
 
     let interned_ty = func_env.module.types[array_type_index].unwrap_module_type_index();
     let array_ty = func_env.types.unwrap_array(interned_ty)?;
@@ -1707,6 +1710,8 @@ pub fn translate_array_new_entity(
     entity_offset: ir::Value,
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
+    env.pre_translate_bulk_op(builder, len)?;
+
     // Before actually allocating this array first do a bounds-check on the
     // passive entity itself.
     let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();

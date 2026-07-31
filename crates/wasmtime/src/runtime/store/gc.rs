@@ -7,7 +7,8 @@ use crate::store::{
 use crate::type_registry::RegisteredType;
 use crate::vm::{self, Backtrace, Frame, GcRootsList, GcStore, SendSyncPtr, VMGcRef};
 use crate::{
-    ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, ThrownException, bail,
+    Engine, ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, ThrownException,
+    bail,
 };
 use core::fmt;
 use core::mem::ManuallyDrop;
@@ -782,7 +783,18 @@ impl StoreOpaque {
     /// type in this store, and we don't have to worry about the type being
     /// reclaimed (since it is possible that none of the Wasm modules in this
     /// store are holding it alive).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ty` was not registered with this store's engine. The types
+    /// here are keyed by their `VMSharedTypeIndex`, which only means anything
+    /// within the engine that assigned it.
     pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: RegisteredType) {
+        assert!(
+            Engine::same(self.engine(), ty.engine()),
+            "type used with wrong engine"
+        );
+
         // If a GC heap is already allocated, eagerly register trace info
         // now. Otherwise, trace info will be registered when the GC heap
         // is allocated in `StoreOpaque::allocate_gc_store`.
