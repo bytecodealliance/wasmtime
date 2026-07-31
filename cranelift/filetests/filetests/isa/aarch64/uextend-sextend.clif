@@ -194,3 +194,181 @@ block0(v0: i32):
 ;   sxtw x0, w0
 ;   ret
 
+
+;; A comparison's result is produced by `cset`, which already zeroes the whole
+;; register, so extending it needs no instruction of its own.
+function %f_u_icmp_32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i32 v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, w1
+;   cset x0, eq
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, w1
+;   cset x0, eq
+;   ret
+
+;; Any output width, since `cset` defines all 64 bits.
+function %f_u_icmp_64(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+  v2 = icmp slt v0, v1
+  v3 = uextend.i64 v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, w1
+;   cset x0, lt
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, w1
+;   cset x0, lt
+;   ret
+
+function %f_u_icmp_16(i64, i64) -> i16 {
+block0(v0: i64, v1: i64):
+  v2 = icmp ugt v0, v1
+  v3 = uextend.i16 v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, x1
+;   cset x0, hi
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x1
+;   cset x0, hi
+;   ret
+
+;; An `i128` comparison takes several instructions to compute its flags, but
+;; still ends in one `cset`.
+function %f_u_icmp_i128(i128, i128) -> i32 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ult v0, v1
+  v3 = uextend.i32 v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, x2
+;   sbcs xzr, x1, x3
+;   cset x0, lo
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x2
+;   sbcs xzr, x1, x3
+;   cset x0, lo
+;   ret
+
+;; `fcmp` lowers through the same helper.
+function %f_u_fcmp(f64, f64) -> i32 {
+block0(v0: f64, v1: f64):
+  v2 = fcmp lt v0, v1
+  v3 = uextend.i32 v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   fcmp d0, d1
+;   cset x0, mi
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp d0, d1
+;   cset x0, mi
+;   ret
+
+;; `fcmp one` needs two `cset`s combined with an `orr`, which is also a 32-bit
+;; write of 0 or 1.
+function %f_u_fcmp_one(f32, f32) -> i64 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp one v0, v1
+  v3 = uextend.i64 v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x4, mi
+;   cset x6, gt
+;   orr w0, w4, w6
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x4, mi
+;   cset x6, gt
+;   orr w0, w4, w6
+;   ret
+
+;; Several extends of one comparison share its register rather than each
+;; re-emitting the comparison.
+function %f_u_icmp_multi_use(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i64 v2
+  v4 = uextend.i64 v2
+  v5 = ishl v4, v3
+  return v5
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, w1
+;   cset x5, eq
+;   lsl x0, x5, x5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, w1
+;   cset x5, eq
+;   lsl x0, x5, x5
+;   ret
+
+;; Extending to `i128` needs a zero upper half, so it keeps its own rule.
+function %f_u_icmp_i128_out(i32, i32) -> i128 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i128 v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, w1
+;   cset x6, eq
+;   uxtb w0, w6
+;   movz x1, #0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, w1
+;   cset x6, eq
+;   uxtb w0, w6
+;   mov x1, #0
+;   ret
+
