@@ -401,6 +401,27 @@ fn test_duration_settings() {
 }
 
 #[test]
+fn test_duration_overflow() {
+    let (_td, cd, cp) = test_prolog();
+
+    for (num, unit) in [
+        (u64::MAX / 60 + 1, "m"),
+        (u64::MAX / (60 * 60) + 1, "h"),
+        (u64::MAX / (60 * 60 * 24) + 1, "d"),
+    ] {
+        let content = format!(
+            "[cache]\ndirectory = '{}'\ncleanup-interval = '{num}{unit}'",
+            cd.display()
+        );
+        fs::write(&cp, content).expect("Failed to write test config file");
+        assert!(
+            CacheConfig::from_file(Some(&cp)).is_err(),
+            "duration {num}{unit} should overflow"
+        );
+    }
+}
+
+#[test]
 fn test_percent_settings() {
     let (_td, cd, cp) = test_prolog();
     let conf = load_config!(
