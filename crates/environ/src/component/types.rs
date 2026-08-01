@@ -676,7 +676,10 @@ impl Default for CanonicalAbiInfo {
 
 const fn align_to(a: u32, b: u32) -> u32 {
     assert!(b.is_power_of_two());
-    (a + (b - 1)) & !(b - 1)
+    match a.checked_add(b - 1) {
+        Some(a) => a & !(b - 1),
+        None => u32::MAX,
+    }
 }
 
 const fn max(a: u32, b: u32) -> u32 {
@@ -728,9 +731,9 @@ impl CanonicalAbiInfo {
 
         let mut ret = CanonicalAbiInfo::default();
         for field in fields {
-            ret.size32 = align_to(ret.size32, field.align32) + field.size32;
+            ret.size32 = align_to(ret.size32, field.align32).saturating_add(field.size32);
             ret.align32 = ret.align32.max(field.align32);
-            ret.size64 = align_to(ret.size64, field.align64) + field.size64;
+            ret.size64 = align_to(ret.size64, field.align64).saturating_add(field.size64);
             ret.align64 = ret.align64.max(field.align64);
             ret.flat_count = add_flat(ret.flat_count, field.flat_count);
         }
@@ -748,9 +751,9 @@ impl CanonicalAbiInfo {
         let mut i = 0;
         while i < fields.len() {
             let field = &fields[i];
-            ret.size32 = align_to(ret.size32, field.align32) + field.size32;
+            ret.size32 = align_to(ret.size32, field.align32).saturating_add(field.size32);
             ret.align32 = max(ret.align32, field.align32);
-            ret.size64 = align_to(ret.size64, field.align64) + field.size64;
+            ret.size64 = align_to(ret.size64, field.align64).saturating_add(field.size64);
             ret.align64 = max(ret.align64, field.align64);
             ret.flat_count = add_flat(ret.flat_count, field.flat_count);
             i += 1;
@@ -805,31 +808,31 @@ impl CanonicalAbiInfo {
     /// Returns the delta from the current value of `offset` to align properly
     /// and read the next record field of type `abi` for 32-bit memories.
     pub fn next_field32(&self, offset: &mut u32) -> u32 {
-        *offset = align_to(*offset, self.align32) + self.size32;
-        *offset - self.size32
+        let start = align_to(*offset, self.align32);
+        *offset = start.saturating_add(self.size32);
+        start
     }
 
     /// Same as `next_field32`, but bumps a usize pointer
     pub fn next_field32_size(&self, offset: &mut usize) -> usize {
-        let cur = u32::try_from(*offset).unwrap();
-        let cur = align_to(cur, self.align32) + self.size32;
-        *offset = usize::try_from(cur).unwrap();
-        usize::try_from(cur - self.size32).unwrap()
+        let start = align_to(u32::try_from(*offset).unwrap(), self.align32);
+        *offset = usize::try_from(start.saturating_add(self.size32)).unwrap();
+        usize::try_from(start).unwrap()
     }
 
     /// Returns the delta from the current value of `offset` to align properly
     /// and read the next record field of type `abi` for 64-bit memories.
     pub fn next_field64(&self, offset: &mut u32) -> u32 {
-        *offset = align_to(*offset, self.align64) + self.size64;
-        *offset - self.size64
+        let start = align_to(*offset, self.align64);
+        *offset = start.saturating_add(self.size64);
+        start
     }
 
     /// Same as `next_field64`, but bumps a usize pointer
     pub fn next_field64_size(&self, offset: &mut usize) -> usize {
-        let cur = u32::try_from(*offset).unwrap();
-        let cur = align_to(cur, self.align64) + self.size64;
-        *offset = usize::try_from(cur).unwrap();
-        usize::try_from(cur - self.size64).unwrap()
+        let start = align_to(u32::try_from(*offset).unwrap(), self.align64);
+        *offset = usize::try_from(start.saturating_add(self.size64)).unwrap();
+        usize::try_from(start).unwrap()
     }
 
     /// Returns ABI information for a structure which contains `count` flags.
@@ -875,12 +878,12 @@ impl CanonicalAbiInfo {
         }
         CanonicalAbiInfo {
             size32: align_to(
-                align_to(discrim_size, max_align32) + max_size32,
+                align_to(discrim_size, max_align32).saturating_add(max_size32),
                 max_align32,
             ),
             align32: max_align32,
             size64: align_to(
-                align_to(discrim_size, max_align64) + max_size64,
+                align_to(discrim_size, max_align64).saturating_add(max_size64),
                 max_align64,
             ),
             align64: max_align64,
@@ -916,12 +919,12 @@ impl CanonicalAbiInfo {
         }
         CanonicalAbiInfo {
             size32: align_to(
-                align_to(discrim_size, max_align32) + max_size32,
+                align_to(discrim_size, max_align32).saturating_add(max_size32),
                 max_align32,
             ),
             align32: max_align32,
             size64: align_to(
-                align_to(discrim_size, max_align64) + max_size64,
+                align_to(discrim_size, max_align64).saturating_add(max_size64),
                 max_align64,
             ),
             align64: max_align64,
@@ -1452,5 +1455,46 @@ mod tests {
 
         assert_ne!(a, b);
         assert_eq!(a, a.clone());
+    }
+
+    #[test]
+    fn canonical_abi_size_overflow_saturates() {
+        const LARGE: CanonicalAbiInfo =
+            CanonicalAbiInfo::fixed_length_list_static(&CanonicalAbiInfo::SCALAR8, 1 << 30);
+        const RECORD: CanonicalAbiInfo = CanonicalAbiInfo::record_static(&[LARGE, LARGE]);
+        const VARIANT: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[Some(LARGE), None]);
+
+        assert_eq!(LARGE.size32, u32::MAX);
+        assert_eq!(LARGE.size64, u32::MAX);
+
+        let record = CanonicalAbiInfo::record([&LARGE, &LARGE].into_iter());
+        assert_eq!(record.size32, u32::MAX);
+        assert_eq!(record.size64, u32::MAX);
+        assert_eq!(RECORD.size32, u32::MAX);
+        assert_eq!(RECORD.size64, u32::MAX);
+
+        let variant = CanonicalAbiInfo::variant([Some(&LARGE), None]);
+        assert_eq!(variant.size32, u32::MAX);
+        assert_eq!(variant.size64, u32::MAX);
+        assert_eq!(VARIANT.size32, u32::MAX);
+        assert_eq!(VARIANT.size64, u32::MAX);
+
+        let mut offset32 = 8;
+        assert_eq!(LARGE.next_field32(&mut offset32), 8);
+        assert_eq!(offset32, u32::MAX);
+        assert_eq!(
+            CanonicalAbiInfo::SCALAR8.next_field32(&mut offset32),
+            u32::MAX
+        );
+        assert_eq!(offset32, u32::MAX);
+
+        let mut offset64 = 8;
+        assert_eq!(LARGE.next_field64(&mut offset64), 8);
+        assert_eq!(offset64, u32::MAX);
+        assert_eq!(
+            CanonicalAbiInfo::SCALAR8.next_field64(&mut offset64),
+            u32::MAX
+        );
+        assert_eq!(offset64, u32::MAX);
     }
 }
