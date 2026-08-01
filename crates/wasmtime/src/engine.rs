@@ -571,6 +571,7 @@ information about this check\
             "has_pauth" => "paca",
             "has_fp16" => "fp16",
             "has_dotprod" => "dotprod",
+            "has_i8mm" => "i8mm",
 
             // aarch64 features which don't need detection
             // No effect on its own.

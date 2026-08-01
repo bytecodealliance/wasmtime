@@ -2769,6 +2769,9 @@ impl MachInstEmit for Inst {
                     // so it is baked into top11; only Q (from `size`) is variable.
                     // top11 (Q=0) | q<<9 with bit15_10 yields 0x4E809400 for .4S/.16B.
                     VecALUModOp::Sdot => (0b000_01110_10_0, 0b100101),
+                    // USDOT Vd.4S, Vn.16B, Vm.16B (FEAT_I8MM). Same shape as
+                    // SDOT; only the opcode field differs.
+                    VecALUModOp::Usdot => (0b000_01110_10_0, 0b100111),
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }

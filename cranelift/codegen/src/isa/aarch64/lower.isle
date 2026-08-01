@@ -412,6 +412,23 @@
                         c))))
       (sdot c a b))
 
+;; With FEAT_I8MM, fold the same tree in its mixed unsigned-by-signed form
+;; into a single `usdot`. This is the shape quantized inference produces —
+;; unsigned activations against signed weights — and it differs from the
+;; `sdot` case above only in that one operand widens unsigned.
+(rule 9 (lower (and (use_i8mm)
+                    (has_type $I32X4
+                      (iadd _
+                        (iadd_pairwise _
+                          (iadd_pairwise _
+                            (swiden_low _ lo @ (imul _ (uwiden_low _ a) (swiden_low _ b)))
+                            (swiden_high _ lo))
+                          (iadd_pairwise _
+                            (swiden_low _ hi @ (imul _ (uwiden_high _ a) (swiden_high _ b)))
+                            (swiden_high _ hi)))
+                        c))))
+      (usdot c a b))
+
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (iabs ty @ (multi_lane _ _) x))

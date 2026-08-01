@@ -1,0 +1,50 @@
+; Execution coverage for the mixed unsigned-by-signed i8 dot product.
+; The lowering only changes aarch64 codegen; running on the interpreter and
+; every native target confirms the result is unchanged either way.
+;
+; The lanes are summed to a scalar before returning: a vector return does
+; not fit in registers on every target, and the per-lane result is already
+; pinned by the precise-output test in isa/aarch64.
+;
+; riscv64 is not listed: its vector backend has no lowering for the lane
+; extraction this reduction needs (and no vector return either), both
+; unrelated to the dot itself. The interpreter plus the three remaining
+; targets cover the semantics.
+test interpret
+test run
+target aarch64
+target aarch64 has_i8mm
+target x86_64
+target s390x
+
+function %usdot_mixed(i32x4, i8x16, i8x16) -> i32 {
+block0(v0: i32x4, v1: i8x16, v2: i8x16):
+    v3 = uwiden_low v1
+    v4 = swiden_low v2
+    v5 = imul v3, v4
+    v6 = swiden_low v5
+    v7 = swiden_high v5
+    v8 = iadd_pairwise v6, v7
+    v9 = uwiden_high v1
+    v10 = swiden_high v2
+    v11 = imul v9, v10
+    v12 = swiden_low v11
+    v13 = swiden_high v11
+    v14 = iadd_pairwise v12, v13
+    v15 = iadd_pairwise v8, v14
+    v16 = iadd v15, v0
+    v17 = extractlane v16, 0
+    v18 = extractlane v16, 1
+    v19 = extractlane v16, 2
+    v20 = extractlane v16, 3
+    v21 = iadd v17, v18
+    v22 = iadd v19, v20
+    v23 = iadd v21, v22
+    return v23
+}
+; 200 read as u8 is 200, not -56 — a signed reading would give a different
+; total, so this pins the unsigned widening.
+; lanes: 4*(200*-1) + 4*(1*3) + 4*(0*5) + 4*(2*-2) = -800 + 12 + 0 - 16
+; run: %usdot_mixed([0 0 0 0], [200 200 200 200 1 1 1 1 0 0 0 0 2 2 2 2], [-1 -1 -1 -1 3 3 3 3 5 5 5 5 -2 -2 -2 -2]) == -804
+; acc [1 2 3 4] plus 4 per lane = [5 6 7 8]
+; run: %usdot_mixed([1 2 3 4], [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1], [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]) == 26

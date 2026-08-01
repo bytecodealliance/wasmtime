@@ -1853,6 +1853,8 @@
     (Fmls)
     ;; Signed integer dot product (FEAT_DotProd)
     (Sdot)
+    ;; Unsigned-by-signed integer dot product (FEAT_I8MM)
+    (Usdot)
 ))
 
 ;; A Vector miscellaneous operation with two registers.
@@ -2075,6 +2077,10 @@
 ;; Matches any instruction when the `has_dotprod` (FEAT_DotProd) setting is on.
 (decl use_dotprod () Inst)
 (extern extractor use_dotprod use_dotprod)
+
+;; Matches any instruction when the `has_i8mm` (FEAT_I8MM) setting is on.
+(decl use_i8mm () Inst)
+(extern extractor use_i8mm use_i8mm)
 
 (spec (use_fp16) (provide (not result)))
 (decl pure use_fp16 () bool)
@@ -3502,6 +3508,13 @@
 (decl sdot (Reg Reg Reg) Reg)
 (rule (sdot acc a b)
       (vec_rrr_mod (VecALUModOp.Sdot) acc a b (VectorSize.Size32x4)))
+
+;; USDOT Vd.4S, Vn.16B, Vm.16B -- like `sdot`, but the first source is read as
+;; unsigned bytes and the second as signed. `acc` is both source and
+;; destination; `a` (unsigned) / `b` (signed) are i8x16.
+(decl usdot (Reg Reg Reg) Reg)
+(rule (usdot acc a b)
+      (vec_rrr_mod (VecALUModOp.Usdot) acc a b (VectorSize.Size32x4)))
 
 ;; Helper for generating a `udf` instruction.
 
