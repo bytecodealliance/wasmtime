@@ -540,6 +540,30 @@ pub struct AliasAnalysis<'a> {
     mem_values: FxHashMap<MemoryLoc, (Inst, Value)>,
 }
 
+/// Can a path starting at `start` reach a divergent block without first
+/// passing through `stop`?
+fn can_reach_divergent_block(
+    post_dom_tree: &PostDominatorTree,
+    cfg: &ControlFlowGraph,
+    start: Block,
+    stop: Block,
+) -> bool {
+    let mut worklist = vec![start];
+    let mut visited = FxHashSet::default();
+
+    while let Some(block) = worklist.pop() {
+        if block == stop || !visited.insert(block) {
+            continue;
+        }
+        if post_dom_tree.diverges(block) {
+            return true;
+        }
+        worklist.extend(cfg.succ_iter(block));
+    }
+
+    false
+}
+
 impl<'a> AliasAnalysis<'a> {
     /// Perform an alias analysis pass.
     pub fn new(func: &Function, domtree: &'a DominatorTree) -> AliasAnalysis<'a> {
@@ -584,9 +608,16 @@ impl<'a> AliasAnalysis<'a> {
             return func.layout.pp_cmp(overwriter, maybe_dead) != Ordering::Less;
         }
 
-        self.post_dom_tree
-            .get_or_insert_with(|| PostDominatorTree::with_cfg(cfg))
-            .post_dominates(overwriter, maybe_dead, &func.layout)
+        let post_dom_tree = self
+            .post_dom_tree
+            .get_or_insert_with(|| PostDominatorTree::with_cfg(cfg));
+
+        // The post-dominator tree only considers paths that reach an explicit
+        // CFG exit. A path into a divergent region may still observe the store
+        // by trapping, so it must also pass through the overwriter before we
+        // can remove the original store.
+        post_dom_tree.post_dominates(overwriter, maybe_dead, &func.layout)
+            && !can_reach_divergent_block(post_dom_tree, cfg, maybe_dead_block, overwriter_block)
     }
 
     fn compute_block_input_states(&mut self, func: &Function) {

@@ -1,0 +1,23 @@
+test alias-analysis
+set opt_level=speed
+target aarch64
+
+function %divergent_path(i64, i32) {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32):
+    v2 = iconst.i32 111
+    store notrap aligned region0 v2, v0
+    brif v1, block1, block2
+
+block1:
+    v3 = iconst.i32 222
+    store notrap aligned region0 v3, v0
+    return
+
+block2:
+    jump block2
+}
+
+; check: store notrap aligned region0 v2, v0
+; check: store notrap aligned region0 v3, v0
