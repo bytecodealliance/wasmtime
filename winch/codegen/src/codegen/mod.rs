@@ -490,6 +490,14 @@ where
         }
     }
 
+    /// Whether a GC barrier must be emitted when writing or reading a
+    /// reference of the given type through a collector-visible location.
+    pub fn gc_barrier_needed(&self, ty: &WasmValType) -> bool {
+        ty.is_vmgcref_type_and_not_i31()
+            && self.tunables.collector
+                == Some(wasmtime_environ::Collector::DeferredReferenceCounting)
+    }
+
     /// Emits a a series of instructions that will type check a function reference call.
     pub fn emit_typecheck_funcref(
         &mut self,
