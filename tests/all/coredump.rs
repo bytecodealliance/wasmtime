@@ -293,3 +293,52 @@ fn core_dump_with_shared_memory() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn coredump_with_composed_component_adapters() -> Result<()> {
+    use wasmtime::component::{Component, Linker};
+
+    let mut config = Config::new();
+    config.coredump_on_trap(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+              (component $A
+                (core module $m
+                  (func (export "f") (param i32) (result i32) unreachable)
+                )
+                (core instance $i (instantiate $m))
+                (func (export "f") (param "x" u32) (result u32)
+                  (canon lift (core func $i "f")))
+              )
+              (component $B
+                (import "f" (func $f (param "x" u32) (result u32)))
+                (core func $fl (canon lower (func $f)))
+                (core module $m
+                  (import "" "f" (func $f (param i32) (result i32)))
+                  (func (export "run") (call $f (i32.const 1)) drop)
+                )
+                (core instance $i (instantiate $m
+                  (with "" (instance (export "f" (func $fl))))))
+                (func (export "run") (canon lift (core func $i "run")))
+              )
+              (instance $a (instantiate $A))
+              (instance $b (instantiate $B (with "f" (func $a "f"))))
+              (func (export "run") (alias export $b "run"))
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    let err = run.call(&mut store, ()).unwrap_err();
+    let coredump = err.downcast_ref::<WasmCoreDump>().unwrap();
+    let bytes = coredump.serialize(&mut store, "composed-component-adapters");
+    wasmparser::Validator::new().validate_all(&bytes)?;
+
+    Ok(())
+}

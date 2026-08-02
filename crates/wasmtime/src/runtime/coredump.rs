@@ -1,4 +1,5 @@
 use crate::hash_map::HashMap;
+use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::{
     AsContextMut, FrameInfo, Global, HeapType, Instance, Memory, Module, StoreContextMut, Val,
@@ -48,8 +49,27 @@ impl WasmCoreDump {
         let store_memories: Vec<Memory> =
             store.all_memories().filter_map(|m| m.unshared()).collect();
 
-        let mut store_globals: Vec<Global> = vec![];
-        store.for_each_global(|_store, global| store_globals.push(global));
+        let mut store_globals = Vec::new();
+        let mut seen_globals = HashSet::new();
+        store.for_each_global(|store, global| {
+            seen_globals.insert(global.hash_key(store));
+            store_globals.push(global);
+        });
+
+        // Component adapters can import synthetic globals that aren't defined
+        // by a core instance and therefore aren't visited above. Include every
+        // global visible to an instance so serialization can reference it.
+        for instance in &instances {
+            let globals = instance
+                .all_globals(store)
+                .map(|(_, global)| global)
+                .collect::<Vec<_>>();
+            for global in globals {
+                if seen_globals.insert(global.hash_key(store)) {
+                    store_globals.push(global);
+                }
+            }
+        }
 
         WasmCoreDump {
             name: String::from("store_name"),
