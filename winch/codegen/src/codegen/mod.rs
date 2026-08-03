@@ -2337,14 +2337,24 @@ where
         let heap = self.env.resolve_heap(memory_index);
         // We need to pop-push the operand to compute the address before passing control over to
         // masm, because some architectures may have specific requirements for the registers used
-        // in some atomic operations.
+        // in some atomic operations. The computed address is pushed back to the context's stack
+        // too, rather than handed over as a register, since registers that are not tracked by the
+        // value stack can't be spilled, so an untracked address register would make any request
+        // for a fixed register fail if the address happened to be allocated to it. For this
+        // reason, the address is pushed as a register to be dereferenced prior to emission, after
+        // all the ISA-specifc constraints have been solved.
         let operand = self.context.pop_to_reg(self.masm, None)?;
         if let Some(addr) = self.emit_compute_heap_address_align_checked(&heap, arg, size)? {
-            let src = self.masm.address_at_reg(addr, 0)?;
+            self.context
+                .stack
+                .push(TypedReg::new(self.env.ptr_type(), addr).into());
             self.context.stack.push(operand.into());
             self.masm
-                .atomic_rmw(&mut self.context, src, size, op, UNTRUSTED_FLAGS, extend)?;
-            self.context.free_reg(addr);
+                .atomic_rmw(&mut self.context, size, op, UNTRUSTED_FLAGS, extend)?;
+        } else {
+            // Ensure that the operand register is not left allocated if the access was proven to
+            // be out of bounds at compile time.
+            self.context.free_reg(operand);
         }
 
         Ok(())
@@ -2368,10 +2378,15 @@ where
         // with regard to the registers used for some arguments, so we
         // need to pass the context to the masm. To solve this issue,
         // we pop the two first arguments from the stack, compute the
-        // address, push back the arguments, and hand over the control
-        // to masm. The implementer of `atomic_cas` can expect to find
-        // `expected` and `replacement` at the top the context's
-        // stack.
+        // address, push back the address and the arguments, and hand
+        // over the control to masm. The implementer of `atomic_cas`
+        // can expect to find `address`, `expected` and `replacement`
+        // at the top the context's stack.
+        //
+        // The computed address is pushed back to the stack as a
+        // register, rather than handed over directly, so that the
+        // register allocator is able to spill it if the target
+        // requires a fixed register.
 
         let replacement = self.context.pop_to_reg(self.masm, None)?;
         let expected = self.context.pop_to_reg(self.masm, None)?;
@@ -2379,14 +2394,19 @@ where
         let memory_index = MemoryIndex::from_u32(arg.memory);
         let heap = self.env.resolve_heap(memory_index);
         if let Some(addr) = self.emit_compute_heap_address_align_checked(&heap, arg, size)? {
+            self.context
+                .stack
+                .push(TypedReg::new(self.env.ptr_type(), addr).into());
             self.context.stack.push(expected.into());
             self.context.stack.push(replacement.into());
 
-            let src = self.masm.address_at_reg(addr, 0)?;
             self.masm
-                .atomic_cas(&mut self.context, src, size, UNTRUSTED_FLAGS, extend)?;
-
-            self.context.free_reg(addr);
+                .atomic_cas(&mut self.context, size, UNTRUSTED_FLAGS, extend)?;
+        } else {
+            // Ensure that the argument registers are not left allocated if the access was proven
+            // to be out of bounds at compile time.
+            self.context.free_reg(expected);
+            self.context.free_reg(replacement);
         }
         Ok(())
     }
