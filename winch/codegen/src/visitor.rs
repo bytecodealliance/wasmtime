@@ -2102,6 +2102,15 @@ where
             let count_addr_reg = self.context.any_gpr(self.masm)?;
             let count_reg = self.context.any_gpr(self.masm)?;
 
+            let skip_inc = self.masm.get_label()?;                        // NEW — bookkeeping, emits nothing
+            self.masm.branch(                                             // NEW — the emitted guard
+                IntCmpKind::Eq,
+                typed_reg.reg,
+                typed_reg.reg.into(),
+                skip_inc,
+                OperandSize::S32,
+            )?;
+
             self.masm.mov(writable!(count_addr_reg), heap_reg.into(), OperandSize::S64)?;
             self.masm.add(
                 writable!(count_addr_reg),
@@ -2120,6 +2129,8 @@ where
                 self.masm.address_at_reg(count_addr_reg, ref_count_offset)?,
                 OperandSize::S64,
             )?;
+
+            self.masm.bind(skip_inc)?;
 
             self.masm
                 .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
