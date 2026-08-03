@@ -3,6 +3,7 @@ use crate::{
     abi::{ABI, ABIOperand, ABISig, LocalSlot, align_to},
     codegen::{CodeGenPhase, Emission, Prologue},
     masm::MacroAssembler,
+    stack::needs_stack_map,
 };
 use smallvec::SmallVec;
 use std::marker::PhantomData;
@@ -94,6 +95,10 @@ pub(crate) struct Frame<P: CodeGenPhase> {
     /// The slot holding the address of the results area.
     pub results_base_slot: Option<LocalSlot>,
     marker: PhantomData<P>,
+
+    /// Frame offsets of SP-addressed locals that stack maps must cover,
+    /// precomputed so that call sites don't scan every local.
+    gc_ref_local_offsets: SmallVec<[u32; 4]>,
 }
 
 impl Frame<Prologue> {
@@ -148,6 +153,12 @@ impl Frame<Prologue> {
             (None, defined_locals_end)
         };
 
+        let gc_ref_local_offsets = wasm_locals
+            .iter()
+            .filter(|slot| slot.addressed_from_sp() && needs_stack_map(&slot.ty))
+            .map(|slot| slot.offset)
+            .collect();
+
         Ok(Self {
             wasm_locals,
             special_locals,
@@ -157,6 +168,7 @@ impl Frame<Prologue> {
             ),
             results_base_slot,
             marker: PhantomData,
+            gc_ref_local_offsets,
         })
     }
 
@@ -175,6 +187,7 @@ impl Frame<Prologue> {
             defined_locals_range: self.defined_locals_range,
             results_base_slot: self.results_base_slot,
             marker: PhantomData,
+            gc_ref_local_offsets: self.gc_ref_local_offsets,
         }
     }
 
@@ -258,12 +271,6 @@ impl Frame<Prologue> {
 }
 
 impl Frame<Emission> {
-    /// Returns an iterator over all the [`LocalSlot`]s in the frame,
-    /// including the [`SpecialLocals`].
-    pub fn locals(&self) -> impl Iterator<Item = &LocalSlot> {
-        self.special_locals.iter().chain(self.wasm_locals.iter())
-    }
-
     /// Get the [`LocalSlot`] for a WebAssembly local.
     /// This method assumes that the index is bound to u32::MAX, representing
     /// the index space for WebAssembly locals.
@@ -291,6 +298,11 @@ impl Frame<Emission> {
     /// Get the special [`LocalSlot`] for the `VMContext`.
     pub fn vmctx_slot(&self) -> &LocalSlot {
         self.get_special_local(0)
+    }
+
+    /// Frame offsets of the SP-addressed locals that stack maps must cover.
+    pub fn gc_ref_local_offsets(&self) -> &[u32] {
+        &self.gc_ref_local_offsets
     }
 
     /// Returns the address of the local at the given index.

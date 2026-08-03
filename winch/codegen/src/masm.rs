@@ -1453,13 +1453,18 @@ pub(crate) trait MacroAssembler {
     fn call(
         &mut self,
         stack_args_size: u32,
-        f: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
+        context: &mut CodeGenContext<Emission>,
+        f: impl FnMut(
+            &mut Self,
+            &mut CodeGenContext<Emission>,
+        ) -> Result<(CalleeKind, CallingConvention)>,
     ) -> Result<u32>;
 
     /// Record a GC stack map at the current code offset, which must be the
-    /// return address of the call emitted immediately before. Each offset is
-    /// the distance from the stack pointer at the call site to a slot holding
-    /// a live GC reference.
+    /// return address of the call emitted immediately before; only
+    /// [`Self::call`] should use this. Each offset is the distance from
+    /// the stack pointer at the call site to a slot holding a live GC
+    /// reference.
     fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[u32]) -> Result<()>;
 
     /// Acquire a scratch register and execute the given callback.

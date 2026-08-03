@@ -419,7 +419,11 @@ impl Masm for MacroAssembler {
     fn call(
         &mut self,
         stack_args_size: u32,
-        mut load_callee: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
+        context: &mut CodeGenContext<Emission>,
+        mut load_callee: impl FnMut(
+            &mut Self,
+            &mut CodeGenContext<Emission>,
+        ) -> Result<(CalleeKind, CallingConvention)>,
     ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
         let addend: u32 = <Self::ABI as abi::ABI>::initial_frame_size().into();
@@ -427,10 +431,16 @@ impl Masm for MacroAssembler {
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack)?;
-        let (callee, call_conv) = load_callee(self)?;
+        let (callee, call_conv) = load_callee(self, context)?;
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg, call_conv),
             CalleeKind::Direct(idx) => self.asm.call_with_name(idx, call_conv),
+        }
+
+        if !context.frame.gc_ref_local_offsets().is_empty() || context.stack.gc_ref_count() != 0 {
+            let sp = self.sp_offset()?;
+            let map_offsets = context.calculate_stack_map_offsets(sp)?;
+            self.emit_stack_map(sp, &map_offsets)?;
         }
 
         Ok(total_stack)
