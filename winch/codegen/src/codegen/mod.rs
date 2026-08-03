@@ -168,6 +168,7 @@ where
 
         self.masm.reserve_stack(self.context.frame.locals_size)?;
         self.spill_register_arguments()?;
+        self.copy_stack_gc_refs_to_frame()?;
 
         let defined_locals_range = &self.context.frame.defined_locals_range;
         self.masm.zero_mem_range(defined_locals_range.as_range())?;
@@ -226,15 +227,31 @@ where
                                 self.masm.store_ptr(*reg, addr)?;
                             }
                             WasmHeapType::Extern => {
-                                self.masm.store((*reg).into(), addr, OperandSize::S32)?;
+                                self.masm.store((*reg).into(), addr, (*ty).try_into()?)?;
                             }
                             _ => bail!(CodeGenError::unsupported_wasm_type()),
                         },
                     }
                 }
-                // GC references passed on the stack are re-homed into the
-                // frame so stack maps cover them; everything else stays in
-                // the caller's argument area.
+                // Skip non-register arguments
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Copy GC references passed on the stack into frame slots so that
+    /// stack maps cover them: the caller's argument area is not visited by
+    /// the collector, so a reference left there goes stale across a
+    /// collection. Everything else stays in the caller's argument area.
+    fn copy_stack_gc_refs_to_frame(&mut self) -> Result<()> {
+        for (operand, slot) in self
+            .sig
+            .params_without_retptr()
+            .iter()
+            .zip(self.context.frame.locals())
+        {
+            match (operand, slot) {
                 (ABIOperand::Stack { ty, offset, .. }, slot)
                     if ty.is_vmgcref_type_and_not_i31() =>
                 {
@@ -247,11 +264,10 @@ where
                     let src_addr = self.masm.local_address(&src)?;
                     let dst_addr = self.masm.local_address(slot)?;
                     self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-                        masm.load(src_addr, scratch.writable(), OperandSize::S32)?;
-                        masm.store(scratch.inner().into(), dst_addr, OperandSize::S32)
+                        masm.load(src_addr, scratch.writable(), (*ty).try_into()?)?;
+                        masm.store(scratch.inner().into(), dst_addr, (*ty).try_into()?)
                     })?;
                 }
-                // Skip non-register arguments
                 _ => {}
             }
         }
