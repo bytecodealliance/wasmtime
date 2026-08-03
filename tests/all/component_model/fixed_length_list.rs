@@ -298,3 +298,30 @@ fn fixed_length_list_length_mismatch_rejected() -> Result<()> {
     assert_eq!(out, 0x1234_5678);
     Ok(())
 }
+
+#[test]
+fn fixed_length_list_wave() -> Result<()> {
+    let wat = r#"
+(component
+  (core module $m
+    (func (export "f") (result i32) (i32.const 7))
+  )
+  (core instance $i (instantiate $m))
+  (func (export "f") (result (list u32 1)) (canon lift (core func $i "f")))
+)
+"#;
+
+    let mut config = Config::new();
+    config.wasm_component_model_fixed_length_lists(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "f").unwrap();
+    let mut results = [Val::Bool(false)];
+
+    func.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0].to_wave()?, "[7]");
+
+    Ok(())
+}
