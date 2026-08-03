@@ -816,6 +816,9 @@ jobs:
 
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
+      env:
+        # Avoid AMX instructions. Details at https://github.com/uxlfoundation/oneDNN/issues/5689
+        ONEDNN_MAX_CPU_ISA: AVX10_1_512
 
   # Test `wasmtime-wasi-tls-nativetls` in its own job. This is because it
   # depends on OpenSSL, which is not easily available on all platforms.
