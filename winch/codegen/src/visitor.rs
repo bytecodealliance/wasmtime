@@ -28,7 +28,7 @@ use wasmparser::{
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType,
     WasmValType,
 };
 
@@ -2080,11 +2080,82 @@ where
         let (ty, base, offset) = self.emit_get_global_addr(index)?;
         let addr = self.masm.address_at_reg(base, offset)?;
 
-        let typed_reg = self.context.pop_to_reg(self.masm, None)?;
-        self.masm
-            .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
-        self.context.free_reg(typed_reg.reg);
-        self.context.free_reg(base);
+        if self.gc_barrier_needed(&ty) {
+            self.context.spill(self.masm)?;
+            let typed_reg = self.context.pop_to_reg(self.masm, None)?;
+            let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
+            let gc_heap_base_offset = self.env.vmoffsets.ptr.vm_store_context().gc_heap_base();
+            let heap_reg = self.context.any_gpr(self.masm)?;
+            self.masm.load_ptr(
+                self.masm.address_at_vmctx(u32::from(store_context_offset))?,
+                writable!(heap_reg),
+            )?;
+            self.masm.load_ptr(
+                self.masm.address_at_reg(heap_reg, u32::from(gc_heap_base_offset))?,
+                writable!(heap_reg),
+            )?;
+
+            let old_reg = self.context.any_gpr(self.masm)?;
+            self.masm.load(addr, writable!(old_reg), OperandSize::S32)?;
+
+            let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+            let count_addr_reg = self.context.any_gpr(self.masm)?;
+            let count_reg = self.context.any_gpr(self.masm)?;
+
+            self.masm.mov(writable!(count_addr_reg), heap_reg.into(), OperandSize::S64)?;
+            self.masm.add(
+                writable!(count_addr_reg),
+                count_addr_reg,
+                typed_reg.reg.into(),
+                OperandSize::S64,
+            )?;
+            self.masm.load(
+                self.masm.address_at_reg(count_addr_reg, ref_count_offset)?,
+                writable!(count_reg),
+                OperandSize::S64,
+            )?;
+            self.masm.add(writable!(count_reg), count_reg, RegImm::i64(1), OperandSize::S64)?;
+            self.masm.store(
+                count_reg.into(),
+                self.masm.address_at_reg(count_addr_reg, ref_count_offset)?,
+                OperandSize::S64,
+            )?;
+
+            self.masm
+                .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
+
+            self.masm.mov(writable!(count_addr_reg), heap_reg.into(), OperandSize::S64)?;
+            self.masm.add(
+                writable!(count_addr_reg),
+                count_addr_reg,
+                old_reg.into(),
+                OperandSize::S64,
+            )?;
+            self.masm.load(
+                self.masm.address_at_reg(count_addr_reg, ref_count_offset)?,
+                writable!(count_reg),
+                OperandSize::S64,
+            )?;
+            self.masm.sub(writable!(count_reg), count_reg, RegImm::i64(1), OperandSize::S64)?;
+            self.masm.store(
+                count_reg.into(),
+                self.masm.address_at_reg(count_addr_reg, ref_count_offset)?,
+                OperandSize::S64,
+            )?;
+
+            self.context.free_reg(count_reg);
+            self.context.free_reg(count_addr_reg);
+            self.context.free_reg(old_reg);
+            self.context.free_reg(heap_reg);
+            self.context.free_reg(typed_reg.reg);
+            self.context.free_reg(base);
+        } else {
+            let typed_reg = self.context.pop_to_reg(self.masm, None)?;
+            self.masm
+                .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
+            self.context.free_reg(typed_reg.reg);
+            self.context.free_reg(base);
+        }
 
         Ok(())
     }
