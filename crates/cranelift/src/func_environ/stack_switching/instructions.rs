@@ -1247,7 +1247,7 @@ fn search_handler<'a>(
     {
         builder.switch_to_block(on_no_match);
         builder.set_cold_block(on_no_match);
-        builder.ins().trap(crate::TRAP_UNHANDLED_TAG);
+        env.trap(builder, crate::TRAP_UNHANDLED_TAG);
     }
 
     builder.seal_block(handle_link);
@@ -1272,14 +1272,12 @@ pub(crate) fn translate_cont_bind<'a>(
     let (witness, contref) = fatpointer::deconstruct(env, &mut builder.cursor(), contobj);
 
     // The typing rules for cont.bind allow a null reference to be passed to it.
-    builder.ins().trapz(contref, crate::TRAP_NULL_REFERENCE);
+    env.trapz(builder, contref, crate::TRAP_NULL_REFERENCE);
 
     let mut vmcontref = helpers::VMContRef::new(contref);
     let revision = vmcontref.get_revision(env, builder);
     let evidence = builder.ins().icmp(IntCC::Equal, witness, revision);
-    builder
-        .ins()
-        .trapz(evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
+    env.trapz(builder, evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
 
     vmcontref_store_payloads(env, builder, args, contref);
 
@@ -1296,7 +1294,7 @@ pub(crate) fn translate_cont_new<'a>(
     return_types: &[WasmValType],
 ) -> WasmResult<ir::Value> {
     // The typing rules for cont.new allow a null reference to be passed to it.
-    builder.ins().trapz(func, crate::TRAP_NULL_REFERENCE);
+    env.trapz(builder, func, crate::TRAP_NULL_REFERENCE);
 
     let nargs = builder
         .ins()
@@ -1464,17 +1462,13 @@ fn translate_resume_impl<'a>(
             fatpointer::deconstruct(env, &mut builder.cursor(), resume_contobj);
 
         // The typing rules for resume allow a null reference to be passed to it.
-        builder
-            .ins()
-            .trapz(resume_contref, crate::TRAP_NULL_REFERENCE);
+        env.trapz(builder, resume_contref, crate::TRAP_NULL_REFERENCE);
 
         let mut vmcontref = helpers::VMContRef::new(resume_contref);
 
         let revision = vmcontref.get_revision(env, builder);
         let evidence = builder.ins().icmp(IntCC::Equal, revision, witness);
-        builder
-            .ins()
-            .trapz(evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
+        env.trapz(builder, evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
 
         match resume_payload {
             ResumePayload::Values(resume_args) => {
@@ -1494,7 +1488,7 @@ fn translate_resume_impl<'a>(
                     ResumePayload::ThrowRef(exnref) => {
                         // Validate both operands before consuming the
                         // continuation.
-                        builder.ins().trapz(exnref, crate::TRAP_NULL_REFERENCE);
+                        env.trapz(builder, exnref, crate::TRAP_NULL_REFERENCE);
                         exnref
                     }
                     ResumePayload::Values(_) => unreachable!(),
@@ -1753,7 +1747,7 @@ fn translate_resume_impl<'a>(
         builder.switch_to_block(jt_default_block);
         builder.set_cold_block(jt_default_block);
 
-        builder.ins().trap(crate::TRAP_UNREACHABLE);
+        env.trap(builder, crate::TRAP_UNREACHABLE);
     }
 
     // We create a preamble block for each of the actual handler blocks: It
@@ -1976,17 +1970,13 @@ pub(crate) fn translate_switch<'a>(
             fatpointer::deconstruct(env, &mut builder.cursor(), switchee_contobj);
 
         // The typing rules for switch allow a null reference to be passed to it.
-        builder
-            .ins()
-            .trapz(target_contref, crate::TRAP_NULL_REFERENCE);
+        env.trapz(builder, target_contref, crate::TRAP_NULL_REFERENCE);
 
         let mut target_contref = helpers::VMContRef::new(target_contref);
 
         let revision = target_contref.get_revision(env, builder);
         let evidence = builder.ins().icmp(IntCC::Equal, revision, witness);
-        builder
-            .ins()
-            .trapz(evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
+        env.trapz(builder, evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
         let _next_revision = target_contref.incr_revision(env, builder, revision);
         target_contref
     };
