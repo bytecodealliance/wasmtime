@@ -1471,7 +1471,6 @@ impl Masm for MacroAssembler {
     fn atomic_rmw(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _addr: Self::Address,
         _size: OperandSize,
         _op: RmwOp,
         _flags: MemFlagsData,
@@ -1557,7 +1556,6 @@ impl Masm for MacroAssembler {
     fn atomic_cas(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _addr: Self::Address,
         _size: OperandSize,
         _flags: MemFlagsData,
         _extend: Option<Extend<Zero>>,

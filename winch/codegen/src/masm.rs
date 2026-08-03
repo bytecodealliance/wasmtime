@@ -2074,13 +2074,22 @@ pub(crate) trait MacroAssembler {
     /// Performs a swizzle between two 128-bit vectors into a 128-bit result.
     fn swizzle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) -> Result<()>;
 
-    /// Performs the RMW `op` operation on the passed `addr`.
+    /// Performs the RMW `op` operation on the address at the top of the
+    /// context's stack.
     ///
-    /// The value *before* the operation was performed is written back to the `operand` register.
+    /// This method takes the `CodeGenContext` as an argument to accommodate
+    /// architectures that expect parameters in specific registers. The context
+    /// stack contains the `address` and the `operand` values, in that order,
+    /// and both are owned by this function. The implementer is expected to
+    /// push the value *before* the operation was performed to the context's
+    /// stack before returning.
+    ///
+    /// Note that the address is passed through the context's stack rather than
+    /// as a register to ensure that any spills can be perfomed when solving
+    /// ISA-specific constraints prior to emission.
     fn atomic_rmw(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        addr: Self::Address,
         size: OperandSize,
         op: RmwOp,
         flags: MemFlagsData,
@@ -2105,17 +2114,21 @@ pub(crate) trait MacroAssembler {
         kind: ReplaceLaneKind,
     ) -> Result<()>;
 
-    /// Perform an atomic CAS (compare-and-swap) operation with the value at `addr`, and `expected`
-    /// and `replacement` (at the top of the context's stack).
+    /// Perform an atomic CAS (compare-and-swap) operation with the `address`, `expected` and
+    /// `replacement` values at the top of the context's stack.
     ///
     /// This method takes the `CodeGenContext` as an arguments to accommodate architectures that
-    /// expect parameters in specific registers. The context stack contains the `replacement`,
-    /// and `expected` values in that order. The implementer is expected to push the value at
-    /// `addr` before the update to the context's stack before returning.
+    /// expect parameters in specific registers. The context stack contains the `address`,
+    /// `expected` and `replacement` values in that order, and all of them are owned by this
+    /// function. The implementer is expected to push the value at `address` before the update to
+    /// the context's stack before returning.
+    ///
+    /// Like in [`MacroAssembler::atomic_rmw`], the address is passed through the context's stack
+    /// so that it can be spilled; implementations that require fixed registers must request them
+    /// *before* popping any of the values above.
     fn atomic_cas(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        addr: Self::Address,
         size: OperandSize,
         flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
