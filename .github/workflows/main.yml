@@ -1063,6 +1063,9 @@ jobs:
 
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
+      env:
+        # Avoid AMX instructions. Details at https://github.com/uxlfoundation/oneDNN/issues/5689
+        ONEDNN_MAX_CPU_ISA: AVX10_1_512
 
   # Test `wasmtime-wasi-tls` in its own job, as not all of its providers are
   # compatible with all targets. The primary culprit is the OpenSSL dependency,
