@@ -1805,7 +1805,16 @@
   (value_regs_get x 0))
 
 ;;;;;  Rules for `fpromote`;;;;;;;;;;;;;;;;;
-(rule (lower (fpromote _ x))
+(rule (lower (fpromote (ty_supported_float_min $F32)
+                       x @ (value_type (ty_supported_float_min $F16))))
+  (rv_fcvtsh x))
+
+(rule (lower (fpromote (ty_supported_float_min $F64)
+                       x @ (value_type (ty_supported_float_min $F16))))
+  (rv_fcvtdh x))
+
+(rule (lower (fpromote (ty_supported_float_min $F64)
+                       x @ (value_type (ty_supported_float_min $F32))))
   (rv_fcvtds x))
 
 ;;;;;  Rules for `fvpromote_low`;;;;;;;;;;;;
@@ -1815,7 +1824,16 @@
   (rv_vfwcvt_f_f_v x (unmasked) (vstate_mf2 half_ty)))
 
 ;;;;;  Rules for `fdemote`;;;;;;;;;;;;;;;;;;
-(rule (lower (fdemote _ x))
+(rule (lower (fdemote (ty_supported_float_min $F16)
+                      x @ (value_type (ty_supported_float_min $F32))))
+  (rv_fcvths (FRM.RNE) x))
+
+(rule (lower (fdemote (ty_supported_float_min $F16)
+                      x @ (value_type (ty_supported_float_min $F64))))
+  (rv_fcvthd (FRM.RNE) x))
+
+(rule (lower (fdemote (ty_supported_float_min $F32)
+                      x @ (value_type (ty_supported_float_min $F64))))
   (rv_fcvtsd (FRM.RNE) x))
 
 ;;;;;  Rules for `fvdemote`;;;;;;;;;;;;;;;;;

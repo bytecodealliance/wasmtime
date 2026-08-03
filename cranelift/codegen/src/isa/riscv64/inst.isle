@@ -445,8 +445,12 @@
   (FcvtFmtLu) ;; fcvt.{fmt}.lu
   (FmvXFmt) ;; fmv.x.{fmt}
   (FmvFmtX) ;; fmv.{fmt}.x
+  (FcvtSH) ;; fcvt.s.h
+  (FcvtHS) ;; fcvt.h.s
   (FcvtSD) ;; fcvt.s.d
   (FcvtDS) ;; fcvt.d.s
+  (FcvtDH) ;; fcvt.d.h
+  (FcvtHD) ;; fcvt.h.d
 
   ;; Zfa Extension
   (Fround) ;; fround.{fmt}
@@ -1422,13 +1426,29 @@
 (decl rv_fmvdx (XReg) FReg)
 (rule (rv_fmvdx r) (fpu_rr (FpuOPRR.FmvFmtX) $F64 (FRM.RNE) r))
 
-;; Helper for emitting the `fcvt.d.s` ("Float Convert Double to Single") instruction.
+;; Helper for emitting the `fcvt.s.h` ("Float Convert Half to Single") instruction.
+(decl rv_fcvtsh (FReg) FReg)
+(rule (rv_fcvtsh rs1) (fpu_rr (FpuOPRR.FcvtSH) $F32 (FRM.RNE) rs1))
+
+;; Helper for emitting the `fcvt.h.s` ("Float Convert Single to Half") instruction.
+(decl rv_fcvths (FRM FReg) FReg)
+(rule (rv_fcvths frm rs1) (fpu_rr (FpuOPRR.FcvtHS) $F16 frm rs1))
+
+;; Helper for emitting the `fcvt.d.s` ("Float Convert Single to Double") instruction.
 (decl rv_fcvtds (FReg) FReg)
 (rule (rv_fcvtds rs1) (fpu_rr (FpuOPRR.FcvtDS) $F64 (FRM.RNE) rs1))
 
-;; Helper for emitting the `fcvt.s.d` ("Float Convert Single to Double") instruction.
+;; Helper for emitting the `fcvt.s.d` ("Float Convert Double to Single") instruction.
 (decl rv_fcvtsd (FRM FReg) FReg)
 (rule (rv_fcvtsd frm rs1) (fpu_rr (FpuOPRR.FcvtSD) $F32 frm rs1))
+
+;; Helper for emitting the `fcvt.d.h` ("Float Convert Half to Double") instruction.
+(decl rv_fcvtdh (FReg) FReg)
+(rule (rv_fcvtdh rs1) (fpu_rr (FpuOPRR.FcvtDH) $F64 (FRM.RNE) rs1))
+
+;; Helper for emitting the `fcvt.h.d` ("Float Convert Double to Half") instruction.
+(decl rv_fcvthd (FRM FReg) FReg)
+(rule (rv_fcvthd frm rs1) (fpu_rr (FpuOPRR.FcvtHD) $F16 frm rs1))
 
 ;; Helper for emitting the `fcvt.s.w` instruction.
 (decl rv_fcvtsw (FRM XReg) FReg)
