@@ -94,7 +94,10 @@ fn ensure_compatibility_between_winch_and_drc_collector(config: &mut Config) -> 
 fn winch_with_drc_collector_disables_gc_types_by_default(config: &mut Config) -> Result<()> {
     config.collector(Collector::DeferredReferenceCounting);
     let engine = Engine::new(&config)?;
-    let result = Module::new(&engine, r#"(module (global (mut externref) (ref.null extern)))"#);
+    let result = Module::new(
+        &engine,
+        r#"(module (global (mut externref) (ref.null extern)))"#,
+    );
     assert!(result.is_err());
 
     Ok(())
