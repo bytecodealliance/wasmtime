@@ -3839,6 +3839,50 @@ fn winch_externref_survives_gc_in_frame() -> Result<()> {
     Ok(())
 }
 
+/// The write barrier's decrement chain releases an object once a global stops
+/// holding the last reference to it.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_drc_write_barrier_drops_old_global_value() -> Result<()> {
+    let mut config = Config::new();
+    config.strategy(Strategy::Winch);
+    config.collector(Collector::DeferredReferenceCounting);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (global $g (mut externref) (ref.null extern))
+          (func (export "set") (param externref)
+            (global.set $g (local.get 0))))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let set = instance.get_func(&mut store, "set").unwrap();
+
+    let dropped = Arc::new(AtomicBool::new(false));
+    {
+        let mut scope = RootScope::new(&mut store);
+        let r = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
+        set.call(&mut scope, &[Val::ExternRef(Some(r))], &mut [])?;
+    }
+
+    // The global holds the only reference; nothing may be dropped yet.
+    store.gc(None)?;
+    assert!(!dropped.load(SeqCst));
+
+    // Overwriting the global decrements the count to zero and releases the
+    // old value.
+    set.call(&mut store, &[Val::ExternRef(None)], &mut [])?;
+    store.gc(None)?;
+    assert!(dropped.load(SeqCst));
+
+    Ok(())
+}
+
 /// Reference values crossing the ABI boundary in every position: stack-passed
 /// externref params and multi-value externref results (more than fit in registers)
 #[test]
