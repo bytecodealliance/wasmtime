@@ -3939,6 +3939,117 @@ fn winch_drc_read_barrier_keeps_loaded_ref_alive() -> Result<()> {
     Ok(())
 }
 
+/// An `externref` may wrap an unboxed i31 created through the host API. Such
+/// values do not have reference counts and must bypass both DRC barriers.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_drc_i31_wrapped_as_externref_skips_global_barriers() -> Result<()> {
+    let mut config = Config::new();
+    config.strategy(Strategy::Winch);
+    config.collector(Collector::DeferredReferenceCounting);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (global $g (mut externref) (ref.null extern))
+          (func (export "set") (param externref)
+            local.get 0
+            global.set $g)
+          (func (export "get") (result externref)
+            global.get $g))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let set = instance.get_func(&mut store, "set").unwrap();
+    let get = instance.get_func(&mut store, "get").unwrap();
+
+    let anyref = AnyRef::from_i31(&mut store, I31::wrapping_u32(0x1234));
+    let externref = ExternRef::convert_any(&mut store, anyref)?;
+    set.call(&mut store, &[Val::ExternRef(Some(externref))], &mut [])?;
+
+    let mut results = [Val::null_extern_ref()];
+    get.call(&mut store, &[], &mut results)?;
+    let externref = results[0]
+        .unwrap_externref()
+        .expect("global.get returned null");
+    let anyref = AnyRef::convert_extern(&mut store, *externref)?;
+    assert_eq!(anyref.unwrap_i31(&store)?.get_u32(), 0x1234);
+
+    // Replacing the i31-backed externref exercises the old-value side of the
+    // write barrier as well.
+    set.call(&mut store, &[Val::null_extern_ref()], &mut [])?;
+    Ok(())
+}
+
+/// Growing the over-approximated-stack-roots list to its threshold forces a
+/// collection from the read barrier and preserves the reference whose load
+/// triggered that collection.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_drc_read_barrier_forces_gc_at_threshold() -> Result<()> {
+    let mut config = Config::new();
+    config.strategy(Strategy::Winch);
+    config.collector(Collector::DeferredReferenceCounting);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+
+    let num_refs = wasmtime_environ::DRC_MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD as usize;
+    let mut wat = "(module\n".to_string();
+    for i in 0..num_refs {
+        wat.push_str(&format!(
+            r#"(global $g{i} (export "g{i}") (mut externref) (ref.null extern))
+"#,
+        ));
+    }
+    wat.push_str("(func (export \"drain\")\n");
+    for i in 0..num_refs {
+        wat.push_str(&format!(
+            "(drop (global.get $g{i}))\n(global.set $g{i} (ref.null extern))\n"
+        ));
+    }
+    wat.push_str("))");
+
+    let module = Module::new(&engine, &wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let dropped = Arc::new(AtomicUsize::new(0));
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        for i in 0..num_refs {
+            let gc_ref = ExternRef::new(&mut scope, CountDrops(dropped.clone()))?;
+            let global = instance
+                .get_global(&mut scope, &format!("g{i}"))
+                .expect("global must be exported");
+            global.set(&mut scope, Val::ExternRef(Some(gc_ref)))?;
+        }
+    }
+
+    // Settle the host roots. Each global is now the only long-lived home for
+    // its reference.
+    store.gc(None)?;
+    assert_eq!(dropped.load(SeqCst), 0);
+
+    let drain = instance.get_typed_func::<(), ()>(&mut store, "drain")?;
+    drain.call(&mut store, ())?;
+
+    // The final global.get reaches the threshold and forces a collection.
+    // The preceding references are no longer on the stack or in globals, but
+    // the triggering reference is still live in the global.get result slot.
+    assert_eq!(dropped.load(SeqCst), num_refs - 1);
+
+    // The triggering reference becomes collectible after `drain` returns.
+    store.gc(None)?;
+    assert_eq!(dropped.load(SeqCst), num_refs);
+
+    Ok(())
+}
+
 /// Reference values crossing the ABI boundary in every position: stack-passed
 /// externref params and multi-value externref results (more than fit in registers)
 #[test]

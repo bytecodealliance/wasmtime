@@ -2,8 +2,8 @@
 ;;! gc_types = true
 
 ;; Winch reference-value support: externref flows through params, results,
-;; locals, and globals, and survives calls (stack maps). Runs under the
-;; barrier-free collectors; the DRC collector is refused at config time until Winch emits barriers.
+;; locals, and globals, and survives calls (stack maps). Global reads and
+;; writes use barriers when running under the DRC collector.
 
 (module
   (global $g (mut externref) (ref.null extern))

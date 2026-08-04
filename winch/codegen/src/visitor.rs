@@ -29,8 +29,8 @@ use wasmparser::{
 use wasmtime_cranelift::{TRAP_GC_HEAP_CORRUPT, TRAP_INDIRECT_CALL_TO_NULL};
 use wasmtime_environ::{
     DRC_HEADER_IN_OVER_APPROX_LIST_BIT, DRC_MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD, DataIndex,
-    ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType,
-    WasmValType,
+    ElemIndex, FuncIndex, GlobalIndex, I31_DISCRIMINANT, MemoryIndex, PtrSize, TableIndex,
+    TypeIndex, WasmHeapType, WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -2069,9 +2069,6 @@ where
         let addr = self.masm.address_at_reg(base, offset)?;
         let gc_ref = self.context.reg_for_type(ty, self.masm)?;
         if self.gc_barrier_needed(&ty) {
-            // Home the loaded reference into its value stack slot before the
-            // barrier: the slot is covered by the stack map if the barrier
-            // forces a collection, and registers don't survive that call.
             self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
             self.context.stack.push(Val::reg(gc_ref, ty));
             self.context.spill(self.masm)?;
@@ -2104,6 +2101,21 @@ where
                 IntCmpKind::Eq,
                 ref_reg,
                 ref_reg.into(),
+                skip_barrier,
+                OperandSize::S32,
+            )?;
+            self.masm
+                .mov(writable!(heap_reg), ref_reg.into(), OperandSize::S32)?;
+            self.masm.and(
+                writable!(heap_reg),
+                heap_reg,
+                RegImm::i32(I31_DISCRIMINANT as i32),
+                OperandSize::S32,
+            )?;
+            self.masm.branch(
+                IntCmpKind::Ne,
+                heap_reg,
+                heap_reg.into(),
                 skip_barrier,
                 OperandSize::S32,
             )?;
@@ -2150,7 +2162,7 @@ where
             self.masm.add(
                 writable!(fold_reg),
                 fold_reg,
-                gc_ref.into(),
+                ref_reg.into(),
                 OperandSize::S64,
             )?;
 
@@ -2382,6 +2394,24 @@ where
                 skip_inc,
                 OperandSize::S32,
             )?;
+            self.masm.mov(
+                writable!(count_addr_reg),
+                typed_reg.reg.into(),
+                OperandSize::S32,
+            )?;
+            self.masm.and(
+                writable!(count_addr_reg),
+                count_addr_reg,
+                RegImm::i32(I31_DISCRIMINANT as i32),
+                OperandSize::S32,
+            )?;
+            self.masm.branch(
+                IntCmpKind::Ne,
+                count_addr_reg,
+                count_addr_reg.into(),
+                skip_inc,
+                OperandSize::S32,
+            )?;
 
             self.masm.mov(
                 writable!(count_addr_reg),
@@ -2433,6 +2463,21 @@ where
                 IntCmpKind::Eq,
                 old_reg,
                 old_reg.into(),
+                skip_dec,
+                OperandSize::S32,
+            )?;
+            self.masm
+                .mov(writable!(count_addr_reg), old_reg.into(), OperandSize::S32)?;
+            self.masm.and(
+                writable!(count_addr_reg),
+                count_addr_reg,
+                RegImm::i32(I31_DISCRIMINANT as i32),
+                OperandSize::S32,
+            )?;
+            self.masm.branch(
+                IntCmpKind::Ne,
+                count_addr_reg,
+                count_addr_reg.into(),
                 skip_dec,
                 OperandSize::S32,
             )?;
