@@ -3883,6 +3883,62 @@ fn winch_drc_write_barrier_drops_old_global_value() -> Result<()> {
     Ok(())
 }
 
+/// The read barrier holds a count for references entering the stack, so
+/// overwriting their last long-lived home cannot free them out from under
+/// the frame that loaded them.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_drc_read_barrier_keeps_loaded_ref_alive() -> Result<()> {
+    let mut config = Config::new();
+    config.strategy(Strategy::Winch);
+    config.collector(Collector::DeferredReferenceCounting);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (import "" "gc" (func $gc))
+          (global $g (mut externref) (ref.null extern))
+          (func (export "set") (param externref)
+            (global.set $g (local.get 0)))
+          (func (export "swap") (result externref)
+            (local $tmp externref)
+            (local.set $tmp (global.get $g))
+            (global.set $g (ref.null extern))
+            (call $gc)
+            (local.get $tmp)))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let gc = Func::wrap(&mut store, |mut cx: Caller<'_, ()>| {
+        let _ = cx.gc(None);
+    });
+    let instance = Instance::new(&mut store, &module, &[gc.into()])?;
+    let set = instance.get_func(&mut store, "set").unwrap();
+    let swap = instance.get_typed_func::<(), Option<Rooted<ExternRef>>>(&mut store, "swap")?;
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let r = ExternRef::new(&mut scope, 0xDECAFu32)?;
+        set.call(&mut scope, &[Val::ExternRef(Some(r))], &mut [])?;
+    }
+
+    // Settle the deferred unroot so the global truly holds the last count.
+    store.gc(None)?;
+
+    // `swap` loads the reference onto the stack, overwrites the global, and
+    // collects while the stack copy is live.
+    let out = swap.call(&mut store, ())?.expect("must not be null");
+    let got = out
+        .data(&store)?
+        .and_then(|d| d.downcast_ref::<u32>().copied());
+    assert_eq!(got, Some(0xDECAF));
+
+    Ok(())
+}
+
 /// Reference values crossing the ABI boundary in every position: stack-passed
 /// externref params and multi-value externref results (more than fit in registers)
 #[test]

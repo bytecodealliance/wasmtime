@@ -26,10 +26,11 @@ use wasmparser::{
     BlockType, BrTable, HeapType, Ieee32, Ieee64, MemArg, V128, ValType, VisitOperator,
     VisitSimdOperator,
 };
-use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
+use wasmtime_cranelift::{TRAP_GC_HEAP_CORRUPT, TRAP_INDIRECT_CALL_TO_NULL};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex,
-    WasmHeapType, WasmValType,
+    DRC_HEADER_IN_OVER_APPROX_LIST_BIT, DRC_MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD, DataIndex,
+    ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType,
+    WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -2066,11 +2067,266 @@ where
         let index = GlobalIndex::from_u32(global_index);
         let (ty, base, offset) = self.emit_get_global_addr(index)?;
         let addr = self.masm.address_at_reg(base, offset)?;
-        let dst = self.context.reg_for_type(ty, self.masm)?;
-        self.masm.load(addr, writable!(dst), ty.try_into()?)?;
-        self.context.stack.push(Val::reg(dst, ty));
+        let gc_ref = self.context.reg_for_type(ty, self.masm)?;
+        if self.gc_barrier_needed(&ty) {
+            // Home the loaded reference into its value stack slot before the
+            // barrier: the slot is covered by the stack map if the barrier
+            // forces a collection, and registers don't survive that call.
+            self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
+            self.context.stack.push(Val::reg(gc_ref, ty));
+            self.context.spill(self.masm)?;
+            let slot = self
+                .context
+                .stack
+                .peek()
+                .ok_or_else(|| CodeGenError::missing_values_in_stack())?
+                .unwrap_mem()
+                .slot;
 
-        self.context.free_reg(base);
+            let ref_reg = self.context.any_gpr(self.masm)?;
+            self.masm.load(
+                self.masm.address_from_sp(slot.offset)?,
+                writable!(ref_reg),
+                OperandSize::S32,
+            )?;
+
+            let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
+            let gc_heap_base_offset = self.env.vmoffsets.ptr.vm_store_context().gc_heap_base();
+            let gc_heap_len_offset = self
+                .env
+                .vmoffsets
+                .ptr
+                .vm_store_context()
+                .gc_heap_current_length();
+            let heap_reg = self.context.any_gpr(self.masm)?;
+            let skip_barrier = self.masm.get_label()?;
+            self.masm.branch(
+                IntCmpKind::Eq,
+                ref_reg,
+                ref_reg.into(),
+                skip_barrier,
+                OperandSize::S32,
+            )?;
+
+            self.masm.load_ptr(
+                self.masm
+                    .address_at_vmctx(u32::from(store_context_offset))?,
+                writable!(heap_reg),
+            )?;
+            let fold_reg = self.context.any_gpr(self.masm)?;
+            self.masm.load(
+                self.masm
+                    .address_at_reg(heap_reg, u32::from(gc_heap_len_offset))?,
+                writable!(fold_reg),
+                OperandSize::S64,
+            )?;
+            self.masm.load_ptr(
+                self.masm
+                    .address_at_reg(heap_reg, u32::from(gc_heap_base_offset))?,
+                writable!(heap_reg),
+            )?;
+
+            let header_extent = i64::from(
+                self.env
+                    .vmoffsets
+                    .vm_drc_header_next_over_approximated_stack_root(),
+            ) + 4;
+            let extent_reg = self.context.any_gpr(self.masm)?;
+            self.masm
+                .mov(writable!(extent_reg), ref_reg.into(), OperandSize::S64)?;
+            self.masm.add(
+                writable!(extent_reg),
+                extent_reg,
+                RegImm::i64(header_extent),
+                OperandSize::S64,
+            )?;
+            self.masm
+                .cmp(extent_reg, fold_reg.into(), OperandSize::S64)?;
+            self.masm.trapif(IntCmpKind::GtU, TRAP_GC_HEAP_CORRUPT)?;
+            self.context.free_reg(extent_reg);
+
+            self.masm
+                .mov(writable!(fold_reg), heap_reg.into(), OperandSize::S64)?;
+            self.masm.add(
+                writable!(fold_reg),
+                fold_reg,
+                gc_ref.into(),
+                OperandSize::S64,
+            )?;
+
+            let reserved_offset = self.env.vmoffsets.vm_gc_header_reserved_bits();
+            let bits_reg = self.context.any_gpr(self.masm)?;
+            self.masm.load(
+                self.masm.address_at_reg(fold_reg, reserved_offset)?,
+                writable!(bits_reg),
+                OperandSize::S32,
+            )?;
+            self.masm.and(
+                writable!(bits_reg),
+                bits_reg,
+                RegImm::i32(DRC_HEADER_IN_OVER_APPROX_LIST_BIT as i32),
+                OperandSize::S32,
+            )?;
+            self.masm.branch(
+                IntCmpKind::Ne,
+                bits_reg,
+                bits_reg.into(),
+                skip_barrier,
+                OperandSize::S32,
+            )?;
+
+            let heap_data_offset = self.env.vmoffsets.ptr.vmctx_gc_heap_data();
+            let roots_head_offset = u32::from(
+                self.env
+                    .vmoffsets
+                    .ptr
+                    .vmdrc_heap_data_over_approximated_stack_roots(),
+            );
+            let roots_len_offset = u32::from(
+                self.env
+                    .vmoffsets
+                    .ptr
+                    .vmdrc_heap_data_current_over_approximated_stack_roots_len(),
+            );
+            let next_offset = self
+                .env
+                .vmoffsets
+                .vm_drc_header_next_over_approximated_stack_root();
+            let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+
+            let heap_data_reg = self.context.any_gpr(self.masm)?;
+            self.masm.load_ptr(
+                self.masm.address_at_vmctx(u32::from(heap_data_offset))?,
+                writable!(heap_data_reg),
+            )?;
+
+            self.masm.load(
+                self.masm.address_at_reg(heap_data_reg, roots_head_offset)?,
+                writable!(bits_reg),
+                OperandSize::S32,
+            )?;
+            self.masm.store(
+                bits_reg.into(),
+                self.masm.address_at_reg(fold_reg, next_offset)?,
+                OperandSize::S32,
+            )?;
+
+            self.masm.load(
+                self.masm.address_at_reg(fold_reg, reserved_offset)?,
+                writable!(bits_reg),
+                OperandSize::S32,
+            )?;
+            self.masm.or(
+                writable!(bits_reg),
+                bits_reg,
+                RegImm::i32(DRC_HEADER_IN_OVER_APPROX_LIST_BIT as i32),
+                OperandSize::S32,
+            )?;
+            self.masm.store(
+                bits_reg.into(),
+                self.masm.address_at_reg(fold_reg, reserved_offset)?,
+                OperandSize::S32,
+            )?;
+
+            self.masm.load(
+                self.masm.address_at_reg(fold_reg, ref_count_offset)?,
+                writable!(bits_reg),
+                OperandSize::S64,
+            )?;
+            self.masm.add(
+                writable!(bits_reg),
+                bits_reg,
+                RegImm::i64(1),
+                OperandSize::S64,
+            )?;
+            self.masm.store(
+                bits_reg.into(),
+                self.masm.address_at_reg(fold_reg, ref_count_offset)?,
+                OperandSize::S64,
+            )?;
+
+            self.masm.store(
+                ref_reg.into(),
+                self.masm.address_at_reg(heap_data_reg, roots_head_offset)?,
+                OperandSize::S32,
+            )?;
+
+            self.masm.load(
+                self.masm.address_at_reg(heap_data_reg, roots_len_offset)?,
+                writable!(bits_reg),
+                OperandSize::S32,
+            )?;
+            self.masm.add(
+                writable!(bits_reg),
+                bits_reg,
+                RegImm::i32(1),
+                OperandSize::S32,
+            )?;
+            self.masm.store(
+                bits_reg.into(),
+                self.masm.address_at_reg(heap_data_reg, roots_len_offset)?,
+                OperandSize::S32,
+            )?;
+
+            let last_len_offset = u32::from(
+                self.env
+                    .vmoffsets
+                    .ptr
+                    .vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc(),
+            );
+            self.masm.load(
+                self.masm.address_at_reg(heap_data_reg, last_len_offset)?,
+                writable!(fold_reg),
+                OperandSize::S32,
+            )?;
+            self.masm.add(
+                writable!(fold_reg),
+                fold_reg,
+                fold_reg.into(),
+                OperandSize::S32,
+            )?;
+
+            let skip_gc = self.masm.get_label()?;
+            self.masm.branch(
+                IntCmpKind::LtU,
+                bits_reg,
+                fold_reg.into(),
+                skip_gc,
+                OperandSize::S32,
+            )?;
+            self.masm.branch(
+                IntCmpKind::LtU,
+                bits_reg,
+                RegImm::i32(DRC_MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD as i32),
+                skip_gc,
+                OperandSize::S32,
+            )?;
+
+            self.context.free_reg(heap_data_reg);
+            self.context.free_reg(ref_reg);
+            self.context.free_reg(bits_reg);
+            self.context.free_reg(fold_reg);
+            self.context.free_reg(heap_reg);
+
+            let force_gc = self.env.builtins.force_gc::<M::ABI>()?;
+            FnCall::emit::<M>(
+                &mut self.env,
+                self.masm,
+                &mut self.context,
+                Callee::Builtin(force_gc),
+            )?;
+            self.context.pop_and_free(self.masm)?;
+
+            self.masm.bind(skip_gc)?;
+            self.masm.bind(skip_barrier)?;
+
+            self.context.free_reg(base);
+        } else {
+            self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
+            self.context.stack.push(Val::reg(gc_ref, ty));
+
+            self.context.free_reg(base);
+        }
 
         Ok(())
     }
@@ -2085,11 +2341,24 @@ where
             let typed_reg = self.context.pop_to_reg(self.masm, None)?;
             let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
             let gc_heap_base_offset = self.env.vmoffsets.ptr.vm_store_context().gc_heap_base();
+            let gc_heap_len_offset = self
+                .env
+                .vmoffsets
+                .ptr
+                .vm_store_context()
+                .gc_heap_current_length();
             let heap_reg = self.context.any_gpr(self.masm)?;
+            let bound_reg = self.context.any_gpr(self.masm)?;
             self.masm.load_ptr(
                 self.masm
                     .address_at_vmctx(u32::from(store_context_offset))?,
                 writable!(heap_reg),
+            )?;
+            self.masm.load(
+                self.masm
+                    .address_at_reg(heap_reg, u32::from(gc_heap_len_offset))?,
+                writable!(bound_reg),
+                OperandSize::S64,
             )?;
             self.masm.load_ptr(
                 self.masm
@@ -2103,16 +2372,31 @@ where
             let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
             let count_addr_reg = self.context.any_gpr(self.masm)?;
             let count_reg = self.context.any_gpr(self.masm)?;
+            let header_extent = i64::from(ref_count_offset) + 8;
 
-            let skip_inc = self.masm.get_label()?; // NEW — bookkeeping, emits nothing
+            let skip_inc = self.masm.get_label()?;
             self.masm.branch(
-                // NEW — the emitted guard
                 IntCmpKind::Eq,
                 typed_reg.reg,
                 typed_reg.reg.into(),
                 skip_inc,
                 OperandSize::S32,
             )?;
+
+            self.masm.mov(
+                writable!(count_addr_reg),
+                typed_reg.reg.into(),
+                OperandSize::S64,
+            )?;
+            self.masm.add(
+                writable!(count_addr_reg),
+                count_addr_reg,
+                RegImm::i64(header_extent),
+                OperandSize::S64,
+            )?;
+            self.masm
+                .cmp(count_addr_reg, bound_reg.into(), OperandSize::S64)?;
+            self.masm.trapif(IntCmpKind::GtU, TRAP_GC_HEAP_CORRUPT)?;
 
             self.masm
                 .mov(writable!(count_addr_reg), heap_reg.into(), OperandSize::S64)?;
@@ -2154,6 +2438,18 @@ where
             )?;
 
             self.masm
+                .mov(writable!(count_addr_reg), old_reg.into(), OperandSize::S64)?;
+            self.masm.add(
+                writable!(count_addr_reg),
+                count_addr_reg,
+                RegImm::i64(header_extent),
+                OperandSize::S64,
+            )?;
+            self.masm
+                .cmp(count_addr_reg, bound_reg.into(), OperandSize::S64)?;
+            self.masm.trapif(IntCmpKind::GtU, TRAP_GC_HEAP_CORRUPT)?;
+
+            self.masm
                 .mov(writable!(count_addr_reg), heap_reg.into(), OperandSize::S64)?;
             self.masm.add(
                 writable!(count_addr_reg),
@@ -2190,6 +2486,7 @@ where
 
             self.context.free_reg(count_reg);
             self.context.free_reg(count_addr_reg);
+            self.context.free_reg(bound_reg);
             self.context.free_reg(heap_reg);
             self.context.free_reg(typed_reg.reg);
             self.context.free_reg(base);
