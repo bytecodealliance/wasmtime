@@ -2172,20 +2172,39 @@ where
                 RegImm::i64(1),
                 OperandSize::S64,
             )?;
+
+            let drop_old = self.masm.get_label()?;
+            self.masm.branch(
+                IntCmpKind::Eq,
+                count_reg,
+                RegImm::i64(0),
+                drop_old,
+                OperandSize::S64,
+            )?;
             self.masm.store(
                 count_reg.into(),
                 self.masm.address_at_reg(count_addr_reg, ref_count_offset)?,
                 OperandSize::S64,
             )?;
-
-            self.masm.bind(skip_dec)?;
+            self.masm.jmp(skip_dec)?;
 
             self.context.free_reg(count_reg);
             self.context.free_reg(count_addr_reg);
-            self.context.free_reg(old_reg);
             self.context.free_reg(heap_reg);
             self.context.free_reg(typed_reg.reg);
             self.context.free_reg(base);
+
+            self.masm.bind(drop_old)?;
+            let drop_gc_ref = self.env.builtins.drop_gc_ref::<M::ABI>()?;
+            self.context.stack.push(TypedReg::i32(old_reg).into());
+            FnCall::emit::<M>(
+                &mut self.env,
+                self.masm,
+                &mut self.context,
+                Callee::Builtin(drop_gc_ref),
+            )?;
+
+            self.masm.bind(skip_dec)?;
         } else {
             let typed_reg = self.context.pop_to_reg(self.masm, None)?;
             self.masm
