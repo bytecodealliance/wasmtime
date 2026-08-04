@@ -28,8 +28,8 @@ use wasmparser::{
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex, WasmHeapType,
-    WasmValType,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, PtrSize, TableIndex, TypeIndex,
+    WasmHeapType, WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -2087,11 +2087,13 @@ where
             let gc_heap_base_offset = self.env.vmoffsets.ptr.vm_store_context().gc_heap_base();
             let heap_reg = self.context.any_gpr(self.masm)?;
             self.masm.load_ptr(
-                self.masm.address_at_vmctx(u32::from(store_context_offset))?,
+                self.masm
+                    .address_at_vmctx(u32::from(store_context_offset))?,
                 writable!(heap_reg),
             )?;
             self.masm.load_ptr(
-                self.masm.address_at_reg(heap_reg, u32::from(gc_heap_base_offset))?,
+                self.masm
+                    .address_at_reg(heap_reg, u32::from(gc_heap_base_offset))?,
                 writable!(heap_reg),
             )?;
 
@@ -2102,8 +2104,9 @@ where
             let count_addr_reg = self.context.any_gpr(self.masm)?;
             let count_reg = self.context.any_gpr(self.masm)?;
 
-            let skip_inc = self.masm.get_label()?;                        // NEW — bookkeeping, emits nothing
-            self.masm.branch(                                             // NEW — the emitted guard
+            let skip_inc = self.masm.get_label()?; // NEW — bookkeeping, emits nothing
+            self.masm.branch(
+                // NEW — the emitted guard
                 IntCmpKind::Eq,
                 typed_reg.reg,
                 typed_reg.reg.into(),
@@ -2111,7 +2114,8 @@ where
                 OperandSize::S32,
             )?;
 
-            self.masm.mov(writable!(count_addr_reg), heap_reg.into(), OperandSize::S64)?;
+            self.masm
+                .mov(writable!(count_addr_reg), heap_reg.into(), OperandSize::S64)?;
             self.masm.add(
                 writable!(count_addr_reg),
                 count_addr_reg,
@@ -2123,7 +2127,12 @@ where
                 writable!(count_reg),
                 OperandSize::S64,
             )?;
-            self.masm.add(writable!(count_reg), count_reg, RegImm::i64(1), OperandSize::S64)?;
+            self.masm.add(
+                writable!(count_reg),
+                count_reg,
+                RegImm::i64(1),
+                OperandSize::S64,
+            )?;
             self.masm.store(
                 count_reg.into(),
                 self.masm.address_at_reg(count_addr_reg, ref_count_offset)?,
@@ -2135,7 +2144,17 @@ where
             self.masm
                 .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
 
-            self.masm.mov(writable!(count_addr_reg), heap_reg.into(), OperandSize::S64)?;
+            let skip_dec = self.masm.get_label()?;
+            self.masm.branch(
+                IntCmpKind::Eq,
+                old_reg,
+                old_reg.into(),
+                skip_dec,
+                OperandSize::S32,
+            )?;
+
+            self.masm
+                .mov(writable!(count_addr_reg), heap_reg.into(), OperandSize::S64)?;
             self.masm.add(
                 writable!(count_addr_reg),
                 count_addr_reg,
@@ -2147,12 +2166,19 @@ where
                 writable!(count_reg),
                 OperandSize::S64,
             )?;
-            self.masm.sub(writable!(count_reg), count_reg, RegImm::i64(1), OperandSize::S64)?;
+            self.masm.sub(
+                writable!(count_reg),
+                count_reg,
+                RegImm::i64(1),
+                OperandSize::S64,
+            )?;
             self.masm.store(
                 count_reg.into(),
                 self.masm.address_at_reg(count_addr_reg, ref_count_offset)?,
                 OperandSize::S64,
             )?;
+
+            self.masm.bind(skip_dec)?;
 
             self.context.free_reg(count_reg);
             self.context.free_reg(count_addr_reg);
