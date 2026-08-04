@@ -1,4 +1,4 @@
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Seek, Write};
 use std::process::Command;
 use wasmtime_wasi::cli::StdinStream;
 use wasmtime_wasi::p2::Pollable;
@@ -16,9 +16,28 @@ fn main() {
         return;
     }
 
-    match std::env::var(VAR_NAME) {
+    match std::env::var(VAR_NAME).as_deref() {
+        Ok("read-once") => child_read_once(),
         Ok(_) => child_process(),
         Err(_) => parent_process(),
+    }
+
+    fn child_read_once() {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let mut stdin = wasmtime_wasi::cli::stdin().p2_stream();
+                loop {
+                    let bytes = stdin.read(1).unwrap();
+                    if !bytes.is_empty() {
+                        assert_eq!(&bytes[..], b"a");
+                        break;
+                    }
+                    stdin.ready().await;
+                }
+            });
     }
 
     fn child_process() {
@@ -92,6 +111,18 @@ fn main() {
 
 fn parent_process() {
     let me = std::env::current_exe().unwrap();
+
+    let mut input = tempfile::tempfile().unwrap();
+    input.write_all(b"abcde").unwrap();
+    input.rewind().unwrap();
+    let status = Command::new(&me)
+        .env(VAR_NAME, "read-once")
+        .stdin(input.try_clone().unwrap())
+        .status()
+        .unwrap();
+    assert!(status.success());
+    assert_eq!(input.stream_position().unwrap(), 1);
+
     let mut cmd = Command::new(me);
     cmd.env(VAR_NAME, "1");
     cmd.stdin(std::process::Stdio::piped());

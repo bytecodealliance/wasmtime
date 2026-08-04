@@ -25,7 +25,6 @@
 
 use crate::cli::{IsTerminal, StdinStream};
 use bytes::{Bytes, BytesMut};
-use std::io::Read;
 use std::mem;
 use std::pin::Pin;
 use std::sync::{Condvar, Mutex, OnceLock};
@@ -116,7 +115,7 @@ fn create() -> GlobalStdin {
             drop(lock);
 
             let mut bytes = BytesMut::zeroed(size_hint);
-            let (new_state, done) = match std::io::stdin().read(&mut bytes) {
+            let (new_state, done) = match read_stdin(&mut bytes) {
                 Ok(0) => (StdinState::Closed, true),
                 Ok(nbytes) => {
                     bytes.truncate(nbytes);
@@ -141,6 +140,44 @@ fn create() -> GlobalStdin {
     });
 
     GlobalStdin::default()
+}
+
+// Bypass `std::io::Stdin`'s process-global buffer so that a guest request
+// cannot advance a seekable input past the requested number of bytes. Keep
+// its lock held to serialize reads with other users of stdin in this process.
+fn read_stdin(bytes: &mut [u8]) -> std::io::Result<usize> {
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsFd;
+        let stdin = std::io::stdin();
+        let stdin = stdin.lock();
+        rustix::io::read(stdin.as_fd(), bytes).map_err(Into::into)
+    }
+
+    #[cfg(windows)]
+    {
+        use std::io::Read as _;
+        use std::os::windows::io::{AsRawHandle, FromRawHandle};
+
+        let stdin = std::io::stdin();
+        let mut stdin = stdin.lock();
+        if std::io::IsTerminal::is_terminal(&stdin) {
+            return stdin.read(bytes);
+        }
+
+        // SAFETY: `stdin` keeps the borrowed process handle valid for this
+        // read, and `ManuallyDrop` prevents `File` from closing the handle.
+        let mut file = std::mem::ManuallyDrop::new(unsafe {
+            std::fs::File::from_raw_handle(stdin.as_raw_handle())
+        });
+        file.read(bytes)
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        use std::io::Read as _;
+        std::io::stdin().read(bytes)
+    }
 }
 
 struct WasiStdin;
