@@ -3,15 +3,16 @@ use crate::component::dfg::AbstractInstantiations;
 use crate::component::*;
 use crate::prelude::*;
 use crate::{
-    EngineOrModuleTypeIndex, EntityIndex, FactInlineIntrinsic, FuncKey, ModuleEnvironment,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, EngineOrModuleTypeIndex,
+    EntityIndex, FactInlineIntrinsic, FuncKey, KnownEntity, ModuleEnvironment,
     ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, ScopeVec, TagIndex,
     Tunables, TypeConvert, WasmHeapType, WasmResult, WasmValType,
 };
 use core::str::FromStr;
-use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::PackedOption;
+use cranelift_entity::{EntityRef, SecondaryMap};
 use indexmap::IndexMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::mem;
 use wasmparser::component_types::{
     AliasableResourceId, ComponentCoreModuleTypeId, ComponentDefinedTypeId, ComponentEntityType,
@@ -19,6 +20,7 @@ use wasmparser::component_types::{
 };
 use wasmparser::types::Types;
 use wasmparser::{Chunk, ComponentExternName, Encoding, Parser, Payload, Validator};
+use wasmtime_core::alloc::PanicOnOom;
 
 mod adapt;
 pub use self::adapt::*;
@@ -549,12 +551,17 @@ impl<'a, 'data> Translator<'a, 'data> {
         let translation =
             component.finish(self.types.types_mut_for_inlining(), self.result.types_ref())?;
 
-        self.analyze_function_imports(&translation);
+        self.analyze_imports(&translation);
 
         Ok((translation, self.static_modules))
     }
 
-    fn analyze_function_imports(&mut self, translation: &ComponentTranslation) {
+    /// Record everything we statically know about each module's imports.
+    ///
+    /// See `ModuleTranslation::known_imported_functions` and
+    /// `ModuleTranslation::known_imported_globals` for how we can optimize
+    /// lowering based on this information.
+    fn analyze_imports(&mut self, translation: &ComponentTranslation) {
         // First, abstract interpret the initializers to create a map from each
         // static module to its abstract set of instantiations.
         let mut instantiations = SecondaryMap::<StaticModuleIndex, AbstractInstantiations>::new();
@@ -583,106 +590,211 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
         }
 
+        // Third, find the globals, memories, and tables whose identity is not
+        // statically known to everything that can access them. Note that this
+        // is a property of the whole component and not of a single module's
+        // instantiations; see `ModuleTranslation::known_imported_globals` for
+        // details.
+        let ambiguous = ambiguous_entities(translation, &instantiations, &instance_to_module);
+
+        // Fourth, record which of each module's own defined entities all of
+        // their importers agree on, which lets those modules use a precise alias
+        // region for them even when they are exported.
+        for (module, translation) in self.static_modules.iter_mut() {
+            for i in 0..translation.module.num_defined_globals() {
+                let index = DefinedGlobalIndex::new(i);
+                let global = translation.module.global_index(index);
+                if !ambiguous.contains(&(module, EntityIndex::Global(global))) {
+                    translation
+                        .globals_known_to_importers
+                        .insert(index)
+                        .panic_on_oom();
+                }
+            }
+            for i in 0..translation.module.num_defined_memories() {
+                let index = DefinedMemoryIndex::new(i);
+                let memory = translation.module.memory_index(index);
+                if !ambiguous.contains(&(module, EntityIndex::Memory(memory))) {
+                    translation
+                        .memories_known_to_importers
+                        .insert(index)
+                        .panic_on_oom();
+                }
+            }
+            for i in 0..translation.module.num_defined_tables() {
+                let index = DefinedTableIndex::new(i);
+                let table = translation.module.table_index(index);
+                if !ambiguous.contains(&(module, EntityIndex::Table(table))) {
+                    translation
+                        .tables_known_to_importers
+                        .insert(index)
+                        .panic_on_oom();
+                }
+            }
+        }
+
         // Finally, iterate over our instantiations and record statically-known
-        // function imports so that they can get translated into direct calls
-        // (and eventually get inlined) rather than indirect calls through the
-        // imports table.
+        // imports: function imports so that they can get translated into direct
+        // calls (and eventually get inlined) rather than indirect calls through
+        // the imports table; and global, memory, and table imports so that they
+        // can get precise alias regions instead of the conservative regions
+        // shared by everything that crosses a module boundary.
         for (module, instantiations) in instantiations.iter() {
             let args = match instantiations {
                 dfg::AbstractInstantiations::Many | dfg::AbstractInstantiations::None => continue,
                 dfg::AbstractInstantiations::One(args) => args,
             };
 
-            let mut imported_func_counter = 0_u32;
             for (i, arg) in args.iter().enumerate() {
-                // Only consider function imports.
-                let (_, _, crate::types::EntityType::Function(_)) =
-                    self.static_modules[module].module.import(i).unwrap()
-                else {
-                    continue;
-                };
-
-                let imported_func = FuncIndex::from_u32(imported_func_counter);
-                imported_func_counter += 1;
-                debug_assert!(
-                    self.static_modules[module]
-                        .module
-                        .defined_func_index(imported_func)
-                        .is_none()
-                );
-
-                let known_func = match arg {
-                    CoreDef::InstanceFlags(_) => unreachable!("instance flags are not a function"),
-                    CoreDef::TaskMayBlock => unreachable!("task_may_block is not a function"),
-
-                    // We could in theory inline these trampolines, so it could
-                    // potentially make sense to record that we know this
-                    // imported function is this particular trampoline. However,
-                    // everything else is based around (module,
-                    // defined-function) pairs and these trampolines don't fit
-                    // that paradigm. Also, inlining trampolines gets really
-                    // tricky when we consider the stack pointer, frame pointer,
-                    // and return address note-taking that they do for the
-                    // purposes of stack walking. We could, with enough effort,
-                    // turn them into direct calls even though we probably
-                    // wouldn't ever inline them, but it just doesn't seem worth
-                    // the effort.
-                    //
-                    // That said, a couple of adapter trampolines are lowered
-                    // inline during translation. We record these here so
-                    // `FuncEnvironment` recognizes them. All other trampolines
-                    // remain indirect calls.
-                    CoreDef::Trampoline(index) => match translation.trampolines[*index] {
-                        Trampoline::EnterSyncCall => FactInlineIntrinsic::EnterSyncCall.into(),
-                        Trampoline::ExitSyncCall => FactInlineIntrinsic::ExitSyncCall.into(),
-                        Trampoline::Trap(trap) => FactInlineIntrinsic::Trap(trap).into(),
-                        _ => continue,
-                    },
-
-                    // This import is a compile-time builtin intrinsic, we
-                    // should inline its implementation during function
-                    // translation.
-                    CoreDef::UnsafeIntrinsic(i) => FuncKey::UnsafeIntrinsic(Abi::Wasm, *i).into(),
-
-                    // This imported function is an export from another
-                    // instance, a perfect candidate for becoming an inlinable
-                    // direct call!
-                    CoreDef::Export(export) => {
-                        let Some(arg_module) = &instance_to_module[export.instance].expand() else {
-                            // Instance of a dynamic module that is not part of
-                            // this component, not a statically-known module
-                            // inside this component. We have to do an indirect
-                            // call.
+                // Record that this global, memory, or table import is always the
+                // same defined entity, when we know that and when everything
+                // else that imports that entity knows it too.
+                macro_rules! record_known_entity {
+                    ($variant:ident, $imported:expr, $defined_index:ident, $known:ident) => {{
+                        let Some((arg_module, EntityIndex::$variant(arg_entity))) =
+                            unambiguous_entity(&instance_to_module, &ambiguous, arg)
+                        else {
                             continue;
                         };
-
-                        let ExportItem::Index(EntityIndex::Function(arg_func)) = &export.item
-                        else {
-                            unreachable!("function imports must be functions")
-                        };
-
-                        let Some(arg_module_def_func) = self.static_modules[*arg_module]
+                        let Some(index) = self.static_modules[arg_module]
                             .module
-                            .defined_func_index(*arg_func)
+                            .$defined_index(arg_entity)
                         else {
-                            // TODO: we should ideally follow re-export chains
-                            // to bottom out the instantiation argument in
-                            // either a definition or an import at the root
-                            // component boundary. In practice, this pattern is
-                            // rare, so following these chains is left for the
-                            // Future.
                             continue;
                         };
+                        assert!(self.static_modules[module].$known[$imported].is_none());
+                        self.static_modules[module].$known[$imported] = Some(KnownEntity {
+                            module: arg_module,
+                            index,
+                        });
+                    }};
+                }
 
-                        FuncKey::DefinedWasmFunction(*arg_module, arg_module_def_func).into()
+                match self.static_modules[module].module.import_index(i).unwrap() {
+                    EntityIndex::Function(imported_func) => {
+                        debug_assert!(
+                            self.static_modules[module]
+                                .module
+                                .defined_func_index(imported_func)
+                                .is_none()
+                        );
+
+                        let known_func = match arg {
+                            CoreDef::InstanceFlags(_) => {
+                                unreachable!("instance flags are not a function")
+                            }
+                            CoreDef::TaskMayBlock => {
+                                unreachable!("task_may_block is not a function")
+                            }
+
+                            // We could in theory inline these trampolines, so it
+                            // could potentially make sense to record that we
+                            // know this imported function is this particular
+                            // trampoline. However, everything else is based
+                            // around (module, defined-function) pairs and these
+                            // trampolines don't fit that paradigm. Also,
+                            // inlining trampolines gets really tricky when we
+                            // consider the stack pointer, frame pointer, and
+                            // return address note-taking that they do for the
+                            // purposes of stack walking. We could, with enough
+                            // effort, turn them into direct calls even though we
+                            // probably wouldn't ever inline them, but it just
+                            // doesn't seem worth the effort.
+                            //
+                            // That said, a couple of adapter trampolines are
+                            // lowered inline during translation. We record these
+                            // here so `FuncEnvironment` recognizes them. All
+                            // other trampolines remain indirect calls.
+                            CoreDef::Trampoline(index) => match translation.trampolines[*index] {
+                                Trampoline::EnterSyncCall => {
+                                    FactInlineIntrinsic::EnterSyncCall.into()
+                                }
+                                Trampoline::ExitSyncCall => {
+                                    FactInlineIntrinsic::ExitSyncCall.into()
+                                }
+                                Trampoline::Trap(trap) => FactInlineIntrinsic::Trap(trap).into(),
+                                _ => continue,
+                            },
+
+                            // This import is a compile-time builtin intrinsic,
+                            // we should inline its implementation during
+                            // function translation.
+                            CoreDef::UnsafeIntrinsic(i) => {
+                                FuncKey::UnsafeIntrinsic(Abi::Wasm, *i).into()
+                            }
+
+                            // This imported function is an export from another
+                            // instance, a perfect candidate for becoming an
+                            // inlinable direct call!
+                            CoreDef::Export(export) => {
+                                let Some((arg_module, arg_entity)) =
+                                    resolve_core_export(&instance_to_module, export)
+                                else {
+                                    // Instance of a dynamic module that is not
+                                    // part of this component, not a
+                                    // statically-known module inside this
+                                    // component. We have to do an indirect call.
+                                    continue;
+                                };
+
+                                let EntityIndex::Function(arg_func) = arg_entity else {
+                                    unreachable!("function imports must be functions")
+                                };
+
+                                let Some(arg_module_def_func) = self.static_modules[arg_module]
+                                    .module
+                                    .defined_func_index(arg_func)
+                                else {
+                                    // TODO: we should ideally follow re-export
+                                    // chains to bottom out the instantiation
+                                    // argument in either a definition or an
+                                    // import at the root component boundary. In
+                                    // practice, this pattern is rare, so
+                                    // following these chains is left for the
+                                    // Future.
+                                    continue;
+                                };
+
+                                FuncKey::DefinedWasmFunction(arg_module, arg_module_def_func).into()
+                            }
+                        };
+
+                        assert!(
+                            self.static_modules[module].known_imported_functions[imported_func]
+                                .is_none()
+                        );
+                        self.static_modules[module].known_imported_functions[imported_func] =
+                            Some(known_func);
                     }
-                };
 
-                assert!(
-                    self.static_modules[module].known_imported_functions[imported_func].is_none()
-                );
-                self.static_modules[module].known_imported_functions[imported_func] =
-                    Some(known_func);
+                    // Note that a global import is not necessarily satisfied by a
+                    // wasm global: it can also be one of the component-model
+                    // flags that live in the `VMComponentContext`, which have
+                    // nothing to do with defined-global alias regions.
+                    EntityIndex::Global(imported_global) => record_known_entity!(
+                        Global,
+                        imported_global,
+                        defined_global_index,
+                        known_imported_globals
+                    ),
+
+                    EntityIndex::Memory(imported_memory) => record_known_entity!(
+                        Memory,
+                        imported_memory,
+                        defined_memory_index,
+                        known_imported_memories
+                    ),
+
+                    EntityIndex::Table(imported_table) => record_known_entity!(
+                        Table,
+                        imported_table,
+                        defined_table_index,
+                        known_imported_tables
+                    ),
+
+                    // Tags don't have alias regions of their own.
+                    EntityIndex::Tag(_) => {}
+                }
             }
         }
     }
@@ -1814,3 +1926,121 @@ mod pre_inlining {
     }
 }
 use pre_inlining::PreInliningComponentTypes;
+
+/// Resolve a `CoreExport` to the static module that defines it and the entity
+/// index it refers to within that module, when we can see through it statically.
+fn resolve_core_export(
+    instance_to_module: &PrimaryMap<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>,
+    export: &CoreExport<EntityIndex>,
+) -> Option<(StaticModuleIndex, EntityIndex)> {
+    // This can be an instance of a dynamic module that is not part of this
+    // component, rather than a statically-known module inside of it.
+    let module = instance_to_module[export.instance].expand()?;
+    match &export.item {
+        ExportItem::Index(index) => Some((module, *index)),
+        // Names are only used for instances of modules whose shape we don't
+        // statically know, which we already filtered out.
+        ExportItem::Name(_) => None,
+    }
+}
+
+/// Same as `resolve_core_export`, but for a `CoreDef` that must additionally be
+/// unambiguous.
+fn unambiguous_entity(
+    instance_to_module: &PrimaryMap<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>,
+    ambiguous: &HashSet<(StaticModuleIndex, EntityIndex)>,
+    def: &CoreDef,
+) -> Option<(StaticModuleIndex, EntityIndex)> {
+    let CoreDef::Export(export) = def else {
+        return None;
+    };
+    let entity = resolve_core_export(instance_to_module, export)?;
+    if ambiguous.contains(&entity) {
+        return None;
+    }
+    Some(entity)
+}
+
+/// Find every core wasm entity in this component whose identity is *not*
+/// statically known to every module that may import it.
+///
+/// An entity is unambiguous when every argument it flows into belongs to a
+/// module that we only ever instantiate with that same entity:
+///
+/// * An argument to a module that we may instantiate differently elsewhere is
+///   ambiguous because that module cannot statically know which one of these
+///   entities it was given at runtime.
+///
+/// * An argument to an imported module is ambiguous because that module is
+///   compiled separately from this component, and it may re-export the entity
+///   back to us under a name we cannot see through, which we may then hand to a
+///   module whose imports we do otherwise know.
+///
+/// Note that ambiguity is never partial: if a module importing an entity has to
+/// conservatively tag its accesses with that entity's public alias region, then
+/// the module defining the entity must do the same, or else inlining one of
+/// them into the other would access the same bytes through two different alias
+/// regions, which is invalid.
+fn ambiguous_entities(
+    translation: &ComponentTranslation,
+    instantiations: &SecondaryMap<StaticModuleIndex, dfg::AbstractInstantiations<'_>>,
+    instance_to_module: &PrimaryMap<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>,
+) -> HashSet<(StaticModuleIndex, EntityIndex)> {
+    let mut ambiguous = HashSet::default();
+
+    let mut mark = |def: &CoreDef| match def {
+        CoreDef::Export(export) => {
+            if let Some(entity) = resolve_core_export(instance_to_module, export) {
+                ambiguous.insert(entity);
+            }
+        }
+
+        // None of these are entities that get an alias region keyed by a
+        // defining module and index.
+        CoreDef::InstanceFlags(_)
+        | CoreDef::Trampoline(_)
+        | CoreDef::UnsafeIntrinsic(_)
+        | CoreDef::TaskMayBlock => {}
+    };
+
+    for init in &translation.component.initializers {
+        match init {
+            GlobalInitializer::InstantiateModule(instantiation, _) => match instantiation {
+                InstantiateModule::Static(module, args) => {
+                    // Arguments to modules that we only instantiate one way are
+                    // exactly the references that keep an entity unambiguous, so
+                    // they are the one case we do not mark here. Everything else
+                    // gets whichever of a number of different entities it was
+                    // handed at runtime, and so has to be conservative.
+                    if !matches!(instantiations[*module], dfg::AbstractInstantiations::One(_)) {
+                        for arg in args.iter() {
+                            mark(arg);
+                        }
+                    }
+                }
+
+                // We cannot see through an imported module's exports, so an
+                // entity we pass into one and that comes back out to a module
+                // whose imports we do know would be accessed via two different
+                // alias regions.
+                InstantiateModule::Import(_, args) => {
+                    for arg in args.values().flat_map(|args| args.values()) {
+                        mark(arg);
+                    }
+                }
+            },
+
+            // The remaining initializers do not involve the global/table/memory
+            // alias regions.
+            GlobalInitializer::ExtractMemory(_)
+            | GlobalInitializer::ExtractTable(_)
+            | GlobalInitializer::ExtractRealloc(_)
+            | GlobalInitializer::ExtractCallback(_)
+            | GlobalInitializer::ExtractPostReturn(_)
+            | GlobalInitializer::Resource(_)
+            | GlobalInitializer::LowerImport { .. } => {}
+        }
+    }
+
+    ambiguous
+}
