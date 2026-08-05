@@ -418,32 +418,32 @@ impl Instance {
 
     /// Return the indexed `VMFunctionImport`.
     fn imported_function(&self, index: FuncIndex) -> &VMFunctionImport {
-        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmfunction_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().imported_functions().at(index)) }
     }
 
     /// Return the index `VMTableImport`.
     fn imported_table(&self, index: TableIndex) -> &VMTableImport {
-        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmtable_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().imported_tables().at(index)) }
     }
 
     /// Return the indexed `VMMemoryImport`.
     fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
-        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmmemory_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().imported_memories().at(index)) }
     }
 
     /// Return the indexed `VMGlobalImport`.
     fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
-        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmglobal_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().imported_globals().at(index)) }
     }
 
     /// Return the indexed `VMTagImport`.
     fn imported_tag(&self, index: TagIndex) -> &VMTagImport {
-        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmtag_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().imported_tags().at(index)) }
     }
 
     /// Return the indexed `VMTagDefinition`.
     pub fn tag_ptr(&self, index: DefinedTagIndex) -> NonNull<VMTagDefinition> {
-        unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmtag_definition(index)) }
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().tags().at(index)) }
     }
 
     /// Return the indexed `VMTableDefinition`.
@@ -461,7 +461,7 @@ impl Instance {
     /// Return a pointer to the `index`'th table within this instance, stored
     /// in vmctx memory.
     pub fn table_ptr(&self, index: DefinedTableIndex) -> NonNull<VMTableDefinition> {
-        unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmtable_definition(index)) }
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().tables().at(index)) }
     }
 
     /// Get a locally defined or imported memory.
@@ -496,14 +496,14 @@ impl Instance {
     #[inline]
     pub fn memory_ptr(&self, index: DefinedMemoryIndex) -> NonNull<VMMemoryDefinition> {
         unsafe {
-            self.vmctx_plus_offset::<VmPtr<_>>(self.offsets().vmctx_vmmemory_pointer(index))
+            self.vmctx_plus_offset::<VmPtr<_>>(self.offsets().memories().at(index))
                 .as_non_null()
         }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
     pub fn global_ptr(&self, index: DefinedGlobalIndex) -> NonNull<VMGlobalDefinition> {
-        unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmglobal_definition(index)) }
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().globals().at(index)) }
     }
 
     /// Get all globals within this instance.
@@ -538,19 +538,19 @@ impl Instance {
     /// Return a pointer to the interrupts structure
     #[inline]
     pub fn vm_store_context(&self) -> NonNull<Option<VmPtr<VMStoreContext>>> {
-        unsafe { self.vmctx_plus_offset_raw(self.offsets().ptr.vmctx_store_context()) }
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().ptr.vmctx().store_context()) }
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
     #[cfg(target_has_atomic = "64")]
     pub fn epoch_ptr(self: Pin<&mut Self>) -> &mut Option<VmPtr<AtomicU64>> {
-        let offset = self.offsets().ptr.vmctx_epoch_ptr();
+        let offset = self.offsets().ptr.vmctx().epoch_ptr();
         unsafe { self.vmctx_plus_offset_mut(offset) }
     }
 
     /// Return a pointer to the collector-specific heap data.
     pub fn gc_heap_data(self: Pin<&mut Self>) -> &mut Option<VmPtr<u8>> {
-        let offset = self.offsets().ptr.vmctx_gc_heap_data();
+        let offset = self.offsets().ptr.vmctx().gc_heap_data();
         unsafe { self.vmctx_plus_offset_mut(offset) }
     }
 
@@ -841,7 +841,7 @@ impl Instance {
     }
 
     fn type_ids_array(&self) -> NonNull<VmPtr<VMSharedTypeIndex>> {
-        unsafe { self.vmctx_plus_offset_raw(self.offsets().ptr.vmctx_type_ids_array()) }
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().ptr.vmctx().type_ids()) }
     }
 
     /// Get a `&VMFuncRef` for the given `FuncIndex`.
@@ -879,7 +879,7 @@ impl Instance {
         let index = module.func_index(def_index);
         let func = &module.functions[index];
         let type_index = func.signature.unwrap_engine_type_index();
-        let vmctx_offset = self.offsets().vmctx_func_ref(func.func_ref);
+        let vmctx_offset = self.offsets().func_refs().at(func.func_ref);
         let array_to_wasm_key = FuncKey::ArrayToWasmTrampoline(module.module_index, def_index);
         let wasm_key = FuncKey::DefinedWasmFunction(module.module_index, def_index);
         // SAFETY: the type/offset/keys here are all valid for the defined
@@ -906,7 +906,7 @@ impl Instance {
                 t.unwrap_engine_type_index()
             }
         };
-        let vmctx_offset = self.offsets().vmctx_startup_func_ref();
+        let vmctx_offset = self.offsets().startup_func_ref();
         let array_to_wasm_key = FuncKey::ModuleStartup(Abi::Array, module.module_index);
         let wasm_key = FuncKey::ModuleStartup(Abi::Wasm, module.module_index);
         // SAFETY: the type/offset/keys here are all valid for the module
@@ -1185,7 +1185,7 @@ impl Instance {
         unsafe {
             let offsets = instance.runtime_info.offsets();
             instance
-                .vmctx_plus_offset_raw::<u32>(offsets.ptr.vmctx_magic())
+                .vmctx_plus_offset_raw::<u32>(offsets.ptr.vmctx().magic())
                 .write(VMCONTEXT_MAGIC);
         }
 
@@ -1213,7 +1213,7 @@ impl Instance {
             let ptr = BUILTINS.expose_provenance();
             let offsets = instance.runtime_info.offsets();
             instance
-                .vmctx_plus_offset_raw(offsets.ptr.vmctx_builtin_functions())
+                .vmctx_plus_offset_raw(offsets.ptr.vmctx().builtin_functions())
                 .write(VmPtr::from(ptr));
         }
 
@@ -1227,7 +1227,7 @@ impl Instance {
             ptr::copy_nonoverlapping(
                 imports.functions.as_ptr(),
                 instance
-                    .vmctx_plus_offset_raw(offsets.vmctx_imported_functions_begin())
+                    .vmctx_plus_offset_raw(offsets.imported_functions().begin())
                     .as_ptr(),
                 imports.functions.len(),
             );
@@ -1235,7 +1235,7 @@ impl Instance {
             ptr::copy_nonoverlapping(
                 imports.tables.as_ptr(),
                 instance
-                    .vmctx_plus_offset_raw(offsets.vmctx_imported_tables_begin())
+                    .vmctx_plus_offset_raw(offsets.imported_tables().begin())
                     .as_ptr(),
                 imports.tables.len(),
             );
@@ -1243,7 +1243,7 @@ impl Instance {
             ptr::copy_nonoverlapping(
                 imports.memories.as_ptr(),
                 instance
-                    .vmctx_plus_offset_raw(offsets.vmctx_imported_memories_begin())
+                    .vmctx_plus_offset_raw(offsets.imported_memories().begin())
                     .as_ptr(),
                 imports.memories.len(),
             );
@@ -1251,7 +1251,7 @@ impl Instance {
             ptr::copy_nonoverlapping(
                 imports.globals.as_ptr(),
                 instance
-                    .vmctx_plus_offset_raw(offsets.vmctx_imported_globals_begin())
+                    .vmctx_plus_offset_raw(offsets.imported_globals().begin())
                     .as_ptr(),
                 imports.globals.len(),
             );
@@ -1259,7 +1259,7 @@ impl Instance {
             ptr::copy_nonoverlapping(
                 imports.tags.as_ptr(),
                 instance
-                    .vmctx_plus_offset_raw(offsets.vmctx_imported_tags_begin())
+                    .vmctx_plus_offset_raw(offsets.imported_tags().begin())
                     .as_ptr(),
                 imports.tags.len(),
             );
@@ -1277,7 +1277,7 @@ impl Instance {
         // valid.
         unsafe {
             let offsets = instance.runtime_info.offsets();
-            let mut ptr = instance.vmctx_plus_offset_raw(offsets.vmctx_tables_begin());
+            let mut ptr = instance.vmctx_plus_offset_raw(offsets.tables().begin());
             let tables = instance.as_mut().tables_mut();
             for i in 0..module.num_defined_tables() {
                 ptr.write(tables[DefinedTableIndex::new(i)].1.vmtable());
@@ -1296,9 +1296,8 @@ impl Instance {
         // valid.
         unsafe {
             let offsets = instance.runtime_info.offsets();
-            let mut ptr = instance.vmctx_plus_offset_raw(offsets.vmctx_memories_begin());
-            let mut owned_ptr =
-                instance.vmctx_plus_offset_raw(offsets.vmctx_owned_memories_begin());
+            let mut ptr = instance.vmctx_plus_offset_raw(offsets.memories().begin());
+            let mut owned_ptr = instance.vmctx_plus_offset_raw(offsets.owned_memories().begin());
             let memories = instance.as_mut().memories_mut();
             for i in 0..module.num_defined_memories() {
                 let defined_memory_index = DefinedMemoryIndex::new(i);
@@ -1355,7 +1354,7 @@ impl Instance {
         // valid.
         unsafe {
             let offsets = instance.runtime_info.offsets();
-            let mut ptr = instance.vmctx_plus_offset_raw(offsets.vmctx_tags_begin());
+            let mut ptr = instance.vmctx_plus_offset_raw(offsets.tags().begin());
             for i in 0..module.num_defined_tags() {
                 let defined_index = DefinedTagIndex::new(i);
                 let tag_index = module.tag_index(defined_index);
@@ -1375,9 +1374,8 @@ impl Instance {
         unsafe {
             let offsets = instance.runtime_info.offsets();
             let mut lengths =
-                instance.vmctx_plus_offset_raw(offsets.vmctx_runtime_data_lengths_begin());
-            let mut bases =
-                instance.vmctx_plus_offset_raw(offsets.vmctx_runtime_data_bases_begin());
+                instance.vmctx_plus_offset_raw(offsets.runtime_data_lengths().begin());
+            let mut bases = instance.vmctx_plus_offset_raw(offsets.runtime_data_bases().begin());
             for i in module.runtime_data.keys() {
                 let data = instance.runtime_data(i);
                 lengths.write(u32::try_from(data.len()).unwrap());
@@ -1408,10 +1406,10 @@ impl Instance {
                     let offsets = instance.runtime_info.offsets();
                     unsafe {
                         instance
-                            .vmctx_plus_offset_raw(offsets.vmctx_runtime_data_length(*data))
+                            .vmctx_plus_offset_raw(offsets.runtime_data_lengths().at(*data))
                             .write(0u32);
                         instance
-                            .vmctx_plus_offset_raw(offsets.vmctx_runtime_data_base(*data))
+                            .vmctx_plus_offset_raw(offsets.runtime_data_bases().at(*data))
                             .write(0usize);
                     }
                 }

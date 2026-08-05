@@ -191,7 +191,7 @@ impl Masm for MacroAssembler {
             masm.with_scratch::<IntScratch, _>(|masm, scratch_stk_limit| {
                 masm.with_scratch::<IntScratch, _>(|masm, scratch_tmp| {
                     masm.load_ptr(
-                        masm.address_at_reg(vmctx, ptr_size_u8.vmcontext_store_context().into())?,
+                        masm.address_at_reg(vmctx, ptr_size_u8.vmctx().store_context().into())?,
                         scratch_stk_limit.writable(),
                     )?;
 

@@ -331,7 +331,7 @@ mod test_vmglobal_definition {
     fn check_vmglobal_begins_aligned() {
         let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(offsets.vmctx_globals_begin() % 16, 0);
+        assert_eq!(offsets.globals().begin() % 16, 0);
     }
 
     #[test]
@@ -544,7 +544,7 @@ mod test_vmtag_definition {
     fn check_vmtag_begins_aligned() {
         let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(offsets.vmctx_tags_begin() % 16, 0);
+        assert_eq!(offsets.tags().begin() % 16, 0);
     }
 }
 
@@ -969,7 +969,7 @@ impl VMContext {
     #[inline]
     pub unsafe fn from_opaque(opaque: NonNull<VMOpaqueContext>) -> NonNull<VMContext> {
         // Note that in general the offset of the "magic" field is stored in
-        // `VMOffsets::vmctx_magic`. Given though that this is a sanity check
+        // `VMContext::magic`. Given though that this is a sanity check
         // about converting this pointer to another type we ideally don't want
         // to read the offset from potentially corrupt memory. Instead it would
         // be better to catch errors here as soon as possible.
