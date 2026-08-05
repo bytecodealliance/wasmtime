@@ -78,6 +78,16 @@ pub const TRAP_CAST_FAILURE: TrapCode =
 pub const TRAP_UNCAUGHT_EXCEPTION: TrapCode =
     TrapCode::unwrap_user(Trap::UncaughtException as u8 + TRAP_OFFSET);
 
+/// The CLIF trap code for a Wasmtime trap code.
+///
+/// This is the inverse of `clif_trap_to_env_trap`'s fallback arm, and is what
+/// all of the `TRAP_*` constants above compute for their particular trap. Use
+/// it when the trap isn't statically known, e.g. when it came out of an
+/// adapter-module immediate.
+const fn env_trap_to_clif_trap(trap: Trap) -> TrapCode {
+    TrapCode::unwrap_user(trap as u8 + TRAP_OFFSET)
+}
+
 /// Creates a new cranelift `Signature` with no wasm params/results for the
 /// given calling convention.
 ///

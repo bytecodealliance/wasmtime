@@ -47,6 +47,9 @@ pub enum FactInlineIntrinsic {
     /// fall back to the out-of-line `exit-sync-call` libcall when the thread
     /// was promoted.
     ExitSyncCall,
+    /// `trap`: raise the trap named by the (always constant) trap-code
+    /// argument.
+    Trap,
 }
 
 /// A statically-known function import.
