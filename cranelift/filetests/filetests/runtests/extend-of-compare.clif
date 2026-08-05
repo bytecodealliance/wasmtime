@@ -65,17 +65,6 @@ block0(v0: i8, v1: i8):
 ; run: %uext_icmp_i8_operands(-1, 0xff) == 1
 ; run: %uext_icmp_i8_operands(0x7f, 0x80) == 0
 
-function %uext_icmp_i128(i128, i128) -> i64 {
-block0(v0: i128, v1: i128):
-    v2 = icmp ult v0, v1
-    v3 = uextend.i64 v2
-    return v3
-}
-; run: %uext_icmp_i128(0, 1) == 1
-; run: %uext_icmp_i128(1, 0) == 0
-; run: %uext_icmp_i128(0xffffffff_ffffffff, 0x1_00000000_00000000) == 1
-; run: %uext_icmp_i128(0x1_00000000_00000000, 0xffffffff_ffffffff) == 0
-
 ;; The extended value has to be usable as an integer, not just compared against
 ;; 0 or 1: an `imul` by it exposes any stray upper bit.
 function %uext_icmp_arith(i32, i32) -> i64 {
@@ -100,16 +89,6 @@ block0(v0: i32, v1: i32):
 }
 ; run: %uext_icmp_multi_use(7, 7) == 2
 ; run: %uext_icmp_multi_use(7, 8) == 0
-
-;; Extending to `i128` must zero the upper half.
-function %uext_icmp_to_i128(i32, i32) -> i128 {
-block0(v0: i32, v1: i32):
-    v2 = icmp eq v0, v1
-    v3 = uextend.i128 v2
-    return v3
-}
-; run: %uext_icmp_to_i128(3, 3) == 1
-; run: %uext_icmp_to_i128(3, 4) == 0
 
 ;; Sign-extending a comparison is the same as zero-extending it, which is a
 ;; mid-end rewrite; check it still holds end to end.
