@@ -1217,35 +1217,16 @@
 
 ;;; Rules for integer min/max: umin, smin, umax, smax ;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; `i64` and smaller.
+;; Scalar integers.
 
-;; cmp     $x, $y
-;; csel    .., $x, $y, $cc
-(attr cmp_and_choose (veri chain))
-(decl cmp_and_choose (Type Cond bool Value Value) ValueRegs)
-(rule (cmp_and_choose (fits_in_64 ty) cc _ x y)
-      (let ((x Reg (put_in_reg x))
-            (y Reg (put_in_reg y)))
-       (with_flags_reg (cmp (operand_size ty) x y)
-                       (csel cc x y))))
-
-;; `i16` and `i8` min/max require sign extension as
-;; the comparison operates on (at least) 32 bits.
-(attr rule cmp_and_choose_8_16 (veri priority))
-(rule cmp_and_choose_8_16 1 (cmp_and_choose (fits_in_16 ty) cc signed x y)
-      (let ((x Reg (extend (put_in_reg x) signed (ty_bits ty) 32))
-            (y Reg (extend (put_in_reg y) signed (ty_bits ty) 32)))
-      (with_flags_reg (cmp (operand_size ty) x y)
-                      (csel cc x y))))
-
-(rule umin 2 (lower (umin (and (fits_in_64 ty) (ty_int _)) x y))
-      (cmp_and_choose ty (Cond.Lo) false x y))
-(rule smin 2 (lower (smin (and (fits_in_64 ty) (ty_int _)) x y))
-      (cmp_and_choose ty (Cond.Lt) true x y))
-(rule umax 2 (lower (umax (and (fits_in_64 ty) (ty_int _)) x y))
-      (cmp_and_choose ty (Cond.Hi) false x y))
-(rule smax 2 (lower (smax (and (fits_in_64 ty) (ty_int _)) x y))
-      (cmp_and_choose ty (Cond.Gt) true x y))
+(rule umin 2 (lower (umin (ty_int ty) x y))
+      (lower_select ty (emit_icmp (IntCC.UnsignedLessThan) x y) x y))
+(rule smin 2 (lower (smin (ty_int ty) x y))
+      (lower_select ty (emit_icmp (IntCC.SignedLessThan) x y) x y))
+(rule umax 2 (lower (umax (ty_int ty) x y))
+      (lower_select ty (emit_icmp (IntCC.UnsignedGreaterThan) x y) x y))
+(rule smax 2 (lower (smax (ty_int ty) x y))
+      (lower_select ty (emit_icmp (IntCC.SignedGreaterThan) x y) x y))
 
 ;; Vector types.
 
