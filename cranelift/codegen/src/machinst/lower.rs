@@ -6,7 +6,9 @@
 // top of it, e.g. the side-effect/coloring analysis and the scan support.
 
 use crate::entity::SecondaryMap;
-use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
+use crate::inst_predicates::{
+    has_lowering_side_effect, is_constant_64bit, must_lower_even_if_unused,
+};
 use crate::ir::{
     ArgumentPurpose, Block, BlockArg, Constant, ConstantData, DataFlowGraph, ExternalName,
     Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, RelSourceLoc, SigRef,
@@ -750,14 +752,19 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // Are any outputs used at least once?
             let value_needed = self.is_any_inst_result_needed(inst);
+
+            // Do we have to emit this instruction even though nothing uses its
+            // results? Note that this is not the same question as
+            // `has_side_effect` above: loads are colored as side-effecting so
+            // that load merging cannot move one across a store, but a load that
+            // is defined not to trap can simply be dropped when it is dead.
+            let must_lower = must_lower_even_if_unused(self.f, inst);
+
             trace!(
-                "lower_clif_block: block {} inst {} ({:?}) is_branch {} side_effect {} value_needed {}",
-                block,
-                inst,
-                data,
+                "lower_clif_block: {block}, {inst}, ({data:?}), is_branch {}, \
+                 has_side_effect {has_side_effect}, must_lower {must_lower}, \
+                 value_needed {value_needed}",
                 data.opcode().is_branch(),
-                has_side_effect,
-                value_needed,
             );
 
             // Update scan state to color prior to this inst (as we are scanning
@@ -777,11 +784,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // order, and therefore **before** in reversed order.
             // Only emit value label aliases if the instruction will be lowered
             // (otherwise we want to keep using the earlier label instead).
-            self.emit_value_label_live_range_start_for_inst(inst, has_side_effect || value_needed);
+            self.emit_value_label_live_range_start_for_inst(inst, must_lower || value_needed);
 
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs is used.
-            if has_side_effect || value_needed {
+            if must_lower || value_needed {
                 trace!("lowering: inst {}: {}", inst, self.f.dfg.display_inst(inst));
                 let temp_regs = match backend.lower(self, inst) {
                     Some(regs) => regs,
