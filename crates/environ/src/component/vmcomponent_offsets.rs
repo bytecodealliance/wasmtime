@@ -49,8 +49,8 @@ pub struct VMComponentOffsets<P> {
     // plus this `VMComponentContext`'s total size. These are all computed by the
     // generated `compute_field_offsets` and read by the generated accessors of
     // the same names.
-    may_leave: u32,
     task_may_block: u32,
+    may_leave: u32,
     trampoline_func_refs: u32,
     intrinsic_func_refs: u32,
     lowerings: u32,
@@ -165,8 +165,8 @@ impl<P: PtrSize> VMComponentOffsets<P> {
                 0
             },
             num_resources: component.num_resources,
-            may_leave: 0,
             task_may_block: 0,
+            may_leave: 0,
             trampoline_func_refs: 0,
             intrinsic_func_refs: 0,
             lowerings: 0,
@@ -181,7 +181,38 @@ impl<P: PtrSize> VMComponentOffsets<P> {
 
         ret.compute_field_offsets();
 
+        // The component-model flags must land where a compiler that only knows
+        // the pointer size can find them; see `Self::task_may_block_offset` and
+        // `Self::may_leave_offset`.
+        debug_assert_eq!(ret.task_may_block(), Self::task_may_block_offset(&ret.ptr));
+        debug_assert!(
+            (0..ret.num_runtime_component_instances)
+                .map(RuntimeComponentInstanceIndex::from_u32)
+                .all(|i| ret.may_leave().at(i) == Self::may_leave_offset(&ret.ptr, i))
+        );
+
         ret
+    }
+
+    /// The offset of the `task_may_block` flag, given only the pointer size.
+    ///
+    /// Core Wasm compilation does not have a component's `VMComponentOffsets` on
+    /// hand, but it must still be able to name this flag's location to build the
+    /// alias region for accessing it. This is only possible because the flags
+    /// are laid out before every field whose offset depends on the component's
+    /// shape; see `for_each_vmctx_type!`.
+    pub fn task_may_block_offset(ptr: &P) -> u32 {
+        crate::vmctxtypes::align_up(u32::from(ptr.vmcomponent().end_of_static_fields()), 16)
+    }
+
+    /// The offset of the given component instance's `may_leave` flag, given only
+    /// the pointer size.
+    ///
+    /// See [`Self::task_may_block_offset`] for why this is computable without
+    /// the full offsets.
+    pub fn may_leave_offset(ptr: &P, index: RuntimeComponentInstanceIndex) -> u32 {
+        let global = u32::from(ptr.vm_global_definition().size());
+        Self::task_may_block_offset(ptr) + global * (index.as_u32() + 1)
     }
 
     /// The size, in bytes, of the host pointer.
@@ -218,5 +249,40 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     #[inline]
     pub fn lowering_data_offset(&self) -> u32 {
         u32::from(self.ptr.size())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The pointer-size-only flag offsets must match the real layout for every
+    /// pointer width and every number of component instances, since core Wasm
+    /// compilation uses them to build alias regions that must agree with the
+    /// regions the component trampolines use.
+    #[test]
+    fn flag_offsets_match_layout() {
+        for ptr in [4u8, 8] {
+            for num_runtime_component_instances in 0..8 {
+                let component = Component {
+                    num_runtime_component_instances,
+                    ..Default::default()
+                };
+                let offsets = VMComponentOffsets::new(ptr, &component);
+
+                assert_eq!(
+                    offsets.task_may_block(),
+                    VMComponentOffsets::task_may_block_offset(&ptr)
+                );
+
+                for i in 0..num_runtime_component_instances {
+                    let index = RuntimeComponentInstanceIndex::from_u32(i);
+                    assert_eq!(
+                        offsets.may_leave().at(index),
+                        VMComponentOffsets::may_leave_offset(&ptr, index)
+                    );
+                }
+            }
+        }
     }
 }

@@ -227,12 +227,21 @@ macro_rules! for_each_vmctx_type {
                     // Each of these flags gets a whole `VMGlobalDefinition`'s
                     // worth of space, but only its first four bytes are ever
                     // accessed.
+                    //
+                    // NB: these flags come first, before any field whose offset
+                    // depends on the component's shape, so that their offsets
+                    // are a function of the target pointer size alone. Core Wasm
+                    // compilation does not have the enclosing
+                    // `VMComponentContext`'s offsets on hand, but must still be
+                    // able to compute these flags' offsets to build the alias
+                    // regions for accessing them; see
+                    // `VMComponentOffsets::{task_may_block,may_leave}_offset`.
+                    field { #[access_as = u32] task_may_block: VMGlobalDefinition }
+
                     array {
                         #[access_as = u32]
                         may_leave[num_runtime_component_instances; RuntimeComponentInstanceIndex]: VMGlobalDefinition
                     }
-
-                    field { #[access_as = u32] task_may_block: VMGlobalDefinition }
 
                     align { ptr }
 

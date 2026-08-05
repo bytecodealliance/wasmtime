@@ -4,7 +4,7 @@ use crate::component::*;
 use crate::prelude::*;
 use crate::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, EngineOrModuleTypeIndex,
-    EntityIndex, FactInlineIntrinsic, FuncKey, KnownEntity, ModuleEnvironment,
+    EntityIndex, FactInlineIntrinsic, FuncKey, KnownEntity, KnownGlobal, ModuleEnvironment,
     ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, ScopeVec, TagIndex,
     Tunables, TypeConvert, WasmHeapType, WasmResult, WasmValType,
 };
@@ -606,21 +606,30 @@ impl<'a, 'data> Translator<'a, 'data> {
             for i in 0..translation.module.num_defined_globals() {
                 let index = DefinedGlobalIndex::new(i);
                 let global = translation.module.global_index(index);
-                if !ambiguous.contains(&(module, EntityIndex::Global(global))) {
+                if !ambiguous
+                    .entities
+                    .contains(&(module, EntityIndex::Global(global)))
+                {
                     translation.globals_known_to_importers.insert(index);
                 }
             }
             for i in 0..translation.module.num_defined_memories() {
                 let index = DefinedMemoryIndex::new(i);
                 let memory = translation.module.memory_index(index);
-                if !ambiguous.contains(&(module, EntityIndex::Memory(memory))) {
+                if !ambiguous
+                    .entities
+                    .contains(&(module, EntityIndex::Memory(memory)))
+                {
                     translation.memories_known_to_importers.insert(index);
                 }
             }
             for i in 0..translation.module.num_defined_tables() {
                 let index = DefinedTableIndex::new(i);
                 let table = translation.module.table_index(index);
-                if !ambiguous.contains(&(module, EntityIndex::Table(table))) {
+                if !ambiguous
+                    .entities
+                    .contains(&(module, EntityIndex::Table(table)))
+                {
                     translation.tables_known_to_importers.insert(index);
                 }
             }
@@ -643,9 +652,14 @@ impl<'a, 'data> Translator<'a, 'data> {
                 // same defined entity, when we know that and when everything
                 // else that imports that entity knows it too.
                 macro_rules! record_known_entity {
-                    ($variant:ident, $imported:expr, $defined_index:ident, $known:ident) => {{
+                    ($variant:ident, $imported:expr, $defined_index:ident, $known:ident, $wrap:expr) => {{
                         let Some((arg_module, EntityIndex::$variant(arg_entity))) =
-                            unambiguous_entity(&self.static_modules, &instances, &ambiguous, arg)
+                            unambiguous_entity(
+                                &self.static_modules,
+                                &instances,
+                                &ambiguous.entities,
+                                arg,
+                            )
                         else {
                             continue;
                         };
@@ -657,10 +671,10 @@ impl<'a, 'data> Translator<'a, 'data> {
                                  defines",
                             );
                         assert!(self.static_modules[module].$known[$imported].is_none());
-                        self.static_modules[module].$known[$imported] = Some(KnownEntity {
+                        self.static_modules[module].$known[$imported] = Some($wrap(KnownEntity {
                             module: arg_module,
                             index,
-                        });
+                        }));
                     }};
                 }
 
@@ -761,27 +775,43 @@ impl<'a, 'data> Translator<'a, 'data> {
 
                     // Note that a global import is not necessarily satisfied by a
                     // wasm global: it can also be one of the component-model
-                    // flags that live in the `VMComponentContext`, which have
-                    // nothing to do with defined-global alias regions.
-                    EntityIndex::Global(imported_global) => record_known_entity!(
-                        Global,
-                        imported_global,
-                        defined_global_index,
-                        known_imported_globals
-                    ),
+                    // flags that live in the `VMComponentContext`, and those get
+                    // their own alias regions rather than a defined-global one.
+                    EntityIndex::Global(imported_global) => match component_flags(arg) {
+                        Some(flags) => {
+                            if ambiguous.flags.contains(&flags) {
+                                continue;
+                            }
+                            assert!(
+                                self.static_modules[module].known_imported_globals[imported_global]
+                                    .is_none()
+                            );
+                            self.static_modules[module].known_imported_globals[imported_global] =
+                                Some(flags);
+                        }
+                        None => record_known_entity!(
+                            Global,
+                            imported_global,
+                            defined_global_index,
+                            known_imported_globals,
+                            KnownGlobal::Defined
+                        ),
+                    },
 
                     EntityIndex::Memory(imported_memory) => record_known_entity!(
                         Memory,
                         imported_memory,
                         defined_memory_index,
-                        known_imported_memories
+                        known_imported_memories,
+                        core::convert::identity
                     ),
 
                     EntityIndex::Table(imported_table) => record_known_entity!(
                         Table,
                         imported_table,
                         defined_table_index,
-                        known_imported_tables
+                        known_imported_tables,
+                        core::convert::identity
                     ),
 
                     // Tags don't have alias regions of their own.
@@ -1927,6 +1957,28 @@ use pre_inlining::PreInliningComponentTypes;
 type StaticInstances<'a> =
     PrimaryMap<RuntimeInstanceIndex, Option<(StaticModuleIndex, &'a [CoreDef])>>;
 
+/// Every entity whose identity is not statically known to everything that can
+/// access it.
+#[derive(Default)]
+struct Ambiguous {
+    /// Globals, memories, and tables defined by a static module in this
+    /// component.
+    entities: HashSet<(StaticModuleIndex, EntityIndex)>,
+
+    /// Component-model flags living in the `VMComponentContext`. Only ever
+    /// contains the non-`KnownGlobal::Defined` variants.
+    flags: HashSet<KnownGlobal>,
+}
+
+/// Get the component-model flag that a `CoreDef` names, if it names one.
+fn component_flags(def: &CoreDef) -> Option<KnownGlobal> {
+    match def {
+        CoreDef::InstanceFlags(instance) => Some(KnownGlobal::ComponentInstanceFlags(*instance)),
+        CoreDef::TaskMayBlock => Some(KnownGlobal::TaskMayBlock),
+        CoreDef::Export(_) | CoreDef::Trampoline(_) | CoreDef::UnsafeIntrinsic(_) => None,
+    }
+}
+
 /// Resolve a `CoreExport` to the static module that *defines* it and the entity
 /// index it refers to within that module, when we can see through it statically.
 ///
@@ -2047,22 +2099,23 @@ fn ambiguous_entities(
     translation: &ComponentTranslation,
     instantiations: &SecondaryMap<StaticModuleIndex, dfg::AbstractInstantiations<'_>>,
     instances: &StaticInstances<'_>,
-) -> HashSet<(StaticModuleIndex, EntityIndex)> {
-    let mut ambiguous = HashSet::default();
+) -> Ambiguous {
+    let mut ambiguous = Ambiguous::default();
 
     let mut mark = |def: &CoreDef| match def {
         CoreDef::Export(export) => {
             if let Some(entity) = resolve_core_export(static_modules, instances, export) {
-                ambiguous.insert(entity);
+                ambiguous.entities.insert(entity);
             }
         }
 
-        // None of these are entities that get an alias region keyed by a
+        CoreDef::InstanceFlags(_) | CoreDef::TaskMayBlock => {
+            ambiguous.flags.insert(component_flags(def).unwrap());
+        }
+
+        // Neither of these is an entity that gets an alias region keyed by a
         // defining module and index.
-        CoreDef::InstanceFlags(_)
-        | CoreDef::Trampoline(_)
-        | CoreDef::UnsafeIntrinsic(_)
-        | CoreDef::TaskMayBlock => {}
+        CoreDef::Trampoline(_) | CoreDef::UnsafeIntrinsic(_) => {}
     };
 
     for init in &translation.component.initializers {

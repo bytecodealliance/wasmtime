@@ -986,6 +986,44 @@ where
     }
 }
 
+/// Methods for the component-model flags that live in the `VMComponentContext`.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    /// Get the alias region for the given offset into the `VMComponentContext`.
+    fn vmcomponent_region(&mut self, func: &mut ir::Function, offset: u32) -> ir::AliasRegion {
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMComponentContext,
+                offset,
+            },
+        )
+    }
+
+    /// Get the alias region for accessing a particular component instance's
+    /// runtime-managed flags, such as its `may_leave` flag.
+    pub fn component_instance_flags_region(
+        &mut self,
+        func: &mut ir::Function,
+        instance: RuntimeComponentInstanceIndex,
+    ) -> ir::AliasRegion {
+        let offset = VMComponentOffsets::<Offsets::Ptr>::may_leave_offset(
+            self.offsets.get_ptr_size(),
+            instance,
+        );
+        self.vmcomponent_region(func, offset)
+    }
+
+    /// Get the alias region for accessing the current task's `may_block` flag.
+    pub fn task_may_block_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        let offset =
+            VMComponentOffsets::<Offsets::Ptr>::task_may_block_offset(self.offsets.get_ptr_size());
+        self.vmcomponent_region(func, offset)
+    }
+}
+
 /// `VMStoreContext`-related methods.
 impl<Offsets> AliasRegions<Offsets>
 where

@@ -59,7 +59,8 @@
 ;;     region1 = 67108888 "VMStoreContext+0x18"
 ;;     region2 = 1207959576 "VMFunctionImport+0x18"
 ;;     region3 = 1476395008 "VMGlobalImport+0x0"
-;;     region4 = 402653184 "PublicGlobal"
+;;     region4 = 738197584 "VMComponentContext+0x50"
+;;     region5 = 738197568 "VMComponentContext+0x40"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -91,7 +92,7 @@
 ;;
 ;;                                 block9:
 ;;                                     v11 = load.i64 notrap aligned readonly can_move region3 v3+144
-;;                                     v12 = load.i32 notrap aligned region4 v11
+;;                                     v12 = load.i32 notrap aligned region5 v11
 ;;                                     jump block12
 ;;
 ;;                                 block12:
@@ -101,7 +102,6 @@
 ;;                                     jump block11
 ;;
 ;;                                 block11:
-;;                                     store.i32 notrap aligned region4 v10, v9
 ;;                                     jump block7
 ;;
 ;;                                 block7:
