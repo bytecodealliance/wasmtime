@@ -652,9 +652,12 @@ impl<'a> CodeGenContext<'a, Emission> {
     /// pointer offset: the distance from the stack pointer to every slot
     /// holding a live GC reference, in the frame's locals and in the value
     /// stack.
-    pub fn calculate_stack_map_offsets(&self, sp: SPOffset) -> Result<SmallVec<[u32; 8]>> {
-        let sp = sp.as_u32();
-        let mut offsets: SmallVec<[u32; 8]> = SmallVec::new();
+    pub fn calculate_stack_map_offsets(&self, sp: SPOffset) -> Result<SmallVec<[SPOffset; 8]>> {
+        if self.frame.gc_ref_local_offsets().is_empty() && self.stack.gc_ref_count() == 0 {
+            return Ok(SmallVec::new());
+        }
+
+        let mut offsets: SmallVec<[SPOffset; 8]> = SmallVec::new();
 
         for offset in self.frame.gc_ref_local_offsets() {
             offsets.push(
@@ -669,7 +672,7 @@ impl<'a> CodeGenContext<'a, Emission> {
                 if v.needs_stack_map() {
                     ensure!(v.is_mem(), CodeGenError::unexpected_value_in_value_stack());
                     offsets.push(
-                        sp.checked_sub(v.unwrap_mem().slot.offset.as_u32())
+                        sp.checked_sub(v.unwrap_mem().slot.offset)
                             .ok_or_else(|| format_err!(CodeGenError::invalid_sp_offset()))?,
                     );
                     remaining -= 1;

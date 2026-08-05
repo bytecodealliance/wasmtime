@@ -2,7 +2,7 @@ use crate::{
     Result,
     abi::{ABI, ABIOperand, ABISig, LocalSlot, align_to},
     codegen::{CodeGenPhase, Emission, Prologue},
-    masm::MacroAssembler,
+    masm::{MacroAssembler, SPOffset},
     stack::needs_stack_map,
 };
 use smallvec::SmallVec;
@@ -98,23 +98,24 @@ pub(crate) struct Frame<P: CodeGenPhase> {
 
     /// Frame offsets of SP-addressed locals that stack maps must cover,
     /// precomputed so that call sites don't scan every local.
-    gc_ref_local_offsets: SmallVec<[u32; 4]>,
+    gc_ref_local_offsets: SmallVec<[SPOffset; 4]>,
 }
 
 impl Frame<Prologue> {
     /// Allocate a new [`Frame`].
     pub fn new<A: ABI>(sig: &ABISig, defined_locals: &DefinedLocals) -> Result<Frame<Prologue>> {
-        let (special_locals, mut wasm_locals, defined_locals_start) =
+        let (special_locals, mut wasm_locals, mut gc_ref_local_offsets, defined_locals_start) =
             Self::compute_arg_slots::<A>(sig)?;
 
         // The defined locals have a zero-based offset by default
         // so we need to add the defined locals start to the offset.
-        wasm_locals.extend(
-            defined_locals
-                .defined_locals
-                .iter()
-                .map(|l| LocalSlot::new(l.ty, l.offset + defined_locals_start)),
-        );
+        wasm_locals.extend(defined_locals.defined_locals.iter().map(|l| {
+            let slot = LocalSlot::new(l.ty, l.offset + defined_locals_start);
+            if needs_stack_map(&slot.ty) {
+                gc_ref_local_offsets.push(SPOffset::from_u32(slot.offset));
+            }
+            slot
+        }));
 
         let stack_align = <A as ABI>::stack_align();
         let defined_locals_end = align_to(
@@ -153,12 +154,6 @@ impl Frame<Prologue> {
             (None, defined_locals_end)
         };
 
-        let gc_ref_local_offsets = wasm_locals
-            .iter()
-            .filter(|slot| slot.addressed_from_sp() && needs_stack_map(&slot.ty))
-            .map(|slot| slot.offset)
-            .collect();
-
         Ok(Self {
             wasm_locals,
             special_locals,
@@ -191,7 +186,9 @@ impl Frame<Prologue> {
         }
     }
 
-    fn compute_arg_slots<A: ABI>(sig: &ABISig) -> Result<(SpecialLocals, WasmLocals, u32)> {
+    fn compute_arg_slots<A: ABI>(
+        sig: &ABISig,
+    ) -> Result<(SpecialLocals, WasmLocals, SmallVec<[SPOffset; 4]>, u32)> {
         // Go over the function ABI-signature and
         // calculate the stack slots.
         //
@@ -238,11 +235,23 @@ impl Frame<Prologue> {
             .map(|arg| Self::abi_arg_slot(&arg, &mut next_stack, arg_base_offset))
             .expect("Slot for VMContext");
 
+        let mut gc_ref_local_offsets = SmallVec::new();
         let slots: WasmLocals = params_iter
-            .map(|arg| Self::abi_arg_slot(&arg, &mut next_stack, arg_base_offset))
+            .map(|arg| {
+                let slot = Self::abi_arg_slot(&arg, &mut next_stack, arg_base_offset);
+                if slot.addressed_from_sp() && needs_stack_map(&slot.ty) {
+                    gc_ref_local_offsets.push(SPOffset::from_u32(slot.offset));
+                }
+                slot
+            })
             .collect();
 
-        Ok(([callee_vmctx, caller_vmctx], slots, next_stack))
+        Ok((
+            [callee_vmctx, caller_vmctx],
+            slots,
+            gc_ref_local_offsets,
+            next_stack,
+        ))
     }
 
     fn abi_arg_slot(arg: &ABIOperand, next_stack: &mut u32, arg_base_offset: u32) -> LocalSlot {
@@ -301,7 +310,7 @@ impl Frame<Emission> {
     }
 
     /// Frame offsets of the SP-addressed locals that stack maps must cover.
-    pub fn gc_ref_local_offsets(&self) -> &[u32] {
+    pub fn gc_ref_local_offsets(&self) -> &[SPOffset] {
         &self.gc_ref_local_offsets
     }
 

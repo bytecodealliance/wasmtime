@@ -424,6 +424,7 @@ impl Masm for MacroAssembler {
             &mut Self,
             &mut CodeGenContext<Emission>,
         ) -> Result<(CalleeKind, CallingConvention)>,
+        mut finalize: impl FnMut(&mut Self, &mut CodeGenContext<Emission>) -> Result<()>,
     ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
         let addend: u32 = <Self::ABI as abi::ABI>::initial_frame_size().into();
@@ -436,12 +437,7 @@ impl Masm for MacroAssembler {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg, call_conv),
             CalleeKind::Direct(idx) => self.asm.call_with_name(idx, call_conv),
         }
-
-        if !context.frame.gc_ref_local_offsets().is_empty() || context.stack.gc_ref_count() != 0 {
-            let sp = self.sp_offset()?;
-            let map_offsets = context.calculate_stack_map_offsets(sp)?;
-            self.emit_stack_map(sp, &map_offsets)?;
-        }
+        finalize(self, context)?;
 
         Ok(total_stack)
     }
@@ -1354,10 +1350,12 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[u32]) -> Result<()> {
+    fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[SPOffset]) -> Result<()> {
         let frame_size = sp_offset.as_u32() + u32::from(SHADOW_STACK_POINTER_SLOT_SIZE);
         let return_addr = self.asm.buffer().cur_offset();
-        let map = cranelift_codegen::ir::UserStackMap::from_sp_offsets(offsets.iter().copied());
+        let map = cranelift_codegen::ir::UserStackMap::from_sp_offsets(
+            offsets.iter().map(SPOffset::as_u32),
+        );
         self.asm
             .buffer_mut()
             .push_user_stack_map_sp_relative(return_addr, frame_size, map);

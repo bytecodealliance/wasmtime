@@ -199,6 +199,10 @@ impl SPOffset {
     pub fn as_u32(&self) -> u32 {
         self.0
     }
+
+    pub fn checked_sub(self, rhs: Self) -> Option<Self> {
+        self.0.checked_sub(rhs.0).map(Self)
+    }
 }
 
 /// A stack slot.
@@ -1458,14 +1462,14 @@ pub(crate) trait MacroAssembler {
             &mut Self,
             &mut CodeGenContext<Emission>,
         ) -> Result<(CalleeKind, CallingConvention)>,
+        finalize: impl FnMut(&mut Self, &mut CodeGenContext<Emission>) -> Result<()>,
     ) -> Result<u32>;
 
     /// Record a GC stack map at the current code offset, which must be the
-    /// return address of the call emitted immediately before; only
-    /// [`Self::call`] should use this. Each offset is the distance from
-    /// the stack pointer at the call site to a slot holding a live GC
-    /// reference.
-    fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[u32]) -> Result<()>;
+    /// return address of the call emitted immediately before. Each offset is
+    /// the distance from the stack pointer at the call site to a slot holding
+    /// a live GC reference.
+    fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[SPOffset]) -> Result<()>;
 
     /// Acquire a scratch register and execute the given callback.
     fn with_scratch<T: ScratchType, R>(&mut self, f: impl FnOnce(&mut Self, Scratch) -> R) -> R;
