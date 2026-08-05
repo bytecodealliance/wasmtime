@@ -105,7 +105,9 @@ impl DrcCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         let heap_data = func_env
             .alias_regions
-            .vmctx_gc_heap_data(&mut builder.cursor(), vmctx);
+            .vmctx()
+            .gc_heap_data()
+            .load(&mut builder.cursor(), vmctx);
 
         // Load the current first list element, which will be our new next list
         // element.
@@ -171,7 +173,9 @@ impl DrcCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         let heap_data = func_env
             .alias_regions
-            .vmctx_gc_heap_data(&mut builder.cursor(), vmctx);
+            .vmctx()
+            .gc_heap_data()
+            .load(&mut builder.cursor(), vmctx);
         let current_len = func_env
             .alias_regions
             .vmdrc_heap_data_current_over_approximated_stack_roots_len(

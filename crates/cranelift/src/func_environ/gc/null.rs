@@ -72,7 +72,9 @@ impl NullCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         let ptr_to_next = func_env
             .alias_regions
-            .vmctx_gc_heap_data(&mut builder.cursor(), vmctx);
+            .vmctx()
+            .gc_heap_data()
+            .load(&mut builder.cursor(), vmctx);
         let next = func_env
             .alias_regions
             .vmnull_heap_data_bump_finger(&mut builder.cursor(), ptr_to_next);

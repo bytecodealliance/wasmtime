@@ -1524,7 +1524,11 @@ impl FuncEnvironment<'_> {
             return heap;
         }
 
-        let store_ctx = self.alias_regions.vmctx_store_context_load(func);
+        let store_ctx = self
+            .alias_regions
+            .vmctx()
+            .store_context()
+            .to_deferred_load(func);
 
         // The base pointer's load is `can_move` and `readonly` when the GC
         // heap's base can never move.

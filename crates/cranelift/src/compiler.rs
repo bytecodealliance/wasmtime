@@ -230,8 +230,10 @@ impl Compiler {
             caller_vmctx,
             wasmtime_environ::VMCONTEXT_MAGIC,
         );
-        let vm_store_context =
-            alias_regions.vmctx_store_context(&mut builder.cursor(), caller_vmctx);
+        let vm_store_context = alias_regions
+            .vmctx()
+            .store_context()
+            .load(&mut builder.cursor(), caller_vmctx);
         save_last_wasm_exit_fp_and_pc(
             &mut builder,
             pointer_type,
@@ -266,8 +268,10 @@ impl Compiler {
         // Increment the "execution version" on the VMStoreContext if
         // guest debugging is enabled.
         if self.tunables.debug_guest {
-            let vmstore_ctx_ptr =
-                alias_regions.vmctx_store_context(&mut builder.cursor(), caller_vmctx);
+            let vmstore_ctx_ptr = alias_regions
+                .vmctx()
+                .store_context()
+                .load(&mut builder.cursor(), caller_vmctx);
             let old_version = alias_regions
                 .vmstore_context_execution_version(&mut builder.cursor(), vmstore_ctx_ptr);
             let new_version = builder.ins().iadd_imm_s(old_version, 1);
@@ -343,7 +347,10 @@ impl Compiler {
             vmctx,
             wasmtime_environ::VMCONTEXT_MAGIC,
         );
-        let vm_store_context = alias_regions.vmctx_store_context(&mut builder.cursor(), vmctx);
+        let vm_store_context = alias_regions
+            .vmctx()
+            .store_context()
+            .load(&mut builder.cursor(), vmctx);
         save_last_wasm_exit_fp_and_pc(
             &mut builder,
             pointer_type,
@@ -550,7 +557,9 @@ impl wasmtime_environ::Compiler for Compiler {
         if !isa.triple().is_pulley() {
             let store_ctx = func_env
                 .alias_regions
-                .vmctx_store_context_load(&mut context.func);
+                .vmctx()
+                .store_context()
+                .to_deferred_load(&mut context.func);
             let stack_limit = func_env
                 .alias_regions
                 .vmstore_context_stack_limit_load(&mut context.func);
@@ -608,7 +617,7 @@ impl wasmtime_environ::Compiler for Compiler {
                     symbol,
                     wasmtime_environ::VMCONTEXT_MAGIC,
                     |alias_regions, _pointer_type, cursor, vmctx| {
-                        alias_regions.vmctx_store_context(cursor, vmctx)
+                        alias_regions.vmctx().store_context().load(cursor, vmctx)
                     },
                 )
             }
@@ -656,7 +665,7 @@ impl wasmtime_environ::Compiler for Compiler {
                         symbol,
                         wasmtime_environ::VMCONTEXT_MAGIC,
                         |alias_regions, _pointer_type, cursor, vmctx| {
-                            alias_regions.vmctx_store_context(cursor, vmctx)
+                            alias_regions.vmctx().store_context().load(cursor, vmctx)
                         },
                     ),
                     // Delegate to a helper to finish compiling this.
@@ -1358,7 +1367,10 @@ impl Compiler {
     {
         // Builtins are stored in an array in all `VMContext`s. First load the
         // base pointer of the array...
-        let array_addr = alias_regions.vmctx_builtin_functions(&mut builder.cursor(), vmctx);
+        let array_addr = alias_regions
+            .vmctx()
+            .builtin_functions()
+            .load(&mut builder.cursor(), vmctx);
         // ... and then load the entry in the array that corresponds to this
         // builtin.
         let func_addr = alias_regions.builtin_functions_array_element(
@@ -1408,7 +1420,14 @@ impl Compiler {
         if !self.emit_debug_checks {
             return;
         }
-        let magic = alias_regions.vmctx_magic(&mut builder.cursor(), vmctx);
+        // NB: a `VMComponentContext`'s `magic` field is deliberately read
+        // through the `VMContext` accessor: both types keep `magic` at offset
+        // zero, and this check is the one place that reads a vmctx's magic
+        // without knowing which of the two it has.
+        let magic = alias_regions
+            .vmctx()
+            .magic()
+            .load(&mut builder.cursor(), vmctx);
         let is_expected_vmctx = builder.ins().icmp_imm_s(
             ir::condcodes::IntCC::Equal,
             magic,
