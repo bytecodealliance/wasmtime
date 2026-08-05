@@ -115,7 +115,8 @@ impl ABI for X64ABI {
     fn sizeof(ty: &WasmValType) -> u8 {
         match ty {
             WasmValType::Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func | WasmHeapType::Extern => Self::word_bytes(),
+                WasmHeapType::Func => Self::word_bytes(),
+                WasmHeapType::Extern => Self::word_bytes() / 2,
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
             WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),

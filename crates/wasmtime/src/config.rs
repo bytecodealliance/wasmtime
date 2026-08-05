@@ -2454,10 +2454,17 @@ impl Config {
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL
-                    | WasmFeatures::GC_TYPES
                     | WasmFeatures::EXCEPTIONS
                     | WasmFeatures::LEGACY_EXCEPTIONS
                     | WasmFeatures::STACK_SWITCHING;
+
+                // Winch supports GC types only under the barrier-free
+                // collectors; the deferred reference-counting collector
+                // requires GC barriers that Winch does not emit yet.
+                #[cfg(feature = "gc")]
+                if self.collector.not_auto() == Some(Collector::DeferredReferenceCounting) {
+                    unsupported |= WasmFeatures::GC_TYPES;
+                }
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
                         unsupported |= WasmFeatures::THREADS;

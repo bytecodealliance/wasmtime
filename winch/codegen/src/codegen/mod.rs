@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    abi::{ABIOperand, ABISig, RetArea, vmctx},
+    abi::{ABI, ABIOperand, ABISig, LocalSlot, RetArea, vmctx},
     bail,
     codegen::BlockSig,
     ensure, format_err,
@@ -168,6 +168,7 @@ where
 
         self.masm.reserve_stack(self.context.frame.locals_size)?;
         self.spill_register_arguments()?;
+        self.copy_stack_gc_refs_to_frame()?;
 
         let defined_locals_range = &self.context.frame.defined_locals_range;
         self.masm.zero_mem_range(defined_locals_range.as_range())?;
@@ -222,14 +223,51 @@ where
                             self.masm.store((*reg).into(), addr, (*ty).try_into()?)?;
                         }
                         Ref(rt) => match rt.heap_type {
-                            WasmHeapType::Func | WasmHeapType::Extern => {
+                            WasmHeapType::Func => {
                                 self.masm.store_ptr(*reg, addr)?;
+                            }
+                            WasmHeapType::Extern => {
+                                self.masm.store((*reg).into(), addr, (*ty).try_into()?)?;
                             }
                             _ => bail!(CodeGenError::unsupported_wasm_type()),
                         },
                     }
                 }
                 // Skip non-register arguments
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Copy GC references passed on the stack into frame slots so that
+    /// stack maps cover them: the caller's argument area is not visited by
+    /// the collector, so a reference left there goes stale across a
+    /// collection. Everything else stays in the caller's argument area.
+    fn copy_stack_gc_refs_to_frame(&mut self) -> Result<()> {
+        for (operand, slot) in self
+            .sig
+            .params_without_retptr()
+            .iter()
+            .zip(self.context.frame.locals())
+        {
+            match (operand, slot) {
+                (ABIOperand::Stack { ty, offset, .. }, slot)
+                    if ty.is_vmgcref_type_and_not_i31() =>
+                {
+                    ensure!(
+                        slot.addressed_from_sp(),
+                        CodeGenError::sp_addressing_expected(),
+                    );
+                    let arg_base = u32::from(<M::ABI as ABI>::arg_base_offset());
+                    let src = LocalSlot::stack_arg(*ty, offset + arg_base);
+                    let src_addr = self.masm.local_address(&src)?;
+                    let dst_addr = self.masm.local_address(slot)?;
+                    self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+                        masm.load(src_addr, scratch.writable(), (*ty).try_into()?)?;
+                        masm.store(scratch.inner().into(), dst_addr, (*ty).try_into()?)
+                    })?;
+                }
                 _ => {}
             }
         }

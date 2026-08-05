@@ -4,7 +4,7 @@ use crate::{
     abi::{ABIOperand, ABIResults, RetArea, vmctx},
     bail,
     codegen::{BranchState, CodeGenError, CodeGenPhase, Emission, Prologue},
-    ensure,
+    ensure, format_err,
     frame::Frame,
     isa::reg::RegClass,
     masm::{
@@ -15,6 +15,7 @@ use crate::{
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
 };
+use smallvec::SmallVec;
 use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
@@ -636,16 +637,53 @@ impl<'a> CodeGenContext<'a, Emission> {
             let len = self.stack.len();
             ensure!(last <= len, CodeGenError::unexpected_value_stack_index(),);
             let truncate = self.stack.len() - last;
-            let stack_mut = self.stack.inner_mut();
 
             // Invoke the callback in top-to-bottom order.
-            for v in stack_mut[truncate..].into_iter().rev() {
+            for v in self.stack.inner()[truncate..].iter().rev() {
                 f(&mut self.regalloc, v)?
             }
-            stack_mut.truncate(truncate);
+            self.stack.truncate(truncate);
         }
 
         Ok(())
+    }
+
+    /// Calculate the stack map offsets for a call site at the given stack
+    /// pointer offset: the distance from the stack pointer to every slot
+    /// holding a live GC reference, in the frame's locals and in the value
+    /// stack.
+    pub fn calculate_stack_map_offsets(&self, sp: SPOffset) -> Result<SmallVec<[SPOffset; 8]>> {
+        if self.frame.gc_ref_local_offsets().is_empty() && self.stack.gc_ref_count() == 0 {
+            return Ok(SmallVec::new());
+        }
+
+        let mut offsets: SmallVec<[SPOffset; 8]> = SmallVec::new();
+
+        for offset in self.frame.gc_ref_local_offsets() {
+            offsets.push(
+                sp.checked_sub(*offset)
+                    .ok_or_else(|| format_err!(CodeGenError::invalid_local_offset()))?,
+            );
+        }
+
+        let mut remaining = self.stack.gc_ref_count();
+        if remaining != 0 {
+            for v in self.stack.inner() {
+                if v.needs_stack_map() {
+                    ensure!(v.is_mem(), CodeGenError::unexpected_value_in_value_stack());
+                    offsets.push(
+                        sp.checked_sub(v.unwrap_mem().slot.offset)
+                            .ok_or_else(|| format_err!(CodeGenError::invalid_sp_offset()))?,
+                    );
+                    remaining -= 1;
+                    if remaining == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(offsets)
     }
 
     /// Convenience wrapper around [`Self::spill_callback`].

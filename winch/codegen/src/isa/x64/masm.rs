@@ -326,7 +326,12 @@ impl Masm for MacroAssembler {
     fn call(
         &mut self,
         stack_args_size: u32,
-        mut load_callee: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
+        context: &mut CodeGenContext<Emission>,
+        mut load_callee: impl FnMut(
+            &mut Self,
+            &mut CodeGenContext<Emission>,
+        ) -> Result<(CalleeKind, CallingConvention)>,
+        mut finalize: impl FnMut(&mut Self, &mut CodeGenContext<Emission>) -> Result<()>,
     ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
         let addend: u32 = <Self::ABI as abi::ABI>::initial_frame_size().into();
@@ -334,11 +339,13 @@ impl Masm for MacroAssembler {
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack)?;
-        let (callee, cc) = load_callee(self)?;
+        let (callee, cc) = load_callee(self, context)?;
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(cc, reg),
             CalleeKind::Direct(idx) => self.asm.call_with_name(cc, idx),
         };
+        finalize(self, context)?;
+
         Ok(total_stack)
     }
 
@@ -1397,6 +1404,18 @@ impl Masm for MacroAssembler {
 
     fn end_source_loc(&mut self) -> Result<()> {
         self.asm.buffer_mut().end_srcloc();
+        Ok(())
+    }
+
+    fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[SPOffset]) -> Result<()> {
+        let frame_size = sp_offset.as_u32();
+        let return_addr = self.asm.buffer().cur_offset();
+        let map = cranelift_codegen::ir::UserStackMap::from_sp_offsets(
+            offsets.iter().map(SPOffset::as_u32),
+        );
+        self.asm
+            .buffer_mut()
+            .push_user_stack_map_sp_relative(return_addr, frame_size, map);
         Ok(())
     }
 

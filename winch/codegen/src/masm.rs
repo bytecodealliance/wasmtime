@@ -199,6 +199,10 @@ impl SPOffset {
     pub fn as_u32(&self) -> u32 {
         self.0
     }
+
+    pub fn checked_sub(self, rhs: Self) -> Option<Self> {
+        self.0.checked_sub(rhs.0).map(Self)
+    }
 }
 
 /// A stack slot.
@@ -1453,8 +1457,19 @@ pub(crate) trait MacroAssembler {
     fn call(
         &mut self,
         stack_args_size: u32,
-        f: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
+        context: &mut CodeGenContext<Emission>,
+        f: impl FnMut(
+            &mut Self,
+            &mut CodeGenContext<Emission>,
+        ) -> Result<(CalleeKind, CallingConvention)>,
+        finalize: impl FnMut(&mut Self, &mut CodeGenContext<Emission>) -> Result<()>,
     ) -> Result<u32>;
+
+    /// Record a GC stack map at the current code offset, which must be the
+    /// return address of the call emitted immediately before. Each offset is
+    /// the distance from the stack pointer at the call site to a slot holding
+    /// a live GC reference.
+    fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[SPOffset]) -> Result<()>;
 
     /// Acquire a scratch register and execute the given callback.
     fn with_scratch<T: ScratchType, R>(&mut self, f: impl FnOnce(&mut Self, Scratch) -> R) -> R;
@@ -1470,7 +1485,7 @@ pub(crate) trait MacroAssembler {
             WasmValType::I32
             | WasmValType::I64
             | WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Func,
+                heap_type: WasmHeapType::Func | WasmHeapType::Extern,
                 ..
             }) => self.with_scratch::<IntScratch, _>(f),
             WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => {

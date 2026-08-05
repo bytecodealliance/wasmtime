@@ -1844,6 +1844,23 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.user_stack_maps.push((return_addr, span, stack_map));
     }
 
+    /// Push a user stack map whose offsets are already relative to the stack
+    /// pointer at the safepoint, with an explicitly provided frame size.
+    pub fn push_user_stack_map_sp_relative(
+        &mut self,
+        return_addr: CodeOffset,
+        frame_size: u32,
+        stack_map: ir::UserStackMap,
+    ) {
+        debug_assert!(
+            self.user_stack_maps
+                .last()
+                .map_or(true, |(prev_addr, _, _)| *prev_addr < return_addr),
+        );
+        self.user_stack_maps
+            .push((return_addr, frame_size, stack_map));
+    }
+
     /// Push a debug tag associated with the current buffer offset.
     pub fn push_debug_tags(&mut self, pos: MachDebugTagPos, tags: &[DebugTag]) {
         trace!("debug tags at offset {}: {tags:?}", self.cur_offset());

@@ -310,6 +310,20 @@ impl Val {
             Val::Local(l) => l.ty,
         }
     }
+
+    /// Whether this value is a GC reference that must be covered by stack maps.
+    pub fn needs_stack_map(&self) -> bool {
+        needs_stack_map(&self.ty())
+    }
+}
+
+/// Whether a value of this type must be covered by stack maps.
+pub(crate) fn needs_stack_map(ty: &WasmValType) -> bool {
+    ty.is_vmgcref_type_and_not_i31()
+        && match ty {
+            WasmValType::Ref(r) => !r.heap_type.is_bottom(),
+            _ => false,
+        }
 }
 
 /// The shadow stack used for compilation.
@@ -317,6 +331,7 @@ impl Val {
 pub(crate) struct Stack {
     // NB: The 64 is chosen arbitrarily. We can adjust as we see fit.
     inner: SmallVec<[Val; 64]>,
+    gc_ref_count: usize,
 }
 
 impl Stack {
@@ -324,6 +339,7 @@ impl Stack {
     pub fn new() -> Self {
         Self {
             inner: Default::default(),
+            gc_ref_count: Default::default(),
         }
     }
 
@@ -356,13 +372,16 @@ impl Stack {
 
     /// Extend the stack with the given elements.
     pub fn extend(&mut self, values: impl IntoIterator<Item = Val>) {
-        self.inner.extend(values);
+        for val in values {
+            self.push(val);
+        }
     }
 
     /// Inserts many values at the given index.
     pub fn insert_many(&mut self, at: usize, values: &[Val]) {
         debug_assert!(at <= self.len());
 
+        self.gc_ref_count += values.iter().filter(|v| v.needs_stack_map()).count();
         if at == self.len() {
             self.inner.extend_from_slice(values);
         } else {
@@ -377,6 +396,9 @@ impl Stack {
 
     /// Push a value to the stack.
     pub fn push(&mut self, val: Val) {
+        if val.needs_stack_map() {
+            self.gc_ref_count += 1;
+        }
         self.inner.push(val);
     }
 
@@ -397,7 +419,13 @@ impl Stack {
 
     /// Pops the top element of the stack, if any.
     pub fn pop(&mut self) -> Option<Val> {
-        self.inner.pop()
+        let val = self.inner.pop();
+        if let Some(v) = val
+            && v.needs_stack_map()
+        {
+            self.gc_ref_count -= 1;
+        }
+        val
     }
 
     /// Pops the element at the top of the stack if it is an i32 const;
@@ -457,8 +485,17 @@ impl Stack {
     }
 
     /// Get a mutable reference to the inner stack representation.
+    ///
+    /// Mutations through this reference must not add or remove GC
+    /// references or the gc ref count will go stale; changing a value's
+    /// representation (e.g. spilling a register to memory) is fine.
     pub fn inner_mut(&mut self) -> &mut SmallVec<[Val; 64]> {
         &mut self.inner
+    }
+
+    /// The number of values on the stack that stack maps must cover.
+    pub fn gc_ref_count(&self) -> usize {
+        self.gc_ref_count
     }
 
     /// Get a reference to the inner stack representation.
@@ -476,6 +513,13 @@ impl Stack {
                 acc
             }
         })
+    }
+
+    /// Truncate the stack to `len`, keeping the gc ref count in sync.
+    pub fn truncate(&mut self, len: usize) {
+        while self.inner.len() > len {
+            self.pop();
+        }
     }
 }
 

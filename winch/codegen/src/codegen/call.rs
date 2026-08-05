@@ -96,10 +96,22 @@ impl FnCall {
         context.spill(masm)?;
         let ret_area = Self::make_ret_area(&sig, masm)?;
         let arg_stack_space = sig.params_stack_size();
-        let reserved_stack = masm.call(arg_stack_space, |masm| {
-            Self::assign(sig, &callee_context, ret_area.as_ref(), context, masm)?;
-            Ok((kind, sig.call_conv))
-        })?;
+        let reserved_stack = masm.call(
+            arg_stack_space,
+            context,
+            |masm, context| {
+                Self::assign(sig, &callee_context, ret_area.as_ref(), context, masm)?;
+                Ok((kind, sig.call_conv))
+            },
+            |masm, context| {
+                let sp = masm.sp_offset()?;
+                let offsets = context.calculate_stack_map_offsets(sp)?;
+                if !offsets.is_empty() {
+                    masm.emit_stack_map(sp, &offsets)?;
+                }
+                Ok(())
+            },
+        )?;
 
         Self::cleanup(
             sig,
