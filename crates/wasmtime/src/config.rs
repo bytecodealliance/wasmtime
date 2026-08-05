@@ -2467,11 +2467,12 @@ impl Config {
                 }
             }
             Some(Strategy::Winch) => {
+                // Exception handling in Winch is a work in progress. Throws currently
+                // compile as uncatchable traps.
                 unsupported |= WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL
-                    | WasmFeatures::EXCEPTIONS
                     | WasmFeatures::LEGACY_EXCEPTIONS
                     | WasmFeatures::STACK_SWITCHING;
 
@@ -3042,6 +3043,20 @@ impl Config {
 
         if features.contains(WasmFeatures::RELAXED_SIMD) && !features.contains(WasmFeatures::SIMD) {
             bail!("cannot disable the simd proposal but enable the relaxed simd proposal");
+        }
+
+        // The GC, function-references, and exception-handling proposals require
+        // Wasmtime's GC runtime support.
+        if !features.contains(WasmFeatures::GC_TYPES) {
+            if features.contains(WasmFeatures::EXCEPTIONS) {
+                bail!("cannot disable gc support but enable the exceptions proposal");
+            }
+            if features.contains(WasmFeatures::GC) {
+                bail!("cannot disable gc support but enable the gc proposal");
+            }
+            if features.contains(WasmFeatures::FUNCTION_REFERENCES) {
+                bail!("cannot disable gc support but enable the function-references proposal");
+            }
         }
 
         if features.contains(WasmFeatures::STACK_SWITCHING) {

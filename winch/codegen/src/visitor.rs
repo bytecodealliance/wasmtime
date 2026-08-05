@@ -23,10 +23,10 @@ use crate::{Result, bail, format_err};
 use regalloc2::RegClass;
 use smallvec::{SmallVec, smallvec};
 use wasmparser::{
-    BlockType, BrTable, HeapType, Ieee32, Ieee64, MemArg, V128, ValType, VisitOperator,
+    BlockType, BrTable, HeapType, Ieee32, Ieee64, MemArg, TryTable, V128, ValType, VisitOperator,
     VisitSimdOperator,
 };
-use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
+use wasmtime_cranelift::{TRAP_INDIRECT_CALL_TO_NULL, TRAP_UNHANDLED_TAG};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
     WasmValType,
@@ -196,6 +196,9 @@ macro_rules! def_unsupported {
     (emit Else $($rest:tt)*) => {};
     (emit Block $($rest:tt)*) => {};
     (emit Loop $($rest:tt)*) => {};
+    (emit TryTable $($rest:tt)*) => {};
+    (emit Throw $($rest:tt)*) => {};
+    (emit ThrowRef $($rest:tt)*) => {};
     (emit Br $($rest:tt)*) => {};
     (emit BrIf $($rest:tt)*) => {};
     (emit Return $($rest:tt)*) => {};
@@ -1841,6 +1844,41 @@ where
             self.masm,
             &mut self.context,
         )?);
+
+        Ok(())
+    }
+
+    // Exceptions currently trap on throw, so a `try_table` compiles like
+    // a `block`. The catch clauses are unreachable and no handler metadata
+    // is emitted.
+    fn visit_try_table(&mut self, try_table: TryTable) -> Self::Output {
+        self.control_frames.push(ControlStackFrame::block(
+            self.env.resolve_block_sig(try_table.ty)?,
+            self.masm,
+            &mut self.context,
+        )?);
+
+        Ok(())
+    }
+
+    // A thrown exception is compiled as an unhandled-tag trap; see
+    // `visit_try_table`.
+    fn visit_throw(&mut self, _tag_index: u32) -> Self::Output {
+        self.masm.trap(TRAP_UNHANDLED_TAG)?;
+        self.context.reachable = false;
+        let outermost = &mut self.control_frames[0];
+        outermost.set_as_target();
+
+        Ok(())
+    }
+
+    // A rethrown exception is compiled as an unhandled-tag trap; see
+    // `visit_try_table`.
+    fn visit_throw_ref(&mut self) -> Self::Output {
+        self.masm.trap(TRAP_UNHANDLED_TAG)?;
+        self.context.reachable = false;
+        let outermost = &mut self.control_frames[0];
+        outermost.set_as_target();
 
         Ok(())
     }

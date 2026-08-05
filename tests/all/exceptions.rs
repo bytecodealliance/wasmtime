@@ -3,7 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
-#[wasmtime_test(wasm_features(exceptions))]
+// Currently exceptions trap on throw, re-enable after catch is implemented.
+#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn basic_throw(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -39,7 +40,8 @@ fn basic_throw(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+// Currently exceptions trap on throw, re-enable after catch is implemented.
+#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn dynamic_tags(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -99,7 +101,8 @@ fn dynamic_tags(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+// Currently exceptions trap on throw, re-enable after catch is implemented.
+#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn exception_escape_to_host(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -132,7 +135,8 @@ fn exception_escape_to_host(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+// Currently exceptions trap on throw, re-enable after catch is implemented.
+#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn exception_from_host(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -272,7 +276,8 @@ fn thrown_exception_without_throwing(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+// Currently exceptions trap on throw, re-enable after catch is implemented.
+#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -298,7 +303,8 @@ fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+// Currently exceptions trap on throw, re-enable after catch is implemented.
+#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
     config.collector(Collector::DeferredReferenceCounting);
@@ -353,7 +359,8 @@ fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+// Currently exceptions trap on throw, re-enable after catch is implemented.
+#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> {
     config.collector(Collector::DeferredReferenceCounting);
@@ -470,5 +477,26 @@ fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Resu
     eprintln!("a4");
     assert!(dropped.load(Relaxed));
 
+    Ok(())
+}
+
+// Winch does not support exnref values yet. Modules that place an exnref
+// in a value position should fail with a compile error instead of
+// panicking.
+#[wasmtime_test(strategies(only(Winch)), wasm_features(exceptions, reference_types))]
+#[cfg_attr(miri, ignore)]
+fn exnref_local_is_unsupported(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let wat = r#"
+        (module
+          (func (result i32)
+            (local exnref)
+            (i32.const 0)))
+    "#;
+    let err = Module::new(&engine, wat).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("Unsupported Wasm type"),
+        "unexpected error: {err:?}"
+    );
     Ok(())
 }
