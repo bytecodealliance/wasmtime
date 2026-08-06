@@ -166,15 +166,15 @@ impl InstructionBuilder {
         }
     }
 
-    pub fn operands_in(mut self, operands: Vec<Operand>) -> Self {
+    pub fn operands_in(mut self, operands: &[Operand]) -> Self {
         assert!(self.operands_in.is_none());
-        self.operands_in = Some(operands);
+        self.operands_in = Some(operands.to_vec());
         self
     }
 
-    pub fn operands_out(mut self, operands: Vec<Operand>) -> Self {
+    pub fn operands_out(mut self, operands: &[Operand]) -> Self {
         assert!(self.operands_out.is_none());
-        self.operands_out = Some(operands);
+        self.operands_out = Some(operands.to_vec());
         self
     }
 
