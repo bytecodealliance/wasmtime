@@ -163,8 +163,8 @@ block0(v0: f32x4):
 }
 
 ; check: const0 = 0x00000000000000000000000000000000
-; check: v4 = vconst.f32x4 const0
-; check: return v4
+; check: v2 = vconst.f32x4 const0
+; check: return v2
 
 function %vector_bxor_x_x_f64x2(f64x2) -> f64x2 {
 block0(v0: f64x2):
@@ -173,8 +173,8 @@ block0(v0: f64x2):
 }
 
 ; check: const0 = 0x00000000000000000000000000000000
-; check: v4 = vconst.f64x2 const0
-; check: return v4
+; check: v2 = vconst.f64x2 const0
+; check: return v2
 
 function %vector_bxor_x_x_f32x2(f32x2) -> f32x2 {
 block0(v0: f32x2):
@@ -182,9 +182,9 @@ block0(v0: f32x2):
     return v1
 }
 
-; check: f32const 0.0
-; check: splat.f32x2
-; check: return
+; check: const0 = 0x0000000000000000
+; check: v2 = vconst.f32x2 const0
+; check: return v2
 
 function %vector_bxor_x_bnot_x(i32x4) -> i32x4 {
 block0(v0: i32x4):
@@ -216,8 +216,8 @@ block0(v0: i32x4):
 }
 
 ; check: const0 = 0x00000000000000000000000000000000
-; check: v5 = vconst.i32x4 const0
-; check: return v5
+; check: v3 = vconst.i32x4 const0
+; check: return v3
 
 function %vector_bor_x_bnot_x(i32x4) -> i32x4 {
 block0(v0: i32x4):

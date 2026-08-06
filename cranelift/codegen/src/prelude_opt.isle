@@ -2,6 +2,12 @@
 
 ;; Any `extern` definitions here are generally implemented in `src/opts.rs`.
 
+;;;;; constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Insert an all-zero constant whose size matches `ty` into the constant pool.
+(decl zero_constant (Type) Constant)
+(extern constructor zero_constant zero_constant)
+
 ;;;;; eclass and enode access ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Extract any node(s) for the given eclass ID.

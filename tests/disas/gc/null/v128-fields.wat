@@ -35,6 +35,6 @@
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v20 = vconst.i8x16 const0
-;; @002e                               return v20  ; v20 = const0
+;;                                     v18 = vconst.i8x16 const0
+;; @002e                               return v18  ; v18 = const0
 ;; }

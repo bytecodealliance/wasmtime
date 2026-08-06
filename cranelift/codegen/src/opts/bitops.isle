@@ -19,8 +19,8 @@
 (rule 0 (all_zero (ty_int ty)) (iconst_u ty 0))
 (rule 1 (all_zero $F32) (f32const $F32 (f32_from_uint 0)))
 (rule 2 (all_zero $F64) (f64const $F64 (f64_from_uint 0)))
-(rule 3 (all_zero (ty_vec64 ty)) (splat ty (all_zero (lane_type ty))))
-(rule 4 (all_zero (ty_vec128 ty)) (splat ty (all_zero (lane_type ty))))
+(rule 3 (all_zero (ty_vec64 ty)) (vconst ty (zero_constant ty)))
+(rule 4 (all_zero (ty_vec128 ty)) (vconst ty (zero_constant ty)))
 
 ;; x ^ x == 0.
 (rule (simplify (bxor ty x x))
