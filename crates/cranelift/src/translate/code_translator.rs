@@ -3335,10 +3335,10 @@ pub fn translate_operator(
                     WasmHeapType::ConcreteCont(index) => {
                         let mti = index
                             .as_module_type_index()
-                            .expect("Only supporting module type indices on switch for now");
+                            .expect("expected module-local type index");
 
                         environ
-                            .continuation_arguments(TypeIndex::from_u32(mti.as_u32()))
+                            .continuation_arguments_from_interned(mti)
                             .iter()
                             .map(|ty| crate::value_type(environ.isa(), *ty))
                             .collect()
