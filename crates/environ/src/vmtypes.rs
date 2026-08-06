@@ -534,8 +534,6 @@ macro_rules! for_each_vm_type {
             pub struct VMDeferredThread {
                 /// The previous value of `VMStoreContext::current_thread`.
                 pub parent: VMLazyThread,
-                /// The caller component instance (a deferred `enter_sync_call` argument).
-                pub caller_instance: u32,
                 /// Whether the callee is async-lifted (a deferred `enter_sync_call` arg).
                 pub callee_async: u32,
                 /// The callee component instance (a deferred `enter_sync_call` argument).

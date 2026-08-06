@@ -469,7 +469,7 @@ impl Func {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
-        store.0.enter_guest_sync_call(None, async_, instance)?;
+        store.0.enter_guest_sync_call(async_, instance)?;
 
         #[repr(C)]
         union Union<Params: Copy, Return: Copy> {

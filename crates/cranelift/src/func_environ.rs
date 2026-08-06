@@ -2076,8 +2076,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// defers the heavyweight task bookkeeping the `enter_sync_call` libcall
     /// would otherwise do eagerly.
     ///
-    /// `real_call_args` is `[callee_vmctx, caller_vmctx, caller_instance,
-    /// callee_async, callee_instance]`.
+    /// `real_call_args` is `[callee_vmctx, caller_vmctx, callee_async,
+    /// callee_instance]`.
     fn lower_fact_enter_sync_call(&mut self, real_call_args: &[ir::Value]) -> CallRets {
         let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
         let slot = crate::component_sync_call::enter(
@@ -2085,9 +2085,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             &mut self.env.alias_regions,
             vmctx,
             crate::component_sync_call::EnterArgs {
-                caller_instance: real_call_args[2],
-                callee_async: real_call_args[3],
-                callee_instance: real_call_args[4],
+                callee_async: real_call_args[2],
+                callee_instance: real_call_args[3],
             },
         );
 

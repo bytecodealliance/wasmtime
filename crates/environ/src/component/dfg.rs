@@ -150,6 +150,9 @@ pub struct ComponentDfg {
     /// Interned map of id-to-`CanonicalOptions`, or all sets-of-options used by
     /// this component.
     pub options: Intern<OptionsId, CanonicalOptions>,
+
+    /// The thread-transparency analysis for this component.
+    pub transparency: ThreadTransparency,
 }
 
 /// Possible side effects that are possible with instantiating this component.

@@ -756,7 +756,19 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let saved_lower_may_leave =
             self.trap_if_not_may_leave(adapter.lower.flags, Trap::CannotLeaveComponent);
 
-        if self.module.tunables.concurrency_support {
+        // If nothing that this adapter can reach is able to observe or mutate
+        // the thread state that `enter-sync-call`/`exit-sync-call` maintain then
+        // none of its bookkeeping is necessary.
+        //
+        // See `component::translate::ThreadTransparency` for details.
+        debug_assert!(
+            !(adapter.thread_transparent && self.emit_resource_call),
+            "resources are not thread transparent",
+        );
+        let needs_thread_state =
+            self.module.tunables.concurrency_support && !adapter.thread_transparent;
+
+        if needs_thread_state {
             // Push a task onto the current task stack.
             //
             // Note that for sync-to-sync calls, we replace this call with
@@ -765,9 +777,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             // adapter for most sync-to-sync calls, since most sync-to-sync
             // calls do not do anything to force the task's creation
             // (e.g. adjust backpressure).
-            self.instruction(I32Const(
-                i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
-            ));
             self.instruction(I32Const(if self.types[adapter.lift.ty].async_ {
                 1
             } else {
@@ -780,9 +789,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(Call(enter_sync_call.as_u32()));
         } else if self.emit_resource_call {
             assert!(!self.types[adapter.lift.ty].async_);
-            self.instruction(I32Const(
-                i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
-            ));
             self.instruction(I32Const(0));
             self.instruction(I32Const(
                 i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
@@ -875,7 +881,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // Note that for sync-to-sync calls, we will emit inline code during
         // translation to CLIF to avoid actually calling out to a libcall when
         // the deferred task's allocation was never forced.
-        if self.emit_resource_call || self.module.tunables.concurrency_support {
+        if self.emit_resource_call || needs_thread_state {
             let exit_sync_call = self.module.import_exit_sync_call();
             self.instruction(Call(exit_sync_call.as_u32()));
         }
