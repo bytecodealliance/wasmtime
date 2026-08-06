@@ -269,6 +269,11 @@ impl WasmCoreDump {
 
                 let module_index = module_to_index[&module.id()];
 
+                // Core dumps are best-effort and may not capture every memory
+                // referenced by an instance. In particular, shared memories
+                // are intentionally omitted because their data cannot be
+                // safely read through `Memory`. Use an invalid index for any
+                // absent memory instead of panicking while serializing.
                 let memories = instance
                     .all_memories(store.0)
                     .filter_map(|(_, m)| m.unshared())
@@ -280,11 +285,22 @@ impl WasmCoreDump {
                     })
                     .collect::<Vec<_>>();
 
+                // Component adapter modules can import runtime-managed globals,
+                // such as component instance flags, whose definitions are not
+                // enumerated by `StoreOpaque::for_each_global`. These globals
+                // are visible through `Instance::all_globals` but absent from
+                // the dump's globals section, so use an invalid index rather
+                // than panicking while serializing.
                 let globals = instance
                     .all_globals(store.0)
                     .collect::<Vec<_>>()
                     .into_iter()
-                    .map(|(_i, global)| global_to_idx[&global.hash_key(&store.0)])
+                    .map(|(_i, global)| {
+                        global_to_idx
+                            .get(&global.hash_key(&store.0))
+                            .copied()
+                            .unwrap_or(u32::MAX)
+                    })
                     .collect::<Vec<_>>();
 
                 instances.instance(module_index, memories, globals);
