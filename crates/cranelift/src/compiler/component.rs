@@ -1189,7 +1189,7 @@ impl<'a> TrampolineCompiler<'a> {
             }
 
             if self.compiler.tunables.concurrency_support {
-                Some(self.enter_sync_call_inline(instance, def.instance))
+                Some(self.enter_sync_call_inline(def.instance))
             } else {
                 None
             }
@@ -1286,14 +1286,9 @@ impl<'a> TrampolineCompiler<'a> {
     /// otherwise do eagerly.
     fn enter_sync_call_inline(
         &mut self,
-        caller_instance: RuntimeComponentInstanceIndex,
         callee_instance: RuntimeComponentInstanceIndex,
     ) -> ir::StackSlot {
         let vmctx = self.caller_vmctx();
-        let caller_instance = self
-            .builder
-            .ins()
-            .iconst(ir::types::I32, i64::from(caller_instance.as_u32()));
         let callee_async = self.builder.ins().iconst(ir::types::I32, 0);
         let callee_instance = self
             .builder
@@ -1304,7 +1299,6 @@ impl<'a> TrampolineCompiler<'a> {
             &mut self.alias_regions,
             vmctx,
             crate::component_sync_call::EnterArgs {
-                caller_instance,
                 callee_async,
                 callee_instance,
             },

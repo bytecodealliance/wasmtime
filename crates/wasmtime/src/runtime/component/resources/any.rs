@@ -218,7 +218,7 @@ impl ResourceAny {
         // means that this is a host resource being destroyed by the host. In
         // that case restrictions around blocking and such are exempt.
         if let Some(instance) = slot.instance {
-            store.0.enter_guest_sync_call(None, false, instance)?;
+            store.0.enter_guest_sync_call(false, instance)?;
         }
 
         // This should be safe because `dtor` has been checked to belong to the

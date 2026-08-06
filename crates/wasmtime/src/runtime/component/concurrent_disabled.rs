@@ -151,7 +151,6 @@ unsafe impl Lower for StreamAny {
 impl StoreOpaque {
     pub(crate) fn enter_guest_sync_call(
         &mut self,
-        _guest_caller: Option<RuntimeInstance>,
         _callee_async: bool,
         _callee: RuntimeInstance,
     ) -> Result<()> {

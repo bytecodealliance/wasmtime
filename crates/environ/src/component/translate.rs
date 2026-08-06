@@ -23,6 +23,8 @@ use wasmparser::{Chunk, ComponentExternName, Encoding, Parser, Payload, Validato
 mod adapt;
 pub use self::adapt::*;
 mod inline;
+mod thread_transparency;
+pub use self::thread_transparency::ThreadTransparency;
 
 /// Structure used to translate a component and parse it.
 pub struct Translator<'a, 'data> {

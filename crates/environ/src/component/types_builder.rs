@@ -828,6 +828,24 @@ impl ComponentTypesBuilder {
         self.type_information(ty).has_borrow
     }
 
+    /// Returns whether the type specified contains any handle within it, where
+    /// "handle" means `own`, `borrow`, `future`, `stream`, or `error-context`.
+    fn ty_contains_any_handle(&self, ty: &InterfaceType) -> bool {
+        self.type_information(ty).has_handle
+    }
+
+    /// Returns whether the signature of `ty` mentions any handle, in either its
+    /// parameters or its results.
+    pub fn func_contains_any_handle(&self, ty: TypeFuncIndex) -> bool {
+        let ty = &self[ty];
+        let params = &self[ty.params].types;
+        let results = &self[ty.results].types;
+        params
+            .iter()
+            .chain(results.iter())
+            .any(|ty| self.ty_contains_any_handle(ty))
+    }
+
     fn type_information(&self, ty: &InterfaceType) -> &TypeInformation {
         match ty {
             InterfaceType::U8
@@ -837,18 +855,26 @@ impl ComponentTypesBuilder {
             | InterfaceType::S16
             | InterfaceType::U32
             | InterfaceType::S32
-            | InterfaceType::Char
-            | InterfaceType::Own(_)
+            | InterfaceType::Char => {
+                static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
+                &INFO
+            }
+            InterfaceType::Own(_)
             | InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => {
-                static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
+                static INFO: TypeInformation = {
+                    let mut info = TypeInformation::primitive(FlatType::I32);
+                    info.has_handle = true;
+                    info
+                };
                 &INFO
             }
             InterfaceType::Borrow(_) => {
                 static INFO: TypeInformation = {
                     let mut info = TypeInformation::primitive(FlatType::I32);
                     info.has_borrow = true;
+                    info.has_handle = true;
                     info
                 };
                 &INFO
@@ -995,7 +1021,14 @@ struct TypeInformationCache {
 
 struct TypeInformation {
     flat: FlatTypesStorage,
+
+    /// Whether this type contains a borrow anywhere within it.
     has_borrow: bool,
+
+    /// Whether this type contains any handle (`own`, `borrow`, `future`,
+    /// `stream`, or `error-context`) anywhere within it. Note that this is a
+    /// superset of `has_borrow`.
+    has_handle: bool,
 }
 
 impl TypeInformation {
@@ -1003,6 +1036,7 @@ impl TypeInformation {
         TypeInformation {
             flat: FlatTypesStorage::new(),
             has_borrow: false,
+            has_handle: false,
         }
     }
 
@@ -1029,6 +1063,7 @@ impl TypeInformation {
     fn build_record<'a>(&mut self, types: impl Iterator<Item = &'a TypeInformation>) {
         for info in types {
             self.has_borrow = self.has_borrow || info.has_borrow;
+            self.has_handle = self.has_handle || info.has_handle;
             match info.flat.as_flat_types() {
                 Some(types) => {
                     for (t32, t64) in types.memory32.iter().zip(types.memory64) {
@@ -1070,6 +1105,7 @@ impl TypeInformation {
                 None => continue,
             };
             self.has_borrow = self.has_borrow || info.has_borrow;
+            self.has_handle = self.has_handle || info.has_handle;
 
             // If this variant is already unrepresentable in a flat
             // representation then this can be skipped.
@@ -1135,6 +1171,7 @@ impl TypeInformation {
     fn fixed_length_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedLengthList) {
         let element_info = types.type_information(&ty.element);
         self.has_borrow = element_info.has_borrow;
+        self.has_handle = element_info.has_handle;
         match element_info.flat.as_flat_types() {
             Some(types) => {
                 'outer: for _ in 0..ty.size {
@@ -1190,6 +1227,7 @@ impl TypeInformation {
         *self = TypeInformation::string();
         let info = types.type_information(&ty.element);
         self.has_borrow = info.has_borrow;
+        self.has_handle = info.has_handle;
     }
 
     fn maps(&mut self, types: &ComponentTypesBuilder, ty: &TypeMap) {
@@ -1199,5 +1237,6 @@ impl TypeInformation {
         let key_info = types.type_information(&ty.key);
         let value_info = types.type_information(&ty.value);
         self.has_borrow = key_info.has_borrow || value_info.has_borrow;
+        self.has_handle = key_info.has_handle || value_info.has_handle;
     }
 }

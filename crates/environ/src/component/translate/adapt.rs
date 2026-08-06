@@ -211,7 +211,14 @@ impl<'data> Translator<'_, 'data> {
             let mut names = Vec::with_capacity(adapter_module.adapters.len());
             for adapter in adapter_module.adapters.iter() {
                 let name = format!("adapter{}", adapter.as_u32());
-                module.adapt(&name, &component.adapters[*adapter]);
+                let adapter = &component.adapters[*adapter];
+                module.adapt(
+                    &name,
+                    adapter,
+                    component
+                        .transparency
+                        .adapter_is_transparent(self.types.types(), adapter),
+                );
                 names.push(name);
             }
             let wasm = module.encode();

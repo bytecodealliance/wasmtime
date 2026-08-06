@@ -671,12 +671,10 @@ fn resource_transfer_borrow(
 fn enter_sync_call(
     store: &mut dyn VMStore,
     instance: Instance,
-    caller_instance: u32,
     callee_async: u32,
     callee_instance: u32,
 ) -> Result<()> {
     store.enter_guest_sync_call(
-        Some(instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(caller_instance))),
         callee_async != 0,
         instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(callee_instance)),
     )

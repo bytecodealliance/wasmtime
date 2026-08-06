@@ -125,6 +125,12 @@ struct AdapterData {
     /// The core wasm function that this adapter will be calling (the original
     /// function that was `canon lift`'d)
     callee: FuncIndex,
+    /// Whether nothing this adapter can reach is able to observe or mutate the
+    /// thread state that `enter-sync-call`/`exit-sync-call` maintain, meaning
+    /// that pair can be omitted entirely.
+    ///
+    /// See `component::translate::ThreadTransparency` for details.
+    thread_transparent: bool,
 }
 
 /// Configuration options which apply at the "global adapter" level.
@@ -300,7 +306,11 @@ impl<'a> Module<'a> {
     ///
     /// The `name` provided is the export name of the adapter from the final
     /// module, and `adapter` contains all metadata necessary for compilation.
-    pub fn adapt(&mut self, name: &str, adapter: &Adapter) {
+    ///
+    /// The `thread_transparent` flag indicates that nothing this adapter can
+    /// reach is able to observe the thread state that `enter-sync-call` and
+    /// `exit-sync-call` maintain, allowing that pair to be skipped.
+    pub fn adapt(&mut self, name: &str, adapter: &Adapter, thread_transparent: bool) {
         // Import any items required by the various canonical options
         // (memories, reallocs, etc)
         let mut lift = self.import_options(adapter.lift_ty, &adapter.lift_options);
@@ -335,6 +345,7 @@ impl<'a> Module<'a> {
                 lift,
                 lower,
                 callee,
+                thread_transparent,
             },
         );
 
@@ -722,7 +733,7 @@ impl<'a> Module<'a> {
         self.import_simple(
             "async",
             "enter-sync-call",
-            &[ValType::I32; 3],
+            &[ValType::I32; 2],
             &[],
             Import::EnterSyncCall,
             |me| &mut me.imported_enter_sync_call,

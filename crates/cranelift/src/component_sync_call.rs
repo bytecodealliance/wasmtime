@@ -29,8 +29,6 @@ use wasmtime_environ::{GetPtrSize, NUM_COMPONENT_CONTEXT_SLOTS, PtrSize};
 /// `VMDeferredThread`, to be replayed by the host if it ever has to promote the
 /// deferred thread into a real one.
 pub struct EnterArgs {
-    /// The component instance performing the call.
-    pub caller_instance: ir::Value,
     /// Whether the callee is async-lifted, as an `i32` boolean.
     pub callee_async: ir::Value,
     /// The component instance being called into.
@@ -79,11 +77,6 @@ where
         .store(&mut builder.cursor(), slot_addr, parent);
 
     // Record the deferred `enter_sync_call` arguments.
-    alias_regions.vm_deferred_thread().caller_instance().store(
-        &mut builder.cursor(),
-        slot_addr,
-        args.caller_instance,
-    );
     alias_regions.vm_deferred_thread().callee_async().store(
         &mut builder.cursor(),
         slot_addr,
