@@ -1111,21 +1111,22 @@ block2(v8: i128):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
+;   movq %rdx, %rcx
 ;   uninit  %rax
 ;   xorq %rax, %rax
-;   testb %dl, %dl
+;   uninit  %rdx
+;   xorq %rdx, %rdx
+;   testb %cl, %cl
 ;   jnz     label2; j label1
 ; block1:
 ;   addq $0x2, %rax
-;   setb %r11b
-;   movzbq %r11b, %rdx
+;   adcq $0x0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 ; block2:
 ;   addq $0x1, %rax
-;   setb %cl
-;   movzbq %cl, %rdx
+;   adcq $0x0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1135,20 +1136,20 @@ block2(v8: i128):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   movq %rdx, %rcx
 ;   xorq %rax, %rax
-;   testb %dl, %dl
-;   jne 0x20
-; block2: ; offset 0xf
+;   xorq %rdx, %rdx
+;   testb %cl, %cl
+;   jne 0x22
+; block2: ; offset 0x15
 ;   addq $2, %rax
-;   setb %r11b
-;   movzbq %r11b, %rdx
+;   adcq $0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block3: ; offset 0x20
+; block3: ; offset 0x22
 ;   addq $1, %rax
-;   setb %cl
-;   movzbq %cl, %rdx
+;   adcq $0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -2055,10 +2056,11 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
+;   uninit  %rdx
+;   xorq %rdx, %rdx
 ;   movq %rsi, %rax
 ;   addq (%rdi), %rax
-;   setb %sil
-;   movzbq %sil, %rdx
+;   adcq $0x0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -2068,10 +2070,10 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   xorq %rdx, %rdx
 ;   movq %rsi, %rax
 ;   addq (%rdi), %rax ; trap: heap_oob
-;   setb %sil
-;   movzbq %sil, %rdx
+;   adcq $0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -2204,10 +2206,11 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
+;   uninit  %rdx
+;   xorq %rdx, %rdx
 ;   movq %rdi, %rax
 ;   addq %rsi, %rax
-;   setb %sil
-;   movzbq %sil, %rdx
+;   adcq $0x0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -2217,10 +2220,10 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   xorq %rdx, %rdx
 ;   movq %rdi, %rax
 ;   addq %rsi, %rax
-;   setb %sil
-;   movzbq %sil, %rdx
+;   adcq $0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
