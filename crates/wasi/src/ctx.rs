@@ -414,10 +414,9 @@ impl WasiCtxBuilder {
         self
     }
 
-    /// Allow usage of UDP.
+    /// Allow usage of UDP
     ///
-    /// This is enabled by default, but can be disabled if UDP should be blanket
-    /// disabled.
+    /// By default this is disabled.
     pub fn allow_udp(&mut self, enable: bool) -> &mut Self {
         self.sockets.allowed_network_uses.udp = enable;
         self
@@ -425,8 +424,7 @@ impl WasiCtxBuilder {
 
     /// Allow usage of TCP
     ///
-    /// This is enabled by default, but can be disabled if TCP should be blanket
-    /// disabled.
+    /// By default this is disabled.
     pub fn allow_tcp(&mut self, enable: bool) -> &mut Self {
         self.sockets.allowed_network_uses.tcp = enable;
         self
