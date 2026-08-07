@@ -966,6 +966,89 @@ fn table64_variable_operator_cost_saturates(config: &mut Config) -> Result<()> {
     // i64::MAX * 2 must saturate at i64::MAX rather than wrap to -2.
     let error = grow.call(&mut store, i64::MAX).unwrap_err();
     assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
+    Ok(())
+}
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn huge_table64_grow_cannot_mint_fuel() -> Result<()> {
+    huge_table64_grow_cannot_mint_fuel_impl(
+        r#"
+        (module
+          (table $t i64 0 0x10000 (ref null func))
+          (func (export "run") (param $delta i64)
+            (loop $l
+              (drop (table.grow $t (ref.null func) (local.get $delta)))
+              (br $l))))
+        "#,
+    )
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn huge_table64_grow_cannot_mint_fuel_const() -> Result<()> {
+    huge_table64_grow_cannot_mint_fuel_impl(
+        r#"
+        (module
+          (table $t i64 0 0x10000 (ref null func))
+          (func (export "run") (param $delta i64)
+            (loop $l
+              (drop (table.grow $t (ref.null func) (i64.const -500)))
+              (br $l))))
+        "#,
+    )
+}
+
+fn huge_table64_grow_cannot_mint_fuel_impl(wat: &str) -> Result<()> {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, wat)?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<i64, ()>(&mut store, "run")?;
+
+    let trap = run.call(&mut store, -500).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap, Trap::OutOfFuel);
+    assert_eq!(store.get_fuel()?, 0);
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn fuel_around_table_grow() -> Result<()> {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (type $ft (func))
+              (func $f (type $ft))
+              (table $t 1 10000000 (ref $ft) (ref.func $f))
+              (func (export "grow") (result i32)
+                (table.grow $t (ref.func $f) (i32.const 9999999)))
+              (func (export "call") (param i32)
+                (call_indirect $t (type $ft) (local.get 0))))
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(2)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let grow = instance.get_typed_func::<(), i32>(&mut store, "grow")?;
+    let trap = grow.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap, Trap::OutOfFuel);
+
+    store.set_fuel(u64::MAX)?;
+    let call = instance.get_typed_func::<i32, ()>(&mut store, "call")?;
+    let trap = call
+        .call(&mut store, 9999999)
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::TableOutOfBounds);
     Ok(())
 }
