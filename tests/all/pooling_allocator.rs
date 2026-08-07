@@ -1556,3 +1556,96 @@ fn purge_module_with_mpk() -> Result<()> {
 
     Ok(())
 }
+
+/// Regression test for both #7942 and #13982: mapping a copy-on-write memory
+/// image into a slot must not drop the slot's MPK protection key.
+///
+/// A fresh `mmap` associates the pages it replaces with the default protection
+/// key 0, which every stripe is allowed to access. If the key is not
+/// re-applied afterwards, an instance in one stripe can read and write the
+/// linear memory of an instance in another stripe.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn mpk_protects_memory_images() -> Result<()> {
+    if !wasmtime::PoolingAllocationConfig::are_memory_protection_keys_available() {
+        println!("skipping test; mpk is not supported");
+        return Ok(());
+    }
+
+    let mut pool = wasmtime::PoolingAllocationConfig::new();
+    pool.memory_protection_keys(Enabled::Yes)
+        .max_memory_protection_keys(2)
+        .max_memory_size(1 << 20)
+        .total_memories(4)
+        .total_tables(4)
+        .total_core_instances(4);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    let engine = Engine::new(&config)?;
+
+    // The victim has a `(data ...)` segment, so it is instantiated from a
+    // copy-on-write memory image; that is the mapping which used to clobber
+    // the protection key.
+    let victim = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 1) (data (i32.const 0) "SECRET"))"#,
+    )?;
+    let attacker = Module::new(
+        &engine,
+        r#"(module
+             (memory (export "m") 1)
+             (func (export "load") (param i32) (result i32) local.get 0 i32.load)
+             (func (export "store") (param i32 i32) local.get 0 local.get 1 i32.store))"#,
+    )?;
+
+    let mut attacker_store = Store::new(&engine, ());
+    let mut victim_store = Store::new(&engine, ());
+    let attacker_instance = Instance::new(&mut attacker_store, &attacker, &[])?;
+    let victim_instance = Instance::new(&mut victim_store, &victim, &[])?;
+
+    let attacker_mem = attacker_instance
+        .get_memory(&mut attacker_store, "m")
+        .unwrap();
+    let victim_mem = victim_instance.get_memory(&mut victim_store, "m").unwrap();
+
+    // Only meaningful if the two instances landed in different stripes and the
+    // victim is within reach of a 32-bit wasm address.
+    let attacker_base = attacker_mem.data_ptr(&attacker_store) as usize;
+    let victim_base = victim_mem.data_ptr(&victim_store) as usize;
+    let offset = match victim_base
+        .checked_sub(attacker_base)
+        .and_then(|offset| u32::try_from(offset).ok())
+    {
+        // Wasm addresses are unsigned, so this is a plain bit-cast.
+        Some(offset) => offset as i32,
+        None => {
+            println!("skipping test; victim memory is not addressable by the attacker");
+            return Ok(());
+        }
+    };
+
+    let load = attacker_instance.get_typed_func::<i32, i32>(&mut attacker_store, "load")?;
+    let store = attacker_instance.get_typed_func::<(i32, i32), ()>(&mut attacker_store, "store")?;
+
+    // The attacker can still use its own memory...
+    store.call(&mut attacker_store, (0, 0x12345678))?;
+    assert_eq!(load.call(&mut attacker_store, 0)?, 0x12345678);
+
+    // ...and the victim's image was still applied correctly...
+    assert_eq!(&victim_mem.data(&victim_store)[..6], b"SECRET");
+
+    // ...but it must not be able to touch the victim's memory.
+    assert!(
+        load.call(&mut attacker_store, offset).is_err(),
+        "attacker read across an MPK stripe boundary"
+    );
+    assert!(
+        store
+            .call(&mut attacker_store, (offset, 0x41414141))
+            .is_err(),
+        "attacker wrote across an MPK stripe boundary"
+    );
+    assert_eq!(&victim_mem.data(&victim_store)[..6], b"SECRET");
+
+    Ok(())
+}
