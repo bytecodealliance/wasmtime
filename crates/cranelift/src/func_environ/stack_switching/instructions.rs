@@ -1012,11 +1012,15 @@ pub(crate) fn tag_address<'a>(
     let vmctx = env.vmctx_val(&mut builder.cursor());
     let tag_index = wasmtime_environ::TagIndex::from_u32(index);
     if let Some(def_index) = env.module.defined_tag_index(tag_index) {
-        let offset = i32::try_from(env.offsets.vmctx_vmtag_definition(def_index)).unwrap();
+        let offset = i32::try_from(env.offsets.tags().at(def_index)).unwrap();
         builder.ins().iadd_imm_s(vmctx, i64::from(offset))
     } else {
+        let import_off = env.offsets.imported_tags().at(tag_index);
         env.alias_regions
-            .vmctx_vmtag_import_from(&mut builder.cursor(), vmctx, tag_index)
+            .vm_tag_import()
+            .from()
+            .relative_to(import_off)
+            .load(&mut builder.cursor(), vmctx)
     }
 }
 
@@ -1033,7 +1037,9 @@ pub fn vmctx_load_stack_chain<'a>(
     // First we need to get the `VMStoreContext`.
     let vm_store_context = env
         .alias_regions
-        .vmctx_store_context(&mut builder.cursor(), vmctx);
+        .vmctx()
+        .store_context()
+        .load(&mut builder.cursor(), vmctx);
 
     let stack_chain_region = env
         .alias_regions
@@ -1061,7 +1067,9 @@ pub fn vmctx_store_stack_chain<'a>(
     // First we need to get the `VMStoreContext`.
     let vm_store_context = env
         .alias_regions
-        .vmctx_store_context(&mut builder.cursor(), vmctx);
+        .vmctx()
+        .store_context()
+        .load(&mut builder.cursor(), vmctx);
 
     let stack_chain_region = env
         .alias_regions
@@ -1565,7 +1573,9 @@ fn translate_resume_impl<'a>(
         // of the invariants that we maintain for the various stack limits.
         let vm_runtime_limits_ptr = env
             .alias_regions
-            .vmctx_store_context(&mut builder.cursor(), vmctx);
+            .vmctx()
+            .store_context()
+            .load(&mut builder.cursor(), vmctx);
         parent_csi.load_limits_from_vmcontext(env, builder, vm_runtime_limits_ptr, true);
         resume_csi.write_limits_to_vmcontext(env, builder, vm_runtime_limits_ptr);
 
@@ -2032,7 +2042,9 @@ pub(crate) fn translate_switch<'a>(
         // switcher continuation.
         let vm_runtime_limits_ptr = env
             .alias_regions
-            .vmctx_store_context(&mut builder.cursor(), vmctx);
+            .vmctx()
+            .store_context()
+            .load(&mut builder.cursor(), vmctx);
         switcher_contref_csi.load_limits_from_vmcontext(env, builder, vm_runtime_limits_ptr, false);
 
         let revision = switcher_contref.get_revision(env, builder);

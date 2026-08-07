@@ -504,7 +504,7 @@ where
             .as_u32()
             .checked_mul(sig_index_bytes.into())
             .unwrap();
-        let signatures_base_offset = self.env.vmoffsets.ptr.vmctx_type_ids_array();
+        let signatures_base_offset = self.env.vmoffsets.ptr.vmctx().type_ids();
         let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref().type_index();
         // Get the caller id.
         let caller_id = self.context.any_gpr(self.masm)?;
@@ -1785,7 +1785,8 @@ where
         let data_segment_length_offset = self
             .env
             .vmoffsets
-            .vmctx_runtime_data_length(runtime_data_index);
+            .runtime_data_lengths()
+            .at(runtime_data_index);
         let tmp1 = self.context.any_gpr(self.masm)?;
         let tmp2 = self.context.any_gpr(self.masm)?;
         self.masm.load(
@@ -1812,7 +1813,8 @@ where
         let data_segment_base_offset = self
             .env
             .vmoffsets
-            .vmctx_runtime_data_base(runtime_data_index);
+            .runtime_data_bases()
+            .at(runtime_data_index);
         self.masm.load(
             self.masm.address_at_vmctx(data_segment_base_offset)?,
             writable!(tmp1),
@@ -1850,7 +1852,8 @@ where
         let data_segment_offset = self
             .env
             .vmoffsets
-            .vmctx_runtime_data_length(runtime_data_index);
+            .runtime_data_lengths()
+            .at(runtime_data_index);
         let len_addr = self.masm.address_at_vmctx(data_segment_offset)?;
         self.masm.store(RegImm::i32(0), len_addr, OperandSize::S32)
     }
@@ -2136,7 +2139,7 @@ where
     /// Emits a series of instructions that load the `fuel_consumed` field from
     /// `VMStoreContext`.
     fn emit_load_fuel_consumed(&mut self, fuel_reg: Reg) -> Result<()> {
-        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx().store_context();
         let fuel_offset = self.env.vmoffsets.ptr.vm_store_context().fuel_consumed();
         self.masm.load_ptr(
             self.masm
@@ -2214,8 +2217,8 @@ where
         epoch_deadline_reg: Reg,
         epoch_counter_reg: Reg,
     ) -> Result<()> {
-        let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx_epoch_ptr();
-        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
+        let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx().epoch_ptr();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx().store_context();
         let epoch_deadline_offset = self.env.vmoffsets.ptr.vm_store_context().epoch_deadline();
 
         // Load the current epoch value into `epoch_counter_var`.
@@ -2256,7 +2259,7 @@ where
             return Ok(());
         }
 
-        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx().store_context();
         let fuel_offset = self.env.vmoffsets.ptr.vm_store_context().fuel_consumed();
         let limits_reg = self.context.any_gpr(self.masm)?;
 
@@ -2565,7 +2568,7 @@ where
             // is loaded from the `VMMemoryImport` and the vmctx is loaded from
             // the vmctx itself.
             None => {
-                let vmimport = self.env.vmoffsets.vmctx_vmmemory_import(mem);
+                let vmimport = self.env.vmoffsets.imported_memories().at(mem);
                 let vmctx_offset =
                     vmimport + u32::from(self.env.vmoffsets.ptr.vm_memory_import().vmctx());
                 let index_offset =
@@ -2597,7 +2600,7 @@ where
                 Ok(Callee::Builtin(builtin))
             }
             None => {
-                let vmimport = self.env.vmoffsets.vmctx_vmtable_import(table);
+                let vmimport = self.env.vmoffsets.imported_tables().at(table);
                 let vmctx_offset =
                     vmimport + u32::from(self.env.vmoffsets.ptr.vm_table_import().vmctx());
                 let index_offset =

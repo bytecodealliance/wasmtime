@@ -213,11 +213,13 @@ impl FnCall {
             context.without::<Result<(Reg, Reg)>, M, _>(&sig.regs, masm, |context, masm| {
                 Ok((context.any_gpr(masm)?, context.any_gpr(masm)?))
             })??;
-        let callee_vmctx_offset = vmoffsets.vmctx_vmfunction_import_vmctx(index);
+        let vmimport = vmoffsets.imported_functions().at(index);
+        let callee_vmctx_offset = vmimport + u32::from(vmoffsets.ptr.vm_function_import().vmctx());
         let callee_vmctx_addr = masm.address_at_vmctx(callee_vmctx_offset)?;
         masm.load_ptr(callee_vmctx_addr, writable!(callee_vmctx))?;
 
-        let callee_body_offset = vmoffsets.vmctx_vmfunction_import_wasm_call(index);
+        let callee_body_offset =
+            vmimport + u32::from(vmoffsets.ptr.vm_function_import().wasm_call());
         let callee_addr = masm.address_at_vmctx(callee_body_offset)?;
         masm.load_ptr(callee_addr, writable!(callee))?;
 

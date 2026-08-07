@@ -102,17 +102,20 @@ impl<'a> Compilation<'a> {
             let memory_offset = if ofs.num_imported_memories > 0 {
                 let index = MemoryIndex::new(0);
                 ModuleMemoryOffset::Imported {
-                    offset_to_vm_memory_definition: ofs.vmctx_vmmemory_import(index)
+                    offset_to_vm_memory_definition: ofs.imported_memories().at(index)
                         + u32::from(ofs.ptr.vm_memory_import().from()),
                     offset_to_memory_base: ofs.ptr.vm_memory_definition().base().into(),
                 }
             } else if ofs.num_owned_memories > 0 {
                 let index = OwnedMemoryIndex::new(0);
-                ModuleMemoryOffset::Defined(ofs.vmctx_vmmemory_definition_base(index))
+                ModuleMemoryOffset::Defined(
+                    ofs.owned_memories().at(index)
+                        + u32::from(ofs.ptr.vm_memory_definition().base()),
+                )
             } else if ofs.num_defined_memories > 0 {
                 let index = DefinedMemoryIndex::new(0);
                 ModuleMemoryOffset::Imported {
-                    offset_to_vm_memory_definition: ofs.vmctx_vmmemory_pointer(index),
+                    offset_to_vm_memory_definition: ofs.memories().at(index),
                     offset_to_memory_base: ofs.ptr.vm_memory_definition().base().into(),
                 }
             } else {
