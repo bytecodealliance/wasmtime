@@ -201,6 +201,11 @@ where
 impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     isle_common_prelude_methods!();
 
+    fn zero_constant(&mut self, ty: Type) -> Constant {
+        let data = vec![0; ty.bytes() as usize];
+        self.ctx.func.dfg.constants.insert(data.into())
+    }
+
     type inst_data_value_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
 
     fn inst_data_value_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
