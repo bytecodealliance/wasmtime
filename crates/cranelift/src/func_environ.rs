@@ -5584,6 +5584,15 @@ impl FuncEnvironment<'_> {
         )
     }
 
+    pub fn continuation_arguments_from_interned(
+        &self,
+        index: ModuleInternedTypeIndex,
+    ) -> &[WasmValType] {
+        self.types[self.types[index].unwrap_cont().unwrap_module_type_index()]
+            .unwrap_func()
+            .params()
+    }
+
     pub fn continuation_arguments(&self, index: TypeIndex) -> &[WasmValType] {
         let idx = self.module.types[index].unwrap_module_type_index();
         self.types[self.types[idx].unwrap_cont().unwrap_module_type_index()]
