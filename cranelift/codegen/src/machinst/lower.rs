@@ -1633,8 +1633,16 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         debug_assert!(self.f.dfg.value_is_real(val));
         trace!("put_value_in_regs: val {}", val);
 
+        // Absorbed multi-result instructions (see `absorb_inst`) are marked
+        // sunk even though their results remain live; those results already
+        // have vreg aliases set, so reading them here is fine.
         if let Some(inst) = self.f.dfg.value_def(val).inst() {
-            assert!(!self.inst_sunk.contains(&inst));
+            if self.inst_sunk.contains(&inst) {
+                let regs = self.value_regs[val];
+                assert!(regs.is_valid());
+                self.value_lowered_uses[val] += 1;
+                return regs;
+            }
         }
 
         let regs = self.value_regs[val];
@@ -1644,6 +1652,50 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.value_lowered_uses[val] += 1;
 
         regs
+    }
+
+    /// Returns true if this value has already been forced into registers during
+    /// lowering (i.e., `put_value_in_regs` has been called on it).
+    pub fn value_has_lowered_uses(&self, val: Value) -> bool {
+        self.value_lowered_uses[val] > 0
+    }
+
+    /// Returns true if this value has exactly one use in the IR use-state
+    /// analysis (see `ValueUseState::Once`).
+    pub fn value_is_once_used(&self, val: Value) -> bool {
+        self.value_ir_uses[val] == ValueUseState::Once
+    }
+
+    /// Current CLIF instruction being lowered, if any.
+    pub fn cur_inst(&self) -> Option<Inst> {
+        self.cur_inst
+    }
+
+    /// Has this instruction been sunk / absorbed away from its original site?
+    pub fn inst_is_sunk(&self, ir_inst: Inst) -> bool {
+        self.inst_sunk.contains(&ir_inst)
+    }
+
+    /// Returns true if `val` is used by any instruction strictly between
+    /// `from_inst` and `to_inst` in layout order within the same block.
+    ///
+    /// Uses on `to_inst` itself (e.g. a branch blockparam) are not counted.
+    pub fn has_same_block_use_between(&self, val: Value, from_inst: Inst, to_inst: Inst) -> bool {
+        let layout = &self.f.layout;
+        if layout.inst_block(from_inst) != layout.inst_block(to_inst) {
+            return true;
+        }
+        let mut cursor = layout.next_inst(from_inst);
+        while let Some(inst) = cursor {
+            if inst == to_inst {
+                break;
+            }
+            if self.f.dfg.inst_values(inst).any(|arg| arg == val) {
+                return true;
+            }
+            cursor = layout.next_inst(inst);
+        }
+        false
     }
 }
 
@@ -1678,6 +1730,37 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let sunk_inst_exit_color = InstColor::new(sunk_inst_entry_color.get() + 1);
         assert!(sunk_inst_exit_color == self.cur_scan_entry_color.unwrap());
         self.cur_scan_entry_color = Some(sunk_inst_entry_color);
+        self.inst_sunk.insert(ir_inst);
+    }
+
+    /// Absorb a multi-result instruction into the current lowering site.
+    ///
+    /// Used when fusing e.g. `*_overflow` into a following `brif` so the ALU op
+    /// is emitted next to a flag-consuming branch (`jo`/`jb`). `results` must
+    /// provide a `ValueRegs` for each CLIF result that should be defined
+    /// (typically just the arithmetic result; unused overflow-flag results can
+    /// be `ValueRegs::invalid()`).
+    ///
+    /// Unlike [`Self::sink_inst`], this does not require a lowering side-effect
+    /// and is allowed to leave results live via vreg aliases.
+    pub fn absorb_inst(&mut self, ir_inst: Inst, results: &[ValueRegs<Reg>]) {
+        assert!(!self.inst_sunk.contains(&ir_inst));
+        let inst_results = self.f.dfg.inst_results(ir_inst);
+        debug_assert_eq!(results.len(), inst_results.len());
+
+        for (regs, &result) in results.iter().zip(inst_results) {
+            if regs.is_invalid() {
+                continue;
+            }
+            let dsts = self.value_regs[result];
+            let mut regs_iter = regs.regs().iter();
+            for &dst in dsts.regs().iter() {
+                let temp = regs_iter.next().copied().unwrap_or(Reg::invalid_sentinel());
+                trace!("absorb_inst: set vreg alias for {result:?}: {dst:?} -> {temp:?}");
+                self.vregs.set_vreg_alias(dst, temp);
+            }
+        }
+
         self.inst_sunk.insert(ir_inst);
     }
 
