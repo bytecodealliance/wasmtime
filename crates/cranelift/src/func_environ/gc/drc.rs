@@ -188,7 +188,7 @@ impl DrcCompiler {
         let doubled_last_len = builder.ins().iadd(last_len, last_len);
         let min_threshold = builder.ins().iconst(
             ir::types::I32,
-            i64::from(wasmtime_environ::drc::MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD),
+            wasmtime_environ::drc::MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD,
         );
         let threshold = builder.ins().umax(doubled_last_len, min_threshold);
 

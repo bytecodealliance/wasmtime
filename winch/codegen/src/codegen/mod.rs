@@ -40,6 +40,8 @@ pub(crate) use control::*;
 mod builtin;
 pub use builtin::*;
 pub(crate) mod bounds;
+mod drc;
+mod gc;
 
 use bounds::{Bounds, ImmOffset, Index};
 

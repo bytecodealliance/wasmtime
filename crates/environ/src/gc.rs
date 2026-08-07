@@ -40,7 +40,7 @@ pub const DRC_HEADER_IN_OVER_APPROX_LIST_BIT: u32 = 1 << 1;
 
 /// The minimum length the over-approximated-stack-roots list must reach
 /// before a read barrier considers forcing a GC.
-pub const DRC_MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD: u32 = 1024;
+pub const DRC_MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD: i64 = 1024;
 
 /// Assert a condition, but only when `gc_zeal` is enabled.
 #[macro_export]
