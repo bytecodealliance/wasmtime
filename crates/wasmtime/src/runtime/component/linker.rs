@@ -18,10 +18,10 @@ use wasmtime_environ::{Atom, PrimaryMap, StringPool};
 
 /// A type used to instantiate [`Component`]s.
 ///
-/// This type is used to both link components together as well as supply host
-/// functionality to components. Values are defined in a [`Linker`] by their
-/// import name and then components are instantiated with a [`Linker`] using the
-/// names provided for name resolution of the component's imports.
+/// This type is used to supply host functionality to components. Values are
+/// defined in a [`Linker`] by their import name and then components are
+/// instantiated with a [`Linker`] using the names provided for name resolution
+/// of the component's imports.
 ///
 /// # Names and Semver
 ///
