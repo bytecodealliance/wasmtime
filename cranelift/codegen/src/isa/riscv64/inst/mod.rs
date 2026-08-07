@@ -814,15 +814,10 @@ impl MachInst for Inst {
         vec![vec![0x13, 0x00, 0x00, 0x00]]
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
-        match ty {
-            I8 => Ok((&[RegClass::Int], &[I8])),
-            I16 => Ok((&[RegClass::Int], &[I16])),
-            I32 => Ok((&[RegClass::Int], &[I32])),
-            I64 => Ok((&[RegClass::Int], &[I64])),
-            F16 => Ok((&[RegClass::Float], &[F16])),
-            F32 => Ok((&[RegClass::Float], &[F32])),
-            F64 => Ok((&[RegClass::Float], &[F64])),
+    fn rc_for_type(ty: &Type) -> CodegenResult<(&[RegClass], &[Type])> {
+        match *ty {
+            I8 | I16 | I32 | I64 => Ok((&[RegClass::Int], core::slice::from_ref(ty))),
+            F16 | F32 | F64 => Ok((&[RegClass::Float], core::slice::from_ref(ty))),
             // FIXME(#8312): Add support for Q extension
             F128 | I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
             _ if ty.is_vector() => {

@@ -1407,16 +1407,14 @@ impl MachInst for Inst {
         ]
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
-        match ty {
-            types::I8 => Ok((&[RegClass::Int], &[types::I8])),
-            types::I16 => Ok((&[RegClass::Int], &[types::I16])),
-            types::I32 => Ok((&[RegClass::Int], &[types::I32])),
-            types::I64 => Ok((&[RegClass::Int], &[types::I64])),
-            types::F16 => Ok((&[RegClass::Float], &[types::F16])),
-            types::F32 => Ok((&[RegClass::Float], &[types::F32])),
-            types::F64 => Ok((&[RegClass::Float], &[types::F64])),
-            types::F128 => Ok((&[RegClass::Float], &[types::F128])),
+    fn rc_for_type(ty: &Type) -> CodegenResult<(&[RegClass], &[Type])> {
+        match *ty {
+            types::I8 | types::I16 | types::I32 | types::I64 => {
+                Ok((&[RegClass::Int], core::slice::from_ref(ty)))
+            }
+            types::F16 | types::F32 | types::F64 | types::F128 => {
+                Ok((&[RegClass::Float], core::slice::from_ref(ty)))
+            }
             types::I128 => Ok((&[RegClass::Int, RegClass::Int], &[types::I64, types::I64])),
             _ if ty.is_vector() && ty.bits() <= 128 => {
                 let types = &[types::I8X2, types::I8X4, types::I8X8, types::I8X16];
