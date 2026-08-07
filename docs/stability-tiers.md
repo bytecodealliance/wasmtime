@@ -340,10 +340,11 @@ emitting Pulley bytecode.
 | [`exception-handling`]                  | ✅        | ❌     |
 | [`stack-switching`]                     | ❌        | ❌     |
 
-[^a]: Winch supports some features of the [`reference-types`] proposal such as
-  the change to support multiple tables and LEB-encoding table indices in
-  instructions, but it does not support GC types such as `externref` or the
-  new table opcodes in the [`reference-types`] proposal.
+[^a]: Winch supports GC reference values such as `externref` through parameters,
+  results, locals, globals, and calls, including the required stack maps and
+  collector barriers. It also supports multiple tables and LEB-encoded table
+  indices, but does not yet support every table and element-segment case in the
+  [`reference-types`] proposal.
 [^b]: Pulley does not support the [`threads`] proposal because there is no known
   safe way to implement this with Rust's memory model.
 [^c]: Winch's support for aarch64 is complete for Core Wasm.
