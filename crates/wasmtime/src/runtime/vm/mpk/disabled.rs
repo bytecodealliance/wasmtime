@@ -1,7 +1,7 @@
 //! Noop implementations of MPK primitives for environments that do not support
 //! the feature.
 
-#[cfg(feature = "pooling-allocator")]
+#[cfg(any(feature = "pooling-allocator", has_virtual_memory))]
 use crate::prelude::*;
 
 #[cfg(feature = "pooling-allocator")]
@@ -32,6 +32,12 @@ impl ProtectionKey {
     }
     #[cfg(feature = "pooling-allocator")]
     pub fn as_stripe(&self) -> usize {
+        match *self {}
+    }
+    // Note: gated on `has_virtual_memory` rather than `pooling-allocator`
+    // because this is called from `cow.rs`, which is not pooling-specific.
+    #[cfg(has_virtual_memory)]
+    pub unsafe fn reprotect(&self, _: usize, _: usize, _: bool) -> Result<()> {
         match *self {}
     }
 }
