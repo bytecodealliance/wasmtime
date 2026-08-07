@@ -548,6 +548,7 @@ pub trait ABIMachineSpec {
     fn gen_clobber_save(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        isa_flags: &Self::F,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]>;
 
@@ -558,6 +559,7 @@ pub trait ABIMachineSpec {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        isa_flags: &Self::F,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]>;
 
@@ -2314,6 +2316,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         insts.extend(M::gen_clobber_save(
             self.call_conv,
             &self.flags,
+            &self.isa_flags,
             &frame_layout,
         ));
 
@@ -2333,6 +2336,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         insts.extend(M::gen_clobber_restore(
             self.call_conv,
             &self.flags,
+            &self.isa_flags,
             &frame_layout,
         ));
 
