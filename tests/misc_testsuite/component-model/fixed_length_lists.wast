@@ -15,6 +15,17 @@
 
 ;; Every mismatch increases the return value by 1.
 
+;; Large fixed-length lists saturate cached ABI sizes instead of overflowing
+;; when nested in a record.
+(component
+  (component
+    (type $l (list u64 1073741824))
+    (type $t (tuple $l $l))
+    (type $f (func (param "a" $t)))
+    (import "x" (func (type $f)))
+  )
+)
+
 (component
   (component (;0;)
     (type $ty-test:fixed-size-lists/to-test (;0;)
