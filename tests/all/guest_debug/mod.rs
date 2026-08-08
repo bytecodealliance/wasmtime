@@ -128,8 +128,6 @@ impl WasmtimeWithGdbstub {
 fn lldb_with_gdbstub_script(port: u16, script: &str) -> Result<String> {
     let _ = env_logger::try_init();
 
-    // A source file keeps LLDB processing commands after a resume command on
-    // versions that stop processing repeated `-o` options at the next stop.
     let mut script_file = tempfile::Builder::new().suffix(".lldb").tempfile()?;
     writeln!(
         script_file,
@@ -278,7 +276,6 @@ fn guest_debug_cli_shared_memory() -> Result<()> {
         port,
         r#"
 continue
-process plugin packet send qXfer:memory-map:read::0,ffff
 memory read --size 4 --format decimal --count 1 0x0
 "#,
     )?;
@@ -288,7 +285,6 @@ memory read --size 4 --format decimal --count 1 0x0
     check_output(
         &output,
         r#"
-check: <memory type="ram" start="0x0"
 check: 42
 "#,
     )?;

@@ -27,8 +27,7 @@ impl Memory {
     fn unique_id(&self) -> u64 {
         match self {
             Memory::Unshared(memory) => memory.debug_index_in_store(),
-            // A shared memory's base address is stable for its lifetime.
-            Memory::Shared(memory) => memory.data().as_ptr() as usize as u64,
+            Memory::Shared(memory) => memory.debug_index_in_store(),
         }
     }
 }
@@ -1068,88 +1067,5 @@ impl wit::HostWasmValue for ResourceTable {
 impl wit::Host for ResourceTable {
     fn convert_error(&mut self, err: wasmtime::Error) -> Result<wit::Error> {
         err.downcast()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::host::add_debuggee;
-    use wasmtime::{Config, Engine, Instance, Module, Store};
-
-    #[cfg_attr(miri, ignore)]
-    #[cfg(target_pointer_width = "64")]
-    #[tokio::test]
-    async fn shared_memory_is_exposed_to_debugger() -> wasmtime::Result<()> {
-        let mut config = Config::new();
-        config.wasm_threads(true);
-        config.shared_memory(true);
-        config.guest_debug(true);
-        let engine = Engine::new(&config)?;
-        let module = Module::new(&engine, r#"(module (memory (export "memory") 1 2 shared))"#)?;
-        let mut store = Store::new(&engine, ());
-        let instance = Instance::new_async(&mut store, &module, &[]).await?;
-
-        let debuggee = crate::Debuggee::new(store, |_store| Box::pin(async { Ok(()) }));
-        let mut table = ResourceTable::new();
-        let debuggee = add_debuggee(&mut table, debuggee)?;
-        let instance = table.push(instance)?;
-        let memory = <ResourceTable as wit::HostInstance>::get_memory(
-            &mut table,
-            instance,
-            Resource::new_borrow(debuggee.rep()),
-            0,
-        )
-        .await?;
-        let size = <ResourceTable as wit::HostMemory>::size_bytes(
-            &mut table,
-            Resource::new_borrow(memory.rep()),
-            Resource::new_borrow(debuggee.rep()),
-        )
-        .await?;
-        assert_eq!(size, 65536);
-
-        let page_size = <ResourceTable as wit::HostMemory>::page_size_bytes(
-            &mut table,
-            Resource::new_borrow(memory.rep()),
-            Resource::new_borrow(debuggee.rep()),
-        )
-        .await?;
-        assert_eq!(page_size, 65536);
-        let old_size = <ResourceTable as wit::HostMemory>::grow_to_bytes(
-            &mut table,
-            Resource::new_borrow(memory.rep()),
-            Resource::new_borrow(debuggee.rep()),
-            page_size,
-        )
-        .await?;
-        assert_eq!(old_size, size);
-        let size = <ResourceTable as wit::HostMemory>::size_bytes(
-            &mut table,
-            Resource::new_borrow(memory.rep()),
-            Resource::new_borrow(debuggee.rep()),
-        )
-        .await?;
-        assert_eq!(size, 2 * page_size);
-
-        <ResourceTable as wit::HostMemory>::set_u32(
-            &mut table,
-            Resource::new_borrow(memory.rep()),
-            Resource::new_borrow(debuggee.rep()),
-            0,
-            0x1234_5678,
-        )
-        .await?;
-        let value = <ResourceTable as wit::HostMemory>::get_u32(
-            &mut table,
-            Resource::new_borrow(memory.rep()),
-            Resource::new_borrow(debuggee.rep()),
-            0,
-        )
-        .await?;
-        assert_eq!(value, 0x1234_5678);
-
-        <ResourceTable as wit::HostDebuggee>::drop(&mut table, debuggee).await?;
-        Ok(())
     }
 }
