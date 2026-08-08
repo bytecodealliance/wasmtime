@@ -91,13 +91,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
-        // This implements the LP64D RISC-V ABI.
+        // This implements the LP64D RISC-V ABI (and CC_RISCV_GHC for Ghc).
 
         assert_ne!(
             call_conv,
             isa::CallConv::Winch,
             "riscv64 does not support the 'winch' calling convention yet"
         );
+
+        let is_ghc = call_conv == isa::CallConv::Ghc;
 
         // All registers that can be used as parameters or rets.
         // both start and end are included.
@@ -107,11 +109,17 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         };
         let mut next_x_reg = x_start;
         let mut next_f_reg = f_start;
+        // GHC uses separate STG register pools (indices into fixed lists).
+        let mut next_ghc_x: usize = 0;
+        let mut next_ghc_f32: usize = 0;
+        let mut next_ghc_f64: usize = 0;
         // Stack space.
         let mut next_stack: u32 = 0;
 
         let ret_area_ptr = if add_ret_area_ptr {
             assert!(ArgsOrRets::Args == args_or_rets);
+            // GHC has void returns only; a return-area pointer is never used.
+            assert!(!is_ghc);
             next_x_reg += 1;
             Some(ABIArg::reg(
                 x_reg(x_start).to_real_reg().unwrap(),
@@ -125,6 +133,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
         for param in params {
             if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                if is_ghc {
+                    return Err(crate::CodegenError::Unsupported(
+                        "StructArgument not supported with ghc calling convention".to_owned(),
+                    ));
+                }
                 panic!(
                     "StructArgument parameters are not supported on riscv64. \
                     Use regular pointer arguments instead."
@@ -135,7 +148,37 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
-                let next_reg = if (next_x_reg <= x_end) && *rc == RegClass::Int {
+                let next_reg = if is_ghc {
+                    // GHC: void returns only; args must fit in STG registers.
+                    // Integer / f32 / f64 use separate pools (LLVM CC_RISCV_GHC).
+                    match args_or_rets {
+                        ArgsOrRets::Rets => None,
+                        ArgsOrRets::Args => match *rc {
+                            RegClass::Int => {
+                                let r = get_ghc_intreg_for_arg(next_ghc_x);
+                                if r.is_some() {
+                                    next_ghc_x += 1;
+                                }
+                                r
+                            }
+                            RegClass::Float if *reg_ty == F32 => {
+                                let r = get_ghc_f32reg_for_arg(next_ghc_f32);
+                                if r.is_some() {
+                                    next_ghc_f32 += 1;
+                                }
+                                r
+                            }
+                            RegClass::Float if *reg_ty == F64 => {
+                                let r = get_ghc_f64reg_for_arg(next_ghc_f64);
+                                if r.is_some() {
+                                    next_ghc_f64 += 1;
+                                }
+                                r
+                            }
+                            _ => None,
+                        },
+                    }
+                } else if (next_x_reg <= x_end) && *rc == RegClass::Int {
                     let x = Some(x_reg(next_x_reg));
                     next_x_reg += 1;
                     x
@@ -153,6 +196,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                         extension: param.extension,
                     });
                 } else {
+                    if is_ghc {
+                        return Err(crate::CodegenError::Unsupported(
+                            "Too many arguments for ghc calling convention; \
+                             all arguments must fit in STG registers"
+                                .to_owned(),
+                        ));
+                    }
                     if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
                         return Err(crate::CodegenError::Unsupported(
                             "Too many return values to fit in registers. \
@@ -631,6 +681,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             // Wasmtime).
             isa::CallConv::PreserveAll if is_exception => ALL_CLOBBERS,
             isa::CallConv::PreserveAll => NO_CLOBBERS,
+            // GHC defines no callee-saved registers; treat calls like
+            // an all-clobbers / Winch-style callsite.
+            isa::CallConv::Ghc => ALL_CLOBBERS,
             _ => DEFAULT_CLOBBERS,
         }
     }
@@ -649,6 +702,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) -> FrameLayout {
         let is_callee_saved = |reg: &Writable<RealReg>| match call_conv {
             isa::CallConv::PreserveAll => true,
+            // GHC defines no callee-saved registers.
+            isa::CallConv::Ghc => false,
             _ => DEFAULT_CALLEE_SAVES.contains(reg.to_reg().into()),
         };
         let mut regs: Vec<Writable<RealReg>> =
@@ -731,8 +786,60 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
                 PAYLOAD_REGS
             }
-            _ => &[],
+            // GHC does not support exceptions.
+            isa::CallConv::Ghc
+            | isa::CallConv::Fast
+            | isa::CallConv::WindowsFastcall
+            | isa::CallConv::AppleAarch64
+            | isa::CallConv::Probestack
+            | isa::CallConv::Winch => &[],
         }
+    }
+}
+
+/// GHC integer STG registers: Base, Sp, Hp, R1–R7, SpLim
+/// (s1, s2–s11 = x9, x18–x27). Note x8/s0 is the frame pointer and is
+/// intentionally not in this set.
+fn get_ghc_intreg_for_arg(idx: usize) -> Option<Reg> {
+    match idx {
+        0 => Some(x_reg(9)),
+        1 => Some(x_reg(18)),
+        2 => Some(x_reg(19)),
+        3 => Some(x_reg(20)),
+        4 => Some(x_reg(21)),
+        5 => Some(x_reg(22)),
+        6 => Some(x_reg(23)),
+        7 => Some(x_reg(24)),
+        8 => Some(x_reg(25)),
+        9 => Some(x_reg(26)),
+        10 => Some(x_reg(27)),
+        _ => None,
+    }
+}
+
+/// GHC f32 STG registers: F1–F6 (fs0–fs5 = f8, f9, f18–f21).
+fn get_ghc_f32reg_for_arg(idx: usize) -> Option<Reg> {
+    match idx {
+        0 => Some(f_reg(8)),
+        1 => Some(f_reg(9)),
+        2 => Some(f_reg(18)),
+        3 => Some(f_reg(19)),
+        4 => Some(f_reg(20)),
+        5 => Some(f_reg(21)),
+        _ => None,
+    }
+}
+
+/// GHC f64 STG registers: D1–D6 (fs6–fs11 = f22–f27).
+fn get_ghc_f64reg_for_arg(idx: usize) -> Option<Reg> {
+    match idx {
+        0 => Some(f_reg(22)),
+        1 => Some(f_reg(23)),
+        2 => Some(f_reg(24)),
+        3 => Some(f_reg(25)),
+        4 => Some(f_reg(26)),
+        5 => Some(f_reg(27)),
+        _ => None,
     }
 }
 

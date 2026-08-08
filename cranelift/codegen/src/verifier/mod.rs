@@ -2085,6 +2085,14 @@ impl<'a> Verifier<'a> {
                     ))?;
                 }
             }
+            CallConv::Ghc => {
+                if !sig.returns.is_empty() {
+                    errors.fatal((
+                        entity,
+                        "Signature with `ghc` ABI cannot have return values".to_string(),
+                    ))?;
+                }
+            }
             _ => {}
         }
         Ok(())

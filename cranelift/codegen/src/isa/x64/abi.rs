@@ -100,6 +100,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> CodegenResult<(u32, Option<usize>)> {
         let is_fastcall = call_conv == CallConv::WindowsFastcall;
         let is_tail = call_conv == CallConv::Tail;
+        let is_ghc = call_conv == CallConv::Ghc;
 
         let mut next_gpr = 0;
         let mut next_vreg = 0;
@@ -154,6 +155,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             let last_param = ix == params.len() - 1;
 
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
+                if is_ghc {
+                    return Err(crate::CodegenError::Unsupported(
+                        "StructArgument not supported with ghc calling convention".to_owned(),
+                    ));
+                }
                 let offset = next_stack as i64;
                 let size = size;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
@@ -199,6 +205,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 && !(param.value_type.is_vector() || param.value_type.is_float())
                 && !flags.enable_llvm_abi_extensions()
                 && !is_tail
+                && !is_ghc
             {
                 panic!(
                     "i128 args/return values not supported unless LLVM ABI extensions are enabled"
@@ -342,6 +349,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         extension: param.extension,
                     });
                 } else {
+                    if is_ghc {
+                        return Err(crate::CodegenError::Unsupported(
+                            "Too many arguments for ghc calling convention; \
+                             all arguments must fit in STG registers"
+                                .to_owned(),
+                        ));
+                    }
                     if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
                         return Err(crate::CodegenError::Unsupported(
                             "Too many return values to fit in registers. \
@@ -536,11 +550,16 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_prologue_frame_setup(
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         flags: &settings::Flags,
         _isa_flags: &x64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
+        // GHC maps STG Sp to %rbp; do not set up a frame pointer.
+        if call_conv == CallConv::Ghc {
+            return smallvec![];
+        }
+
         let r_rsp = Gpr::RSP;
         let r_rbp = Gpr::RBP;
         let w_rbp = Writable::from_reg(r_rbp);
@@ -569,11 +588,16 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_epilogue_frame_restore(
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         _flags: &settings::Flags,
         _isa_flags: &x64_settings::Flags,
         _frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
+        // GHC uses an FP-less frame.
+        if call_conv == CallConv::Ghc {
+            return smallvec![];
+        }
+
         let rbp = Gpr::RBP;
         let rsp = Gpr::RSP;
 
@@ -650,7 +674,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_clobber_save(
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         flags: &settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
@@ -660,6 +684,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // present, resize the incoming argument area of the frame to accommodate those arguments.
         let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
         if incoming_args_diff > 0 {
+            // GHC has no stack arguments, so this path must not run (it would
+            // clobber STG Sp in %rbp).
+            debug_assert_ne!(call_conv, CallConv::Ghc);
+
             // Decrement the stack pointer to make space for the new arguments.
             let rsp = Writable::from_reg(regs::rsp());
             insts.push(Inst::subq_mi(
@@ -872,8 +900,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
     }
 
-    fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
-        if flags.enable_pinned_reg() {
+    fn get_machine_env(flags: &settings::Flags, call_conv: isa::CallConv) -> &MachineEnv {
+        if call_conv == CallConv::Ghc {
+            // GHC needs %rbp allocatable (STG Sp) and does not use the pinned
+            // register scheme.
+            static MACHINE_ENV: MachineEnv = create_reg_env_ghc();
+            &MACHINE_ENV
+        } else if flags.enable_pinned_reg() {
             static MACHINE_ENV: MachineEnv = create_reg_env_systemv(true);
             &MACHINE_ENV
         } else {
@@ -895,6 +928,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // Wasmtime).
             (isa::CallConv::PreserveAll, true) => ALL_CLOBBERS,
             (isa::CallConv::Winch, _) => ALL_CLOBBERS,
+            (isa::CallConv::Ghc, _) => GHC_CLOBBERS,
             (isa::CallConv::SystemV, _) => SYSV_CLOBBERS,
             (isa::CallConv::WindowsFastcall, false) => WINDOWS_CLOBBERS,
             (isa::CallConv::PreserveAll, _) => NO_CLOBBERS,
@@ -925,9 +959,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         debug_assert!(tail_args_size >= incoming_args_size);
 
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
-            // The `winch` calling convention doesn't have any callee-save
-            // registers.
-            CallConv::Winch => vec![],
+            // The `winch` and `ghc` calling conventions don't have any
+            // callee-save registers.
+            CallConv::Winch | CallConv::Ghc => vec![],
             CallConv::Fast | CallConv::SystemV | CallConv::Tail => regs
                 .iter()
                 .cloned()
@@ -950,8 +984,25 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // Compute clobber size.
         let clobber_size = compute_clobber_size(&regs);
 
-        // Compute setup area size.
-        let setup_area_size = 16; // RBP, return address
+        // Compute setup area size. GHC leaves %rbp free for STG Sp, so the
+        // setup area is only the return address.
+        let setup_area_size = if call_conv == CallConv::Ghc {
+            8 // return address only
+        } else {
+            16 // RBP, return address
+        };
+
+        // SysV requires RSP ≡ 0 (mod 16) immediately before a `call`. A GHC
+        // entry has RSP ≡ 8 (retaddr only, no `push %rbp`). A 16-aligned frame
+        // would leave RSP ≡ 8 at call sites — pad by 8 when this function makes
+        // any non-tail call.
+        let mut fixed_frame_storage_size = fixed_frame_storage_size;
+        if call_conv == CallConv::Ghc && matches!(function_calls, FunctionCalls::Regular) {
+            let frame = clobber_size + fixed_frame_storage_size + outgoing_args_size;
+            if frame % 16 == 0 {
+                fixed_frame_storage_size += 8;
+            }
+        }
 
         // Return FrameLayout structure.
         FrameLayout {
@@ -1019,6 +1070,23 @@ impl From<StackAMode> for SyntheticAmode {
 }
 
 fn get_intreg_for_arg(call_conv: CallConv, idx: usize, arg_idx: usize) -> Option<Reg> {
+    if call_conv == CallConv::Ghc {
+        // STG registers: Base, Sp, Hp, R1, R2, R3, R4, R5, R6, SpLim
+        return match idx {
+            0 => Some(regs::r13()),
+            1 => Some(regs::rbp()),
+            2 => Some(regs::r12()),
+            3 => Some(regs::rbx()),
+            4 => Some(regs::r14()),
+            5 => Some(regs::rsi()),
+            6 => Some(regs::rdi()),
+            7 => Some(regs::r8()),
+            8 => Some(regs::r9()),
+            9 => Some(regs::r15()),
+            _ => None,
+        };
+    }
+
     let is_fastcall = call_conv == CallConv::WindowsFastcall;
 
     // Fastcall counts by absolute argument number; SysV counts by argument of
@@ -1040,6 +1108,19 @@ fn get_intreg_for_arg(call_conv: CallConv, idx: usize, arg_idx: usize) -> Option
 }
 
 fn get_fltreg_for_arg(call_conv: CallConv, idx: usize, arg_idx: usize) -> Option<Reg> {
+    if call_conv == CallConv::Ghc {
+        // STG registers: F1, F2, F3, F4, D1, D2
+        return match idx {
+            0 => Some(regs::xmm1()),
+            1 => Some(regs::xmm2()),
+            2 => Some(regs::xmm3()),
+            3 => Some(regs::xmm4()),
+            4 => Some(regs::xmm5()),
+            5 => Some(regs::xmm6()),
+            _ => None,
+        };
+    }
+
     let is_fastcall = call_conv == CallConv::WindowsFastcall;
 
     // Fastcall counts by absolute argument number; SysV counts by argument of
@@ -1096,6 +1177,7 @@ fn get_intreg_for_retval(
         },
 
         CallConv::Winch => is_last.then(|| regs::rax()),
+        CallConv::Ghc => None,
         CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 => unreachable!(),
     }
@@ -1124,6 +1206,7 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
             _ => None,
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),
+        CallConv::Ghc => None,
         CallConv::Probestack => todo!(),
         CallConv::AppleAarch64 => unreachable!(),
     }
@@ -1185,6 +1268,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 const WINDOWS_CLOBBERS: PRegSet = windows_clobbers();
 const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
 pub(crate) const ALL_CLOBBERS: PRegSet = all_clobbers();
+const GHC_CLOBBERS: PRegSet = ghc_clobbers();
 const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
 const fn windows_clobbers() -> PRegSet {
@@ -1277,6 +1361,12 @@ const fn all_clobbers() -> PRegSet {
         .with(regs::fpr_preg(XMM15))
 }
 
+/// GHC clobbers every allocatable register, including %rbp (STG Sp).
+const fn ghc_clobbers() -> PRegSet {
+    use asm::gpr::enc::*;
+    all_clobbers().with(regs::gpr_preg(RBP))
+}
+
 const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
     const fn preg(r: Reg) -> PReg {
         r.to_real_reg().unwrap().preg()
@@ -1341,6 +1431,64 @@ const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
     }
 
     env
+}
+
+/// Register environment for the GHC calling convention.
+///
+/// Unlike SysV, %rbp is allocatable because it holds STG Sp. %r15 is also
+/// always allocatable (STG SpLim); the pinned-register feature is not used.
+const fn create_reg_env_ghc() -> MachineEnv {
+    const fn preg(r: Reg) -> PReg {
+        r.to_real_reg().unwrap().preg()
+    }
+
+    MachineEnv {
+        preferred_regs_by_class: [
+            PRegSet::empty()
+                .with(preg(regs::rax()))
+                .with(preg(regs::rcx()))
+                .with(preg(regs::rdx()))
+                .with(preg(regs::rsi()))
+                .with(preg(regs::rdi()))
+                .with(preg(regs::r8()))
+                .with(preg(regs::r9()))
+                .with(preg(regs::r10()))
+                .with(preg(regs::r11())),
+            PRegSet::empty()
+                .with(preg(regs::xmm0()))
+                .with(preg(regs::xmm1()))
+                .with(preg(regs::xmm2()))
+                .with(preg(regs::xmm3()))
+                .with(preg(regs::xmm4()))
+                .with(preg(regs::xmm5()))
+                .with(preg(regs::xmm6()))
+                .with(preg(regs::xmm7())),
+            PRegSet::empty(),
+        ],
+        non_preferred_regs_by_class: [
+            // STG integer registers that are callee-saved under SysV, plus
+            // %rbp which is normally reserved as the frame pointer.
+            PRegSet::empty()
+                .with(preg(regs::rbx()))
+                .with(preg(regs::rbp()))
+                .with(preg(regs::r12()))
+                .with(preg(regs::r13()))
+                .with(preg(regs::r14()))
+                .with(preg(regs::r15())),
+            PRegSet::empty()
+                .with(preg(regs::xmm8()))
+                .with(preg(regs::xmm9()))
+                .with(preg(regs::xmm10()))
+                .with(preg(regs::xmm11()))
+                .with(preg(regs::xmm12()))
+                .with(preg(regs::xmm13()))
+                .with(preg(regs::xmm14()))
+                .with(preg(regs::xmm15())),
+            PRegSet::empty(),
+        ],
+        fixed_stack_slots: vec![],
+        scratch_by_class: [None, None, None],
+    }
 }
 
 #[cfg(test)]

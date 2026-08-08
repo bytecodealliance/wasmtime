@@ -578,7 +578,8 @@ where
             | isa::CallConv::WindowsFastcall
             | isa::CallConv::AppleAarch64
             | isa::CallConv::Probestack
-            | isa::CallConv::Winch => &[],
+            | isa::CallConv::Winch
+            | isa::CallConv::Ghc => &[],
         }
     }
 }

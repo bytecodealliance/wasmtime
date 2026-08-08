@@ -1231,7 +1231,8 @@ impl<M: ABIMachineSpec> Callee<M> {
                 || call_conv == isa::CallConv::WindowsFastcall
                 || call_conv == isa::CallConv::AppleAarch64
                 || call_conv == isa::CallConv::Winch
-                || call_conv == isa::CallConv::PreserveAll,
+                || call_conv == isa::CallConv::PreserveAll
+                || call_conv == isa::CallConv::Ghc,
             "Unsupported calling convention: {call_conv:?}"
         );
 
@@ -1822,10 +1823,11 @@ impl<M: ABIMachineSpec> Callee<M> {
         let word_bits = M::word_bits() as usize;
 
         if is_tail_call {
-            debug_assert_eq!(
-                self.call_conv,
-                isa::CallConv::Tail,
-                "Can only do `return_call`s from within a `tail` calling convention function"
+            debug_assert!(
+                self.call_conv.supports_tail_calls(),
+                "Can only do `return_call`s from within a calling convention \
+                 that supports tail calls (got {:?})",
+                self.call_conv
             );
         }
 

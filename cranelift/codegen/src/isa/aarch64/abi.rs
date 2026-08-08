@@ -160,6 +160,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     ) -> CodegenResult<(u32, Option<usize>)> {
         let is_apple_cc = call_conv == isa::CallConv::AppleAarch64;
         let is_winch_return = call_conv == isa::CallConv::Winch && args_or_rets == ArgsOrRets::Rets;
+        let is_ghc = call_conv == isa::CallConv::Ghc;
 
         // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing), sections 6.4.
         //
@@ -190,6 +191,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
             0
         };
         let mut next_vreg = 0;
+        // GHC uses separate STG register pools (indices into fixed lists),
+        // matching LLVM CC_AArch64_GHC: ints, f32, f64, and optional 128-bit
+        // vectors each have their own counter.
+        let mut next_ghc_x: usize = 0;
+        let mut next_ghc_f32: usize = 0;
+        let mut next_ghc_f64: usize = 0;
+        let mut next_ghc_vec: usize = 0;
         let mut next_stack: u32 = 0;
 
         // Note on return values: on the regular ABI, we may return values
@@ -202,6 +210,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let ret_area_ptr = if add_ret_area_ptr {
             debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
+            // GHC has void returns only; a return-area pointer is never used.
+            assert!(!is_ghc);
             if call_conv != isa::CallConv::Winch {
                 // In the AAPCS64 calling convention the return area pointer is
                 // stored in x8.
@@ -243,9 +253,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     "support for StructReturn parameters is not implemented for the `tail` \
                     calling convention yet",
                 );
+                if is_ghc {
+                    return Err(crate::CodegenError::Unsupported(
+                        "StructReturn not supported with ghc calling convention".to_owned(),
+                    ));
+                }
             }
 
             if let ir::ArgumentPurpose::StructArgument(_) = param.purpose {
+                if is_ghc {
+                    return Err(crate::CodegenError::Unsupported(
+                        "StructArgument not supported with ghc calling convention".to_owned(),
+                    ));
+                }
                 panic!(
                     "StructArgument parameters are not supported on arm64. \
                     Use regular pointer arguments instead."
@@ -301,6 +321,46 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     "Unable to handle non i64 regs"
                 );
 
+                if is_ghc {
+                    // GHC: void returns only; args must fit in STG registers.
+                    let regs = match args_or_rets {
+                        ArgsOrRets::Rets => None,
+                        ArgsOrRets::Args => {
+                            match (
+                                get_ghc_intreg_for_arg(next_ghc_x),
+                                get_ghc_intreg_for_arg(next_ghc_x + 1),
+                            ) {
+                                (Some(lo), Some(hi)) => Some((lo, hi)),
+                                _ => None,
+                            }
+                        }
+                    };
+                    let Some((lower_reg, upper_reg)) = regs else {
+                        return Err(crate::CodegenError::Unsupported(
+                            "Too many arguments for ghc calling convention; \
+                             all arguments must fit in STG registers"
+                                .to_owned(),
+                        ));
+                    };
+                    args.push(ABIArg::Slots {
+                        slots: smallvec![
+                            ABIArgSlot::Reg {
+                                reg: lower_reg.to_real_reg().unwrap(),
+                                ty: reg_types[0],
+                                extension: param.extension,
+                            },
+                            ABIArgSlot::Reg {
+                                reg: upper_reg.to_real_reg().unwrap(),
+                                ty: reg_types[1],
+                                extension: param.extension,
+                            },
+                        ],
+                        purpose: param.purpose,
+                    });
+                    next_ghc_x += 2;
+                    continue;
+                }
+
                 let reg_class_space = max_per_class_reg_vals - next_xreg;
                 let reg_space = remaining_reg_vals;
 
@@ -336,6 +396,66 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     remaining_reg_vals -= 2;
                     continue;
                 }
+            } else if is_ghc {
+                // GHC: void returns only; args must fit in STG registers.
+                // Integer / f32 / f64 / 128-bit vectors use separate pools
+                // (LLVM CC_AArch64_GHC).
+                let rc = rcs[0];
+                let reg_ty = reg_types[0];
+                let next_reg = match args_or_rets {
+                    ArgsOrRets::Rets => None,
+                    ArgsOrRets::Args => match rc {
+                        RegClass::Int => {
+                            let r = get_ghc_intreg_for_arg(next_ghc_x);
+                            if r.is_some() {
+                                next_ghc_x += 1;
+                            }
+                            r
+                        }
+                        RegClass::Float if reg_ty == F32 => {
+                            let r = get_ghc_f32reg_for_arg(next_ghc_f32);
+                            if r.is_some() {
+                                next_ghc_f32 += 1;
+                            }
+                            r
+                        }
+                        RegClass::Float if reg_ty == F64 || reg_ty.bits() == 64 => {
+                            let r = get_ghc_f64reg_for_arg(next_ghc_f64);
+                            if r.is_some() {
+                                next_ghc_f64 += 1;
+                            }
+                            r
+                        }
+                        RegClass::Float if reg_ty.bits() == 128 => {
+                            let r = get_ghc_vec128reg_for_arg(next_ghc_vec);
+                            if r.is_some() {
+                                next_ghc_vec += 1;
+                            }
+                            r
+                        }
+                        RegClass::Float => None,
+                        RegClass::Vector => unreachable!(),
+                    },
+                };
+                if let Some(reg) = next_reg {
+                    let ty = if param.value_type.is_dynamic_vector() {
+                        dynamic_to_fixed(param.value_type)
+                    } else {
+                        param.value_type
+                    };
+                    args.push(ABIArg::reg(
+                        reg.to_real_reg().unwrap(),
+                        ty,
+                        param.extension,
+                        param.purpose,
+                    ));
+                    continue;
+                }
+                return Err(crate::CodegenError::Unsupported(
+                    "Too many arguments for ghc calling convention; \
+                     all arguments must fit in STG registers"
+                        .to_owned(),
+                ));
             } else {
                 // Single Register parameters
                 let rc = rcs[0];
@@ -378,6 +498,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             }
 
             // Spill to the stack
+            debug_assert!(!is_ghc, "GHC must not spill arguments to the stack");
 
             if args_or_rets == ArgsOrRets::Rets && !flags.enable_multi_ret_implicit_sret() {
                 return Err(crate::CodegenError::Unsupported(
@@ -1191,6 +1312,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             (isa::CallConv::Tail, true) => ALL_CLOBBERS,
             (isa::CallConv::Winch, true) => ALL_CLOBBERS,
             (isa::CallConv::Winch, false) => WINCH_CLOBBERS,
+            // GHC defines no callee-saved registers; treat calls like
+            // an all-clobbers / Winch-style callsite.
+            (isa::CallConv::Ghc, _) => ALL_CLOBBERS,
             // Note that "PreserveAll" actually preserves nothing at
             // the callsite if used for a `try_call`, because the
             // unwinder ABI for `try_call`s is still "no clobbered
@@ -1300,7 +1424,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
             | isa::CallConv::Tail
             | isa::CallConv::PreserveAll
             | isa::CallConv::AppleAarch64 => PAYLOAD_REGS,
-            _ => &[],
+            isa::CallConv::Ghc
+            | isa::CallConv::Fast
+            | isa::CallConv::WindowsFastcall
+            | isa::CallConv::Probestack
+            | isa::CallConv::Winch => &[],
         }
     }
 }
@@ -1389,6 +1517,11 @@ fn is_reg_saved_in_prologue(
     if call_conv == isa::CallConv::PreserveAll {
         return true;
     }
+    // GHC defines no callee-saved registers (STG state lives in the usual
+    // AAPCS callee-saves and must not be spilled/restored by the prologue).
+    if call_conv == isa::CallConv::Ghc {
+        return false;
+    }
 
     // FIXME: We need to inspect whether a function is returning Z or P regs too.
     let save_z_regs = sig
@@ -1424,6 +1557,57 @@ fn is_reg_saved_in_prologue(
             }
         }
         RegClass::Vector => unreachable!(),
+    }
+}
+
+/// GHC integer STG registers: Base, Sp, Hp, R1–R6, SpLim
+/// (x19–x28). Note x29 is the frame pointer and is intentionally not
+/// in this set.
+fn get_ghc_intreg_for_arg(idx: usize) -> Option<Reg> {
+    match idx {
+        0 => Some(xreg(19)),
+        1 => Some(xreg(20)),
+        2 => Some(xreg(21)),
+        3 => Some(xreg(22)),
+        4 => Some(xreg(23)),
+        5 => Some(xreg(24)),
+        6 => Some(xreg(25)),
+        7 => Some(xreg(26)),
+        8 => Some(xreg(27)),
+        9 => Some(xreg(28)),
+        _ => None,
+    }
+}
+
+/// GHC f32 STG registers: F1–F4 (s8–s11 = v8–v11).
+fn get_ghc_f32reg_for_arg(idx: usize) -> Option<Reg> {
+    match idx {
+        0 => Some(vreg(8)),
+        1 => Some(vreg(9)),
+        2 => Some(vreg(10)),
+        3 => Some(vreg(11)),
+        _ => None,
+    }
+}
+
+/// GHC f64 STG registers: D1–D4 (d12–d15 = v12–v15).
+fn get_ghc_f64reg_for_arg(idx: usize) -> Option<Reg> {
+    match idx {
+        0 => Some(vreg(12)),
+        1 => Some(vreg(13)),
+        2 => Some(vreg(14)),
+        3 => Some(vreg(15)),
+        _ => None,
+    }
+}
+
+/// GHC 128-bit / v2f64 STG registers (q4–q5 = v4–v5), matching LLVM
+/// CC_AArch64_GHC.
+fn get_ghc_vec128reg_for_arg(idx: usize) -> Option<Reg> {
+    match idx {
+        0 => Some(vreg(4)),
+        1 => Some(vreg(5)),
+        _ => None,
     }
 }
 
