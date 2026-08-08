@@ -20,6 +20,18 @@ where
     Ok(tys)
 }
 
+/// Deserialize a `Vec<T>` via [`TryVec`](crate::collections::TryVec) so that
+/// allocation failures are surfaced as deserialization errors rather than
+/// aborting.
+pub fn deserialize_vec<'de, T, D>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    T: serde::de::Deserialize<'de>,
+    D: serde::de::Deserializer<'de>,
+{
+    let tys: crate::collections::TryVec<T> = serde::Deserialize::deserialize(deserializer)?;
+    Ok(tys.into())
+}
+
 /// A trait for things that can trace all type-to-type edges, aka all type
 /// indices within this thing.
 pub trait TypeTrace {
@@ -734,8 +746,8 @@ pub enum WasmHeapBottomType {
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
 #[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFuncType {
-    #[serde(deserialize_with = "deserialize_boxed_slice")]
-    params_results: Box<[WasmValType]>,
+    #[serde(deserialize_with = "deserialize_vec")]
+    params_results: Vec<WasmValType>,
     params_len: u32,
     non_i31_gc_ref_params_count: u32,
     non_i31_gc_ref_results_count: u32,
@@ -743,8 +755,15 @@ pub struct WasmFuncType {
 
 impl TryClone for WasmFuncType {
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let mut params_results =
+            crate::collections::TryVec::with_capacity(self.params_results.len())?;
+        for ty in &self.params_results {
+            params_results
+                .push(ty.try_clone()?)
+                .expect("reserved capacity");
+        }
         Ok(Self {
-            params_results: TryClone::try_clone(&self.params_results)?,
+            params_results: params_results.into(),
             params_len: self.params_len,
             non_i31_gc_ref_params_count: self.non_i31_gc_ref_params_count,
             non_i31_gc_ref_results_count: self.non_i31_gc_ref_results_count,
@@ -815,7 +834,7 @@ impl WasmFuncType {
             .filter(|r| r.is_vmgcref_type_and_not_i31())
             .count();
 
-        let params_results = params_results.into_boxed_slice()?;
+        let params_results = params_results.into();
         let params_len = u32::try_from(params_len).unwrap();
         let non_i31_gc_ref_params_count = u32::try_from(non_i31_gc_ref_params_count).unwrap();
         let non_i31_gc_ref_results_count = u32::try_from(non_i31_gc_ref_results_count).unwrap();
@@ -826,6 +845,69 @@ impl WasmFuncType {
             non_i31_gc_ref_params_count,
             non_i31_gc_ref_results_count,
         })
+    }
+
+    /// Creates a new, empty function type (no params, no results).
+    ///
+    /// Params and results can be appended afterwards with
+    /// [`push_param`][Self::push_param] and [`push_result`][Self::push_result].
+    pub fn empty() -> Self {
+        Self {
+            params_results: Vec::new(),
+            params_len: 0,
+            non_i31_gc_ref_params_count: 0,
+            non_i31_gc_ref_results_count: 0,
+        }
+    }
+
+    /// Append a parameter to this function type.
+    ///
+    /// Parameters are kept ahead of results in the internal representation, so
+    /// appending a param after results have already been added shifts those
+    /// results down by one; this only matters while building up a type and
+    /// never on any hot path.
+    pub fn push_param(&mut self, ty: WasmValType) {
+        let at = usize::try_from(self.params_len).unwrap();
+        self.params_results.insert(at, ty);
+        self.params_len += 1;
+        if ty.is_vmgcref_type_and_not_i31() {
+            self.non_i31_gc_ref_params_count += 1;
+        }
+    }
+
+    /// Append a result to this function type.
+    pub fn push_result(&mut self, ty: WasmValType) {
+        self.params_results.push(ty);
+        if ty.is_vmgcref_type_and_not_i31() {
+            self.non_i31_gc_ref_results_count += 1;
+        }
+    }
+
+    /// Replace the `i`th parameter type, keeping the cached GC-reference counts
+    /// consistent.
+    pub fn set_param(&mut self, i: usize, ty: WasmValType) {
+        let was_gc_ref = self.params_results[i].is_vmgcref_type_and_not_i31();
+        let is_gc_ref = ty.is_vmgcref_type_and_not_i31();
+        self.params_results[i] = ty;
+        match (was_gc_ref, is_gc_ref) {
+            (false, true) => self.non_i31_gc_ref_params_count += 1,
+            (true, false) => self.non_i31_gc_ref_params_count -= 1,
+            _ => {}
+        }
+    }
+
+    /// Replace the `i`th result type, keeping the cached GC-reference counts
+    /// consistent.
+    pub fn set_result(&mut self, i: usize, ty: WasmValType) {
+        let at = self.results_start() + i;
+        let was_gc_ref = self.params_results[at].is_vmgcref_type_and_not_i31();
+        let is_gc_ref = ty.is_vmgcref_type_and_not_i31();
+        self.params_results[at] = ty;
+        match (was_gc_ref, is_gc_ref) {
+            (false, true) => self.non_i31_gc_ref_results_count += 1,
+            (true, false) => self.non_i31_gc_ref_results_count -= 1,
+            _ => {}
+        }
     }
 
     fn results_start(&self) -> usize {
@@ -1153,14 +1235,18 @@ impl TypeTrace for WasmArrayType {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmStructType {
     /// The fields that make up this struct type.
-    #[serde(deserialize_with = "deserialize_boxed_slice")]
-    pub fields: Box<[WasmFieldType]>,
+    #[serde(deserialize_with = "deserialize_vec")]
+    pub fields: Vec<WasmFieldType>,
 }
 
 impl TryClone for WasmStructType {
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        let mut fields = crate::collections::TryVec::with_capacity(self.fields.len())?;
+        for field in &self.fields {
+            fields.push(field.try_clone()?).expect("reserved capacity");
+        }
         Ok(Self {
-            fields: self.fields.try_clone()?,
+            fields: fields.into(),
         })
     }
 }
