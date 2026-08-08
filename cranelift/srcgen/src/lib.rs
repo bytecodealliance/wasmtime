@@ -382,10 +382,6 @@ mod srcgen_tests {
     use super::Match;
     use super::parse_multiline;
 
-    fn from_raw_string<S: Into<String>>(s: S) -> String {
-        s.into().trim().to_string()
-    }
-
     #[test]
     fn adding_arms_works() {
         let mut m = Match::new("x");
@@ -398,9 +394,7 @@ mod srcgen_tests {
         let mut fmt = Formatter::new(Language::Rust);
         fmt.add_match(m);
 
-        let expected_lines = from_raw_string(
-            r#"
-match x {
+        let expected_lines = r#"match x {
     Green { a, b } => {
         different body
     }
@@ -412,8 +406,7 @@ match x {
         some body
     }
 }
-        "#,
-        );
+"#;
         assert_eq!(fmt.lines, expected_lines);
     }
 
@@ -429,9 +422,7 @@ match x {
         let mut fmt = Formatter::new(Language::Rust);
         fmt.add_match(m);
 
-        let expected_lines = from_raw_string(
-            r#"
-match x {
+        let expected_lines = r#"match x {
     Green { a, b } => {
         different body
     }
@@ -442,8 +433,7 @@ match x {
         unreachable!()
     }
 }
-        "#,
-        );
+"#;
         assert_eq!(fmt.lines, expected_lines);
     }
 
@@ -526,13 +516,11 @@ match x {
         If you stick to writing it.
 "#,
         );
-        let expected_lines = from_raw_string(
-            r#"
-/// documentation
+        let expected_lines = r#"/// documentation
 /// can be really good.
 ///
-/// If you stick to writing it."#,
-        );
+/// If you stick to writing it.
+"#;
         assert_eq!(fmt.lines, expected_lines);
     }
 }
