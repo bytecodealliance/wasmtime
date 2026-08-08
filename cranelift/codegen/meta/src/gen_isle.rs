@@ -635,295 +635,274 @@ impl NumericOp<'_> {
         };
 
         // Operations that apply to both signed and unsigned numbers.
-        let ops = [
-            // Comparisons.
-            NumericOp {
-                name: "eq",
-                body: "a == b",
-                ..comparison.clone()
-            },
-            NumericOp {
-                name: "ne",
-                body: "a != b",
-                ..comparison.clone()
-            },
-            NumericOp {
-                name: "lt",
-                body: "a < b",
-                ..comparison.clone()
-            },
-            NumericOp {
-                name: "lt_eq",
-                body: "a <= b",
-                ..comparison.clone()
-            },
-            NumericOp {
-                name: "gt",
-                body: "a > b",
-                ..comparison.clone()
-            },
-            NumericOp {
-                name: "gt_eq",
-                body: "a >= b",
-                ..comparison.clone()
-            },
-            // Arithmetic operations.
-            //
-            // For each operation (e.g. addition) we have three variants:
-            //
-            // * partial ctor `checked_add`: no return value on overflow
-            // * ctor `wrapping_add`: wraps on overflow
-            // * ctor `add`: non-partial but panics at runtime on overflow
-            NumericOp {
-                name: "checked_add",
-                body: "a.checked_add(b)",
-                ..partial_binop.clone()
-            },
-            NumericOp {
-                name: "wrapping_add",
-                body: "a.wrapping_add(b)",
-                ..binop.clone()
-            },
-            NumericOp {
-                name: "add",
-                body: r#"a.checked_add(b).unwrap_or_else(|| panic!("addition overflow: {a} + {b}"))"#,
-                ..binop.clone()
-            },
-            NumericOp {
-                name: "checked_sub",
-                body: "a.checked_sub(b)",
-                ..partial_binop.clone()
-            },
-            NumericOp {
-                name: "wrapping_sub",
-                body: "a.wrapping_sub(b)",
-                ..binop.clone()
-            },
-            NumericOp {
+        let mut ops = Vec::new();
+
+        // Comparisons.
+        ops.push(NumericOp {
+            name: "eq",
+            body: "a == b",
+            ..comparison.clone()
+        });
+        ops.push(NumericOp {
+            name: "ne",
+            body: "a != b",
+            ..comparison.clone()
+        });
+        ops.push(NumericOp {
+            name: "lt",
+            body: "a < b",
+            ..comparison.clone()
+        });
+        ops.push(NumericOp {
+            name: "lt_eq",
+            body: "a <= b",
+            ..comparison.clone()
+        });
+        ops.push(NumericOp {
+            name: "gt",
+            body: "a > b",
+            ..comparison.clone()
+        });
+        ops.push(NumericOp {
+            name: "gt_eq",
+            body: "a >= b",
+            ..comparison.clone()
+        });
+
+        // Arithmetic operations.
+        //
+        // For each operation (e.g. addition) we have three variants:
+        //
+        // * partial ctor `checked_add`: no return value on overflow
+        // * ctor `wrapping_add`: wraps on overflow
+        // * ctor `add`: non-partial but panics at runtime on overflow
+        ops.push(NumericOp {
+            name: "checked_add",
+            body: "a.checked_add(b)",
+            ..partial_binop.clone()
+        });
+
+        ops.push(NumericOp {
+            name: "wrapping_add",
+            body: "a.wrapping_add(b)",
+            ..binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "add",
+            body: r#"a.checked_add(b).unwrap_or_else(|| panic!("addition overflow: {a} + {b}"))"#,
+            ..binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "checked_sub",
+            body: "a.checked_sub(b)",
+            ..partial_binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "wrapping_sub",
+            body: "a.wrapping_sub(b)",
+            ..binop.clone()
+        });
+        ops.push(NumericOp {
                 name: "sub",
                 body: r#"a.checked_sub(b).unwrap_or_else(|| panic!("subtraction overflow: {a} - {b}"))"#,
                 ..binop.clone()
-            },
-            NumericOp {
-                name: "checked_mul",
-                body: "a.checked_mul(b)",
-                ..partial_binop.clone()
-            },
-            NumericOp {
-                name: "wrapping_mul",
-                body: "a.wrapping_mul(b)",
-                ..binop.clone()
-            },
-            NumericOp {
+            });
+        ops.push(NumericOp {
+            name: "checked_mul",
+            body: "a.checked_mul(b)",
+            ..partial_binop.clone()
+        });
+
+        ops.push(NumericOp {
+            name: "wrapping_mul",
+            body: "a.wrapping_mul(b)",
+            ..binop.clone()
+        });
+        ops.push(NumericOp {
                 name: "mul",
                 body: r#"a.checked_mul(b).unwrap_or_else(|| panic!("multiplication overflow: {a} * {b}"))"#,
                 ..binop.clone()
-            },
-            NumericOp {
-                name: "checked_div",
-                body: "a.checked_div(b)",
-                ..partial_binop.clone()
-            },
-            NumericOp {
-                name: "wrapping_div",
-                body: "a.wrapping_div(b)",
-                ..binop.clone()
-            },
-            NumericOp {
-                name: "div",
-                body: r#"a.checked_div(b).unwrap_or_else(|| panic!("div failure: {a} / {b}"))"#,
-                ..binop.clone()
-            },
-            NumericOp {
-                name: "checked_rem",
-                body: "a.checked_rem(b)",
-                ..partial_binop.clone()
-            },
-            NumericOp {
-                name: "rem",
-                body: r#"a.checked_rem(b).unwrap_or_else(|| panic!("rem failure: {a} % {b}"))"#,
-                ..binop.clone()
-            },
-            // Bitwise operations.
-            //
-            // When applicable (e.g. shifts) we have checked, wrapping, and
-            // unwrapping variants, similar to arithmetic operations.
-            NumericOp {
-                name: "and",
-                body: "a & b",
-                ..binop.clone()
-            },
-            NumericOp {
-                name: "or",
-                body: "a | b",
-                ..binop.clone()
-            },
-            NumericOp {
-                name: "xor",
-                body: "a ^ b",
-                ..binop.clone()
-            },
-            NumericOp {
-                name: "not",
-                body: "!a",
-                ..unop.clone()
-            },
-            NumericOp {
-                name: "checked_shl",
-                body: "a.checked_shl(b)",
-                ..partial_shift.clone()
-            },
-            NumericOp {
-                name: "wrapping_shl",
-                body: "a.wrapping_shl(b)",
-                ..shift.clone()
-            },
-            NumericOp {
-                name: "shl",
-                body: r#"a.checked_shl(b).unwrap_or_else(|| panic!("shl overflow: {a} << {b}"))"#,
-                ..shift.clone()
-            },
-            NumericOp {
-                name: "checked_shr",
-                body: "a.checked_shr(b)",
-                ..partial_shift.clone()
-            },
-            NumericOp {
-                name: "wrapping_shr",
-                body: "a.wrapping_shr(b)",
-                ..shift.clone()
-            },
-            NumericOp {
-                name: "shr",
-                body: r#"a.checked_shr(b).unwrap_or_else(|| panic!("shr overflow: {a} >> {b}"))"#,
-                ..shift.clone()
-            },
-            NumericOp {
-                name: "rotl",
-                body: "a.rotate_left(b)",
-                ..shift.clone()
-            },
-            NumericOp {
-                name: "rotr",
-                body: "a.rotate_right(b)",
-                ..shift.clone()
-            },
-            // Predicates.
-            //
-            // We generate both pure constructors and a variety of extractors
-            // for these. See the relevant comments in `gen_numerics_isle` about
-            // the extractors.
-            NumericOp {
-                name: "is_zero",
-                body: "a == 0",
-                ..predicate.clone()
-            },
-            NumericOp {
-                name: "is_non_zero",
-                body: "a != 0",
-                ..predicate.clone()
-            },
-            NumericOp {
-                name: "is_odd",
-                body: "a & 1 == 1",
-                ..predicate.clone()
-            },
-            NumericOp {
-                name: "is_even",
-                body: "a & 1 == 0",
-                ..predicate.clone()
-            },
-            // Miscellaneous unary operations.
-            NumericOp {
-                name: "checked_ilog2",
-                body: "a.checked_ilog2()",
-                ret: "u32",
-                ..partial_unop.clone()
-            },
-            NumericOp {
-                name: "ilog2",
-                body: r#"a.checked_ilog2().unwrap_or_else(|| panic!("ilog2 overflow: {a}"))"#,
-                ret: "u32",
-                ..unop.clone()
-            },
-            NumericOp {
-                name: "trailing_zeros",
-                body: "a.trailing_zeros()",
-                ret: "u32",
-                ..unop.clone()
-            },
-            NumericOp {
-                name: "trailing_ones",
-                body: "a.trailing_ones()",
-                ret: "u32",
-                ..unop.clone()
-            },
-            NumericOp {
-                name: "leading_zeros",
-                body: "a.leading_zeros()",
-                ret: "u32",
-                ..unop.clone()
-            },
-            NumericOp {
-                name: "leading_ones",
-                body: "a.leading_ones()",
-                ret: "u32",
-                ..unop.clone()
-            },
-        ];
+            });
+        ops.push(NumericOp {
+            name: "checked_div",
+            body: "a.checked_div(b)",
+            ..partial_binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "wrapping_div",
+            body: "a.wrapping_div(b)",
+            ..binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "div",
+            body: r#"a.checked_div(b).unwrap_or_else(|| panic!("div failure: {a} / {b}"))"#,
+            ..binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "checked_rem",
+            body: "a.checked_rem(b)",
+            ..partial_binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "rem",
+            body: r#"a.checked_rem(b).unwrap_or_else(|| panic!("rem failure: {a} % {b}"))"#,
+            ..binop.clone()
+        });
+        // Bitwise operations.
+        //
+        // When applicable (e.g. shifts) we have checked, wrapping, and
+        // unwrapping variants, similar to arithmetic operations.
+        ops.push(NumericOp {
+            name: "and",
+            body: "a & b",
+            ..binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "or",
+            body: "a | b",
+            ..binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "xor",
+            body: "a ^ b",
+            ..binop.clone()
+        });
+        ops.push(NumericOp {
+            name: "not",
+            body: "!a",
+            ..unop.clone()
+        });
+        ops.push(NumericOp {
+            name: "checked_shl",
+            body: "a.checked_shl(b)",
+            ..partial_shift.clone()
+        });
+        ops.push(NumericOp {
+            name: "wrapping_shl",
+            body: "a.wrapping_shl(b)",
+            ..shift.clone()
+        });
+        ops.push(NumericOp {
+            name: "shl",
+            body: r#"a.checked_shl(b).unwrap_or_else(|| panic!("shl overflow: {a} << {b}"))"#,
+            ..shift.clone()
+        });
+        ops.push(NumericOp {
+            name: "checked_shr",
+            body: "a.checked_shr(b)",
+            ..partial_shift.clone()
+        });
+        ops.push(NumericOp {
+            name: "wrapping_shr",
+            body: "a.wrapping_shr(b)",
+            ..shift.clone()
+        });
+        ops.push(NumericOp {
+            name: "shr",
+            body: r#"a.checked_shr(b).unwrap_or_else(|| panic!("shr overflow: {a} >> {b}"))"#,
+            ..shift.clone()
+        });
+        ops.push(NumericOp {
+            name: "rotl",
+            body: "a.rotate_left(b)",
+            ..shift.clone()
+        });
+        ops.push(NumericOp {
+            name: "rotr",
+            body: "a.rotate_right(b)",
+            ..shift.clone()
+        });
 
-        // Operations that apply only to signed numbers.
-        let signed_ops = [
-            NumericOp {
+        // Predicates.
+        //
+        // We generate both pure constructors and a variety of extractors
+        // for these. See the relevant comments in `gen_numerics_isle` about
+        // the extractors.
+        ops.push(NumericOp {
+            name: "is_zero",
+            body: "a == 0",
+            ..predicate.clone()
+        });
+        ops.push(NumericOp {
+            name: "is_non_zero",
+            body: "a != 0",
+            ..predicate.clone()
+        });
+        ops.push(NumericOp {
+            name: "is_odd",
+            body: "a & 1 == 1",
+            ..predicate.clone()
+        });
+        ops.push(NumericOp {
+            name: "is_even",
+            body: "a & 1 == 0",
+            ..predicate.clone()
+        });
+        // Miscellaneous unary operations.
+        ops.push(NumericOp {
+            name: "checked_ilog2",
+            body: "a.checked_ilog2()",
+            ret: "u32",
+            ..partial_unop.clone()
+        });
+        ops.push(NumericOp {
+            name: "ilog2",
+            body: r#"a.checked_ilog2().unwrap_or_else(|| panic!("ilog2 overflow: {a}"))"#,
+            ret: "u32",
+            ..unop.clone()
+        });
+        ops.push(NumericOp {
+            name: "trailing_zeros",
+            body: "a.trailing_zeros()",
+            ret: "u32",
+            ..unop.clone()
+        });
+        ops.push(NumericOp {
+            name: "trailing_ones",
+            body: "a.trailing_ones()",
+            ret: "u32",
+            ..unop.clone()
+        });
+        ops.push(NumericOp {
+            name: "leading_zeros",
+            body: "a.leading_zeros()",
+            ret: "u32",
+            ..unop.clone()
+        });
+        ops.push(NumericOp {
+            name: "leading_ones",
+            body: "a.leading_ones()",
+            ret: "u32",
+            ..unop.clone()
+        });
+
+        if ty.signed {
+            // Operations that apply only to signed numbers.
+            ops.push(NumericOp {
                 name: "checked_neg",
                 body: "a.checked_neg()",
                 ..partial_unop.clone()
-            },
-            NumericOp {
+            });
+            ops.push(NumericOp {
                 name: "wrapping_neg",
                 body: "a.wrapping_neg()",
                 ..unop.clone()
-            },
-            NumericOp {
+            });
+            ops.push(NumericOp {
                 name: "neg",
                 body: r#"a.checked_neg().unwrap_or_else(|| panic!("negation overflow: {a}"))"#,
                 ..unop.clone()
-            },
-        ];
-
-        // Operations that apply only to unsigned numbers.
-        let unsigned_ops = [NumericOp {
-            name: "is_power_of_two",
-            body: "a.is_power_of_two()",
-            ..predicate.clone()
-        }];
-
-        struct IterIf<I> {
-            condition: bool,
-            iter: I,
-        }
-
-        impl<I: Iterator> Iterator for IterIf<I> {
-            type Item = I::Item;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.condition {
-                    self.iter.next()
-                } else {
-                    None
-                }
-            }
+            });
+        } else {
+            // Operations that apply only to unsigned numbers.
+            ops.push(NumericOp {
+                name: "is_power_of_two",
+                body: "a.is_power_of_two()",
+                ..predicate.clone()
+            });
         }
 
         ops.into_iter()
-            .chain(IterIf {
-                condition: ty.signed,
-                iter: signed_ops.into_iter(),
-            })
-            .chain(IterIf {
-                condition: !ty.signed,
-                iter: unsigned_ops.into_iter(),
-            })
     }
 }
 
