@@ -621,6 +621,12 @@
 (decl zero_offset () Offset32)
 (extern constructor zero_offset zero_offset)
 
+;; Negate a constant `i32` into an `Offset32`, used to fold `x - C` into an
+;; `lea -C(x)`. Fails (partial) when the negation overflows, i.e. `C` is
+;; `i32::MIN`.
+(decl pure partial neg_i32_to_offset32 (i32) Offset32)
+(extern constructor neg_i32_to_offset32 neg_i32_to_offset32)
+
 ;; Shift kinds.
 
 (type ShiftKind extern

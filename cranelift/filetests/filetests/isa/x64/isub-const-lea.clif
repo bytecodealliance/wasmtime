@@ -1,0 +1,85 @@
+test compile precise-output
+target x86_64
+
+;; `x - C` should lower to a single `lea -C(x)`, not `mov`+`sub`.
+function %isub_c2(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 2
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   leaq -2(%rdi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq -2(%rdi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; 32-bit variant.
+function %isub_c5_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   leal -5(%rdi), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leal -5(%rdi), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; reg-reg isub must still use `sub` (rule must not fire).
+function %isub_regreg(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rax
+;   subq %rsi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   subq %rsi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

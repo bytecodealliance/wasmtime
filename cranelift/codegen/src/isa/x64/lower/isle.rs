@@ -1403,6 +1403,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
+    fn neg_i32_to_offset32(&mut self, c: i32) -> Option<Offset32> {
+        c.checked_neg().map(Offset32::new)
+    }
+
+    #[inline]
     fn preg_rbp(&mut self) -> PReg {
         regs::rbp().to_real_reg().unwrap().into()
     }

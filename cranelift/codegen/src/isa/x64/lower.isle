@@ -249,6 +249,15 @@
 (rule -3 (lower (isub (fits_in_64 ty) x y))
       (x64_sub ty x y))
 
+;; `x - C` for a constant `C` lowers to `lea -C(x)`, mirroring the `iadd` lea
+;; lowering. `lea` reads `x` and writes the result directly, avoiding the
+;; register copy the two-operand `sub` needs when the destination differs from
+;; `x`. Fires only for 32/64-bit types (which `lea` supports) and when `-C`
+;; fits in an `Offset32`.
+(rule isub_const_lea -2 (lower (isub (ty_32_or_64 ty) x (i32_from_iconst c)))
+      (if-let neg_off (neg_i32_to_offset32 c))
+      (x64_lea ty (to_amode (mem_flags_trusted_data) x neg_off)))
+
 ;; SSE.
 
 (rule (lower (isub (multi_lane 8 16) x y))
