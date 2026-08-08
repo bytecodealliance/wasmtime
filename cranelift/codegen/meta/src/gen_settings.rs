@@ -317,7 +317,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
     );
     fmt.indent(|fmt| {
         for preset in &group.presets {
-            fmt.comment(format!(
+            fmt.comment(format_args!(
                 "{}: {}",
                 preset.name,
                 preset.setting_names(group).collect::<Vec<_>>().join(", ")

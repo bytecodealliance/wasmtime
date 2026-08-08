@@ -171,7 +171,7 @@ impl Formatter {
         // Avoid `fmtln!` here: we don't want to append a location comment to a
         // comment.
         let comment_token = self.lang.comment_token();
-        self.line(format!("{comment_token} {comment}"));
+        self.line(format_args!("{comment_token} {comment}"));
     }
 
     /// Add a (multi-line) documentation comment.
