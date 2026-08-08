@@ -86,9 +86,10 @@ impl IsleCompilation {
 }
 
 pub fn shared_isle_lower_paths(codegen_crate_dir: &std::path::Path) -> Vec<std::path::PathBuf> {
-    let inst_specs_isle = codegen_crate_dir.join("src").join("inst_specs.isle");
-    let prelude_isle = codegen_crate_dir.join("src").join("prelude.isle");
-    let prelude_lower_isle = codegen_crate_dir.join("src").join("prelude_lower.isle");
+    let codegen_crate_src_dir = codegen_crate_dir.join("src");
+    let inst_specs_isle = codegen_crate_src_dir.join("inst_specs.isle");
+    let prelude_isle = codegen_crate_src_dir.join("prelude.isle");
+    let prelude_lower_isle = codegen_crate_src_dir.join("prelude_lower.isle");
     // The shared instruction selector logic.
     vec![
         inst_specs_isle.clone(),
@@ -107,9 +108,10 @@ pub fn get_isle_compilations(
     let numerics_isle = gen_dir.join("numerics.isle");
     let clif_lower_isle = gen_dir.join("clif_lower.isle");
     let clif_opt_isle = gen_dir.join("clif_opt.isle");
-    let prelude_isle = codegen_crate_dir.join("src").join("prelude.isle");
-    let prelude_opt_isle = codegen_crate_dir.join("src").join("prelude_opt.isle");
-    let prelude_lower_isle = codegen_crate_dir.join("src").join("prelude_lower.isle");
+    let codegen_crate_src_dir = codegen_crate_dir.join("src");
+    let prelude_isle = codegen_crate_src_dir.join("prelude.isle");
+    let prelude_opt_isle = codegen_crate_src_dir.join("prelude_opt.isle");
+    let prelude_lower_isle = codegen_crate_src_dir.join("prelude_lower.isle");
     #[cfg(feature = "pulley")]
     let pulley_gen = gen_dir.join("pulley_gen.isle");
 
@@ -121,7 +123,7 @@ pub fn get_isle_compilations(
         if !cfg!(feature = "spec") {
             return vec![];
         }
-        let spec_dir = codegen_crate_dir.join("src").join("spec");
+        let spec_dir = codegen_crate_src_dir.join("spec");
         let mut inputs = vec![
             spec_dir.join("prelude_spec.isle"),
             spec_dir.join("inst_specs.isle"),
@@ -133,25 +135,23 @@ pub fn get_isle_compilations(
     let lower_spec_inputs = |extra: &[&str]| -> Vec<std::path::PathBuf> {
         let mut inputs = spec_inputs(extra);
         if cfg!(feature = "spec") {
-            let spec_dir = codegen_crate_dir.join("src").join("spec");
+            let spec_dir = codegen_crate_src_dir.join("spec");
             inputs.push(spec_dir.join("prelude_lower_spec.isle"));
         }
         inputs
     };
 
     // Directory for mid-end optimizations.
-    let src_opts = codegen_crate_dir.join("src").join("opts");
+    let src_opts = codegen_crate_src_dir.join("opts");
 
     // Directories for lowering backends.
-    let src_isa_x64 = codegen_crate_dir.join("src").join("isa").join("x64");
-    let src_isa_aarch64 = codegen_crate_dir.join("src").join("isa").join("aarch64");
-    let src_isa_s390x = codegen_crate_dir.join("src").join("isa").join("s390x");
-    let src_isa_risc_v = codegen_crate_dir.join("src").join("isa").join("riscv64");
+    let isa_dir = codegen_crate_src_dir.join("isa");
+    let src_isa_x64 = isa_dir.join("x64");
+    let src_isa_aarch64 = isa_dir.join("aarch64");
+    let src_isa_s390x = isa_dir.join("s390x");
+    let src_isa_risc_v = isa_dir.join("riscv64");
     #[cfg(feature = "pulley")]
-    let src_isa_pulley_shared = codegen_crate_dir
-        .join("src")
-        .join("isa")
-        .join("pulley_shared");
+    let src_isa_pulley_shared = isa_dir.join("pulley_shared");
 
     // This is a set of ISLE compilation units.
     //
