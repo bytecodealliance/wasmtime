@@ -5,12 +5,11 @@
 
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Display;
 use std::fs;
 use std::io::Write;
 
 pub mod error;
-
-static SHIFTWIDTH: usize = 4;
 
 /// A macro for constructing a [`FileLocation`] at the current location.
 #[macro_export]
@@ -43,11 +42,11 @@ impl core::fmt::Display for FileLocation {
 #[macro_export]
 macro_rules! fmtln {
     ($fmt:ident, $fmtstring:expr, $($fmtargs:expr),*) => {
-        $fmt.line_with_location(format!($fmtstring, $($fmtargs),*), $crate::loc!())
+        $fmt.line_with_location(format_args!($fmtstring, $($fmtargs),*), $crate::loc!())
     };
 
     ($fmt:ident, $arg:expr) => {
-        $fmt.line_with_location(format!($arg), $crate::loc!())
+        $fmt.line_with_location(format_args!($arg), $crate::loc!())
     };
 
     ($_:tt, $($args:expr),+) => {
@@ -84,10 +83,19 @@ impl Language {
     }
 }
 
+static SHIFTWIDTH: usize = 4;
+
+/// Returns 4 times as many spaces. Max indent is 16, which consists of 64 spaces
+fn spaces_for_indent(indent: usize) -> &'static str {
+    // static str of 64 spaces
+    static INDENT_STR: &'static str = "                                                                                                                                ";
+    &INDENT_STR[..INDENT_STR.len().min(indent * SHIFTWIDTH)]
+}
+
 /// Collect source code to be written to a file and keep track of indentation.
 pub struct Formatter {
     indent: usize,
-    lines: Vec<String>,
+    lines: String,
     lang: Language,
 }
 
@@ -97,7 +105,7 @@ impl Formatter {
     pub fn new(lang: Language) -> Self {
         Self {
             indent: 0,
-            lines: Vec::new(),
+            lines: String::new(),
             lang,
         }
     }
@@ -122,37 +130,37 @@ impl Formatter {
     }
 
     /// Get the current whitespace indentation in the form of a String.
-    fn get_indent(&self) -> String {
-        if self.indent == 0 {
-            String::new()
-        } else {
-            format!("{:-1$}", " ", self.indent * SHIFTWIDTH)
-        }
+    fn get_indent(&self) -> &'static str {
+        spaces_for_indent(self.indent)
     }
 
     /// Add an indented line.
-    pub fn line(&mut self, contents: impl AsRef<str>) {
-        let indented_line = format!("{}{}\n", self.get_indent(), contents.as_ref());
-        self.lines.push(indented_line);
+    pub fn line(&mut self, contents: impl Display) {
+        use std::fmt::Write;
+
+        let indent = self.get_indent();
+        write!(&mut self.lines, "{indent}{contents}\n").unwrap();
     }
 
-    /// Add an indented lin with a given a `location` appended as a comment to
+    /// Add an indented line with a given a `location` appended as a comment to
     /// the line (this is useful for identifying where a line was generated).
-    pub fn line_with_location(&mut self, contents: impl AsRef<str>, location: FileLocation) {
+    pub fn line_with_location(&mut self, contents: impl Display, location: FileLocation) {
+        use std::fmt::Write;
+
         let indent = self.get_indent();
-        let contents = contents.as_ref();
-        let indented_line = if self.lang.should_append_location(contents) {
+
+        write!(&mut self.lines, "{indent}{contents}").unwrap();
+        // just after writing contents, check ends_with using should_append_location
+        if self.lang.should_append_location(&self.lines) {
             let comment_token = self.lang.comment_token();
-            format!("{indent}{contents} {comment_token} {location}\n")
-        } else {
-            format!("{indent}{contents}\n")
-        };
-        self.lines.push(indented_line);
+            write!(&mut self.lines, " {comment_token} {location}").unwrap();
+        }
+        self.lines.push('\n');
     }
 
     /// Pushes an empty line.
     pub fn empty_line(&mut self) {
-        self.lines.push("\n".to_string());
+        self.lines.push('\n');
     }
 
     /// Add one or more lines after stripping common indentation.
@@ -161,10 +169,11 @@ impl Formatter {
     }
 
     /// Add a comment line.
-    pub fn comment(&mut self, s: impl AsRef<str>) {
+    pub fn comment(&mut self, comment: impl Display) {
         // Avoid `fmtln!` here: we don't want to append a location comment to a
         // comment.
-        self.line(format!("{} {}", self.lang.comment_token(), s.as_ref()));
+        let comment_token = self.lang.comment_token();
+        self.line(format_args!("{comment_token} {comment}"));
     }
 
     /// Add a (multi-line) documentation comment.
@@ -186,7 +195,7 @@ impl Formatter {
     /// <f()> }`. This properly indents the contents of the block.
     pub fn add_block<T, F: FnOnce(&mut Formatter) -> T>(&mut self, start: &str, f: F) -> T {
         assert!(matches!(self.lang, Language::Rust));
-        self.line(format!("{start} {{"));
+        self.line(format_args!("{start} {{"));
         let ret = self.indent(f);
         self.line("}");
         ret
@@ -241,21 +250,8 @@ impl Formatter {
         eprintln!("Writing generated file: {}", path.display());
         let mut f = fs::File::create(path)?;
 
-        for l in self.lines.iter().map(|l| l.as_bytes()) {
-            f.write_all(l)?;
-        }
-
+        f.write_all(self.lines.as_bytes())?;
         Ok(())
-    }
-}
-
-/// Compute the indentation of s, or None of an empty line.
-fn _indent(s: &str) -> Option<usize> {
-    if s.is_empty() {
-        None
-    } else {
-        let t = s.trim_start();
-        Some(s.len() - t.len())
     }
 }
 
@@ -264,7 +260,7 @@ fn _indent(s: &str) -> Option<usize> {
 /// doc strings.
 fn parse_multiline(s: &str) -> Vec<String> {
     // Convert tabs into spaces.
-    let expanded_tab = format!("{:-1$}", " ", SHIFTWIDTH);
+    let expanded_tab = spaces_for_indent(1);
     let lines: Vec<String> = s.lines().map(|l| l.replace('\t', &expanded_tab)).collect();
 
     // Determine minimum indentation, ignoring the first line and empty lines.
@@ -386,14 +382,6 @@ mod srcgen_tests {
     use super::Match;
     use super::parse_multiline;
 
-    fn from_raw_string<S: Into<String>>(s: S) -> Vec<String> {
-        s.into()
-            .trim()
-            .split("\n")
-            .map(|x| format!("{x}\n"))
-            .collect()
-    }
-
     #[test]
     fn adding_arms_works() {
         let mut m = Match::new("x");
@@ -406,9 +394,7 @@ mod srcgen_tests {
         let mut fmt = Formatter::new(Language::Rust);
         fmt.add_match(m);
 
-        let expected_lines = from_raw_string(
-            r#"
-match x {
+        let expected_lines = r#"match x {
     Green { a, b } => {
         different body
     }
@@ -420,8 +406,7 @@ match x {
         some body
     }
 }
-        "#,
-        );
+"#;
         assert_eq!(fmt.lines, expected_lines);
     }
 
@@ -437,9 +422,7 @@ match x {
         let mut fmt = Formatter::new(Language::Rust);
         fmt.add_match(m);
 
-        let expected_lines = from_raw_string(
-            r#"
-match x {
+        let expected_lines = r#"match x {
     Green { a, b } => {
         different body
     }
@@ -450,8 +433,7 @@ match x {
         unreachable!()
     }
 }
-        "#,
-        );
+"#;
         assert_eq!(fmt.lines, expected_lines);
     }
 
@@ -476,7 +458,7 @@ match x {
             "    // Nested comment\n",
             "Back home again\n",
         ];
-        assert_eq!(fmt.lines, expected_lines);
+        assert_eq!(fmt.lines, expected_lines.join(""));
     }
 
     #[test]
@@ -502,7 +484,7 @@ match x {
     fn fmt_can_add_type_to_lines() {
         let mut fmt = Formatter::new(Language::Rust);
         fmt.line(format!("pub const {}: Type = Type({:#x});", "example", 0));
-        let expected_lines = vec!["pub const example: Type = Type(0x0);\n"];
+        let expected_lines = "pub const example: Type = Type(0x0);\n";
         assert_eq!(fmt.lines, expected_lines);
     }
 
@@ -513,7 +495,7 @@ match x {
         fmt.indent_push();
         fmt.line("world");
         let expected_lines = vec!["hello\n", "    world\n"];
-        assert_eq!(fmt.lines, expected_lines);
+        assert_eq!(fmt.lines, expected_lines.join(""));
     }
 
     #[test]
@@ -521,7 +503,7 @@ match x {
         let mut fmt = Formatter::new(Language::Rust);
         fmt.doc_comment("documentation\nis\ngood");
         let expected_lines = vec!["/// documentation\n", "/// is\n", "/// good\n"];
-        assert_eq!(fmt.lines, expected_lines);
+        assert_eq!(fmt.lines, expected_lines.join(""));
     }
 
     #[test]
@@ -534,13 +516,11 @@ match x {
         If you stick to writing it.
 "#,
         );
-        let expected_lines = from_raw_string(
-            r#"
-/// documentation
+        let expected_lines = r#"/// documentation
 /// can be really good.
 ///
-/// If you stick to writing it."#,
-        );
+/// If you stick to writing it.
+"#;
         assert_eq!(fmt.lines, expected_lines);
     }
 }
