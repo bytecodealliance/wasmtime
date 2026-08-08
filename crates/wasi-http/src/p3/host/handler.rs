@@ -52,29 +52,37 @@ impl<T> HostWithStore<T> for WasiHttp {
         let (res_result_tx, res_result_rx) = oneshot::channel();
 
         let getter = store.getter();
-        let fut = store.with(|mut store| {
-            let WasiHttpCtxView { table, .. } = store.get();
-            let req = table
-                .delete(req)
-                .context("failed to delete request from table")
-                .map_err(HttpError::trap)?;
-            let (req, options) =
-                req.into_http_with_getter(&mut store, io_task_result(io_result_rx), getter)?;
-            HttpResult::Ok(store.get().hooks.send_request(
-                req.map(|body| body.with_state(io_task_rx).boxed_unsync()),
-                options.as_deref().copied(),
-                Box::new(async {
-                    // Forward the response processing result to `WasiHttpCtx` implementation
-                    let Ok(fut) = res_result_rx.await else {
-                        return Ok(());
-                    };
-                    Box::into_pin(fut).await
-                }),
-            ))
-        })?;
-        let (res, io) = Box::into_pin(fut)
-            .await
-            .map_err(|e| store.with(|mut store| store.get().error_to_p3(&e)))?;
+        let fut = store
+            .with(|mut store| {
+                let WasiHttpCtxView { table, .. } = store.get();
+                let req = table
+                    .delete(req)
+                    .context("failed to delete request from table")
+                    .map_err(HttpError::trap)?;
+                let (req, options) =
+                    req.into_http_with_getter(&mut store, io_task_result(io_result_rx), getter)?;
+                HttpResult::Ok(store.get().hooks.send_request(
+                    req.map(|body| body.with_state(io_task_rx).boxed_unsync()),
+                    options.as_deref().copied(),
+                    Box::new(async {
+                        // Forward the response processing result to `WasiHttpCtx` implementation
+                        let Ok(fut) = res_result_rx.await else {
+                            return Ok(());
+                        };
+                        Box::into_pin(fut).await
+                    }),
+                ))
+            })
+            .await?;
+        let (res, io) = match Box::into_pin(fut).await {
+            Ok(res) => res,
+            Err(e) => {
+                return Err(store
+                    .with(|mut store| store.get().error_to_p3(&e))
+                    .await
+                    .into());
+            }
+        };
         let (
             http::response::Parts {
                 status, headers, ..
@@ -83,10 +91,14 @@ impl<T> HostWithStore<T> for WasiHttp {
         ) = res.into_parts();
 
         let mut io = Box::into_pin(io);
-        let body = match io.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+        let io_poll = io.as_mut().poll(&mut Context::from_waker(Waker::noop()));
+        let body = match io_poll {
             Poll::Ready(Ok(())) => body,
             Poll::Ready(Err(e)) => {
-                return Err(store.with(|mut store| store.get().error_to_p3(&e)).into());
+                return Err(store
+                    .with(|mut store| store.get().error_to_p3(&e))
+                    .await
+                    .into());
             }
             Poll::Pending => {
                 // I/O driver still needs to be polled, spawn a task and send handles to it
@@ -102,22 +114,24 @@ impl<T> HostWithStore<T> for WasiHttp {
                 body.with_state(io).boxed_unsync()
             }
         };
-        store.with(|mut store| {
-            let res = Response {
-                status,
-                headers: FieldMap::new_immutable(store.get().hooks, headers),
-                body: Body::Host {
-                    body,
-                    result_tx: res_result_tx,
-                },
-            };
-            store
-                .get()
-                .table
-                .push(res)
-                .context("failed to push response to table")
-                .map_err(HttpError::trap)
-        })
+        store
+            .with(|mut store| {
+                let res = Response {
+                    status,
+                    headers: FieldMap::new_immutable(store.get().hooks, headers),
+                    body: Body::Host {
+                        body,
+                        result_tx: res_result_tx,
+                    },
+                };
+                store
+                    .get()
+                    .table
+                    .push(res)
+                    .context("failed to push response to table")
+                    .map_err(HttpError::trap)
+            })
+            .await
     }
 }
 

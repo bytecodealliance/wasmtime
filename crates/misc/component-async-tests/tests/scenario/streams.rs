@@ -295,7 +295,9 @@ pub async fn async_closed_stream() -> Result<()> {
             let stream = guest.local_local_closed_stream().call_get(accessor).await?;
 
             let (tx, mut rx) = mpsc::channel(1);
-            accessor.with(move |store| stream.pipe(store, PipeConsumer::new(tx)))?;
+            accessor
+                .with(move |store| stream.pipe(store, PipeConsumer::new(tx)))
+                .await?;
             assert!(rx.next().await.is_none());
 
             Ok(())
@@ -498,8 +500,9 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
     store
         .run_concurrent(async |store| {
             let count = things.len();
-            let stream =
-                store.with(|store| StreamReader::new(store, VecProducer::new(things, delay)))?;
+            let stream = store
+                .with(|store| StreamReader::new(store, VecProducer::new(things, delay)))
+                .await?;
 
             let stream = guest
                 .local_local_short_reads()
@@ -509,9 +512,9 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
             let received_things = Arc::new(Mutex::new(Vec::<Thing>::with_capacity(count)));
             // Read just one item at a time from the guest, forcing it to
             // re-take ownership of any unwritten items.
-            store.with(|store| {
-                stream.pipe(store, OneAtATime::new(received_things.clone(), delay))
-            })?;
+            store
+                .with(|store| stream.pipe(store, OneAtATime::new(received_things.clone(), delay)))
+                .await?;
 
             for i in 0.. {
                 assert!(i < 1000);

@@ -38,14 +38,16 @@ impl<T> bindings::local::local::resource_stream::HostWithStore<T> for Ctx {
         accessor: &Accessor<T, Self>,
         count: u32,
     ) -> wasmtime::Result<StreamReader<Resource<ResourceStreamX>>> {
-        accessor.with(|mut access| {
-            let (mut tx, rx) = mpsc::channel(usize::try_from(count).unwrap());
-            for _ in 0..count {
-                tx.try_send(access.get().table.push(ResourceStreamX)?)
-                    .unwrap()
-            }
-            StreamReader::new(access, PipeProducer::new(rx))
-        })
+        accessor
+            .with(|mut access| {
+                let (mut tx, rx) = mpsc::channel(usize::try_from(count).unwrap());
+                for _ in 0..count {
+                    tx.try_send(access.get().table.push(ResourceStreamX)?)
+                        .unwrap()
+                }
+                StreamReader::new(access, PipeProducer::new(rx))
+            })
+            .await
     }
 }
 
