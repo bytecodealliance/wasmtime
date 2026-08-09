@@ -72,7 +72,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
         ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
     };
     ensure!(
-        (header.e_flags(endian) & expected_e_flags) == expected_e_flags,
+        header.e_flags(endian).contains(expected_e_flags),
         "incompatible object file format"
     );
 
@@ -156,12 +156,12 @@ fn detect_precompiled<'data, R: object::ReadRef<'data>>(
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
             e_flags,
-        } if e_flags & obj::EF_WASMTIME_MODULE != 0 => Some(Precompiled::Module),
+        } if e_flags.contains(obj::EF_WASMTIME_MODULE) => Some(Precompiled::Module),
         FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
             e_flags,
-        } if e_flags & obj::EF_WASMTIME_COMPONENT != 0 => Some(Precompiled::Component),
+        } if e_flags.contains(obj::EF_WASMTIME_COMPONENT) => Some(Precompiled::Component),
         _ => None,
     }
 }

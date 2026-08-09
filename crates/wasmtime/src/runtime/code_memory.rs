@@ -202,7 +202,10 @@ impl CodeMemory {
                 ".text" => {
                     text = range;
 
-                    if section_header.sh_flags(endian) & obj::SH_WASMTIME_NOT_EXECUTED != 0 {
+                    if section_header
+                        .sh_flags(endian)
+                        .contains(obj::SH_WASMTIME_NOT_EXECUTED)
+                    {
                         needs_executable = false;
                     }
                 }

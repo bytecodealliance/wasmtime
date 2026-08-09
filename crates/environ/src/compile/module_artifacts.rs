@@ -284,22 +284,14 @@ impl FinishedObject for Vec<u8> {
         struct ObjectVec(Vec<u8>);
 
         impl WritableBuffer for ObjectVec {
-            fn len(&self) -> usize {
-                self.0.len()
-            }
-
-            fn reserve(&mut self, additional: usize) -> Result<(), ()> {
+            fn reserve(&mut self, additional: u64) -> Result<(), ()> {
                 assert_eq!(self.0.len(), 0, "cannot reserve twice");
-                self.0 = Vec::with_capacity(additional);
+                self.0 = Vec::with_capacity(additional as usize);
                 Ok(())
             }
 
-            fn resize(&mut self, new_len: usize) {
-                if new_len <= self.0.len() {
-                    self.0.truncate(new_len)
-                } else {
-                    self.0.extend(vec![0; new_len - self.0.len()])
-                }
+            fn write_zeros(&mut self, additional: u64) {
+                self.0.extend(vec![0; additional as usize])
             }
 
             fn write_bytes(&mut self, val: &[u8]) {

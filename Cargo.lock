@@ -1007,7 +1007,7 @@ dependencies = [
  "cranelift-module",
  "gimli 0.33.0",
  "log",
- "object 0.39.0",
+ "object 0.40.0",
  "target-lexicon 0.13.5",
 ]
 
@@ -1827,9 +1827,6 @@ name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
-dependencies = [
- "foldhash 0.2.0",
-]
 
 [[package]]
 name = "hashbrown"
@@ -2465,7 +2462,7 @@ name = "min-platform-host"
 version = "49.0.0"
 dependencies = [
  "libloading",
- "object 0.39.0",
+ "object 0.40.0",
  "wasmtime",
 ]
 
@@ -2631,12 +2628,12 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63944c133d03f44e75866bbd160b95af0ec3f6a13d936d69d31c81078cbc5baf"
+checksum = "dd229a0361b9d0d4396176e02d65897f487eebeab7caa6d443855ee152ca0b9c"
 dependencies = [
  "crc32fast",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.0",
  "indexmap 2.14.0",
  "memchr",
 ]
@@ -4352,7 +4349,7 @@ version = "49.0.0"
 dependencies = [
  "bitflags 2.11.1",
  "byte-array-literals",
- "object 0.39.0",
+ "object 0.40.0",
  "wasip1",
  "wasm-encoder 0.254.0",
  "wit-bindgen-rust-macro 0.60.0",
@@ -4600,7 +4597,7 @@ dependencies = [
  "log",
  "mach2 0.6.0",
  "memfd",
- "object 0.39.0",
+ "object 0.40.0",
  "once_cell",
  "postcard",
  "proptest",
@@ -4708,7 +4705,7 @@ dependencies = [
  "log",
  "memchr",
  "num_cpus",
- "object 0.39.0",
+ "object 0.40.0",
  "pin-project-lite",
  "pulley-interpreter",
  "rand 0.10.1",
@@ -4787,7 +4784,7 @@ dependencies = [
  "hashbrown 0.17.0",
  "indexmap 2.14.0",
  "log",
- "object 0.39.0",
+ "object 0.40.0",
  "postcard",
  "rustc-demangle",
  "semver",
@@ -4962,7 +4959,7 @@ dependencies = [
  "gimli 0.33.0",
  "itertools 0.14.0",
  "log",
- "object 0.39.0",
+ "object 0.40.0",
  "pulley-interpreter",
  "smallvec 1.15.1",
  "target-lexicon 0.13.5",
@@ -5039,7 +5036,7 @@ name = "wasmtime-internal-jit-debug"
 version = "49.0.0"
 dependencies = [
  "cc",
- "object 0.39.0",
+ "object 0.40.0",
  "rustix 1.1.4",
  "wasmtime-internal-versioned-export-macros",
 ]
@@ -5059,7 +5056,7 @@ version = "49.0.0"
 dependencies = [
  "cranelift-codegen",
  "log",
- "object 0.39.0",
+ "object 0.40.0",
  "wasmtime-environ",
 ]
 
@@ -5079,7 +5076,7 @@ dependencies = [
  "cranelift-codegen",
  "gimli 0.33.0",
  "log",
- "object 0.39.0",
+ "object 0.40.0",
  "target-lexicon 0.13.5",
  "wasmparser 0.254.0",
  "wasmtime-environ",
@@ -5274,7 +5271,7 @@ version = "49.0.0"
 dependencies = [
  "json-from-wast",
  "log",
- "object 0.39.0",
+ "object 0.40.0",
  "serde_json",
  "tokio",
  "wasmparser 0.254.0",
