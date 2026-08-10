@@ -703,10 +703,8 @@ impl WasmtimeConfig {
                     config.config.simd_enabled = false;
                 }
 
-                // Account for the proposals that are currently only
-                // supported on x64.
+                // Account for the proposals that Winch only supports on x64.
                 if cfg!(target_arch = "aarch64") {
-                    config.config.simd_enabled = false;
                     config.config.wide_arithmetic_enabled = false;
                     config.config.threads_enabled = false;
                 }
