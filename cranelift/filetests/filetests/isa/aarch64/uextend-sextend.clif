@@ -323,8 +323,7 @@ block0(v0: f32, v1: f32):
 ;   orr w0, w4, w6
 ;   ret
 
-;; Several extends of one comparison share its register rather than each
-;; re-emitting the comparison.
+;; Each extended use lowers the comparison independently.
 function %f_u_icmp_multi_use(i32, i32) -> i64 {
 block0(v0: i32, v1: i32):
   v2 = icmp eq v0, v1
@@ -337,15 +336,19 @@ block0(v0: i32, v1: i32):
 ; VCode:
 ; block0:
 ;   subs wzr, w0, w1
-;   cset x5, eq
-;   lsl x0, x5, x5
+;   cset x6, eq
+;   subs wzr, w0, w1
+;   cset x7, eq
+;   lsl x0, x7, x6
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, w1
-;   cset x5, eq
-;   lsl x0, x5, x5
+;   cset x6, eq
+;   cmp w0, w1
+;   cset x7, eq
+;   lsl x0, x7, x6
 ;   ret
 
 ;; Extending to `i128` needs a zero upper half, so it keeps its own rule.
@@ -371,4 +374,3 @@ block0(v0: i32, v1: i32):
 ;   uxtb w0, w6
 ;   mov x1, #0
 ;   ret
-

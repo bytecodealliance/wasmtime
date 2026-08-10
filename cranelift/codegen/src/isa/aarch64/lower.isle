@@ -1273,15 +1273,15 @@
       (if-let mem_op (is_sinkable_inst x))
       (load_acquire in flags (sink_atomic_load mem_op)))
 
-;; A scalar comparison is lowered by `lower_cond_result_bool`, whose every arm
-;; already has all upper bits clear, so extending it is a no-op.
+;; Lower scalar comparisons here so we know their upper bits are clear and can
+;; skip the extension.
 ;;
 ;; This does not hold true for vector comparisons, which instead produce a
 ;; per-lane mask of either all ones or zeroes. rather than 0 or 1.
-(rule 1 (lower (uextend (fits_in_64 _) x @ (icmp _ _ (value_type (ty_int _)) _)))
-      (value_regs_get x 0))
-(rule 1 (lower (uextend (fits_in_64 _) x @ (fcmp _ _ (value_type (ty_scalar_float _)) _)))
-      (value_regs_get x 0))
+(rule 1 (lower (uextend (fits_in_64 _) (icmp _ cond x @ (value_type (ty_int _)) y)))
+      (lower_cond_result_bool (emit_icmp cond x y)))
+(rule 1 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type (ty_scalar_float _)) y)))
+      (lower_cond_result_bool (emit_fcmp cond x y)))
 
 ;; Conversion to 128-bit needs a zero-extension of the lower bits and the upper
 ;; bits are all zero.
@@ -2137,7 +2137,7 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero_swap cond rn vec_size))))
 
-(rule 0 (lower (fcmp _ cond x @ (value_type (ty_scalar_float in_ty)) y))
+(rule 0 (lower (fcmp _ cond x @ (value_type (ty_scalar_float _)) y))
   (lower_cond_result_bool (emit_fcmp cond x y)))
 
 (rule -1 (lower (fcmp _ cond x @ (value_type in_ty) y))
@@ -2176,7 +2176,7 @@
         (rm Reg (put_in_reg y)))
    (vec_cmp rn rm in_ty cond)))
 
-(rule -2 (lower (icmp _ cond x @ (value_type (ty_int ty)) y))
+(rule -2 (lower (icmp _ cond x @ (value_type (ty_int _)) y))
   (lower_cond_result_bool (emit_icmp cond x y)))
 
 ;; Helper to put a `CondResult` into a general register.
