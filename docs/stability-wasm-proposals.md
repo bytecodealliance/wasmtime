@@ -35,6 +35,7 @@ The emoji legend is:
 | [`function-references`]  | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`gc`]                   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`exception-handling`]   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`wide-arithmetic`]      | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 
 [^1]: The `component-model` proposal is not at phase 4 in the standardization
     process but it is still enabled-by-default in Wasmtime.
@@ -51,7 +52,6 @@ The emoji legend is:
 |--------------------------|---------|-------|----------|--------|-----|--------|
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
 | [`threads`]              | ✅      | ✅    | 🚧[^8]   | ❌[^4] | ✅  | ✅     |
-| [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
 
 [^4]: Fuzzing with threads is an open implementation question that is expected
     to get fleshed out as the [`shared-everything-threads`] proposal advances.
@@ -83,6 +83,7 @@ The emoji legend is:
 | [`flexible-vectors`]          | [#9464](https://github.com/bytecodealliance/wasmtime/issues/9464) |
 | [`memory-control`]            | [#9467](https://github.com/bytecodealliance/wasmtime/issues/9467) |
 | [`shared-everything-threads`] | [#9466](https://github.com/bytecodealliance/wasmtime/issues/9466) |
+| [`compact-import-section`]    | [#14108](https://github.com/bytecodealliance/wasmtime/issues/14108) |
 
 [`mutable-globals`]: https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md
 [`sign-extension-ops`]: https://github.com/WebAssembly/spec/blob/master/proposals/sign-extension-ops/Overview.md
@@ -108,6 +109,7 @@ The emoji legend is:
 [`wide-arithmetic`]: https://github.com/WebAssembly/wide-arithmetic/blob/main/proposals/wide-arithmetic/Overview.md
 [`gc`]: https://github.com/WebAssembly/gc
 [`custom-page-sizes`]: https://github.com/WebAssembly/custom-page-sizes
+[`compact-import-section`]: https://github.com/WebAssembly/compact-import-section
 
 ## Feature requirements
 

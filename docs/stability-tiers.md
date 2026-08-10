@@ -43,6 +43,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`function-references`]                    |
 | WebAssembly Proposal | [`gc`]                                     |
 | WebAssembly Proposal | [`exception-handling`]                     |
+| WebAssembly Proposal | [`wide-arithmetic`]                        |
 | WASI Proposal        | [`wasi-io`]                                |
 | WASI Proposal        | [`wasi-clocks`]                            |
 | WASI Proposal        | [`wasi-filesystem`]                        |
@@ -89,7 +90,6 @@ For explanations of what each tier means see below.
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
 | WebAssembly Proposal | [`custom-page-sizes`]      | Unstable wasm proposal      |
 | WebAssembly Proposal | [`threads`]                | fuzzing, API quality        |
-| WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
 | Embedding API        | C++                        | Full-time maintainer        |
 
