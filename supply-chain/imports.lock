@@ -1744,8 +1744,8 @@ user-login = "philipc"
 user-name = "Philip Craig"
 
 [[publisher.object]]
-version = "0.39.0"
-when = "2026-03-29"
+version = "0.40.0"
+when = "2026-08-01"
 user-id = 4415
 user-login = "philipc"
 user-name = "Philip Craig"
