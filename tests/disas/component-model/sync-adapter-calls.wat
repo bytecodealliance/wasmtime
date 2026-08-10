@@ -149,7 +149,6 @@
 ;;                                     store notrap aligned region5 v19, v20+136
 ;;                                     v26 = load.i64 notrap aligned readonly can_move region3 v3+176
 ;;                                     v27 = load.i32 notrap aligned region4 v26
-;;                                     store notrap aligned region4 v27, v26
 ;;                                     jump block17
 ;;
 ;;                                 block17:
