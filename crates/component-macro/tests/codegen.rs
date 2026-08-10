@@ -861,6 +861,31 @@ mod named_imports {
         }
     }
 
+    mod hyphenated_interface_name {
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface my-itf {
+                    ping: func();
+                }
+
+                world the-world {
+                    import my-itf;
+                }
+            ",
+            named_imports: {
+                "foo:foo/my-itf": String,
+            },
+        });
+
+        struct MyHost;
+
+        impl named_imports::foo::foo::my_itf::Host for MyHost {
+            fn ping(&mut self, _id: String) {}
+        }
+    }
+
     mod async_store {
         #[derive(Clone)]
         pub struct MyId(u32);
