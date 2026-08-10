@@ -31,46 +31,46 @@
 ;;       tst     w0, w0
 ;;       b.eq    #0x124
 ;;       b       #0x60
-;;   60: mov     w1, w0
-;;       and     w1, w1, #1
-;;       tst     w1, w1
+;;   60: mov     w16, w0
+;;       and     w16, w16, #1
+;;       tst     w16, w16
 ;;       b.ne    #0x124
 ;;       b       #0x74
 ;;   74: ldur    x1, [x9, #8]
 ;;       ldur    x2, [x1, #0x28]
 ;;       ldur    x1, [x1, #0x20]
-;;       mov     x3, x0
-;;       add     x3, x3, #0x14
-;;       cmp     x3, x2, uxtx
+;;       mov     x16, x0
+;;       add     x16, x16, #0x14
+;;       cmp     x16, x2, uxtx
 ;;       sub     sp, x28, #0xc
 ;;       b.hi    #0x14c
 ;;   94: mov     sp, x28
 ;;       mov     x2, x1
 ;;       add     x2, x2, x0, uxtx
-;;       ldur    w3, [x2]
-;;       and     w3, w3, #2
-;;       tst     w3, w3
+;;       ldur    w16, [x2]
+;;       and     w16, w16, #2
+;;       tst     w16, w16
 ;;       b.ne    #0x124
 ;;       b       #0xb4
-;;   b4: ldur    x4, [x9, #0x20]
-;;       ldur    w3, [x4]
-;;       stur    w3, [x2, #0x10]
-;;       ldur    w3, [x2]
-;;       orr     w3, w3, #2
-;;       stur    w3, [x2]
-;;       ldur    x3, [x2, #8]
-;;       add     x3, x3, #1
-;;       stur    x3, [x2, #8]
-;;       stur    w0, [x4]
-;;       ldur    w3, [x4, #4]
-;;       add     w3, w3, #1
-;;       stur    w3, [x4, #4]
-;;       ldur    w2, [x4, #8]
-;;       add     w2, w2, w2, uxtx
-;;       cmp     w3, w2, uxtx
+;;   b4: ldur    x3, [x9, #0x20]
+;;       ldur    w16, [x3]
+;;       stur    w16, [x2, #0x10]
+;;       ldur    w16, [x2]
+;;       orr     w16, w16, #2
+;;       stur    w16, [x2]
+;;       ldur    x4, [x2, #8]
+;;       add     x4, x4, #1
+;;       stur    x4, [x2, #8]
+;;       stur    w0, [x3]
+;;       ldur    w4, [x3, #4]
+;;       add     w4, w4, #1
+;;       stur    w4, [x3, #4]
+;;       ldur    w16, [x3, #8]
+;;       add     w16, w16, w16, uxtx
+;;       cmp     w4, w16, uxtx
 ;;       b.lo    #0x124
 ;;       b       #0xfc
-;;   fc: cmp     w3, #0x400
+;;   fc: cmp     w4, #0x400
 ;;       b.lo    #0x124
 ;;       b       #0x108
 ;;  108: sub     x28, x28, #0xc

@@ -38,14 +38,14 @@
 ;;       tst     w0, w0
 ;;       b.eq    #0xbc
 ;;       b       #0x7c
-;;   7c: mov     w4, w0
-;;       and     w4, w4, #1
-;;       tst     w4, w4
+;;   7c: mov     w16, w0
+;;       and     w16, w16, #1
+;;       tst     w16, w16
 ;;       b.ne    #0xbc
 ;;       b       #0x90
-;;   90: mov     x4, x0
-;;       add     x4, x4, #0x10
-;;       cmp     x4, x2, uxtx
+;;   90: mov     x16, x0
+;;       add     x16, x16, #0x10
+;;       cmp     x16, x2, uxtx
 ;;       sub     sp, x28, #8
 ;;       b.hi    #0x16c
 ;;   a4: mov     sp, x28
@@ -58,14 +58,14 @@
 ;;       tst     w3, w3
 ;;       b.eq    #0x150
 ;;       b       #0xcc
-;;   cc: mov     w4, w3
-;;       and     w4, w4, #1
-;;       tst     w4, w4
+;;   cc: mov     w16, w3
+;;       and     w16, w16, #1
+;;       tst     w16, w16
 ;;       b.ne    #0x150
 ;;       b       #0xe0
-;;   e0: mov     x4, x3
-;;       add     x4, x4, #0x10
-;;       cmp     x4, x2, uxtx
+;;   e0: mov     x16, x3
+;;       add     x16, x16, #0x10
+;;       cmp     x16, x2, uxtx
 ;;       sub     sp, x28, #8
 ;;       b.hi    #0x170
 ;;   f4: mov     sp, x28
