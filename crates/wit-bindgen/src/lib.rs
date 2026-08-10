@@ -502,7 +502,7 @@ impl Wasmtime {
         let key_name = resolve.name_world_key(&key);
         generator.generate_add_to_linker(id, &key_name);
         let body = String::from(mem::take(&mut generator.src));
-        let interface_name = resolve.interfaces[id].name.as_ref().unwrap();
+        let interface_name = to_rust_ident(resolve.interfaces[id].name.as_ref().unwrap());
         let body = format!("pub mod {interface_name} {{\n{body}\n}}");
         let path = self.generate_interface_name(resolve, id, &key, InterfaceKind::Named);
         self.named_import_modules
