@@ -713,3 +713,23 @@
 (rule (simplify (uge ty (bor ty y x) x)) (cmp_true ty))
 (rule (simplify (ule ty x (bor ty x y))) (cmp_true ty))
 (rule (simplify (ule ty x (bor ty y x))) (cmp_true ty))
+
+;; (~x & y) & x == (x & ~y) & y == 0.
+(rule (simplify (band ty (band ty (bnot ty x) y) x))
+      (subsume (all_zero ty)))
+(rule (simplify (band ty (band ty x (bnot ty y)) y))
+      (subsume (all_zero ty)))
+(rule (simplify (band ty x (band ty (bnot ty x) y)))
+      (subsume (all_zero ty)))
+(rule (simplify (band ty x (band ty y (bnot ty x))))
+      (subsume (all_zero ty)))
+
+;; ~(x | y) & x == ~(x | y) & y == 0.
+(rule (simplify (band ty (bnot ty (bor ty x y)) x))
+      (subsume (all_zero ty)))
+(rule (simplify (band ty (bnot ty (bor ty x y)) y))
+      (subsume (all_zero ty)))
+(rule (simplify (band ty x (bnot ty (bor ty x y))))
+      (subsume (all_zero ty)))
+(rule (simplify (band ty x (bnot ty (bor ty y x))))
+      (subsume (all_zero ty)))
