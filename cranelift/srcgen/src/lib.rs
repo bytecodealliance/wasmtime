@@ -5,6 +5,7 @@
 
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Display;
 use std::fs;
 use std::io::Write;
 
@@ -43,11 +44,11 @@ impl core::fmt::Display for FileLocation {
 #[macro_export]
 macro_rules! fmtln {
     ($fmt:ident, $fmtstring:expr, $($fmtargs:expr),*) => {
-        $fmt.line_with_location(format!($fmtstring, $($fmtargs),*), $crate::loc!())
+        $fmt.line_with_location(format_args!($fmtstring, $($fmtargs),*), $crate::loc!())
     };
 
     ($fmt:ident, $arg:expr) => {
-        $fmt.line_with_location(format!($arg), $crate::loc!())
+        $fmt.line_with_location(format_args!($arg), $crate::loc!())
     };
 
     ($_:tt, $($args:expr),+) => {
@@ -131,23 +132,28 @@ impl Formatter {
     }
 
     /// Add an indented line.
-    pub fn line(&mut self, contents: impl AsRef<str>) {
-        let indented_line = format!("{}{}\n", self.get_indent(), contents.as_ref());
+    pub fn line(&mut self, contents: impl Display) {
+        let indent = self.get_indent();
+        let indented_line = format!("{indent}{contents}\n");
         self.lines.push(indented_line);
     }
 
-    /// Add an indented lin with a given a `location` appended as a comment to
+    /// Add an indented line with a given a `location` appended as a comment to
     /// the line (this is useful for identifying where a line was generated).
-    pub fn line_with_location(&mut self, contents: impl AsRef<str>, location: FileLocation) {
+    pub fn line_with_location(&mut self, contents: impl Display, location: FileLocation) {
+        use std::fmt::Write;
+
         let indent = self.get_indent();
-        let contents = contents.as_ref();
-        let indented_line = if self.lang.should_append_location(contents) {
+        let mut buf = String::new();
+
+        write!(&mut buf, "{indent}{contents}").unwrap();
+        // just after writing contents, check ends_with using should_append_location
+        if self.lang.should_append_location(&buf) {
             let comment_token = self.lang.comment_token();
-            format!("{indent}{contents} {comment_token} {location}\n")
-        } else {
-            format!("{indent}{contents}\n")
-        };
-        self.lines.push(indented_line);
+            write!(&mut buf, " {comment_token} {location}").unwrap();
+        }
+        buf.push('\n');
+        self.lines.push(buf);
     }
 
     /// Pushes an empty line.
@@ -161,10 +167,11 @@ impl Formatter {
     }
 
     /// Add a comment line.
-    pub fn comment(&mut self, s: impl AsRef<str>) {
+    pub fn comment(&mut self, comment: impl Display) {
         // Avoid `fmtln!` here: we don't want to append a location comment to a
         // comment.
-        self.line(format!("{} {}", self.lang.comment_token(), s.as_ref()));
+        let comment_token = self.lang.comment_token();
+        self.line(format_args!("{comment_token} {comment}"));
     }
 
     /// Add a (multi-line) documentation comment.
@@ -186,7 +193,7 @@ impl Formatter {
     /// <f()> }`. This properly indents the contents of the block.
     pub fn add_block<T, F: FnOnce(&mut Formatter) -> T>(&mut self, start: &str, f: F) -> T {
         assert!(matches!(self.lang, Language::Rust));
-        self.line(format!("{start} {{"));
+        self.line(format_args!("{start} {{"));
         let ret = self.indent(f);
         self.line("}");
         ret
