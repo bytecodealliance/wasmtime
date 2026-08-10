@@ -892,7 +892,9 @@ impl WasmtimeConfig {
             if let Some(amt) = mcfg.gc_heap_initial_size {
                 let page_size = 64 * 1024;
                 let amt = amt.next_multiple_of(page_size);
-                let max = (pcfg.max_memory_size as u64).next_multiple_of(page_size);
+                // Round down so the GC's round-up-to-page-size doesn't push
+                // this back over the pooling limit.
+                let max = (pcfg.max_memory_size as u64) / page_size * page_size;
                 mcfg.gc_heap_initial_size = Some(amt.min(max));
             }
         }
