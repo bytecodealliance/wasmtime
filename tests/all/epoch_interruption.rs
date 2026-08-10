@@ -496,3 +496,130 @@ async fn drop_future_on_epoch_yield(config: &mut Config) -> Result<()> {
     assert_eq!(true, alive_flag.load(Ordering::Acquire));
     Ok(())
 }
+
+#[test]
+fn memory_grow_in_epoch_callback() -> Result<()> {
+    let mut config = Config::new();
+    config.epoch_interruption(true);
+    config.memory_reservation(0);
+    config.memory_reservation_for_growth(0);
+    config.memory_guard_size(0);
+    config.memory_may_move(true);
+    config.memory_init_cow(false);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (memory (export "mem") 1)
+              (func (export "go")
+                (memory.fill (i32.const 0) (i32.const 0x41) (i32.const 65536))))
+        "#,
+    )?;
+
+    let mut store: Store<Option<Memory>> = Store::new(&engine, None);
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_callback(move |mut cx| {
+        if let Some(mem) = *cx.data() {
+            mem.grow(&mut cx, 5)?;
+        }
+        Ok(UpdateDeadline::Continue(0))
+    });
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let mem = instance.get_memory(&mut store, "mem").unwrap();
+    *store.data_mut() = Some(mem);
+    engine.increment_epoch();
+
+    instance
+        .get_typed_func::<(), ()>(&mut store, "go")?
+        .call(&mut store, ())?;
+
+    let data = mem.data(&store);
+    assert_eq!(data[0], 0x41);
+    assert_eq!(data[65535], 0x41);
+    Ok(())
+}
+
+#[test]
+fn table_grow_in_epoch_callback() -> Result<()> {
+    let mut config = Config::new();
+    config.epoch_interruption(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (table $t (export "t") 1 funcref)
+              (func (export "go")
+                (table.fill $t (i32.const 0) (ref.null func) (i32.const 1))))
+        "#,
+    )?;
+
+    let mut store: Store<Option<Table>> = Store::new(&engine, None);
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_callback(move |mut cx| {
+        if let Some(t) = *cx.data() {
+            t.grow(&mut cx, 5, Ref::Func(None))?;
+        }
+        Ok(UpdateDeadline::Continue(0))
+    });
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let t = instance.get_table(&mut store, "t").unwrap();
+    *store.data_mut() = Some(t);
+    engine.increment_epoch();
+
+    instance
+        .get_typed_func::<(), ()>(&mut store, "go")?
+        .call(&mut store, ())?;
+    Ok(())
+}
+
+#[test]
+fn gc_during_epoch_callback() -> Result<()> {
+    let mut config = Config::new();
+    config.epoch_interruption(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (type $box (struct (field i32)))
+              (type $arr (array (mut (ref null $box))))
+              (global $sink (mut (ref null $arr)) (ref.null $arr))
+              (func $mk (param $n i32) (result (ref $arr))
+                (array.new_default $arr (local.get $n)))
+              (func (export "run") (param $n i32) (result i32)
+                (local $i i32)
+                (block $done
+                    (loop $l
+                      (br_if $done (i32.ge_u (local.get $i) (i32.const 40)))
+                      (array.fill $arr (call $mk (local.get $n)) (i32.const 0)
+                                  (struct.new $box (i32.const 7)) (local.get $n))
+                      (global.set $sink (call $mk (i32.const 8)))
+                      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                      (br $l)
+                    )
+                )
+                (i32.mul (local.get $n) (i32.const 7))))
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_callback(|mut caller| {
+        caller.gc(None)?;
+        Ok(UpdateDeadline::Continue(0))
+    });
+    engine.increment_epoch();
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<u32, u32>(&mut store, "run")?;
+    let n = 200;
+    for i in 0..5 {
+        let got = run.call(&mut store, n)?;
+        assert_eq!(got, 7 * n, "iteration {i} read back {got}");
+    }
+    Ok(())
+}
