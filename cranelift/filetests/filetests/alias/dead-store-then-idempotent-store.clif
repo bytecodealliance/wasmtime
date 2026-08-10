@@ -1,0 +1,181 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Removing a dead store must expose the *previous* memory version to the store
+;; that overwrote it, so that a save/clear/restore sequence collapses entirely in
+;; a single pass rather than one link per pass.
+function %save_clear_restore(i64) {
+    region0 = 0 "flags"
+block0(v0: i64):
+    v1 = load.i32 notrap aligned region0 v0
+    v2 = iconst.i32 0
+    store notrap aligned region0 v2, v0
+    store notrap aligned region0 v1, v0
+    return
+}
+
+; function %save_clear_restore(i64) fast {
+;     region0 = 0 "flags"
+;
+; block0(v0: i64):
+;     v1 = load.i32 notrap aligned region0 v0
+;     return
+; }
+
+;; The same, but with several dead stores between the load and the restore.
+function %save_clobber_many_restore(i64, i32, i32) {
+    region0 = 0 "flags"
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = load.i32 notrap aligned region0 v0
+    store notrap aligned region0 v1, v0
+    store notrap aligned region0 v2, v0
+    store notrap aligned region0 v1, v0
+    store notrap aligned region0 v3, v0
+    return
+}
+
+; function %save_clobber_many_restore(i64, i32, i32) fast {
+;     region0 = 0 "flags"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     v3 = load.i32 notrap aligned region0 v0
+;     return
+; }
+
+;; Two independent flags, each in its own alias region, are both collapsed.
+;;
+;; Note that the accesses are interleaved: unwinding one region's dead store
+;; must not disturb the other region's last-store state.
+function %two_regions_interleaved(i64, i64) {
+    region0 = 0 "flags0"
+    region1 = 1 "flags1"
+block0(v0: i64, v1: i64):
+    v2 = load.i32 notrap aligned region0 v0
+    v3 = load.i32 notrap aligned region1 v1
+    v4 = iconst.i32 0
+    store notrap aligned region0 v4, v0
+    store notrap aligned region1 v4, v1
+    store notrap aligned region0 v2, v0
+    store notrap aligned region1 v3, v1
+    return
+}
+
+; function %two_regions_interleaved(i64, i64) fast {
+;     region0 = 0 "flags0"
+;     region1 = 1 "flags1"
+;
+; block0(v0: i64, v1: i64):
+;     v2 = load.i32 notrap aligned region0 v0
+;     v3 = load.i32 notrap aligned region1 v1
+;     return
+; }
+
+;; The restore is folded across intervening blocks, so long as nothing in them
+;; observes the flag.
+function %save_clear_restore_cross_block(i64) {
+    region0 = 0 "flags"
+block0(v0: i64):
+    v1 = load.i32 notrap aligned region0 v0
+    v2 = iconst.i32 0
+    store notrap aligned region0 v2, v0
+    jump block1
+
+block1:
+    jump block2
+
+block2:
+    store notrap aligned region0 v1, v0
+    return
+}
+
+; function %save_clear_restore_cross_block(i64) fast {
+;     region0 = 0 "flags"
+;
+; block0(v0: i64):
+;     v1 = load.i32 notrap aligned region0 v0
+;     jump block1
+;
+; block1:
+;     jump block2
+;
+; block2:
+;     return
+; }
+
+;; Negative test: a call between the clear and the restore observes the cleared
+;; flag, so neither store may be removed.
+function %call_observes_cleared_flag(i64) {
+    region0 = 0 "flags"
+    fn0 = %g(i64)
+block0(v0: i64):
+    v1 = load.i32 notrap aligned region0 v0
+    v2 = iconst.i32 0
+    store notrap aligned region0 v2, v0
+    call fn0(v0)
+    store notrap aligned region0 v1, v0
+    return
+}
+
+; function %call_observes_cleared_flag(i64) fast {
+;     region0 = 0 "flags"
+;     sig0 = (i64) fast
+;     fn0 = %g sig0
+;
+; block0(v0: i64):
+;     v1 = load.i32 notrap aligned region0 v0
+;     v2 = iconst.i32 0
+;     store notrap aligned region0 v2, v0  ; v2 = 0
+;     call fn0(v0)
+;     store notrap aligned region0 v1, v0
+;     return
+; }
+
+;; Negative test: the final store writes a value other than the saved one, so it
+;; is not idempotent. Only the dead middle store is removed.
+function %restore_wrong_value(i64, i32) {
+    region0 = 0 "flags"
+block0(v0: i64, v1: i32):
+    v2 = load.i32 notrap aligned region0 v0
+    v3 = iconst.i32 0
+    store notrap aligned region0 v3, v0
+    store notrap aligned region0 v1, v0
+    return
+}
+
+; function %restore_wrong_value(i64, i32) fast {
+;     region0 = 0 "flags"
+;
+; block0(v0: i64, v1: i32):
+;     v2 = load.i32 notrap aligned region0 v0
+;     store notrap aligned region0 v1, v0
+;     return
+; }
+
+;; Negative test: rolling back to the previous memory version must not resurrect
+;; knowledge across a store to a *different* address in the same region. The
+;; region's last-store slot is per-region, not per-address, so after the store to
+;; `v0+8` the analysis no longer knows what is at `v0`, and the final store to
+;; `v0` cannot be proven idempotent.
+function %same_region_different_address(i64, i32) {
+    region0 = 0 "flags"
+block0(v0: i64, v1: i32):
+    v2 = load.i32 notrap aligned region0 v0
+    v3 = iconst.i32 0
+    store notrap aligned region0 v3, v0
+    store notrap aligned region0 v1, v0+8
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %same_region_different_address(i64, i32) fast {
+;     region0 = 0 "flags"
+;
+; block0(v0: i64, v1: i32):
+;     v2 = load.i32 notrap aligned region0 v0
+;     v3 = iconst.i32 0
+;     store notrap aligned region0 v3, v0  ; v3 = 0
+;     store notrap aligned region0 v1, v0+8
+;     store notrap aligned region0 v2, v0
+;     return
+; }
