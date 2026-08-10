@@ -819,3 +819,29 @@ block0(v0: i32, v1: i32):
 
 ; run: %test_ule_x_bor(0, 0) == 1
 ; run: %test_ule_x_bor(1, 0) == 1
+
+;; (~x & y) & x --> 0
+function %test_band_band_bnot_x_y_x(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = band v2, v1
+    v4 = band v3, v0
+    return v4
+}
+
+; run: %test_band_band_bnot_x_y_x(0, 0) == 0
+; run: %test_band_band_bnot_x_y_x(0x12345678, 0xffffffff) == 0
+; run: %test_band_band_bnot_x_y_x(-1, 0x55555555) == 0
+
+;; ~(x | y) & x/y --> 0
+function %test_band_bnot_bor_x_y_x(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bnot v2
+    v4 = band v3, v0
+    return v4
+}
+
+; run: %test_band_bnot_bor_x_y_x(0, 0) == 0
+; run: %test_band_bnot_bor_x_y_x(0x12345678, 0x87654321) == 0
+; run: %test_band_bnot_bor_x_y_x(-1, 0x55555555) == 0
