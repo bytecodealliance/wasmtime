@@ -321,12 +321,12 @@ pub trait Compiler: Send + Sync {
 
         let triple = self.triple();
         let (arch, flags) = match triple.architecture {
-            X86_32(_) => (Architecture::I386, 0),
-            X86_64 => (Architecture::X86_64, 0),
-            Arm(_) => (Architecture::Arm, 0),
-            Aarch64(_) => (Architecture::Aarch64, 0),
-            S390x => (Architecture::S390x, 0),
-            Riscv64(_) => (Architecture::Riscv64, 0),
+            X86_32(_) => (Architecture::I386, object::elf::FileFlags(0)),
+            X86_64 => (Architecture::X86_64, object::elf::FileFlags(0)),
+            Arm(_) => (Architecture::Arm, object::elf::FileFlags(0)),
+            Aarch64(_) => (Architecture::Aarch64, object::elf::FileFlags(0)),
+            S390x => (Architecture::S390x, object::elf::FileFlags(0)),
+            Riscv64(_) => (Architecture::Riscv64, object::elf::FileFlags(0)),
             // XXX: the `object` crate won't successfully build an object
             // with relocations and such if it doesn't know the
             // architecture, so just pretend we are riscv64. Yolo!

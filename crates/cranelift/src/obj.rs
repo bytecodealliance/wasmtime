@@ -88,11 +88,10 @@ impl<'a> ModuleTextBuilder<'a> {
         // try to call `Mmap::make_executable`, which makes Pulley more
         // portable.
         if compiler.triple().is_pulley() {
-            let section = obj.section_mut(text_section);
-            assert!(matches!(section.flags, SectionFlags::None));
-            section.flags = SectionFlags::Elf {
-                sh_flags: obj::SH_WASMTIME_NOT_EXECUTED,
+            let SectionFlags::Elf { sh_flags, .. } = obj.section_flags_mut(text_section) else {
+                unreachable!();
             };
+            *sh_flags = obj::SH_WASMTIME_NOT_EXECUTED;
         }
 
         Self {

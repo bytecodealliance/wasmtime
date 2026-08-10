@@ -16,7 +16,7 @@ use object::write::{
 };
 use object::{
     BinaryFormat, RelocationEncoding, RelocationFlags, RelocationKind, SectionFlags, SectionKind,
-    SymbolFlags, SymbolKind, SymbolScope, elf,
+    SymbolFlags, SymbolKind, SymbolScope, elf, macho,
 };
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -175,12 +175,7 @@ impl ObjectBuilder {
 /// See the following for details:
 /// <https://github.com/rust-lang/rust/blob/1.95.0/compiler/rustc_codegen_ssa/src/back/metadata.rs#L408-L425>
 fn macho_build_version(triple: &Triple) -> Option<object::write::MachOBuildVersion> {
-    use target_lexicon::{DeploymentTarget, OperatingSystem::*};
-
-    fn pack_version(v: DeploymentTarget) -> u32 {
-        let (major, minor, patch) = (v.major as u32, v.minor as u32, v.patch as u32);
-        (major << 16) | (minor << 8) | patch
-    }
+    use target_lexicon::OperatingSystem::*;
 
     match triple.operating_system {
         Darwin(v) | MacOSX(v) | IOS(v) | TvOS(v) | VisionOS(v) | WatchOS(v) | XROS(v) => {
@@ -206,7 +201,7 @@ fn macho_build_version(triple: &Triple) -> Option<object::write::MachOBuildVersi
                 (WatchOS(_), _) => PLATFORM_WATCHOS,
                 _ => {
                     warn!("unsupported OS/environment: {triple}");
-                    0
+                    PLATFORM_UNKNOWN
                 }
             };
 
@@ -214,7 +209,7 @@ fn macho_build_version(triple: &Triple) -> Option<object::write::MachOBuildVersi
             build_version.platform = platform;
 
             build_version.minos = if let Some(v) = v {
-                pack_version(v)
+                macho::Version::new(v.major, v.minor, v.patch)
             } else {
                 // The `minos` in object files is useful for diagnostics, as
                 // it tells the linker whether the file supports a given OS -
@@ -223,12 +218,12 @@ fn macho_build_version(triple: &Triple) -> Option<object::write::MachOBuildVersi
                 //
                 // Using `0.0.0` here should be fine if we don't have the data
                 // available.
-                0
+                macho::Version(0)
             };
 
             // Setting a 0 SDK version is fine, it's only relevant for the
             // final linked binary.
-            build_version.sdk = 0;
+            build_version.sdk = macho::Version(0);
 
             Some(build_version)
         }
@@ -577,18 +572,18 @@ impl Module for ObjectModule {
             );
 
             match self.object.section_flags_mut(section) {
-                SectionFlags::MachO { flags } => {
+                SectionFlags::MachO { flags, .. } => {
                     // There are no default flags for the `SectionKind`s that
                     // we've specified above, so it's fine to override.
                     //
                     // (If we don't want to override, we'll have to be careful
                     // with how we set these, to ensure we set the section
                     // type properly).
-                    assert_eq!(*flags, 0);
+                    assert_eq!(flags.0, 0);
                     *flags = macho_flags;
                 }
                 _ => {
-                    if macho_flags != 0 {
+                    if macho_flags.0 != 0 {
                         unreachable!("unsupported Mach-O flags for this platform: {macho_flags:?}");
                     }
                 }
@@ -600,12 +595,12 @@ impl Module for ObjectModule {
         if used {
             match self.object.format() {
                 object::BinaryFormat::Elf => match self.object.section_flags_mut(section) {
-                    SectionFlags::Elf { sh_flags } => *sh_flags |= u64::from(elf::SHF_GNU_RETAIN),
+                    SectionFlags::Elf { sh_flags, .. } => *sh_flags |= elf::SHF_GNU_RETAIN,
                     _ => unreachable!(),
                 },
                 object::BinaryFormat::Coff => {}
                 object::BinaryFormat::MachO => match self.object.symbol_flags_mut(symbol) {
-                    SymbolFlags::MachO { n_desc } => *n_desc |= object::macho::N_NO_DEAD_STRIP,
+                    SymbolFlags::MachO { n_desc, .. } => *n_desc |= macho::N_NO_DEAD_STRIP,
                     _ => unreachable!(),
                 },
                 _ => unreachable!(),
@@ -1181,7 +1176,7 @@ struct ObjectRelocRecord {
 fn parse_section(
     section: &str,
     binary_format: BinaryFormat,
-) -> Result<(&str, &str, u32), anyhow::Error> {
+) -> Result<(&str, &str, macho::SectionFlags), anyhow::Error> {
     match binary_format {
         // See https://github.com/llvm/llvm-project/blob/main/llvm/lib/MC/MCSectionMachO.cpp
         BinaryFormat::MachO => {
@@ -1213,7 +1208,7 @@ fn parse_section(
                 .iter()
                 .find(|(name, _)| *name == section_type)
             {
-                *val
+                (*val).into()
             } else {
                 let types = list_valid_values(MACHO_SECTION_TYPES);
                 return section_err(&format!(
@@ -1244,7 +1239,7 @@ fn parse_section(
             Ok((segment_name, section_name, macho_flags))
         }
         // Otherwise, assume no segment and flags.
-        _ => Ok(("", section, 0)),
+        _ => Ok(("", section, macho::S_REGULAR.into())),
     }
 }
 
@@ -1255,7 +1250,7 @@ fn parse_section(
 // See also the Mac OS X Assembler Reference:
 // <https://leopard-adc.pepas.com/documentation/DeveloperTools/Reference/Assembler/040-Assembler_Directives/asm_directives.html#//apple_ref/doc/uid/TP30000823-TPXREF102>
 #[rustfmt::skip]
-const MACHO_SECTION_TYPES: &[(&str, u32)] = {
+const MACHO_SECTION_TYPES: &[(&str, macho::SectionType)] = {
     use object::macho::*;
     &[
         ("regular", S_REGULAR),
@@ -1284,7 +1279,7 @@ const MACHO_SECTION_TYPES: &[(&str, u32)] = {
     ]
 };
 
-const MACHO_SECTION_ATTRIBUTES: &[(&str, u32)] = {
+const MACHO_SECTION_ATTRIBUTES: &[(&str, macho::SectionFlags)] = {
     use object::macho::*;
     &[
         ("pure_instructions", S_ATTR_PURE_INSTRUCTIONS),
@@ -1301,7 +1296,7 @@ const MACHO_SECTION_ATTRIBUTES: &[(&str, u32)] = {
     ]
 };
 
-fn list_valid_values(items: &[(&str, u32)]) -> String {
+fn list_valid_values<T>(items: &[(&str, T)]) -> String {
     let mut items = items.iter().peekable();
     let mut result = String::new();
     if let Some((item, _)) = items.next() {
@@ -1326,7 +1321,7 @@ mod tests {
     fn section() {
         assert_eq!(
             parse_section("__DATA,__mod_init_func,mod_init_funcs", BinaryFormat::MachO).unwrap(),
-            ("__DATA", "__mod_init_func", S_MOD_INIT_FUNC_POINTERS),
+            ("__DATA", "__mod_init_func", S_MOD_INIT_FUNC_POINTERS.into()),
         );
         assert_eq!(
             parse_section(
@@ -1339,11 +1334,11 @@ mod tests {
 
         assert_eq!(
             parse_section("__TEXT,__text", BinaryFormat::MachO).unwrap(),
-            ("__TEXT", "__text", S_REGULAR),
+            ("__TEXT", "__text", S_REGULAR.into()),
         );
         assert_eq!(
             parse_section("__TEXT,__text,regular", BinaryFormat::MachO).unwrap(),
-            ("__TEXT", "__text", S_REGULAR),
+            ("__TEXT", "__text", S_REGULAR.into()),
         );
         assert_eq!(
             parse_section(
