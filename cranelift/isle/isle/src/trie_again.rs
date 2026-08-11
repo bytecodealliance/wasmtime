@@ -30,6 +30,12 @@ impl std::convert::TryFrom<usize> for BindingId {
     }
 }
 
+impl std::convert::From<u16> for BindingId {
+    fn from(value: u16) -> Self {
+        BindingId(value)
+    }
+}
+
 impl TupleIndex {
     /// Get the index of this field.
     pub fn index(self) -> usize {

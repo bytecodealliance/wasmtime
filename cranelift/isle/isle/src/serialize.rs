@@ -214,8 +214,9 @@ impl HasControlFlow {
     /// this function to run in linear time. That's fine because later we'll
     /// recursively sort both partitions.
     fn partition(self, rules: &RuleSet, order: &mut [usize]) -> PartitionResults {
+        let rules_slice = rules.rules.as_slice();
         let matching = partition_in_place(order, |&idx| {
-            let rule = &rules.rules[idx];
+            let rule = &rules_slice[idx];
             match self {
                 HasControlFlow::Match(binding_id) => rule.get_constraint(binding_id).is_some(),
                 HasControlFlow::Equal(x, y) => rule.equals.in_same_set(x, y),
@@ -417,7 +418,11 @@ impl<'a> Decomposition<'a> {
     /// already been hash-consed, a single in-order pass visits a binding's
     /// dependencies before visiting the binding itself.
     fn add_bindings(&mut self) {
-        for (idx, binding) in self.rules.bindings.iter().enumerate() {
+        let mut idx: u16 = 0; // perf: u16 prevents casting usize from .enumerate() to u16
+        for binding in self.rules.bindings.iter() {
+            let binding_id = BindingId::from(idx);
+            idx += 1;
+
             // We only add these bindings when matching a corresponding
             // type of control flow, in `make_control_flow`.
             if matches!(
@@ -435,14 +440,15 @@ impl<'a> Decomposition<'a> {
             // prefers to match on already-emitted bindings first. This helps
             // to sort cheap computations before expensive ones.
 
-            let idx: BindingId = idx.try_into().unwrap();
-            if self.scope.ready[idx.index()] < BindingState::Available {
+            let ready = self.scope.ready.as_slice();
+
+            if ready[binding_id.index()] < BindingState::Available {
                 if binding
                     .sources()
                     .iter()
-                    .all(|&source| self.scope.ready[source.index()] >= BindingState::Available)
+                    .all(|&source| ready[source.index()] >= BindingState::Available)
                 {
-                    self.set_ready(idx, BindingState::Available);
+                    self.set_ready(binding_id, BindingState::Available);
                 }
             }
         }
@@ -474,19 +480,20 @@ impl<'a> Decomposition<'a> {
         debug_assert_eq!(self.scope.candidates.len(), 0);
         // TODO: assert something about self.equal_candidates?
 
+        let rules = self.rules.rules.as_slice();
         // If we're building a multi-constructor, then there could be multiple
         // rules with the same left-hand side. We'll evaluate them all, but
         // to keep the output consistent, first sort by descending priority
         // and break ties with the order the rules were declared. In non-multi
         // constructors, there should be at most one rule remaining here.
-        order.sort_unstable_by_key(|&idx| (Reverse(self.rules.rules[idx].prio), idx));
+        order.sort_unstable_by_key(|&idx| (Reverse(rules[idx].prio), idx));
         for &idx in order.iter() {
             let &Rule {
                 pos,
                 result,
                 ref impure,
                 ..
-            } = &self.rules.rules[idx];
+            } = &rules[idx];
 
             // Ensure that any impure constructors are called, even if their
             // results aren't used.
@@ -719,9 +726,9 @@ impl<'a> Decomposition<'a> {
             let source = candidate.source.0;
             let state = self.scope.ready[source.index()];
             candidate.score.update(state, || {
-                let matching = partition_in_place(order, |&idx| {
-                    self.rules.rules[idx].equals.find(source).is_some()
-                });
+                let rules = self.rules.rules.as_slice();
+                let matching =
+                    partition_in_place(order, |&idx| rules[idx].equals.find(source).is_some());
                 PartitionResults {
                     any_matched: matching > 0,
                     valid: respect_priority(self.rules, order, matching),
