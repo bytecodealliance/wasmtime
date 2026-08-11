@@ -1,4 +1,4 @@
-use crate::cli::{IsTerminal, StdoutStream};
+use crate::cli::{IsTerminal, StdoutStream, stream_error_from};
 use crate::p2;
 use bytes::Bytes;
 use std::io::{self, Write};
@@ -78,7 +78,7 @@ impl OutputStream for StdioOutputStream {
             StdioOutputStream::Stdout => std::io::stdout().write_all(&bytes),
             StdioOutputStream::Stderr => std::io::stderr().write_all(&bytes),
         }
-        .map_err(|e| p2::StreamError::LastOperationFailed(wasmtime::format_err!(e)))
+        .map_err(|e| stream_error_from(e))
     }
 
     fn flush(&mut self) -> p2::StreamResult<()> {
@@ -86,7 +86,7 @@ impl OutputStream for StdioOutputStream {
             StdioOutputStream::Stdout => std::io::stdout().flush(),
             StdioOutputStream::Stderr => std::io::stderr().flush(),
         }
-        .map_err(|e| p2::StreamError::LastOperationFailed(wasmtime::format_err!(e)))
+        .map_err(|e| stream_error_from(e))
     }
 
     fn check_write(&mut self) -> p2::StreamResult<usize> {

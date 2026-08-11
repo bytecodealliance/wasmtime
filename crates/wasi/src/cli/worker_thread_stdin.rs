@@ -23,7 +23,7 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
-use crate::cli::{IsTerminal, StdinStream};
+use crate::cli::{IsTerminal, StdinStream, stream_error_from};
 use bytes::{Bytes, BytesMut};
 use std::mem;
 use std::pin::Pin;
@@ -213,7 +213,7 @@ impl InputStream for WasiStdin {
             }
             StdinState::Error(e) => {
                 *locked = StdinState::Closed;
-                Err(StreamError::LastOperationFailed(e.into()))
+                Err(stream_error_from(e))
             }
             StdinState::Closed => {
                 *locked = StdinState::Closed;
