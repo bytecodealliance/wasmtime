@@ -3248,14 +3248,14 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "region"
-version = "3.0.2"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b6ebd13bc009aef9cd476c1310d49ac354d36e240cf1bd753290f3dc7199a7"
+checksum = "430988f137a23121407b362bf10b09df302ed5092ffeb9af90a549edcc849115"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.11.1",
  "libc",
  "mach2 0.4.3",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

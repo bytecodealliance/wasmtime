@@ -21,7 +21,7 @@ cranelift-entity = { workspace = true }
 cranelift-control = { workspace = true }
 wasmtime-unwinder = { workspace = true, optional = true, features = ["cranelift"] }
 anyhow = { workspace = true }
-region = "3.0.2"
+region = "4.0.0"
 libc = { workspace = true }
 target-lexicon = { workspace = true }
 memmap2 = "0.9.11"
