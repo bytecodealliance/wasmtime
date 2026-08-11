@@ -1140,6 +1140,7 @@ fn pass_cross_store_arg(config: &mut Config) -> wasmtime::Result<()> {
 fn externref_signature_no_reference_types() -> wasmtime::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(false);
+    config.wasm_component_model_async(false);
     let mut store = Store::new(&Engine::new(&config)?, ());
     Func::wrap(&mut store, |_: Option<Func>| {});
     let func_ty = FuncType::new(
