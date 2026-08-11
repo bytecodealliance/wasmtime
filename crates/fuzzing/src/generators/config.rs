@@ -198,6 +198,7 @@ impl Config {
         config.gc_enabled = gc.unwrap_or(false);
         config.reference_types_enabled = config.gc_enabled
             || self.module_config.function_references_enabled
+            || self.module_config.component_model_async
             || reference_types.unwrap_or(false);
         config.extended_const_enabled = extended_const.unwrap_or(false);
         config.exceptions_enabled =
