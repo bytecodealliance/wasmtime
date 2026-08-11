@@ -52,7 +52,11 @@ jobs:
     - if: github.ref_name != 'main'
       run: |
         sed '/---------------/Q' RELEASES.md > relnotes.md
-        gh release create ${{ github.ref_name }} --notes-file relnotes.md dist/*
+        prerelease=
+        case "${{ github.ref_name }}" in
+          *-*) prerelease=--prerelease ;;
+        esac
+        gh release create ${{ github.ref_name }} $prerelease --notes-file relnotes.md dist/*
       env:
         GH_TOKEN: ${{ github.token }}
       continue-on-error: true

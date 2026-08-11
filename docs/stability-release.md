@@ -69,6 +69,29 @@ for older release notes.
 For maintainers, performing a release is [documented
 here](./contributing-release-process.md#releasing-a-major-version).
 
+## Release Candidates
+
+When a release branch is created on the 5th of the month, `X.0.0-rc.1` is
+published to crates.io and as a GitHub pre-release. Additional candidates may be
+published as `-rc.2`, `-rc.3`, and so on if changes land on the release branch
+that are worth testing before release day. Embedders of Wasmtime can use these
+published pre-release versions to provide feedback on release candidates.
+
+Release candidates come with no support or stability guarantees:
+
+* They receive no security advisories, and will not be listed as affected
+  versions in advisories for the releases they precede.
+* Publishing a new release candidate yanks the previous one, and publishing
+  `X.0.0` itself yanks the last candidate that preceded it, so a candidate can
+  disappear from under you at any time. No release candidate outlives the
+  release it was a candidate for.
+* They should never be a permanent dependency of anything. Treat a release
+  candidate exactly as you would treat a `git` dependency on an arbitrary commit
+  of a release branch.
+
+Note also that the `main` branch permanently carries a `-dev` version which is
+never published anywhere.
+
 ## Version Support
 
 Wasmtime major version releases are of one of two categories:

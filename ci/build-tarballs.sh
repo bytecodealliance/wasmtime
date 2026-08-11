@@ -62,7 +62,10 @@ case $build in
 
     if [ "$min" = "" ]; then
       # Generate a `*.msi` installer for Windows as well
-      export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
+      # Note that WiX requires a strictly numeric `x.y.z` version, so any
+      # pre-release suffix (`-dev` on `main`, `-rc.N` on a release branch) is
+      # stripped here.
+      export WT_VERSION=$(./ci/print-current-version.sh | sed 's/-.*//')
       "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj ci/wasmtime.wxs
       "$WIX/bin/light" -out dist/$bin_pkgname.msi target/wasmtime.wixobj -ext WixUtilExtension
       rm dist/$bin_pkgname.wixpdb
