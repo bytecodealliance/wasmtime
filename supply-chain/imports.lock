@@ -975,8 +975,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.serde_spanned]]
-version = "1.0.3"
-when = "2025-10-09"
+version = "1.1.1"
+when = "2026-03-31"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -1094,8 +1094,8 @@ user-login = "Darksonn"
 user-name = "Alice Ryhl"
 
 [[publisher.toml]]
-version = "0.9.8"
-when = "2025-10-09"
+version = "1.1.4+spec-1.1.0"
+when = "2026-07-28"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
