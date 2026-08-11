@@ -252,6 +252,10 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.component_model_more_async_builtins = Some(true);
     ret.component_model_async_stackful = Some(true);
     ret.component_model_threading = Some(true);
+    ret.gc = Some(true);
+    ret.exceptions = Some(true);
+    ret.component_model_map = Some(true);
+    ret.component_model_fixed_length_lists = Some(true);
 
     if test.ends_with("memory64.wast") {
         ret.component_model_memory64 = Some(true);
@@ -514,14 +518,6 @@ impl WastTest {
     /// configuration.
     pub fn should_fail(&self, config: &WastConfig) -> bool {
         if !config.compiler.supports_host() {
-            return true;
-        }
-
-        let unsupported = [
-            // needs to be updated after WebAssembly/component-model#680
-            "test/values/post-return.wast",
-        ];
-        if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
         }
 
