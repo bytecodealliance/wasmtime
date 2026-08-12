@@ -66,8 +66,8 @@ enum CacheEvent {
 impl Worker {
     pub(super) fn start_new(cache_config: &CacheConfig) -> Self {
         let queue_size = match cache_config.worker_event_queue_size() {
-            num if num <= usize::max_value() as u64 => num as usize,
-            _ => usize::max_value(),
+            num if num <= usize::MAX as u64 => num as usize,
+            _ => usize::MAX,
         };
         let (tx, rx) = sync_channel(queue_size);
 

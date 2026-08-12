@@ -7,7 +7,7 @@ use crate::{
     PanicOnOom as _,
 };
 use core::ops::Range;
-use core::{fmt, u32};
+use core::fmt;
 use core::{iter, str};
 use serde_derive::{Deserialize, Serialize};
 #[cfg(feature = "rr")]

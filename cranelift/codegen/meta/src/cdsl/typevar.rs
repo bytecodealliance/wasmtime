@@ -662,7 +662,7 @@ fn range_to_set(range: Option<Range>) -> NumSet {
     assert!(low <= high);
 
     for i in low.trailing_zeros()..=high.trailing_zeros() {
-        assert!(1 << i <= RangeBound::max_value());
+        assert!(1 << i <= RangeBound::MAX);
         set.insert(1 << i);
     }
     set

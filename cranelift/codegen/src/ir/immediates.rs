@@ -9,7 +9,6 @@ use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter};
 use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Sub};
 use core::str::FromStr;
-use core::{i32, u32};
 use libm::Libm;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
@@ -1124,7 +1123,6 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u128, &'static str> {
 mod tests {
     use super::*;
     use alloc::string::ToString;
-    use core::{f32, f64};
 
     #[test]
     fn format_imm64() {

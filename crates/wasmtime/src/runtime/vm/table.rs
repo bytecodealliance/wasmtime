@@ -12,7 +12,7 @@ use core::mem;
 use core::ops::Range;
 use core::ptr::NonNull;
 use core::slice;
-use core::{cmp, usize};
+use core::cmp;
 use wasmtime_environ::{
     FUNCREF_INIT_BIT, FUNCREF_MASK, IndexType, Trap, Tunables, WasmHeapTopType, WasmRefType,
 };
