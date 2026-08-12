@@ -46,7 +46,10 @@ impl<_T: 'static> TheFlagsPre<_T> {
     pub fn instantiate(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheFlags> {
+    ) -> wasmtime::Result<TheFlags>
+    where
+        _T: Send,
+    {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate(&mut store)?;
         self.indices.load(&mut store, &instance)
@@ -136,7 +139,7 @@ const _: () = {
     impl TheFlags {
         /// Convenience wrapper around [`TheFlagsPre::new`] and
         /// [`TheFlagsPre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -155,14 +158,11 @@ const _: () = {
         }
         /// Convenience wrapper around [`TheFlagsPre::new`] and
         /// [`TheFlagsPre::instantiate_async`].
-        pub async fn instantiate_async<_T>(
+        pub async fn instantiate_async<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<TheFlags>
-        where
-            _T: Send,
-        {
+        ) -> wasmtime::Result<TheFlags> {
             let pre = linker.instantiate_pre(component)?;
             TheFlagsPre::new(pre)?.instantiate_async(store).await
         }

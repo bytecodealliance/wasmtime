@@ -422,6 +422,8 @@ impl<'a> CodeBuilder<'a> {
     ///     padding: u64,
     /// }
     ///
+    /// unsafe impl Send for ExposedPointer {}
+    ///
     /// static _EXPOSED_POINTER_LAYOUT_ASSERTIONS: () = {
     ///     assert!(mem::size_of::<ExposedPointer>() == 8);
     ///     assert!(mem::align_of::<ExposedPointer>() == 8);

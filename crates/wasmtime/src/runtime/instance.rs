@@ -297,7 +297,7 @@ impl Instance {
     /// This method is unsafe because it does not type-check the `imports`
     /// provided. The `imports` provided must be suitable for the module
     /// provided as well.
-    async unsafe fn new_raw(
+    pub(crate) async unsafe fn new_raw(
         store: &mut StoreOpaque,
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         module: &Module,
@@ -349,7 +349,7 @@ impl Instance {
         }
     }
 
-    fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+    pub(crate) fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let store_id = store.0.id();

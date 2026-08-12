@@ -392,10 +392,6 @@ pub enum CoreDef {
     Trampoline(TrampolineIndex),
     /// An intrinsic for compile-time builtins.
     UnsafeIntrinsic(UnsafeIntrinsic),
-    /// Reference to a wasm global which represents a runtime-managed boolean
-    /// indicating whether the currently-running task may perform a blocking
-    /// operation.
-    TaskMayBlock,
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
