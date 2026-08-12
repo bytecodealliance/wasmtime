@@ -6,6 +6,33 @@
 
 using namespace wasmtime;
 
+namespace {
+
+void async_callback(void *, wasmtime_caller_t *, const wasmtime_val_t *, size_t,
+                    wasmtime_val_t *, size_t, wasm_trap_t **,
+                    wasmtime_async_continuation_t *) {}
+
+void finalize(void *data) { *static_cast<bool *>(data) = true; }
+
+} // namespace
+
+TEST(async, finalizes_callback_when_name_parsing_fails) {
+  Engine engine;
+  Linker linker(engine);
+  auto *ty = wasm_functype_new_0_0();
+  const char invalid_utf8[] = {static_cast<char>(0xff)};
+  bool finalized = false;
+
+  auto *error = wasmtime_linker_define_async_func(
+      linker.capi(), invalid_utf8, sizeof(invalid_utf8), "name", 4, ty,
+      async_callback, &finalized, finalize);
+
+  ASSERT_NE(error, nullptr);
+  wasmtime_error_delete(error);
+  EXPECT_TRUE(finalized);
+  wasm_functype_delete(ty);
+}
+
 TEST(async, call_func_async) {
   Engine engine;
   Store store(engine);
