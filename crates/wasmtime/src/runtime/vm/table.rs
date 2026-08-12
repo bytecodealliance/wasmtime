@@ -8,11 +8,11 @@ use crate::runtime::vm::stack_switching::VMContObj;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VmPtr};
 use core::alloc::Layout;
+use core::cmp;
 use core::mem;
 use core::ops::Range;
 use core::ptr::NonNull;
 use core::slice;
-use core::cmp;
 use wasmtime_environ::{
     FUNCREF_INIT_BIT, FUNCREF_MASK, IndexType, Trap, Tunables, WasmHeapTopType, WasmRefType,
 };
