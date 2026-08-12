@@ -201,16 +201,8 @@ impl ResourceAny {
             _ => unreachable!(),
         };
 
-        // Implement the reentrance check required by the canonical ABI. Note
-        // that this happens whether or not a destructor is present.
-        //
-        // Note that this should be safe because the raw pointer access in
-        // `flags` is valid due to `store` being the owner of the flags and
-        // flags are never destroyed within the store.
-        if let Some(instance) = slot.instance {
-            if !store.0.may_enter(instance)? {
-                bail!(Trap::CannotEnterComponent);
-            }
+        if slot.instance.is_some() && !store.0.may_enter() {
+            bail!(Trap::CannotEnterComponent);
         }
 
         let dtor = match slot.dtor {

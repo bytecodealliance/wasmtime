@@ -46,7 +46,10 @@ impl<_T: 'static> Path1Pre<_T> {
     pub fn instantiate(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Path1> {
+    ) -> wasmtime::Result<Path1>
+    where
+        _T: Send,
+    {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate(&mut store)?;
         self.indices.load(&mut store, &instance)
@@ -130,7 +133,7 @@ const _: () = {
     impl Path1 {
         /// Convenience wrapper around [`Path1Pre::new`] and
         /// [`Path1Pre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -149,14 +152,11 @@ const _: () = {
         }
         /// Convenience wrapper around [`Path1Pre::new`] and
         /// [`Path1Pre::instantiate_async`].
-        pub async fn instantiate_async<_T>(
+        pub async fn instantiate_async<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Path1>
-        where
-            _T: Send,
-        {
+        ) -> wasmtime::Result<Path1> {
             let pre = linker.instantiate_pre(component)?;
             Path1Pre::new(pre)?.instantiate_async(store).await
         }

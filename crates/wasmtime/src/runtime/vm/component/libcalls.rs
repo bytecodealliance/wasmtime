@@ -1,11 +1,13 @@
 //! Implementation of string transcoding required by the component model.
 
+#[cfg(feature = "component-model-async")]
+use crate::bail_bug;
 use crate::component::Instance;
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::WaitResult;
 use crate::prelude::*;
 #[cfg(feature = "component-model-async")]
-use crate::runtime::component::concurrent::{ResourcePair, SuspensionTarget};
+use crate::runtime::component::concurrent::{ResourcePair, ResumeThread, SuspensionTarget};
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::{HostResultHasUnwindSentinel, VMStore, VmSafe};
 use core::cell::Cell;
@@ -1017,13 +1019,14 @@ fn future_read(
 fn future_cancel_write(
     store: &mut dyn VMStore,
     instance: Instance,
-    _caller_instance: u32,
+    caller_instance: u32,
     ty: u32,
     async_: u8,
     writer: u32,
 ) -> Result<u32> {
     instance.future_cancel_write(
         store,
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         TypeFutureTableIndex::from_u32(ty),
         async_ != 0,
         writer,
@@ -1034,13 +1037,14 @@ fn future_cancel_write(
 fn future_cancel_read(
     store: &mut dyn VMStore,
     instance: Instance,
-    _caller_instance: u32,
+    caller_instance: u32,
     ty: u32,
     async_: u8,
     reader: u32,
 ) -> Result<u32> {
     instance.future_cancel_read(
         store,
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         TypeFutureTableIndex::from_u32(ty),
         async_ != 0,
         reader,
@@ -1131,13 +1135,14 @@ fn stream_read(
 fn stream_cancel_write(
     store: &mut dyn VMStore,
     instance: Instance,
-    _caller_instance: u32,
+    caller_instance: u32,
     ty: u32,
     async_: u8,
     writer: u32,
 ) -> Result<u32> {
     instance.stream_cancel_write(
         store,
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         TypeStreamTableIndex::from_u32(ty),
         async_ != 0,
         writer,
@@ -1148,13 +1153,14 @@ fn stream_cancel_write(
 fn stream_cancel_read(
     store: &mut dyn VMStore,
     instance: Instance,
-    _caller_instance: u32,
+    caller_instance: u32,
     ty: u32,
     async_: u8,
     reader: u32,
 ) -> Result<u32> {
     instance.stream_cancel_read(
         store,
+        RuntimeComponentInstanceIndex::from_u32(caller_instance),
         TypeStreamTableIndex::from_u32(ty),
         async_ != 0,
         reader,
@@ -1324,13 +1330,16 @@ fn thread_resume_later(
     caller_instance: u32,
     thread_idx: u32,
 ) -> Result<()> {
-    instance.resume_thread(
+    if !instance.resume_thread(
         store,
         RuntimeComponentInstanceIndex::from_u32(caller_instance),
         thread_idx,
-        false,
-        false,
-    )
+        ResumeThread::ResumeLater,
+    )? {
+        bail_bug!("resumed thread should have been ready");
+    }
+
+    Ok(())
 }
 
 #[cfg(feature = "component-model-async")]
@@ -1383,7 +1392,7 @@ fn thread_suspend_then_resume(
             RuntimeComponentInstanceIndex::from_u32(caller),
             cancellable != 0,
             false,
-            SuspensionTarget::SomeSuspended(thread_idx),
+            SuspensionTarget::Resume(thread_idx),
         )
         .map(|r| r == WaitResult::Cancelled)
 }
@@ -1402,7 +1411,7 @@ fn thread_yield_then_resume(
             RuntimeComponentInstanceIndex::from_u32(caller_instance),
             cancellable != 0,
             true,
-            SuspensionTarget::SomeSuspended(thread_idx),
+            SuspensionTarget::Resume(thread_idx),
         )
         .map(|r| r == WaitResult::Cancelled)
 }
@@ -1421,7 +1430,7 @@ fn thread_suspend_then_promote(
             RuntimeComponentInstanceIndex::from_u32(caller),
             cancellable != 0,
             false,
-            SuspensionTarget::Some(thread_idx),
+            SuspensionTarget::Promote(thread_idx),
         )
         .map(|r| r == WaitResult::Cancelled)
 }
@@ -1440,7 +1449,7 @@ fn thread_yield_then_promote(
             RuntimeComponentInstanceIndex::from_u32(caller),
             cancellable != 0,
             true,
-            SuspensionTarget::Some(thread_idx),
+            SuspensionTarget::Promote(thread_idx),
         )
         .map(|r| r == WaitResult::Cancelled)
 }

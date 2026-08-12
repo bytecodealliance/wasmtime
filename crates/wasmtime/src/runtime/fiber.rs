@@ -215,6 +215,7 @@ impl<'a, 'b> BlockingContext<'a, 'b> {
         // fiber and for this fiber. The "take" pattern here ensures that if
         // this `BlockingContext` context acquires the pointers then there are
         // no other instances of these pointers in use anywhere else.
+
         let future_cx = unsafe { Some(state.current_future_cx.take().unwrap().as_mut()) };
         let suspend = unsafe { state.current_suspend.take().unwrap().as_mut() };
 

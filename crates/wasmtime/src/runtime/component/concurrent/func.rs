@@ -13,7 +13,7 @@ use wasmtime_environ::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESUL
 /// Returned from [`Func::start_call_concurrent`] to represent a
 /// pending-but-not-yet-resolved call into wasm.
 pub struct FuncCallConcurrent<'a, T> {
-    call: concurrent::QueuedCall<Vec<Val>>,
+    call: concurrent::StagedCall<Vec<Val>>,
     results: &'a mut [Val],
     _marker: marker::PhantomData<fn(T)>,
 }
@@ -136,7 +136,7 @@ impl Func {
     ) -> Result<FuncCallConcurrent<'a, T>> {
         self.check_params_results(store.as_context_mut(), params, results)?;
         let prepared = self.prepare_call_dynamic(store.as_context_mut(), params.to_vec())?;
-        let call = concurrent::QueuedCall::new(store.as_context_mut(), prepared)?;
+        let call = concurrent::StagedCall::new(store.as_context_mut(), prepared)?;
         Ok(FuncCallConcurrent {
             call,
             results,
@@ -213,7 +213,7 @@ impl<T> FuncCallConcurrent<'_, T> {
 /// Returned from [`TypedFunc::start_call_concurrent`] to represent a
 /// pending-but-not-yet-resolved call into wasm.
 pub struct TypedFuncCallConcurrent<T, P, R> {
-    call: concurrent::QueuedCall<R>,
+    call: concurrent::StagedCall<R>,
     _marker: marker::PhantomData<fn(T, P)>,
 }
 
@@ -271,7 +271,7 @@ where
             task: prepared.task_id(),
         };
 
-        let result = concurrent::QueuedCall::new(wrapper.store.as_context_mut(), prepared)?;
+        let result = concurrent::StagedCall::new(wrapper.store.as_context_mut(), prepared)?;
         wrapper
             .store
             .as_context_mut()
@@ -381,7 +381,7 @@ where
         let prepared = self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
             Self::lower_args(cx, ty, dst, &params)
         })?;
-        let call = concurrent::QueuedCall::new(store, prepared)?;
+        let call = concurrent::StagedCall::new(store, prepared)?;
         Ok(TypedFuncCallConcurrent {
             call,
             _marker: marker::PhantomData,

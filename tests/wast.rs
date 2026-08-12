@@ -154,7 +154,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
     // panic or segfault as a result.
     //
     // Updates to whether a test should pass or fail should be done in the
-    // `crates/wast-util/src/lib.rs` file.
+    // `crates/test-util/src/wast.rs` file.
     let should_fail = test.should_fail(&config);
 
     let multi_memory = test_config.multi_memory();

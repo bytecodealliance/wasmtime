@@ -46,7 +46,10 @@ impl<_T: 'static> HttpInterfacePre<_T> {
     pub fn instantiate(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<HttpInterface> {
+    ) -> wasmtime::Result<HttpInterface>
+    where
+        _T: Send,
+    {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate(&mut store)?;
         self.indices.load(&mut store, &instance)
@@ -136,7 +139,7 @@ const _: () = {
     impl HttpInterface {
         /// Convenience wrapper around [`HttpInterfacePre::new`] and
         /// [`HttpInterfacePre::instantiate`].
-        pub fn instantiate<_T>(
+        pub fn instantiate<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -155,14 +158,11 @@ const _: () = {
         }
         /// Convenience wrapper around [`HttpInterfacePre::new`] and
         /// [`HttpInterfacePre::instantiate_async`].
-        pub async fn instantiate_async<_T>(
+        pub async fn instantiate_async<_T: Send>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<HttpInterface>
-        where
-            _T: Send,
-        {
+        ) -> wasmtime::Result<HttpInterface> {
             let pre = linker.instantiate_pre(component)?;
             HttpInterfacePre::new(pre)?.instantiate_async(store).await
         }

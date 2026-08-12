@@ -461,7 +461,7 @@ impl Func {
         let instance = self.instance.runtime_instance(raw_options.instance);
         let async_ = raw_options.async_;
 
-        if !store.0.may_enter(instance)? {
+        if !store.0.may_enter() {
             bail!(crate::Trap::CannotEnterComponent);
         }
 

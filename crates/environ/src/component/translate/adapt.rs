@@ -164,9 +164,6 @@ pub struct AdapterOptions {
     /// The Wasmtime-assigned component instance index where the options were
     /// originally specified.
     pub instance: RuntimeComponentInstanceIndex,
-    /// The ancestors (i.e. chain of instantiating instances) of the instance
-    /// specified in the `instance` field.
-    pub ancestors: Vec<RuntimeComponentInstanceIndex>,
     /// How strings are encoded.
     pub string_encoding: StringEncoding,
     /// The async callback function used by these options, if specified.
@@ -455,8 +452,7 @@ impl PartitionAdapterModules {
             // These items can't transitively depend on an adapter
             dfg::CoreDef::Trampoline(_)
             | dfg::CoreDef::InstanceFlags(_)
-            | dfg::CoreDef::UnsafeIntrinsic(..)
-            | dfg::CoreDef::TaskMayBlock => {}
+            | dfg::CoreDef::UnsafeIntrinsic(..) => {}
         }
     }
 

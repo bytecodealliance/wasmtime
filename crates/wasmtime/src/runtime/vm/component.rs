@@ -961,20 +961,6 @@ impl ComponentInstance {
             )
         }
     }
-
-    pub(crate) fn task_may_block(&self) -> NonNull<VMGlobalDefinition> {
-        unsafe { self.vmctx_plus_offset_raw::<VMGlobalDefinition>(self.offsets.task_may_block()) }
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn get_task_may_block(&self) -> bool {
-        unsafe { *self.task_may_block().as_ref().as_i32() != 0 }
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn set_task_may_block(self: Pin<&mut Self>, val: bool) {
-        unsafe { *self.task_may_block().as_mut().as_i32_mut() = if val { 1 } else { 0 } }
-    }
 }
 
 // SAFETY: `layout` should describe this accurately and `OwnedVMContext` is the

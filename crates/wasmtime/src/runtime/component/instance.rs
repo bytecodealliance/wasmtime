@@ -10,13 +10,17 @@ use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, TypedResource, TypedResourceIndex};
-use crate::runtime::vm::{self, VMFuncRef};
+use crate::runtime::vm::{self, VMFuncRef, VMStore};
+#[cfg(feature = "component-model-async")]
+use crate::store::StoreToken;
 use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
 use core::pin::Pin;
 use core::ptr::NonNull;
+#[cfg(feature = "component-model-async")]
+use futures::channel::oneshot;
 use wasmtime_environ::{EngineOrModuleTypeIndex, component::*};
 use wasmtime_environ::{EntityIndex, EntityType, PrimaryMap};
 
@@ -611,9 +615,6 @@ pub(crate) fn lookup_vmdef(
             // within that store, so it's safe to create a `Func`.
             vm::Export::Function(unsafe { crate::Func::from_vm_func_ref(store.id(), funcref) })
         }
-        CoreDef::TaskMayBlock => vm::Export::Global(crate::Global::from_task_may_block(
-            StoreComponentInstanceId::new(store.id(), id),
-        )),
     }
 }
 
@@ -718,7 +719,7 @@ impl<'a> Instantiator<'a> {
         })
     }
 
-    async fn run<T>(
+    async fn run<T: 'static + Send>(
         &mut self,
         store: &mut StoreContextMut<'_, T>,
         asyncness: Asyncness,
@@ -841,16 +842,74 @@ impl<'a> Instantiator<'a> {
                     // already checked for asyncness and are running on a fiber
                     // if required.
 
-                    let i = unsafe {
-                        crate::Instance::new_started(store, module, imports.as_ref(), asyncness)
+                    let mut instance = {
+                        let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
+                        unsafe {
+                            crate::Instance::new_raw(
+                                store,
+                                limiter.as_mut(),
+                                module,
+                                imports.as_ref(),
+                            )
                             .await?
+                        }
                     };
+
+                    if instance.id.get_mut(store.0).needs_startup() {
+                        if asyncness == Asyncness::No {
+                            instance.start_raw(store)?;
+                        } else {
+                            #[cfg(feature = "async")]
+                            {
+                                #[cfg(feature = "component-model-async")]
+                                {
+                                    if store.0.concurrency_support() {
+                                        // With concurrency support enabled, we must
+                                        // run the start function inside the store's
+                                        // event loop in case it calls async
+                                        // functions or intrinsics, creates and
+                                        // resumes threads, etc.
+                                        let (tx, rx) = oneshot::channel();
+                                        let token = StoreToken::new(store.as_context_mut());
+                                        store.0.queue_task(move |store| {
+                                            _ = tx.send(
+                                                instance
+                                                    .start_raw(&mut token.as_context_mut(store))
+                                                    .map(|()| instance),
+                                            );
+                                            Ok(())
+                                        })?;
+                                        instance = store
+                                            .as_context_mut()
+                                            .run_concurrent_trap_on_idle(async |_| {
+                                                rx.await.map_err(|_| {
+                                                    format_err!("oneshot channel canceled")
+                                                })
+                                            })
+                                            .await???;
+                                    } else {
+                                        store.on_fiber(|store| instance.start_raw(store)).await??;
+                                    }
+                                }
+                                #[cfg(not(feature = "component-model-async"))]
+                                {
+                                    _ = &mut instance;
+                                    store.on_fiber(|store| instance.start_raw(store)).await??;
+                                }
+                            }
+                            #[cfg(not(feature = "async"))]
+                            {
+                                _ = &mut instance;
+                                unreachable!();
+                            }
+                        }
+                    }
 
                     if exit {
                         store.0.exit_guest_sync_call()?;
                     }
 
-                    self.instance_mut(store.0).push_instance_id(i.id())?;
+                    self.instance_mut(store.0).push_instance_id(instance.id())?;
                 }
 
                 GlobalInitializer::LowerImport { import, index } => {
@@ -1139,7 +1198,10 @@ impl<T: 'static> InstancePre<T> {
     /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more docs
-    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance>
+    where
+        T: Send,
+    {
         let store = store.as_context_mut();
 
         // If this instance requires an async host, set that flag in the store,
@@ -1162,7 +1224,10 @@ impl<T: 'static> InstancePre<T> {
     //
     // TODO: needs more docs
     #[cfg(feature = "async")]
-    pub async fn instantiate_async(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    pub async fn instantiate_async(&self, store: impl AsContextMut<Data = T>) -> Result<Instance>
+    where
+        T: Send,
+    {
         self._instantiate(store, Asyncness::Yes).await
     }
 
@@ -1170,7 +1235,10 @@ impl<T: 'static> InstancePre<T> {
         &self,
         mut store: impl AsContextMut<Data = T>,
         asyncness: Asyncness,
-    ) -> Result<Instance> {
+    ) -> Result<Instance>
+    where
+        T: Send,
+    {
         let store = store.as_context_mut();
         store.0.set_async_required(self.asyncness);
         store
