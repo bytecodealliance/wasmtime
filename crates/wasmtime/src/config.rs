@@ -2786,6 +2786,15 @@ impl Config {
             )
         }
 
+        // Generated adapters between components will use `ref.func` in some
+        // async-related situations so `component-model-async` requires
+        // `reference-types`.
+        if features.contains(WasmFeatures::CM_ASYNC)
+            && !features.contains(WasmFeatures::REFERENCE_TYPES)
+        {
+            bail!("the component-model-async feature requires the wasm reference-types proposal");
+        }
+
         // If the pooling allocator is used and GC is enabled, check that
         // memories and the GC heap are configured identically, since the
         // pooling allocator can't support differently-configured heaps.
