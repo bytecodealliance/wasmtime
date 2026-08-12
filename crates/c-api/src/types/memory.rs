@@ -61,7 +61,7 @@ pub extern "C" fn wasm_memorytype_limits(mt: &wasm_memorytype_t) -> &wasm_limits
     let mt = mt.ty();
     mt.limits_cache.get_or_init(|| wasm_limits_t {
         min: u32::try_from(mt.ty.minimum()).unwrap(),
-        max: u32::try_from(mt.ty.maximum().unwrap_or(u64::from(u32::max_value()))).unwrap(),
+        max: u32::try_from(mt.ty.maximum().unwrap_or(u64::from(u32::MAX))).unwrap(),
     })
 }
 

@@ -247,7 +247,7 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasip1::Fd, blocking_mode: Blocking
 
 unsafe fn test_fd_readwrite_invalid_fd() {
     let fd_readwrite = wasip1::SubscriptionFdReadwrite {
-        file_descriptor: wasip1::Fd::max_value(),
+        file_descriptor: wasip1::Fd::MAX,
     };
     let r#in = [
         wasip1::Subscription {

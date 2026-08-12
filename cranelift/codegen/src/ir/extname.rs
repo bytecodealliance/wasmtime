@@ -241,7 +241,6 @@ mod tests {
         LibCall, UserExternalName, entities::UserExternalNameRef, function::FunctionParameters,
     };
     use alloc::string::ToString;
-    use core::u32;
     use cranelift_entity::EntityRef as _;
 
     #[cfg(target_pointer_width = "64")]

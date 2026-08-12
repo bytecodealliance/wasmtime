@@ -33,7 +33,6 @@ use crate::{
 };
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::u32;
 use regalloc2::PReg;
 
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
@@ -259,7 +258,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn lshl_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
         let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         let shiftee_bits = ty_bits(ty);
-        if shiftee_bits <= core::u8::MAX as usize {
+        if shiftee_bits <= u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
             Some(ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm))
         } else {
@@ -270,7 +269,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn ashr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
         let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
         let shiftee_bits = ty_bits(ty);
-        if shiftee_bits <= core::u8::MAX as usize {
+        if shiftee_bits <= u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
             Some(ShiftOpAndAmt::new(ShiftOp::ASR, shiftimm))
         } else {
