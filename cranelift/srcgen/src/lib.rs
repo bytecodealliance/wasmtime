@@ -191,7 +191,7 @@ impl Formatter {
 
     /// Add a brace-delimited block that begins with `start`: i.e., `<start> {
     /// <f()> }`. This properly indents the contents of the block.
-    pub fn add_block<T, F: FnOnce(&mut Formatter) -> T>(&mut self, start: &str, f: F) -> T {
+    pub fn add_block<T, F: FnOnce(&mut Formatter) -> T>(&mut self, start: impl Display, f: F) -> T {
         assert!(matches!(self.lang, Language::Rust));
         self.line(format_args!("{start} {{"));
         let ret = self.indent(f);

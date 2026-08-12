@@ -8,6 +8,8 @@ use cranelift_codegen_shared::constant_hash::simple_hash;
 use cranelift_srcgen::{Formatter, Language, Match, error, fmtln};
 use std::collections::HashMap;
 
+use crate::display_join::DisplayJoinedVecExt;
+
 pub(crate) enum ParentGroup {
     None,
     Shared,
@@ -25,7 +27,7 @@ fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatte
             fmt,
             "#[allow(unused_variables, reason = \"generated code\")]"
         );
-        fmt.add_block(&format!("pub fn new({args}) -> Self"), |fmt| {
+        fmt.add_block(format_args!("pub fn new({args}) -> Self"), |fmt| {
             fmtln!(fmt, "let bvec = builder.state_for(\"{}\");", group.name);
             fmtln!(
                 fmt,
@@ -78,7 +80,7 @@ fn gen_enum_all(name: &str, values: &[&'static str], fmt: &mut Formatter) {
         "/// Returns a slice with all possible [{}] values.",
         name
     );
-    fmt.add_block(&format!("pub fn all() -> &'static [{name}]"), |fmt| {
+    fmt.add_block(format_args!("pub fn all() -> &'static [{name}]"), |fmt| {
         fmtln!(fmt, "&[");
         fmt.indent(|fmt| {
             for v in values.iter() {
@@ -91,7 +93,7 @@ fn gen_enum_all(name: &str, values: &[&'static str], fmt: &mut Formatter) {
 
 /// Emit Display and FromStr implementations for enum settings.
 fn gen_to_and_from_str(name: &str, values: &[&'static str], fmt: &mut Formatter) {
-    fmt.add_block(&format!("impl fmt::Display for {name}"), |fmt| {
+    fmt.add_block(format_args!("impl fmt::Display for {name}"), |fmt| {
         fmt.add_block(
             "fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result",
             |fmt| {
@@ -105,7 +107,7 @@ fn gen_to_and_from_str(name: &str, values: &[&'static str], fmt: &mut Formatter)
         );
     });
 
-    fmt.add_block(&format!("impl core::str::FromStr for {name}"), |fmt| {
+    fmt.add_block(format_args!("impl core::str::FromStr for {name}"), |fmt| {
         fmtln!(fmt, "type Err = ();");
         fmt.add_block("fn from_str(s: &str) -> Result<Self, Self::Err>", |fmt| {
             fmt.add_block("match s", |fmt| {
@@ -129,14 +131,14 @@ fn gen_enum_types(group: &SettingGroup, fmt: &mut Formatter) {
 
         fmt.doc_comment(format!("Values for `{}.{}`.", group.name, setting.name));
         fmtln!(fmt, "#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]");
-        fmt.add_block(&format!("pub enum {name}"), |fmt| {
+        fmt.add_block(format_args!("pub enum {name}"), |fmt| {
             for v in values.iter() {
                 fmt.doc_comment(format!("`{v}`."));
                 fmtln!(fmt, "{},", camel_case(v));
             }
         });
 
-        fmt.add_block(&format!("impl {name}"), |fmt| {
+        fmt.add_block(format_args!("impl {name}"), |fmt| {
             gen_enum_all(&name, values, fmt);
         });
 
@@ -151,9 +153,12 @@ fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
         SpecificSetting::Bool(BoolSetting {
             predicate_number, ..
         }) => {
-            fmt.add_block(&format!("pub fn {}(&self) -> bool", setting.name), |fmt| {
-                fmtln!(fmt, "self.numbered_predicate({})", predicate_number);
-            });
+            fmt.add_block(
+                format_args!("pub fn {}(&self) -> bool", setting.name),
+                |fmt| {
+                    fmtln!(fmt, "self.numbered_predicate({})", predicate_number);
+                },
+            );
         }
         SpecificSetting::Enum(ref values) => {
             let ty = camel_case(setting.name);
@@ -170,9 +175,12 @@ fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
             );
         }
         SpecificSetting::Num(_) => {
-            fmt.add_block(&format!("pub fn {}(&self) -> u8", setting.name), |fmt| {
-                fmtln!(fmt, "self.bytes[{}]", setting.byte_offset);
-            });
+            fmt.add_block(
+                format_args!("pub fn {}(&self) -> u8", setting.name),
+                |fmt| {
+                    fmtln!(fmt, "self.bytes[{}]", setting.byte_offset);
+                },
+            );
         }
     }
 }
@@ -320,7 +328,10 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             fmt.comment(format_args!(
                 "{}: {}",
                 preset.name,
-                preset.setting_names(group).collect::<Vec<_>>().join(", ")
+                preset
+                    .setting_names(group)
+                    .collect::<Vec<_>>()
+                    .display_join(", ")
             ));
             for (mask, value) in preset.layout(group) {
                 fmtln!(fmt, "(0b{:08b}, 0b{:08b}),", mask, value);
@@ -337,7 +348,7 @@ fn gen_template(group: &SettingGroup, fmt: &mut Formatter) {
     }
 
     let default_bytes: Vec<String> = default_bytes.iter().map(|x| format!("{x:#04x}")).collect();
-    let default_bytes_str = default_bytes.join(", ");
+    let default_bytes_str = default_bytes.display_join(", ");
 
     fmt.add_block(
         "static TEMPLATE: detail::Template = detail::Template",
