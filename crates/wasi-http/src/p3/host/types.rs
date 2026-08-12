@@ -565,4 +565,3 @@ impl Host for WasiHttpCtxView<'_> {
         error.downcast()
     }
 }
-
