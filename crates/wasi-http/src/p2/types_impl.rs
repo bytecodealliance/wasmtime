@@ -333,13 +333,16 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = self.table.get_mut(&request)?;
 
-        if let Some(s) = authority.as_ref() {
-            if let Err(_) = http::uri::Authority::from_str(s.as_str()) {
+        // Match p3: reject empty / non-numeric / out-of-range ports that
+        // `http::uri::Authority` alone would accept (see crate::parse_authority).
+        if let Some(s) = authority {
+            let Ok(parsed) = crate::parse_authority(s) else {
                 return Ok(Err(()));
-            }
+            };
+            req.authority = Some(parsed.as_str().into());
+        } else {
+            req.authority = None;
         }
-
-        req.authority = authority;
 
         Ok(Ok(()))
     }

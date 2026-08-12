@@ -11,6 +11,11 @@
 
 use http::{HeaderName, header};
 
+#[cfg(any(feature = "p2", feature = "p3"))]
+mod authority;
+#[cfg(any(feature = "p2", feature = "p3"))]
+pub(crate) use authority::parse_authority;
+
 mod ctx;
 #[cfg(feature = "default-send-request")]
 mod default_send_request;
