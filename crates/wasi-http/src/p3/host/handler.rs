@@ -23,12 +23,46 @@ impl Drop for AbortOnDropJoinHandle {
 }
 
 async fn io_task_result(
-    rx: oneshot::Receiver<(AbortOnDropJoinHandle, oneshot::Receiver<Result<(), Error>>)>,
+    rx: oneshot::Receiver<(
+        Option<AbortOnDropJoinHandle>,
+        oneshot::Receiver<Result<(), Error>>,
+    )>,
 ) -> Result<(), Error> {
     let Ok((_io, io_result_rx)) = rx.await else {
-        return Ok(());
+        return Err(Error::InternalError(Some(
+            "Future indicating transmission result dropped without being resolved.".to_string(),
+        )));
     };
-    io_result_rx.await.unwrap_or(Ok(()))
+    io_result_rx.await.unwrap_or_else(|_| {
+        Err(Error::InternalError(Some(
+            "Future indicating transmission result dropped without being resolved.".to_string(),
+        )))
+    })
+}
+
+fn send_dummy_io(
+    result: Result<(), Error>,
+    io_result_tx: oneshot::Sender<(
+        Option<AbortOnDropJoinHandle>,
+        oneshot::Receiver<Result<(), Error>>,
+    )>,
+) {
+    let (tx, rx) = oneshot::channel();
+    let _ = tx.send(result);
+    let _ = io_result_tx.send((None, rx));
+}
+
+fn send_dummy_io_err<T>(
+    store: &Accessor<T, WasiHttp>,
+    e: Error,
+    io_result_tx: oneshot::Sender<(
+        Option<AbortOnDropJoinHandle>,
+        oneshot::Receiver<Result<(), Error>>,
+    )>,
+) -> HttpError {
+    let err_code = store.with(|mut store| store.get().error_to_p3(&e));
+    send_dummy_io(Err(e), io_result_tx);
+    err_code.into()
 }
 
 impl<T> HostWithStore<T> for WasiHttp {
@@ -63,10 +97,26 @@ impl<T> HostWithStore<T> for WasiHttp {
                     Box::into_pin(fut).await
                 }),
             ))
-        })?;
-        let (res, io) = Box::into_pin(fut)
-            .await
-            .map_err(|e| store.with(|mut store| store.get().error_to_p3(&e)))?;
+        });
+        let fut = match fut {
+            Ok(fut) => fut,
+            Err(e) => match e.downcast() {
+                Ok(err_code) => {
+                    send_dummy_io(Err(err_code.clone().into()), io_result_tx);
+                    return Err(err_code.into());
+                }
+                Err(e) => {
+                    let e = Error::InternalError(Some(format!("{}", e)));
+                    return Err(send_dummy_io_err(store, e, io_result_tx));
+                }
+            },
+        };
+        let (res, io) = match Box::into_pin(fut).await {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(send_dummy_io_err(store, e, io_result_tx));
+            }
+        };
         let (
             http::response::Parts {
                 status, headers, ..
@@ -76,9 +126,12 @@ impl<T> HostWithStore<T> for WasiHttp {
 
         let mut io = Box::into_pin(io);
         let body = match io.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
-            Poll::Ready(Ok(())) => body,
+            Poll::Ready(Ok(())) => {
+                send_dummy_io(Ok(()), io_result_tx);
+                body
+            }
             Poll::Ready(Err(e)) => {
-                return Err(store.with(|mut store| store.get().error_to_p3(&e)).into());
+                return Err(send_dummy_io_err(store, e, io_result_tx));
             }
             Poll::Pending => {
                 // I/O driver still needs to be polled, spawn a task and send handles to it
@@ -88,7 +141,7 @@ impl<T> HostWithStore<T> for WasiHttp {
                     debug!(?res, "`send_request` I/O future finished");
                     _ = tx.send(res);
                 }));
-                _ = io_result_tx.send((io, rx));
+                _ = io_result_tx.send((Some(io), rx));
                 body.boxed_unsync()
             }
         };
