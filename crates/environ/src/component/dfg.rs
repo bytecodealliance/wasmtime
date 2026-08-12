@@ -30,7 +30,7 @@
 use crate::component::*;
 use crate::error::Result;
 use crate::prelude::*;
-use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
+use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, Trap, WasmValType};
 use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
 use info::LinearMemoryOptions;
@@ -469,7 +469,7 @@ pub enum Trampoline {
     FutureTransfer,
     StreamTransfer,
     ErrorContextTransfer,
-    Trap,
+    Trap(Trap),
     EnterSyncCall,
     ExitSyncCall,
     ThreadIndex {
@@ -1155,7 +1155,7 @@ impl LinearizeDfg<'_> {
             Trampoline::FutureTransfer => info::Trampoline::FutureTransfer,
             Trampoline::StreamTransfer => info::Trampoline::StreamTransfer,
             Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
-            Trampoline::Trap => info::Trampoline::Trap,
+            Trampoline::Trap(trap) => info::Trampoline::Trap(*trap),
             Trampoline::EnterSyncCall => info::Trampoline::EnterSyncCall,
             Trampoline::ExitSyncCall => info::Trampoline::ExitSyncCall,
             Trampoline::ThreadIndex { instance } => info::Trampoline::ThreadIndex {

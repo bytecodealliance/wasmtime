@@ -3930,8 +3930,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn trap(&mut self, trap: Trap) {
-        let trap_func = self.module.import_trap();
-        self.instruction(I32Const(trap as i32));
+        let trap_func = self.module.import_trap(trap);
         self.instruction(Call(trap_func.as_u32()));
         self.instruction(Unreachable);
     }

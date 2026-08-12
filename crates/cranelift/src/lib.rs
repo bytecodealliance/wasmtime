@@ -82,8 +82,8 @@ pub const TRAP_UNCAUGHT_EXCEPTION: TrapCode =
 ///
 /// This is the inverse of `clif_trap_to_env_trap`'s fallback arm, and is what
 /// all of the `TRAP_*` constants above compute for their particular trap. Use
-/// it when the trap isn't statically known, e.g. when it came out of an
-/// adapter-module immediate.
+/// it for traps that don't have a constant above, e.g. the trap named by a
+/// fused adapter's `trap` intrinsic.
 const fn env_trap_to_clif_trap(trap: Trap) -> TrapCode {
     TrapCode::unwrap_user(trap as u8 + TRAP_OFFSET)
 }

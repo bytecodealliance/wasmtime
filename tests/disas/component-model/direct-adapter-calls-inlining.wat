@@ -70,7 +70,7 @@
 ;;     gv7 = load.i64 notrap aligned readonly can_move region0 gv6+8
 ;;     gv8 = load.i64 notrap aligned region1 gv7+24
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
-;;     sig1 = (i64 vmctx, i64, i32) tail
+;;     sig1 = (i64 vmctx, i64) tail
 ;;     sig2 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     fn0 = colocated u2:0 sig0
 ;;     fn1 = colocated u0:0 sig2
@@ -84,13 +84,13 @@
 ;;
 ;;                                 block6:
 ;; @00ee                               v3 = load.i64 notrap aligned readonly can_move region2 v0+72
-;;                                     v9 = load.i64 notrap aligned readonly can_move region3 v3+136
+;;                                     v9 = load.i64 notrap aligned readonly can_move region3 v3+168
 ;;                                     v10 = load.i32 notrap aligned region4 v9
 ;;                                     trapz v10, user26
 ;;                                     jump block9
 ;;
 ;;                                 block9:
-;;                                     v11 = load.i64 notrap aligned readonly can_move region3 v3+112
+;;                                     v11 = load.i64 notrap aligned readonly can_move region3 v3+144
 ;;                                     v12 = load.i32 notrap aligned region4 v11
 ;;                                     jump block12
 ;;
@@ -117,6 +117,6 @@
 ;; @00f0                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v24 = iconst.i32 1276
-;; @00f0                               return v24  ; v24 = 1276
+;;                                     v23 = iconst.i32 1276
+;; @00f0                               return v23  ; v23 = 1276
 ;; }

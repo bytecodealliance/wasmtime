@@ -689,13 +689,10 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
-            Trampoline::Trap => {
-                self.translate_libcall(
-                    host::trap,
-                    TrapSentinel::Falsy,
-                    WasmArgs::InRegisters,
-                    |_, _| {},
-                );
+            Trampoline::Trap(code) => {
+                let code = crate::env_trap_to_clif_trap(*code);
+                let (mut traps, builder) = self.traps();
+                traps.trap(builder, code);
             }
             Trampoline::EnterSyncCall => {
                 self.translate_libcall(
@@ -1491,7 +1488,7 @@ impl<'a> TrampolineCompiler<'a> {
             | Trampoline::FutureTransfer
             | Trampoline::StreamTransfer
             | Trampoline::ErrorContextTransfer
-            | Trampoline::Trap
+            | Trampoline::Trap(_)
             | Trampoline::EnterSyncCall
             | Trampoline::ExitSyncCall
             | Trampoline::Transcoder { .. } => return,

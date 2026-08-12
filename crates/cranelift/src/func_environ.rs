@@ -1900,8 +1900,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // called.
             Some(KnownFunc::FactIntrinsic(intrinsic)) => {
                 match intrinsic {
-                    FactInlineIntrinsic::Trap => {
-                        self.lower_fact_trap(&real_call_args);
+                    FactInlineIntrinsic::Trap(trap) => {
+                        self.env
+                            .trap(self.builder, crate::env_trap_to_clif_trap(*trap));
                         return Ok(Reachability::Unreachable);
                     }
 
@@ -1972,37 +1973,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// have extra context.
     fn can_directly_inline_unsafe_intrinsic(&self, abi: wasmtime_environ::Abi) -> bool {
         abi == wasmtime_environ::Abi::Wasm && !self.tail && !self.env.tunables.debug_guest
-    }
-
-    /// Inline lowering of a FACT adapter's `trap` intrinsic: raise the trap
-    /// directly rather than calling out to the host just to have it turn a
-    /// constant into an error.
-    fn lower_fact_trap(&mut self, real_call_args: &[ir::Value]) {
-        let &[_callee_vmctx, _caller_vmctx, trap_code] = real_call_args else {
-            panic!("wrong number of arguments for the FACT `trap` intrinsic");
-        };
-
-        let def = self
-            .builder
-            .func
-            .dfg
-            .value_def(trap_code)
-            .inst()
-            .expect("FACT emits an instruction for this argument");
-        let ir::InstructionData::UnaryImm {
-            opcode: ir::Opcode::Iconst,
-            imm,
-        } = self.builder.func.dfg.insts[def]
-        else {
-            panic!("FACT emits a UnaryImm for this argument")
-        };
-        let byte = u8::try_from(imm.bits())
-            .expect("FACT emits an immediate that fits in u8 for this argument");
-        let trap = wasmtime_environ::Trap::from_u8(byte)
-            .expect("FACT emits a valid Trap discriminant for this argument");
-
-        self.env
-            .trap(self.builder, crate::env_trap_to_clif_trap(trap));
     }
 
     /// Inline lowering of a FACT adapter's `enter-sync-call` intrinsic: push a

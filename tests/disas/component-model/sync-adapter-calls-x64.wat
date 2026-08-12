@@ -62,11 +62,11 @@
 ;;   39: subq    $0x30, %rsp
 ;;       movq    %rbx, 0x20(%rsp)
 ;;       movq    0x48(%rdi), %rdi
-;;       movq    0xc8(%rdi), %rax
+;;       movq    0xe8(%rdi), %rax
 ;;       movl    (%rax), %ecx
 ;;       testl   %ecx, %ecx
 ;;       je      0xfd
-;;   57: movq    0xe0(%rdi), %rdx
+;;   57: movq    0x100(%rdi), %rdx
 ;;       movl    (%rdx), %esi
 ;;       movl    $0, (%rdx)
 ;;       movq    8(%rdi), %r8
@@ -83,7 +83,7 @@
 ;;       movl    %r11d, 0x18(%rsp)
 ;;       movl    $0, 0x84(%r8)
 ;;       movq    %rbx, 0x88(%r8)
-;;       movq    0xb0(%rdi), %rdi
+;;       movq    0xd0(%rdi), %rdi
 ;;       movl    (%rdi), %edi
 ;;       movq    %r9, 0x88(%r8)
 ;;       movl    %r10d, 0x80(%r8)

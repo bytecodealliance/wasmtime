@@ -28,7 +28,7 @@ use crate::fact::transcode::Transcoder;
 use crate::prelude::*;
 use crate::{
     EntityRef, FuncIndex, GlobalIndex, IndexType, Memory, MemoryIndex, ModuleInternedTypeIndex,
-    PrimaryMap, Tunables,
+    PrimaryMap, Trap, Tunables,
 };
 use std::collections::HashMap;
 use wasm_encoder::*;
@@ -97,7 +97,8 @@ pub struct Module<'a> {
     imported_enter_sync_call: Option<FuncIndex>,
     imported_exit_sync_call: Option<FuncIndex>,
 
-    imported_trap: Option<FuncIndex>,
+    /// Cached versions of the imported `trap` intrinsic, one per trap code.
+    imported_traps: HashMap<Trap, FuncIndex>,
 
     // Current status of index spaces from the imports generated so far.
     imported_funcs: PrimaryMap<FuncIndex, Option<CoreDef>>,
@@ -291,7 +292,7 @@ impl<'a> Module<'a> {
             imported_error_context_transfer: None,
             imported_enter_sync_call: None,
             imported_exit_sync_call: None,
-            imported_trap: None,
+            imported_traps: HashMap::new(),
             exports: Vec::new(),
             task_may_block: None,
         }
@@ -762,14 +763,18 @@ impl<'a> Module<'a> {
         )
     }
 
-    fn import_trap(&mut self) -> FuncIndex {
-        self.import_simple(
+    fn import_trap(&mut self, trap: Trap) -> FuncIndex {
+        let name = format!("trap{}", trap as u8);
+        self.import_simple_get_and_set(
             "runtime",
-            "trap",
-            &[ValType::I32],
+            &name,
             &[],
-            Import::Trap,
-            |me| &mut me.imported_trap,
+            &[],
+            Import::Trap(trap),
+            |me| me.imported_traps.get(&trap).copied(),
+            |me, idx| {
+                me.imported_traps.insert(trap, idx);
+            },
         )
     }
 
@@ -912,7 +917,7 @@ pub enum Import {
     /// ownership of an `error-context`.
     ErrorContextTransfer,
     /// An intrinsic for trapping the instance with a specific trap code.
-    Trap,
+    Trap(Trap),
     /// An intrinsic used by FACT-generated modules to check whether an instance
     /// may be entered for a sync-to-sync call and push a task onto the stack if
     /// so.

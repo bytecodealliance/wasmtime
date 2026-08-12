@@ -8,7 +8,7 @@ use crate::{
     EngineOrModuleTypeIndex, EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType,
     MemoryIndex, MemoryInitializer, ModuleInternedTypeIndex, ModuleStartup, ModuleTypesBuilder,
     PanicOnOom as _, PassiveElemIndex, PrimaryMap, RuntimeDataIndex, StaticModuleIndex, TableIndex,
-    TableInitialValue, TableInitialization, Tag, TagIndex, Tunables, TypeConvert, TypeIndex,
+    TableInitialValue, TableInitialization, Tag, TagIndex, Trap, Tunables, TypeConvert, TypeIndex,
     WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use alloc::borrow::Cow;
@@ -47,9 +47,8 @@ pub enum FactInlineIntrinsic {
     /// fall back to the out-of-line `exit-sync-call` libcall when the thread
     /// was promoted.
     ExitSyncCall,
-    /// `trap`: raise the trap named by the (always constant) trap-code
-    /// argument.
-    Trap,
+    /// `trap`: raise the given trap.
+    Trap(Trap),
 }
 
 /// A statically-known function import.
