@@ -46,6 +46,7 @@ mod sealed {
 /// assert_eq!(x, 42);
 ///
 /// let error = u32_to_u8(999).unwrap_err();
+/// let std_error = u8::try_from(999_u32).unwrap_err();
 ///
 /// // The error is a `String` because of our added context.
 /// assert!(error.is::<String>());
@@ -58,18 +59,18 @@ mod sealed {
 /// assert!(error.is::<std::num::TryFromIntError>());
 /// assert_eq!(
 ///     error.root_cause().to_string(),
-///     "out of range integral type conversion attempted",
+///     std_error.to_string(),
 /// );
 ///
 /// // The debug output of the error contains the full error chain.
 /// assert_eq!(
 ///     format!("{error:?}").trim(),
-///     r#"
+///     format!(r#"
 /// failed to convert `999` into a `u8` (max = `255`)
 ///
 /// Caused by:
-///     out of range integral type conversion attempted
-///     "#.trim(),
+///     {std_error}
+///     "#).trim(),
 /// );
 /// ```
 ///

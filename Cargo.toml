@@ -233,8 +233,8 @@ unused_extern_crates = 'warn'
 trivial_numeric_casts = 'warn'
 unstable_features = 'warn'
 unused_import_braces = 'warn'
-unused-lifetimes = 'warn'
-unused-macro-rules = 'warn'
+unused_lifetimes = 'warn'
+unused_macro_rules = 'warn'
 
 # Don't warn about unknown cfgs for our custom cfgs.
 [workspace.lints.rust.unexpected_cfgs]

@@ -592,10 +592,10 @@ pub mod _7_async;
 ///     type Data<'a> = &'a mut MyState;
 /// }
 ///
-/// impl MyWorldImportsWithStore for MyState {
+/// impl<T> MyWorldImportsWithStore<T> for MyState {
 ///     /// Synchronous functions that have access to the store are defined in
 ///     /// Rust as a normal `fn` with an `Access` as the first parameter.
-///     fn sync_with_store<T>(mut host: Access<'_, T, Self>) {
+///     fn sync_with_store(mut host: Access<'_, T, Self>) {
 ///         // The `Access` type implements `AsContextMut` to manipulate and
 ///         // operate on the store.
 ///         let mut store: StoreContextMut<'_, T> = host.as_context_mut();
@@ -608,7 +608,7 @@ pub mod _7_async;
 ///
 ///     /// Asynchronous functions that have access to the store are defined in
 ///     /// Rust as an `async fn` with an `Accessor` as the first parameter.
-///     async fn async_with_store<T>(accessor: &Accessor<T, Self>) {
+///     async fn async_with_store(accessor: &Accessor<T, Self>) {
 ///         // The `Accessor` type does not implement `AsContextMut` directly
 ///         // and instead represents the ability to, synchronously, work with
 ///         // the store. Notably borrows into the store or `Self` cannot be

@@ -29,7 +29,6 @@ use cranelift_codegen::{settings, settings::Configurable, timing};
 use smallvec::SmallVec;
 use std::mem;
 use std::str::FromStr;
-use std::{u16, u32};
 use target_lexicon::Triple;
 
 macro_rules! match_imm {

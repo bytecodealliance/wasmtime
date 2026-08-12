@@ -717,7 +717,7 @@ impl Func {
     /// let instance = Instance::new(&mut store, &module, &[add.into()])?;
     /// let foo = instance.get_typed_func::<(i32, i32), i32>(&mut store, "foo")?;
     /// assert_eq!(foo.call(&mut store, (1, 2))?, 3);
-    /// assert!(foo.call(&mut store, (i32::max_value(), 1)).is_err());
+    /// assert!(foo.call(&mut store, (i32::MAX, 1)).is_err());
     /// # Ok(())
     /// # }
     /// ```
@@ -1405,7 +1405,7 @@ impl Func {
     /// # use wasmtime::*;
     /// # fn foo(add_with_overflow: &Func, mut store: Store<()>) -> Result<()> {
     /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32)>(&store)?;
-    /// let (result, overflow) = typed.call(&mut store, (u32::max_value(), 2))?;
+    /// let (result, overflow) = typed.call(&mut store, (u32::MAX, 2))?;
     /// assert_eq!(result, 1);
     /// assert_eq!(overflow, 1);
     /// # Ok(())

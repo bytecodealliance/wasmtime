@@ -163,7 +163,7 @@ impl CompiledFunction {
     /// Create and return the compiled function address map from the original source offset
     /// and length.
     pub fn set_address_map(&mut self, offset: u32, length: u32, with_instruction_addresses: bool) {
-        assert!((offset + length) <= u32::max_value());
+        assert!((offset + length) <= u32::MAX);
         let len = self.buffer.data().len();
         let srclocs = self
             .buffer

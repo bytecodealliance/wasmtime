@@ -1131,7 +1131,7 @@ pub(crate) fn emit(
                         inst.emit(sink, info, state);
                     }
                     OperandSize::Size64 => {
-                        // An f64 can represent `i32::min_value() - 1` exactly with precision to spare,
+                        // An f64 can represent `i32::MIN - 1` exactly with precision to spare,
                         // so there are values less than -2^(N-1) that convert correctly to INT_MIN.
                         let cst = if output_bits < 64 {
                             no_overflow_cc = CC::NBE; // >
@@ -1363,9 +1363,9 @@ pub(crate) fn emit(
                 let inst = Inst::imm(
                     OperandSize::Size64,
                     if *dst_size == OperandSize::Size64 {
-                        u64::max_value()
+                        u64::MAX
                     } else {
-                        u32::max_value() as u64
+                        u64::from(u32::MAX)
                     },
                     dst,
                 );

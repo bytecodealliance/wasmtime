@@ -13,7 +13,6 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::mem;
 use core::slice;
-use core::u32;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
