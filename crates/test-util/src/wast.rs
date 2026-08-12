@@ -558,16 +558,6 @@ impl WastTest {
             return true;
         }
 
-        // Winch supports GC types only under the barrier-free collectors;
-        // the deferred reference-counting collector is refused until Winch
-        // emits GC barriers.
-        if config.compiler == Compiler::Winch
-            && config.collector == Collector::DeferredReferenceCounting
-            && self.config.gc_types()
-        {
-            return true;
-        }
-
         // Disable spec tests per target for proposals that Winch does not implement yet.
         if config.compiler == Compiler::Winch {
             // Common list for tests that fail in all targets supported by Winch.

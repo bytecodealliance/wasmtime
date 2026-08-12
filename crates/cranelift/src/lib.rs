@@ -49,7 +49,7 @@ mod trap;
 use self::compiler::Compiler;
 
 const TRAP_INTERNAL_ASSERT: TrapCode = TrapCode::unwrap_user(1);
-const TRAP_GC_HEAP_CORRUPT: TrapCode = TrapCode::unwrap_user(2);
+pub const TRAP_GC_HEAP_CORRUPT: TrapCode = TrapCode::unwrap_user(2);
 const TRAP_OFFSET: u8 = 3;
 pub const TRAP_CANNOT_LEAVE_COMPONENT: TrapCode =
     TrapCode::unwrap_user(Trap::CannotLeaveComponent as u8 + TRAP_OFFSET);

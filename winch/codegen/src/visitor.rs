@@ -2066,11 +2066,15 @@ where
         let index = GlobalIndex::from_u32(global_index);
         let (ty, base, offset) = self.emit_get_global_addr(index)?;
         let addr = self.masm.address_at_reg(base, offset)?;
-        let dst = self.context.reg_for_type(ty, self.masm)?;
-        self.masm.load(addr, writable!(dst), ty.try_into()?)?;
-        self.context.stack.push(Val::reg(dst, ty));
+        if self.gc_barrier_needed(&ty) {
+            self.emit_drc_read_barrier(ty, base, addr)?;
+        } else {
+            let gc_ref = self.context.reg_for_type(ty, self.masm)?;
+            self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
+            self.context.stack.push(Val::reg(gc_ref, ty));
 
-        self.context.free_reg(base);
+            self.context.free_reg(base);
+        }
 
         Ok(())
     }
@@ -2080,11 +2084,15 @@ where
         let (ty, base, offset) = self.emit_get_global_addr(index)?;
         let addr = self.masm.address_at_reg(base, offset)?;
 
-        let typed_reg = self.context.pop_to_reg(self.masm, None)?;
-        self.masm
-            .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
-        self.context.free_reg(typed_reg.reg);
-        self.context.free_reg(base);
+        if self.gc_barrier_needed(&ty) {
+            self.emit_drc_write_barrier(ty, base, addr)?;
+        } else {
+            let typed_reg = self.context.pop_to_reg(self.masm, None)?;
+            self.masm
+                .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
+            self.context.free_reg(typed_reg.reg);
+            self.context.free_reg(base);
+        }
 
         Ok(())
     }

@@ -15,10 +15,6 @@ use wasmtime_environ::{
     WasmValType, drc::DrcTypeLayouts,
 };
 
-// The minimum over-approximated stack roots list size for which we will trigger
-// a GC.
-const MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD: i64 = 1024;
-
 #[derive(Default)]
 pub struct DrcCompiler {
     layouts: DrcTypeLayouts,
@@ -190,9 +186,10 @@ impl DrcCompiler {
             );
 
         let doubled_last_len = builder.ins().iadd(last_len, last_len);
-        let min_threshold = builder
-            .ins()
-            .iconst(ir::types::I32, MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD);
+        let min_threshold = builder.ins().iconst(
+            ir::types::I32,
+            wasmtime_environ::drc::MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD,
+        );
         let threshold = builder.ins().umax(doubled_last_len, min_threshold);
 
         let should_gc =
