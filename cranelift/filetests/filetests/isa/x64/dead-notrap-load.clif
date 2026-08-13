@@ -1,0 +1,164 @@
+test compile precise-output
+target x86_64
+
+;; A `notrap` load has no side effect of its own, so when nothing uses the value
+;; it read, lowering drops it.
+
+function %dead_notrap_load(i64) {
+block0(v0: i64):
+    v1 = load.i64 notrap aligned v0
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Extending loads too.
+
+function %dead_notrap_uload8(i64) {
+block0(v0: i64):
+    v1 = uload8.i32 notrap aligned v0
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Chains collapse within the single backward pass over the block: dropping the
+;; second load is what makes the first one dead.
+
+function %dead_notrap_load_chain(i64) {
+block0(v0: i64):
+    v1 = load.i64 notrap aligned readonly v0+176
+    v2 = load.i32 notrap aligned v1
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; The address computation survives if it is live for some other reason.
+
+function %dead_notrap_load_live_address(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 8
+    v2 = iadd v0, v1
+    v3 = load.i64 notrap aligned v2
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   leaq 8(%rdi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq 8(%rdi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; A load without `notrap` is defined to trap on inaccessible memory, so it is
+;; still emitted even though its result is unused.
+
+function %dead_trapping_load(i64) {
+block0(v0: i64):
+    v1 = load.i64 aligned v0
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq (%rdi), %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi), %rdx ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; Atomic loads are always side-effecting, `notrap` or not.
+
+function %dead_atomic_load(i64) {
+block0(v0: i64):
+    v1 = atomic_load.i64 notrap aligned v0
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq (%rdi), %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi), %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq

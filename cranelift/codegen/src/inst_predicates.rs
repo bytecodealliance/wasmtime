@@ -94,9 +94,25 @@ pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
 
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,
 /// but not the get_pinned_reg opcode?
+///
+/// Loads are included so that lowering colors them as side-effecting, which is
+/// what keeps a load from being merged into a consumer across an intervening
+/// store. Deciding whether a load has to be *emitted* is a different question;
+/// see [`must_lower_even_if_unused`].
 pub fn has_lowering_side_effect(func: &Function, inst: Inst) -> bool {
     let op = func.dfg.insts[inst].opcode();
     op != Opcode::GetPinnedReg && (has_side_effect(func, inst) || op.can_load())
+}
+
+/// Must lowering emit the given instruction even when none of its results are
+/// used?
+///
+/// This is [has_lowering_side_effect] without its "or is a load" clause: a load
+/// that is defined not to trap has no effect of its own, so if nothing wants the
+/// value it read there is no reason to emit it.
+pub fn must_lower_even_if_unused(func: &Function, inst: Inst) -> bool {
+    let op = func.dfg.insts[inst].opcode();
+    op != Opcode::GetPinnedReg && has_side_effect(func, inst)
 }
 
 /// Is the given instruction a constant value (`iconst`, `fconst`) that can be
