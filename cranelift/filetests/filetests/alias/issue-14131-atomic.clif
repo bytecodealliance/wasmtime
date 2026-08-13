@@ -1,0 +1,40 @@
+test optimize precise-output
+set opt_level=speed_and_size
+target x86_64
+
+;; Regression test for https://github.com/bytecodealliance/wasmtime/issues/14131
+;;
+;; The last-store slot that dead-store elimination must not materialize into
+;; `region0` holds an *atomic* store rather than a regionless store.
+;;
+;; The `atomic_store` has memory fence semantics, so it becomes the `last_fence`
+;; while `region0`'s last-store slot stays empty. The first `region0` store
+;; therefore sees the `last_fence` fallback, and is then made dead by the second
+;; `region0` store. Unwinding the last-store state past the removed store must
+;; restore `region0`'s empty slot rather than the last-fence fallback: otherwise
+;; reprocessing the overwriting store "observes" the atomic store, an
+;; observation the up-front observed-stores analysis never makes (the trailing
+;; `fence` replaces the atomic in `last_fence` without observing it), ultimately
+;; leading to an assertion failure.
+
+function %f(i64, i32) system_v {
+    region0 = 1 "table"
+
+block0(v0: i64, v1: i32):
+    atomic_store.i32 notrap v1, v0
+    store notrap region0 v1, v0
+    store notrap region0 v1, v0
+    fence
+    return
+}
+
+; function %f(i64, i32) system_v {
+;     region0 = 1 "table"
+;
+; block0(v0: i64, v1: i32):
+;     atomic_store notrap v1, v0
+;     store notrap region0 v1, v0
+;     fence 
+;     return
+; }
+
