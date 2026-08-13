@@ -18,7 +18,8 @@ static void async_func_callback(void *, wasmtime_context_t *,
                                 wasmtime_error_t **,
                                 wasmtime_async_continuation_t *) {}
 
-static wasmtime_error_t *resource_destructor(void *, wasmtime_context_t *, uint32_t) {
+static wasmtime_error_t *resource_destructor(void *, wasmtime_context_t *,
+                                             uint32_t) {
   return nullptr;
 }
 
