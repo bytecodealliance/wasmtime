@@ -760,13 +760,13 @@ fn import_works() -> Result<()> {
 }
 
 #[test]
-fn func_eq_and_hash() -> Result<()> {
+fn func_is_same_and_identity_key() -> Result<()> {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
-    fn hash_of(f: &Func) -> u64 {
+    fn hash_of(k: impl Hash) -> u64 {
         let mut hasher = DefaultHasher::new();
-        f.hash(&mut hasher);
+        k.hash(&mut hasher);
         hasher.finish()
     }
 
@@ -782,30 +782,50 @@ fn func_eq_and_hash() -> Result<()> {
     )?;
     let instance = Instance::new(&mut store, &module, &[])?;
 
-    // Fetching the same function twice yields equal `Func`s, even though
-    // each fetch adds a distinct `StoreData` entry, and this holds whether
-    // it's fetched the same way each time or via different paths (by
-    // export name vs. by walking `exports()` vs. through a table).
+    // Fetched by name and by name again: same function.
     let f1 = instance.get_func(&mut store, "f").unwrap();
     let f2 = instance.get_func(&mut store, "f").unwrap();
-    assert_eq!(f1, f2);
-    assert_eq!(hash_of(&f1), hash_of(&f2));
+    assert!(Func::is_same(&store, &f1, &f2));
+    assert_eq!(
+        hash_of(f1.identity_key(&store)),
+        hash_of(f2.identity_key(&store))
+    );
 
+    // Fetched via `exports()`: same function.
     let f3 = instance
         .exports(&mut store)
         .find_map(|e| e.into_func())
         .unwrap();
-    assert_eq!(f1, f3);
-    assert_eq!(hash_of(&f1), hash_of(&f3));
+    assert!(Func::is_same(&store, &f1, &f3));
 
+    // Fetched through a table: same function.
     let t = instance.get_table(&mut store, "t").unwrap();
     let f4 = *t.get(&mut store, 0).unwrap().unwrap_func().unwrap();
-    assert_eq!(f1, f4);
-    assert_eq!(hash_of(&f1), hash_of(&f4));
+    assert!(Func::is_same(&store, &f1, &f4));
 
-    // A different function is not equal.
+    // Passed as an import to another instance and re-exported: still the
+    // same function, even though the two `Func`s wrap distinct pointers.
+    let importer = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (import "" "f" (func $g (result i32)))
+                (export "reexported" (func $g)))
+        "#,
+    )?;
+    let importer_instance = Instance::new(&mut store, &importer, &[f1.into()])?;
+    let f5 = importer_instance
+        .get_func(&mut store, "reexported")
+        .unwrap();
+    assert!(Func::is_same(&store, &f1, &f5));
+    assert_eq!(
+        hash_of(f1.identity_key(&store)),
+        hash_of(f5.identity_key(&store))
+    );
+
+    // A different function is not the same.
     let other = Func::wrap(&mut store, || {});
-    assert_ne!(f1, other);
+    assert!(!Func::is_same(&store, &f1, &other));
 
     Ok(())
 }

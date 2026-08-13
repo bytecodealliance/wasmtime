@@ -1,9 +1,9 @@
 use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
+    self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallFunction, VMArrayCallHostFuncContext,
     VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
-    VMStoreContext,
+    VMStoreContext, VMWasmCallFunction, VmPtr,
 };
 use crate::store::{Asyncness, AutoAssertNoGc, InstanceId, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
@@ -290,26 +290,6 @@ const _: () = {
     assert!(core::mem::align_of::<C>() == core::mem::align_of::<Func>());
     assert!(core::mem::offset_of!(Func, store) == 0);
 };
-
-// Comparing/hashing only reads the `StoreId` and the raw pointer bits of the
-// `VMFuncRef` pointer, neither of which requires dereferencing the pointer,
-// so this is safe to do even without an ambient `StoreOpaque` in scope.
-impl PartialEq for Func {
-    #[inline]
-    fn eq(&self, other: &Func) -> bool {
-        self.store == other.store && self.unsafe_func_ref == other.unsafe_func_ref
-    }
-}
-
-impl Eq for Func {}
-
-impl core::hash::Hash for Func {
-    #[inline]
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.store.hash(state);
-        self.unsafe_func_ref.hash(state);
-    }
-}
 
 macro_rules! for_each_function_signature {
     ($mac:ident) => {
@@ -1224,6 +1204,47 @@ impl Func {
         values_vec.truncate(0);
         store.0.save_wasm_val_raw_storage(values_vec);
         Ok(())
+    }
+
+    /// Returns whether `a` and `b` refer to the same underlying function
+    /// within `store`, regardless of how each was reached (e.g. one fetched
+    /// directly and the other passed as an import to another instance and
+    /// re-exported from there).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `a` or `b` are not owned by `store`.
+    pub fn is_same(store: impl AsContext, a: &Func, b: &Func) -> bool {
+        let store = store.as_context().0;
+        a.identity_key_raw(store) == b.identity_key_raw(store)
+    }
+
+    /// Returns a key that uniquely identifies the underlying function this
+    /// `Func` refers to within `store`, suitable for use as a `HashMap` key.
+    ///
+    /// Two `Func`s produce equal keys if and only if [`Func::is_same`] would
+    /// return `true` for them.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this `Func` is not owned by `store`.
+    pub fn identity_key(&self, store: impl AsContext) -> impl core::hash::Hash + Eq {
+        self.identity_key_raw(store.as_context().0)
+    }
+
+    fn identity_key_raw(
+        &self,
+        store: &StoreOpaque,
+    ) -> (
+        VmPtr<VMOpaqueContext>,
+        Option<VmPtr<VMWasmCallFunction>>,
+        VmPtr<VMArrayCallFunction>,
+    ) {
+        // SAFETY: `vm_func_ref` validates that this pointer belongs to
+        // `store`, which we're borrowing for the duration of this call, so
+        // dereferencing it here is sound.
+        let func_ref = unsafe { self.vm_func_ref(store).as_ref() };
+        (func_ref.vmctx, func_ref.wasm_call, func_ref.array_call)
     }
 
     #[inline]
