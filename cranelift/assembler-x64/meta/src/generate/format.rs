@@ -54,29 +54,46 @@ impl dsl::Format {
     /// once Cranelift has switched to using this assembler predominantly
     /// (TODO).
     #[must_use]
-    pub(crate) fn generate_att_style_operands(&self) -> String {
-        let ordered_ops: Vec<_> = self
-            .operands
-            .iter()
-            .filter(|o| !o.implicit)
-            .rev()
-            .map(|o| format!("{{{}}}", o.location))
-            .collect();
-        ordered_ops.join(", ")
+    pub(crate) fn generate_att_style_operands(&self, nd: bool) -> String {
+        self.ordered_operands(nd, false)
     }
 
     /// Like [`Self::generate_att_style_operands`], but omits the fixed `%xmm0`
     /// mask operand, which XED leaves implicit.
     #[must_use]
-    pub(crate) fn generate_xed_style_operands(&self) -> String {
-        let ordered_ops: Vec<_> = self
+    pub(crate) fn generate_xed_style_operands(&self, nd: bool) -> String {
+        self.ordered_operands(nd, true)
+    }
+
+    /// Shared operand ordering for AT&T-style printing.
+    ///
+    /// Normally this is just the reverse of the DSL's Intel-style order. APX
+    /// "new data destination" (NDD) forms are the exception: their
+    /// architectural destination is the `vvvv`-encoded register, which the DSL
+    /// must list in the middle so that the positional slot assignment in
+    /// `generate_vex_or_evex_prefix` maps operands to `reg`/`vvvv`/`rm`
+    /// correctly. Blindly reversing would therefore print the destination in
+    /// the middle. Instead, for `ND = 1` the sources keep their DSL order and
+    /// the destination is printed last, which matches both AT&T convention and
+    /// the XED disassembly used as a fuzzing oracle.
+    #[must_use]
+    fn ordered_operands(&self, nd: bool, xed_style: bool) -> String {
+        let ops = self
             .operands
             .iter()
-            .filter(|o| !o.implicit && o.location != dsl::Location::xmm0)
-            .rev()
+            .filter(|o| !o.implicit && !(xed_style && o.location == dsl::Location::xmm0));
+        let ordered: Vec<&dsl::Operand> = if nd {
+            let (dst, srcs): (Vec<_>, Vec<_>) =
+                ops.partition(|o| matches!(o.mutability, dsl::Mutability::Write));
+            srcs.into_iter().chain(dst).collect()
+        } else {
+            ops.rev().collect()
+        };
+        ordered
+            .into_iter()
             .map(|o| format!("{{{}}}", o.location))
-            .collect();
-        ordered_ops.join(", ")
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     #[must_use]

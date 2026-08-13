@@ -89,6 +89,13 @@ impl Encoding {
             Encoding::Evex(evex) => evex.opcode,
         }
     }
+
+    /// Return whether this encoding sets the APX `ND` ("new data destination")
+    /// bit, meaning the architectural destination is the `vvvv`-encoded
+    /// register rather than an operand named by ModRM.
+    pub fn is_nd(&self) -> bool {
+        matches!(self, Encoding::Evex(evex) if evex.nd == Some(true))
+    }
 }
 
 impl fmt::Display for Encoding {
