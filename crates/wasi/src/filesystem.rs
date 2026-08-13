@@ -490,7 +490,7 @@ impl Descriptor {
     pub(crate) fn file(&self) -> Result<&File, ErrorCode> {
         match self {
             Descriptor::File(f) => Ok(f),
-            Descriptor::Dir(_) => Err(ErrorCode::BadDescriptor),
+            Descriptor::Dir(_) => Err(ErrorCode::IsDirectory),
         }
     }
 

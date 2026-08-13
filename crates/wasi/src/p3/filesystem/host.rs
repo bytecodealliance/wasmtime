@@ -521,8 +521,18 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
         fd: Resource<Descriptor>,
         offset: Filesize,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
-        let file = get_file(store.get().table, &fd)?;
-        let file = file.clone();
+        let file = match get_descriptor(store.get().table, &fd)?.file() {
+            Ok(file) => file.clone(),
+            Err(err) => {
+                return Ok((
+                    StreamReader::new(&mut store, iter::empty())?,
+                    FutureReader::new(
+                        &mut store,
+                        async move { wasmtime::error::Ok(Err(err.into())) },
+                    )?,
+                ));
+            }
+        };
         let (result_tx, result_rx) = oneshot::channel();
         Ok((
             StreamReader::new(
