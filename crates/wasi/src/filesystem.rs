@@ -490,7 +490,10 @@ impl Descriptor {
     pub(crate) fn file(&self) -> Result<&File, ErrorCode> {
         match self {
             Descriptor::File(f) => Ok(f),
-            Descriptor::Dir(_) => Err(ErrorCode::IsDirectory),
+            // File-only ops such as advise stay bad-descriptor on a dir
+            // (wasi-testsuite filesystem-advise). read-via-stream maps Dir
+            // to is-directory on its own.
+            Descriptor::Dir(_) => Err(ErrorCode::BadDescriptor),
         }
     }
 
