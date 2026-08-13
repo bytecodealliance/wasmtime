@@ -516,6 +516,70 @@ fn private_entity_access() -> wasmtime::Result<()> {
     Ok(())
 }
 
+// `Func` implements `PartialEq`/`Eq`/`Hash` as pointer-identity equality (the
+// same store, and the same underlying `VMFuncRef`). This lets a debugger
+// invert `Instance::debug_function` itself -- building a `Func -> index` map
+// by walking every index once with `debug_function` and inserting into a
+// `HashMap` -- without wasmtime needing to expose that inverse lookup as its
+// own API. This module deliberately places functions into a table out of
+// index order, so a naive "assume escape order tracks function index order"
+// approach would not happen to work by coincidence.
+#[test]
+fn debug_function_identity_round_trips_through_a_caller_built_map() -> wasmtime::Result<()> {
+    let (module, mut store) = get_module_and_store(
+        |_| {},
+        r#"
+        (module
+          (import "" "f" (func))
+          (table 4 funcref)
+          (elem (i32.const 0) $f3 $f2 $f1 $f0)
+          (func $f0 (result i32) i32.const 0)
+          (func $f1 (result i32) i32.const 1)
+          (func $f2 (result i32) i32.const 2)
+          (func $f3 (result i32) i32.const 3))
+        "#,
+    )?;
+    let host_func = Func::wrap(&mut store, || {});
+    let instance = Instance::new(&mut store, &module, &[Extern::Func(host_func)])?;
+
+    // The full function index space: 1 import + 4 defined functions.
+    let mut func_to_index = std::collections::HashMap::new();
+    for index in 0..5u32 {
+        let f = instance.debug_function(&mut store, index).unwrap();
+        func_to_index.insert(f, index);
+    }
+    assert_eq!(
+        func_to_index.len(),
+        5,
+        "every index maps to a distinct Func"
+    );
+
+    for index in 0..5u32 {
+        let f = instance.debug_function(&mut store, index).unwrap();
+        assert_eq!(
+            func_to_index.get(&f),
+            Some(&index),
+            "function {index} must round-trip through a caller-built map, \
+             even though its funcref slot (for defined functions) was \
+             assigned out of index order"
+        );
+    }
+
+    // A function that was never inserted into the map is not present,
+    // whether or not it happens to alias some other function's identity.
+    let unrelated_host_func = Func::wrap(&mut store, || {});
+    assert_eq!(func_to_index.get(&unrelated_host_func), None);
+    assert_ne!(unrelated_host_func, host_func);
+
+    // Two `Func` handles for the same underlying function -- even fetched
+    // independently -- compare equal.
+    let f2_again = instance.debug_function(&mut store, 2).unwrap();
+    let f2 = instance.debug_function(&mut store, 2).unwrap();
+    assert_eq!(f2, f2_again);
+
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 #[cfg(target_pointer_width = "64")] // Threads not supported on 32-bit systems.
