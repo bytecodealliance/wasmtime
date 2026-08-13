@@ -427,6 +427,11 @@ macro_rules! for_each_vm_type {
 
                 /// A pointer to the embedder's `T` inside a `Store<T>`, for use with the
                 /// `store-data-address` unsafe intrinsic.
+                ///
+                /// This pointer is fixed for the lifetime of the store, so loads
+                /// of it are `readonly` and `can_move`.
+                #[readonly]
+                #[can_move]
                 pub store_data: VmPtr<()>,
 
                 /// The range, in addresses, of the guard page that is currently in use.

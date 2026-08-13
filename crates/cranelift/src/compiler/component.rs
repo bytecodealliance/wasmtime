@@ -2162,7 +2162,9 @@ where
                 let data_address = self
                     .traps
                     .alias_regions()
-                    .vmstore_context_store_data(&mut self.builder.cursor(), store_ctx);
+                    .vm_store_context()
+                    .store_data()
+                    .load(&mut self.builder.cursor(), store_ctx);
 
                 // Zero-extend the address if we are on a 32-bit architecture.
                 let data_address = match pointer_type.bits() {

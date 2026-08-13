@@ -667,7 +667,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmstore_ctx = self.get_vmstore_context_ptr(builder);
         let fuel = self
             .alias_regions
-            .vmstore_context_fuel_consumed(&mut builder.cursor(), vmstore_ctx);
+            .vm_store_context()
+            .fuel_consumed()
+            .load(&mut builder.cursor(), vmstore_ctx);
         builder.def_var(self.fuel_var, fuel);
     }
 
@@ -676,7 +678,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let vmstore_ctx = self.get_vmstore_context_ptr(builder);
         let fuel_consumed = builder.use_var(self.fuel_var);
-        self.alias_regions.store_vmstore_context_fuel_consumed(
+        self.alias_regions.vm_store_context().fuel_consumed().store(
             &mut builder.cursor(),
             vmstore_ctx,
             fuel_consumed,
@@ -859,7 +861,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmstore_ctx = self.get_vmstore_context_ptr(builder);
         let deadline = self
             .alias_regions
-            .vmstore_context_epoch_deadline(&mut builder.cursor(), vmstore_ctx);
+            .vm_store_context()
+            .epoch_deadline()
+            .load(&mut builder.cursor(), vmstore_ctx);
         builder.def_var(self.epoch_deadline_var, deadline);
         self.epoch_check_cached(builder, cur_epoch_value, continuation_block);
 
