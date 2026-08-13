@@ -6,7 +6,8 @@ use cranelift_codegen::{
 };
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, GetPtrSize,
-    ModuleInternedTypeIndex, PtrSize as _, RuntimeDataIndex, StaticModuleIndex, VMOffsets,
+    ModuleInternedTypeIndex, NUM_COMPONENT_CONTEXT_SLOTS, PtrSize as _, RuntimeDataIndex,
+    StaticModuleIndex, VMOffsets,
     component::{
         ComponentBuiltinFunctionIndex, LoweredIndex, ResourceIndex, RuntimeCallbackIndex,
         RuntimeComponentInstanceIndex, RuntimeMemoryIndex, RuntimePostReturnIndex,
@@ -571,6 +572,11 @@ impl<'a, Offsets> Field<'a, Offsets> {
 ///     fn current_length(self) -> Field<'a, Offsets> { ... }
 /// }
 /// ```
+///
+/// A field marked `#[aggregate]` gets no accessor, because it has no single
+/// Cranelift type. A field marked `#[indexed]` is a fixed-size array of a
+/// scalar type; its accessor takes the element index, and each element gets its
+/// own alias region.
 #[allow(
     unused_macro_rules,
     reason = "the `#[readonly]`/`#[can_move]` marker arms are generated \
@@ -607,6 +613,13 @@ macro_rules! define_vm_type_alias_region_helpers {
     (@field_ty $pt:expr, DefinedTagIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, VMGlobalKind) => { ir::types::I64 };
 
+    // Classify an `#[indexed]` field's array type to
+    // `(element ir::Type, element size in bytes, element count)`.
+    (@array_info $pt:expr, UnsafeCell < $inner:tt >) => {
+        define_vm_type_alias_region_helpers!(@array_info $pt, $inner)
+    };
+    (@array_info $pt:expr, [u32; $n:expr]) => { (ir::types::I32, 4u32, $n) };
+
     // Apply a field attribute to its access flags. The `#[readonly]` and
     // `#[can_move]` markers map to the corresponding `MemFlagsData` builder
     // methods; doc comments have no effect on flags; any other attribute is a
@@ -615,13 +628,68 @@ macro_rules! define_vm_type_alias_region_helpers {
     (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move() };
     (@apply_attr $flags:expr, [doc = $d:literal]) => { $flags };
 
+    // Emit the accessor method for a single ordinary (scalar) field.
+    (@method $Name:ident $snake:ident plain $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ]) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the `", stringify!($fname),
+            "` field of `", stringify!($Name), "`."
+        )]
+        pub fn $fname(self) -> Field<'a, Offsets> {
+            let offset = u32::from(
+                self.regions.offsets.get_ptr_size().$snake().$fname()
+            );
+            let flags = ir::MemFlagsData::trusted();
+            $(
+                let flags = define_vm_type_alias_region_helpers!(
+                    @apply_attr flags, $fattr
+                );
+            )*
+            let ty = define_vm_type_alias_region_helpers!(
+                @field_ty self.regions.pointer_type, $($fty)*
+            );
+            Field::new(self.regions, VmType::$Name, offset, flags, ty)
+        }
+    };
+
+    // Emit the accessor method for an `#[indexed]` field: a fixed-size array of
+    // a scalar type, indexed by a compile-time constant.
+    (@method $Name:ident $snake:ident indexed $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ]) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the `index`th element of the `",
+            stringify!($fname), "` field of `", stringify!($Name), "`."
+        )]
+        pub fn $fname(self, index: u8) -> Field<'a, Offsets> {
+            let (ty, elem_size, len) = define_vm_type_alias_region_helpers!(
+                @array_info self.regions.pointer_type, $($fty)*
+            );
+            assert!(
+                usize::from(index) < len,
+                concat!(
+                    "index out of bounds for `", stringify!($Name), "::",
+                    stringify!($fname), "`"
+                ),
+            );
+            let base = u32::from(
+                self.regions.offsets.get_ptr_size().$snake().$fname()
+            );
+            let offset = base + u32::from(index) * elem_size;
+            let flags = ir::MemFlagsData::trusted();
+            $(
+                let flags = define_vm_type_alias_region_helpers!(
+                    @apply_attr flags, $fattr
+                );
+            )*
+            Field::new(self.regions, VmType::$Name, offset, flags, ty)
+        }
+    };
+
     // Emit the accessor `struct` and per-field methods for one `VM*` type.
     //
-    // Fields arrive pre-split into `{ $fname [ $attrs... ] [ $fty... ] }` groups
-    // (see `@munch` below); the terminal arm consumes those groups once the
-    // struct body has been fully peeled apart.
+    // Fields arrive pre-split into `{ $kind $fname [ $attrs... ] [ $fty... ] }`
+    // groups (see `@munch` below); the terminal arm consumes those groups once
+    // the struct body has been fully peeled apart.
     (@emit $Name:ident $snake:ident {
-        $( { $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] } )*
+        $( { $fkind:ident $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] } )*
     }) => {
         #[doc = concat!(
             "An [`AliasRegions`] accessor for the fields of a `",
@@ -657,32 +725,17 @@ macro_rules! define_vm_type_alias_region_helpers {
             Offsets: GetPtrSize,
         {
             $(
-                #[doc = concat!(
-                    "Get the [`Field`] for the `", stringify!($fname),
-                    "` field of `", stringify!($Name), "`."
-                )]
-                pub fn $fname(self) -> Field<'a, Offsets> {
-                    let offset = u32::from(
-                        self.regions.offsets.get_ptr_size().$snake().$fname()
-                    );
-                    let flags = ir::MemFlagsData::trusted();
-                    $(
-                        let flags = define_vm_type_alias_region_helpers!(
-                            @apply_attr flags, $fattr
-                        );
-                    )*
-                    let ty = define_vm_type_alias_region_helpers!(
-                        @field_ty self.regions.pointer_type, $($fty)*
-                    );
-                    Field::new(self.regions, VmType::$Name, offset, flags, ty)
-                }
+                define_vm_type_alias_region_helpers!(
+                    @method $Name $snake $fkind $fname [ $($fattr)* ] [ $($fty)* ]
+                );
             )*
         }
     };
 
     // Peel fields off the raw struct body one at a time, accumulating completed
-    // `{ $fname [ $attrs... ] [ $fty... ] }` groups plus the pending attributes
-    // for the field currently being parsed.
+    // `{ $kind $fname [ $attrs... ] [ $fty... ] }` groups plus the pending
+    // attributes for the field currently being parsed. `$kind` is `plain` or
+    // `indexed`, and selects which `@method` arm emits the field's accessor.
     //
     // Splitting the body by hand (rather than matching `$fty:tt $(< $fgen:ty
     // >)?` within a repetition) is what lets each field's type reach the
@@ -692,30 +745,37 @@ macro_rules! define_vm_type_alias_region_helpers {
         define_vm_type_alias_region_helpers!(@emit $Name $snake { $($groups)* });
     };
     // A field marked `#[aggregate]` is a composite (a nested struct or array)
-    // that is not accessed as a whole by Wasm code, but piecewise
-    // instead. Therefore, there is no single Cranelift type for such fields, so
-    // no accessors are generated for them; interior accesses are computed from
-    // the field's offset instead, which the generated `offsets::*` methods
-    // still provide.
+    // so there is no single Cranelift type for such fields, so no accessors are
+    // generated for them; interior accesses are computed from the field's
+    // offset instead, which the generated `offsets::*` methods still provide.
     (@munch $Name:ident $snake:ident { $($groups:tt)* }
         $(#[doc = $fdoc:literal])* #[aggregate] $fvis:vis $fname:ident : $fty:ty , $($rest:tt)*
     ) => {
         define_vm_type_alias_region_helpers!(@munch $Name $snake { $($groups)* } $($rest)*);
+    };
+    // A field marked `#[indexed]` is a fixed-size array of a scalar type whose
+    // elements are accessed individually by a compile-time constant index. It
+    // has no single Cranelift type either, but its elements do, so it gets an
+    // index-taking accessor.
+    (@munch $Name:ident $snake:ident { $($groups:tt)* }
+        $(#[doc = $fdoc:literal])* #[indexed] $fvis:vis $fname:ident : $($rest:tt)*
+    ) => {
+        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } indexed $fname [] [] $($rest)*);
     };
     // Consume one field's attributes, visibility, and name, then collect its
     // type tokens.
     (@munch $Name:ident $snake:ident { $($groups:tt)* }
         $(# $fattr:tt)* $fvis:vis $fname:ident : $($rest:tt)*
     ) => {
-        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fname [ $($fattr)* ] [] $($rest)*);
+        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } plain $fname [ $($fattr)* ] [] $($rest)*);
     };
     // Accumulate one field's type tokens up to its terminating comma, then
     // append the completed group.
-    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] , $($rest:tt)*) => {
-        define_vm_type_alias_region_helpers!(@munch $Name $snake { $($groups)* { $fname [ $($fattr)* ] [ $($fty)* ] } } $($rest)*);
+    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fkind:ident $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] , $($rest:tt)*) => {
+        define_vm_type_alias_region_helpers!(@munch $Name $snake { $($groups)* { $fkind $fname [ $($fattr)* ] [ $($fty)* ] } } $($rest)*);
     };
-    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] $tok:tt $($rest:tt)*) => {
-        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fname [ $($fattr)* ] [ $($fty)* $tok ] $($rest)*);
+    (@munch_ty $Name:ident $snake:ident { $($groups:tt)* } $fkind:ident $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] $tok:tt $($rest:tt)*) => {
+        define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fkind $fname [ $($fattr)* ] [ $($fty)* $tok ] $($rest)*);
     };
 
     // Top-level entry: the list of `VM*` type definitions.
@@ -1099,40 +1159,6 @@ where
         )
     }
 
-    fn vmstore_context_load(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        ty: ir::Type,
-        base_flags: ir::MemFlagsData,
-        vmstore_ctx: ir::Value,
-        offset: u32,
-    ) -> ir::Value {
-        let region = self.vmstore_context_region(cursor.func, offset);
-        cursor.ins().load(
-            ty,
-            base_flags.with_alias_region(Some(region)),
-            vmstore_ctx,
-            i32::try_from(offset).unwrap(),
-        )
-    }
-
-    fn vmstore_context_store(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        base_flags: ir::MemFlagsData,
-        vmstore_ctx: ir::Value,
-        offset: u32,
-        val: ir::Value,
-    ) {
-        let region = self.vmstore_context_region(cursor.func, offset);
-        cursor.ins().store(
-            base_flags.with_alias_region(Some(region)),
-            val,
-            vmstore_ctx,
-            i32::try_from(offset).unwrap(),
-        );
-    }
-
     /// Get a `Load` of the GC heap base pointer (`VMStoreContext::gc_heap.base`).
     ///
     /// The caller supplies the base flags because whether the base pointer is
@@ -1207,150 +1233,6 @@ where
     ) -> ir::AliasRegion {
         let offset = self.offsets.get_ptr_size().vm_store_context().stack_chain();
         self.vmstore_context_region(func, offset.into())
-    }
-
-    /// Load a `VMStoreContext` component-context slot.
-    ///
-    /// The slot is indexed by a compile-time constant, so the alias region is
-    /// keyed on the precise per-slot offset.
-    pub fn vmstore_context_component_context_slot(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        ty: ir::Type,
-        vmstore_ctx: ir::Value,
-        slot: u8,
-    ) -> ir::Value {
-        self.vmstore_context_load(
-            cursor,
-            ty,
-            ir::MemFlagsData::trusted(),
-            vmstore_ctx,
-            self.offsets
-                .get_ptr_size()
-                .vm_store_context()
-                .component_context_slot(slot)
-                .into(),
-        )
-    }
-
-    /// Store a `VMStoreContext` component-context slot.
-    ///
-    /// The slot is indexed by a compile-time constant, so the alias region is
-    /// keyed on the precise per-slot offset.
-    pub fn store_vmstore_context_component_context_slot(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmstore_ctx: ir::Value,
-        slot: u8,
-        val: ir::Value,
-    ) {
-        self.vmstore_context_store(
-            cursor,
-            ir::MemFlagsData::trusted(),
-            vmstore_ctx,
-            self.offsets
-                .get_ptr_size()
-                .vm_store_context()
-                .component_context_slot(slot)
-                .into(),
-            val,
-        )
-    }
-}
-
-/// `VMDeferredThread`-related methods.
-impl<Offsets> AliasRegions<Offsets>
-where
-    Offsets: GetPtrSize,
-{
-    fn vmdeferred_thread_region(
-        &mut self,
-        func: &mut ir::Function,
-        offset: u32,
-    ) -> ir::AliasRegion {
-        self.region(
-            func,
-            AliasRegionKey::Vm {
-                ty: VmType::VMDeferredThread,
-                offset,
-            },
-        )
-    }
-
-    fn vmdeferred_thread_load(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        ty: ir::Type,
-        base_flags: ir::MemFlagsData,
-        vmdeferred_thread_ptr: ir::Value,
-        offset: u32,
-    ) -> ir::Value {
-        let region = self.vmdeferred_thread_region(cursor.func, offset);
-        cursor.ins().load(
-            ty,
-            base_flags.with_alias_region(Some(region)),
-            vmdeferred_thread_ptr,
-            i32::try_from(offset).unwrap(),
-        )
-    }
-
-    fn vmdeferred_thread_store(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        base_flags: ir::MemFlagsData,
-        vmdeferred_thread_ptr: ir::Value,
-        offset: u32,
-        val: ir::Value,
-    ) {
-        let region = self.vmdeferred_thread_region(cursor.func, offset);
-        cursor.ins().store(
-            base_flags.with_alias_region(Some(region)),
-            val,
-            vmdeferred_thread_ptr,
-            i32::try_from(offset).unwrap(),
-        );
-    }
-
-    /// Load `VMDeferredThread::saved_context[i]` (a saved `context.{get,set}`
-    /// slot).
-    pub fn vmdeferred_thread_saved_context(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmdeferred_thread_ptr: ir::Value,
-        i: u8,
-    ) -> ir::Value {
-        self.vmdeferred_thread_load(
-            cursor,
-            ir::types::I32,
-            ir::MemFlagsData::trusted(),
-            vmdeferred_thread_ptr,
-            self.offsets
-                .get_ptr_size()
-                .vm_deferred_thread()
-                .saved_context_slot(i)
-                .into(),
-        )
-    }
-
-    /// Store `VMDeferredThread::saved_context[i]`.
-    pub fn store_vmdeferred_thread_saved_context(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmdeferred_thread_ptr: ir::Value,
-        i: u8,
-        val: ir::Value,
-    ) {
-        self.vmdeferred_thread_store(
-            cursor,
-            ir::MemFlagsData::trusted(),
-            vmdeferred_thread_ptr,
-            self.offsets
-                .get_ptr_size()
-                .vm_deferred_thread()
-                .saved_context_slot(i)
-                .into(),
-            val,
-        )
     }
 }
 

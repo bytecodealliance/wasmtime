@@ -203,6 +203,7 @@ macro_rules! define_vm_types {
             $(
                 $(#[doc = $fdoc:literal])*
                 $(#[aggregate])?
+                $(#[indexed])?
                 $(#[readonly])?
                 $(#[can_move])?
                 $fvis:vis $fname:ident : $fty:tt $(< $fgen:ty >)? ,
@@ -823,11 +824,10 @@ mod test_vmstore_context {
     use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
 
     /// Check the `VMStoreContext` offsets that `for_each_vm_type!` does *not*
-    /// generate: the offsets reaching into the inlined `gc_heap`, and the
-    /// indexed `component_context` slot accessor.
+    /// generate: the offsets reaching into the inlined `gc_heap`.
     ///
-    /// Every plain field offset, plus the size and alignment of the type, is
-    /// already checked by the generated `test_vm_type_layouts::vm_store_context`.
+    /// Every field offset, plus the size and alignment of the type, is already
+    /// checked by the generated `test_vm_type_layouts::vm_store_context`.
     #[test]
     fn derived_field_offsets() {
         let module = Module::new(StaticModuleIndex::from_u32(0));
@@ -839,20 +839,6 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, gc_heap) + offset_of!(VMMemoryDefinition, current_length),
             usize::from(offsets.ptr.vm_store_context().gc_heap_current_length())
-        );
-        assert_eq!(
-            offset_of!(VMStoreContext, component_context),
-            usize::from(offsets.ptr.vm_store_context().component_context_slot(0))
-        );
-
-        // Make sure that the calculation for the size of a slot is also
-        // accurate.
-        let slot_width = offsets.ptr.vm_store_context().component_context_slot(1)
-            - offsets.ptr.vm_store_context().component_context_slot(0);
-        let mut default = VMStoreContext::default();
-        assert_eq!(
-            size_of_val(&default.component_context.get_mut()[0]),
-            usize::from(slot_width)
         );
     }
 }
@@ -920,30 +906,6 @@ mod test_vmlazy_thread {
         assert_eq!(
             VMLazyThread::forced().thread.unwrap().addr().get(),
             usize::try_from(wasmtime_environ::VM_LAZY_THREAD_FORCED).unwrap()
-        );
-    }
-}
-
-#[cfg(test)]
-mod test_vmdeferred_thread {
-    use super::*;
-    use core::mem::offset_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
-
-    /// Check the indexed `saved_context` slot accessor, which
-    /// `for_each_vm_type!` does not generate.
-    ///
-    /// Every plain field offset, plus the size and alignment of the type, is
-    /// already checked by the generated
-    /// `test_vm_type_layouts::vm_deferred_thread`.
-    #[test]
-    fn deferred_thread_derived_field_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        let ptr = offsets.ptr;
-        assert_eq!(
-            offset_of!(VMDeferredThread, saved_context),
-            usize::from(ptr.vm_deferred_thread().saved_context_slot(0))
         );
     }
 }

@@ -37,6 +37,13 @@
 ///   is still generated, since that is what interior accesses are computed
 ///   relative to.
 ///
+/// * `#[indexed]`: this field is a fixed-size array of a scalar type, whose
+///   elements compiled Wasm code accesses individually by a compile-time
+///   constant index. Like `#[aggregate]`, the field has no single Cranelift
+///   type; unlike `#[aggregate]`, its elements all do, so an alias-region
+///   accessor taking that index is generated for it and each element gets its
+///   own alias region.
+///
 /// * `#[readonly]` and/or `#[can_move]`: describe how Cranelift may treat loads
 ///   and stores of that field.
 #[macro_export]
@@ -456,7 +463,7 @@ macro_rules! for_each_vm_type {
                 /// This is saved/restored when threads are swapped in the component model.
                 ///
                 /// NB: `UnsafeCell` because JIT code writes to the slots.
-                #[aggregate]
+                #[indexed]
                 pub component_context: UnsafeCell<[u32; NUM_COMPONENT_CONTEXT_SLOTS]>,
 
                 /// JIT-visible current thread for the component model's sync-to-sync
@@ -542,7 +549,7 @@ macro_rules! for_each_vm_type {
                 pub callee_instance: u32,
                 /// The caller thread's `context.{get,set}` slots, saved on entry and
                 /// restored on the fast-path exit (or recovered while forcing).
-                #[aggregate]
+                #[indexed]
                 pub saved_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
             }
         }
