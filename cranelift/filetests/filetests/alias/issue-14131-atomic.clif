@@ -34,6 +34,7 @@ block0(v0: i64, v1: i32):
 ; block0(v0: i64, v1: i32):
 ;     atomic_store notrap v1, v0
 ;     store notrap region0 v1, v0
-;     fence
+;     fence 
 ;     return
 ; }
+
