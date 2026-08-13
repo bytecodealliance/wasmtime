@@ -34,6 +34,13 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
         return;
     }
 
+    // Likewise, capstone cannot decode the APX extended-EVEX ("map 4")
+    // encodings at all, returning zero instructions. These are instead checked
+    // against XED by `roundtrip_xed`, which does understand map 4.
+    if features_mention(inst.features(), Feature::apx) {
+        return;
+    }
+
     roundtrip_with(
         inst,
         "capstone",
