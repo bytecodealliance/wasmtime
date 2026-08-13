@@ -291,19 +291,6 @@ const _: () = {
     assert!(core::mem::offset_of!(Func, store) == 0);
 };
 
-// Two `Func`s are equal if and only if they reference the exact same
-// function: the same store, and the same underlying `VMFuncRef`. This is
-// pointer-identity equality, not a deep comparison of behavior (e.g. two
-// distinct closures that happen to compute the same result are *not*
-// considered equal).
-//
-// This is useful for building a mapping from a `Func` back to some
-// caller-defined identifier (for example, reconstructing the function index
-// a `Func` came from within its instance) without wasmtime needing to expose
-// such an inverse lookup itself: collect `(Func, id)` pairs by walking the
-// forward direction once, and use `Func`'s `Eq`/`Hash` impls to build a
-// `HashMap` from that.
-//
 // Comparing/hashing only reads the `StoreId` and the raw pointer bits of the
 // `VMFuncRef` pointer, neither of which requires dereferencing the pointer,
 // so this is safe to do even without an ambient `StoreOpaque` in scope.

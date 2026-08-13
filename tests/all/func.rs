@@ -760,6 +760,57 @@ fn import_works() -> Result<()> {
 }
 
 #[test]
+fn func_eq_and_hash() -> Result<()> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    fn hash_of(f: &Func) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        f.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    let mut store = Store::<()>::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (table (export "t") 1 1 funcref)
+                (func (export "f") (result i32) i32.const 0)
+                (elem (i32.const 0) 0))
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    // Fetching the same function twice yields equal `Func`s, even though
+    // each fetch adds a distinct `StoreData` entry, and this holds whether
+    // it's fetched the same way each time or via different paths (by
+    // export name vs. by walking `exports()` vs. through a table).
+    let f1 = instance.get_func(&mut store, "f").unwrap();
+    let f2 = instance.get_func(&mut store, "f").unwrap();
+    assert_eq!(f1, f2);
+    assert_eq!(hash_of(&f1), hash_of(&f2));
+
+    let f3 = instance
+        .exports(&mut store)
+        .find_map(|e| e.into_func())
+        .unwrap();
+    assert_eq!(f1, f3);
+    assert_eq!(hash_of(&f1), hash_of(&f3));
+
+    let t = instance.get_table(&mut store, "t").unwrap();
+    let f4 = *t.get(&mut store, 0).unwrap().unwrap_func().unwrap();
+    assert_eq!(f1, f4);
+    assert_eq!(hash_of(&f1), hash_of(&f4));
+
+    // A different function is not equal.
+    let other = Func::wrap(&mut store, || {});
+    assert_ne!(f1, other);
+
+    Ok(())
+}
+
+#[test]
 #[cfg_attr(miri, ignore)]
 fn trap_smoke() -> Result<()> {
     let mut store = Store::<()>::default();
