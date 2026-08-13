@@ -11,7 +11,7 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   addq %rsi, %rax, %rdi
+;   addq %rdi, %rsi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
