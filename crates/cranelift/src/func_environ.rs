@@ -450,12 +450,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> (ir::Value, i32) {
         let vmctx = self.vmctx_val(pos);
         if let Some(def_index) = self.module.defined_global_index(index) {
-            let offset = i32::try_from(self.offsets.vmctx_vmglobal_definition(def_index)).unwrap();
+            let offset = i32::try_from(self.offsets.globals().at(def_index)).unwrap();
             (vmctx, offset)
         } else {
+            let import_off = self.offsets.imported_globals().at(index);
             let addr = self
                 .alias_regions
-                .vmctx_vmglobal_import_from(pos, vmctx, index);
+                .vm_global_import()
+                .from()
+                .relative_to(import_off)
+                .load(pos, vmctx);
             (addr, 0)
         }
     }
@@ -464,7 +468,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn get_vmstore_context_ptr(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         self.alias_regions
-            .vmctx_store_context(&mut builder.cursor(), vmctx)
+            .vmctx()
+            .store_context()
+            .load(&mut builder.cursor(), vmctx)
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -737,7 +743,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         self.alias_regions
-            .vmctx_epoch_ptr(&mut builder.cursor(), vmctx)
+            .vmctx()
+            .epoch_ptr()
+            .load(&mut builder.cursor(), vmctx)
     }
 
     fn epoch_load_current(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
@@ -1097,7 +1105,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> ir::Value {
         let vmctx = self.vmctx_val(pos);
         // Load the base pointer of the array of `VMSharedTypeIndex`es.
-        let shared_indices = self.alias_regions.vmctx_shared_type_ids_array(pos, vmctx);
+        let shared_indices = self.alias_regions.vmctx().type_ids().load(pos, vmctx);
 
         // Calculate the offset in that array for this type's entry.
 
@@ -1550,7 +1558,9 @@ impl FuncEnvironment<'_> {
                 // atomically growing it.
                 let mem = self
                     .alias_regions
-                    .vmctx_vmmemory_pointer_load(func, def_index);
+                    .vmctx()
+                    .memories(def_index)
+                    .to_deferred_load(func);
                 let mut base = self.alias_regions.vm_memory_definition().base();
                 base.can_move();
                 if base_readonly {
@@ -1572,7 +1582,7 @@ impl FuncEnvironment<'_> {
                 // relative to the `vmctx` itself: fold that offset into each
                 // field's offset.
                 let owned_index = self.module.owned_memory_index(def_index);
-                let vmctx_off = self.offsets.vmctx_vmmemory_definition(owned_index);
+                let vmctx_off = self.offsets.owned_memories().at(owned_index);
                 let mut base = self.alias_regions.vm_memory_definition().base();
                 base.can_move();
                 if base_readonly {
@@ -1591,9 +1601,13 @@ impl FuncEnvironment<'_> {
                 )
             }
         } else {
+            let import_off = self.offsets.imported_memories().at(index);
             let mem = self
                 .alias_regions
-                .vmctx_vmmemory_import_from_load(func, index);
+                .vm_memory_import()
+                .from()
+                .relative_to(import_off)
+                .to_deferred_load(func);
             let mut base = self.alias_regions.vm_memory_definition().base();
             base.can_move();
             if base_readonly {
@@ -1646,7 +1660,7 @@ impl FuncEnvironment<'_> {
         if let Some(def_index) = self.module.defined_table_index(index) {
             // A defined table's `VMTableDefinition` is inlined into the vmctx,
             // reached at an absolute `vmctx` offset.
-            let vmctx_off = self.offsets.vmctx_vmtable_definition(def_index);
+            let vmctx_off = self.offsets.tables().at(def_index);
             let mut base = self.alias_regions.vm_table_definition().base();
             if is_static {
                 base.readonly().can_move();
@@ -1674,7 +1688,13 @@ impl FuncEnvironment<'_> {
         } else {
             // An imported table is reached through a `*mut VMTableDefinition`
             // loaded from the `vmctx`.
-            let from = self.alias_regions.vmctx_vmtable_from_load(func, index);
+            let import_off = self.offsets.imported_tables().at(index);
+            let from = self
+                .alias_regions
+                .vm_table_import()
+                .from()
+                .relative_to(import_off)
+                .to_deferred_load(func);
             let mut base = self.alias_regions.vm_table_definition().base();
             if is_static {
                 base.readonly().can_move();
@@ -1735,16 +1755,19 @@ impl FuncEnvironment<'_> {
         } else {
             // An imported tag -- we need to load the VMTagImport struct.
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            let from_vmctx = self.alias_regions.vmctx_vmtag_import_vmctx(
-                &mut builder.cursor(),
-                vmctx,
-                tag_index,
-            );
-            let index = self.alias_regions.vmctx_vmtag_import_index(
-                &mut builder.cursor(),
-                vmctx,
-                tag_index,
-            );
+            let import_off = self.offsets.imported_tags().at(tag_index);
+            let from_vmctx = self
+                .alias_regions
+                .vm_tag_import()
+                .vmctx()
+                .relative_to(import_off)
+                .load(&mut builder.cursor(), vmctx);
+            let index = self
+                .alias_regions
+                .vm_tag_import()
+                .index()
+                .relative_to(import_off)
+                .load(&mut builder.cursor(), vmctx);
             let builtin = self.builtin_functions.get_instance_id(builder.func);
             let call = builder.ins().call(builtin, &[from_vmctx]);
             let from_instance_id = builder.func.dfg.inst_results(call)[0];
@@ -1841,11 +1864,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
         // First append the callee vmctx address.
         let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
-        let callee_vmctx = self.env.alias_regions.vmctx_vmfunction_import_vmctx(
-            &mut self.builder.cursor(),
-            vmctx,
-            callee_index,
-        );
+        let import_off = self.env.offsets.imported_functions().at(callee_index);
+        let callee_vmctx = self
+            .env
+            .alias_regions
+            .vm_function_import()
+            .vmctx()
+            .relative_to(import_off)
+            .load(&mut self.builder.cursor(), vmctx);
         real_call_args.push(callee_vmctx);
         real_call_args.push(caller_vmctx);
 
@@ -1929,11 +1955,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     }
                     FactInlineIntrinsic::EnterSyncCall | FactInlineIntrinsic::ExitSyncCall => {}
                 }
-                let func_addr = self.env.alias_regions.vmctx_vmfunction_import_wasm_call(
-                    &mut self.builder.cursor(),
-                    vmctx,
-                    callee_index,
-                );
+                let import_off = self.env.offsets.imported_functions().at(callee_index);
+                let func_addr = self
+                    .env
+                    .alias_regions
+                    .vm_function_import()
+                    .wasm_call()
+                    .relative_to(import_off)
+                    .load(&mut self.builder.cursor(), vmctx);
                 Ok(Reachability::Reachable(self.indirect_call_inst(
                     sig_ref,
                     func_addr,
@@ -1947,11 +1976,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // and with different functions. Either way, we have to do the
             // indirect call.
             None => {
-                let func_addr = self.env.alias_regions.vmctx_vmfunction_import_wasm_call(
-                    &mut self.builder.cursor(),
-                    vmctx,
-                    callee_index,
-                );
+                let import_off = self.env.offsets.imported_functions().at(callee_index);
+                let func_addr = self
+                    .env
+                    .alias_regions
+                    .vm_function_import()
+                    .wasm_call()
+                    .relative_to(import_off)
+                    .load(&mut self.builder.cursor(), vmctx);
                 Ok(Reachability::Reachable(self.indirect_call_inst(
                     sig_ref,
                     func_addr,
@@ -2143,11 +2175,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // equivalent out-of-line teardown via the `exit_sync_call` libcall.
         self.builder.switch_to_block(slow_block);
         let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
-        let func_addr = self.env.alias_regions.vmctx_vmfunction_import_wasm_call(
-            &mut self.builder.cursor(),
-            vmctx,
-            callee_index,
-        );
+        let import_off = self.env.offsets.imported_functions().at(callee_index);
+        let func_addr = self
+            .env
+            .alias_regions
+            .vm_function_import()
+            .wasm_call()
+            .relative_to(import_off)
+            .load(&mut self.builder.cursor(), vmctx);
         self.indirect_call_inst(sig_ref, func_addr, real_call_args);
         self.builder.ins().jump(cont_block, &[]);
 
@@ -3518,12 +3553,19 @@ impl FuncEnvironment<'_> {
             // This is an imported memory, so load the vmctx/defined index from
             // the import definition itself.
             None => {
+                let import_off = self.offsets.imported_memories().at(index);
                 let vmctx = self
                     .alias_regions
-                    .vmctx_vmmemory_import_vmctx(pos, cur_vmctx, index);
+                    .vm_memory_import()
+                    .vmctx()
+                    .relative_to(import_off)
+                    .load(pos, cur_vmctx);
                 let index = self
                     .alias_regions
-                    .vmctx_vmmemory_import_index(pos, cur_vmctx, index);
+                    .vm_memory_import()
+                    .index()
+                    .relative_to(import_off)
+                    .load(pos, cur_vmctx);
                 (vmctx, index)
             }
         }
@@ -3544,12 +3586,19 @@ impl FuncEnvironment<'_> {
         match self.module.defined_table_index(index) {
             Some(index) => (cur_vmctx, pos.ins().iconst(I32, i64::from(index.as_u32()))),
             None => {
+                let import_off = self.offsets.imported_tables().at(index);
                 let vmctx = self
                     .alias_regions
-                    .vmctx_vmtable_import_vmctx(pos, cur_vmctx, index);
+                    .vm_table_import()
+                    .vmctx()
+                    .relative_to(import_off)
+                    .load(pos, cur_vmctx);
                 let index = self
                     .alias_regions
-                    .vmctx_vmtable_import_index(pos, cur_vmctx, index);
+                    .vm_table_import()
+                    .index()
+                    .relative_to(import_off)
+                    .load(pos, cur_vmctx);
                 (vmctx, index)
             }
         }
@@ -3600,7 +3649,9 @@ impl FuncEnvironment<'_> {
             if is_shared {
                 let mem_ptr = self
                     .alias_regions
-                    .vmctx_vmmemory_pointer(pos, vmctx, def_index);
+                    .vmctx()
+                    .memories(def_index)
+                    .load(pos, vmctx);
                 self.alias_regions
                     .vm_memory_definition()
                     .current_length()
@@ -3609,7 +3660,7 @@ impl FuncEnvironment<'_> {
                 // A defined, owned memory's `VMMemoryDefinition` is inlined into
                 // the `vmctx` at an absolute offset.
                 let owned_index = self.module.owned_memory_index(def_index);
-                let vmctx_off = self.offsets.vmctx_vmmemory_definition(owned_index);
+                let vmctx_off = self.offsets.owned_memories().at(owned_index);
                 self.alias_regions
                     .vm_memory_definition()
                     .current_length()
@@ -3617,9 +3668,13 @@ impl FuncEnvironment<'_> {
                     .load(pos, vmctx)
             }
         } else {
+            let import_off = self.offsets.imported_memories().at(index);
             let mem_ptr = self
                 .alias_regions
-                .vmctx_vmmemory_import_from(pos, vmctx, index);
+                .vm_memory_import()
+                .from()
+                .relative_to(import_off)
+                .load(pos, vmctx);
             if is_shared {
                 self.alias_regions
                     .vm_memory_definition()
@@ -4040,12 +4095,10 @@ impl FuncEnvironment<'_> {
         // the value 0 to the `VMContext`'s slot for this passive data segment.
         let vmctx = self.vmctx_val(&mut pos);
         let new_length = pos.ins().iconst(I32, 0);
-        self.alias_regions.store_vmctx_runtime_data_length(
-            &mut pos,
-            vmctx,
-            runtime_index,
-            new_length,
-        );
+        self.alias_regions
+            .vmctx()
+            .runtime_data_lengths(runtime_index)
+            .store(&mut pos, vmctx, new_length);
 
         Ok(())
     }
@@ -4331,7 +4384,9 @@ impl FuncEnvironment<'_> {
     ) -> ir::Value {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         self.alias_regions
-            .vmctx_runtime_data_length(&mut builder.cursor(), vmctx, runtime_index)
+            .vmctx()
+            .runtime_data_lengths(runtime_index)
+            .load(&mut builder.cursor(), vmctx)
     }
 
     fn load_runtime_data_length_as_pointer(
@@ -4350,7 +4405,9 @@ impl FuncEnvironment<'_> {
     ) -> ir::Value {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         self.alias_regions
-            .vmctx_runtime_data_base(&mut builder.cursor(), vmctx, runtime_index)
+            .vmctx()
+            .runtime_data_bases(runtime_index)
+            .load(&mut builder.cursor(), vmctx)
     }
 
     pub fn translate_table_copy(

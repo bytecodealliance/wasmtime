@@ -34,7 +34,9 @@ impl CopyingCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         func_env
             .alias_regions
-            .vmctx_gc_heap_data(&mut builder.cursor(), vmctx)
+            .vmctx()
+            .gc_heap_data()
+            .load(&mut builder.cursor(), vmctx)
     }
 
     /// Load the current bump pointer and active-space end from a `*mut

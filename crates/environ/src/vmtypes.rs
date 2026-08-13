@@ -147,10 +147,14 @@ macro_rules! for_each_vm_type {
             #[snake_name = vm_function_import]
             pub struct VMFunctionImport {
                 /// Same as `VMFuncRef::array_call`.
+                #[readonly]
+                #[can_move]
                 pub array_call: VmPtr<VMArrayCallFunction>,
 
                 /// Same as `VMFuncRef::wasm_call`, except always non-null. Must be filled
                 /// in by the time Wasm is importing this function!
+                #[readonly]
+                #[can_move]
                 pub wasm_call: VmPtr<VMWasmCallFunction>,
 
                 /// Function signature's _actual_ type id.
@@ -158,9 +162,13 @@ macro_rules! for_each_vm_type {
                 /// This is the type that the function was defined with, not the type that
                 /// it was imported as. These two can be different in the face of subtyping
                 /// and we need the former for to correctly implement dynamic downcasts.
+                #[readonly]
+                #[can_move]
                 pub type_index: VMSharedTypeIndex,
 
                 /// Same as `VMFuncRef::vmctx`.
+                #[readonly]
+                #[can_move]
                 pub vmctx: VmPtr<VMOpaqueContext>,
             }
 
@@ -171,12 +179,18 @@ macro_rules! for_each_vm_type {
             #[snake_name = vm_table_import]
             pub struct VMTableImport {
                 /// A pointer to the imported table description.
+                #[readonly]
+                #[can_move]
                 pub from: VmPtr<VMTableDefinition>,
 
                 /// A pointer to the `VMContext` that owns the table description.
+                #[readonly]
+                #[can_move]
                 pub vmctx: VmPtr<VMContext>,
 
                 /// The table index, within `vmctx`, this definition resides at.
+                #[readonly]
+                #[can_move]
                 pub index: DefinedTableIndex,
             }
 
@@ -187,12 +201,18 @@ macro_rules! for_each_vm_type {
             #[snake_name = vm_memory_import]
             pub struct VMMemoryImport {
                 /// A pointer to the imported memory description.
+                #[readonly]
+                #[can_move]
                 pub from: VmPtr<VMMemoryDefinition>,
 
                 /// A pointer to the `VMContext` that owns the memory description.
+                #[readonly]
+                #[can_move]
                 pub vmctx: VmPtr<VMContext>,
 
                 /// The index of the memory in the containing `vmctx`.
+                #[readonly]
+                #[can_move]
                 pub index: DefinedMemoryIndex,
             }
 
@@ -207,6 +227,8 @@ macro_rules! for_each_vm_type {
             #[snake_name = vm_global_import]
             pub struct VMGlobalImport {
                 /// A pointer to the imported global variable description.
+                #[readonly]
+                #[can_move]
                 pub from: VmPtr<VMGlobalDefinition>,
 
                 /// A pointer to the context that owns the global.
@@ -215,10 +237,14 @@ macro_rules! for_each_vm_type {
                 /// for `VMGlobalKind::Host`, it's a `VMContext` for
                 /// `VMGlobalKind::Instance`, and it's `VMComponentContext` for
                 /// `VMGlobalKind::ComponentFlags`.
+                #[readonly]
+                #[can_move]
                 pub vmctx: Option<VmPtr<VMOpaqueContext>>,
 
                 /// The kind of global, and extra location information in addition to
                 /// `vmctx` above.
+                #[readonly]
+                #[can_move]
                 pub kind: VMGlobalKind,
             }
 
@@ -229,12 +255,18 @@ macro_rules! for_each_vm_type {
             #[snake_name = vm_tag_import]
             pub struct VMTagImport {
                 /// A pointer to the imported tag description.
+                #[readonly]
+                #[can_move]
                 pub from: VmPtr<VMTagDefinition>,
 
                 /// The instance that owns this tag.
+                #[readonly]
+                #[can_move]
                 pub vmctx: VmPtr<VMContext>,
 
                 /// The index of the tag in the containing `vmctx`.
+                #[readonly]
+                #[can_move]
                 pub index: DefinedTagIndex,
             }
 

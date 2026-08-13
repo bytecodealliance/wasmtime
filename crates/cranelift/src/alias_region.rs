@@ -5,13 +5,12 @@ use cranelift_codegen::{
     ir::{self, InstBuilder as _},
 };
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GetPtrSize, GlobalIndex, MemoryIndex, ModuleInternedTypeIndex, PtrSize as _, RuntimeDataIndex,
-    StaticModuleIndex, TableIndex, TagIndex, VMOffsets,
+    BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, GetPtrSize,
+    ModuleInternedTypeIndex, PtrSize as _, RuntimeDataIndex, StaticModuleIndex, VMOffsets,
     component::{
         ComponentBuiltinFunctionIndex, LoweredIndex, ResourceIndex, RuntimeCallbackIndex,
         RuntimeComponentInstanceIndex, RuntimeMemoryIndex, RuntimePostReturnIndex,
-        VMComponentOffsets,
+        RuntimeReallocIndex, VMComponentOffsets,
     },
 };
 
@@ -501,10 +500,6 @@ impl<'a, Offsets> Field<'a, Offsets> {
 
     /// Emit a store of `value` to this field relative to `ptr`, a pointer to
     /// the containing `VM*` structure.
-    #[allow(
-        dead_code,
-        reason = "part of the general `Field` API; not all fields are stored to yet"
-    )]
     pub fn store(&mut self, cursor: &mut FuncCursor<'_>, ptr: ir::Value, value: ir::Value) {
         let flags = self.flags_with_region(cursor.func);
         cursor
@@ -703,6 +698,226 @@ macro_rules! define_vm_type_alias_region_helpers {
 }
 wasmtime_environ::for_each_vm_type!(define_vm_type_alias_region_helpers);
 
+/// Define, for each of Wasmtime's vmctx types, an [`AliasRegions`] accessor
+/// that returns a wrapper exposing a [`Field`]-returning method per field of
+/// that vmctx.
+///
+/// For example, `alias_regions.vmctx().epoch_ptr()` is the `VMContext::epoch_ptr`
+/// field, and `alias_regions.vmcomponent().callbacks(i)` is the `i`th element of
+/// the `VMComponentContext`'s runtime-callbacks array.
+///
+/// A vmctx's `static` fields sit at offsets that depend only on the target
+/// pointer size, so their accessors are available for any `Offsets: GetPtrSize`.
+/// Its `dynamic` fields sit at offsets that additionally depend on the module or
+/// component being compiled, so their accessors are only available when the
+/// `AliasRegions` carries that vmctx's own fully-computed offsets.
+///
+/// A field marked `#[aggregate]` gets no accessor, for the same reason it gets
+/// none in [`define_vm_type_alias_region_helpers!`]: it has no single Cranelift
+/// type. Instead, its interior is reached by rebasing a [`Field`] of the nested
+/// `VM*` type onto the aggregate's own offset within the vmctx (see
+/// [`Field::relative_to`]), which produces exactly the same alias region as
+/// accessing that `VM*` type through a pointer would. For the few aggregates that
+/// have no `VM*` type of their own, and hence no alias region of their own, there
+/// are hand-written helpers below.
+#[allow(
+    unused_macro_rules,
+    reason = "entry shapes and marker attributes are handled uniformly for both \
+              sections of both vmctx types, but not every combination occurs"
+)]
+macro_rules! define_vmctx_alias_region_helpers {
+    // Classify a field type to its Cranelift `ir::Type`, given `$pt` (the target
+    // pointer type as an `ir::Type`).
+    (@field_ty $pt:expr, u32) => { ir::types::I32 };
+    (@field_ty $pt:expr, VmPtr < $g:ident >) => { $pt };
+
+    // Determine the Cranelift type a field is *accessed* as: the classification
+    // of its `#[access_as = T]` type if it has one, and of its declared type
+    // otherwise.
+    (@access_ty $pt:expr, [ $($fty:tt)* ] []) => {
+        define_vmctx_alias_region_helpers!(@field_ty $pt, $($fty)*)
+    };
+    (@access_ty $pt:expr, $fty:tt [ #[access_as = $($t:tt)*] $($rest:tt)* ]) => {
+        define_vmctx_alias_region_helpers!(@field_ty $pt, $($t)*)
+    };
+    (@access_ty $pt:expr, $fty:tt [ # $skip:tt $($rest:tt)* ]) => {
+        define_vmctx_alias_region_helpers!(@access_ty $pt, $fty [ $($rest)* ])
+    };
+
+    // Apply a field attribute to its access flags.
+    (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly() };
+    (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move() };
+    (@apply_attr $flags:expr, [access_as = $($t:tt)*]) => { $flags };
+
+    // Compute a field's access flags and Cranelift type from its declared type
+    // and marker attributes, and build the `Field` for it at `$offset`.
+    (@field $Name:ident ($self:expr, $offset:expr) [ $($fty:tt)* ] [ $(# $fattr:tt)* ]) => {{
+        let this = $self;
+        let flags = ir::MemFlagsData::trusted();
+        $( let flags = define_vmctx_alias_region_helpers!(@apply_attr flags, $fattr); )*
+        let ty = define_vmctx_alias_region_helpers!(
+            @access_ty this.regions.pointer_type, [ $($fty)* ] [ $(# $fattr)* ]
+        );
+        let offset = $offset;
+        Field::new(this.regions, VmType::$Name, offset, flags, ty)
+    }};
+
+    // ### `static` Section Entries
+
+    (@static_entry $Name:ident $snake:ident align { $al:tt }) => {};
+
+    // Aggregates get no accessor.
+    (@static_entry $Name:ident $snake:ident $kind:ident { #[aggregate] $($rest:tt)* }) => {};
+
+    (@static_entry $Name:ident $snake:ident field {
+        $(# $fattr:tt)* $fname:ident : $($fty:tt)*
+    }) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the `", stringify!($fname), "` field of `",
+            stringify!($Name), "`."
+        )]
+        pub fn $fname(self) -> Field<'a, Offsets> {
+            let offset = u32::from(self.regions.offsets.get_ptr_size().$snake().$fname());
+            define_vmctx_alias_region_helpers!(
+                @field $Name (self, offset) [ $($fty)* ] [ $(# $fattr)* ]
+            )
+        }
+    };
+
+    // ### `dynamic` Section Entries
+
+    (@dynamic_entry $Name:ident $Offsets:tt align { $al:tt }) => {};
+
+    // Aggregates get no accessor.
+    (@dynamic_entry $Name:ident $Offsets:tt $kind:ident { #[aggregate] $($rest:tt)* }) => {};
+
+    (@dynamic_entry $Name:ident [ $($Offsets:tt)* ] array {
+        $(# $fattr:tt)* $fname:ident [ $count:ident ; $Index:ident ] : $($fty:tt)*
+    }) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the `index`th element of `", stringify!($Name),
+            "`'s `", stringify!($fname), "` array.\n\nPanics if `index` is out of \
+             bounds for this vmctx."
+        )]
+        pub fn $fname(self, index: $Index) -> Field<'a, $($Offsets)*> {
+            let offset = self.regions.offsets.$fname().at(index);
+            define_vmctx_alias_region_helpers!(
+                @field $Name (self, offset) [ $($fty)* ] [ $(# $fattr)* ]
+            )
+        }
+    };
+
+    // A single field, whether unconditionally present (`field`) or only
+    // conditionally (`optional`).
+    (@dynamic_entry $Name:ident [ $($Offsets:tt)* ] $kind:ident {
+        $(# $fattr:tt)* $fname:ident $([ if $flag:ident ])? : $($fty:tt)*
+    }) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the `", stringify!($fname), "` field of `",
+            stringify!($Name), "`."
+            $(, "\n\nPanics if `", stringify!($flag), "` is false, in which case \
+                 this field is not present at all.")?
+        )]
+        pub fn $fname(self) -> Field<'a, $($Offsets)*> {
+            let offset = self.regions.offsets.$fname();
+            define_vmctx_alias_region_helpers!(
+                @field $Name (self, offset) [ $($fty)* ] [ $(# $fattr)* ]
+            )
+        }
+    };
+
+    // Emit the `impl` block holding the accessors for the dynamically-positioned
+    // fields.
+    (@dynamic_impl $Name:ident [ $($Offsets:tt)* ] $OffsetsTt:tt {
+        $($kind:ident $entry:tt)*
+    }) => {
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for every field; not all fields are \
+                      accessed by compiled code"
+        )]
+        impl<'a> $Name<'a, $($Offsets)*> {
+            $(
+                define_vmctx_alias_region_helpers!(
+                    @dynamic_entry $Name $OffsetsTt $kind $entry
+                );
+            )*
+        }
+    };
+
+    // Emit the accessor `struct` and both `impl` blocks for one vmctx type.
+    (@emit $Name:ident $snake:ident $Offsets:tt
+        static { $($skind:ident $sentry:tt)* }
+        dynamic { $($dyn:tt)* }
+    ) => {
+        #[doc = concat!(
+            "An [`AliasRegions`] accessor for the fields of a `", stringify!($Name),
+            "`."
+        )]
+        pub struct $Name<'a, Offsets> {
+            regions: &'a mut AliasRegions<Offsets>,
+        }
+
+        impl<Offsets> AliasRegions<Offsets> {
+            #[doc = concat!(
+                "Get an accessor for the fields of a `", stringify!($Name), "`."
+            )]
+            pub fn $snake(&mut self) -> $Name<'_, Offsets> {
+                $Name { regions: self }
+            }
+        }
+
+        // A statically-positioned field's offset depends only on the target
+        // pointer size, so these accessors work with any `Offsets`.
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for every field; not all fields are \
+                      accessed by compiled code"
+        )]
+        impl<'a, Offsets> $Name<'a, Offsets>
+        where
+            Offsets: GetPtrSize,
+        {
+            $( define_vmctx_alias_region_helpers!(@static_entry $Name $snake $skind $sentry); )*
+        }
+
+        // A dynamically-positioned field's offset depends on the module or
+        // component being compiled, so these accessors require this vmctx's own
+        // fully-computed offsets.
+        define_vmctx_alias_region_helpers!(
+            @dynamic_impl $Name $Offsets $Offsets { $($dyn)* }
+        );
+    };
+
+    // Map each vmctx type to the offsets type that computes its
+    // dynamically-positioned fields' offsets.
+    (@one VMContext $snake:ident static { $($stat:tt)* } dynamic { $($dyn:tt)* }) => {
+        define_vmctx_alias_region_helpers!(@emit VMContext $snake [ VMOffsets<u8> ]
+            static { $($stat)* } dynamic { $($dyn)* });
+    };
+    (@one VMComponentContext $snake:ident static { $($stat:tt)* } dynamic { $($dyn:tt)* }) => {
+        define_vmctx_alias_region_helpers!(
+            @emit VMComponentContext $snake [ VMComponentOffsets<u8> ]
+            static { $($stat)* } dynamic { $($dyn)* }
+        );
+    };
+
+    // Top-level entry.
+    ( $(
+        {
+            $Name:ident $snake:ident
+            static { $($stat:tt)* }
+            dynamic { $($dyn:tt)* }
+        }
+    )* ) => {
+        $(
+            define_vmctx_alias_region_helpers!(@one $Name $snake
+                static { $($stat)* } dynamic { $($dyn)* });
+        )*
+    };
+}
+wasmtime_environ::for_each_vmctx_type!(define_vmctx_alias_region_helpers);
+
 impl<Offsets> AliasRegions<Offsets>
 where
     Offsets: GetPtrSize,
@@ -771,526 +986,6 @@ where
         index: DefinedGlobalIndex,
     ) -> ir::AliasRegion {
         self.region(func, AliasRegionKey::DefinedGlobal { module, index })
-    }
-}
-
-/// `VMContext`-related methods that are valid for any `VMContext`, regardless
-/// of its particular `VMOffsets`.
-impl<Offsets> AliasRegions<Offsets>
-where
-    Offsets: GetPtrSize,
-{
-    /// Get the alias region for the given offset into the `VMContext`.
-    fn vmctx_region(&mut self, func: &mut ir::Function, offset: u32) -> ir::AliasRegion {
-        self.region(
-            func,
-            AliasRegionKey::Vm {
-                ty: VmType::VMContext,
-                offset,
-            },
-        )
-    }
-
-    fn vmctx_load(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        ty: ir::Type,
-        base_flags: ir::MemFlagsData,
-        vmctx: ir::Value,
-        offset: u32,
-    ) -> ir::Value {
-        let region = self.vmctx_region(cursor.func, offset);
-        cursor.ins().load(
-            ty,
-            base_flags.with_alias_region(Some(region)),
-            vmctx,
-            i32::try_from(offset).unwrap(),
-        )
-    }
-
-    fn vmctx_store(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        base_flags: ir::MemFlagsData,
-        vmctx: ir::Value,
-        offset: u32,
-        val: ir::Value,
-    ) {
-        let region = self.vmctx_region(cursor.func, offset);
-        cursor.ins().store(
-            base_flags.with_alias_region(Some(region)),
-            val,
-            vmctx,
-            i32::try_from(offset).unwrap(),
-        );
-    }
-
-    /// Load the `VMContext::magic` field.
-    pub fn vmctx_magic(&mut self, cursor: &mut FuncCursor<'_>, vmctx: ir::Value) -> ir::Value {
-        self.vmctx_load(
-            cursor,
-            ir::types::I32,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.get_ptr_size().vmctx_magic().into(),
-        )
-    }
-
-    /// Load the `*mut VMStoreContext` value out of the given `*mut VMContext`.
-    pub fn vmctx_store_context(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-    ) -> ir::Value {
-        self.vmctx_store_context_load(cursor.func)
-            .emit(cursor, vmctx)
-    }
-
-    /// Get a `Load` for the `*mut VMStoreContext` value out of a `*mut VMContext`.
-    pub fn vmctx_store_context_load(&mut self, func: &mut ir::Function) -> Load {
-        let offset = u32::from(self.offsets.get_ptr_size().vmctx_store_context());
-        let region = self.vmctx_region(func, offset);
-        Load {
-            offset,
-            flags: ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_can_move()
-                .with_alias_region(Some(region)),
-            ty: self.pointer_type,
-        }
-    }
-
-    /// Load the `*mut i64` epoch pointer out of the given `*mut VMContext`.
-    pub fn vmctx_epoch_ptr(&mut self, cursor: &mut FuncCursor<'_>, vmctx: ir::Value) -> ir::Value {
-        self.vmctx_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.get_ptr_size().vmctx_epoch_ptr().into(),
-        )
-    }
-
-    /// Load the base pointer of the `[VMSharedTypeIndex]` array out of the
-    /// given `*mut VMContext`.
-    pub fn vmctx_shared_type_ids_array(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-    ) -> ir::Value {
-        self.vmctx_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.get_ptr_size().vmctx_type_ids_array().into(),
-        )
-    }
-
-    /// Load the collector's heap data pointer out of the `*mut VMContext`.
-    pub fn vmctx_gc_heap_data(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-    ) -> ir::Value {
-        self.vmctx_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.get_ptr_size().vmctx_gc_heap_data().into(),
-        )
-    }
-
-    /// Load the base pointer to the builtin-functions array from a `*mut
-    /// VMContext`.
-    pub fn vmctx_builtin_functions(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-    ) -> ir::Value {
-        self.vmctx_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets
-                .get_ptr_size()
-                .vmcontext_builtin_functions()
-                .into(),
-        )
-    }
-}
-
-/// `VMContext`-related methods that are specific to a particular Wasm module's
-/// `VMOffsets`.
-impl AliasRegions<VMOffsets<u8>> {
-    /// Like `vmctx_load`, but tags the load with a per-import alias region
-    /// rather than the coarse `VMContext` region. Used for fields of the
-    /// `VM*Import` structs inlined into the `VMContext`.
-    fn vmimport_load(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        ty: ir::Type,
-        base_flags: ir::MemFlagsData,
-        vmctx: ir::Value,
-        vmctx_offset: u32,
-        field_offset: u32,
-        vm_type: VmType,
-    ) -> ir::Value {
-        let region = self.region(
-            cursor.func,
-            AliasRegionKey::Vm {
-                ty: vm_type,
-                offset: field_offset,
-            },
-        );
-        cursor.ins().load(
-            ty,
-            base_flags.with_alias_region(Some(region)),
-            vmctx,
-            i32::try_from(vmctx_offset).unwrap(),
-        )
-    }
-
-    /// Load the imported tag's `VMTagImport::vmctx` field from the `*mut
-    /// VMContext`.
-    pub fn vmctx_vmtag_import_vmctx(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        tag: TagIndex,
-    ) -> ir::Value {
-        self.vmimport_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.vmctx_vmtag_import_vmctx(tag),
-            self.offsets.ptr.vm_tag_import().vmctx().into(),
-            VmType::VMTagImport,
-        )
-    }
-
-    /// Load the imported tag's `VMTagImport::index` field from the `*mut
-    /// VMContext`.
-    pub fn vmctx_vmtag_import_index(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        tag: TagIndex,
-    ) -> ir::Value {
-        self.vmimport_load(
-            cursor,
-            ir::types::I32,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.vmctx_vmtag_import_index(tag),
-            self.offsets.ptr.vm_tag_import().index().into(),
-            VmType::VMTagImport,
-        )
-    }
-
-    /// Load the imported tag's `VMTagImport::from` field from the `*mut
-    /// VMContext`.
-    pub fn vmctx_vmtag_import_from(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        tag: TagIndex,
-    ) -> ir::Value {
-        self.vmimport_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.vmctx_vmtag_import_from(tag),
-            self.offsets.ptr.vm_tag_import().from().into(),
-            VmType::VMTagImport,
-        )
-    }
-
-    /// Load the import function's `VMFunctionImport::vmctx` field from the
-    /// `*mut VMContext`.
-    pub fn vmctx_vmfunction_import_vmctx(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        func: FuncIndex,
-    ) -> ir::Value {
-        self.vmimport_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.vmctx_vmfunction_import_vmctx(func),
-            self.offsets.ptr.vm_function_import().vmctx().into(),
-            VmType::VMFunctionImport,
-        )
-    }
-
-    /// Load the import function's `VMFunctionImport::wasm_call` field from the
-    /// `*mut VMContext`.
-    pub fn vmctx_vmfunction_import_wasm_call(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        func: FuncIndex,
-    ) -> ir::Value {
-        self.vmimport_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.vmctx_vmfunction_import_wasm_call(func),
-            self.offsets.ptr.vm_function_import().wasm_call().into(),
-            VmType::VMFunctionImport,
-        )
-    }
-
-    /// Load the imported memory's `VMMemoryImport::vmctx` field from the `*mut
-    /// VMContext`.
-    pub fn vmctx_vmmemory_import_vmctx(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        memory: MemoryIndex,
-    ) -> ir::Value {
-        let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
-        let mem_vmctx_offset = mem_offset + u32::from(self.offsets.ptr.vm_memory_import().vmctx());
-        self.vmimport_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            mem_vmctx_offset,
-            self.offsets.ptr.vm_memory_import().vmctx().into(),
-            VmType::VMMemoryImport,
-        )
-    }
-
-    /// Load the imported memory's `VMMemoryImport::index` field from the `*mut
-    /// VMContext`.
-    pub fn vmctx_vmmemory_import_index(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        memory: MemoryIndex,
-    ) -> ir::Value {
-        let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
-        let mem_index_offset = mem_offset + u32::from(self.offsets.ptr.vm_memory_import().index());
-        self.vmimport_load(
-            cursor,
-            ir::types::I32,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            mem_index_offset,
-            self.offsets.ptr.vm_memory_import().index().into(),
-            VmType::VMMemoryImport,
-        )
-    }
-
-    /// Load the imported memory's `VMMemoryImport::from` field from the `*mut
-    /// VMContext`.
-    pub fn vmctx_vmmemory_import_from(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        memory: MemoryIndex,
-    ) -> ir::Value {
-        self.vmctx_vmmemory_import_from_load(cursor.func, memory)
-            .emit(cursor, vmctx)
-    }
-
-    /// Get a `Load` for the imported memory's `VMMemoryImport::from` field from
-    /// a `*mut VMContext`.
-    pub fn vmctx_vmmemory_import_from_load(
-        &mut self,
-        func: &mut ir::Function,
-        memory: MemoryIndex,
-    ) -> Load {
-        let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
-        let offset = mem_offset + u32::from(self.offsets.ptr.vm_memory_import().from());
-        let region = self.region(
-            func,
-            AliasRegionKey::Vm {
-                ty: VmType::VMMemoryImport,
-                offset: self.offsets.ptr.vm_memory_import().from().into(),
-            },
-        );
-        Load {
-            offset,
-            flags: ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_can_move()
-                .with_alias_region(Some(region)),
-            ty: self.pointer_type,
-        }
-    }
-
-    /// Load the imported table's `VMTableImport::vmctx` field from the `*mut
-    /// VMContext`.
-    pub fn vmctx_vmtable_import_vmctx(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        table: TableIndex,
-    ) -> ir::Value {
-        let table_offset = self.offsets.vmctx_vmtable_import(table);
-        let table_vmctx_offset =
-            table_offset + u32::from(self.offsets.ptr.vm_table_import().vmctx());
-        self.vmimport_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            table_vmctx_offset,
-            self.offsets.ptr.vm_table_import().vmctx().into(),
-            VmType::VMTableImport,
-        )
-    }
-
-    /// Load the imported table's `VMTableImport::index` field from the `*mut
-    /// VMContext`.
-    pub fn vmctx_vmtable_import_index(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        table: TableIndex,
-    ) -> ir::Value {
-        let table_offset = self.offsets.vmctx_vmtable_import(table);
-        let table_index_offset =
-            table_offset + u32::from(self.offsets.ptr.vm_table_import().index());
-        self.vmimport_load(
-            cursor,
-            ir::types::I32,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            table_index_offset,
-            self.offsets.ptr.vm_table_import().index().into(),
-            VmType::VMTableImport,
-        )
-    }
-
-    /// Get a `Load` for the imported table's `VMTableImport::from` field (a
-    /// `*mut VMTableDefinition`) out of a `*mut VMContext`.
-    pub fn vmctx_vmtable_from_load(&mut self, func: &mut ir::Function, table: TableIndex) -> Load {
-        let offset = self.offsets.vmctx_vmtable_from(table);
-        let region = self.region(
-            func,
-            AliasRegionKey::Vm {
-                ty: VmType::VMTableImport,
-                offset: self.offsets.ptr.vm_table_import().from().into(),
-            },
-        );
-        Load {
-            offset,
-            flags: ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_can_move()
-                .with_alias_region(Some(region)),
-            ty: self.pointer_type,
-        }
-    }
-
-    /// Load the imported global's address (`VMGlobalImport::from`) out of the
-    /// `*mut VMContext`.
-    pub fn vmctx_vmglobal_import_from(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        global: GlobalIndex,
-    ) -> ir::Value {
-        let from_offset = self.offsets.vmctx_vmglobal_import_from(global);
-        self.vmimport_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            from_offset,
-            self.offsets.ptr.vm_global_import().from().into(),
-            VmType::VMGlobalImport,
-        )
-    }
-
-    /// Load the defined memory's `*mut VMMemoryDefinition` out of the `*mut
-    /// VMContext`.
-    pub fn vmctx_vmmemory_pointer(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        memory: DefinedMemoryIndex,
-    ) -> ir::Value {
-        self.vmctx_vmmemory_pointer_load(cursor.func, memory)
-            .emit(cursor, vmctx)
-    }
-
-    /// Get a `Load` for the defined memory's `*mut VMMemoryDefinition` out of a
-    /// `*mut VMContext`.
-    pub fn vmctx_vmmemory_pointer_load(
-        &mut self,
-        func: &mut ir::Function,
-        memory: DefinedMemoryIndex,
-    ) -> Load {
-        let offset = self.offsets.vmctx_vmmemory_pointer(memory);
-        let region = self.vmctx_region(func, offset);
-        Load {
-            offset,
-            flags: ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_can_move()
-                .with_alias_region(Some(region)),
-            ty: self.pointer_type,
-        }
-    }
-
-    /// Load the base of the given runtime data out of the `*mut VMContext`.
-    pub fn vmctx_runtime_data_base(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        runtime_data: RuntimeDataIndex,
-    ) -> ir::Value {
-        self.vmctx_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.vmctx_runtime_data_base(runtime_data),
-        )
-    }
-
-    /// Load the length of the given runtime data out of the `*mut VMContext`.
-    pub fn vmctx_runtime_data_length(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        runtime_data: RuntimeDataIndex,
-    ) -> ir::Value {
-        self.vmctx_load(
-            cursor,
-            ir::types::I32,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.vmctx_runtime_data_length(runtime_data),
-        )
-    }
-
-    /// Load the length of the given runtime data out of the `*mut VMContext`.
-    pub fn store_vmctx_runtime_data_length(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        runtime_data: RuntimeDataIndex,
-        new_length: ir::Value,
-    ) {
-        self.vmctx_store(
-            cursor,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.vmctx_runtime_data_length(runtime_data),
-            new_length,
-        )
     }
 }
 
@@ -2332,243 +2027,45 @@ where
     }
 }
 
-/// `VMComponentContext`-related methods, used when compiling component
-/// trampolines.
+/// `VMComponentContext` fields that are not simply one of the layout's own
+/// fields, and so are not generated by [`define_vmctx_alias_region_helpers!`].
 impl AliasRegions<VMComponentOffsets<u8>> {
-    fn vmcomponent_region(&mut self, func: &mut ir::Function, offset: u32) -> ir::AliasRegion {
-        self.region(
-            func,
-            AliasRegionKey::Vm {
-                ty: VmType::VMComponentContext,
-                offset,
-            },
-        )
-    }
-
-    fn vmcomponent_load(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        ty: ir::Type,
-        base_flags: ir::MemFlagsData,
-        vmctx: ir::Value,
-        offset: u32,
-    ) -> ir::Value {
-        let region = self.vmcomponent_region(cursor.func, offset);
-        cursor.ins().load(
-            ty,
-            base_flags.with_alias_region(Some(region)),
-            vmctx,
-            i32::try_from(offset).unwrap(),
-        )
-    }
-
-    fn vmcomponent_store(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        base_flags: ir::MemFlagsData,
-        vmctx: ir::Value,
-        offset: u32,
-        val: ir::Value,
-    ) {
-        let region = self.vmcomponent_region(cursor.func, offset);
-        cursor.ins().store(
-            base_flags.with_alias_region(Some(region)),
-            val,
-            vmctx,
-            i32::try_from(offset).unwrap(),
-        );
-    }
-
-    /// Load a lowering's host-data pointer from the `VMComponentContext`.
-    pub fn vmcomponent_lowering_data(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        index: LoweredIndex,
-    ) -> ir::Value {
-        self.vmcomponent_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.lowering_data(index),
-        )
-    }
-
-    /// Load a lowering's host callee pointer from the `VMComponentContext`.
+    /// Get the [`Field`] for the `callee` of the `index`th lowering in the
+    /// `VMComponentContext`'s `lowerings` array.
     pub fn vmcomponent_lowering_callee(
         &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
         index: LoweredIndex,
-    ) -> ir::Value {
-        self.vmcomponent_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.lowering_callee(index),
-        )
+    ) -> Field<'_, VMComponentOffsets<u8>> {
+        let offset = self.offsets.lowering_callee(index);
+        self.vmlowering_field(offset)
     }
 
-    /// Load the current task's `may_block` flag from the `VMComponentContext`.
-    pub fn vmcomponent_task_may_block(
+    /// Get the [`Field`] for the host data of the `index`th lowering in the
+    /// `VMComponentContext`'s `lowerings` array.
+    pub fn vmcomponent_lowering_data(
         &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-    ) -> ir::Value {
-        self.vmcomponent_load(
-            cursor,
-            ir::types::I32,
-            ir::MemFlagsData::trusted().with_readonly(),
-            vmctx,
-            self.offsets.task_may_block(),
-        )
+        index: LoweredIndex,
+    ) -> Field<'_, VMComponentOffsets<u8>> {
+        let offset = self.offsets.lowering_data(index);
+        self.vmlowering_field(offset)
     }
 
-    /// Store the current task's `may_block` flag into the `VMComponentContext`.
-    pub fn store_vmcomponent_task_may_block(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        val: ir::Value,
-    ) {
-        self.vmcomponent_store(
-            cursor,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.task_may_block(),
-            val,
-        )
-    }
-
-    /// Load a resource's destructor function pointer from the
+    /// Get the [`Field`] at `offset` within a `VMLowering` inlined into the
     /// `VMComponentContext`.
-    pub fn vmcomponent_resource_destructor(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        index: ResourceIndex,
-    ) -> ir::Value {
-        self.vmcomponent_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly(),
-            vmctx,
-            self.offsets.resource_destructor(index),
-        )
-    }
-
-    /// Load a runtime memory's `*mut VMMemoryDefinition` from the
-    /// `VMComponentContext`.
-    pub fn vmcomponent_runtime_memory(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        index: RuntimeMemoryIndex,
-    ) -> ir::Value {
-        self.vmcomponent_load(
-            cursor,
-            self.pointer_type,
+    ///
+    /// Unlike the other aggregates inlined into a vmctx, `VMLowering` is not one
+    /// of the types defined by `for_each_vm_type!`, and so has no alias region of
+    /// its own to rebase onto the aggregate's offset. Its fields are therefore
+    /// part of the containing `VMComponentContext`'s region, keyed by their
+    /// offset within it.
+    fn vmlowering_field(&mut self, offset: u32) -> Field<'_, VMComponentOffsets<u8>> {
+        let ty = self.pointer_type;
+        Field::new(
+            self,
+            VmType::VMComponentContext,
+            offset,
             ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.runtime_memory(index),
-        )
-    }
-
-    /// Load a runtime callback function pointer from the `VMComponentContext`.
-    pub fn vmcomponent_runtime_callback(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        index: RuntimeCallbackIndex,
-    ) -> ir::Value {
-        self.vmcomponent_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.runtime_callback(index),
-        )
-    }
-
-    /// Load a runtime post-return function pointer from the
-    /// `VMComponentContext`.
-    pub fn vmcomponent_runtime_post_return(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        index: RuntimePostReturnIndex,
-    ) -> ir::Value {
-        self.vmcomponent_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.runtime_post_return(index),
-        )
-    }
-
-    /// Load the base pointer of the component builtins array from the
-    /// `VMComponentContext`.
-    pub fn vmcomponent_builtins(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-    ) -> ir::Value {
-        self.vmcomponent_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly(),
-            vmctx,
-            self.offsets.builtins(),
-        )
-    }
-
-    /// Load a component instance's `may_leave` flag from the `VMComponentContext`.
-    pub fn vmcomponent_instance_may_leave(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        vmctx: ir::Value,
-        instance: RuntimeComponentInstanceIndex,
-    ) -> ir::Value {
-        self.vmcomponent_load(
-            cursor,
-            ir::types::I32,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.may_leave(instance),
-        )
-    }
-}
-
-/// `VMComponentContext`-related methods that need to be generic over `Offsets`
-/// due to the call context.
-impl<Offsets> AliasRegions<Offsets>
-where
-    Offsets: GetPtrSize,
-{
-    /// Load a field at `offset` within a `VMComponentContext`.
-    pub fn vmcomponent_context_generic_load(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        ty: ir::Type,
-        base_flags: ir::MemFlagsData,
-        vmctx: ir::Value,
-        offset: u32,
-    ) -> ir::Value {
-        let region = self.region(
-            cursor.func,
-            AliasRegionKey::Vm {
-                ty: VmType::VMComponentContext,
-                offset,
-            },
-        );
-        cursor.ins().load(
             ty,
-            base_flags.with_alias_region(Some(region)),
-            vmctx,
-            i32::try_from(offset).unwrap(),
         )
     }
 }

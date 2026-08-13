@@ -225,7 +225,7 @@ where
         gc_ref: Reg,
         object_addr: Reg,
     ) -> Result<(Reg, Reg)> {
-        let heap_data_offset = self.env.vmoffsets.ptr.vmctx_gc_heap_data();
+        let heap_data_offset = self.env.vmoffsets.ptr.vmctx().gc_heap_data();
         let roots_head_offset = u32::from(
             self.env
                 .vmoffsets
