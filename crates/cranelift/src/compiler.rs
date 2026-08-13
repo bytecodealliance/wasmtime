@@ -41,7 +41,7 @@ use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
     FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize, HostCall,
-    InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder,
+    InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder, PtrSize,
     StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables,
     WasmFuncType, WasmValType, prelude::*,
 };
@@ -252,8 +252,15 @@ impl Compiler {
 
         // Load the actual callee out of the
         // `VMArrayCallHostFuncContext::host_func`.
+        let func_ref_offset = alias_regions
+            .offsets()
+            .get_ptr_size()
+            .vmarray_call_host_func_context_func_ref();
         let callee = alias_regions
-            .vmarray_call_host_func_context_array_call(&mut builder.cursor(), callee_vmctx);
+            .vm_func_ref()
+            .array_call()
+            .relative_to(func_ref_offset.into())
+            .load(&mut builder.cursor(), callee_vmctx);
 
         // Do an indirect call to the callee.
         let callee_signature = builder.func.import_signature(array_call_sig);

@@ -318,6 +318,11 @@ pub struct AliasRegions<Offsets> {
 }
 
 impl<Offsets> AliasRegions<Offsets> {
+    /// Get the offsets this `AliasRegions` computes its field offsets from.
+    pub fn offsets(&self) -> &Offsets {
+        &self.offsets
+    }
+
     /// Make the alias region for a stack map.
     pub fn stack_map_region(
         regions: &mut ir::AliasRegionSet,
@@ -443,6 +448,17 @@ impl<'a, Offsets> Field<'a, Offsets> {
     /// See the note on [`Field::readonly`].
     pub fn can_move_if(self, can_move: bool) -> Self {
         if can_move { self.can_move() } else { self }
+    }
+
+    /// Set the trap code for accesses of this field.
+    ///
+    /// A `Field`'s accesses do not trap by default.
+    ///
+    /// Note that when signals-based traps are disabled, callers must use the
+    /// explicit call-to-host trapping codegen instead.
+    pub fn trap_code(mut self, code: Option<ir::TrapCode>) -> Self {
+        self.flags = self.flags.with_trap_code(code);
+        self
     }
 
     /// Cast this field to the given type.
@@ -1792,104 +1808,6 @@ where
                 .saved_context_slot(i)
                 .into(),
             val,
-        )
-    }
-}
-
-/// `VMFuncRef`-related methods.
-impl<Offsets> AliasRegions<Offsets>
-where
-    Offsets: GetPtrSize,
-{
-    fn vmfuncref_region(&mut self, func: &mut ir::Function, offset: u32) -> ir::AliasRegion {
-        self.region(
-            func,
-            AliasRegionKey::Vm {
-                ty: VmType::VMFuncRef,
-                offset,
-            },
-        )
-    }
-
-    /// Load the `VMFuncRef::type_index` field out of a `*const VMFuncRef`.
-    pub fn vmfuncref_type_index(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        base_flags: ir::MemFlagsData,
-        funcref: ir::Value,
-    ) -> ir::Value {
-        let offset = self.offsets.get_ptr_size().vm_func_ref().type_index();
-        let region = self.vmfuncref_region(cursor.func, offset.into());
-        let ty = ir::Type::int_with_byte_size(
-            self.offsets
-                .get_ptr_size()
-                .size_of_vmshared_type_index()
-                .into(),
-        )
-        .unwrap();
-        cursor.ins().load(
-            ty,
-            base_flags.with_alias_region(Some(region)),
-            funcref,
-            i32::from(offset),
-        )
-    }
-
-    /// Load the `VMFuncRef::wasm_call` field out of a `*const VMFuncRef`.
-    ///
-    /// The caller supplies the base flags because this load may carry an
-    /// optional trap code for the null-funcref case.
-    pub fn vmfuncref_wasm_call(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        base_flags: ir::MemFlagsData,
-        funcref: ir::Value,
-    ) -> ir::Value {
-        let offset = self.offsets.get_ptr_size().vm_func_ref().wasm_call();
-        let region = self.vmfuncref_region(cursor.func, offset.into());
-        cursor.ins().load(
-            self.pointer_type,
-            base_flags.with_alias_region(Some(region)),
-            funcref,
-            i32::from(offset),
-        )
-    }
-
-    /// Load the `VMFuncRef::vmctx` field out of a `*const VMFuncRef`.
-    pub fn vmfuncref_vmctx(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        base_flags: ir::MemFlagsData,
-        funcref: ir::Value,
-    ) -> ir::Value {
-        let offset = self.offsets.get_ptr_size().vm_func_ref().vmctx();
-        let region = self.vmfuncref_region(cursor.func, offset.into());
-        cursor.ins().load(
-            self.pointer_type,
-            base_flags.with_alias_region(Some(region)),
-            funcref,
-            i32::from(offset),
-        )
-    }
-
-    /// Load the `array_call` field of the `VMFuncRef` inlined in a
-    /// `VMArrayCallHostFuncContext`.
-    pub fn vmarray_call_host_func_context_array_call(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        host_func_ctx: ir::Value,
-    ) -> ir::Value {
-        let func_ref = self
-            .offsets
-            .get_ptr_size()
-            .vmarray_call_host_func_context_func_ref();
-        let field = self.offsets.get_ptr_size().vm_func_ref().array_call();
-        let region = self.vmfuncref_region(cursor.func, field.into());
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            host_func_ctx,
-            i32::from(func_ref) + i32::from(field),
         )
     }
 }

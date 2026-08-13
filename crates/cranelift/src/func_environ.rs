@@ -2276,18 +2276,20 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         //
         // Note that the callee may be null in which case this load may
         // trap. If so use the `TRAP_INDIRECT_CALL_TO_NULL` trap code.
-        let mut mem_flags = ir::MemFlagsData::trusted().with_readonly();
-        if self.env.clif_memory_traps_enabled() {
-            mem_flags = mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL));
+        let trap_code = if self.env.clif_memory_traps_enabled() {
+            Some(crate::TRAP_INDIRECT_CALL_TO_NULL)
         } else {
             self.env
                 .trapz(self.builder, funcref_ptr, crate::TRAP_INDIRECT_CALL_TO_NULL);
-        }
-        let callee_sig_id = self.env.alias_regions.vmfuncref_type_index(
-            &mut self.builder.cursor(),
-            mem_flags,
-            funcref_ptr,
-        );
+            None
+        };
+        let callee_sig_id = self
+            .env
+            .alias_regions
+            .vm_func_ref()
+            .type_index()
+            .trap_code(trap_code)
+            .load(&mut self.builder.cursor(), funcref_ptr);
 
         // Check that they match: in the case of Wasm GC, this means doing a
         // full subtype check. Otherwise, we do a simple equality check.
@@ -2345,24 +2347,27 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // optional trap code provided by the caller of `unchecked_call` which
         // will handle the case where this is either already known to be
         // non-null or may trap.
-        let mem_flags = ir::MemFlagsData::trusted().with_readonly();
-        let mut callee_flags = mem_flags;
-        if self.env.clif_memory_traps_enabled() {
-            callee_flags = callee_flags.with_trap_code(callee_load_trap_code);
+        let callee_load_trap_code = if self.env.clif_memory_traps_enabled() {
+            callee_load_trap_code
         } else {
             if let Some(trap) = callee_load_trap_code {
                 self.env.trapz(self.builder, callee, trap);
             }
-        }
-        let func_addr = self.env.alias_regions.vmfuncref_wasm_call(
-            &mut self.builder.cursor(),
-            callee_flags,
-            callee,
-        );
-        let callee_vmctx =
-            self.env
-                .alias_regions
-                .vmfuncref_vmctx(&mut self.builder.cursor(), mem_flags, callee);
+            None
+        };
+        let func_addr = self
+            .env
+            .alias_regions
+            .vm_func_ref()
+            .wasm_call()
+            .trap_code(callee_load_trap_code)
+            .load(&mut self.builder.cursor(), callee);
+        let callee_vmctx = self
+            .env
+            .alias_regions
+            .vm_func_ref()
+            .vmctx()
+            .load(&mut self.builder.cursor(), callee);
 
         (func_addr, callee_vmctx)
     }
