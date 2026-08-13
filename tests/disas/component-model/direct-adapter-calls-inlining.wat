@@ -60,7 +60,6 @@
 ;;     region2 = 1207959576 "VMFunctionImport+0x18"
 ;;     region3 = 1476395008 "VMGlobalImport+0x0"
 ;;     region4 = 402653184 "PublicGlobal"
-;;     region5 = 1207959560 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -71,7 +70,7 @@
 ;;     gv7 = load.i64 notrap aligned readonly can_move region0 gv6+8
 ;;     gv8 = load.i64 notrap aligned region1 gv7+24
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
-;;     sig1 = (i64 vmctx, i64, i32) tail
+;;     sig1 = (i64 vmctx, i64) tail
 ;;     sig2 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     fn0 = colocated u2:0 sig0
 ;;     fn1 = colocated u0:0 sig2
@@ -83,57 +82,41 @@
 ;;                                 block2:
 ;;                                     jump block6
 ;;
-;;                                 block8(v5: i64):
-;;                                     jump block5
-;;
 ;;                                 block6:
 ;; @00ee                               v3 = load.i64 notrap aligned readonly can_move region2 v0+72
-;;                                     v9 = load.i64 notrap aligned readonly can_move region3 v3+136
+;;                                     v9 = load.i64 notrap aligned readonly can_move region3 v3+168
 ;;                                     v10 = load.i32 notrap aligned region4 v9
-;;                                     brif v10, block9, block10
-;;
-;;                                 block10:
-;;                                     v24 = load.i64 notrap aligned readonly can_move region5 v3+88
-;;                                     v23 = load.i64 notrap aligned readonly can_move region2 v3+104
-;;                                     v22 = iconst.i32 23
-;;                                     try_call_indirect v24(v23, v3, v22), sig1, block11, [ context v3, default: block8(exn0) ]  ; v22 = 23
-;;
-;;                                 block11:
-;;                                     trap user12
+;;                                     trapz v10, user26
+;;                                     jump block9
 ;;
 ;;                                 block9:
-;;                                     v11 = load.i64 notrap aligned readonly can_move region3 v3+112
+;;                                     v11 = load.i64 notrap aligned readonly can_move region3 v3+144
 ;;                                     v12 = load.i32 notrap aligned region4 v11
-;;                                     jump block13
-;;
-;;                                 block13:
-;;                                     jump block14
-;;
-;;                                 block14:
 ;;                                     jump block12
 ;;
 ;;                                 block12:
+;;                                     jump block13
+;;
+;;                                 block13:
+;;                                     jump block11
+;;
+;;                                 block11:
 ;;                                     store.i32 notrap aligned region4 v10, v9
 ;;                                     jump block7
 ;;
 ;;                                 block7:
 ;;                                     jump block4
 ;;
-;;                                 block5:
-;;                                     v26 = iconst.i32 49
-;;                                     call_indirect.i64 sig1, v24(v23, v3, v26)  ; v26 = 49
-;;                                     trap user12
-;;
 ;;                                 block4:
 ;;                                     jump block3
 ;;
 ;;                                 block3:
-;;                                     jump block15
+;;                                     jump block14
 ;;
-;;                                 block15:
+;;                                 block14:
 ;; @00f0                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v29 = iconst.i32 1276
-;; @00f0                               return v29  ; v29 = 1276
+;;                                     v23 = iconst.i32 1276
+;; @00f0                               return v23  ; v23 = 1276
 ;; }

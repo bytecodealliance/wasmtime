@@ -715,13 +715,16 @@ pub fn translate_operator(
             let mut args = environ.stacks.peekn(num_args).to_vec();
             bitcast_wasm_params(environ, sig_ref, &mut args, builder);
 
-            let inst_results = environ.translate_call(
-                builder,
-                environ.next_srcloc,
-                function_index,
-                sig_ref,
-                &args,
-            )?;
+            let inst_results = unwrap_or_return_unreachable_state!(
+                environ,
+                environ.translate_call(
+                    builder,
+                    environ.next_srcloc,
+                    function_index,
+                    sig_ref,
+                    &args,
+                )?
+            );
 
             debug_assert_eq!(
                 inst_results.len(),

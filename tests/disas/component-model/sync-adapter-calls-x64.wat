@@ -56,67 +56,45 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
 ;;       movq    0x18(%r10), %r10
-;;       addq    $0x70, %r10
+;;       addq    $0x30, %r10
 ;;       cmpq    %rsp, %r10
-;;       ja      0x154
-;;   39: subq    $0x60, %rsp
-;;       movq    %rbx, 0x30(%rsp)
-;;       movq    %r12, 0x38(%rsp)
-;;       movq    %r13, 0x40(%rsp)
-;;       movq    %r14, 0x48(%rsp)
-;;       movq    %r15, 0x50(%rsp)
-;;       movq    0x48(%rdi), %rsi
-;;       movq    0xc8(%rsi), %rax
+;;       ja      0xfb
+;;   39: subq    $0x30, %rsp
+;;       movq    %rbx, 0x20(%rsp)
+;;       movq    0x48(%rdi), %rdi
+;;       movq    0xe8(%rdi), %rax
 ;;       movl    (%rax), %ecx
 ;;       testl   %ecx, %ecx
-;;       jne     0x84
-;;   6b: movq    0x58(%rsi), %rax
-;;       movq    0x68(%rsi), %rdi
-;;       movq    %rsi, 0x20(%rsp)
-;;       movl    $0x17, %edx
-;;       callq   *%rax
-;;       ├─╼ exception frame offset: SP = FP - 0x60
-;;       ╰─╼ exception handler: default handler, context at [SP+0x20], handler=0x13e
-;;       jmp     0x13c
-;;   84: movq    0xe0(%rsi), %rdx
-;;       movl    (%rdx), %r8d
+;;       je      0xfd
+;;   57: movq    0x100(%rdi), %rdx
+;;       movl    (%rdx), %esi
 ;;       movl    $0, (%rdx)
-;;       movq    8(%rsi), %rdi
-;;       movq    0x88(%rdi), %r9
+;;       movq    8(%rdi), %r8
+;;       movq    0x88(%r8), %r9
 ;;       leaq    (%rsp), %rbx
 ;;       movq    %r9, (%rsp)
 ;;       movl    $2, 8(%rsp)
 ;;       movl    $0, 0xc(%rsp)
 ;;       movl    $1, 0x10(%rsp)
-;;       movl    0x80(%rdi), %r10d
+;;       movl    0x80(%r8), %r10d
 ;;       movl    %r10d, 0x14(%rsp)
-;;       movl    $0, 0x80(%rdi)
-;;       movl    0x84(%rdi), %r11d
+;;       movl    $0, 0x80(%r8)
+;;       movl    0x84(%r8), %r11d
 ;;       movl    %r11d, 0x18(%rsp)
-;;       movl    $0, 0x84(%rdi)
-;;       movq    %rbx, 0x88(%rdi)
-;;       movq    0xb0(%rsi), %rsi
-;;       movl    (%rsi), %esi
-;;       movq    %r9, 0x88(%rdi)
-;;       movl    %r10d, 0x80(%rdi)
-;;       movl    %r11d, 0x84(%rdi)
+;;       movl    $0, 0x84(%r8)
+;;       movq    %rbx, 0x88(%r8)
+;;       movq    0xd0(%rdi), %rdi
+;;       movl    (%rdi), %edi
+;;       movq    %r9, 0x88(%r8)
+;;       movl    %r10d, 0x80(%r8)
+;;       movl    %r11d, 0x84(%r8)
 ;;       movl    %ecx, (%rax)
-;;       movl    %r8d, (%rdx)
+;;       movl    %esi, (%rdx)
 ;;       movl    $0x4fc, %eax
-;;       movq    0x30(%rsp), %rbx
-;;       movq    0x38(%rsp), %r12
-;;       movq    0x40(%rsp), %r13
-;;       movq    0x48(%rsp), %r14
-;;       movq    0x50(%rsp), %r15
-;;       addq    $0x60, %rsp
+;;       movq    0x20(%rsp), %rbx
+;;       addq    $0x30, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  13c: ud2
-;;  13e: movq    0x20(%rsp), %rsi
-;;  143: movq    0x58(%rsi), %rax
-;;  147: movq    0x68(%rsi), %rdi
-;;  14b: movl    $0x31, %edx
-;;  150: callq   *%rax
-;;  152: ud2
-;;  154: ud2
+;;   fb: ud2
+;;   fd: ud2

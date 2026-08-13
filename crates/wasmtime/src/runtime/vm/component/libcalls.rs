@@ -666,12 +666,6 @@ fn resource_transfer_borrow(
     instance.resource_transfer_borrow(store, src_idx, src_table, dst_table)
 }
 
-fn trap(_store: &mut dyn VMStore, _instance: Instance, code: u32) -> Result<()> {
-    Err(wasmtime_environ::Trap::from_u8(u8::try_from(code).unwrap())
-        .unwrap()
-        .into())
-}
-
 fn enter_sync_call(
     store: &mut dyn VMStore,
     instance: Instance,

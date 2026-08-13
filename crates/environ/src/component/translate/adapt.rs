@@ -348,7 +348,7 @@ fn fact_import_to_core_def(
         fact::Import::ErrorContextTransfer => {
             simple_intrinsic(dfg::Trampoline::ErrorContextTransfer)
         }
-        fact::Import::Trap => simple_intrinsic(dfg::Trampoline::Trap),
+        fact::Import::Trap(trap) => simple_intrinsic(dfg::Trampoline::Trap(*trap)),
         fact::Import::EnterSyncCall => simple_intrinsic(dfg::Trampoline::EnterSyncCall),
         fact::Import::ExitSyncCall => simple_intrinsic(dfg::Trampoline::ExitSyncCall),
     }

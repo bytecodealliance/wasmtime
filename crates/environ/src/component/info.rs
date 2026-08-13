@@ -48,7 +48,7 @@
 
 use crate::component::*;
 use crate::prelude::*;
-use crate::{EntityIndex, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
+use crate::{EntityIndex, ModuleInternedTypeIndex, PrimaryMap, Trap, WasmValType};
 use cranelift_entity::packed_option::PackedOption;
 use serde_derive::{Deserialize, Serialize};
 
@@ -1097,9 +1097,9 @@ pub enum Trampoline {
     /// component does not invalidate the handle in the original component.
     ErrorContextTransfer,
 
-    /// An intrinsic used by FACT-generated modules to trap with a specified
+    /// An intrinsic used by FACT-generated modules to trap with the specified
     /// code.
-    Trap,
+    Trap(Trap),
 
     /// An intrinsic used by FACT-generated modules to push a task onto the
     /// stack for a sync-to-sync, guest-to-guest call.
@@ -1247,7 +1247,7 @@ impl Trampoline {
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
-            Trap => format!("trap"),
+            Trap(trap) => format!("trap-{}", *trap as u8),
             EnterSyncCall => format!("enter-sync-call"),
             ExitSyncCall => format!("exit-sync-call"),
             ThreadIndex { .. } => format!("thread-index"),

@@ -635,6 +635,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                     CoreDef::Trampoline(index) => match translation.trampolines[*index] {
                         Trampoline::EnterSyncCall => FactInlineIntrinsic::EnterSyncCall.into(),
                         Trampoline::ExitSyncCall => FactInlineIntrinsic::ExitSyncCall.into(),
+                        Trampoline::Trap(trap) => FactInlineIntrinsic::Trap(trap).into(),
                         _ => continue,
                     },
 

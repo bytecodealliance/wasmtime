@@ -9,7 +9,7 @@ use crate::translate::{
 };
 use crate::trap::TranslateTrap;
 use crate::{
-    BuiltinFunctionSignatures, TRAP_ARRAY_OUT_OF_BOUNDS, TRAP_GC_HEAP_CORRUPT,
+    BuiltinFunctionSignatures, Reachability, TRAP_ARRAY_OUT_OF_BOUNDS, TRAP_GC_HEAP_CORRUPT,
     TRAP_TABLE_OUT_OF_BOUNDS,
 };
 use cranelift_codegen::cursor::FuncCursor;
@@ -1807,7 +1807,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         wasm_call_args: &[ir::Value],
-    ) -> WasmResult<CallRets> {
+    ) -> WasmResult<Reachability<CallRets>> {
         let mut real_call_args = Vec::with_capacity(wasm_call_args.len() + 2);
         let caller_vmctx = self
             .builder
@@ -1831,7 +1831,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             let callee = self
                 .env
                 .get_or_create_defined_func_ref(self.builder.func, def_func_index);
-            return Ok(self.direct_call_inst(callee, &real_call_args));
+            return Ok(Reachability::Reachable(
+                self.direct_call_inst(callee, &real_call_args),
+            ));
         }
 
         // Handle direct calls to imported functions. We use an indirect call
@@ -1873,9 +1875,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     let result = intrinsic_compiler
                         .translate(*intrinsic, &real_call_args)
                         .unwrap();
-                    Ok(result.into_iter().collect())
+                    Ok(Reachability::Reachable(result.into_iter().collect()))
                 } else {
-                    Ok(self.direct_call_inst(callee, &real_call_args))
+                    Ok(Reachability::Reachable(
+                        self.direct_call_inst(callee, &real_call_args),
+                    ))
                 }
             }
 
@@ -1887,37 +1891,54 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 let callee = self
                     .env
                     .get_or_create_imported_func_ref(self.builder.func, callee_index);
-                Ok(self.direct_call_inst(callee, &real_call_args))
+                Ok(Reachability::Reachable(
+                    self.direct_call_inst(callee, &real_call_args),
+                ))
             }
 
-            // The guest-to-guest sync fast path: these adapter intrinsics are
-            // lowered inline rather than called, but only when concurrency
-            // support is enabled (the deferred thread state only exists then)
-            // and this isn't a tail call (the deferred frame must outlive the
-            // call). Otherwise fall back to the indirect call, which is also
-            // the out-of-line slow path the inline `exit` branches to.
+            // Fused adapter intrinsics that are lowered inline rather than
+            // called.
             Some(KnownFunc::FactIntrinsic(intrinsic)) => {
-                if self.env.tunables.concurrency_support {
-                    debug_assert!(!self.tail);
-                    match intrinsic {
-                        FactInlineIntrinsic::EnterSyncCall => {
-                            return Ok(self.lower_fact_enter_sync_call(&real_call_args));
-                        }
-                        FactInlineIntrinsic::ExitSyncCall => {
-                            return Ok(self.lower_fact_exit_sync_call(
-                                callee_index,
-                                sig_ref,
-                                &real_call_args,
-                            ));
-                        }
+                match intrinsic {
+                    FactInlineIntrinsic::Trap(trap) => {
+                        self.env
+                            .trap(self.builder, crate::env_trap_to_clif_trap(*trap));
+                        return Ok(Reachability::Unreachable);
                     }
+
+                    // The guest-to-guest sync fast path: these adapter
+                    // intrinsics are lowered inline rather than called, but
+                    // only when concurrency support is enabled (the deferred
+                    // thread state only exists then) and this isn't a tail call
+                    // (the deferred frame must outlive the call). Otherwise
+                    // fall back to the indirect call, which is also the
+                    // out-of-line slow path the inline `exit` branches to.
+                    FactInlineIntrinsic::EnterSyncCall if self.env.tunables.concurrency_support => {
+                        debug_assert!(!self.tail);
+                        return Ok(Reachability::Reachable(
+                            self.lower_fact_enter_sync_call(&real_call_args),
+                        ));
+                    }
+                    FactInlineIntrinsic::ExitSyncCall if self.env.tunables.concurrency_support => {
+                        debug_assert!(!self.tail);
+                        return Ok(Reachability::Reachable(self.lower_fact_exit_sync_call(
+                            callee_index,
+                            sig_ref,
+                            &real_call_args,
+                        )));
+                    }
+                    FactInlineIntrinsic::EnterSyncCall | FactInlineIntrinsic::ExitSyncCall => {}
                 }
                 let func_addr = self.env.alias_regions.vmctx_vmfunction_import_wasm_call(
                     &mut self.builder.cursor(),
                     vmctx,
                     callee_index,
                 );
-                Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+                Ok(Reachability::Reachable(self.indirect_call_inst(
+                    sig_ref,
+                    func_addr,
+                    &real_call_args,
+                )))
             }
 
             Some(key) => panic!("unexpected kind of known-import function: {key:?}"),
@@ -1931,7 +1952,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     vmctx,
                     callee_index,
                 );
-                Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+                Ok(Reachability::Reachable(self.indirect_call_inst(
+                    sig_ref,
+                    func_addr,
+                    &real_call_args,
+                )))
             }
         }
     }
@@ -3406,6 +3431,8 @@ impl FuncEnvironment<'_> {
         )
     }
 
+    /// Returns `None` when the call was lowered to an unconditional trap and so
+    /// everything after it is unreachable. See `Call::direct_call`.
     pub fn translate_call<'a>(
         &mut self,
         builder: &'a mut FunctionBuilder,
@@ -3413,7 +3440,7 @@ impl FuncEnvironment<'_> {
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
-    ) -> WasmResult<CallRets> {
+    ) -> WasmResult<Reachability<CallRets>> {
         Call::new(builder, self, srcloc).direct_call(callee_index, sig_ref, call_args)
     }
 
@@ -3436,7 +3463,8 @@ impl FuncEnvironment<'_> {
         sig_ref: ir::SigRef,
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        Call::new_tail(builder, self, srcloc).direct_call(callee_index, sig_ref, call_args)?;
+        let _ =
+            Call::new_tail(builder, self, srcloc).direct_call(callee_index, sig_ref, call_args)?;
         Ok(())
     }
 
@@ -6088,7 +6116,10 @@ impl FuncEnvironment<'_> {
             .signature
             .unwrap_module_type_index();
         let sig_ref = self.get_or_create_interned_sig_ref(builder.func, ty);
-        self.translate_call(builder, Default::default(), func, sig_ref, &[])?;
+        match self.translate_call(builder, Default::default(), func, sig_ref, &[])? {
+            Reachability::Reachable(_) => {}
+            Reachability::Unreachable => return Ok(()),
+        }
         if self.tunables.consume_fuel {
             self.fuel_load_into_var(builder);
         }
