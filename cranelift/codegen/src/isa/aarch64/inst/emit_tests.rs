@@ -7284,7 +7284,7 @@ fn test_aarch64_binemit() {
             scratch1: writable_xreg(24),
             scratch2: writable_xreg(28),
         },
-        "3BFF5F087F031A6B7C339A9A3CFF180898FFFFB5",
+        "3BFF5F087F033A6B7C339A9A3CFF180898FFFFB5",
         "atomic_rmw_loop_umin_8 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28",
     ));
     insns.push((
@@ -7298,7 +7298,7 @@ fn test_aarch64_binemit() {
             scratch1: writable_xreg(24),
             scratch2: writable_xreg(28),
         },
-        "3BFF5F487F031A6B7C839A9A3CFF184898FFFFB5",
+        "3BFF5F487F233A6B7C839A9A3CFF184898FFFFB5",
         "atomic_rmw_loop_umax_16 addr=x25 operand=x26 oldval=x27 scratch1=x24 scratch2=x28",
     ));
 
