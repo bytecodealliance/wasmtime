@@ -3651,3 +3651,21 @@ fn non_utf8_raises_error() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn compile_empty_component_with_debug_info() -> Result<()> {
+    // A component with no core modules reached simulated-DWARF generation with
+    // nothing to describe, which used to panic instead of compiling.
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("empty-component.cwasm");
+    let stdout = run_wasmtime(&[
+        "compile",
+        "-D",
+        "debug-info=y",
+        "tests/all/cli_tests/empty_component.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "");
+    Ok(())
+}
