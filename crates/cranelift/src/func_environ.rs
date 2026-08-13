@@ -1617,12 +1617,13 @@ impl FuncEnvironment<'_> {
                     .vmctx()
                     .memories(def_index)
                     .to_deferred_load(func);
-                let mut base = self.alias_regions.vm_memory_definition().base();
-                base.can_move();
-                if base_readonly {
-                    base.readonly();
-                }
-                let base = base.to_deferred_load(func);
+                let base = self
+                    .alias_regions
+                    .vm_memory_definition()
+                    .base()
+                    .can_move()
+                    .readonly_if(base_readonly)
+                    .to_deferred_load(func);
                 let len = self
                     .alias_regions
                     .vm_memory_definition()
@@ -1639,12 +1640,14 @@ impl FuncEnvironment<'_> {
                 // field's offset.
                 let owned_index = self.module.owned_memory_index(def_index);
                 let vmctx_off = self.offsets.owned_memories().at(owned_index);
-                let mut base = self.alias_regions.vm_memory_definition().base();
-                base.can_move();
-                if base_readonly {
-                    base.readonly();
-                }
-                let base = base.relative_to(vmctx_off).to_deferred_load(func);
+                let base = self
+                    .alias_regions
+                    .vm_memory_definition()
+                    .base()
+                    .can_move()
+                    .readonly_if(base_readonly)
+                    .relative_to(vmctx_off)
+                    .to_deferred_load(func);
                 let len = self
                     .alias_regions
                     .vm_memory_definition()
@@ -1664,12 +1667,13 @@ impl FuncEnvironment<'_> {
                 .from()
                 .relative_to(import_off)
                 .to_deferred_load(func);
-            let mut base = self.alias_regions.vm_memory_definition().base();
-            base.can_move();
-            if base_readonly {
-                base.readonly();
-            }
-            let base = base.to_deferred_load(func);
+            let base = self
+                .alias_regions
+                .vm_memory_definition()
+                .base()
+                .can_move()
+                .readonly_if(base_readonly)
+                .to_deferred_load(func);
             let len = self
                 .alias_regions
                 .vm_memory_definition()
@@ -1717,24 +1721,26 @@ impl FuncEnvironment<'_> {
             // A defined table's `VMTableDefinition` is inlined into the vmctx,
             // reached at an absolute `vmctx` offset.
             let vmctx_off = self.offsets.tables().at(def_index);
-            let mut base = self.alias_regions.vm_table_definition().base();
-            if is_static {
-                base.readonly().can_move();
-            }
             let base = VmctxLoadChain::new(smallvec![
-                base.relative_to(vmctx_off).to_deferred_load(func)
+                self.alias_regions
+                    .vm_table_definition()
+                    .base()
+                    .readonly_if(is_static)
+                    .can_move_if(is_static)
+                    .relative_to(vmctx_off)
+                    .to_deferred_load(func)
             ]);
             let bound = if is_static {
                 TableSize::Static {
                     bound: table.limits.min,
                 }
             } else {
-                let mut current_elements =
-                    self.alias_regions.vm_table_definition().current_elements();
-                current_elements.cast(bound_ty);
                 TableSize::Dynamic {
                     bound: VmctxLoadChain::new(smallvec![
-                        current_elements
+                        self.alias_regions
+                            .vm_table_definition()
+                            .current_elements()
+                            .cast(bound_ty)
                             .relative_to(vmctx_off)
                             .to_deferred_load(func)
                     ]),
@@ -1751,11 +1757,15 @@ impl FuncEnvironment<'_> {
                 .from()
                 .relative_to(import_off)
                 .to_deferred_load(func);
-            let mut base = self.alias_regions.vm_table_definition().base();
-            if is_static {
-                base.readonly().can_move();
-            }
-            let base = VmctxLoadChain::new(smallvec![from, base.to_deferred_load(func)]);
+            let base = VmctxLoadChain::new(smallvec![
+                from,
+                self.alias_regions
+                    .vm_table_definition()
+                    .base()
+                    .readonly_if(is_static)
+                    .can_move_if(is_static)
+                    .to_deferred_load(func),
+            ]);
             let bound = if is_static {
                 TableSize::Static {
                     bound: table.limits.min,

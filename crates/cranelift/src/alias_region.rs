@@ -416,17 +416,33 @@ impl<'a, Offsets> Field<'a, Offsets> {
     /// module being compiled (e.g. whether a memory can be relocated) rather
     /// than being a static property of the field; this method allows callers
     /// to mark the load as `readonly` in these cases.
-    pub fn readonly(&mut self) -> &mut Self {
+    pub fn readonly(mut self) -> Self {
         self.flags.set_readonly();
         self
+    }
+
+    /// Mark accesses of this field as `readonly` if and only if `readonly` is
+    /// `true`.
+    ///
+    /// See the note on [`Field::readonly`].
+    pub fn readonly_if(self, readonly: bool) -> Self {
+        if readonly { self.readonly() } else { self }
     }
 
     /// Mark accesses of this field as `can_move`.
     ///
     /// See the note on [`Field::readonly`].
-    pub fn can_move(&mut self) -> &mut Self {
+    pub fn can_move(mut self) -> Self {
         self.flags = self.flags.with_can_move();
         self
+    }
+
+    /// Mark accesses of this field as `can_move` if and only if `can_move` is
+    /// `true`.
+    ///
+    /// See the note on [`Field::readonly`].
+    pub fn can_move_if(self, can_move: bool) -> Self {
+        if can_move { self.can_move() } else { self }
     }
 
     /// Cast this field to the given type.
@@ -435,7 +451,7 @@ impl<'a, Offsets> Field<'a, Offsets> {
     /// `VMGlobalDefinition`'s storage (a `[u8; 16]` represented as
     /// `ir::types::I8X16`) to the global's actual Wasm type's representation
     /// (`ir::types::I32` for a Wasm `i32`).
-    pub fn cast(&mut self, ty: ir::Type) -> &mut Self {
+    pub fn cast(mut self, ty: ir::Type) -> Self {
         self.ty = ty;
         self
     }
