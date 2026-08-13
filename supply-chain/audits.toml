@@ -4512,6 +4512,15 @@ the same as before where it's all as expected and the `unsafe` has to do with
 managing OS APIs.
 """
 
+[[audits.region]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "3.0.2 -> 4.0.0"
+notes = """
+A bunch of updates to existing unsafe code, mostly to use newer methods that are
+now available after an MSRV bump. Looks fine.
+"""
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
