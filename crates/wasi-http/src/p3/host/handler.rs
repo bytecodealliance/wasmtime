@@ -1,12 +1,11 @@
 use crate::FieldMap;
 use crate::p3::bindings::http::client::{Host, HostWithStore};
 use crate::p3::bindings::http::types::{Request, Response};
-use crate::p3::body::{Body, BodyExt as _};
+use crate::p3::body::Body;
 use crate::p3::{HttpError, HttpResult};
 use crate::{Error, WasiHttp, WasiHttpCtxView};
 use core::task::{Context, Poll, Waker};
 use http_body_util::BodyExt as _;
-use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::task::{self, JoinHandle};
 use tracing::debug;
@@ -24,10 +23,7 @@ impl Drop for AbortOnDropJoinHandle {
 }
 
 async fn io_task_result(
-    rx: oneshot::Receiver<(
-        Arc<AbortOnDropJoinHandle>,
-        oneshot::Receiver<Result<(), Error>>,
-    )>,
+    rx: oneshot::Receiver<(AbortOnDropJoinHandle, oneshot::Receiver<Result<(), Error>>)>,
 ) -> Result<(), Error> {
     let Ok((_io, io_result_rx)) = rx.await else {
         return Ok(());
@@ -40,10 +36,6 @@ impl<T> HostWithStore<T> for WasiHttp {
         store: &Accessor<T, Self>,
         req: Resource<Request>,
     ) -> HttpResult<Resource<Response>> {
-        // A handle to the I/O task, if spawned, will be sent on this channel
-        // and kept as part of request body state
-        let (io_task_tx, io_task_rx) = oneshot::channel();
-
         // A handle to the I/O task, if spawned, will be sent on this channel
         // along with the result receiver
         let (io_result_tx, io_result_rx) = oneshot::channel();
@@ -61,7 +53,7 @@ impl<T> HostWithStore<T> for WasiHttp {
             let (req, options) =
                 req.into_http_with_getter(&mut store, io_task_result(io_result_rx), getter)?;
             HttpResult::Ok(store.get().hooks.send_request(
-                req.map(|body| body.with_state(io_task_rx).boxed_unsync()),
+                req.map(|body| body.boxed_unsync()),
                 options.as_deref().copied(),
                 Box::new(async {
                     // Forward the response processing result to `WasiHttpCtx` implementation
@@ -91,15 +83,13 @@ impl<T> HostWithStore<T> for WasiHttp {
             Poll::Pending => {
                 // I/O driver still needs to be polled, spawn a task and send handles to it
                 let (tx, rx) = oneshot::channel();
-                let io = task::spawn(async move {
+                let io = AbortOnDropJoinHandle(task::spawn(async move {
                     let res = io.await;
                     debug!(?res, "`send_request` I/O future finished");
                     _ = tx.send(res);
-                });
-                let io = Arc::new(AbortOnDropJoinHandle(io));
-                _ = io_result_tx.send((Arc::clone(&io), rx));
-                _ = io_task_tx.send(Arc::clone(&io));
-                body.with_state(io).boxed_unsync()
+                }));
+                _ = io_result_tx.send((io, rx));
+                body.boxed_unsync()
             }
         };
         store.with(|mut store| {

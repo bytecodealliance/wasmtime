@@ -568,39 +568,6 @@ where
     }
 }
 
-/// A wrapper around [http_body::Body], which allows attaching arbitrary state to it
-pub(crate) struct BodyWithState<T, U> {
-    body: T,
-    _state: U,
-}
-
-impl<T, U> http_body::Body for BodyWithState<T, U>
-where
-    T: http_body::Body + Unpin,
-    U: Unpin,
-{
-    type Data = T::Data;
-    type Error = T::Error;
-
-    #[inline]
-    fn poll_frame(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-        Pin::new(&mut self.get_mut().body).poll_frame(cx)
-    }
-
-    #[inline]
-    fn is_end_stream(&self) -> bool {
-        self.body.is_end_stream()
-    }
-
-    #[inline]
-    fn size_hint(&self) -> http_body::SizeHint {
-        self.body.size_hint()
-    }
-}
-
 /// A wrapper around [http_body::Body], which validates `Content-Length`
 pub(crate) struct BodyWithContentLength<T, E> {
     body: T,
@@ -683,16 +650,6 @@ where
 }
 
 pub(crate) trait BodyExt {
-    fn with_state<T>(self, state: T) -> BodyWithState<Self, T>
-    where
-        Self: Sized,
-    {
-        BodyWithState {
-            body: self,
-            _state: state,
-        }
-    }
-
     fn with_content_length<E>(
         self,
         limit: u64,
