@@ -424,19 +424,30 @@ impl LastStores {
         }
     }
 
+    /// Get the contents of `inst`'s own alias region's slot, without falling
+    /// back to the last fence.
+    ///
+    /// Returns `None` when `inst` has no alias region.
+    fn raw_region_slot(&self, func: &Function, inst: Inst) -> Option<PackedOption<Inst>> {
+        let region = func.dfg.insts[inst].alias_region(&func.dfg)?;
+        Some(self.regions[region])
+    }
+
     /// Roll this state back to the memory version from just before `dead`,
     /// which is a store being removed from the function by dead-store
     /// elimination.
     ///
-    /// `prev_last_store` must be the last-store instruction that immediately
-    /// preceded `dead`, as recorded when `dead` itself was processed.
+    /// `prev_region_slot` must be what `dead`'s own alias-region slot held
+    /// immediately before `dead` overwrote it, as recorded by `region_slot`
+    /// when `dead` itself was processed (that is, it must not be the last-fence
+    /// fallback).
     ///
     /// Only `dead`'s own alias-region slot is restored. A store with no alias
     /// region is treated as a fence by `update`, which clears *every* region
     /// slot, and we do not undo that; in that case, we leave this state
     /// alone. Similarly, stores marked observed while processing `dead` stay
     /// observed.
-    fn undo_store(&mut self, func: &Function, dead: Inst, prev_last_store: PackedOption<Inst>) {
+    fn undo_store(&mut self, func: &Function, dead: Inst, prev_region_slot: PackedOption<Inst>) {
         debug_assert!(func.dfg.insts[dead].opcode().can_store());
 
         let Some(region) = func.dfg.insts[dead].alias_region(&func.dfg) else {
@@ -446,7 +457,7 @@ impl LastStores {
         // Only roll back if `dead` really is the current last store to its
         // region.
         if self.regions[region].expand() == Some(dead) {
-            self.regions[region] = prev_last_store;
+            self.regions[region] = prev_region_slot;
         }
     }
 
@@ -565,12 +576,17 @@ struct KnownValue {
     /// Kept around for quick dominance checks.
     def_inst: Inst,
 
-    /// When this entry was created by a store, the last-store instruction that
-    /// immediately preceded that store: that is, the memory version this
-    /// location was at just *before* `def_inst` overwrote it.
+    /// When this entry was created by a store to a particular alias region,
+    /// whatever that region's last-store slot held just *before* `def_inst`
+    /// overwrote it, as given by `LastStores::region_slot`.
     ///
-    /// `None` for entries created by loads.
-    prev_last_store: Option<PackedOption<Inst>>,
+    /// `None` means either the entry was created by a load or by a store with
+    /// no alias region. Neither will ever undo `LastStores` state.
+    ///
+    /// `Some(maybe_inst)` contains the alias region slot's previous value, so
+    /// that it can be restored if `def_inst` is a dead store that gets
+    /// eliminated.
+    prev_region_slot: Option<PackedOption<Inst>>,
 }
 
 /// The result of processing an instruction through alias analysis.
@@ -819,12 +835,13 @@ impl<'a> AliasAnalysis<'a> {
                         // would then need a whole additional pass over the
                         // function to collapse each link.
                         //
-                        // A missing entry means we never processed the dead
-                        // store as a store in this pass (it can come from a
-                        // precomputed `block_input` snapshot, for a predecessor
-                        // block we have not walked yet), so we have no previous
-                        // version to roll back to and simply don't.
-                        if let Some(prev) = dead_entry.and_then(|e| e.prev_last_store) {
+                        // A missing entry means we have no previous version to
+                        // roll back to, and simply don't: either we never
+                        // processed the dead store as a store in this pass (it
+                        // can come from a precomputed `block_input` snapshot,
+                        // for a predecessor block we have not walked yet) or it
+                        // has no alias region and therefore no slot of its own.
+                        if let Some(prev) = dead_entry.and_then(|e| e.prev_region_slot) {
                             state.undo_store(func, last_store, prev);
                         }
 
@@ -889,7 +906,11 @@ impl<'a> AliasAnalysis<'a> {
                     KnownValue {
                         def_inst: inst,
                         value: store_data,
-                        prev_last_store: Some(last_store),
+                        // NB: we use the raw region slot, without the
+                        // last-fence fallback, because we don't want to move an
+                        // instruction without a region into a region slot on
+                        // DSE rollback.
+                        prev_region_slot: state.raw_region_slot(func, inst),
                     },
                 );
 
@@ -944,7 +965,7 @@ impl<'a> AliasAnalysis<'a> {
                             value: load_result,
                             // A load does not advance the memory version, so
                             // there is no previous version to roll back to.
-                            prev_last_store: None,
+                            prev_region_slot: None,
                         },
                     );
                 }
