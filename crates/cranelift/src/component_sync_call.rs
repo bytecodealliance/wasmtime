@@ -73,20 +73,23 @@ where
         .vm_store_context()
         .current_thread()
         .load(&mut builder.cursor(), vmstore);
-    alias_regions.store_vmdeferred_thread_parent(&mut builder.cursor(), slot_addr, parent);
+    alias_regions
+        .vm_deferred_thread()
+        .parent()
+        .store(&mut builder.cursor(), slot_addr, parent);
 
     // Record the deferred `enter_sync_call` arguments.
-    alias_regions.store_vmdeferred_thread_caller_instance(
+    alias_regions.vm_deferred_thread().caller_instance().store(
         &mut builder.cursor(),
         slot_addr,
         args.caller_instance,
     );
-    alias_regions.store_vmdeferred_thread_callee_async(
+    alias_regions.vm_deferred_thread().callee_async().store(
         &mut builder.cursor(),
         slot_addr,
         args.callee_async,
     );
-    alias_regions.store_vmdeferred_thread_callee_instance(
+    alias_regions.vm_deferred_thread().callee_instance().store(
         &mut builder.cursor(),
         slot_addr,
         args.callee_instance,
@@ -183,7 +186,10 @@ where
 
     // Fast path: pop the deferred thread and restore the caller's context.
     builder.switch_to_block(fast_block);
-    let parent = alias_regions.vmdeferred_thread_parent(&mut builder.cursor(), slot_addr);
+    let parent = alias_regions
+        .vm_deferred_thread()
+        .parent()
+        .load(&mut builder.cursor(), slot_addr);
     alias_regions
         .vm_store_context()
         .current_thread()
