@@ -58,7 +58,7 @@ where
     /// Both returned registers are allocated from the code-generation context
     /// and are owned by the caller. The caller must eventually free them.
     pub(super) fn emit_load_gc_heap_base_and_bound(&mut self) -> Result<(Reg, Reg)> {
-        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx().store_context();
         let gc_heap_base_offset = self.env.vmoffsets.ptr.vm_store_context().gc_heap_base();
         let gc_heap_len_offset = self
             .env
