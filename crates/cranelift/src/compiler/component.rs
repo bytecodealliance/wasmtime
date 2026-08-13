@@ -1398,11 +1398,9 @@ impl<'a> TrampolineCompiler<'a> {
             .load(&mut self.builder.cursor(), vmctx);
         // Next load the function pointer at `offset` and return that.
         self.alias_regions
-            .component_builtin_functions_array_element(
-                &mut self.builder.cursor(),
-                builtins_array,
-                index,
-            )
+            .vmcomponent()
+            .builtins_array(index)
+            .load(&mut self.builder.cursor(), builtins_array)
     }
 
     /// Get a function's parameters regardless of the ABI in use.

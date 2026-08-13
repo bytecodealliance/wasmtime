@@ -7,7 +7,7 @@ use cranelift_codegen::{
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, GetPtrSize,
     ModuleInternedTypeIndex, NUM_COMPONENT_CONTEXT_SLOTS, PtrSize as _, RuntimeDataIndex,
-    StaticModuleIndex, VMOffsets,
+    StaticModuleIndex, VMOffsets, VmctxArrayIndex as _,
     component::{
         ComponentBuiltinFunctionIndex, LoweredIndex, ResourceIndex, RuntimeCallbackIndex,
         RuntimeComponentInstanceIndex, RuntimeMemoryIndex, RuntimePostReturnIndex,
@@ -820,6 +820,11 @@ wasmtime_environ::for_each_vm_type!(define_vm_type_alias_region_helpers);
 /// accessing that `VM*` type through a pointer would. For the few aggregates that
 /// have no `VM*` type of their own, and hence no alias region of their own, there
 /// are hand-written helpers below.
+///
+/// A field marked `#[pointee(..)]` additionally gets an accessor for what it
+/// points *at*, which lives outside the vmctx. For example,
+/// `alias_regions.vmctx().builtin_functions_array(i)` is the `i`th builtin in
+/// the array that the `VMContext::builtin_functions` field points at.
 #[allow(
     unused_macro_rules,
     reason = "entry shapes and marker attributes are handled uniformly for both \
@@ -830,6 +835,9 @@ macro_rules! define_vmctx_alias_region_helpers {
     // pointer type as an `ir::Type`).
     (@field_ty $pt:expr, u32) => { ir::types::I32 };
     (@field_ty $pt:expr, VmPtr < $g:ident >) => { $pt };
+    (@field_ty $pt:expr, VMSharedTypeIndex) => { ir::types::I32 };
+    (@field_ty $pt:expr, AtomicU64) => { ir::types::I64 };
+    (@field_ty $pt:expr, unsafe extern "C" fn) => { $pt };
 
     // Determine the Cranelift type a field is *accessed* as: the classification
     // of its `#[access_as = T]` type if it has one, and of its declared type
@@ -849,6 +857,7 @@ macro_rules! define_vmctx_alias_region_helpers {
     (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move() };
     (@apply_attr $flags:expr, [access_as = $($t:tt)*]) => { $flags };
     (@apply_attr $flags:expr, [ptr_size_offset]) => { $flags };
+    (@apply_attr $flags:expr, [pointee( $($t:tt)* )]) => { $flags };
 
     // Compute a field's access flags and Cranelift type from its declared type
     // and marker attributes, and build the `Field` for it at `$offset`.
@@ -862,6 +871,55 @@ macro_rules! define_vmctx_alias_region_helpers {
         let offset = $offset;
         Field::new(this.regions, VmType::$Name, offset, flags, ty)
     }};
+
+    // Scan a field's attributes for a `#[pointee(..)]` and emit the accessor it
+    // describes, if any.
+    (@pointee_methods $Offsets:tt [ ]) => {};
+    (@pointee_methods $Offsets:tt [ #[pointee( $($p:tt)* )] $($rest:tt)* ]) => {
+        define_vmctx_alias_region_helpers!(@pointee $Offsets $($p)*);
+    };
+    (@pointee_methods $Offsets:tt [ # $skip:tt $($rest:tt)* ]) => {
+        define_vmctx_alias_region_helpers!(@pointee_methods $Offsets [ $($rest)* ]);
+    };
+
+    // An array of pointees.
+    (@pointee [ $($Offsets:tt)* ]
+        $(# $pattr:tt)* $Region:ident as $pname:ident [ $Index:ident ] : $($pty:tt)*
+    ) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the `index`th element of the out-of-line `",
+            stringify!($Region), "` array.\n\nThe returned [`Field`] is relative \
+             to the array's base pointer, not to the vmctx."
+        )]
+        pub fn $pname(self, index: $Index) -> Field<'a, $($Offsets)*> {
+            let ty = define_vmctx_alias_region_helpers!(
+                @field_ty self.regions.pointer_type, $($pty)*
+            );
+            let offset = index.vmctx_array_index().checked_mul(ty.bytes()).unwrap();
+            let flags = ir::MemFlagsData::trusted();
+            $( let flags = define_vmctx_alias_region_helpers!(@apply_attr flags, $pattr); )*
+            Field::new(self.regions, VmType::$Region, offset, flags, ty)
+        }
+    };
+
+    // A single pointee.
+    (@pointee [ $($Offsets:tt)* ]
+        $(# $pattr:tt)* $Region:ident as $pname:ident : $($pty:tt)*
+    ) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the out-of-line `", stringify!($Region),
+            "`.\n\nThe returned [`Field`] is relative to the pointer to it, not \
+             to the vmctx."
+        )]
+        pub fn $pname(self) -> Field<'a, $($Offsets)*> {
+            let ty = define_vmctx_alias_region_helpers!(
+                @field_ty self.regions.pointer_type, $($pty)*
+            );
+            let flags = ir::MemFlagsData::trusted();
+            $( let flags = define_vmctx_alias_region_helpers!(@apply_attr flags, $pattr); )*
+            Field::new(self.regions, VmType::$Region, 0, flags, ty)
+        }
+    };
 
     // ### `static` Section Entries
 
@@ -883,6 +941,8 @@ macro_rules! define_vmctx_alias_region_helpers {
                 @field $Name (self, offset) [ $($fty)* ] [ $(# $fattr)* ]
             )
         }
+
+        define_vmctx_alias_region_helpers!(@pointee_methods [ Offsets ] [ $(# $fattr)* ]);
     };
 
     // ### `dynamic` Section Entries Marked `#[ptr_size_offset]`
@@ -951,6 +1011,10 @@ macro_rules! define_vmctx_alias_region_helpers {
                 @field $Name (self, offset) [ $($fty)* ] [ $(# $fattr)* ]
             )
         }
+
+        define_vmctx_alias_region_helpers!(
+            @pointee_methods [ $($Offsets)* ] [ $(# $fattr)* ]
+        );
     };
 
     // A single field, whether unconditionally present (`field`) or only
@@ -970,6 +1034,10 @@ macro_rules! define_vmctx_alias_region_helpers {
                 @field $Name (self, offset) [ $($fty)* ] [ $(# $fattr)* ]
             )
         }
+
+        define_vmctx_alias_region_helpers!(
+            @pointee_methods [ $($Offsets)* ] [ $(# $fattr)* ]
+        );
     };
 
     // Emit the `impl` block holding the accessors for the dynamically-positioned
@@ -1236,151 +1304,11 @@ where
     }
 }
 
-/// `[VMSharedTypeIndex]`-related methods.
+/// Component-specific methods.
 impl<Offsets> AliasRegions<Offsets>
 where
     Offsets: GetPtrSize,
 {
-    /// Load a `VMSharedTypeIndex` element out of the `[VMSharedTypeIndex]`
-    /// array pointed at by the `VMContext::type_ids_array` field.
-    pub fn type_ids_array_element(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        array: ir::Value,
-        ty: ModuleInternedTypeIndex,
-    ) -> ir::Value {
-        let load_ty = ir::Type::int_with_byte_size(
-            self.offsets
-                .get_ptr_size()
-                .size_of_vmshared_type_index()
-                .into(),
-        )
-        .unwrap();
-
-        let offset = ty.as_u32().checked_mul(load_ty.bytes()).unwrap();
-        let region = self.region(
-            cursor.func,
-            AliasRegionKey::Vm {
-                ty: VmType::TypeIdsArray,
-                offset,
-            },
-        );
-
-        cursor.ins().load(
-            load_ty,
-            ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_can_move()
-                .with_alias_region(Some(region)),
-            array,
-            i32::try_from(offset).unwrap(),
-        )
-    }
-}
-
-/// Epoch counter-related methods.
-impl<Offsets> AliasRegions<Offsets>
-where
-    Offsets: GetPtrSize,
-{
-    /// Dereference the epoch pointer (an `*const AtomicU64` previously loaded
-    /// out of the vmctx's `epoch_ptr` field) to read the current epoch counter.
-    pub fn epoch_counter(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        epoch_ptr: ir::Value,
-    ) -> ir::Value {
-        let region = self.region(
-            cursor.func,
-            AliasRegionKey::Vm {
-                ty: VmType::EpochCounter,
-                offset: 0,
-            },
-        );
-        cursor.ins().load(
-            ir::types::I64,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            epoch_ptr,
-            0,
-        )
-    }
-}
-
-/// Builtin-functions array methods.
-impl<Offsets> AliasRegions<Offsets>
-where
-    Offsets: GetPtrSize,
-{
-    /// Load a host function pointer element out of the builtin-functions array
-    /// (`VMContext::builtin_functions`)
-    pub fn builtin_functions_array_element(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        array: ir::Value,
-        builtin: BuiltinFunctionIndex,
-    ) -> ir::Value {
-        let offset = builtin
-            .index()
-            .checked_mul(self.pointer_type.bytes())
-            .unwrap();
-
-        let region = self.region(
-            cursor.func,
-            AliasRegionKey::Vm {
-                ty: VmType::BuiltinFunctionsArray,
-                offset,
-            },
-        );
-
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_can_move()
-                .with_alias_region(Some(region)),
-            array,
-            i32::try_from(offset).unwrap(),
-        )
-    }
-}
-
-/// Component builtin-functions array methods.
-impl<Offsets> AliasRegions<Offsets>
-where
-    Offsets: GetPtrSize,
-{
-    /// Load a host function pointer element out of the component
-    /// builtin-functions array (`VMComponentContext::builtins`).
-    pub fn component_builtin_functions_array_element(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        array: ir::Value,
-        builtin: ComponentBuiltinFunctionIndex,
-    ) -> ir::Value {
-        let offset = builtin
-            .index()
-            .checked_mul(self.pointer_type.bytes())
-            .unwrap();
-
-        let region = self.region(
-            cursor.func,
-            AliasRegionKey::Vm {
-                ty: VmType::ComponentBuiltinFunctionsArray,
-                offset,
-            },
-        );
-
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_can_move()
-                .with_alias_region(Some(region)),
-            array,
-            i32::try_from(offset).unwrap(),
-        )
-    }
-
     /// Get the alias region for the `ValRaw` array used to marshal arguments
     /// and results across the array calling convention used by various
     /// trampolines.

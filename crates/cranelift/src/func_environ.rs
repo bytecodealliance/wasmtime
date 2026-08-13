@@ -804,7 +804,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn epoch_load_current(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
         let addr = builder.use_var(self.epoch_ptr_var);
         self.alias_regions
-            .epoch_counter(&mut builder.cursor(), addr)
+            .vmctx()
+            .epoch_counter()
+            .load(&mut builder.cursor(), addr)
     }
 
     fn epoch_check(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -1162,12 +1164,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // Load the base pointer of the array of `VMSharedTypeIndex`es.
         let shared_indices = self.alias_regions.vmctx().type_ids().load(pos, vmctx);
 
-        // Calculate the offset in that array for this type's entry.
-
         // Load the`VMSharedTypeIndex` that this `ModuleInternedTypeIndex` is
         // associated with at runtime from the array.
         self.alias_regions
-            .type_ids_array_element(pos, shared_indices, interned_ty)
+            .vmctx()
+            .type_ids_array(interned_ty)
+            .load(pos, shared_indices)
     }
 
     /// Does this function need a GC heap?

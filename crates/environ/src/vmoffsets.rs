@@ -8,8 +8,8 @@
 
 use crate::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, FuncIndex,
-    FuncRefIndex, GlobalIndex, MemoryIndex, Module, OwnedMemoryIndex, RuntimeDataIndex, TableIndex,
-    TagIndex,
+    FuncRefIndex, GlobalIndex, MemoryIndex, Module, ModuleInternedTypeIndex, OwnedMemoryIndex,
+    RuntimeDataIndex, TableIndex, TagIndex,
 };
 
 /// Number of slots in for `component_context` in the `VMStoreContext`. This is
@@ -1002,6 +1002,7 @@ impl_vmctx_array_index! {
     DefinedTagIndex,
     FuncRefIndex,
     RuntimeDataIndex,
+    ModuleInternedTypeIndex,
 }
 
 /// Generate the accessors for the offsets of `VMContext`'s
