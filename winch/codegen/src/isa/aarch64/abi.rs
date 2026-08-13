@@ -127,17 +127,17 @@ impl ABI for Aarch64ABI {
         Self::word_bytes()
     }
 
-    fn sizeof(ty: &WasmValType) -> u8 {
-        match ty {
+    fn sizeof(ty: &WasmValType) -> Result<u8> {
+        Ok(match ty {
             WasmValType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => Self::word_bytes(),
                 WasmHeapType::Extern => Self::word_bytes() / 2,
-                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+                ht => bail!("{}: {ht}", CodeGenError::unsupported_wasm_type()),
             },
             WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),
             WasmValType::F32 | WasmValType::I32 => Self::word_bytes() / 2,
             WasmValType::V128 => Self::word_bytes() * 2,
-        }
+        })
     }
 }
 
@@ -159,15 +159,10 @@ impl Aarch64ABI {
                 (index_env.next_fpr().map(regs::vreg), ty)
             }
 
-            ty @ WasmValType::Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func | WasmHeapType::Extern => {
-                    (index_env.next_gpr().map(regs::xreg), ty)
-                }
-                _ => bail!(CodeGenError::unsupported_wasm_type()),
-            },
+            ty @ WasmValType::Ref(_) => (index_env.next_gpr().map(regs::xreg), ty),
         };
 
-        let ty_size = <Self as ABI>::sizeof(wasm_arg);
+        let ty_size = <Self as ABI>::sizeof(wasm_arg)?;
         let default = || {
             // Stack slots for parameters are aligned to a fixed slot size,
             // 8 bytes if the type size is 8 or less and type-sized aligned
@@ -214,7 +209,7 @@ mod tests {
     };
 
     #[test]
-    fn ref_sizes_match_cranelift_representation() {
+    fn ref_sizes_match_cranelift_representation() -> Result<()> {
         use wasmtime_environ::{WasmHeapType, WasmRefType};
         let ty = |heap_type| {
             WasmValType::Ref(WasmRefType {
@@ -223,10 +218,11 @@ mod tests {
             })
         };
         assert_eq!(
-            Aarch64ABI::sizeof(&ty(WasmHeapType::Func)),
+            Aarch64ABI::sizeof(&ty(WasmHeapType::Func))?,
             Aarch64ABI::word_bytes()
         );
-        assert_eq!(Aarch64ABI::sizeof(&ty(WasmHeapType::Extern)), 4);
+        assert_eq!(Aarch64ABI::sizeof(&ty(WasmHeapType::Extern))?, 4);
+        Ok(())
     }
 
     #[test]

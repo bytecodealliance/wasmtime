@@ -3045,20 +3045,6 @@ impl Config {
             bail!("cannot disable the simd proposal but enable the relaxed simd proposal");
         }
 
-        // The GC, function-references, and exception-handling proposals require
-        // Wasmtime's GC runtime support.
-        if !features.contains(WasmFeatures::GC_TYPES) {
-            if features.contains(WasmFeatures::EXCEPTIONS) {
-                bail!("cannot disable gc support but enable the exceptions proposal");
-            }
-            if features.contains(WasmFeatures::GC) {
-                bail!("cannot disable gc support but enable the gc proposal");
-            }
-            if features.contains(WasmFeatures::FUNCTION_REFERENCES) {
-                bail!("cannot disable gc support but enable the function-references proposal");
-            }
-        }
-
         if features.contains(WasmFeatures::STACK_SWITCHING) {
             use target_lexicon::OperatingSystem;
             let model = match target.operating_system {
