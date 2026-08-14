@@ -1718,7 +1718,7 @@ impl<I: VCodeInst> VRegAllocator<I> {
             return Err(CodegenError::CodeTooLarge);
         }
         let v = self.vreg_types.len();
-        let (regclasses, tys) = I::rc_for_type(ty)?;
+        let (regclasses, tys) = I::rc_for_type(&ty)?;
 
         // Check that new indices are in-bounds for regalloc2's
         // VReg/Operand representation.
@@ -1774,7 +1774,7 @@ impl<I: VCodeInst> VRegAllocator<I> {
     /// registers for the given type. This is meant to be used with
     /// deferred allocation errors (see `Lower::alloc_tmp()`).
     fn bogus_for_deferred_error(&self, ty: Type) -> ValueRegs<Reg> {
-        let (regclasses, _tys) = I::rc_for_type(ty).expect("must have valid type");
+        let (regclasses, _tys) = I::rc_for_type(&ty).expect("must have valid type");
         match regclasses {
             &[rc0] => ValueRegs::one(VReg::new(0, rc0).into()),
             &[rc0, rc1] => ValueRegs::two(VReg::new(0, rc0).into(), VReg::new(1, rc1).into()),

@@ -1116,16 +1116,10 @@ impl MachInst for Inst {
         vec![vec![0x1f, 0x20, 0x03, 0xd5]]
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
-        match ty {
-            I8 => Ok((&[RegClass::Int], &[I8])),
-            I16 => Ok((&[RegClass::Int], &[I16])),
-            I32 => Ok((&[RegClass::Int], &[I32])),
-            I64 => Ok((&[RegClass::Int], &[I64])),
-            F16 => Ok((&[RegClass::Float], &[F16])),
-            F32 => Ok((&[RegClass::Float], &[F32])),
-            F64 => Ok((&[RegClass::Float], &[F64])),
-            F128 => Ok((&[RegClass::Float], &[F128])),
+    fn rc_for_type(ty: &Type) -> CodegenResult<(&[RegClass], &[Type])> {
+        match *ty {
+            I8 | I16 | I32 | I64 => Ok((&[RegClass::Int], slice::from_ref(ty))),
+            F16 | F32 | F64 | F128 => Ok((&[RegClass::Float], slice::from_ref(ty))),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
             _ if ty.is_vector() && ty.bits() <= 128 => {
                 let types = &[types::I8X2, types::I8X4, types::I8X8, types::I8X16];

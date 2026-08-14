@@ -324,7 +324,7 @@ pub trait MachInst: Clone + Debug {
     /// target, an I64 may be stored in two registers, each of which holds an
     /// I32. The actually-stored types are used only to inform the backend when
     /// generating spills and reloads for individual registers.
-    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])>;
+    fn rc_for_type(ty: &Type) -> CodegenResult<(&[RegClass], &[Type])>;
 
     /// Get an appropriate type that can fully hold a value in a given
     /// register class. This may not be the only type that maps to
