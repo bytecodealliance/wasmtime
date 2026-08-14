@@ -313,6 +313,10 @@
          (ty Type)
          (flags MemFlagsData))
 
+       ;; A 128-bit atomic compare-and-swap operation, such as `caspal`. This
+       ;; instruction requires LSE support (FEAT_LSE) and has acquire-release semantics.
+       (AtomicCAS128 (args BoxAtomicCAS128Args))
+
        ;; Read `access_ty` bits from address `rt`, either 8, 16, 32 or 64-bits, and put
        ;; it in `rn`, optionally zero-extending to fill a word or double word result.
        ;; This instruction is sequentially consistent.
@@ -1341,6 +1345,7 @@
 (type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
 (type BranchTarget (primitive BranchTarget))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
+(type BoxAtomicCAS128Args (primitive BoxAtomicCAS128Args))
 (type CodeOffset (primitive CodeOffset))
 (type VecMachLabel extern (enum))
 
@@ -4440,6 +4445,26 @@
             (_ Unit (emit (MInst.AtomicCAS dst expect replace addr ty flags)))
           )
           dst))
+
+;; Helper for emitting `MInst.AtomicCAS128` instructions.
+(decl atomic_cas_128_args (WritableReg WritableReg Reg Reg Reg Reg Reg MemFlagsData)
+      BoxAtomicCAS128Args)
+(extern constructor atomic_cas_128_args atomic_cas_128_args)
+
+(decl lse_atomic_cas_128 (Reg ValueRegs ValueRegs MemFlagsData) ValueRegs)
+(rule (lse_atomic_cas_128 addr expect replace flags)
+      (let (
+            (dst_lo WritableReg (temp_writable_reg $I64))
+            (dst_hi WritableReg (temp_writable_reg $I64))
+            (args BoxAtomicCAS128Args (atomic_cas_128_args dst_lo dst_hi
+                                                           (value_regs_get expect 0)
+                                                           (value_regs_get expect 1)
+                                                           (value_regs_get replace 0)
+                                                           (value_regs_get replace 1)
+                                                           addr flags))
+            (_ Unit (emit (MInst.AtomicCAS128 args)))
+          )
+          (value_regs dst_lo dst_hi)))
 
 ;; Helper for emitting `MInst.AtomicRMWLoop` instructions.
 ;; - Make sure that both args are in virtual regs, since in effect

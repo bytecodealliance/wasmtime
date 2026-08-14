@@ -2342,6 +2342,11 @@
       (atomic_rmw_loop (AtomicRMWLoopOp.Xchg) addr src ty flags))
 
 ;;;; Rules for `AtomicCAS` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 2 (lower (and (use_lse)
+                  (atomic_cas $I128 (little_or_native_endian flags) addr expect replace)))
+      (lse_atomic_cas_128 addr expect replace flags))
+
 (rule 1 (lower (and (use_lse)
                   (atomic_cas (valid_atomic_transaction ty) (little_or_native_endian flags) addr src1 src2)))
       (lse_atomic_cas addr src1 src2 ty flags))
