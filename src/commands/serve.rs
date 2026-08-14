@@ -935,8 +935,9 @@ impl HandlerState for HostHandlerState {
             .new_store(self.component.engine(), Some(instance_id))?;
 
         // Register this store's MMU interrupter so the `MmuInterruptThread` can
-        // do its work. It is unregistered in `HostWorkerState::drop()` before
-        // the store is dropped.
+        // do its work. It is normally unregistered in `HostWorkerState::drop()` before
+        // the store is dropped. We register it before instantiate_into(), lest
+        // the Wasm's initializer run on unreasonably long.
         #[cfg(has_mmu_interruption)]
         if let Some(registry) = &self.interrupter_registry {
             if let Some(interrupter) = store.mmu_interrupter() {
@@ -944,7 +945,21 @@ impl HandlerState for HostHandlerState {
             }
         }
 
-        let proxy = self.instantiate_into(&mut store).await?;
+        // If something goes wrong instantiating the pre-instance into the
+        // store, we won't ever construct a HostWorkerState whose drop() is
+        // responsible for calling unregister(). So unregister it here before
+        // bailing out. Critically, we avoid leaving a raw pointer to a freed
+        // `VMStoreContext` in the registry.
+        let proxy = match self.instantiate_into(&mut store).await {
+            Ok(proxy) => proxy,
+            Err(e) => {
+                #[cfg(has_mmu_interruption)]
+                if let Some(registry) = &self.interrupter_registry {
+                    registry.unregister(instance_id);
+                }
+                return Err(e);
+            }
+        };
 
         Ok(Instance {
             store,
@@ -1112,6 +1127,9 @@ impl MmuInterrupterRegistry {
     /// Interrupts the next store in round-robin order, returning the number of
     /// stores currently registered.
     fn interrupt_next(&self) -> usize {
+        // It's vital to hold this lock while interrupt() runs. Otherwise,
+        // unregister() could be called before or during, and interrupt() could
+        // mprotect a page that has been munmap()'d.
         let mut inner = self.lock();
         let len = inner.entries.len();
         if len == 0 {
