@@ -351,6 +351,9 @@ fn fact_import_to_core_def(
         fact::Import::Trap(trap) => simple_intrinsic(dfg::Trampoline::Trap(*trap)),
         fact::Import::EnterSyncCall => simple_intrinsic(dfg::Trampoline::EnterSyncCall),
         fact::Import::ExitSyncCall => simple_intrinsic(dfg::Trampoline::ExitSyncCall),
+        fact::Import::UnsafeIntrinsic(intrinsic) => {
+            dfg::CoreDef::UnsafeIntrinsic(ty.unwrap_func().unwrap_module_type_index(), *intrinsic)
+        }
     }
 }
 
