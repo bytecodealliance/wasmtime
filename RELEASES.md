@@ -1,3 +1,14 @@
+## 48.0.1
+
+Unreleased.
+
+### Fixed
+
+* Context slots in component compositions are now correctly managed.
+  [#14139](https://github.com/bytecodealliance/wasmtime/pull/14139)
+
+--------------------------------------------------------------------------------
+
 ## 48.0.0
 
 Released 2026-08-20.

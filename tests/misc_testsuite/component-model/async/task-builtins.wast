@@ -272,7 +272,7 @@
         (if (i32.ne (local.get 2) (i32.const 1)) (then (unreachable)))
         (if (i32.ne (local.get 3) (i32.const 2)) (then (unreachable)))
 
-        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 0)) (then (unreachable)))
         (call $context.set (i32.const 500))
 
         call $backpressure.inc
@@ -326,19 +326,19 @@
 
       ;; set this tasks's context before calling $run, in calling $run the
       ;; runtime will then call `realloc` above for the string return value
-      ;; which should see our 400 value. That will then set 500 which we should
-      ;; then see after the return.
+      ;; which should NOT see our 400 value. That will then set 500 which we
+      ;; should NOT then see after the return.
 
       (func (export "sync-to-sync")
         (call $context.set (i32.const 400))
         (call $sync-to-sync (i32.const 20))
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
       )
 
       (func (export "sync-to-async")
         (call $context.set (i32.const 400))
         (call $sync-to-async (i32.const 20))
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
       )
 
       (func (export "async-to-sync")
@@ -350,7 +350,7 @@
           )
           (then (unreachable))
         )
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
       )
 
       (func (export "async-to-async")
@@ -362,7 +362,7 @@
           )
           (then (unreachable))
         )
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
       )
     )
     (core instance $m (instantiate $M (with "" (instance
