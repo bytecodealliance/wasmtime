@@ -268,7 +268,6 @@
 ;; @00f0                               store notrap aligned region6 v19, v20+136
 ;; @00f2                               v26 = load.i64 notrap aligned readonly can_move region2 v0+176
 ;; @00f2                               v27 = load.i32 notrap aligned region3 v26
-;; @00fe                               store notrap aligned region3 v27, v26
 ;; @0100                               jump block15
 ;;
 ;;                                 block15:
