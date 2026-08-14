@@ -2,7 +2,10 @@ use core::cell::UnsafeCell;
 
 /// A wrapper around `UnsafeCell` that implements `Send` and `Sync` for types
 /// that are themselves `Send` and `Sync`.
+///
+/// This type is `repr(transparent)` and has exactly `T`'s layout.
 #[derive(Default)]
+#[repr(transparent)]
 pub struct SendSyncUnsafeCell<T>(UnsafeCell<T>);
 
 // Safety: `T` is `Send` and users guarantee that any pointers derived from the

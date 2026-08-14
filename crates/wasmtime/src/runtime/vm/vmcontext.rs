@@ -13,6 +13,8 @@ use core::ffi::c_void;
 use core::fmt;
 use core::marker;
 use core::mem::{self, MaybeUninit};
+#[cfg(feature = "gc-null")]
+use core::num::NonZeroU32;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -196,6 +198,7 @@ unsafe impl VmSafe for VMTagImport {}
 macro_rules! define_vm_types {
     ( $(
         $(#[doc = $sdoc:literal])*
+        $(#[cfg($($scfg:tt)*)])?
         $(#[derive($($d:ident),*)])?
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
@@ -212,6 +215,7 @@ macro_rules! define_vm_types {
     )* ) => {
         $(
             $(#[doc = $sdoc])*
+            $(#[cfg($($scfg)*)])?
             $(#[derive($($d),*)])?
             #[repr($($repr)*)]
             $svis struct $Name {
@@ -224,13 +228,15 @@ macro_rules! define_vm_types {
 
         #[cfg(test)]
         mod test_vm_type_layouts {
-            use super::{ $( $Name, )* };
             use core::mem::{align_of, offset_of, size_of};
             use wasmtime_environ::{HostPtr, PtrSize};
 
             $(
+                $(#[cfg($($scfg)*)])?
                 #[test]
                 fn $snake() {
+                    use super::$Name;
+
                     let host = HostPtr;
                     let offsets = host.$snake();
 

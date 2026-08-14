@@ -51,6 +51,10 @@ macro_rules! define_vm_type_offsets {
     (@size ($p:expr) i64) => { 8u32 };
     (@size ($p:expr) u64) => { 8u32 };
     (@size ($p:expr) u32) => { 4u32 };
+    // `VMGcRef` is a `NonZeroU32` newtype, so `Option<VMGcRef>` is niche-packed
+    // back down into four bytes.
+    (@size ($p:expr) NonZeroU32) => { 4u32 };
+    (@size ($p:expr) Option < VMGcRef >) => { 4u32 };
     (@size ($p:expr) [u8; 16]) => { 16u32 };
     (@size ($p:expr) [u32; $n:expr]) => { 4u32 * u32::try_from($n).unwrap() };
     (@size ($p:expr) VMSharedTypeIndex) => { u32::from(($p).size_of_vmshared_type_index()) };
@@ -85,6 +89,8 @@ macro_rules! define_vm_type_offsets {
     (@align ($p:expr) i64) => { 8u32 };
     (@align ($p:expr) u64) => { 8u32 };
     (@align ($p:expr) u32) => { 4u32 };
+    (@align ($p:expr) NonZeroU32) => { 4u32 };
+    (@align ($p:expr) Option < VMGcRef >) => { 4u32 };
     (@align ($p:expr) [u8; 16]) => { 16u32 };
     (@align ($p:expr) [u32; $n:expr]) => { 4u32 };
     (@align ($p:expr) VMSharedTypeIndex) => { u32::from(($p).align_of_vmshared_type_index()) };
@@ -205,6 +211,7 @@ macro_rules! define_vm_type_offsets {
     // Top-level entry: the list of `VM*` type definitions.
     ( $(
         $(#[doc = $sdoc:literal])*
+        $(#[cfg($($scfg:tt)*)])?
         $(#[derive($($d:ident),*)])?
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
@@ -382,6 +389,7 @@ impl<P: PtrSize> offsets::VMStoreContext<P> {
 macro_rules! define_ptr_size_vm_type_accessors {
     ( $(
         $(#[doc = $sdoc:literal])*
+        $(#[cfg($($scfg:tt)*)])?
         $(#[derive($($d:ident),*)])?
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
@@ -666,65 +674,6 @@ pub trait PtrSize {
     /// Return the offset of `VMContRef::values`.
     fn vmcontref_values(&self) -> u8 {
         self.vmcontref_args() + self.size_of_vmhostarray()
-    }
-
-    /// Return the offset of the `over_approximated_stack_roots` field within
-    /// `VMDrcHeapData`.
-    #[inline]
-    fn vmdrc_heap_data_over_approximated_stack_roots(&self) -> u8 {
-        0
-    }
-
-    /// Return the offset of the `current_over_approximated_stack_roots_len`
-    /// field within `VMDrcHeapData`.
-    #[inline]
-    fn vmdrc_heap_data_current_over_approximated_stack_roots_len(&self) -> u8 {
-        4
-    }
-
-    /// Return the offset of the
-    /// `over_approximated_stack_roots_len_after_last_gc` field within
-    /// `VMDrcHeapData`.
-    #[inline]
-    fn vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc(&self) -> u8 {
-        8
-    }
-
-    /// Return the size of `VMDrcHeapData`.
-    #[inline]
-    fn size_of_vmdrc_heap_data(&self) -> u8 {
-        12
-    }
-
-    /// Return the alignment of `VMDrcHeapData`.
-    #[inline]
-    fn align_of_vmdrc_heap_data(&self) -> u8 {
-        4
-    }
-
-    /// Return the offset of the `bump_ptr` field within `VMCopyingHeapData`.
-    #[inline]
-    fn vmcopying_heap_data_bump_ptr(&self) -> u8 {
-        0
-    }
-
-    /// Return the offset of the `active_space_end` field within
-    /// `VMCopyingHeapData`.
-    #[inline]
-    fn vmcopying_heap_data_active_space_end(&self) -> u8 {
-        4
-    }
-
-    /// Return the size of `VMCopyingHeapData`.
-    #[inline]
-    fn size_of_vmcopying_heap_data(&self) -> u8 {
-        8
-    }
-
-    /// Return the alignment of `VMCopyingHeapData`.
-    #[inline]
-    fn align_of_vmcopying_heap_data(&self) -> u8 {
-        4
     }
 }
 
