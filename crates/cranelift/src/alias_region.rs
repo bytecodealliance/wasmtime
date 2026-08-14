@@ -1,3 +1,23 @@
+//! Alias regions for the memory that compiled Wasm code accesses.
+//!
+//! Every load and store Wasmtime emits carries a
+//! `cranelift_codegen::ir::AliasRegion` naming the memory it touches, so that
+//! Cranelift's alias analysis can better eliminate redundant loads, dead
+//! stores, etc. This module, and primarily its `AliasRegions` type, parcels
+//! those regions out.
+//!
+//! `AliasRegions` accessors come from two places:
+//!
+//! 1. Fields of the `VM*` types and of the vmctx types get one region per
+//!    field, and an accessor per field is generated from our
+//!    `for_each_vm[ctx]_type!` macros.
+//!
+//! 2. There are a handful of hand-written methods for memory regions that are
+//!    not part of the vmctx or a `VM*` type at all (linear memories, the GC
+//!    heap, stack slots, etc...).
+//!
+//! We strive to avoid adding new hand-written methods as much as possible.
+
 use crate::translate::Load;
 use core::fmt;
 use cranelift_codegen::{
