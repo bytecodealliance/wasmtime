@@ -367,8 +367,12 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
     ) -> FsResult<Resource<DynInputStream>> {
-        // Trap if fd lookup fails:
-        let f = self.table.get(&fd)?.file()?;
+        // Trap if fd lookup fails. A directory is is-directory, not
+        // bad-descriptor (POSIX EISDIR on read).
+        let f = match self.table.get(&fd)? {
+            Descriptor::File(f) => f,
+            Descriptor::Dir(_) => return Err(ErrorCode::IsDirectory.into()),
+        };
 
         // Create a stream view for it.
         let reader: DynInputStream = Box::new(FileInputStream::new(f, offset));

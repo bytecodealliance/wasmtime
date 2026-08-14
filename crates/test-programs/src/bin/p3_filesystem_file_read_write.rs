@@ -1,5 +1,7 @@
 use futures::join;
-use test_programs::p3::wasi::filesystem::types::{DescriptorFlags, OpenFlags, PathFlags};
+use test_programs::p3::wasi::filesystem::types::{
+    DescriptorFlags, ErrorCode, OpenFlags, PathFlags,
+};
 use test_programs::p3::{wasi, wit_stream};
 
 struct Component;
@@ -10,6 +12,13 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         let preopens = wasi::filesystem::preopens::get_directories();
         let (dir, _) = &preopens[0];
+
+        let (_data_rx, data_fut) = dir.read_via_stream(0);
+        let err = data_fut.await.expect_err("directory read should fail");
+        assert!(
+            matches!(err, ErrorCode::IsDirectory),
+            "unexpected error: {err:?}"
+        );
 
         let filename = "test.txt";
         {
