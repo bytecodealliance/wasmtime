@@ -582,6 +582,93 @@ macro_rules! for_each_vm_type {
                 pub last_wasm_entry_trap_handler: usize,
             }
 
+            /// A reference to a buffer ("array") allocated on a continuation's
+            /// stack.
+            ///
+            /// The elements are of whatever type the buffer's user expects;
+            /// `data` is an untyped pointer, and the runtime casts it at each
+            /// use site.
+            #[derive(Debug, Clone)]
+            #[repr(C)]
+            #[snake_name = vm_host_array]
+            pub struct VMHostArray {
+                /// Number of currently occupied slots.
+                pub length: u32,
+
+                /// Number of slots in the data buffer. Note that this is *not*
+                /// the size of the buffer in bytes!
+                pub capacity: u32,
+
+                /// The buffer itself, which lives on the continuation's stack
+                /// rather than in this object.
+                pub data: *mut u8,
+            }
+
+            /// The information saved for every stack, whether it is a
+            /// continuation's or the initial stack's.
+            #[derive(Debug, Clone)]
+            #[repr(C)]
+            #[snake_name = vm_common_stack_information]
+            pub struct VMCommonStackInformation {
+                /// The subset of `VMStoreContext` saved for this stack.
+                #[aggregate]
+                pub limits: VMStackLimits,
+
+                /// Where this stack is in its life cycle; a `VMStackState`
+                /// discriminant.
+                pub state: VMStackState,
+
+                /// The tags this stack handles, set while it is a `Parent`.
+                #[aggregate]
+                pub handlers: VMHostArray,
+
+                /// The index within `handlers` of the first `switch` handler.
+                pub first_switch_handler_index: u32,
+            }
+
+            /// A continuation.
+            #[repr(C)]
+            #[snake_name = vm_cont_ref]
+            pub struct VMContRef {
+                /// The information saved for this continuation's stack.
+                #[aggregate]
+                pub common_stack_information: VMCommonStackInformation,
+
+                /// This continuation's parent: another continuation, the
+                /// initial stack, or absent.
+                #[aggregate]
+                pub parent_chain: VMStackChain,
+
+                /// The end of this continuation's parent chain, used only while
+                /// it is `Suspended` or `Fresh`.
+                pub last_ancestor: *mut VMContRef,
+
+                /// Revision counter.
+                pub revision: usize,
+
+                /// The stack this continuation runs on.
+                #[aggregate]
+                pub stack: VMContinuationStack,
+
+                /// The arguments to, and return values of, the function passed
+                /// to `cont.new`.
+                #[aggregate]
+                pub args: VMHostArray,
+
+                /// The payloads passed to and from this continuation once it
+                /// has been suspended.
+                #[aggregate]
+                pub values: VMHostArray,
+
+                /// Tells the compiler that this structure has potential
+                /// self-references, through `last_ancestor`.
+                ///
+                /// This is a zero-sized type in final position, so it affects
+                /// neither this type's size nor its alignment.
+                #[aggregate]
+                pub _marker: PhantomPinned,
+            }
+
             /// The deferred-reference-counting collector's JIT-accessible heap
             /// data.
             ///

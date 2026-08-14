@@ -64,7 +64,7 @@ use std::ops::Range;
 use std::ptr;
 
 use crate::prelude::*;
-use crate::runtime::vm::stack_switching::VMHostArray;
+use crate::runtime::vm::VMHostArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -228,7 +228,7 @@ impl VMContinuationStack {
         &self,
         func_ref: *const VMFuncRef,
         caller_vmctx: *mut VMContext,
-        args: *mut VMHostArray<ValRaw>,
+        args: *mut VMHostArray,
         parameter_count: u32,
         return_value_count: u32,
     ) -> Result<()> {
@@ -281,7 +281,7 @@ impl VMContinuationStack {
             };
 
             args_ref.capacity = args_capacity;
-            args_ref.data = args_data_ptr.cast::<ValRaw>();
+            args_ref.data = args_data_ptr;
 
             let to_store = [
                 // Data near top of stack:
@@ -324,7 +324,7 @@ impl Drop for VMContinuationStack {
 unsafe extern "C" fn fiber_start(
     func_ref: *mut VMFuncRef,
     caller_vmctx: *mut VMContext,
-    args: *mut VMHostArray<ValRaw>,
+    args: *mut VMHostArray,
     return_value_count: u32,
 ) -> bool {
     unsafe {
@@ -334,8 +334,11 @@ unsafe extern "C" fn fiber_start(
         let params_and_returns: NonNull<[ValRaw]> = if args.capacity == 0 {
             NonNull::from(&[])
         } else {
-            std::slice::from_raw_parts_mut(args.data, usize::try_from(args.capacity).unwrap())
-                .into()
+            std::slice::from_raw_parts_mut(
+                args.data.cast::<ValRaw>(),
+                usize::try_from(args.capacity).unwrap(),
+            )
+            .into()
         };
 
         // NOTE(frank-emrich) The usage of the `caller_vmctx` is probably not

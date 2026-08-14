@@ -4,8 +4,8 @@
 use crate::Result;
 use core::ops::Range;
 
-use crate::runtime::vm::stack_switching::VMHostArray;
-use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
+use crate::runtime::vm::VMHostArray;
+use crate::runtime::vm::{VMContext, VMFuncRef};
 
 cfg_select! {
     all(feature = "stack-switching", unix, target_arch = "x86_64") => {
@@ -103,7 +103,7 @@ impl VMContinuationStack {
         &self,
         func_ref: *const VMFuncRef,
         caller_vmctx: *mut VMContext,
-        args: *mut VMHostArray<ValRaw>,
+        args: *mut VMHostArray,
         parameter_count: u32,
         return_value_count: u32,
     ) -> Result<()> {

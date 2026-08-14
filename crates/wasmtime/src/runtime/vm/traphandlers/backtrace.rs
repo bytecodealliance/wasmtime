@@ -29,7 +29,7 @@ use crate::runtime::vm::{
     traphandlers::{CallThreadState, tls},
 };
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
-use crate::vm::stack_switching::{VMContRef, VMStackState};
+use crate::vm::{VMContRef, stack_switching::VMStackState};
 use core::ops::ControlFlow;
 use wasmtime_unwinder::Frame;
 #[cfg(feature = "debug")]

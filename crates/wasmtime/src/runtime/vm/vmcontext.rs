@@ -7,11 +7,11 @@ pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
-use crate::vm::stack_switching::VMStackChain;
+use crate::vm::stack_switching::{VMContinuationStack, VMStackChain, VMStackState};
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
 use core::fmt;
-use core::marker;
+use core::marker::{self, PhantomPinned};
 use core::mem::{self, MaybeUninit};
 #[cfg(feature = "gc-null")]
 use core::num::NonZeroU32;
@@ -195,7 +195,56 @@ unsafe impl VmSafe for VMGlobalKind {}
 unsafe impl VmSafe for VMTagImport {}
 
 /// Define the runtime definitions of the shared `VM*` types.
+#[cfg_attr(
+    not(test),
+    allow(
+        unused_macro_rules,
+        reason = "the `@test` arms are only expanded inside the `#[cfg(test)]` \
+                  layout-test module"
+    )
+)]
 macro_rules! define_vm_types {
+    (@test [ $($cfg:tt)* ] $Name:ident $snake:ident [ $($fname:ident)* ]) => {
+        $($cfg)*
+        #[test]
+        fn $snake() {
+            use super::$Name;
+
+            let host = HostPtr;
+            let offsets = host.$snake();
+
+            let expected = usize::from(offsets.size());
+            let actual = size_of::<$Name>();
+            assert_eq!(
+                expected,
+                actual,
+                "size of {} failed: {expected} (expected) != {actual} (actual)",
+                stringify!($Name),
+            );
+
+            let expected = usize::from(offsets.align());
+            let actual = align_of::<$Name>();
+            assert_eq!(
+                expected,
+                actual,
+                "alignment of {} failed: {expected} (expected) != {actual} (actual)",
+                stringify!($Name),
+            );
+
+            $(
+                let expected = usize::from(offsets.$fname());
+                let actual = offset_of!($Name, $fname);
+                assert_eq!(
+                    expected,
+                    actual,
+                    "offset of {}::{} failed: {expected} (expected) != {actual} (actual)",
+                    stringify!($Name),
+                    stringify!($fname),
+                );
+            )*
+        }
+    };
+
     ( $(
         $(#[doc = $sdoc:literal])*
         $(#[cfg($($scfg:tt)*)])?
@@ -209,7 +258,10 @@ macro_rules! define_vm_types {
                 $(#[indexed])?
                 $(#[readonly])?
                 $(#[can_move])?
-                $fvis:vis $fname:ident : $fty:tt $(< $fgen:ty >)? ,
+                // Unlike the offsets and alias-region consumers, this one only
+                // ever re-emits a field's type verbatim, so it can capture the
+                // whole type as one fragment instead of taking it apart.
+                $fvis:vis $fname:ident : $fty:ty ,
             )*
         }
     )* ) => {
@@ -221,7 +273,7 @@ macro_rules! define_vm_types {
             $svis struct $Name {
                 $(
                     $(#[doc = $fdoc])*
-                    $fvis $fname: $fty $(< $fgen >)?,
+                    $fvis $fname: $fty,
                 )*
             }
         )*
@@ -232,44 +284,12 @@ macro_rules! define_vm_types {
             use wasmtime_environ::{HostPtr, PtrSize};
 
             $(
-                $(#[cfg($($scfg)*)])?
-                #[test]
-                fn $snake() {
-                    use super::$Name;
-
-                    let host = HostPtr;
-                    let offsets = host.$snake();
-
-                    let expected = usize::from(offsets.size());
-                    let actual = size_of::<$Name>();
-                    assert_eq!(
-                        expected,
-                        actual,
-                        "size of {} failed: {expected} (expected) != {actual} (actual)",
-                        stringify!($Name),
-                    );
-
-                    let expected = usize::from(offsets.align());
-                    let actual = align_of::<$Name>();
-                    assert_eq!(
-                        expected,
-                        actual,
-                        "alignment of {} failed: {expected} (expected) != {actual} (actual)",
-                        stringify!($Name),
-                    );
-
-                    $(
-                        let expected = usize::from(offsets.$fname());
-                        let actual = offset_of!($Name, $fname);
-                        assert_eq!(
-                            expected,
-                            actual,
-                            "offset of {}::{} failed: {expected} (expected) != {actual} (actual)",
-                            stringify!($Name),
-                            stringify!($fname),
-                        );
-                    )*
-                }
+                define_vm_types!(
+                    @test
+                    [ $(#[cfg($($scfg)*)])? ]
+                    $Name $snake
+                    [ $($fname)* ]
+                );
             )*
         }
     };
@@ -846,6 +866,26 @@ mod test_vmstore_context {
             offset_of!(VMStoreContext, gc_heap) + offset_of!(VMMemoryDefinition, current_length),
             usize::from(offsets.ptr.vm_store_context().gc_heap_current_length())
         );
+    }
+}
+
+#[cfg(test)]
+mod test_vm_cont_ref {
+    use wasmtime_environ::PtrSize;
+
+    /// Check the one `VMContRef` property that `for_each_vm_type!` does *not*
+    /// generate an assertion for: that `revision` lands at an eight-aligned
+    /// offset for every target pointer width, not just the host's.
+    ///
+    /// Some 32-bit platforms need it to be 8-byte aligned and some don't, so we
+    /// make sure that it always is, without padding to get there.
+    ///
+    /// Every field offset, plus the size and alignment of the type, is already
+    /// checked by the generated `test_vm_type_layouts::vm_cont_ref`.
+    #[test]
+    fn revision_is_eight_aligned() {
+        assert_eq!(4u8.vm_cont_ref().revision() % 8, 0);
+        assert_eq!(8u8.vm_cont_ref().revision() % 8, 0);
     }
 }
 

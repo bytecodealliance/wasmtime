@@ -3,7 +3,7 @@
 
 mod stack;
 
-use crate::vm::VMStackLimits;
+use crate::vm::{VMCommonStackInformation, VMContRef, VMHostArray, VMStackLimits};
 use core::{marker::PhantomPinned, ptr::NonNull};
 
 pub use stack::*;
@@ -78,59 +78,13 @@ impl VMContObj {
 unsafe impl Send for VMContObj {}
 unsafe impl Sync for VMContObj {}
 
-/// This type represents "common" information that we need to save both for the
-/// initial stack and each continuation.
-#[repr(C)]
-#[derive(Debug, Clone)]
-pub struct VMCommonStackInformation {
-    /// Saves subset of `VMStoreContext` for this stack. See documentation of
-    /// `VMStackChain` for the exact uses.
-    pub limits: VMStackLimits,
-    /// For the initial stack, this field must only have one of the following values:
-    /// - Running
-    /// - Parent
-    pub state: VMStackState,
-
-    /// Only in use when state is `Parent`. Otherwise, the list must be empty.
-    ///
-    /// Represents the handlers that this stack installed when resume-ing a
-    /// continuation.
-    ///
-    /// Note that for any resume instruction, we can re-order the handler
-    /// clauses without changing behavior such that all the suspend handlers
-    /// come first, followed by all the switch handler (while maintaining the
-    /// original ordering within the two groups).
-    /// Thus, we assume that the given resume instruction has the following
-    /// shape:
-    ///
-    /// (resume $ct
-    ///   (on $tag_0 $block_0) ... (on $tag_{n-1} $block_{n-1})
-    ///   (on $tag_n switch) ... (on $tag_m switch)
-    /// )
-    ///
-    /// On resume, the handler list is then filled with m + 1 (i.e., one per
-    /// handler clause) entries such that the i-th entry, using 0-based
-    /// indexing, is the identifier of $tag_i (represented as *mut
-    /// VMTagDefinition).
-    /// Further, `first_switch_handler_index` (see below) is set to n (i.e., the
-    /// 0-based index of the first switch handler).
-    ///
-    /// Note that the actual data buffer (i.e., the one `handler.data` points
-    /// to) is always allocated on the stack that this `CommonStackInformation`
-    /// struct describes.
-    pub handlers: VMHandlerList,
-
-    /// Only used when state is `Parent`. See documentation of `handlers` above.
-    pub first_switch_handler_index: u32,
-}
-
 impl VMCommonStackInformation {
     /// Default value with state set to `Running`
     pub fn running_default() -> Self {
         Self {
             limits: VMStackLimits::default(),
             state: VMStackState::Running,
-            handlers: VMHandlerList::empty(),
+            handlers: VMHostArray::empty(),
             first_switch_handler_index: 0,
         }
     }
@@ -146,22 +100,8 @@ impl VMStackLimits {
     }
 }
 
-#[repr(C)]
-#[derive(Debug, Clone)]
-/// Reference to a stack-allocated buffer ("array"), storing data of some type
-/// `T`.
-pub struct VMHostArray<T> {
-    /// Number of currently occupied slots.
-    pub length: u32,
-    /// Number of slots in the data buffer. Note that this is *not* the size of
-    /// the buffer in bytes!
-    pub capacity: u32,
-    /// The actual data buffer
-    pub data: *mut T,
-}
-
-impl<T> VMHostArray<T> {
-    /// Creates empty `Array`
+impl VMHostArray {
+    /// Creates an empty array.
     pub fn empty() -> Self {
         Self {
             length: 0,
@@ -169,68 +109,6 @@ impl<T> VMHostArray<T> {
             data: core::ptr::null_mut(),
         }
     }
-
-    /// Makes `Array` empty.
-    pub fn clear(&mut self) {
-        *self = Self::empty();
-    }
-}
-
-/// Type used for passing payloads to and from continuations. The actual type
-/// argument should be wasmtime::runtime::vm::vmcontext::ValRaw, but we don't
-/// have access to that here.
-pub type VMPayloads = VMHostArray<u128>;
-
-/// Type for a list of handlers, represented by the handled tag. Thus, the
-/// stored data is actually `*mut VMTagDefinition`, but we don't have access to
-/// that here.
-pub type VMHandlerList = VMHostArray<*mut u8>;
-
-/// The main type representing a continuation.
-#[repr(C)]
-pub struct VMContRef {
-    /// The `CommonStackInformation` of this continuation's stack.
-    pub common_stack_information: VMCommonStackInformation,
-
-    /// The parent of this continuation, which may be another continuation, the
-    /// initial stack, or absent (in case of a suspended continuation).
-    pub parent_chain: VMStackChain,
-
-    /// Only used if `common_stack_information.state` is `Suspended` or `Fresh`. In
-    /// that case, this points to the end of the stack chain (i.e., the
-    /// continuation in the parent chain whose own `parent_chain` field is
-    /// `VMStackChain::Absent`).
-    /// Note that this may be a pointer to itself (if the state is `Fresh`, this is always the case).
-    pub last_ancestor: *mut VMContRef,
-
-    /// Revision counter.
-    pub revision: usize,
-
-    /// The underlying stack.
-    pub stack: VMContinuationStack,
-
-    /// Used to store only
-    /// 1. The arguments to the function passed to cont.new
-    /// 2. The return values of that function
-    ///
-    /// Note that the actual data buffer (i.e., the one `args.data` points
-    /// to) is always allocated on this continuation's stack.
-    pub args: VMPayloads,
-
-    /// Once a continuation has been suspended (using suspend or switch),
-    /// this buffer is used to pass payloads to and from the continuation.
-    /// More concretely, it is used to
-    /// - Pass payloads from a suspend instruction to the corresponding handler.
-    /// - Pass payloads to a continuation using cont.bind or resume
-    /// - Pass payloads to the continuation being switched to when using switch.
-    ///
-    /// Note that the actual data buffer (i.e., the one `values.data` points
-    /// to) is always allocated on this continuation's stack.
-    pub values: VMPayloads,
-
-    /// Tell the compiler that this structure has potential self-references
-    /// through the `last_ancestor` pointer.
-    _marker: core::marker::PhantomPinned,
 }
 
 impl VMContRef {
@@ -247,7 +125,7 @@ impl VMContRef {
     pub fn empty() -> Self {
         let limits = VMStackLimits::with_stack_limit(Default::default());
         let state = VMStackState::Fresh;
-        let handlers = VMHandlerList::empty();
+        let handlers = VMHostArray::empty();
         let common_stack_information = VMCommonStackInformation {
             limits,
             state,
@@ -257,8 +135,8 @@ impl VMContRef {
         let parent_chain = VMStackChain::Absent;
         let last_ancestor = core::ptr::null_mut();
         let stack = VMContinuationStack::unallocated();
-        let args = VMPayloads::empty();
-        let values = VMPayloads::empty();
+        let args = VMHostArray::empty();
+        let values = VMHostArray::empty();
         let revision = 0;
         let _marker = PhantomPinned;
 
@@ -319,7 +197,7 @@ pub fn cont_new(
 
     // The initialization function will allocate the actual args/return value buffer and
     // update this object (if needed).
-    let contref_args_ptr = &mut contref.args as *mut _ as *mut VMHostArray<crate::ValRaw>;
+    let contref_args_ptr = &mut contref.args as *mut VMHostArray;
 
     contref.stack.initialize(
         func.cast::<crate::vm::VMFuncRef>(),
@@ -560,59 +438,6 @@ mod tests {
     }
 
     #[test]
-    fn check_vm_common_stack_information_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMCommonStackInformation>(),
-            usize::from(offsets.ptr.size_of_vmcommon_stack_information())
-        );
-        assert_eq!(
-            offset_of!(VMCommonStackInformation, limits),
-            usize::from(offsets.ptr.vmcommon_stack_information_limits())
-        );
-        assert_eq!(
-            offset_of!(VMCommonStackInformation, state),
-            usize::from(offsets.ptr.vmcommon_stack_information_state())
-        );
-        assert_eq!(
-            offset_of!(VMCommonStackInformation, handlers),
-            usize::from(offsets.ptr.vmcommon_stack_information_handlers())
-        );
-        assert_eq!(
-            offset_of!(VMCommonStackInformation, first_switch_handler_index),
-            usize::from(
-                offsets
-                    .ptr
-                    .vmcommon_stack_information_first_switch_handler_index()
-            )
-        );
-    }
-
-    #[test]
-    fn check_vm_array_offsets() {
-        // Note that the type parameter has no influence on the size and offsets.
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            size_of::<VMHostArray<()>>(),
-            usize::from(offsets.ptr.size_of_vmhostarray())
-        );
-        assert_eq!(
-            offset_of!(VMHostArray<()>, length),
-            usize::from(offsets.ptr.vmhostarray_length())
-        );
-        assert_eq!(
-            offset_of!(VMHostArray<()>, capacity),
-            usize::from(offsets.ptr.vmhostarray_capacity())
-        );
-        assert_eq!(
-            offset_of!(VMHostArray<()>, data),
-            usize::from(offsets.ptr.vmhostarray_data())
-        );
-    }
-
-    #[test]
     fn check_vm_contobj_offsets() {
         let module = Module::new(StaticModuleIndex::from_u32(0));
         let offsets = VMOffsets::new(HostPtr, &module);
@@ -628,44 +453,6 @@ mod tests {
             size_of::<VMContObj>(),
             usize::from(offsets.ptr.size_of_vmcontobj())
         )
-    }
-
-    #[test]
-    fn check_vm_contref_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            offset_of!(VMContRef, common_stack_information),
-            usize::from(offsets.ptr.vmcontref_common_stack_information())
-        );
-        assert_eq!(
-            offset_of!(VMContRef, parent_chain),
-            usize::from(offsets.ptr.vmcontref_parent_chain())
-        );
-        assert_eq!(
-            offset_of!(VMContRef, last_ancestor),
-            usize::from(offsets.ptr.vmcontref_last_ancestor())
-        );
-        // Some 32-bit platforms need this to be 8-byte aligned, some don't.
-        // So we need to make sure it always is, without padding.
-        assert_eq!(u8::vmcontref_revision(&4) % 8, 0);
-        assert_eq!(u8::vmcontref_revision(&8) % 8, 0);
-        assert_eq!(
-            offset_of!(VMContRef, revision),
-            usize::from(offsets.ptr.vmcontref_revision())
-        );
-        assert_eq!(
-            offset_of!(VMContRef, stack),
-            usize::from(offsets.ptr.vmcontref_stack())
-        );
-        assert_eq!(
-            offset_of!(VMContRef, args),
-            usize::from(offsets.ptr.vmcontref_args())
-        );
-        assert_eq!(
-            offset_of!(VMContRef, values),
-            usize::from(offsets.ptr.vmcontref_values())
-        );
     }
 
     #[test]
