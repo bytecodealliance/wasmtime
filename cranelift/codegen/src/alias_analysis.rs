@@ -424,6 +424,43 @@ impl LastStores {
         }
     }
 
+    /// Get the contents of `inst`'s own alias region's slot, without falling
+    /// back to the last fence.
+    ///
+    /// Returns `None` when `inst` has no alias region.
+    fn raw_region_slot(&self, func: &Function, inst: Inst) -> Option<PackedOption<Inst>> {
+        let region = func.dfg.insts[inst].alias_region(&func.dfg)?;
+        Some(self.regions[region])
+    }
+
+    /// Roll this state back to the memory version from just before `dead`,
+    /// which is a store being removed from the function by dead-store
+    /// elimination.
+    ///
+    /// `prev_region_slot` must be what `dead`'s own alias-region slot held
+    /// immediately before `dead` overwrote it, as recorded by `region_slot`
+    /// when `dead` itself was processed (that is, it must not be the last-fence
+    /// fallback).
+    ///
+    /// Only `dead`'s own alias-region slot is restored. A store with no alias
+    /// region is treated as a fence by `update`, which clears *every* region
+    /// slot, and we do not undo that; in that case, we leave this state
+    /// alone. Similarly, stores marked observed while processing `dead` stay
+    /// observed.
+    fn undo_store(&mut self, func: &Function, dead: Inst, prev_region_slot: PackedOption<Inst>) {
+        debug_assert!(func.dfg.insts[dead].opcode().can_store());
+
+        let Some(region) = func.dfg.insts[dead].alias_region(&func.dfg) else {
+            return;
+        };
+
+        // Only roll back if `dead` really is the current last store to its
+        // region.
+        if self.regions[region].expand() == Some(dead) {
+            self.regions[region] = prev_region_slot;
+        }
+    }
+
     /// Get the last-store instruction for the given `inst`'s alias region, if
     /// any.
     fn get_last_store(&self, func: &Function, inst: Inst) -> PackedOption<Inst> {
@@ -527,6 +564,31 @@ struct MemoryLoc {
     extending_opcode: Option<Opcode>,
 }
 
+/// What is known to be in memory at an associated `MemoryLoc`.
+#[derive(Clone, Copy, Debug)]
+struct KnownValue {
+    /// The value held at the associated `MemoryLoc`.
+    value: Value,
+
+    /// The instruction that produced `value`: either the load that read it out
+    /// of memory or the store that wrote it there.
+    ///
+    /// Kept around for quick dominance checks.
+    def_inst: Inst,
+
+    /// When this entry was created by a store to a particular alias region,
+    /// whatever that region's last-store slot held just *before* `def_inst`
+    /// overwrote it, as given by `LastStores::region_slot`.
+    ///
+    /// `None` means either the entry was created by a load or by a store with
+    /// no alias region. Neither will ever undo `LastStores` state.
+    ///
+    /// `Some(maybe_inst)` contains the alias region slot's previous value, so
+    /// that it can be restored if `def_inst` is a dead store that gets
+    /// eliminated.
+    prev_region_slot: Option<PackedOption<Inst>>,
+}
+
 /// The result of processing an instruction through alias analysis.
 pub enum OptResult {
     /// No optimization applied.
@@ -576,9 +638,7 @@ pub struct AliasAnalysis<'a> {
     /// Known memory-value equivalences. This is the result of the
     /// analysis. This is a mapping from (last store, address
     /// expression, offset, type) to SSA `Value`.
-    ///
-    /// We keep the defining inst around for quick dominance checks.
-    mem_values: FxHashMap<MemoryLoc, (Inst, Value)>,
+    mem_values: FxHashMap<MemoryLoc, KnownValue>,
 }
 
 impl<'a> AliasAnalysis<'a> {
@@ -754,7 +814,37 @@ impl<'a> AliasAnalysis<'a> {
                             ty,
                             extending_opcode: get_ext_opcode(opcode),
                         };
-                        self.mem_values.remove(&dead_loc);
+                        let dead_entry = self.mem_values.remove(&dead_loc);
+
+                        // Roll our last-store state back to the memory version
+                        // just before the dead store, so that `state` describes
+                        // memory as if the dead store had never happened.
+                        //
+                        // Our callers remove the dead store from the layout and
+                        // then reprocess this overwriting store. Without the
+                        // rollback, that reprocessing keys its `mem_values`
+                        // lookup on the instruction we just removed, finds
+                        // nothing, and so fails to notice that the overwriter
+                        // has now become an idempotent store. Chains like
+                        //
+                        //     v1 = load.i32 region0 v0
+                        //     store region0 v2, v0  ;; dead
+                        //     store region0 v1, v0  ;; idempotent, once the
+                        //                           ;; dead store is gone
+                        //
+                        // would then need a whole additional pass over the
+                        // function to collapse each link.
+                        //
+                        // A missing entry means we have no previous version to
+                        // roll back to, and simply don't: either we never
+                        // processed the dead store as a store in this pass (it
+                        // can come from a precomputed `block_input` snapshot,
+                        // for a predecessor block we have not walked yet) or it
+                        // has no alias region and therefore no slot of its own.
+                        if let Some(prev) = dead_entry.and_then(|e| e.prev_region_slot) {
+                            state.undo_store(func, last_store, prev);
+                        }
+
                         return OptResult::DeadStore {
                             dead: last_store,
                             overwriter: inst,
@@ -769,7 +859,12 @@ impl<'a> AliasAnalysis<'a> {
                     ty,
                     extending_opcode: get_ext_opcode(opcode),
                 };
-                if let Some((def_inst, known_value)) = self.mem_values.get(&check_loc).cloned() {
+                if let Some(KnownValue {
+                    def_inst,
+                    value: known_value,
+                    ..
+                }) = self.mem_values.get(&check_loc).cloned()
+                {
                     // Check for idempotent stores, where we are
                     // storing the exact same value back to a location
                     // that already has that value.
@@ -806,7 +901,18 @@ impl<'a> AliasAnalysis<'a> {
                     extending_opcode: get_ext_opcode(opcode),
                 };
                 trace!("  --> updating known values in memory: {mem_loc:?} = {store_data}");
-                self.mem_values.insert(mem_loc, (inst, store_data));
+                self.mem_values.insert(
+                    mem_loc,
+                    KnownValue {
+                        def_inst: inst,
+                        value: store_data,
+                        // NB: we use the raw region slot, without the
+                        // last-fence fallback, because we don't want to move an
+                        // instruction without a region into a region slot on
+                        // DSE rollback.
+                        prev_region_slot: state.raw_region_slot(func, inst),
+                    },
+                );
 
                 OptResult::None
             } else if opcode.can_load() {
@@ -831,8 +937,9 @@ impl<'a> AliasAnalysis<'a> {
                 // load (stores will always dominate though if
                 // their `last_store` survives through
                 // meet-points to this use-site).
-                let aliased = if let Some((def_inst, value)) =
-                    self.mem_values.get(&mem_loc).cloned()
+                let aliased = if let Some(KnownValue {
+                    def_inst, value, ..
+                }) = self.mem_values.get(&mem_loc).cloned()
                 {
                     trace!("  see known value {value} from {def_inst}");
                     if self.domtree.dominates(def_inst, inst, &func.layout) {
@@ -851,7 +958,16 @@ impl<'a> AliasAnalysis<'a> {
                 // as a new equivalent value.
                 if aliased.is_none() {
                     trace!("  --> inserting load result {load_result} at loc {mem_loc:?}");
-                    self.mem_values.insert(mem_loc, (inst, load_result));
+                    self.mem_values.insert(
+                        mem_loc,
+                        KnownValue {
+                            def_inst: inst,
+                            value: load_result,
+                            // A load does not advance the memory version, so
+                            // there is no previous version to roll back to.
+                            prev_region_slot: None,
+                        },
+                    );
                 }
 
                 match aliased {

@@ -288,9 +288,9 @@ pub unsafe extern "C" fn wasmtime_linker_define_async_func(
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
 ) -> Option<Box<wasmtime_error_t>> {
     let ty = ty.ty().ty(linker.linker.engine());
+    let cb = c_async_callback_to_rust_fn(callback, data, finalizer);
     let module = to_str!(module, module_len);
     let name = to_str!(name, name_len);
-    let cb = c_async_callback_to_rust_fn(callback, data, finalizer);
 
     handle_result(
         linker.linker.func_new_async(module, name, ty, cb),

@@ -1206,6 +1206,71 @@ mod test_programs {
     }
 
     #[test]
+    fn p2_cli_stdout_epipe() -> Result<()> {
+        let mut child = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", P2_CLI_STDOUT_EPIPE_COMPONENT])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::null())
+            .spawn()?;
+
+        // Read a small amount from stdout then drop it to close the pipe,
+        // which should cause the guest to receive StreamError::Closed (EPIPE).
+        let mut stdout = child.stdout.take().unwrap();
+        let mut buf = [0u8; 64];
+        let _ = stdout.read(&mut buf)?;
+        drop(stdout);
+
+        let output = child.wait_with_output()?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            output.status.success(),
+            "guest should exit successfully after receiving Closed, stderr: {stderr}"
+        );
+        assert!(
+            stderr.contains("got expected StreamError::Closed"),
+            "guest should have reported StreamError::Closed, stderr: {stderr}"
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn p2_cli_stdin_eisdir() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        // Open the directory and transfer the fd to Stdio for use as stdin.
+        let dir_file = std::fs::File::open(dir.path())?;
+        let stdin_stdio: Stdio = dir_file.into();
+
+        let child = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", P2_CLI_STDIN_EISDIR_COMPONENT])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(stdin_stdio)
+            .spawn()?;
+
+        let output = child.wait_with_output()?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            output.status.success(),
+            "guest should exit successfully after receiving IsDirectory, stderr: {stderr}"
+        );
+        assert!(
+            stderr.contains("got expected ErrorCode::IsDirectory"),
+            "guest should have reported ErrorCode::IsDirectory, stderr: {stderr}"
+        );
+        Ok(())
+    }
+
+    // EISDIR is a Unix-specific concept; on Windows opening a directory for
+    // reading behaves differently, so this test only runs on Unix.
+    #[cfg(not(unix))]
+    #[test]
+    fn p2_cli_stdin_eisdir() -> Result<()> {
+        Ok(())
+    }
+
+    #[test]
     fn p2_cli_env() -> Result<()> {
         run_wasmtime(&[
             "run",
@@ -3649,5 +3714,23 @@ fn non_utf8_raises_error() -> Result<()> {
             bail!("should have failed: {output:?}")
         }
     }
+    Ok(())
+}
+
+#[test]
+fn compile_empty_component_with_debug_info() -> Result<()> {
+    // A component with no core modules reached simulated-DWARF generation with
+    // nothing to describe, which used to panic instead of compiling.
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("empty-component.cwasm");
+    let stdout = run_wasmtime(&[
+        "compile",
+        "-D",
+        "debug-info=y",
+        "tests/all/cli_tests/empty_component.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "");
     Ok(())
 }

@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite, empty};
 use wasmtime::component::{HasData, ResourceTable};
-use wasmtime_wasi_io::streams::{InputStream, OutputStream};
+use wasmtime_wasi_io::streams::{InputStream, OutputStream, StreamError};
 
 mod empty;
 mod file;
@@ -14,6 +14,27 @@ mod worker_thread_stdin;
 
 pub use self::file::{InputFile, OutputFile};
 pub use self::locked_async::{AsyncStdinStream, AsyncStdoutStream};
+
+/// Convert a host `io::Error` into a `StreamError`, matching the error-code
+/// recovery that wasip1 performs via `filesystem::ErrorCode::from`.
+///
+/// * `BrokenPipe` is mapped to `StreamError::Closed` so that downstream
+///   consumers (e.g. wasi-libc) can recover `EPIPE` rather than falling back
+///   to a generic `EIO`.
+///
+/// * All other errors (including `IsADirectory`, permission errors, etc.) are
+///   preserved as `LastOperationFailed` with the original `std::io::Error`
+///   intact. This allows guests to recover the specific error code via the
+///   `wasi:filesystem/types#filesystem-error-code` function, which downcasts
+///   the error back to `std::io::Error` and maps it through
+///   `ErrorCode::from`.
+fn stream_error_from(e: std::io::Error) -> StreamError {
+    if e.kind() == std::io::ErrorKind::BrokenPipe {
+        StreamError::Closed
+    } else {
+        StreamError::LastOperationFailed(e.into())
+    }
+}
 
 // Convenience reexport for stdio types so tokio doesn't have to be imported
 // itself.
@@ -365,5 +386,67 @@ mod test {
         s.flush()?;
         s.write_ready().await?;
         Ok(())
+    }
+
+    // Verify that the stdio OutputStream implementation reports a usable
+    // write permit and can successfully write + flush (exercises the full
+    // trait impl including the error conversion path).
+    #[test]
+    fn stdio_output_stream_write_flush() {
+        let mut stream: Box<dyn wasmtime_wasi_io::streams::OutputStream> =
+            StdoutStream::p2_stream(&std::io::stderr());
+
+        let permit = stream.check_write().expect("check_write");
+        assert!(permit > 0, "permit should be nonzero");
+
+        // Writing empty bytes must succeed.
+        stream
+            .write(Bytes::new())
+            .expect("writing empty bytes should succeed");
+
+        // Flushing must succeed.
+        stream.flush().expect("flush should succeed");
+    }
+
+    #[test]
+    fn stream_error_from_broken_pipe_maps_to_closed() {
+        use std::io;
+        use wasmtime_wasi_io::streams::StreamError;
+
+        let err = super::stream_error_from(io::Error::from(io::ErrorKind::BrokenPipe));
+        assert!(matches!(err, StreamError::Closed));
+    }
+
+    #[test]
+    fn stream_error_from_preserves_io_error() {
+        use std::io;
+        use wasmtime_wasi_io::streams::StreamError;
+
+        let err = super::stream_error_from(io::Error::from(io::ErrorKind::IsADirectory));
+        match err {
+            StreamError::LastOperationFailed(e) => {
+                let io_err = e.downcast::<io::Error>().expect("should downcast");
+                assert_eq!(io_err.kind(), io::ErrorKind::IsADirectory);
+            }
+            other => panic!("expected LastOperationFailed, got: {other:?}"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stream_error_from_raw_os_eisdir() {
+        use rustix::io::Errno;
+        use std::io;
+        use wasmtime_wasi_io::streams::StreamError;
+
+        let err =
+            super::stream_error_from(io::Error::from_raw_os_error(Errno::ISDIR.raw_os_error()));
+        match err {
+            StreamError::LastOperationFailed(e) => {
+                let io_err = e.downcast::<io::Error>().expect("should downcast");
+                assert_eq!(io_err.raw_os_error(), Some(Errno::ISDIR.raw_os_error()));
+            }
+            other => panic!("expected LastOperationFailed, got: {other:?}"),
+        }
     }
 }

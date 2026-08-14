@@ -1,8 +1,25 @@
 #include <gtest/gtest.h>
+#include <wasmtime.h>
 #include <wasmtime/func.hh>
 #include <wasmtime/linker.hh>
 
 using namespace wasmtime;
+
+namespace {
+
+wasm_trap_t *callback(void *, wasmtime_caller_t *, const wasmtime_val_t *,
+                      size_t, wasmtime_val_t *, size_t) {
+  return nullptr;
+}
+
+wasm_trap_t *unchecked_callback(void *, wasmtime_caller_t *,
+                                wasmtime_val_raw_t *, size_t) {
+  return nullptr;
+}
+
+void finalize(void *data) { *static_cast<bool *>(data) = true; }
+
+} // namespace
 
 TEST(Linker, Smoke) {
   Engine engine;
@@ -73,6 +90,31 @@ TEST(Linker, CallableCopy) {
 
   CallableFunc cf;
   linker.func_new("a", "f", FuncType({}, {}), cf).unwrap();
+}
+
+TEST(Linker, FinalizesCallbacksWhenNameParsingFails) {
+  Engine engine;
+  Linker linker(engine);
+  auto *ty = wasm_functype_new_0_0();
+  const char invalid_utf8[] = {static_cast<char>(0xff)};
+
+  bool finalized = false;
+  auto *error = wasmtime_linker_define_func(linker.capi(), invalid_utf8,
+                                            sizeof(invalid_utf8), "name", 4, ty,
+                                            callback, &finalized, finalize);
+  ASSERT_NE(error, nullptr);
+  wasmtime_error_delete(error);
+  EXPECT_TRUE(finalized);
+
+  finalized = false;
+  error = wasmtime_linker_define_func_unchecked(
+      linker.capi(), "module", 6, invalid_utf8, sizeof(invalid_utf8), ty,
+      unchecked_callback, &finalized, finalize);
+  ASSERT_NE(error, nullptr);
+  wasmtime_error_delete(error);
+  EXPECT_TRUE(finalized);
+
+  wasm_functype_delete(ty);
 }
 
 TEST(Linker, DefineUnknownImportsAsTraps) {
