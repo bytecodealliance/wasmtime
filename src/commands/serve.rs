@@ -1079,9 +1079,13 @@ struct MmuInterrupterEntry {
 
 #[cfg(has_mmu_interruption)]
 impl MmuInterrupterRegistry {
+    fn lock(&self) -> std::sync::MutexGuard<'_, MmuInterrupterRegistryInner> {
+        self.inner.lock().unwrap()
+    }
+
     /// Registers a store's interrupter by its `instance_id`.
     fn register(&self, instance_id: u64, interrupt: Box<dyn Fn() + Send + Sync>) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock();
         inner.entries.push(MmuInterrupterEntry {
             instance_id,
             interrupt,
@@ -1091,7 +1095,7 @@ impl MmuInterrupterRegistry {
     /// Removes a store's interrupter. This must be called before the store is
     /// dropped.
     fn unregister(&self, instance_id: u64) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock();
         if let Some(pos) = inner
             .entries
             .iter()
@@ -1108,7 +1112,7 @@ impl MmuInterrupterRegistry {
     /// Interrupts the next store in round-robin order, returning the number of
     /// stores currently registered.
     fn interrupt_next(&self) -> usize {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock();
         let len = inner.entries.len();
         if len == 0 {
             inner.next = 0;
