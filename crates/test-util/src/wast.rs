@@ -458,7 +458,6 @@ impl Compiler {
                     || config.tail_call()
                     || config.function_references()
                     || config.relaxed_simd()
-                    || config.exceptions()
                     || config.legacy_exceptions()
                     || config.stack_switching()
                 {
@@ -564,11 +563,15 @@ impl WastTest {
             let unsupported = [
                 "extended-const/elem.wast",
                 "extended-const/global.wast",
-                "misc_testsuite/component-model/modules.wast",
                 "misc_testsuite/externref-segments.wast",
                 "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
                 "misc_testsuite/no-panic.wast",
+                // Currently exceptions trap on throw, re-enable after catch
+                // is implemented.
+                "misc_testsuite/traps-skip-catch-all.wast",
+                "misc_testsuite/component-model/async/exceptions.wast",
+                "spec_testsuite/throw.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

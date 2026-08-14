@@ -63,7 +63,7 @@ impl DefinedLocals {
 
             let ty = types.convert_valtype(ty)?;
             for _ in 0..count {
-                let ty_size = <A as ABI>::sizeof(&ty);
+                let ty_size = <A as ABI>::sizeof(&ty)?;
                 next_stack = align_to(next_stack, ty_size as u32) + (ty_size as u32);
                 slots.push(LocalSlot::new(ty, next_stack));
             }

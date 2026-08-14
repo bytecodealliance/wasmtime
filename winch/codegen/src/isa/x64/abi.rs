@@ -112,17 +112,17 @@ impl ABI for X64ABI {
         Self::word_bytes()
     }
 
-    fn sizeof(ty: &WasmValType) -> u8 {
-        match ty {
+    fn sizeof(ty: &WasmValType) -> Result<u8> {
+        Ok(match ty {
             WasmValType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => Self::word_bytes(),
                 WasmHeapType::Extern => Self::word_bytes() / 2,
-                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+                ht => bail!("{}: {ht}", CodeGenError::unsupported_wasm_type()),
             },
             WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),
             WasmValType::F32 | WasmValType::I32 => Self::word_bytes() / 2,
             WasmValType::V128 => Self::word_bytes() * 2,
-        }
+        })
     }
 }
 
@@ -135,13 +135,10 @@ impl X64ABI {
         params_or_returns: ParamsOrReturns,
     ) -> Result<(ABIOperand, u32)> {
         let (reg, ty) = match wasm_arg {
-            ty @ WasmValType::Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func | WasmHeapType::Extern => (
-                    Self::int_reg_for(index_env.next_gpr(), call_conv, params_or_returns),
-                    ty,
-                ),
-                _ => bail!(CodeGenError::unsupported_wasm_type()),
-            },
+            ty @ WasmValType::Ref(_) => (
+                Self::int_reg_for(index_env.next_gpr(), call_conv, params_or_returns),
+                ty,
+            ),
 
             ty @ (WasmValType::I32 | WasmValType::I64) => (
                 Self::int_reg_for(index_env.next_gpr(), call_conv, params_or_returns),
@@ -155,7 +152,7 @@ impl X64ABI {
             ),
         };
 
-        let ty_size = <Self as ABI>::sizeof(wasm_arg);
+        let ty_size = <Self as ABI>::sizeof(wasm_arg)?;
         let default = || {
             let slot_size = Self::stack_slot_size();
             if params_or_returns == ParamsOrReturns::Params {

@@ -141,7 +141,7 @@ pub(crate) trait ABI {
     fn stack_slot_size() -> u8;
 
     /// Returns the size in bytes of the given [`WasmType`].
-    fn sizeof(ty: &WasmValType) -> u8;
+    fn sizeof(ty: &WasmValType) -> Result<u8>;
 
     /// The target pointer size represented as [WasmValType].
     fn ptr_type() -> WasmValType {
