@@ -2628,6 +2628,7 @@ impl Drop for StoreOpaque {
             }
 
             self.store_data.decrement_allocator_resources(allocator);
+            self.vm_store_context_mut().unmap_interrupt_page();
         }
     }
 }
