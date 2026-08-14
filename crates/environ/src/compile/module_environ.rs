@@ -5,12 +5,12 @@ use crate::module::{
 use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
-    ElemIndex, EngineOrModuleTypeIndex, EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex,
-    IndexType, MemoryIndex, MemoryInitializer, ModuleInternedTypeIndex, ModuleStartup,
-    ModuleTypesBuilder, PanicOnOom as _, PassiveElemIndex, PrimaryMap, RuntimeDataIndex,
-    StaticModuleIndex, TableIndex, TableInitialValue, TableInitialization, Tag, TagIndex, Trap,
-    Tunables, TypeConvert, TypeIndex, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType,
-    WasmparserTypeConverter,
+    DefinedTableIndex, ElemIndex, EngineOrModuleTypeIndex, EntityIndex, EntityType, FuncIndex,
+    FuncKey, GlobalIndex, IndexType, MemoryIndex, MemoryInitializer, ModuleInternedTypeIndex,
+    ModuleStartup, ModuleTypesBuilder, PanicOnOom as _, PassiveElemIndex, PrimaryMap,
+    RuntimeDataIndex, StaticModuleIndex, TableIndex, TableInitialValue, TableInitialization, Tag,
+    TagIndex, Trap, Tunables, TypeConvert, TypeIndex, WasmHeapTopType, WasmHeapType, WasmResult,
+    WasmValType, WasmparserTypeConverter,
 };
 use alloc::borrow::Cow;
 use cranelift_entity::SecondaryMap;

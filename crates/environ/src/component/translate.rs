@@ -9,7 +9,6 @@ use crate::{
     Tunables, TypeConvert, WasmHeapType, WasmResult, WasmValType,
 };
 use core::str::FromStr;
-use cranelift_entity::packed_option::PackedOption;
 use cranelift_entity::{EntityRef, SecondaryMap};
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
@@ -565,17 +564,16 @@ impl<'a, 'data> Translator<'a, 'data> {
         // First, abstract interpret the initializers to create a map from each
         // static module to its abstract set of instantiations.
         let mut instantiations = SecondaryMap::<StaticModuleIndex, AbstractInstantiations>::new();
-        let mut instance_to_module =
-            PrimaryMap::<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>::new();
+        let mut instances = StaticInstances::new();
         for init in &translation.component.initializers {
             match init {
                 GlobalInitializer::InstantiateModule(instantiation, _) => match instantiation {
                     InstantiateModule::Static(module, args) => {
                         instantiations[*module].join(AbstractInstantiations::One(&*args));
-                        instance_to_module.push(Some(*module).into());
+                        instances.push(Some((*module, &args[..])));
                     }
                     _ => {
-                        instance_to_module.push(None.into());
+                        instances.push(None);
                     }
                 },
                 _ => continue,
@@ -595,7 +593,12 @@ impl<'a, 'data> Translator<'a, 'data> {
         // is a property of the whole component and not of a single module's
         // instantiations; see `ModuleTranslation::known_imported_globals` for
         // details.
-        let ambiguous = ambiguous_entities(translation, &instantiations, &instance_to_module);
+        let ambiguous = ambiguous_entities(
+            &self.static_modules,
+            translation,
+            &instantiations,
+            &instances,
+        );
 
         // Fourth, record which of each module's own defined entities all of
         // their importers agree on, which lets those modules use a precise alias
@@ -652,16 +655,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                 macro_rules! record_known_entity {
                     ($variant:ident, $imported:expr, $defined_index:ident, $known:ident) => {{
                         let Some((arg_module, EntityIndex::$variant(arg_entity))) =
-                            unambiguous_entity(&instance_to_module, &ambiguous, arg)
+                            unambiguous_entity(&self.static_modules, &instances, &ambiguous, arg)
                         else {
                             continue;
                         };
-                        let Some(index) = self.static_modules[arg_module]
+                        let index = self.static_modules[arg_module]
                             .module
                             .$defined_index(arg_entity)
-                        else {
-                            continue;
-                        };
+                            .expect(
+                                "`resolve_core_export` only returns entities that their module \
+                                 defines",
+                            );
                         assert!(self.static_modules[module].$known[$imported].is_none());
                         self.static_modules[module].$known[$imported] = Some(KnownEntity {
                             module: arg_module,
@@ -728,12 +732,16 @@ impl<'a, 'data> Translator<'a, 'data> {
                             // inlinable direct call!
                             CoreDef::Export(export) => {
                                 let Some((arg_module, arg_entity)) =
-                                    resolve_core_export(&instance_to_module, export)
+                                    resolve_core_export(&self.static_modules, &instances, export)
                                 else {
-                                    // Instance of a dynamic module that is not
-                                    // part of this component, not a
-                                    // statically-known module inside this
-                                    // component. We have to do an indirect call.
+                                    // Either an instance of a dynamic module that
+                                    // is not part of this component, or a
+                                    // re-export chain that bottoms out in
+                                    // something that isn't a defined function
+                                    // (for example a re-export of a trampoline;
+                                    // note that we only match trampolines and
+                                    // intrinsics as *direct* arguments above).
+                                    // Either way we have to do an indirect call.
                                     continue;
                                 };
 
@@ -741,19 +749,13 @@ impl<'a, 'data> Translator<'a, 'data> {
                                     unreachable!("function imports must be functions")
                                 };
 
-                                let Some(arg_module_def_func) = self.static_modules[arg_module]
+                                let arg_module_def_func = self.static_modules[arg_module]
                                     .module
                                     .defined_func_index(arg_func)
-                                else {
-                                    // TODO: we should ideally follow re-export
-                                    // chains to bottom out the instantiation
-                                    // argument in either a definition or an
-                                    // import at the root component boundary. In
-                                    // practice, this pattern is rare, so
-                                    // following these chains is left for the
-                                    // Future.
-                                    continue;
-                                };
+                                    .expect(
+                                        "`resolve_core_export` only returns entities that their \
+                                         module defines",
+                                    );
 
                                 FuncKey::DefinedWasmFunction(arg_module, arg_module_def_func).into()
                             }
@@ -1927,34 +1929,99 @@ mod pre_inlining {
 }
 use pre_inlining::PreInliningComponentTypes;
 
-/// Resolve a `CoreExport` to the static module that defines it and the entity
+/// A map from each runtime instance to the static module it is an instance of
+/// and the arguments it was instantiated with, when we statically know them.
+///
+/// `None` for instances of modules that are not part of this component, and
+/// whose shape we therefore cannot see into.
+type StaticInstances<'a> =
+    PrimaryMap<RuntimeInstanceIndex, Option<(StaticModuleIndex, &'a [CoreDef])>>;
+
+/// Resolve a `CoreExport` to the static module that *defines* it and the entity
 /// index it refers to within that module, when we can see through it statically.
+///
+/// A module may import an entity and then re-export it, in which case the
+/// export names an index in the re-exporting module's *imported* index space.
+/// We follow those chains all the way back to the module that actually defines
+/// the entity, so that the returned pair is a canonical identity for it: every
+/// reference to the same entity resolves to the same `(module, entity)` pair, no
+/// matter how many modules it was laundered through along the way. That is
+/// load-bearing for alias regions, where naming the same bytes with two
+/// different keys is a miscompile.
+///
+/// Therefore a returned `Some((module, entity))` always satisfies
+/// `!static_modules[module].module.is_imported(entity)`.
 fn resolve_core_export(
-    instance_to_module: &PrimaryMap<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>,
+    static_modules: &PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
+    instances: &StaticInstances<'_>,
     export: &CoreExport<EntityIndex>,
 ) -> Option<(StaticModuleIndex, EntityIndex)> {
-    // This can be an instance of a dynamic module that is not part of this
-    // component, rather than a statically-known module inside of it.
-    let module = instance_to_module[export.instance].expand()?;
-    match &export.item {
-        ExportItem::Index(index) => Some((module, *index)),
-        // Names are only used for instances of modules whose shape we don't
-        // statically know, which we already filtered out.
-        ExportItem::Name(_) => None,
+    let mut instance = export.instance;
+    let mut item = &export.item;
+
+    loop {
+        // This can be an instance of a dynamic module that is not part of this
+        // component, rather than a statically-known module inside of it.
+        let (module, args) = instances[instance]?;
+
+        let index = match item {
+            ExportItem::Index(index) => *index,
+            // Names are only used for instances of modules whose shape we don't
+            // statically know, which we already filtered out.
+            ExportItem::Name(_) => return None,
+        };
+
+        // The common case: this instance's module defines the entity itself, so
+        // we've bottomed out at its canonical identity.
+        if !static_modules[module].module.is_imported(index) {
+            return Some((module, index));
+        }
+
+        // Otherwise this is a re-export of one of the module's imports, so keep
+        // walking through whichever argument satisfied that import.
+        let position = static_modules[module]
+            .module
+            .import_position(index)
+            .expect("imported entities always have an associated import initializer");
+        match &args[position] {
+            CoreDef::Export(next) => {
+                // An instantiation's arguments are always exports of instances
+                // created before the instance being instantiated: `LinearizeDfg`
+                // builds the argument `CoreDef`s before assigning the new
+                // instance's `RuntimeInstanceIndex`, and would panic building an
+                // export of an instance it had not linearized yet. So this walk
+                // strictly decreases and must terminate.
+                debug_assert!(next.instance < instance);
+                if next.instance >= instance {
+                    return None;
+                }
+                instance = next.instance;
+                item = &next.item;
+            }
+
+            // The chain bottoms out in something that is not an export of
+            // another instance in this component, so there is no defining module
+            // for us to name.
+            CoreDef::InstanceFlags(_)
+            | CoreDef::Trampoline(_)
+            | CoreDef::UnsafeIntrinsic(_)
+            | CoreDef::TaskMayBlock => return None,
+        }
     }
 }
 
 /// Same as `resolve_core_export`, but for a `CoreDef` that must additionally be
 /// unambiguous.
 fn unambiguous_entity(
-    instance_to_module: &PrimaryMap<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>,
+    static_modules: &PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
+    instances: &StaticInstances<'_>,
     ambiguous: &HashSet<(StaticModuleIndex, EntityIndex)>,
     def: &CoreDef,
 ) -> Option<(StaticModuleIndex, EntityIndex)> {
     let CoreDef::Export(export) = def else {
         return None;
     };
-    let entity = resolve_core_export(instance_to_module, export)?;
+    let entity = resolve_core_export(static_modules, instances, export)?;
     if ambiguous.contains(&entity) {
         return None;
     }
@@ -1981,16 +2048,24 @@ fn unambiguous_entity(
 /// the module defining the entity must do the same, or else inlining one of
 /// them into the other would access the same bytes through two different alias
 /// regions, which is invalid.
+///
+/// Entities in the returned set are identified by the module that *defines*
+/// them, as resolved by `resolve_core_export`. That is what makes the previous
+/// paragraph work through re-exports: marking a module's re-export of an import
+/// as ambiguous poisons the definition it ultimately refers to, and therefore
+/// every other module that can reach that definition, and not just the
+/// re-exporter.
 fn ambiguous_entities(
+    static_modules: &PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
     translation: &ComponentTranslation,
     instantiations: &SecondaryMap<StaticModuleIndex, dfg::AbstractInstantiations<'_>>,
-    instance_to_module: &PrimaryMap<RuntimeInstanceIndex, PackedOption<StaticModuleIndex>>,
+    instances: &StaticInstances<'_>,
 ) -> HashSet<(StaticModuleIndex, EntityIndex)> {
     let mut ambiguous = HashSet::default();
 
     let mut mark = |def: &CoreDef| match def {
         CoreDef::Export(export) => {
-            if let Some(entity) = resolve_core_export(instance_to_module, export) {
+            if let Some(entity) = resolve_core_export(static_modules, instances, export) {
                 ambiguous.insert(entity);
             }
         }

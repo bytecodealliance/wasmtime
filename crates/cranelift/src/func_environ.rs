@@ -342,6 +342,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.isa.pointer_type()
     }
 
+    /// Get the alias region to use for accesses of the given memory.
+    ///
+    /// XXX: Keep the `{memory,global,table}_alias_region` methods in sync with
+    /// each other.
     pub(crate) fn memory_alias_region(
         &mut self,
         func: &mut Function,
@@ -383,6 +387,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
+    /// Get the alias region to use for accesses of the given table.
+    ///
+    /// XXX: Keep the `{memory,global,table}_alias_region` methods in sync with
+    /// each other.
     pub(crate) fn table_alias_region(
         &mut self,
         func: &mut Function,
@@ -413,6 +421,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
+    /// Get the alias region to use for accesses of the given global.
+    ///
+    /// XXX: Keep the `{memory,global,table}_alias_region` methods in sync with
+    /// each other.
     pub(crate) fn global_alias_region(
         &mut self,
         func: &mut Function,

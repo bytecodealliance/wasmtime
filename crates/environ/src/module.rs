@@ -518,6 +518,36 @@ impl Module {
         }
     }
 
+    /// Test whether the given entity index refers to one of this module's
+    /// imports, rather than to something it defines itself.
+    pub fn is_imported(&self, entity: EntityIndex) -> bool {
+        match entity {
+            EntityIndex::Function(i) => self.is_imported_function(i),
+            EntityIndex::Table(i) => self.is_imported_table(i),
+            EntityIndex::Memory(i) => self.is_imported_memory(i),
+            EntityIndex::Global(i) => self.is_imported_global(i),
+            EntityIndex::Tag(i) => self.is_imported_tag(i),
+        }
+    }
+
+    /// Get the position of the import that defines the given entity, suitable
+    /// for indexing an instantiation's argument list.
+    ///
+    /// Returns `None` when this module defines the entity itself, rather than
+    /// importing it.
+    ///
+    /// Note that this has to scan the initializers: imports of different kinds
+    /// are interleaved in declaration order, so an import's position is not
+    /// recoverable from the `num_imported_*` counts alone.
+    pub fn import_position(&self, entity: EntityIndex) -> Option<usize> {
+        if !self.is_imported(entity) {
+            return None;
+        }
+        self.initializers.iter().position(|i| match i {
+            Initializer::Import { index, .. } => *index == entity,
+        })
+    }
+
     /// Returns the type of an item based on its index
     pub fn type_of(&self, index: EntityIndex) -> EntityType {
         match index {
