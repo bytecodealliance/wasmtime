@@ -1,0 +1,104 @@
+test compile precise-output
+target aarch64 has_lse
+
+function %atomic_cas_i128(i64, i128, i128) -> i128 {
+block0(v0: i64, v1: i128, v2: i128):
+    v3 = atomic_cas.i128 v0, v1, v2
+    return v3
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   str x28, [sp, #-16]!
+;   stp x26, x27, [sp, #-16]!
+;   stp x24, x25, [sp, #-16]!
+; block0:
+;   mov x24, x2
+;   mov x25, x3
+;   mov x26, x4
+;   mov x27, x5
+;   mov x28, x0
+;   caspal x24, x25, x24, x25, x26, x27, [x28]
+;   mov x0, x24
+;   mov x1, x25
+;   ldp x24, x25, [sp], #16
+;   ldp x26, x27, [sp], #16
+;   ldr x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   str x28, [sp, #-0x10]!
+;   stp x26, x27, [sp, #-0x10]!
+;   stp x24, x25, [sp, #-0x10]!
+; block1: ; offset 0x14
+;   mov x24, x2
+;   mov x25, x3
+;   mov x26, x4
+;   mov x27, x5
+;   mov x28, x0
+;   caspal x24, x25, x26, x27, [x28] ; trap: heap_oob
+;   mov x0, x24
+;   mov x1, x25
+;   ldp x24, x25, [sp], #0x10
+;   ldp x26, x27, [sp], #0x10
+;   ldr x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %atomic_cas_i128_success(i64, i128, i128) -> i8 {
+block0(v0: i64, v1: i128, v2: i128):
+    v3 = atomic_cas.i128 v0, v1, v2
+    v4 = icmp eq v3, v1
+    return v4
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   str x28, [sp, #-16]!
+;   stp x26, x27, [sp, #-16]!
+;   stp x24, x25, [sp, #-16]!
+; block0:
+;   mov x26, x4
+;   mov x27, x5
+;   mov x28, x0
+;   mov x24, x2
+;   mov x25, x3
+;   caspal x24, x25, x24, x25, x26, x27, [x28]
+;   subs xzr, x24, x2
+;   ccmp x25, x3, #nzcv, eq
+;   cset x0, eq
+;   ldp x24, x25, [sp], #16
+;   ldp x26, x27, [sp], #16
+;   ldr x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   str x28, [sp, #-0x10]!
+;   stp x26, x27, [sp, #-0x10]!
+;   stp x24, x25, [sp, #-0x10]!
+; block1: ; offset 0x14
+;   mov x26, x4
+;   mov x27, x5
+;   mov x28, x0
+;   mov x24, x2
+;   mov x25, x3
+;   caspal x24, x25, x26, x27, [x28] ; trap: heap_oob
+;   cmp x24, x2
+;   ccmp x25, x3, #0, eq
+;   cset x0, eq
+;   ldp x24, x25, [sp], #0x10
+;   ldp x26, x27, [sp], #0x10
+;   ldr x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
