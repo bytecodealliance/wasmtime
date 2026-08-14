@@ -3,7 +3,7 @@ use crate::prelude::*;
 use crate::runtime::vm::{
     self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallFunction, VMArrayCallHostFuncContext,
     VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
-    VMStoreContext, VMWasmCallFunction, VmPtr,
+    VMStoreContext, VmPtr,
 };
 use crate::store::{Asyncness, AutoAssertNoGc, InstanceId, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
@@ -1237,14 +1237,14 @@ impl Func {
         store: &StoreOpaque,
     ) -> (
         VmPtr<VMOpaqueContext>,
-        Option<VmPtr<VMWasmCallFunction>>,
         VmPtr<VMArrayCallFunction>,
+        VMSharedTypeIndex,
     ) {
         // SAFETY: `vm_func_ref` validates that this pointer belongs to
         // `store`, which we're borrowing for the duration of this call, so
         // dereferencing it here is sound.
         let func_ref = unsafe { self.vm_func_ref(store).as_ref() };
-        (func_ref.vmctx, func_ref.wasm_call, func_ref.array_call)
+        (func_ref.vmctx, func_ref.array_call, func_ref.type_index)
     }
 
     #[inline]

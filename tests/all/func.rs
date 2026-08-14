@@ -827,6 +827,24 @@ fn func_is_same_and_identity_key() -> Result<()> {
     let other = Func::wrap(&mut store, || {});
     assert!(!Func::is_same(&store, &f1, &other));
 
+    // Two `Func`s wrapping the same closure *type* (so they share a
+    // monomorphized trampoline) are still not the same: only their
+    // individual `vmctx`s (heap-allocated per `wrap` call) distinguish them.
+    let c = || {};
+    let host1 = Func::wrap(&mut store, c);
+    let host2 = Func::wrap(&mut store, c);
+    assert!(!Func::is_same(&store, &host1, &host2));
+
+    // A host function's `identity_key` is stable even though Wasmtime fills
+    // in its Wasm-calling-convention trampoline lazily, the first time it's
+    // paired with a module that has one -- so `identity_key` can't rely on
+    // that trampoline either.
+    let key_before = hash_of(host1.identity_key(&store));
+    let importer_of_host1 = Module::new(store.engine(), r#"(module (import "" "" (func)))"#)?;
+    Instance::new(&mut store, &importer_of_host1, &[host1.into()])?;
+    let key_after = hash_of(host1.identity_key(&store));
+    assert_eq!(key_before, key_after);
+
     Ok(())
 }
 
