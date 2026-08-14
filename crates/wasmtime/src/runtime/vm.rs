@@ -137,7 +137,7 @@ pub use crate::runtime::vm::vmcontext::VMNullHeapData;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
-    VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
+    VMStackLimits, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;

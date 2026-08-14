@@ -3,6 +3,7 @@
 
 mod stack;
 
+use crate::vm::VMStackLimits;
 use core::{marker::PhantomPinned, ptr::NonNull};
 
 pub use stack::*;
@@ -76,21 +77,6 @@ impl VMContObj {
 
 unsafe impl Send for VMContObj {}
 unsafe impl Sync for VMContObj {}
-
-/// This type is used to save (and subsequently restore) a subset of the data in
-/// `VMStoreContext`. See documentation of `VMStackChain` for the exact uses.
-#[repr(C)]
-#[derive(Debug, Default, Clone)]
-pub struct VMStackLimits {
-    /// Saved version of `stack_limit` field of `VMStoreContext`
-    pub stack_limit: usize,
-    /// Saved version of `last_wasm_entry_fp` field of `VMStoreContext`
-    pub last_wasm_entry_fp: usize,
-    /// Saved version of `last_wasm_entry_sp` field of `VMStoreContext`
-    pub last_wasm_entry_sp: usize,
-    /// Saved version of `last_wasm_entry_trap_handler` field of `VMStoreContext`
-    pub last_wasm_entry_trap_handler: usize,
-}
 
 /// This type represents "common" information that we need to save both for the
 /// initial stack and each continuation.
@@ -571,28 +557,6 @@ mod tests {
         // The Rust spec does not technically guarantee that the null pointer
         // optimization applies to a struct containing a `NonNull`.
         assert_eq!(size_of::<Option<VMContObj>>(), size_of::<VMContObj>());
-    }
-
-    #[test]
-    fn check_vm_stack_limits_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(
-            offset_of!(VMStackLimits, stack_limit),
-            usize::from(offsets.ptr.vmstack_limits_stack_limit())
-        );
-        assert_eq!(
-            offset_of!(VMStackLimits, last_wasm_entry_fp),
-            usize::from(offsets.ptr.vmstack_limits_last_wasm_entry_fp())
-        );
-        assert_eq!(
-            offset_of!(VMStackLimits, last_wasm_entry_sp),
-            usize::from(offsets.ptr.vmstack_limits_last_wasm_entry_sp())
-        );
-        assert_eq!(
-            offset_of!(VMStackLimits, last_wasm_entry_trap_handler),
-            usize::from(offsets.ptr.vmstack_limits_last_wasm_entry_trap_handler())
-        );
     }
 
     #[test]

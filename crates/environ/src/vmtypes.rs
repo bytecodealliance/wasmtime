@@ -561,6 +561,27 @@ macro_rules! for_each_vm_type {
                 pub saved_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
             }
 
+            /// This type is used to save (and subsequently restore) a subset of
+            /// the data in `VMStoreContext`.
+            ///
+            /// See documentation of `VMStackChain` for the exact uses.
+            #[derive(Debug, Default, Clone)]
+            #[repr(C)]
+            #[snake_name = vm_stack_limits]
+            pub struct VMStackLimits {
+                /// Saved version of the `stack_limit` field of `VMStoreContext`.
+                pub stack_limit: usize,
+                /// Saved version of the `last_wasm_entry_fp` field of
+                /// `VMStoreContext`.
+                pub last_wasm_entry_fp: usize,
+                /// Saved version of the `last_wasm_entry_sp` field of
+                /// `VMStoreContext`.
+                pub last_wasm_entry_sp: usize,
+                /// Saved version of the `last_wasm_entry_trap_handler` field of
+                /// `VMStoreContext`.
+                pub last_wasm_entry_trap_handler: usize,
+            }
+
             /// The deferred-reference-counting collector's JIT-accessible heap
             /// data.
             ///

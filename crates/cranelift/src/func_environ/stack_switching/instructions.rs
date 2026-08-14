@@ -784,12 +784,13 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
-            // The load side reads this continuation's inline `VMStackLimits`
-            // (the `VMContRef` region); the store side targets the
-            // `VMStoreContext`.
+            // The load side reads this continuation's inline `VMStackLimits`;
+            // the store side targets the `VMStoreContext`.
             let stack_limit = env
                 .alias_regions
-                .stack_limit(&mut builder.cursor(), stack_limits_ptr);
+                .vm_stack_limits()
+                .stack_limit()
+                .load(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions.vm_store_context().stack_limit().store(
                 &mut builder.cursor(),
                 vmruntime_limits_ptr,
@@ -798,7 +799,9 @@ pub(crate) mod stack_switching_helpers {
 
             let last_wasm_entry_fp = env
                 .alias_regions
-                .last_wasm_entry_fp(&mut builder.cursor(), stack_limits_ptr);
+                .vm_stack_limits()
+                .last_wasm_entry_fp()
+                .load(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions
                 .vm_store_context()
                 .last_wasm_entry_fp()
@@ -810,7 +813,9 @@ pub(crate) mod stack_switching_helpers {
 
             let last_wasm_entry_sp = env
                 .alias_regions
-                .last_wasm_entry_sp(&mut builder.cursor(), stack_limits_ptr);
+                .vm_stack_limits()
+                .last_wasm_entry_sp()
+                .load(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions
                 .vm_store_context()
                 .last_wasm_entry_sp()
@@ -822,7 +827,9 @@ pub(crate) mod stack_switching_helpers {
 
             let last_wasm_entry_trap_handler = env
                 .alias_regions
-                .last_wasm_entry_trap_handler(&mut builder.cursor(), stack_limits_ptr);
+                .vm_stack_limits()
+                .last_wasm_entry_trap_handler()
+                .load(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions
                 .vm_store_context()
                 .last_wasm_entry_trap_handler()
@@ -865,31 +872,22 @@ pub(crate) mod stack_switching_helpers {
                 .last_wasm_entry_trap_handler()
                 .load(&mut builder.cursor(), vmruntime_limits_ptr);
 
-            let vmcontref_region = env.alias_regions.vmcontref_region(builder.func);
-            let our_memflags =
-                ir::MemFlagsData::trusted().with_alias_region(Some(vmcontref_region));
-            builder.ins().store(
-                our_memflags,
-                last_wasm_entry_fp,
-                stack_limits_ptr,
-                i32::from(env.offsets.ptr.vmstack_limits_last_wasm_entry_fp()),
-            );
-            builder.ins().store(
-                our_memflags,
-                last_wasm_entry_sp,
-                stack_limits_ptr,
-                i32::from(env.offsets.ptr.vmstack_limits_last_wasm_entry_sp()),
-            );
-            builder.ins().store(
-                our_memflags,
-                last_wasm_entry_trap_handler,
-                stack_limits_ptr,
-                i32::from(
-                    env.offsets
-                        .ptr
-                        .vmstack_limits_last_wasm_entry_trap_handler(),
-                ),
-            );
+            env.alias_regions
+                .vm_stack_limits()
+                .last_wasm_entry_fp()
+                .store(&mut builder.cursor(), stack_limits_ptr, last_wasm_entry_fp);
+            env.alias_regions
+                .vm_stack_limits()
+                .last_wasm_entry_sp()
+                .store(&mut builder.cursor(), stack_limits_ptr, last_wasm_entry_sp);
+            env.alias_regions
+                .vm_stack_limits()
+                .last_wasm_entry_trap_handler()
+                .store(
+                    &mut builder.cursor(),
+                    stack_limits_ptr,
+                    last_wasm_entry_trap_handler,
+                );
 
             if load_stack_limit {
                 // Load from the `VMStoreContext`...
@@ -899,12 +897,10 @@ pub(crate) mod stack_switching_helpers {
                     .stack_limit()
                     .load(&mut builder.cursor(), vmruntime_limits_ptr);
                 // ...and store to this continuation's inline `VMStackLimits`.
-                let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
-                builder.ins().store(
-                    our_memflags,
-                    stack_limit,
+                env.alias_regions.vm_stack_limits().stack_limit().store(
+                    &mut builder.cursor(),
                     stack_limits_ptr,
-                    i32::from(stack_limit_offset),
+                    stack_limit,
                 );
             }
         }

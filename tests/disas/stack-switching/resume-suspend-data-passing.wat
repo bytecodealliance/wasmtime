@@ -181,7 +181,11 @@
 ;;     region4 = 67108936 "VMStoreContext+0x48"
 ;;     region5 = 67108928 "VMStoreContext+0x40"
 ;;     region6 = 67108944 "VMStoreContext+0x50"
-;;     region7 = 1140850688 "ContinuationStackMemory+0x0"
+;;     region7 = 2415919112 "VMStackLimits+0x8"
+;;     region8 = 2415919120 "VMStackLimits+0x10"
+;;     region9 = 2415919128 "VMStackLimits+0x18"
+;;     region10 = 2415919104 "VMStackLimits+0x0"
+;;     region11 = 1140850688 "ContinuationStackMemory+0x0"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -255,25 +259,25 @@
 ;; @0062                               v42 = load.i64 notrap aligned region4 v25+72
 ;; @0062                               v43 = load.i64 notrap aligned region5 v25+64
 ;; @0062                               v44 = load.i64 notrap aligned region6 v25+80
-;; @0062                               store notrap aligned region2 v42, v27+8
-;; @0062                               store notrap aligned region2 v43, v27+16
-;; @0062                               store notrap aligned region2 v44, v27+24
+;; @0062                               store notrap aligned region7 v42, v27+8
+;; @0062                               store notrap aligned region8 v43, v27+16
+;; @0062                               store notrap aligned region9 v44, v27+24
 ;; @0062                               v45 = load.i64 notrap aligned region1 v25+24
-;; @0062                               store notrap aligned region2 v45, v27
-;; @0062                               v48 = load.i64 notrap aligned region2 v15
+;; @0062                               store notrap aligned region10 v45, v27
+;; @0062                               v48 = load.i64 notrap aligned region10 v15
 ;; @0062                               store notrap aligned region1 v48, v25+24
-;; @0062                               v49 = load.i64 notrap aligned region2 v15+8
+;; @0062                               v49 = load.i64 notrap aligned region7 v15+8
 ;; @0062                               store notrap aligned region4 v49, v25+72
-;; @0062                               v50 = load.i64 notrap aligned region2 v15+16
+;; @0062                               v50 = load.i64 notrap aligned region8 v15+16
 ;; @0062                               store notrap aligned region5 v50, v25+64
-;; @0062                               v51 = load.i64 notrap aligned region2 v15+24
+;; @0062                               v51 = load.i64 notrap aligned region9 v15+24
 ;; @0062                               store notrap aligned region6 v51, v25+80
 ;;                                     v166 = iconst.i64 40
 ;;                                     v167 = iadd v27, v166  ; v166 = 40
 ;; @0062                               store notrap aligned region2 v161, v167+4  ; v161 = 1
 ;; @0062                               store.i64 notrap aligned region2 v55, v167+8
 ;;                                     v168 = iadd.i64 v0, v56  ; v56 = 48
-;; @0062                               store notrap aligned region7 v168, v55
+;; @0062                               store notrap aligned region11 v168, v55
 ;; @0062                               store notrap aligned region2 v161, v167  ; v161 = 1
 ;; @0062                               store notrap aligned region2 v161, v27+56  ; v161 = 1
 ;;                                     v169 = iconst.i64 96
@@ -307,13 +311,13 @@
 ;;                                     v184 = iconst.i64 32
 ;;                                     v185 = iadd.i64 v72, v184  ; v184 = 32
 ;; @0062                               store notrap aligned region2 v86, v185  ; v86 = 5
-;; @0062                               v91 = load.i64 notrap aligned region2 v27
+;; @0062                               v91 = load.i64 notrap aligned region10 v27
 ;; @0062                               store notrap aligned region1 v91, v25+24
-;; @0062                               v92 = load.i64 notrap aligned region2 v27+8
+;; @0062                               v92 = load.i64 notrap aligned region7 v27+8
 ;; @0062                               store notrap aligned region4 v92, v25+72
-;; @0062                               v93 = load.i64 notrap aligned region2 v27+16
+;; @0062                               v93 = load.i64 notrap aligned region8 v27+16
 ;; @0062                               store notrap aligned region5 v93, v25+64
-;; @0062                               v94 = load.i64 notrap aligned region2 v27+24
+;; @0062                               v94 = load.i64 notrap aligned region9 v27+24
 ;; @0062                               store notrap aligned region6 v94, v25+80
 ;;                                     v186 = iconst.i32 0
 ;;                                     v187 = iconst.i64 120
@@ -336,16 +340,16 @@
 ;; @0062                               v109 = load.i64 notrap aligned region4 v25+72
 ;; @0062                               v110 = load.i64 notrap aligned region5 v25+64
 ;; @0062                               v111 = load.i64 notrap aligned region6 v25+80
-;; @0062                               store notrap aligned region2 v109, v72+8
-;; @0062                               store notrap aligned region2 v110, v72+16
-;; @0062                               store notrap aligned region2 v111, v72+24
-;; @0062                               v114 = load.i64 notrap aligned region2 v27
+;; @0062                               store notrap aligned region7 v109, v72+8
+;; @0062                               store notrap aligned region8 v110, v72+16
+;; @0062                               store notrap aligned region9 v111, v72+24
+;; @0062                               v114 = load.i64 notrap aligned region10 v27
 ;; @0062                               store notrap aligned region1 v114, v25+24
-;; @0062                               v115 = load.i64 notrap aligned region2 v27+8
+;; @0062                               v115 = load.i64 notrap aligned region7 v27+8
 ;; @0062                               store notrap aligned region4 v115, v25+72
-;; @0062                               v116 = load.i64 notrap aligned region2 v27+16
+;; @0062                               v116 = load.i64 notrap aligned region8 v27+16
 ;; @0062                               store notrap aligned region5 v116, v25+64
-;; @0062                               v117 = load.i64 notrap aligned region2 v27+24
+;; @0062                               v117 = load.i64 notrap aligned region9 v27+24
 ;; @0062                               store notrap aligned region6 v117, v25+80
 ;; @0062                               v119 = load.i64 notrap aligned region2 v72+88
 ;; @0062                               jump block10
@@ -357,7 +361,7 @@
 ;; @0062                               v126 = iconst.i64 136
 ;; @0062                               v127 = iadd.i64 v72, v126  ; v126 = 136
 ;; @0062                               v128 = load.i64 notrap aligned region2 v127+8
-;; @0062                               v129 = load.i32 notrap aligned region7 v128
+;; @0062                               v129 = load.i32 notrap aligned region11 v128
 ;;                                     v181 = iconst.i32 0
 ;; @0062                               store notrap aligned region2 v181, v127  ; v181 = 0
 ;; @0062                               jump block4
@@ -367,13 +371,13 @@
 ;; @0062                               br_table v118, block12, [block13]
 ;;
 ;;                                 block6:
-;; @0062                               v133 = load.i64 notrap aligned region2 v27
+;; @0062                               v133 = load.i64 notrap aligned region10 v27
 ;; @0062                               store notrap aligned region1 v133, v25+24
-;; @0062                               v134 = load.i64 notrap aligned region2 v27+8
+;; @0062                               v134 = load.i64 notrap aligned region7 v27+8
 ;; @0062                               store notrap aligned region4 v134, v25+72
-;; @0062                               v135 = load.i64 notrap aligned region2 v27+16
+;; @0062                               v135 = load.i64 notrap aligned region8 v27+16
 ;; @0062                               store notrap aligned region5 v135, v25+64
-;; @0062                               v136 = load.i64 notrap aligned region2 v27+24
+;; @0062                               v136 = load.i64 notrap aligned region9 v27+24
 ;; @0062                               store notrap aligned region6 v136, v25+80
 ;; @0062                               v139 = iconst.i32 4
 ;;                                     v175 = iconst.i64 32

@@ -306,7 +306,7 @@ impl Backtrace {
         entry_trampoline_fp: usize,
         mut f: impl FnMut(Activation) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
-        use crate::runtime::vm::stack_switching::VMStackLimits;
+        use crate::runtime::vm::VMStackLimits;
 
         // Handle the stack that is currently running (which may be a
         // continuation or the initial stack).

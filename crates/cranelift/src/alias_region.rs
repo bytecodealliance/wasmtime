@@ -38,6 +38,7 @@ enum VmType {
     VMCopyingHeapData,
     VMNullHeapData,
     VMDeferredThread,
+    VMStackLimits,
     #[allow(
         dead_code,
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
@@ -191,6 +192,7 @@ impl AliasRegionKey {
     const VM_GLOBAL_DEFINITION_KIND: u32 = Self::new_kind(0b100001);
     const VM_TAG_DEFINITION_KIND: u32 = Self::new_kind(0b100010);
     const VM_LAZY_THREAD_KIND: u32 = Self::new_kind(0b100011);
+    const VM_STACK_LIMITS_KIND: u32 = Self::new_kind(0b100100);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -210,6 +212,7 @@ impl AliasRegionKey {
                     VmType::VMCopyingHeapData => Self::VM_COPYING_HEAP_DATA_KIND,
                     VmType::VMNullHeapData => Self::VM_NULL_HEAP_DATA_KIND,
                     VmType::VMDeferredThread => Self::VM_DEFERRED_THREAD_KIND,
+                    VmType::VMStackLimits => Self::VM_STACK_LIMITS_KIND,
                     VmType::VMLazyThread => Self::VM_LAZY_THREAD_KIND,
                     VmType::VMContRef => Self::VM_CONTREF_KIND,
                     VmType::ContinuationStackMemory => Self::CONTINUATION_STACK_MEMORY_KIND,
@@ -1427,89 +1430,20 @@ impl<Offsets> AliasRegions<Offsets>
 where
     Offsets: GetPtrSize,
 {
-    /// Load `VMStackLimits::stack_limit`.
-    pub fn stack_limit(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        stack_limits: ir::Value,
-    ) -> ir::Value {
-        let offset = self.offsets.get_ptr_size().vmstack_limits_stack_limit();
-        let region = self.vmcontref_region(cursor.func);
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            stack_limits,
-            i32::from(offset),
-        )
-    }
-
-    /// Load `VMStackLimits::last_wasm_entry_fp`.
-    pub fn last_wasm_entry_fp(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        stack_limits: ir::Value,
-    ) -> ir::Value {
-        let offset = self
-            .offsets
-            .get_ptr_size()
-            .vmstack_limits_last_wasm_entry_fp();
-        let region = self.vmcontref_region(cursor.func);
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            stack_limits,
-            i32::from(offset),
-        )
-    }
-
-    /// Load `VMStackLimits::last_wasm_entry_sp`.
-    pub fn last_wasm_entry_sp(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        stack_limits: ir::Value,
-    ) -> ir::Value {
-        let offset = self
-            .offsets
-            .get_ptr_size()
-            .vmstack_limits_last_wasm_entry_sp();
-        let region = self.vmcontref_region(cursor.func);
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            stack_limits,
-            i32::from(offset),
-        )
-    }
-
-    /// Load `VMStackLimits::last_wasm_entry_trap_handler`.
-    pub fn last_wasm_entry_trap_handler(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        stack_limits: ir::Value,
-    ) -> ir::Value {
-        let offset = self
-            .offsets
-            .get_ptr_size()
-            .vmstack_limits_last_wasm_entry_trap_handler();
-        let region = self.vmcontref_region(cursor.func);
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            stack_limits,
-            i32::from(offset),
-        )
-    }
-
     /// Region for a continuation-reference object and its inline
     /// sub-structures.
     ///
-    /// A `VMContRef` (and its inline `VMCommonStackInformation` /
-    /// `VMStackLimits` / `VMHostArray` headers) is reached through a `*mut
-    /// VMContRef`.
+    /// A `VMContRef` (and its inline `VMCommonStackInformation` / `VMHostArray`
+    /// headers) is reached through a `*mut VMContRef`.
     ///
     /// A single region covers the whole object: this is coarse but sound, and
     /// keeps every field of the object disjoint from linear memory, the vmctx,
     /// the store context, etc...
+    ///
+    /// The one exception is the inline `VMStackLimits`, which has its own
+    /// per-field regions (see the generated `vm_stack_limits` accessors). Those
+    /// bytes must therefore be reached only through those accessors, never at a
+    /// hand-computed offset from this region.
     pub fn vmcontref_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
         self.region(
             func,
