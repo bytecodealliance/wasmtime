@@ -6,7 +6,7 @@ test_programs::p3::export!(Component);
 
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
-        let res = test_programs::p3::http::request(
+        let (transmit, _response) = test_programs::p3::http::request_with_transmit_result(
             Method::Get,
             Scheme::Other("WS".to_owned()),
             "localhost:3000",
@@ -17,10 +17,12 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             None,
             None,
         )
-        .await;
+        .await
+        .expect("failed to construct request");
 
         assert!(matches!(
-            res.unwrap_err()
+            transmit
+                .expect_err("expected request transmission to fail")
                 .downcast::<ErrorCode>()
                 .expect("expected a wasi-http ErrorCode"),
             ErrorCode::HttpProtocolError,
