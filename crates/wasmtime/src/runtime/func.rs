@@ -1244,9 +1244,10 @@ impl Func {
         // `store`, which we're borrowing for the duration of this call, so
         // dereferencing it here is sound.
         let func_ref = unsafe { self.vm_func_ref(store).as_ref() };
-        // `array_call`'s type (`VMArrayCallFunction`) is only re-exported
-        // under the `component-model` feature, so use its address rather
-        // than naming the type here.
+        // `vmctx` disambiguates statically-same functions belonging to
+        // different instances of the same module; `array_call` is always
+        // present and unique per function; `type_index` is extra insurance
+        // that we disambiguate by Wasm-level signature too.
         (
             func_ref.vmctx,
             func_ref.array_call.addr(),
