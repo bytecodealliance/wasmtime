@@ -22,13 +22,13 @@ use crate::component::dfg::CoreDef;
 use crate::component::{
     Adapter, AdapterOptions as AdapterOptionsDfg, CanonicalAbiInfo, ComponentTypesBuilder,
     FlatType, InterfaceType, RuntimeComponentInstanceIndex, StringEncoding, Transcode,
-    TypeFuncIndex,
+    TypeFuncIndex, UnsafeIntrinsic,
 };
 use crate::fact::transcode::Transcoder;
 use crate::prelude::*;
 use crate::{
     EntityRef, FuncIndex, GlobalIndex, IndexType, Memory, MemoryIndex, ModuleInternedTypeIndex,
-    PrimaryMap, Trap, Tunables,
+    PrimaryMap, Trap, Tunables, WasmValType,
 };
 use std::collections::HashMap;
 use wasm_encoder::*;
@@ -96,6 +96,9 @@ pub struct Module<'a> {
 
     imported_enter_sync_call: Option<FuncIndex>,
     imported_exit_sync_call: Option<FuncIndex>,
+
+    /// Cached versions of unsafe intrinsics and where they were imported.
+    imported_unsafe_intrinsics: HashMap<UnsafeIntrinsic, FuncIndex>,
 
     /// Cached versions of the imported `trap` intrinsic, one per trap code.
     imported_traps: HashMap<Trap, FuncIndex>,
@@ -292,6 +295,7 @@ impl<'a> Module<'a> {
             imported_error_context_transfer: None,
             imported_enter_sync_call: None,
             imported_exit_sync_call: None,
+            imported_unsafe_intrinsics: HashMap::new(),
             imported_traps: HashMap::new(),
             exports: Vec::new(),
             task_may_block: None,
@@ -763,6 +767,51 @@ impl<'a> Module<'a> {
         )
     }
 
+    /// Imports the `context.get` intrinsic for the `slot`th context slot.
+    fn import_context_get(&mut self, slot: usize) -> FuncIndex {
+        let intrinsic = match slot {
+            0 => UnsafeIntrinsic::ContextGetI32_0,
+            1 => UnsafeIntrinsic::ContextGetI32_1,
+            _ => unreachable!(),
+        };
+        self.import_unsafe_intrinsic(intrinsic, &format!("get{slot}"))
+    }
+
+    /// Imports the `context.set` intrinsic for the `slot`th context slot.
+    fn import_context_set(&mut self, slot: usize) -> FuncIndex {
+        let intrinsic = match slot {
+            0 => UnsafeIntrinsic::ContextSetI32_0,
+            1 => UnsafeIntrinsic::ContextSetI32_1,
+            _ => unreachable!(),
+        };
+        self.import_unsafe_intrinsic(intrinsic, &format!("set{slot}"))
+    }
+
+    fn import_unsafe_intrinsic(&mut self, intrinsic: UnsafeIntrinsic, name: &str) -> FuncIndex {
+        let map = |ty: &WasmValType| match ty {
+            crate::WasmValType::I32 => ValType::I32,
+            crate::WasmValType::I64 => ValType::I64,
+            crate::WasmValType::F32 => ValType::F32,
+            crate::WasmValType::F64 => ValType::F64,
+            crate::WasmValType::V128 => ValType::V128,
+            crate::WasmValType::Ref(_) => unreachable!(),
+        };
+        let params = intrinsic.core_params().iter().map(map).collect::<Vec<_>>();
+        let results = intrinsic.core_results().iter().map(map).collect::<Vec<_>>();
+
+        self.import_simple_get_and_set(
+            "context",
+            name,
+            &params,
+            &results,
+            Import::UnsafeIntrinsic(intrinsic),
+            |me| me.imported_unsafe_intrinsics.get(&intrinsic).copied(),
+            |me, idx| {
+                me.imported_unsafe_intrinsics.insert(intrinsic, idx);
+            },
+        )
+    }
+
     fn import_trap(&mut self, trap: Trap) -> FuncIndex {
         let name = format!("trap{}", trap as u8);
         self.import_simple_get_and_set(
@@ -925,6 +974,8 @@ pub enum Import {
     /// An intrinsic used by FACT-generated modules to pop the task previously
     /// pushed by `EnterSyncCall`.
     ExitSyncCall,
+    /// An unsafe intrinsic, such as reading/writing `context.{get,set}` slots.
+    UnsafeIntrinsic(UnsafeIntrinsic),
 }
 
 impl Options {

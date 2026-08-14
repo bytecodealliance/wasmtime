@@ -30,7 +30,7 @@ use crate::fact::{
     LinearMemoryOptions, Module, Options,
 };
 use crate::prelude::*;
-use crate::{FuncIndex, GlobalIndex, IndexType, Trap};
+use crate::{FuncIndex, GlobalIndex, IndexType, NUM_COMPONENT_CONTEXT_SLOTS, Trap};
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
@@ -884,6 +884,15 @@ impl<'a, 'b> Compiler<'a, 'b> {
         }
         result_locals.reverse();
 
+        // The `exit-sync-call` intrinsic below will clobber this task's context
+        // slots, but if we've got a post-return we'll want to restore them
+        // temporarily for that. Save them if it's necessary.
+        let callee_context = if adapter.lift.post_return.is_some() {
+            self.save_context()
+        } else {
+            Vec::new()
+        };
+
         // Handle a few things related to the concurrent task infrastructure
         // after the callee has finished, such as:
         //
@@ -916,11 +925,19 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         // And finally post-return state is handled here once all results/etc
         // are all translated.
+        //
+        // Note that for this call the callee's previous context is shuffled
+        // in-and-then-back-out after the call.
         if let Some(func) = adapter.lift.post_return {
+            let caller_context = self.save_context();
+            self.restore_context(callee_context);
             for (result, _) in result_locals.iter() {
                 self.instruction(LocalGet(*result));
             }
             self.instruction(Call(func.as_u32()));
+            self.restore_context(caller_context);
+        } else {
+            assert!(callee_context.is_empty());
         }
 
         for tmp in temps {
@@ -3715,7 +3732,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.ptr_uconst(mem_opts, 0);
                 self.ptr_uconst(mem_opts, align);
                 self.alloc_size(mem_opts, &size);
-                self.instruction(Call(realloc.as_u32()));
+                self.call_realloc(realloc);
                 let addr = self.local_set_new_tmp(mem_opts.ptr());
                 self.memory_operand(opts, addr, size, align, oob_trap)
             }
@@ -3744,7 +3761,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.alloc_size(mem_opts, &prev_size);
                 self.ptr_uconst(mem_opts, align);
                 self.alloc_size(mem_opts, &size);
-                self.instruction(Call(realloc.as_u32()));
+                self.call_realloc(realloc);
                 self.instruction(LocalSet(ptr.idx));
                 self.validate_guest_pointer(opts, &ptr, &size, align, oob_trap)
             }
@@ -3923,6 +3940,56 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .or_insert(Vec::new())
             .push(local.idx);
         local.needs_free = false;
+    }
+
+    /// Reads all of the current task's `context.{get,set}` slots into fresh
+    /// temporary locals which can later be handed to `restore_context`.
+    fn save_context(&mut self) -> Vec<TempLocal> {
+        if !self.module.tunables.concurrency_support {
+            return Vec::new();
+        }
+        let mut saved = Vec::new();
+        for slot in 0..NUM_COMPONENT_CONTEXT_SLOTS {
+            let get = self.module.import_context_get(slot);
+            self.instruction(Call(get.as_u32()));
+            saved.push(self.local_set_new_tmp(ValType::I32));
+        }
+        saved
+    }
+
+    /// Stores zero into all of the current task's `context.{get,set}` slots.
+    fn clear_context(&mut self) {
+        if !self.module.tunables.concurrency_support {
+            return;
+        }
+        for slot in 0..NUM_COMPONENT_CONTEXT_SLOTS {
+            let set = self.module.import_context_set(slot);
+            self.instruction(I32Const(0));
+            self.instruction(Call(set.as_u32()));
+        }
+    }
+
+    /// Stores the slot values previously read by `save_context` back into the
+    /// current task's `context.{get,set}` slots.
+    fn restore_context(&mut self, saved: Vec<TempLocal>) {
+        for (slot, local) in saved.into_iter().enumerate() {
+            let set = self.module.import_context_set(slot);
+            self.instruction(LocalGet(local.idx));
+            self.instruction(Call(set.as_u32()));
+            self.free_temp_local(local);
+        }
+    }
+
+    /// Emits a call to a guest `realloc` function.
+    ///
+    /// Note that this has special handling of the current task's
+    /// `context.{get,set}` slots, namely they're saved/restored around this
+    /// call and zero'd out during the call.
+    fn call_realloc(&mut self, realloc: FuncIndex) {
+        let saved = self.save_context();
+        self.clear_context();
+        self.instruction(Call(realloc.as_u32()));
+        self.restore_context(saved);
     }
 
     fn instruction(&mut self, instr: Instruction) {
