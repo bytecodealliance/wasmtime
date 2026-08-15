@@ -968,11 +968,11 @@ impl<'a> AliasAnalysis<'a> {
 
         let observed_stores_len = self.observed_stores.len();
         state.update(func, inst, &mut self.observed_stores);
-        debug_assert_eq!(
-            observed_stores_len,
-            self.observed_stores.len(),
-            "`compute_block_input_states` should have already found all observed stores, \
-             but processing {inst} found a new one",
+        debug_assert!(
+            self.observed_stores.len() >= observed_stores_len,
+            "processing {inst} unexpectedly shrank the observed stores set; it should only grow \
+             or stay the same, because later optimization passes may discover additional \
+             observations when they delete or rewrite stores",
         );
 
         result
