@@ -567,10 +567,8 @@ impl WastTest {
                 "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
                 "misc_testsuite/no-panic.wast",
-                // Currently exceptions trap on throw, re-enable after catch
-                // is implemented.
+                // Winch does not implement exception handlers yet.
                 "misc_testsuite/traps-skip-catch-all.wast",
-                "misc_testsuite/component-model/async/exceptions.wast",
                 "spec_testsuite/throw.wast",
             ];
 

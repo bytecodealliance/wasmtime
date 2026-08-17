@@ -174,7 +174,7 @@ pub trait TargetIsa: Send + Sync {
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
         tunables: &Tunables,
-    ) -> Result<CompiledFunction>;
+    ) -> Result<(CompiledFunction, bool)>;
 
     /// Get the default calling convention of the underlying target triple.
     fn default_call_conv(&self) -> CallConv {

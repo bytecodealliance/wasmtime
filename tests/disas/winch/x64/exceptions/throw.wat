@@ -2,8 +2,8 @@
 ;;! test = "winch"
 ;;! flags = ["-W", "exceptions"]
 
-;; Currently exceptions trap on throw: `throw` becomes a trap and
-;; `try_table` compiles as a plain block.
+;; `throw` builds an exception that escapes to the host, while `try_table`
+;; still compiles as a plain block.
 (module
   (tag $e (param i32))
   (func (result i32)
@@ -15,15 +15,52 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
 ;;       movq    0x18(%r11), %r11
-;;       addq    $0x10, %r11
+;;       addq    $0x20, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x3a
+;;       ja      0xf3
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
-;;       ud2
+;;       movq    %r14, %rdi
+;;       callq   0x1f8
+;;       movq    8(%rsp), %r14
+;;       movq    0x28(%r14), %rcx
+;;       movl    8(%rcx), %ecx
+;;       subq    $4, %rsp
+;;       movl    %eax, (%rsp)
+;;       subq    $4, %rsp
+;;       movl    %ecx, (%rsp)
+;;       subq    $8, %rsp
+;;       movq    %r14, %rdi
+;;       movl    $0x4000002, %esi
+;;       movl    8(%rsp), %edx
+;;       movl    $0x20, %ecx
+;;       movl    $0x10, %r8d
+;;       callq   0x1a9
+;;       addq    $8, %rsp
+;;       addq    $4, %rsp
+;;       movq    0xc(%rsp), %r14
+;;       movq    8(%r14), %rcx
+;;       movq    0x28(%rcx), %rdx
+;;       movq    0x20(%rcx), %rcx
+;;       movq    %rcx, %rdx
+;;       addq    %rax, %rdx
+;;       movl    (%rsp), %ecx
+;;       addq    $4, %rsp
+;;       movl    %ecx, 0x10(%rdx)
+;;       movl    $0, 0x14(%rdx)
+;;       movl    $0x2a, 0x18(%rdx)
+;;       subq    $4, %rsp
+;;       movl    %eax, (%rsp)
+;;       subq    $0xc, %rsp
+;;       movq    %r14, %rdi
+;;       movl    0xc(%rsp), %esi
+;;       callq   0x225
+;;       addq    $0xc, %rsp
+;;       addq    $4, %rsp
+;;       movq    8(%rsp), %r14
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   3a: ud2
+;;   f3: ud2

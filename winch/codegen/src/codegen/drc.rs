@@ -21,6 +21,38 @@ impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {
+    /// Emits a DRC initialization barrier for a reference stored at `addr`.
+    ///
+    /// A newly initialized field has no old reference to release. Non-null,
+    /// non-i31 heap references are retained before the field is initialized.
+    pub(crate) fn emit_drc_init_barrier(
+        &mut self,
+        ty: WasmValType,
+        addr: M::Address,
+    ) -> Result<()> {
+        let new_ref = self.context.pop_to_reg(self.masm, None)?;
+        let skip_inc = self.masm.get_label()?;
+        self.emit_skip_if_gc_ref_is_null_or_i31(new_ref.reg, skip_inc)?;
+
+        let (heap_reg, bound_reg) = self.emit_load_gc_heap_base_and_bound()?;
+        let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+        let header_extent = i64::from(ref_count_offset) + 8;
+        self.emit_gc_ref_bounds_check(new_ref.reg, bound_reg, header_extent)?;
+        self.context.free_reg(bound_reg);
+
+        let object_addr = self.emit_gc_ref_addr(new_ref.reg, heap_reg)?;
+        let count = self.emit_mutate_ref_count(object_addr, RefCountMutation::Increment)?;
+        self.emit_store_ref_count(object_addr, count)?;
+        self.context.free_reg(count);
+        self.context.free_reg(object_addr);
+        self.context.free_reg(heap_reg);
+
+        self.masm.bind(skip_inc)?;
+        self.masm.store(new_ref.reg.into(), addr, ty.try_into()?)?;
+        self.context.free_reg(new_ref.reg);
+        Ok(())
+    }
+
     /// Emits a DRC read barrier for a value loaded from `addr`.
     ///
     /// The loaded reference is first pushed and spilled so it is represented

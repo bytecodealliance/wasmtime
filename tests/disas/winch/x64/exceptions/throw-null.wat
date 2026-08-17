@@ -1,0 +1,87 @@
+;;! target = "x86_64"
+;;! test = "winch"
+;;! flags = "-W exceptions -C collector=null"
+
+;; Exercise the Null collector's inline exception allocation path.
+(module
+  (tag $e (param i32))
+  (func
+    (throw $e (i32.const 42))))
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    0x18(%r11), %r11
+;;       addq    $0x20, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x14f
+;;   1c: movq    %rdi, %r14
+;;       subq    $0x10, %rsp
+;;       movq    %rdi, 8(%rsp)
+;;       movq    %rsi, (%rsp)
+;;       movq    %r14, %rdi
+;;       callq   0x243
+;;       movq    8(%rsp), %r14
+;;       movq    0x20(%r14), %r11
+;;       movl    (%r11), %ecx
+;;       addl    $7, %ecx
+;;       jb      0x151
+;;   4f: andl    $0xfffffff8, %ecx
+;;       movl    %ecx, %edx
+;;       addl    $0x18, %edx
+;;       jb      0x153
+;;   63: subq    $4, %rsp
+;;       movl    %eax, (%rsp)
+;;       subq    $4, %rsp
+;;       movl    %ecx, (%rsp)
+;;       subq    $4, %rsp
+;;       movl    %edx, (%rsp)
+;;       movl    (%rsp), %eax
+;;       addq    $4, %rsp
+;;       movq    8(%r14), %rcx
+;;       movq    0x28(%rcx), %rdx
+;;       movq    0x20(%rcx), %rcx
+;;       cmpq    %rdx, %rax
+;;       jbe     0xbc
+;;   a0: subq    %rdx, %rax
+;;       pushq   %rax
+;;       movq    %r14, %rdi
+;;       movq    (%rsp), %rsi
+;;       callq   0x1fc
+;;       addq    $8, %rsp
+;;       movq    0x10(%rsp), %r14
+;;       movl    (%rsp), %eax
+;;       addq    $4, %rsp
+;;       movq    8(%r14), %rcx
+;;       movq    0x28(%rcx), %rdx
+;;       movq    0x20(%rcx), %rcx
+;;       movq    %rcx, %rdx
+;;       addq    %rax, %rdx
+;;       movl    $0x4000018, (%rdx)
+;;       movq    0x28(%r14), %r11
+;;       movl    8(%r11), %r11d
+;;       movl    %r11d, 4(%rdx)
+;;       movq    0x20(%r14), %rcx
+;;       movl    %eax, %r11d
+;;       addl    $0x18, %r11d
+;;       movl    %r11d, (%rcx)
+;;       movl    (%rsp), %ecx
+;;       addq    $4, %rsp
+;;       movl    %ecx, 8(%rdx)
+;;       movl    $0, 0xc(%rdx)
+;;       movl    $0x2a, 0x10(%rdx)
+;;       subq    $4, %rsp
+;;       movl    %eax, (%rsp)
+;;       subq    $0xc, %rsp
+;;       movq    %r14, %rdi
+;;       movl    0xc(%rsp), %esi
+;;       callq   0x270
+;;       addq    $0xc, %rsp
+;;       addq    $4, %rsp
+;;       movq    8(%rsp), %r14
+;;       addq    $0x10, %rsp
+;;       popq    %rbp
+;;       retq
+;;  14f: ud2
+;;  151: ud2
+;;  153: ud2

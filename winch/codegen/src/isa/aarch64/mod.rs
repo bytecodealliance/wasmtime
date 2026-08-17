@@ -88,7 +88,7 @@ impl TargetIsa for Aarch64 {
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
         tunables: &Tunables,
-    ) -> Result<CompiledFunction> {
+    ) -> Result<(CompiledFunction, bool)> {
         let pointer_bytes = self.pointer_bytes();
         let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
         let mut body = body.get_binary_reader();
@@ -118,12 +118,12 @@ impl TargetIsa for Aarch64 {
 
         let mut body_codegen = codegen.emit_prologue()?;
         body_codegen.emit(body, validator)?;
+        let needs_gc_heap = body_codegen.needs_gc_heap;
         let names = body_codegen.env.take_name_map();
         let base = body_codegen.source_location.base;
-        Ok(CompiledFunction::new(
-            masm.finalize(base)?,
-            names,
-            self.function_alignment(),
+        Ok((
+            CompiledFunction::new(masm.finalize(base)?, names, self.function_alignment()),
+            needs_gc_heap,
         ))
     }
 
