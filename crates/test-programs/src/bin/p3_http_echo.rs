@@ -15,8 +15,24 @@ impl Handler for Component {
     /// Return a response which echoes the request headers, body, and trailers.
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         let headers = request.get_headers();
-        let (_, result_rx) = wit_future::new(|| Ok(()));
-        let (body, trailers) = Request::consume_body(request, result_rx);
+        let (result_tx, result_rx) = wit_future::new(|| Ok(()));
+        let (mut body, trailers) = Request::consume_body(request, result_rx);
+
+        // If `inject-transmission-error` is set, report a transmission error
+        // and then loop without replying.
+        if headers
+            .get("inject-transmission-error")
+            .into_iter()
+            .any(|v| v == b"true")
+        {
+            result_tx
+                .write(Err(ErrorCode::InternalError(Some(
+                    "Injected error by echo service".to_string(),
+                ))))
+                .await
+                .unwrap();
+            futures::future::pending::<()>().await;
+        }
 
         let (response, _result) = if headers
             .get("x-host-to-host")
