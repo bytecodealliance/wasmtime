@@ -16,7 +16,7 @@ impl Handler for Component {
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         let headers = request.get_headers();
         let (result_tx, result_rx) = wit_future::new(|| Ok(()));
-        let (mut body, trailers) = Request::consume_body(request, result_rx);
+        let (body, trailers) = Request::consume_body(request, result_rx);
 
         // If `inject-transmission-error` is set, report a transmission error
         // and then loop without replying.
