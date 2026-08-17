@@ -106,7 +106,7 @@ impl<T> HostWithStore<T> for WasiHttp {
                     return Err(err_code.into());
                 }
                 Err(e) => {
-                    let e = Error::InternalError(Some(format!("{}", e)));
+                    let e = Error::InternalError(Some(format!("{e}")));
                     return Err(send_dummy_io_err(store, e, io_result_tx));
                 }
             },
