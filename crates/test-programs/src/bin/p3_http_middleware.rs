@@ -120,7 +120,7 @@ impl exports::wasi::http::handler::Guest for Component {
             .unwrap();
         my_request.set_authority(authority.as_deref()).unwrap();
 
-        // Forward any transmission error back to the caller.
+        // Forward completion or transmission error back to the caller.
         wit_bindgen::spawn_local(async move {
             _ = result_tx.write(request_complete.await).await;
         });
