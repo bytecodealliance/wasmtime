@@ -417,6 +417,12 @@ jobs:
               -p cranelift-entity --no-default-features
               -p cranelift-entity --no-default-features --features enable-serde
 
+          - name: cranelift-module
+            checks: |
+              -p cranelift-module --no-default-features
+              -p cranelift-module --no-default-features --features core
+              -p cranelift-module --no-default-features --features core,enable-serde
+
           - name: wasmtime-bench-api
             checks: |
               -p wasmtime-bench-api

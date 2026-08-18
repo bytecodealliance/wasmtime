@@ -290,6 +290,11 @@ pub enum ModuleError {
     Compilation(CodegenError),
 
     /// Memory allocation failure from a backend
+    ///
+    /// Only the `std` builds carry this variant: the payload is a
+    /// `std::io::Error` and the only producer is `cranelift-jit`, which needs
+    /// `std` anyway.
+    #[cfg(feature = "std")]
     Allocation {
         /// Io error the allocation failed with
         err: std::io::Error,
@@ -310,8 +315,8 @@ impl<'a> From<CompileError<'a>> for ModuleError {
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for ModuleError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl core::error::Error for ModuleError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Undeclared { .. }
             | Self::IncompatibleDeclaration { .. }
@@ -319,6 +324,7 @@ impl std::error::Error for ModuleError {
             | Self::DuplicateDefinition { .. }
             | Self::InvalidImportDefinition { .. } => None,
             Self::Compilation(source) => Some(source),
+            #[cfg(feature = "std")]
             Self::Allocation { err: source } => Some(source),
             Self::Backend(source) => Some(&**source),
             Self::Flag(source) => Some(source),
@@ -353,6 +359,7 @@ impl std::fmt::Display for ModuleError {
             Self::Compilation(err) => {
                 write!(f, "Compilation error: {err}")
             }
+            #[cfg(feature = "std")]
             Self::Allocation { err } => {
                 write!(f, "Allocation error: {err}")
             }
@@ -362,13 +369,13 @@ impl std::fmt::Display for ModuleError {
     }
 }
 
-impl std::convert::From<CodegenError> for ModuleError {
+impl From<CodegenError> for ModuleError {
     fn from(source: CodegenError) -> Self {
         Self::Compilation { 0: source }
     }
 }
 
-impl std::convert::From<SetError> for ModuleError {
+impl From<SetError> for ModuleError {
     fn from(source: SetError) -> Self {
         Self::Flag { 0: source }
     }
