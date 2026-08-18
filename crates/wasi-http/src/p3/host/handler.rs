@@ -5,7 +5,6 @@ use crate::p3::body::Body;
 use crate::p3::{HttpError, HttpResult};
 use crate::{Error, WasiHttp, WasiHttpCtxView};
 use core::task::{Context, Poll, Waker};
-use http_body_util::BodyExt as _;
 use tokio::sync::oneshot;
 use tokio::task::{self, JoinHandle};
 use tracing::debug;
@@ -22,6 +21,9 @@ impl Drop for AbortOnDropJoinHandle {
     }
 }
 
+const DROPPED_FUTURE_ERROR: &str =
+    "Future indicating transmission result dropped without being resolved.";
+
 async fn io_task_result(
     rx: oneshot::Receiver<(
         Option<AbortOnDropJoinHandle>,
@@ -29,15 +31,11 @@ async fn io_task_result(
     )>,
 ) -> Result<(), Error> {
     let Ok((_io, io_result_rx)) = rx.await else {
-        return Err(Error::InternalError(Some(
-            "Future indicating transmission result dropped without being resolved.".to_string(),
-        )));
+        return Err(Error::InternalError(Some(DROPPED_FUTURE_ERROR.to_string())));
     };
-    io_result_rx.await.unwrap_or_else(|_| {
-        Err(Error::InternalError(Some(
-            "Future indicating transmission result dropped without being resolved.".to_string(),
-        )))
-    })
+    io_result_rx
+        .await
+        .unwrap_or_else(|_| Err(Error::InternalError(Some(DROPPED_FUTURE_ERROR.to_string()))))
 }
 
 fn send_dummy_io(
@@ -87,7 +85,7 @@ impl<T> HostWithStore<T> for WasiHttp {
             let (req, options) =
                 req.into_http_with_getter(&mut store, io_task_result(io_result_rx), getter)?;
             HttpResult::Ok(store.get().hooks.send_request(
-                req.map(|body| body.boxed_unsync()),
+                req,
                 options.as_deref().copied(),
                 Box::new(async {
                     // Forward the response processing result to `WasiHttpCtx` implementation
@@ -142,7 +140,7 @@ impl<T> HostWithStore<T> for WasiHttp {
                     _ = tx.send(res);
                 }));
                 _ = io_result_tx.send((Some(io), rx));
-                body.boxed_unsync()
+                body
             }
         };
         store.with(|mut store| {
