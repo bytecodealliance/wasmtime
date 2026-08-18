@@ -1,6 +1,7 @@
-use crate::{
-    wasm_byte_vec_t, wasm_config_t, wasm_engine_t, wasmtime_component_type_t, wasmtime_error_t,
-};
+use crate::{wasm_config_t, wasm_engine_t, wasmtime_component_type_t, wasmtime_error_t};
+// Only `wasmtime_component_serialize` uses this, and it is gated the same way.
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+use crate::wasm_byte_vec_t;
 use std::ffi::{CStr, c_char};
 use wasmtime::component::{Component, ComponentExportIndex};
 use wasmtime::error::Context;
