@@ -10,6 +10,9 @@ Please make sure you include the following information:
 Our development process is documented in the Wasmtime book:
 https://docs.wasmtime.dev/contributing-development-process.html
 
+Please review the Bytecode Alliance's AI tool usage policy at
+https://github.com/bytecodealliance/governance/blob/main/AI_TOOL_POLICY.md
+
 Please ensure all communication follows the code of conduct:
 https://github.com/bytecodealliance/wasmtime/blob/main/CODE_OF_CONDUCT.md
 -->
