@@ -215,7 +215,6 @@ impl<'a, 'b> BlockingContext<'a, 'b> {
         // fiber and for this fiber. The "take" pattern here ensures that if
         // this `BlockingContext` context acquires the pointers then there are
         // no other instances of these pointers in use anywhere else.
-
         let future_cx = unsafe { Some(state.current_future_cx.take().unwrap().as_mut()) };
         let suspend = unsafe { state.current_suspend.take().unwrap().as_mut() };
 
@@ -887,19 +886,6 @@ where
         id,
         fiber: Some(RawFiber(fiber).into()),
     })
-}
-
-/// Safe wrapper around [`make_fiber_unchecked`] which requires that `S` is
-/// `Send`.
-#[cfg(feature = "component-model-async")]
-pub(crate) fn make_fiber<'a, S>(
-    store: &mut S,
-    fun: impl FnOnce(&mut S) -> Result<()> + Send + Sync + 'a,
-) -> Result<StoreFiber<'a>>
-where
-    S: AsStoreOpaque + Send + ?Sized + 'a,
-{
-    unsafe { make_fiber_unchecked(store, fun) }
 }
 
 /// Run the specified function on a newly-created fiber and `.await` its

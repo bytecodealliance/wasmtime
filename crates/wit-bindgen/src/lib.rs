@@ -933,10 +933,7 @@ impl<_T: 'static> {camel}Pre<_T> {{
     pub fn instantiate(
         &self,
         mut store: impl {wt}::AsContextMut<Data = _T>,
-    ) -> {wt}::Result<{camel}>
-    where
-        _T: Send
-   {{
+    ) -> {wt}::Result<{camel}> {{
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate(&mut store)?;
         self.indices.load(&mut store, &instance)
@@ -1077,7 +1074,7 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
             "impl {camel} {{
                 /// Convenience wrapper around [`{camel}Pre::new`] and
                 /// [`{camel}Pre::instantiate`].
-                pub fn instantiate<_T: Send>(
+                pub fn instantiate<_T>(
                     store: impl {wt}::AsContextMut<Data = _T>,
                     component: &{wt}::component::Component,
                     linker: &{wt}::component::Linker<_T>,
@@ -1104,11 +1101,12 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
                 "
                     /// Convenience wrapper around [`{camel}Pre::new`] and
                     /// [`{camel}Pre::instantiate_async`].
-                    pub async fn instantiate_async<_T: Send>(
+                    pub async fn instantiate_async<_T>(
                         store: impl {wt}::AsContextMut<Data = _T>,
                         component: &{wt}::component::Component,
                         linker: &{wt}::component::Linker<_T>,
                     ) -> {wt}::Result<{camel}>
+                        where _T: Send,
                     {{
                         let pre = linker.instantiate_pre(component)?;
                         {camel}Pre::new(pre)?.instantiate_async(store).await

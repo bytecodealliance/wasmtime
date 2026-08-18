@@ -46,10 +46,7 @@ impl<_T: 'static> Host_Pre<_T> {
     pub fn instantiate(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Host_>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<Host_> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate(&mut store)?;
         self.indices.load(&mut store, &instance)
@@ -146,7 +143,7 @@ const _: () = {
     impl Host_ {
         /// Convenience wrapper around [`Host_Pre::new`] and
         /// [`Host_Pre::instantiate`].
-        pub fn instantiate<_T: Send>(
+        pub fn instantiate<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -165,11 +162,14 @@ const _: () = {
         }
         /// Convenience wrapper around [`Host_Pre::new`] and
         /// [`Host_Pre::instantiate_async`].
-        pub async fn instantiate_async<_T: Send>(
+        pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Host_> {
+        ) -> wasmtime::Result<Host_>
+        where
+            _T: Send,
+        {
             let pre = linker.instantiate_pre(component)?;
             Host_Pre::new(pre)?.instantiate_async(store).await
         }
