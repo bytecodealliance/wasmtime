@@ -719,7 +719,7 @@ impl<'a> Instantiator<'a> {
         })
     }
 
-    async fn run<T: 'static + Send>(
+    async fn run<T>(
         &mut self,
         store: &mut StoreContextMut<'_, T>,
         asyncness: Asyncness,
@@ -1198,10 +1198,7 @@ impl<T: 'static> InstancePre<T> {
     /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more docs
-    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance>
-    where
-        T: Send,
-    {
+    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
         let store = store.as_context_mut();
 
         // If this instance requires an async host, set that flag in the store,
@@ -1224,10 +1221,7 @@ impl<T: 'static> InstancePre<T> {
     //
     // TODO: needs more docs
     #[cfg(feature = "async")]
-    pub async fn instantiate_async(&self, store: impl AsContextMut<Data = T>) -> Result<Instance>
-    where
-        T: Send,
-    {
+    pub async fn instantiate_async(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
         self._instantiate(store, Asyncness::Yes).await
     }
 
@@ -1235,10 +1229,7 @@ impl<T: 'static> InstancePre<T> {
         &self,
         mut store: impl AsContextMut<Data = T>,
         asyncness: Asyncness,
-    ) -> Result<Instance>
-    where
-        T: Send,
-    {
+    ) -> Result<Instance> {
         let store = store.as_context_mut();
         store.0.set_async_required(self.asyncness);
         store

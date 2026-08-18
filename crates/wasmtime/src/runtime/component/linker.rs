@@ -309,10 +309,7 @@ impl<T: 'static> Linker<T> {
         &self,
         mut store: impl AsContextMut<Data = T>,
         component: &Component,
-    ) -> Result<Instance>
-    where
-        T: Send,
-    {
+    ) -> Result<Instance> {
         let store = store.as_context_mut();
         store.0.validate_sync_call()?;
         self.instantiate_pre(component)?.instantiate(store)

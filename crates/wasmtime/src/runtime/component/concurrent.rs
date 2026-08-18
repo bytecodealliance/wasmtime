@@ -1199,10 +1199,7 @@ impl<T> StoreContextMut<'_, T> {
     pub(super) async fn run_concurrent_trap_on_idle<R>(
         self,
         fun: impl AsyncFnOnce(&Accessor<T>) -> R,
-    ) -> Result<R>
-    where
-        T: Send + 'static,
-    {
+    ) -> Result<R> {
         self.do_run_concurrent(fun, true).await
     }
 
@@ -1210,10 +1207,7 @@ impl<T> StoreContextMut<'_, T> {
         mut self,
         fun: impl AsyncFnOnce(&Accessor<T>) -> R,
         trap_on_idle: bool,
-    ) -> Result<R>
-    where
-        T: Send + 'static,
-    {
+    ) -> Result<R> {
         debug_assert!(self.0.concurrency_support());
         check_recursive_run();
         let token = StoreToken::new(self.as_context_mut());
@@ -1267,10 +1261,7 @@ impl<T> StoreContextMut<'_, T> {
         mut self,
         mut future: Pin<&mut impl Future<Output = R>>,
         trap_on_idle: bool,
-    ) -> Result<R>
-    where
-        T: Send + 'static,
-    {
+    ) -> Result<R> {
         struct Reset<'a, T: 'static> {
             store: StoreContextMut<'a, T>,
             futures: Option<FuturesUnordered<HostTaskFuture>>,
@@ -1517,10 +1508,7 @@ impl<T> StoreContextMut<'_, T> {
     }
 
     /// Handle the specified work item, possibly resuming a fiber if applicable.
-    async fn handle_work_item(self, item: WorkItem) -> Result<()>
-    where
-        T: Send,
-    {
+    async fn handle_work_item(self, item: WorkItem) -> Result<()> {
         log::trace!("handle work item {item:?}");
         match item {
             WorkItem::PushFuture(future) => {
@@ -1577,26 +1565,43 @@ impl<T> StoreContextMut<'_, T> {
     }
 
     /// Execute the specified guest call on a worker fiber.
-    async fn run_on_worker(self, item: WorkerItem) -> Result<()>
-    where
-        T: Send,
-    {
+    async fn run_on_worker(self, item: WorkerItem) -> Result<()> {
         let worker = if let Some(fiber) = self.0.concurrent_state_mut()?.worker.take() {
             fiber
         } else {
-            fiber::make_fiber(self.0, move |store| {
-                loop {
-                    let Some(item) = store.concurrent_state_mut()?.worker_item.take() else {
-                        bail_bug!("worker_item not present when resuming fiber")
-                    };
-                    match item {
-                        WorkerItem::GuestCall(call) => handle_guest_call(store, call)?,
-                        WorkerItem::Function(fun) => fun.into_inner()(store)?,
-                    }
+            // SAFETY: the `make_fiber_unchecked` function is unsafe because the
+            // returned fiber is unconditionally `Send` as opposed to being
+            // conditionally send depending on the argument (in this case
+            // `self.0`). This `async` function, however, is conditionally
+            // `Send` depending on `self`, in this case `StoreContextMut<T>`,
+            // which is already going to be conditionally `Send` depending on
+            // `T`.
+            //
+            // The returned fiber is possibly stored within the `Store<T>` as
+            // well. If `T: Send` then that's fine and everything's dandy. If
+            // `T: !Send`, however, then the store is already not-`Send` meaning
+            // that putting more actually-not-`Send` things inside of it isn't
+            // an issue.
+            //
+            // The main issue here is that the returned fiber effectively can't
+            // get transferred outside the context of the store. That's an
+            // implementation detail we'll have to rely on, but is currently
+            // true.
+            unsafe {
+                fiber::make_fiber_unchecked(self.0, move |store| {
+                    loop {
+                        let Some(item) = store.concurrent_state_mut()?.worker_item.take() else {
+                            bail_bug!("worker_item not present when resuming fiber")
+                        };
+                        match item {
+                            WorkerItem::GuestCall(call) => handle_guest_call(store, call)?,
+                            WorkerItem::Function(fun) => fun.into_inner()(store)?,
+                        }
 
-                    store.suspend(SuspendReason::NeedWork)?;
-                }
-            })?
+                        store.suspend(SuspendReason::NeedWork)?;
+                    }
+                })?
+            }
         };
 
         let worker_item = &mut self.0.concurrent_state_mut()?.worker_item;

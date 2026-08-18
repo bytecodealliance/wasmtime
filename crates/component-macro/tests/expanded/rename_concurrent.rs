@@ -46,10 +46,7 @@ impl<_T: 'static> NeptunePre<_T> {
     pub fn instantiate(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Neptune>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<Neptune> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate(&mut store)?;
         self.indices.load(&mut store, &instance)
@@ -133,7 +130,7 @@ const _: () = {
     impl Neptune {
         /// Convenience wrapper around [`NeptunePre::new`] and
         /// [`NeptunePre::instantiate`].
-        pub fn instantiate<_T: Send>(
+        pub fn instantiate<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -152,11 +149,14 @@ const _: () = {
         }
         /// Convenience wrapper around [`NeptunePre::new`] and
         /// [`NeptunePre::instantiate_async`].
-        pub async fn instantiate_async<_T: Send>(
+        pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Neptune> {
+        ) -> wasmtime::Result<Neptune>
+        where
+            _T: Send,
+        {
             let pre = linker.instantiate_pre(component)?;
             NeptunePre::new(pre)?.instantiate_async(store).await
         }

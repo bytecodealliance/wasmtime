@@ -46,10 +46,7 @@ impl<_T: 'static> MyWorldPre<_T> {
     pub fn instantiate(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<MyWorld>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<MyWorld> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate(&mut store)?;
         self.indices.load(&mut store, &instance)
@@ -141,7 +138,7 @@ const _: () = {
     impl MyWorld {
         /// Convenience wrapper around [`MyWorldPre::new`] and
         /// [`MyWorldPre::instantiate`].
-        pub fn instantiate<_T: Send>(
+        pub fn instantiate<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
@@ -160,11 +157,14 @@ const _: () = {
         }
         /// Convenience wrapper around [`MyWorldPre::new`] and
         /// [`MyWorldPre::instantiate_async`].
-        pub async fn instantiate_async<_T: Send>(
+        pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<MyWorld> {
+        ) -> wasmtime::Result<MyWorld>
+        where
+            _T: Send,
+        {
             let pre = linker.instantiate_pre(component)?;
             MyWorldPre::new(pre)?.instantiate_async(store).await
         }
