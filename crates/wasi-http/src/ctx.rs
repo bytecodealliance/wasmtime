@@ -347,6 +347,13 @@ pub trait WasiHttpHooks: Send {
         })
     }
 
+    /// Maximum number of bytes the implementation will copy out of the guest in
+    /// a single write to an outgoing body's stream.
+    #[cfg(feature = "p3")]
+    fn p3_outgoing_body_chunk_size(&mut self) -> usize {
+        crate::p3::DEFAULT_OUTGOING_BODY_CHUNK_SIZE
+    }
+
     /// Optional hook to configure the error code for hyper errors.
     #[cfg(feature = "p3")]
     fn p3_error_from_hyper(&mut self, err: &hyper::Error) -> p3::ErrorCode {

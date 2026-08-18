@@ -127,6 +127,7 @@ async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
         Ctx {
             wasi: wasmtime_wasi::WasiCtx::builder()
                 .env("HTTP_SERVER", server.addr())
+                .inherit_stdio()
                 .build(),
             ..Ctx::new(oneshot::channel().0)
         },
@@ -938,4 +939,10 @@ async fn p3_http_empty_frames_interleaved() -> Result<()> {
     let collected_body = collected_body.to_bytes();
     assert_eq!(collected_body, b"hello world".as_slice());
     Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_chunk_size() -> Result<()> {
+    let server = Server::http1(1)?;
+    run_cli(P3_HTTP_OUTBOUND_REQUEST_CHUNK_SIZE_COMPONENT, &server).await
 }
