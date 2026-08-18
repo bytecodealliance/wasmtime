@@ -73,11 +73,11 @@
 ;;       neg     a1, a1
 ;;       not     a1, a1
 ;;       and     a0, a0, a1
-;;       lbu     a0, 0(a0)
+;;       lb      a0, 0(a0)
+;;       andi    a0, a0, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
 ;;       ret
-;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;       .byte   0x01, 0x00, 0xff, 0xff
 ;;       .byte   0x00, 0x00, 0x00, 0x00

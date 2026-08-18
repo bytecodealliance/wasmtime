@@ -464,27 +464,14 @@ where
             })
         }
         Opcode::Load
-        | Opcode::Uload8
-        | Opcode::Sload8
-        | Opcode::Uload16
-        | Opcode::Sload16
-        | Opcode::Uload32
-        | Opcode::Sload32
         | Opcode::Uload8x8
         | Opcode::Sload8x8
         | Opcode::Uload16x4
         | Opcode::Sload16x4
         | Opcode::Uload32x2
         | Opcode::Sload32x2 => {
-            let ctrl_ty = inst_context.controlling_type().unwrap();
-            let (load_ty, kind) = match inst.opcode() {
-                Opcode::Load => (ctrl_ty, None),
-                Opcode::Uload8 => (types::I8, Some(ValueConversionKind::ZeroExtend(ctrl_ty))),
-                Opcode::Sload8 => (types::I8, Some(ValueConversionKind::SignExtend(ctrl_ty))),
-                Opcode::Uload16 => (types::I16, Some(ValueConversionKind::ZeroExtend(ctrl_ty))),
-                Opcode::Sload16 => (types::I16, Some(ValueConversionKind::SignExtend(ctrl_ty))),
-                Opcode::Uload32 => (types::I32, Some(ValueConversionKind::ZeroExtend(ctrl_ty))),
-                Opcode::Sload32 => (types::I32, Some(ValueConversionKind::SignExtend(ctrl_ty))),
+            let load_ty = match inst.opcode() {
+                Opcode::Load => inst_context.controlling_type().unwrap(),
                 Opcode::Uload8x8
                 | Opcode::Sload8x8
                 | Opcode::Uload16x4
@@ -496,39 +483,18 @@ where
 
             let addr_value = calculate_addr(types::I64, imm(), args())?;
             let mem_flags = resolve_memflags();
-            let loaded = assign_or_memtrap(
+            assign_or_memtrap(
                 Address::try_from(addr_value)
                     .and_then(|addr| state.checked_load(addr, load_ty, mem_flags)),
-            );
-
-            match (loaded, kind) {
-                (ControlFlow::Assign(ret), Some(c)) => ControlFlow::Assign(
-                    ret.into_iter()
-                        .map(|loaded| loaded.convert(c.clone()))
-                        .collect::<ValueResult<SmallVec<[DataValue; 1]>>>()?,
-                ),
-                (cf, _) => cf,
-            }
+            )
         }
-        Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-            let kind = match inst.opcode() {
-                Opcode::Store => None,
-                Opcode::Istore8 => Some(ValueConversionKind::Truncate(types::I8)),
-                Opcode::Istore16 => Some(ValueConversionKind::Truncate(types::I16)),
-                Opcode::Istore32 => Some(ValueConversionKind::Truncate(types::I32)),
-                _ => unreachable!(),
-            };
-
+        Opcode::Store => {
             let addr_value = calculate_addr(types::I64, imm(), args_range(1..)?)?;
             let mem_flags = resolve_memflags();
-            let reduced = if let Some(c) = kind {
-                arg(0).convert(c)?
-            } else {
-                arg(0)
-            };
+            let value = arg(0);
             continue_or_memtrap(
                 Address::try_from(addr_value)
-                    .and_then(|addr| state.checked_store(addr, reduced, mem_flags)),
+                    .and_then(|addr| state.checked_store(addr, value, mem_flags)),
             )
         }
         Opcode::StackAddr => {

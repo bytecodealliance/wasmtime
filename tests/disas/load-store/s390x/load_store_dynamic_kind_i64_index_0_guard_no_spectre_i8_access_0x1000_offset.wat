@@ -46,12 +46,13 @@
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       lg      %r7, 0x40(%r2)
-;;       aghi    %r7, -0x1001
-;;       clgr    %r4, %r7
+;;       lg      %r3, 0x40(%r2)
+;;       aghi    %r3, -0x1001
+;;       clgr    %r4, %r3
 ;;       jgh     0x8c
 ;;       ag      %r4, 0x38(%r2)
 ;;       lghi    %r2, 0x1000
 ;;       llc     %r2, 0(%r2, %r4)
+;;       llcr    %r2, %r2
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

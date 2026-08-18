@@ -1593,6 +1593,66 @@ fn gen_bitwise_not_builders(fmt: &mut Formatter) {
     }
 }
 
+/// Emit the `uload8`, `uload16`, `uload32`, `sload8`, `sload16`, `sload32`,
+/// `istore8`, `istore16`, and `istore32` `InstBuilder`
+/// backwards-compat/convenience methods.
+fn gen_extending_load_store_builders(fmt: &mut Formatter) {
+    for (bits, ty) in [(8, "I8"), (16, "I16"), (32, "I32")] {
+        for (prefix, ext_method, ext_doc) in [
+            ("u", "uextend", "zero-extend"),
+            ("s", "sextend", "sign-extend"),
+        ] {
+            // `{u,s}loadN` => `load` + `{u,s}extend`.
+            let method = format!("{prefix}load{bits}");
+            let tyvar = format!("iExt{bits}");
+            fmt.doc_comment(format!(
+                "Load {bits} bits from memory at ``p + Offset`` and {ext_doc}.\
+                 \n\nThis emits a `load` of the narrow type followed by a \
+                 `{ext_method}`.",
+            ));
+            fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
+            fmt.add_block(
+                &format!(
+                    "fn {method}<T1: Into<ir::MemFlagsData>, T2: Into<ir::immediates::Offset32>>(mut self, {tyvar}: crate::ir::Type, MemFlags: T1, p: ir::Value, Offset: T2) -> Value"
+                ),
+                |fmt| {
+                    fmt.line("let MemFlags = MemFlags.into();");
+                    fmt.line("let Offset = Offset.into();");
+                    fmt.line("let MemFlags = self.data_flow_graph_mut().mem_flags.insert(MemFlags).unwrap();");
+                    fmtln!(
+                        fmt,
+                        "let load = self.build_aux_inst(InstructionData::Load {{ opcode: Opcode::Load, arg: p, flags: MemFlags, offset: Offset }}, types::{ty});"
+                    );
+                    fmt.line("let load = self.data_flow_graph().first_result(load);");
+                    fmtln!(fmt, "self.{ext_method}({tyvar}, load)");
+                },
+            );
+            fmt.empty_line();
+        }
+
+        // `istoreN` => `ireduce` + `store`.
+        fmt.doc_comment(format!(
+            "Store the low {bits} bits of ``x`` to memory at ``p + Offset``.\
+             \n\nThis emits an `ireduce` to the narrow type followed by a `store`.",
+        ));
+        fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
+        fmt.add_block(
+            &format!(
+                "fn istore{bits}<T1: Into<ir::MemFlagsData>, T2: Into<ir::immediates::Offset32>>(mut self, MemFlags: T1, x: ir::Value, p: ir::Value, Offset: T2) -> Inst"
+            ),
+            |fmt| {
+                fmtln!(
+                    fmt,
+                    "let narrow = self.build_aux_inst(InstructionData::Unary {{ opcode: Opcode::Ireduce, arg: x }}, types::{ty});"
+                );
+                fmt.line("let narrow = self.data_flow_graph().first_result(narrow);");
+                fmt.line("self.store(MemFlags, narrow, p, Offset)");
+            },
+        );
+        fmt.empty_line();
+    }
+}
+
 /// Generate a Builder trait with methods for all instructions.
 fn gen_builder(
     instructions: &AllInstructions,
@@ -1631,6 +1691,8 @@ fn gen_builder(
         gen_stack_access_builders(fmt);
         fmt.empty_line();
         gen_bitwise_not_builders(fmt);
+        fmt.empty_line();
+        gen_extending_load_store_builders(fmt);
         for (i, format) in formats.iter().enumerate() {
             gen_format_constructor(format, fmt);
             if i + 1 != formats.len() {

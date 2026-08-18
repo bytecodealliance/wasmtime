@@ -23,9 +23,10 @@
 ;; @0031                               v3 = uextend.i64 v2
 ;; @0031                               v4 = load.i64 notrap aligned readonly can_move region2 v0+56
 ;; @0031                               v5 = iadd v4, v3
-;; @0031                               v6 = uload8.i64 little region4 v5
+;; @0031                               v6 = load.i8 little region4 v5
+;; @0031                               v7 = uextend.i64 v6
 ;; @0034                               jump block1
 ;;
 ;;                                 block1:
-;; @0034                               return v6
+;; @0034                               return v7
 ;; }

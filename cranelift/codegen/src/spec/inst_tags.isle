@@ -27,47 +27,11 @@
     (tag wasm_category_stores)
     (tag wasm_proposal_mvp))
 
-(attr uload8
-    (tag wasm_category_loads)
-    (tag wasm_proposal_mvp))
-
-(attr uload16
-    (tag wasm_category_loads)
-    (tag wasm_proposal_mvp))
-
-(attr sload8
-    (tag wasm_category_loads)
-    (tag wasm_proposal_mvp))
-
-(attr sload16
-    (tag wasm_category_loads)
-    (tag wasm_proposal_mvp))
-
-(attr sload32
-    (tag wasm_category_loads)
-    (tag wasm_proposal_mvp))
-
-(attr uload32
-    (tag wasm_category_loads)
-    (tag wasm_proposal_mvp))
-
 (attr load
     (tag wasm_category_loads)
     (tag wasm_proposal_mvp))
 
 (attr store
-    (tag wasm_category_stores)
-    (tag wasm_proposal_mvp))
-
-(attr istore8
-    (tag wasm_category_stores)
-    (tag wasm_proposal_mvp))
-
-(attr istore16
-    (tag wasm_category_stores)
-    (tag wasm_proposal_mvp))
-
-(attr istore32
     (tag wasm_category_stores)
     (tag wasm_proposal_mvp))
 

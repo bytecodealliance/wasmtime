@@ -57,7 +57,8 @@ block0(v0: i64):
 
 function %istore8_i64(i64, i64) {
 block0(v0: i64, v1: i64):
-  istore8.i64 little v0, v1
+  v2 = ireduce.i8 v0
+  store little v2, v1
   return
 }
 
@@ -74,7 +75,8 @@ block0(v0: i64, v1: i64):
 function %istore8_imm_i64(i64) {
 block0(v0: i64):
   v1 = iconst.i64 123
-  istore8.i64 little v1, v0
+  v2 = ireduce.i8 v1
+  store little v2, v0
   return
 }
 
@@ -90,7 +92,8 @@ block0(v0: i64):
 
 function %istore16_i64(i64, i64) {
 block0(v0: i64, v1: i64):
-  istore16.i64 little v0, v1
+  v2 = ireduce.i16 v0
+  store little v2, v1
   return
 }
 
@@ -108,7 +111,8 @@ function %istore16_i64_sym(i64) {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  istore16.i64 aligned little v0, v1
+  v2 = ireduce.i16 v0
+  store aligned little v2, v1
   return
 }
 
@@ -126,7 +130,8 @@ block0(v0: i64):
 function %istore16_imm_i64(i64) {
 block0(v0: i64):
   v1 = iconst.i64 12345
-  istore16.i64 little v1, v0
+  v2 = ireduce.i16 v1
+  store little v2, v0
   return
 }
 
@@ -142,7 +147,8 @@ block0(v0: i64):
 
 function %istore32_i64(i64, i64) {
 block0(v0: i64, v1: i64):
-  istore32.i64 little v0, v1
+  v2 = ireduce.i32 v0
+  store little v2, v1
   return
 }
 
@@ -160,7 +166,8 @@ function %istore32_i64_sym(i64) {
   gv0 = symbol colocated %sym
 block0(v0: i64):
   v1 = symbol_value.i64 gv0
-  istore32.i64 aligned little v0, v1
+  v2 = ireduce.i32 v0
+  store aligned little v2, v1
   return
 }
 
@@ -178,7 +185,8 @@ block0(v0: i64):
 function %istore32_imm_i64(i64) {
 block0(v0: i64):
   v1 = iconst.i64 12345
-  istore32.i64 little v1, v0
+  v2 = ireduce.i32 v1
+  store little v2, v0
   return
 }
 
@@ -250,7 +258,8 @@ block0(v0: i64):
 
 function %istore8_i32(i32, i64) {
 block0(v0: i32, v1: i64):
-  istore8.i32 little v0, v1
+  v2 = ireduce.i8 v0
+  store little v2, v1
   return
 }
 
@@ -267,7 +276,8 @@ block0(v0: i32, v1: i64):
 function %istore8_imm_i32(i64) {
 block0(v0: i64):
   v1 = iconst.i32 123
-  istore8.i32 little v1, v0
+  v2 = ireduce.i8 v1
+  store little v2, v0
   return
 }
 
@@ -283,7 +293,8 @@ block0(v0: i64):
 
 function %istore16_i32(i32, i64) {
 block0(v0: i32, v1: i64):
-  istore16.i32 little v0, v1
+  v2 = ireduce.i16 v0
+  store little v2, v1
   return
 }
 
@@ -301,7 +312,8 @@ function %istore16_i32_sym(i32) {
   gv0 = symbol colocated %sym
 block0(v0: i32):
   v1 = symbol_value.i64 gv0
-  istore16.i32 aligned little v0, v1
+  v2 = ireduce.i16 v0
+  store aligned little v2, v1
   return
 }
 
@@ -319,7 +331,8 @@ block0(v0: i32):
 function %istore16_imm_i32(i64) {
 block0(v0: i64):
   v1 = iconst.i32 12345
-  istore16.i32 little v1, v0
+  v2 = ireduce.i16 v1
+  store little v2, v0
   return
 }
 
@@ -387,7 +400,8 @@ block0(v0: i64):
 
 function %istore8_i16(i16, i64) {
 block0(v0: i16, v1: i64):
-  istore8.i16 little v0, v1
+  v2 = ireduce.i8 v0
+  store little v2, v1
   return
 }
 
@@ -404,7 +418,8 @@ block0(v0: i16, v1: i64):
 function %istore8_imm_i16(i64) {
 block0(v0: i64):
   v1 = iconst.i16 123
-  istore8.i16 little v1, v0
+  v2 = ireduce.i8 v1
+  store little v2, v0
   return
 }
 

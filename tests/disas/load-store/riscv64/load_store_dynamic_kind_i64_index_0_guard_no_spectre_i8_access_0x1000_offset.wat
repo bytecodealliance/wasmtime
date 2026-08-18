@@ -50,11 +50,12 @@
 ;;       sub     a1, a1, a3
 ;;       bgeu    a1, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a0, 0x38(a0)
-;;       add     a0, a0, a2
+;;       ld      a1, 0x38(a0)
+;;       add     a1, a1, a2
 ;;       lui     t6, 1
-;;       add     t6, t6, a0
-;;       lbu     a0, 0(t6)
+;;       add     t6, t6, a1
+;;       lb      a1, 0(t6)
+;;       andi    a0, a1, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

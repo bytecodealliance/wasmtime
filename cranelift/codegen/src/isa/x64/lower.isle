@@ -3030,22 +3030,6 @@
 ;; no extension.
 (rule load_64_x64_movzx -1 (lower (load (ty_int_ref_64 ty) (little_or_native_endian flags) address offset))
       (x64_mov (to_amode flags address offset)))
-;; Also, certain scalar loads have a specific `from` width and extension kind
-;; (signed -> `sx`, zeroed -> `zx`). We overwrite the high bits of the 64-bit
-;; GPR even if the `to` type is smaller (e.g., 16-bits).
-(rule (lower (uload8 (is_gpr_type ty) (little_or_native_endian flags) address offset))
-      (x64_movzx (ExtMode.BQ) (to_amode flags address offset)))
-(rule (lower (sload8 (is_gpr_type ty) (little_or_native_endian flags) address offset))
-      (x64_movsx (ExtMode.BQ) (to_amode flags address offset)))
-(rule (lower (uload16 (is_gpr_type ty) (little_or_native_endian flags) address offset))
-      (x64_movzx (ExtMode.WQ) (to_amode flags address offset)))
-(rule (lower (sload16 (is_gpr_type ty) (little_or_native_endian flags) address offset))
-      (x64_movsx (ExtMode.WQ) (to_amode flags address offset)))
-(rule (lower (uload32 (is_gpr_type ty) (little_or_native_endian flags) address offset))
-      (x64_movzx (ExtMode.LQ) (to_amode flags address offset)))
-(rule (lower (sload32 (is_gpr_type ty) (little_or_native_endian flags) address offset))
-      (x64_movsx (ExtMode.LQ) (to_amode flags address offset)))
-
 ;; To load to XMM registers, we use the x64-specific instructions for each type.
 ;; For `$F32` and `$F64` this is important--we only want to load 32 or 64 bits.
 ;; But for the 128-bit types, this is not strictly necessary for performance but
@@ -3114,17 +3098,6 @@
                     offset))
       (side_effect
        (x64_movrm ty (to_amode flags address offset) value)))
-
-;; Explicit 8/16/32-bit opcodes.
-(rule (lower (istore8 (little_or_native_endian flags) value address offset))
-      (side_effect
-       (x64_movrm $I8 (to_amode flags address offset) value)))
-(rule (lower (istore16 (little_or_native_endian flags) value address offset))
-      (side_effect
-       (x64_movrm $I16 (to_amode flags address offset) value)))
-(rule (lower (istore32 (little_or_native_endian flags) value address offset))
-      (side_effect
-       (x64_movrm $I32 (to_amode flags address offset) value)))
 
 ;; IMM stores
 (rule 4 (lower (store (little_or_native_endian flags) value @ (value_type (fits_in_64 ty)) address offset))

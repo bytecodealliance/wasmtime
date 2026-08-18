@@ -45,16 +45,16 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       mv      a3, a0
-;;       auipc   a0, 0
-;;       ld      a0, 0x34(a0)
-;;       sltu    a0, a0, a2
-;;       ld      a1, 0x38(a3)
-;;       add     a1, a1, a2
-;;       neg     a0, a0
-;;       not     a0, a0
-;;       and     a2, a1, a0
-;;       lbu     a0, 0(a2)
+;;       auipc   a1, 0
+;;       ld      a1, 0x38(a1)
+;;       sltu    a1, a1, a2
+;;       ld      a3, 0x38(a0)
+;;       add     a2, a3, a2
+;;       neg     a0, a1
+;;       not     a1, a0
+;;       and     a3, a2, a1
+;;       lb      a1, 0(a3)
+;;       andi    a0, a1, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

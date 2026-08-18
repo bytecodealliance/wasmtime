@@ -41,17 +41,17 @@
 ;; @0021                               v15 = iconst.i64 24
 ;; @0021                               v16 = iadd v14, v15  ; v15 = 24
 ;; @0021                               store user2 little region5 v2, v16  ; v2 = 0.0
-;; @0021                               v3 = iconst.i32 0
+;;                                     v43 = iconst.i8 0
 ;; @0021                               v17 = iconst.i64 28
 ;; @0021                               v18 = iadd v14, v17  ; v17 = 28
-;; @0021                               istore8 user2 little region5 v3, v18  ; v3 = 0
+;; @0021                               store user2 little region5 v43, v18  ; v43 = 0
 ;; @0021                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v59 = iconst.i32 0
-;; @0021                               v19 = iconst.i64 32
-;; @0021                               v20 = iadd.i64 v14, v19  ; v19 = 32
-;; @0021                               store user2 little region5 v59, v20  ; v59 = 0
+;; @0021                               v3 = iconst.i32 0
+;; @0021                               v20 = iconst.i64 32
+;; @0021                               v21 = iadd.i64 v14, v20  ; v20 = 32
+;; @0021                               store user2 little region5 v3, v21  ; v3 = 0
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:

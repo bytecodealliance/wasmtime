@@ -24,7 +24,8 @@
 ;; @0033                               v4 = uextend.i64 v2
 ;; @0033                               v5 = load.i64 notrap aligned readonly can_move region2 v0+56
 ;; @0033                               v6 = iadd v5, v4
-;; @0033                               istore16 little region4 v3, v6
+;; @0033                               v7 = ireduce.i16 v3
+;; @0033                               store little region4 v7, v6
 ;; @0036                               jump block1
 ;;
 ;;                                 block1:

@@ -976,41 +976,25 @@
         (hi XReg (pulley_xload (amode addr offsetp8) $I64 flags)))
     (value_regs lo hi)))
 
-(rule 0 (lower (uload8 (ty_int (fits_in_32 _)) (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I8 (ExtKind.Zero32)))
+;; Pulley's `xload` instructions can extend the loaded value as part of the
+;; load itself, so sink a narrow load into the extension that consumes it and
+;; re-emit it as a single extending load.
 
-(rule 0 (lower (uload16 (ty_int (fits_in_32 _)) (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I16 (ExtKind.Zero32)))
+(rule 2 (lower (uextend (fits_in_32 _) val))
+  (if-let ld (sinkable_narrow_load val))
+  (gen_sunk_xload ld (ExtKind.Zero32)))
 
-(rule 0 (lower (uload32 (ty_int (fits_in_32 _)) (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I32 (ExtKind.None)))
+(rule 3 (lower (uextend $I64 val))
+  (if-let ld (sinkable_narrow_load val))
+  (gen_sunk_xload ld (ExtKind.Zero64)))
 
-(rule 1 (lower (uload8 $I64 (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I8 (ExtKind.Zero64)))
+(rule 2 (lower (sextend (fits_in_32 _) val))
+  (if-let ld (sinkable_narrow_load val))
+  (gen_sunk_xload ld (ExtKind.Sign32)))
 
-(rule 1 (lower (uload16 $I64 (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I16 (ExtKind.Zero64)))
-
-(rule 1 (lower (uload32 $I64 (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I32 (ExtKind.Zero64)))
-
-(rule 0 (lower (sload8 (ty_int (fits_in_32 _)) (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I8 (ExtKind.Sign32)))
-
-(rule 0 (lower (sload16 (ty_int (fits_in_32 _)) (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I16 (ExtKind.Sign32)))
-
-(rule 0 (lower (sload32 (ty_int (fits_in_32 _)) (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I32 (ExtKind.None)))
-
-(rule 1 (lower (sload8 $I64 (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I8 (ExtKind.Sign64)))
-
-(rule 1 (lower (sload16 $I64 (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I16 (ExtKind.Sign64)))
-
-(rule 1 (lower (sload32 $I64 (mem_flags_data flags) addr offset))
-  (gen_xload addr offset flags $I32 (ExtKind.Sign64)))
+(rule 3 (lower (sextend $I64 val))
+  (if-let ld (sinkable_narrow_load val))
+  (gen_sunk_xload ld (ExtKind.Sign64)))
 
 (rule 2 (lower (load (ty_vec128 ty) (mem_flags_data flags) addr offset))
   (gen_vload addr offset flags ty (VExtKind.None)))
@@ -1264,15 +1248,6 @@
 
 (rule 1 (lower (store (mem_flags_data flags) src @ (value_type (ty_scalar_float ty)) addr offset))
   (side_effect (gen_store src addr offset flags ty)))
-
-(rule (lower (istore8 (mem_flags_data flags) src addr offset))
-  (side_effect (gen_store src addr offset flags $I8)))
-
-(rule (lower (istore16 (mem_flags_data flags) src addr offset))
-  (side_effect (gen_store src addr offset flags $I16)))
-
-(rule (lower (istore32 (mem_flags_data flags) src addr offset))
-  (side_effect (gen_store src addr offset flags $I32)))
 
 (rule 2 (lower (store (mem_flags_data flags) src @ (value_type (ty_vec128 ty)) addr offset))
   (side_effect (gen_store src addr offset flags ty)))

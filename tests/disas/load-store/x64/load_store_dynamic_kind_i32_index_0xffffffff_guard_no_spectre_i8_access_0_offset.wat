@@ -36,10 +36,11 @@
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %esi
 ;;       cmpq    0x40(%rdi), %rsi
-;;       jae     0x3e
-;;   30: movq    0x38(%rdi), %rdi
-;;       movzbq  (%rdi, %rsi), %rax
+;;       jae     0x42
+;;   30: movq    0x38(%rdi), %r8
+;;       movzbq  (%r8, %rsi), %r8
+;;       movzbl  %r8b, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   3e: ud2
+;;   42: ud2

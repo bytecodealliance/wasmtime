@@ -42,7 +42,8 @@
 ;;       slli    a1, a2, 0x20
 ;;       srli    a1, a1, 0x20
 ;;       add     a0, a0, a1
-;;       lbu     a0, 0(a0)
+;;       lb      a0, 0(a0)
+;;       andi    a0, a0, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

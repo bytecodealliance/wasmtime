@@ -74,9 +74,9 @@
       (add_reg ty x y))
 
 ;; Add a register and a sign-extended register.
-(rule 8 (lower (iadd (fits_in_64 ty) x (sext32_value y)))
+(rule 2 (lower (iadd (fits_in_64 ty) x (sext32_value y)))
       (add_reg_sext32 ty x y))
-(rule 15 (lower (iadd (fits_in_64 ty) (sext32_value x) y))
+(rule 9 (lower (iadd (fits_in_64 ty) (sext32_value x) y))
       (add_reg_sext32 ty y x))
 
 ;; Add a register and an immediate.
@@ -103,13 +103,13 @@
 
 ;; Add a register and sign-extended memory.
 (rule 3 (lower (iadd (fits_in_64 ty) x (sinkable_sload16 y)))
-      (add_mem_sext16 ty x (sink_sload16 y)))
+      (add_mem_sext16 ty x (sink_load y)))
 (rule 10 (lower (iadd (fits_in_64 ty) (sinkable_sload16 x) y))
-      (add_mem_sext16 ty y (sink_sload16 x)))
-(rule 2 (lower (iadd (fits_in_64 ty) x (sinkable_sload32 y)))
-      (add_mem_sext32 ty x (sink_sload32 y)))
-(rule 9 (lower (iadd (fits_in_64 ty) (sinkable_sload32 x) y))
-      (add_mem_sext32 ty y (sink_sload32 x)))
+      (add_mem_sext16 ty y (sink_load x)))
+(rule 8 (lower (iadd (fits_in_64 ty) x (sinkable_sload32 y)))
+      (add_mem_sext32 ty x (sink_load y)))
+(rule 15 (lower (iadd (fits_in_64 ty) (sinkable_sload32 x) y))
+      (add_mem_sext32 ty y (sink_load x)))
 
 ;; Add two vector registers.
 (rule 1 (lower (iadd (vr128_ty ty) x y))
@@ -183,7 +183,7 @@
       (sub_reg ty x y))
 
 ;; Sub a register and a sign-extended register.
-(rule 8 (lower (isub (fits_in_64 ty) x (sext32_value y)))
+(rule 2 (lower (isub (fits_in_64 ty) x (sext32_value y)))
       (sub_reg_sext32 ty x y))
 
 ;; Sub a register and an immediate (using add of the negated value).
@@ -202,9 +202,9 @@
 
 ;; Sub a register and sign-extended memory.
 (rule 3 (lower (isub (fits_in_64 ty) x (sinkable_sload16 y)))
-      (sub_mem_sext16 ty x (sink_sload16 y)))
-(rule 2 (lower (isub (fits_in_64 ty) x (sinkable_sload32 y)))
-      (sub_mem_sext32 ty x (sink_sload32 y)))
+      (sub_mem_sext16 ty x (sink_load y)))
+(rule 8 (lower (isub (fits_in_64 ty) x (sinkable_sload32 y)))
+      (sub_mem_sext32 ty x (sink_load y)))
 
 ;; Sub two vector registers.
 (rule 1 (lower (isub (vr128_ty ty) x y))
@@ -411,9 +411,9 @@
       (mul_reg ty x y))
 
 ;; Multiply a register and a sign-extended register.
-(rule 8 (lower (imul (fits_in_64 ty) x (sext32_value y)))
+(rule 2 (lower (imul (fits_in_64 ty) x (sext32_value y)))
       (mul_reg_sext32 ty x y))
-(rule 15 (lower (imul (fits_in_64 ty) (sext32_value x) y))
+(rule 9 (lower (imul (fits_in_64 ty) (sext32_value x) y))
       (mul_reg_sext32 ty y x))
 
 ;; Multiply a register and an immediate.
@@ -440,13 +440,13 @@
 
 ;; Multiply a register and sign-extended memory.
 (rule 3 (lower (imul (fits_in_64 ty) x (sinkable_sload16 y)))
-      (mul_mem_sext16 ty x (sink_sload16 y)))
+      (mul_mem_sext16 ty x (sink_load y)))
 (rule 10 (lower (imul (fits_in_64 ty) (sinkable_sload16 x) y))
-      (mul_mem_sext16 ty y (sink_sload16 x)))
-(rule 2 (lower (imul (fits_in_64 ty) x (sinkable_sload32 y)))
-      (mul_mem_sext32 ty x (sink_sload32 y)))
-(rule 9 (lower (imul (fits_in_64 ty) (sinkable_sload32 x) y))
-      (mul_mem_sext32 ty y (sink_sload32 x)))
+      (mul_mem_sext16 ty y (sink_load x)))
+(rule 8 (lower (imul (fits_in_64 ty) x (sinkable_sload32 y)))
+      (mul_mem_sext32 ty x (sink_load y)))
+(rule 15 (lower (imul (fits_in_64 ty) (sinkable_sload32 x) y))
+      (mul_mem_sext32 ty y (sink_load x)))
 
 ;; Multiply two vector registers, using a helper.
 (decl vec_mul_impl (Type Reg Reg) Reg)
@@ -3015,94 +3015,6 @@
       (vec_elt_rev ty (vec_load ty (lower_address flags addr offset))))
 
 
-;;;; Rules for `uload8` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; 16- or 32-bit target types.
-(rule (lower (uload8 (gpr32_ty _ty) (mem_flags_data flags) addr offset))
-      (zext32_mem $I8 (lower_address flags addr offset)))
-
-;; 64-bit target types.
-(rule 1 (lower (uload8 (gpr64_ty _ty) (mem_flags_data flags) addr offset))
-      (zext64_mem $I8 (lower_address flags addr offset)))
-
-
-;;;; Rules for `sload8` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; 16- or 32-bit target types.
-(rule (lower (sload8 (gpr32_ty _ty) (mem_flags_data flags) addr offset))
-      (sext32_mem $I8 (lower_address flags addr offset)))
-
-;; 64-bit target types.
-(rule 1 (lower (sload8 (gpr64_ty _ty) (mem_flags_data flags) addr offset))
-      (sext64_mem $I8 (lower_address flags addr offset)))
-
-
-;;;; Rules for `uload16` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; 32-bit target type, big-endian source value.
-(rule 3 (lower (uload16 (gpr32_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
-      (zext32_mem $I16 (lower_address flags addr offset)))
-
-;; 32-bit target type, little-endian source value (via explicit extension).
-(rule 1 (lower (uload16 (gpr32_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
-      (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
-        (zext32_reg $I16 reg16)))
-
-;; 64-bit target type, big-endian source value.
-(rule 4 (lower (uload16 (gpr64_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
-      (zext64_mem $I16 (lower_address flags addr offset)))
-
-;; 64-bit target type, little-endian source value (via explicit extension).
-(rule 2 (lower (uload16 (gpr64_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
-      (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
-        (zext64_reg $I16 reg16)))
-
-
-;;;; Rules for `sload16` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; 32-bit target type, big-endian source value.
-(rule 2 (lower (sload16 (gpr32_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
-      (sext32_mem $I16 (lower_address flags addr offset)))
-
-;; 32-bit target type, little-endian source value (via explicit extension).
-(rule 0 (lower (sload16 (gpr32_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
-      (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
-        (sext32_reg $I16 reg16)))
-
-;; 64-bit target type, big-endian source value.
-(rule 3 (lower (sload16 (gpr64_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
-      (sext64_mem $I16 (lower_address flags addr offset)))
-
-;; 64-bit target type, little-endian source value (via explicit extension).
-(rule 1 (lower (sload16 (gpr64_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
-      (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
-        (sext64_reg $I16 reg16)))
-
-
-;;;; Rules for `uload32` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; 64-bit target type, big-endian source value.
-(rule 1 (lower (uload32 (gpr64_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
-      (zext64_mem $I32 (lower_address flags addr offset)))
-
-;; 64-bit target type, little-endian source value (via explicit extension).
-(rule (lower (uload32 (gpr64_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
-      (let ((reg32 Reg (loadrev32 (lower_address flags addr offset))))
-        (zext64_reg $I32 reg32)))
-
-
-;;;; Rules for `sload32` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; 64-bit target type, big-endian source value.
-(rule 1 (lower (sload32 (gpr64_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
-      (sext64_mem $I32 (lower_address flags addr offset)))
-
-;; 64-bit target type, little-endian source value (via explicit extension).
-(rule (lower (sload32 (gpr64_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
-      (let ((reg32 Reg (loadrev32 (lower_address flags addr offset))))
-        (sext64_reg $I32 reg32)))
-
-
 ;;;; Rules for `uloadNxM` and `sloadNxM` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Unsigned 8->16 bit extension.
@@ -3357,10 +3269,6 @@
 
 ;;;; Rules for 8-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Main `istore8` lowering entry point, dispatching to the helper.
-(rule (lower (istore8 (mem_flags_data flags) val addr offset))
-      (side_effect (istore8_impl flags val addr offset)))
-
 ;; Helper to store 8-bit integer types.
 (decl istore8_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
 
@@ -3369,15 +3277,16 @@
       (store8 (put_in_reg val) (lower_address flags addr offset)))
 
 ;; Store 8-bit integer types, immediate input.
+;;
+;; The value may be narrowed by an `ireduce`, which is a no-op for an 8-bit
+;; store, so look through it to find the constant.
 (rule 1 (istore8_impl flags (u8_from_value imm) addr offset)
+      (store8_imm imm (lower_address flags addr offset)))
+(rule 2 (istore8_impl flags (ireduce _ (u8_from_value imm)) addr offset)
       (store8_imm imm (lower_address flags addr offset)))
 
 
 ;;;; Rules for 16-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Main `istore16` lowering entry point, dispatching to the helper.
-(rule (lower (istore16 (mem_flags_data flags) val addr offset))
-      (side_effect (istore16_impl flags val addr offset)))
 
 ;; Helper to store 16-bit integer types.
 (decl istore16_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
@@ -3391,19 +3300,22 @@
       (storerev16 (put_in_reg val) (lower_address flags addr offset)))
 
 ;; Store 16-bit big-endian integer types, immediate input.
+;;
+;; The value may be narrowed by an `ireduce`, which is a no-op for a 16-bit
+;; store, so look through it to find the constant.
 (rule 3 (istore16_impl flags @ (bigendian) (i16_from_value imm) addr offset)
+      (store16_imm imm (lower_address flags addr offset)))
+(rule 5 (istore16_impl flags @ (bigendian) (ireduce _ (i16_from_value imm)) addr offset)
       (store16_imm imm (lower_address flags addr offset)))
 
 ;; Store 16-bit little-endian integer types, immediate input.
 (rule 1 (istore16_impl flags @ (littleendian) (i16_from_swapped_value imm) addr offset)
       (store16_imm imm (lower_address flags addr offset)))
+(rule 4 (istore16_impl flags @ (littleendian) (ireduce _ (i16_from_swapped_value imm)) addr offset)
+      (store16_imm imm (lower_address flags addr offset)))
 
 
 ;;;; Rules for 32-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Main `istore32` lowering entry point, dispatching to the helper.
-(rule (lower (istore32 (mem_flags_data flags) val addr offset))
-      (side_effect (istore32_impl flags val addr offset)))
 
 ;; Helper to store 32-bit integer types.
 (decl istore32_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
@@ -3413,7 +3325,12 @@
       (store32 (put_in_reg val) (lower_address flags addr offset)))
 
 ;; Store 32-bit big-endian integer types, immediate input.
+;;
+;; The value may be narrowed by an `ireduce`, which is a no-op for a 32-bit
+;; store, so look through it to find the constant.
 (rule 2 (istore32_impl flags @ (bigendian) (i16_from_value imm) addr offset)
+      (store32_simm16 imm (lower_address flags addr offset)))
+(rule 3 (istore32_impl flags @ (bigendian) (ireduce _ (i16_from_value imm)) addr offset)
       (store32_simm16 imm (lower_address flags addr offset)))
 
 ;; Store 32-bit little-endian integer types.
@@ -3898,9 +3815,9 @@
 
 ;; Compare (signed) a register and sign-extended memory.
 (rule 4 (icmps_val true x @ (value_type (fits_in_64 ty)) (sinkable_sload16 y))
-      (icmps_mem_sext16 ty x (sink_sload16 y)))
+      (icmps_mem_sext16 ty x (sink_load y)))
 (rule 4 (icmps_val true x @ (value_type (fits_in_64 ty)) (sinkable_sload32 y))
-      (icmps_mem_sext32 ty x (sink_sload32 y)))
+      (icmps_mem_sext32 ty x (sink_load y)))
 
 
 ;; Return a `ProducesBool` to implement unsigned integer comparisons.
@@ -3935,10 +3852,10 @@
 ;; address here, so we need to check whether the sinkable load matches this.
 (rule 3 (icmpu_val true x @ (value_type (fits_in_64 ty))
                  (sinkable_uload16 ld))
-      (if-let y (uload16_sym ld))
-      (icmpu_mem_zext16 ty x (sink_uload16 y)))
+      (if-let y (load_sym ld))
+      (icmpu_mem_zext16 ty x (sink_load y)))
 (rule 3 (icmpu_val true x @ (value_type (fits_in_64 ty)) (sinkable_uload32 y))
-      (icmpu_mem_zext32 ty x (sink_uload32 y)))
+      (icmpu_mem_zext32 ty x (sink_load y)))
 
 
 ;; Compare (signed) 128-bit integers on z17.
@@ -4400,11 +4317,11 @@
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register an a zero-extended register.
-(rule 4 (lower (uadd_overflow_trap (fits_in_64 ty) x (zext32_value y) tc))
+(rule 1 (lower (uadd_overflow_trap (fits_in_64 ty) x (zext32_value y) tc))
       (with_flags
         (add_logical_reg_zext32_with_flags_paired ty x y)
         (trap_if_impl (mask_as_cond 3) tc)))
-(rule 8 (lower (uadd_overflow_trap (fits_in_64 ty) (zext32_value x) y tc))
+(rule 5 (lower (uadd_overflow_trap (fits_in_64 ty) (zext32_value x) y tc))
       (with_flags
         (add_logical_reg_zext32_with_flags_paired ty y x)
         (trap_if_impl (mask_as_cond 3) tc)))
@@ -4430,13 +4347,13 @@
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register and zero-extended memory.
-(rule 1 (lower (uadd_overflow_trap (fits_in_64 ty) x (sinkable_uload32 y) tc))
+(rule 4 (lower (uadd_overflow_trap (fits_in_64 ty) x (sinkable_uload32 y) tc))
       (with_flags
-        (add_logical_mem_zext32_with_flags_paired ty x (sink_uload32 y))
+        (add_logical_mem_zext32_with_flags_paired ty x (sink_load y))
         (trap_if_impl (mask_as_cond 3) tc)))
-(rule 5 (lower (uadd_overflow_trap (fits_in_64 ty) (sinkable_uload32 x) y tc))
+(rule 8 (lower (uadd_overflow_trap (fits_in_64 ty) (sinkable_uload32 x) y tc))
       (with_flags
-        (add_logical_mem_zext32_with_flags_paired ty y (sink_uload32 x))
+        (add_logical_mem_zext32_with_flags_paired ty y (sink_load x))
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

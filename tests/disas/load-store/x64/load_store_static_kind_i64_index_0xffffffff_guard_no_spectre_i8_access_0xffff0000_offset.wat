@@ -35,11 +35,12 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       cmpq    $0xffff, %rdx
-;;       ja      0x64
+;;       ja      0x69
 ;;   51: addq    0x38(%rdi), %rdx
-;;       movl    $0xffff0000, %edi
-;;       movzbq  (%rdx, %rdi), %rax
+;;       movl    $0xffff0000, %r8d
+;;       movzbq  (%rdx, %r8), %r8
+;;       movzbl  %r8b, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   64: ud2
+;;   69: ud2

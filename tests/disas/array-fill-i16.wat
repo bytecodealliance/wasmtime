@@ -51,25 +51,26 @@
 ;; @0031                               v24 = iconst.i64 20
 ;; @0031                               v25 = iadd v9, v24  ; v24 = 20
 ;; @0031                               v16 = iconst.i64 1
-;;                                     v50 = ishl v14, v16  ; v16 = 1
-;; @0031                               v29 = iadd v25, v50
-;;                                     v54 = ishl v15, v16  ; v16 = 1
-;; @0031                               v38 = uadd_overflow_trap v29, v54, user2
+;;                                     v51 = ishl v14, v16  ; v16 = 1
+;; @0031                               v29 = iadd v25, v51
+;;                                     v55 = ishl v15, v16  ; v16 = 1
+;; @0031                               v38 = uadd_overflow_trap v29, v55, user2
 ;; @0031                               v37 = iadd v8, v36
 ;; @0031                               v39 = icmp ugt v38, v37
 ;; @0031                               trapnz v39, user2
-;;                                     v47 = iconst.i64 0
-;; @0031                               v42 = icmp eq v15, v47  ; v47 = 0
+;;                                     v48 = iconst.i64 0
+;; @0031                               v42 = icmp eq v15, v48  ; v48 = 0
+;; @0031                               v44 = ireduce.i16 v4
 ;; @0031                               v27 = iconst.i64 2
-;; @0031                               v40 = iadd v29, v54
+;; @0031                               v40 = iadd v29, v55
 ;; @0031                               brif v42, block3, block2(v29)
 ;;
 ;;                                 block2(v43: i64):
-;; @0031                               istore16.i32 user2 little region4 v4, v43
-;;                                     v57 = iconst.i64 2
-;;                                     v58 = iadd v43, v57  ; v57 = 2
-;; @0031                               v46 = icmp eq v58, v40
-;; @0031                               brif v46, block3, block2(v58)
+;; @0031                               store.i16 user2 little region4 v44, v43
+;;                                     v58 = iconst.i64 2
+;;                                     v59 = iadd v43, v58  ; v58 = 2
+;; @0031                               v47 = icmp eq v59, v40
+;; @0031                               brif v47, block3, block2(v59)
 ;;
 ;;                                 block3:
 ;; @0034                               jump block1
@@ -202,27 +203,27 @@
 ;; @005d                               v24 = iconst.i64 20
 ;; @005d                               v25 = iadd v9, v24  ; v24 = 20
 ;; @005d                               v16 = iconst.i64 1
-;;                                     v50 = ishl v14, v16  ; v16 = 1
-;; @005d                               v29 = iadd v25, v50
-;;                                     v54 = ishl v15, v16  ; v16 = 1
-;; @005d                               v38 = uadd_overflow_trap v29, v54, user2
+;;                                     v51 = ishl v14, v16  ; v16 = 1
+;; @005d                               v29 = iadd v25, v51
+;;                                     v55 = ishl v15, v16  ; v16 = 1
+;; @005d                               v38 = uadd_overflow_trap v29, v55, user2
 ;; @005d                               v37 = iadd v8, v36
 ;; @005d                               v39 = icmp ugt v38, v37
 ;; @005d                               trapnz v39, user2
-;;                                     v47 = iconst.i64 0
-;; @005d                               v42 = icmp eq v15, v47  ; v47 = 0
-;; @0057                               v5 = iconst.i32 0xdead
+;;                                     v48 = iconst.i64 0
+;; @005d                               v42 = icmp eq v15, v48  ; v48 = 0
+;;                                     v58 = iconst.i16 -8531
 ;; @005d                               v27 = iconst.i64 2
-;; @005d                               v40 = iadd v29, v54
+;; @005d                               v40 = iadd v29, v55
 ;; @005d                               brif v42, block3, block2(v29)
 ;;
 ;;                                 block2(v43: i64):
-;;                                     v57 = iconst.i32 0xdead
-;; @005d                               istore16 user2 little region4 v57, v43  ; v57 = 0xdead
-;;                                     v58 = iconst.i64 2
-;;                                     v59 = iadd v43, v58  ; v58 = 2
-;; @005d                               v46 = icmp eq v59, v40
-;; @005d                               brif v46, block3, block2(v59)
+;;                                     v59 = iconst.i16 -8531
+;; @005d                               store user2 little region4 v59, v43  ; v59 = -8531
+;;                                     v60 = iconst.i64 2
+;;                                     v61 = iadd v43, v60  ; v60 = 2
+;; @005d                               v47 = icmp eq v61, v40
+;; @005d                               brif v47, block3, block2(v61)
 ;;
 ;;                                 block3:
 ;; @0060                               jump block1

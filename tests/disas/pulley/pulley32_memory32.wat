@@ -54,17 +54,19 @@
 )
 ;; wasm[0]::function[0]::load8:
 ;;       push_frame
-;;       xload32le_o32 x5, x0, 32
-;;       xload32le_o32 x6, x0, 28
-;;       xload8_u32_g32 x0, x6, x5, x2, 0
+;;       xload32le_o32 x6, x0, 32
+;;       xload32le_o32 x7, x0, 28
+;;       xload8_u32_g32 x6, x7, x6, x2, 0
+;;       zext8 x0, x6
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[1]::load16:
 ;;       push_frame
-;;       xload32le_o32 x5, x0, 32
-;;       xload32le_o32 x6, x0, 28
-;;       xload16le_u32_g32 x0, x6, x5, x2, 0
+;;       xload32le_o32 x6, x0, 32
+;;       xload32le_o32 x7, x0, 28
+;;       xload16le_u32_g32 x6, x7, x6, x2, 0
+;;       zext16 x0, x6
 ;;       pop_frame
 ;;       ret
 ;;
@@ -118,17 +120,19 @@
 ;;
 ;; wasm[0]::function[8]::load8_offset:
 ;;       push_frame
-;;       xload32le_o32 x5, x0, 32
-;;       xload32le_o32 x6, x0, 28
-;;       xload8_u32_g32 x0, x6, x5, x2, 32
+;;       xload32le_o32 x6, x0, 32
+;;       xload32le_o32 x7, x0, 28
+;;       xload8_u32_g32 x6, x7, x6, x2, 32
+;;       zext8 x0, x6
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[9]::load16_offset:
 ;;       push_frame
-;;       xload32le_o32 x5, x0, 32
-;;       xload32le_o32 x6, x0, 28
-;;       xload16le_u32_g32 x0, x6, x5, x2, 32
+;;       xload32le_o32 x6, x0, 32
+;;       xload32le_o32 x7, x0, 28
+;;       xload16le_u32_g32 x6, x7, x6, x2, 32
+;;       zext16 x0, x6
 ;;       pop_frame
 ;;       ret
 ;;

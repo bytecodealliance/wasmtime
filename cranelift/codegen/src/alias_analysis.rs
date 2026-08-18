@@ -539,13 +539,12 @@ impl LastStores {
 /// A key identifying a unique memory location.
 ///
 /// For the result of a load to be equivalent to the result of another
-/// load, or the store data from a store, we need for (i) the
-/// "version" of memory (here ensured by having the same last store
-/// instruction to touch the disjoint category of abstract state we're
-/// accessing); (ii) the address must be the same (here ensured by
-/// having the same SSA value, which doesn't change after computed);
-/// (iii) the offset must be the same; (iv) the accessed type and
-/// extension mode (e.g., 8-to-32, signed) must be the same; and (v)
+/// load, or the store data from a store, we need for (i) the "version"
+/// of memory (here ensured by having the same last store instruction
+/// to touch the disjoint category of abstract state we're accessing);
+/// (ii) the address must be the same (here ensured by having the same
+/// SSA value, which doesn't change after computed); (iii) the offset
+/// must be the same; (iv) the accessed type must be the same; and (v)
 /// the byte order of the two accesses must be the same.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct MemoryLoc {
@@ -553,18 +552,13 @@ struct MemoryLoc {
     address: Value,
     offset: Offset32,
     ty: Type,
-    /// We keep the *opcode* of the instruction that produced the
-    /// value we record at this key if the opcode is anything other
-    /// than an ordinary load or store. This is needed when we
-    /// consider loads that extend the value: e.g., an 8-to-32
-    /// sign-extending load will produce a 32-bit value from an 8-bit
-    /// value in memory, so we can only reuse that (as part of RLE)
-    /// for another load with the same extending opcode.
-    ///
-    /// We could improve the transform to insert explicit extend ops
-    /// in place of extending loads when we know the memory value, but
-    /// we haven't yet done this.
-    extending_opcode: Option<Opcode>,
+    /// We keep the *opcode* of the instruction that produced the value we
+    /// record at this key if the opcode is anything other than an ordinary load
+    /// or store, like an atomic access. An atomic access is not interchangeable
+    /// with a plain one, so we only reuse the value at this key for an access
+    /// with the same opcode. Plain `load` and `store` opcodes both map to
+    /// `None` so that store-to-load forwarding works between them.
+    special_opcode: Option<Opcode>,
     /// The byte order of this access, as explicitly specified in its memory
     /// flags, or `None` when the access uses the target's native byte order.
     ///
@@ -835,7 +829,7 @@ impl<'a> AliasAnalysis<'a> {
                             address,
                             offset,
                             ty,
-                            extending_opcode: get_ext_opcode(opcode),
+                            special_opcode: special_opcode(opcode),
                             endianness: get_endianness(func, last_store),
                         };
                         let dead_entry = self.mem_values.remove(&dead_loc);
@@ -881,7 +875,7 @@ impl<'a> AliasAnalysis<'a> {
                     address,
                     offset,
                     ty,
-                    extending_opcode: get_ext_opcode(opcode),
+                    special_opcode: special_opcode(opcode),
                     endianness: get_endianness(func, inst),
                 };
                 if let Some(KnownValue {
@@ -923,7 +917,7 @@ impl<'a> AliasAnalysis<'a> {
                     address,
                     offset,
                     ty,
-                    extending_opcode: get_ext_opcode(opcode),
+                    special_opcode: special_opcode(opcode),
                     endianness: get_endianness(func, inst),
                 };
                 trace!("  --> updating known values in memory: {mem_loc:?} = {store_data}");
@@ -949,7 +943,7 @@ impl<'a> AliasAnalysis<'a> {
                     address,
                     offset,
                     ty,
-                    extending_opcode: get_ext_opcode(opcode),
+                    special_opcode: special_opcode(opcode),
                     endianness: get_endianness(func, inst),
                 };
                 trace!("  load with last_store at loc {mem_loc:?}");
@@ -1075,7 +1069,7 @@ fn get_endianness(func: &Function, inst: Inst) -> Option<Endianness> {
         .and_then(|flags| flags.explicit_endianness())
 }
 
-fn get_ext_opcode(op: Opcode) -> Option<Opcode> {
+fn special_opcode(op: Opcode) -> Option<Opcode> {
     debug_assert!(op.can_load() || op.can_store());
     match op {
         Opcode::Load | Opcode::Store => None,
@@ -1086,11 +1080,10 @@ fn get_ext_opcode(op: Opcode) -> Option<Opcode> {
 /// Can `overwriter` make `maybe_dead` a dead store?
 ///
 /// Only if `maybe_dead` is itself a store that writes exactly the
-/// bytes `overwriter` overwrites: the same alias region, address,
-/// offset, type, and store width (i.e. extending/truncating
-/// opcode). Otherwise some (or all) of `maybe_dead`'s bytes may
-/// remain observable after `overwriter` runs, and removing
-/// `maybe_dead` would change the program's behavior.
+/// bytes `overwriter` overwrites: the same opcode, alias region,
+/// address, offset, and type. Otherwise some (or all) of
+/// `maybe_dead`'s bytes may remain observable after `overwriter` runs,
+/// and removing `maybe_dead` would change the program's behavior.
 ///
 /// `overwriter_addr` must already have had its value-aliases resolved
 /// (as the caller does for the overwriter's address).
@@ -1112,10 +1105,10 @@ fn fully_overwrites(
         return false;
     }
 
-    // Both must write the same number of bytes: e.g. `istore8` and `store`
-    // write different widths even when their value types are equal.
+    // Both must be the same kind of store: e.g. a plain `store` does not
+    // subsume an `atomic_store`, whose fence is observable on its own.
     let overwriter_opcode = func.dfg.insts[overwriter].opcode();
-    if get_ext_opcode(maybe_dead_opcode) != get_ext_opcode(overwriter_opcode) {
+    if maybe_dead_opcode != overwriter_opcode {
         return false;
     }
 

@@ -291,6 +291,33 @@
 
 (convert SinkableLoad SunkLoad sink_load)
 
+;; A narrow integer load whose result is about to be widened by a `uextend` or
+;; `sextend`. Pulley's `xload` instructions can perform that extension as part
+;; of the load itself, so the lowering of the extend sinks the load and
+;; re-emits it with the appropriate `ExtKind` via `gen_sunk_xload`.
+;;
+;; Unlike `sinkable_load` above there are no additional requirements on
+;; endianness, trapping, or the width of the static offset, because the load is
+;; emitted through `gen_xload`, which handles all of those cases itself.
+;;
+;; Like `SinkableLoad`, this deliberately hands back the load's *operands*
+;; rather than its result value. A rule matching on it therefore cannot come to
+;; depend on how that load would have been lowered on its own.
+(type SinkableNarrowLoad
+  (enum (Load (inst Inst) (ty Type) (flags MemFlagsData) (addr Value) (offset Offset32))))
+
+(decl pure partial sinkable_narrow_load (Value) SinkableNarrowLoad)
+
+(rule (sinkable_narrow_load value)
+  (if-let inst @ (load ty (mem_flags_data flags) addr offset) (is_sinkable_inst value))
+  (SinkableNarrowLoad.Load inst ty flags addr offset))
+
+;; Commit to sinking a `SinkableNarrowLoad` and emit it as an extending `xload`.
+(decl gen_sunk_xload (SinkableNarrowLoad ExtKind) XReg)
+(rule (gen_sunk_xload (SinkableNarrowLoad.Load inst ty flags addr offset) ext)
+      (let ((_ Unit (sink_inst inst)))
+        (gen_xload addr offset flags ty ext)))
+
 ;; Helper for determining what the pointer width of the host is.
 (type PointerWidth extern (enum PointerWidth32 PointerWidth64))
 (decl pure pointer_width () PointerWidth)
