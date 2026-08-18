@@ -20,6 +20,11 @@ mod response;
 pub use request::Request;
 pub use response::Response;
 
+/// The default value configured for [`WasiHttpHooks::p3_outgoing_body_chunk_size`].
+///
+/// [`WasiHttpHooks::p3_outgoing_body_chunk_size`]: crate::WasiHttpHooks::p3_outgoing_body_chunk_size
+pub const DEFAULT_OUTGOING_BODY_CHUNK_SIZE: usize = 1024 * 1024;
+
 use crate::{FieldMapError, WasiHttp, WasiHttpView};
 use bindings::http::{client, types};
 use core::ops::Deref;
