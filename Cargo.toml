@@ -367,8 +367,8 @@ wasip1 = { version = "1.0.0", default-features = false }
 # Note that `cap-fs-ext` should be avoided where possible to use
 # `cap-primitives` instead.
 target-lexicon = "0.13.5"
-cap-primitives = "4.0.2"
-cap-fs-ext-avoid-using-this = { version = "4.0.2", package = 'cap-fs-ext' }
+cap-primitives = "4.0.3"
+cap-fs-ext-avoid-using-this = { version = "4.0.3", package = 'cap-fs-ext' }
 rustix = "1.1.4"
 # wit-bindgen:
 wit-bindgen = { version = "0.60.0", default-features = false }
