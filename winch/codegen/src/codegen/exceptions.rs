@@ -1,6 +1,6 @@
-use super::{Callee, CodeGen, Emission, FnCall};
+use super::{Callee, CodeGen, CodeGenError, Emission, FnCall};
 use crate::{
-    Result,
+    Result, format_err,
     masm::{IntScratch, MacroAssembler, OperandSize, RegImm},
     reg::Reg,
     stack::TypedReg,
@@ -8,7 +8,7 @@ use crate::{
 use wasmtime_environ::copying::InlineTraceInfo;
 use wasmtime_environ::{
     Collector, GcStructLayout, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TagIndex, VMGcKind,
-    WasmHeapType, WasmStorageType, WasmValType,
+    WasmExnType, WasmHeapType, WasmStorageType, WasmValType,
 };
 
 impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
@@ -101,19 +101,16 @@ where
     /// remains owned by the caller.
     pub(crate) fn emit_exception_payload_fields(
         &mut self,
-        field_types: &[WasmStorageType],
-        field_offsets: &[u32],
+        exn_ty: &WasmExnType,
+        layout: &GcStructLayout,
         mut gc_ref: TypedReg,
         mut object_addr: Reg,
     ) -> Result<TypedReg> {
-        assert_eq!(field_types.len(), field_offsets.len());
+        assert_eq!(exn_ty.fields.len(), layout.fields.len());
 
-        for (field_ty, field_offset) in field_types
-            .iter()
-            .copied()
-            .zip(field_offsets.iter().copied())
-            .rev()
-        {
+        for (field, field_layout) in exn_ty.fields.iter().zip(layout.fields.iter()).rev() {
+            let field_ty = field.element_type;
+            let field_offset = field_layout.offset;
             match field_ty {
                 WasmStorageType::I8 => {
                     let value = self.context.pop_to_reg(self.masm, None)?;
@@ -127,37 +124,45 @@ where
                     self.masm.store(value.reg.into(), addr, OperandSize::S16)?;
                     self.context.free_reg(value.reg);
                 }
-                WasmStorageType::Val(WasmValType::Ref(r)) if r.heap_type == WasmHeapType::Func => {
-                    let func_ref = self.context.pop_to_reg(self.masm, None)?;
+                WasmStorageType::Val(ty @ WasmValType::Ref(r)) => match r.heap_type {
+                    WasmHeapType::Func => {
+                        let func_ref = self.context.pop_to_reg(self.masm, None)?;
 
-                    // The call can clobber allocated registers, so preserve the
-                    // allocation results beneath its argument.
-                    self.context.stack.push(TypedReg::i64(object_addr).into());
-                    self.context.stack.push(gc_ref.into());
-                    self.context.stack.push(func_ref.into());
+                        // The call can clobber allocated registers, so preserve the
+                        // allocation results beneath its argument.
+                        self.context.stack.push(TypedReg::i64(object_addr).into());
+                        self.context.stack.push(gc_ref.into());
+                        self.context.stack.push(func_ref.into());
 
-                    let intern = self.env.builtins.intern_func_ref_for_gc_heap::<M::ABI>()?;
-                    FnCall::emit::<M>(
-                        &mut self.env,
-                        self.masm,
-                        &mut self.context,
-                        Callee::Builtin(intern),
-                    )?;
+                        let intern = self.env.builtins.intern_func_ref_for_gc_heap::<M::ABI>()?;
+                        FnCall::emit::<M>(
+                            &mut self.env,
+                            self.masm,
+                            &mut self.context,
+                            Callee::Builtin(intern),
+                        )?;
 
-                    let func_ref_id = self.context.pop_to_reg(self.masm, None)?;
-                    gc_ref = self.context.pop_to_reg(self.masm, None)?;
-                    object_addr = self.context.pop_to_reg(self.masm, None)?.reg;
-                    let addr = self.masm.address_at_reg(object_addr, field_offset)?;
-                    self.masm
-                        .store(func_ref_id.reg.into(), addr, OperandSize::S32)?;
-                    self.context.free_reg(func_ref_id.reg);
-                }
-                WasmStorageType::Val(ty @ WasmValType::Ref(_))
-                    if self.tunables.collector == Some(Collector::DeferredReferenceCounting) =>
-                {
-                    let addr = self.masm.address_at_reg(object_addr, field_offset)?;
-                    self.emit_drc_init_barrier(ty, addr)?;
-                }
+                        let func_ref_id = self.context.pop_to_reg(self.masm, None)?;
+                        gc_ref = self.context.pop_to_reg(self.masm, None)?;
+                        object_addr = self.context.pop_to_reg(self.masm, None)?.reg;
+                        let addr = self.masm.address_at_reg(object_addr, field_offset)?;
+                        self.masm
+                            .store(func_ref_id.reg.into(), addr, OperandSize::S32)?;
+                        self.context.free_reg(func_ref_id.reg);
+                    }
+                    WasmHeapType::Extern
+                        if self.tunables.collector
+                            == Some(Collector::DeferredReferenceCounting) =>
+                    {
+                        let addr = self.masm.address_at_reg(object_addr, field_offset)?;
+                        self.emit_drc_init_barrier(ty, addr)?;
+                    }
+                    WasmHeapType::Extern => {
+                        let addr = self.masm.address_at_reg(object_addr, field_offset)?;
+                        self.context.pop_to_addr(self.masm, addr)?;
+                    }
+                    _ => return Err(format_err!(CodeGenError::unsupported_wasm_type())),
+                },
                 WasmStorageType::Val(_) => {
                     let addr = self.masm.address_at_reg(object_addr, field_offset)?;
                     self.context.pop_to_addr(self.masm, addr)?;

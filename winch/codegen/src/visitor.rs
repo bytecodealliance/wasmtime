@@ -29,7 +29,7 @@ use wasmparser::{
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeIndex,
-    WasmCompositeInnerType, WasmHeapType, WasmStorageType, WasmValType,
+    WasmCompositeInnerType, WasmHeapType, WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -1866,7 +1866,8 @@ where
         let interned = self.env.translation.module.tags[tag_index]
             .exception
             .unwrap_module_type_index();
-        let exn_ty = match &self.env.types[interned].composite_type.inner {
+        let types = self.env.types;
+        let exn_ty = match &types[interned].composite_type.inner {
             WasmCompositeInnerType::Exn(exn_ty) => exn_ty,
             _ => return Err(format_err!(CodeGenError::unsupported_wasm_type())),
         };
@@ -1875,32 +1876,10 @@ where
         let layout = layouts
             .exn_layout(exn_ty)
             .map_err(|_| format_err!(CodeGenError::unsupported_wasm_type()))?;
-        let field_types: SmallVec<[_; 8]> = exn_ty
-            .fields
-            .iter()
-            .map(|field| field.element_type)
-            .collect();
-        let field_offsets: SmallVec<[_; 8]> =
-            layout.fields.iter().map(|field| field.offset).collect();
-
-        // Winch represents `funcref` as a pointer on the value stack and as an
-        // interned ID in the GC heap. Other supported references already use
-        // the GC heap's representation.
-        for field_ty in &field_types {
-            let WasmStorageType::Val(WasmValType::Ref(r)) = field_ty else {
-                continue;
-            };
-
-            match r.heap_type {
-                WasmHeapType::Func | WasmHeapType::Extern => {}
-                _ => return Err(format_err!(CodeGenError::unsupported_wasm_type())),
-            }
-        }
 
         let (gc_ref, object_addr) =
             self.emit_exception_alloc(tag_index, interned, &layout, layouts)?;
-        let gc_ref =
-            self.emit_exception_payload_fields(&field_types, &field_offsets, gc_ref, object_addr)?;
+        let gc_ref = self.emit_exception_payload_fields(exn_ty, &layout, gc_ref, object_addr)?;
         self.context.stack.push(gc_ref.into());
         self.visit_throw_ref()
     }
