@@ -17,18 +17,23 @@ pub const MAX_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
 pub const MAX_FIELDS_RANGE: RangeInclusive<u32> = 0..=8;
 /// Range for the length of created arrays.
 pub const ARRAY_LENGTH_RANGE: RangeInclusive<u32> = 1..=16;
-/// Maximum number of operations.
-pub const MAX_OPS: usize = 100;
 
 /// Limits controlling the structure of a generated Wasm module.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, mutatis::Mutate)]
 pub struct GcOpsLimits {
+    #[mutatis(default_mutate)]
     pub(crate) num_params: u32,
+    #[mutatis(default_mutate)]
     pub(crate) num_globals: u32,
+    #[mutatis(default_mutate)]
     pub(crate) table_size: u32,
+    #[mutatis(default_mutate)]
     pub(crate) max_rec_groups: u32,
+    #[mutatis(default_mutate)]
     pub(crate) max_types: u32,
+    #[mutatis(default_mutate)]
     pub(crate) max_fields: u32,
+    #[mutatis(default_mutate)]
     pub(crate) array_length: u32,
 }
 
@@ -59,15 +64,18 @@ impl GcOpsLimits {
             array_length,
         } = self;
 
-        let clamp = |limit: &mut u32, range: RangeInclusive<u32>| {
-            *limit = (*limit).clamp(*range.start(), *range.end())
+        let fixup = |limit: &mut u32, range: RangeInclusive<u32>| {
+            if !range.contains(limit) {
+                let (start, end) = (*range.start(), *range.end());
+                *limit = start + *limit % (end - start + 1);
+            }
         };
-        clamp(table_size, TABLE_SIZE_RANGE);
-        clamp(num_params, NUM_PARAMS_RANGE);
-        clamp(num_globals, NUM_GLOBALS_RANGE);
-        clamp(max_rec_groups, MAX_REC_GROUPS_RANGE);
-        clamp(max_types, MAX_TYPES_RANGE);
-        clamp(max_fields, MAX_FIELDS_RANGE);
-        clamp(array_length, ARRAY_LENGTH_RANGE);
+        fixup(table_size, TABLE_SIZE_RANGE);
+        fixup(num_params, NUM_PARAMS_RANGE);
+        fixup(num_globals, NUM_GLOBALS_RANGE);
+        fixup(max_rec_groups, MAX_REC_GROUPS_RANGE);
+        fixup(max_types, MAX_TYPES_RANGE);
+        fixup(max_fields, MAX_FIELDS_RANGE);
+        fixup(array_length, ARRAY_LENGTH_RANGE);
     }
 }

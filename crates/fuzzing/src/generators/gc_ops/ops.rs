@@ -5,6 +5,7 @@ use crate::generators::gc_ops::{
     limits::GcOpsLimits,
     types::{CompositeType, RecGroupId, TypeId, Types},
 };
+use mutatis::Generate;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use wasm_encoder::{
@@ -49,7 +50,7 @@ struct WasmEncodingBases {
 
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GcOps {
     pub(crate) limits: GcOpsLimits,
     pub(crate) ops: Vec<GcOp>,
@@ -1125,11 +1126,14 @@ macro_rules! define_gc_op_variants {
         )*
     ) => {
         /// The operations that can be performed by the `gc` function.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, mutatis::Mutate,
+        )]
+        #[mutatis(default_mutate = false)]
         #[allow(missing_docs, reason = "self-describing")]
         pub enum GcOp {
             $(
-                $op $( { $( $field : $field_ty ),* } )? ,
+                $op $( { $( #[mutatis(default_mutate)] $field : $field_ty ),* } )? ,
             )*
         }
     };
@@ -1276,36 +1280,6 @@ impl GcOp {
             }};
         }
         for_each_gc_op!(define_gc_op_fixup)
-    }
-
-    pub(crate) fn generate(ctx: &mut mutatis::Context) -> mutatis::Result<GcOp> {
-        macro_rules! define_gc_op_generate {
-            (
-                $(
-                    $( #[$attr:meta] )*
-                    $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
-                )*
-            ) => {{
-                let choices: &[fn(&mut mutatis::Context) -> mutatis::Result<GcOp>] = &[
-                    $(
-                        |_ctx| Ok(GcOp::$op $( {
-                            $(
-                                $field: {
-                                    let mut mutator = <$field_ty as mutatis::DefaultMutate>::DefaultMutate::default();
-                                    mutatis::Generate::<$field_ty>::generate(&mut mutator, _ctx)?
-                                }
-                            ),*
-                        } )? ),
-                    )*
-                ];
-
-                let f = *ctx.rng()
-                    .choose(choices)
-                    .unwrap();
-                (f)(ctx)
-            }};
-        }
-        for_each_gc_op!(define_gc_op_generate)
     }
 
     fn encode(
