@@ -163,7 +163,7 @@ The steps you'll want to use when minimizing `*.cwasm` size are:
     Rust's libstd, etc.
 * Pass `-Daddress-map=n` to disable the ability to generate backtraces with wasm
   pc's in the backtrace.
-* Pass `-Dsymbols=n` to diasble symbols used for debugging/profiling in the
+* Pass `-Dsymbols=n` to disable symbols used for debugging/profiling in the
   output artifact.
 * Pass `-Omemory-init-cow=n` to disable page-aligned data sections and
   precomputation of a memory image that may have holes in it.

@@ -52,7 +52,7 @@ pub struct RunCommand {
     /// e.g. `wasi:cli/run.run@0.2.0()` or
     /// `your:pkg/iface.func("arguments in wave encoding")`. Bare function
     /// names (e.g. `run()`) are accepted and searched for in all exported
-    /// instances, and must be unambigious.
+    /// instances, and must be unambiguous.
     #[arg(long, value_name = "FUNCTION")]
     pub invoke: Option<String>,
 

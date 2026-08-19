@@ -283,7 +283,7 @@ Spec macros may be declared:
 ```
 
 Macro expansions are of the form `(<name>! <args...>)`. The body of the macro is
-evaluated in a scope with paramters set to argument values, and the result
+evaluated in a scope with parameters set to argument values, and the result
 substituted for the expansion expression.
 
 ## Type Instantiation

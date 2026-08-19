@@ -2393,7 +2393,7 @@ where
         // value stack can't be spilled, so an untracked address register would make any request
         // for a fixed register fail if the address happened to be allocated to it. For this
         // reason, the address is pushed as a register to be dereferenced prior to emission, after
-        // all the ISA-specifc constraints have been solved.
+        // all the ISA-specific constraints have been solved.
         let operand = self.context.pop_to_reg(self.masm, None)?;
         if let Some(addr) = self.emit_compute_heap_address_align_checked(&heap, arg, size)? {
             self.context

@@ -4504,7 +4504,7 @@ impl FuncEnvironment<'_> {
                 | WasmHeapTopType::Cont => ty.heap_type.is_vmgcref_type_and_not_i31(),
 
                 // `funcref` is stored differently in tables and the GC heap, so
-                // futher inspection is necessary of where the copy is
+                // further inspection is necessary of where the copy is
                 // happening.
                 WasmHeapTopType::Func => match src_entity {
                     // Tables of funcrefs might be lazily initialized which
@@ -6097,7 +6097,7 @@ impl FuncEnvironment<'_> {
         Ok(())
     }
 
-    /// Peform initialization of an active data segment in a module.
+    /// Perform initialization of an active data segment in a module.
     fn module_initialize_memory_segment(
         &mut self,
         builder: &mut FunctionBuilder,
