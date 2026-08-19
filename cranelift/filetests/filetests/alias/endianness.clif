@@ -1,0 +1,197 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Byte order is part of a memory location's identity: two accesses to the same
+;; address with the same type but opposite byte order are *not* interchangeable,
+;; because forwarding a value from one to the other would drop a byte swap.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Redundant-load elimination
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The big-endian load must not be replaced with the little-endian load's
+;; result.
+function %rle_mismatched_endianness(i64) -> i16, i16 {
+    region0 = 0 "heap"
+block0(v0: i64):
+    v1 = load.i16 region0 little v0
+    v2 = load.i16 region0 big v0
+    return v1, v2
+}
+
+; function %rle_mismatched_endianness(i64) -> i16, i16 fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64):
+;     v1 = load.i16 little region0 v0
+;     v2 = load.i16 big region0 v0
+;     return v1, v2
+; }
+
+;; Same byte order: the second load is redundant and is removed.
+function %rle_matching_endianness(i64) -> i16, i16 {
+    region0 = 0 "heap"
+block0(v0: i64):
+    v1 = load.i16 region0 big v0
+    v2 = load.i16 region0 big v0
+    return v1, v2
+}
+
+; function %rle_matching_endianness(i64) -> i16, i16 fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64):
+;     v1 = load.i16 big region0 v0
+;     return v1, v1
+; }
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Store-to-load forwarding
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The big-endian load must not be replaced with the little-endian store's data.
+function %stl_mismatched_endianness(i64, i16) -> i16 {
+    region0 = 0 "heap"
+block0(v0: i64, v1: i16):
+    store.i16 region0 little v1, v0
+    v2 = load.i16 region0 big v0
+    return v2
+}
+
+; function %stl_mismatched_endianness(i64, i16) -> i16 fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i16):
+;     store little region0 v1, v0
+;     v2 = load.i16 big region0 v0
+;     return v2
+; }
+
+;; Same byte order: the load is forwarded from the store.
+function %stl_matching_endianness(i64, i16) -> i16 {
+    region0 = 0 "heap"
+block0(v0: i64, v1: i16):
+    store.i16 region0 big v1, v0
+    v2 = load.i16 region0 big v0
+    return v2
+}
+
+; function %stl_matching_endianness(i64, i16) -> i16 fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i16):
+;     store big region0 v1, v0
+;     return v1
+; }
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Idempotent-store elimination
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Storing a big-endian load's result back with little-endian byte order writes
+;; the byte-swapped value to memory, so the store is not idempotent and must be
+;; kept.
+function %idempotent_store_mismatched_endianness(i64) {
+    region0 = 0 "heap"
+block0(v0: i64):
+    v1 = load.i16 region0 big v0
+    store.i16 region0 little v1, v0
+    return
+}
+
+; function %idempotent_store_mismatched_endianness(i64) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64):
+;     v1 = load.i16 big region0 v0
+;     store little region0 v1, v0
+;     return
+; }
+
+;; Same byte order: the store really is idempotent and is removed.
+function %idempotent_store_matching_endianness(i64) {
+    region0 = 0 "heap"
+block0(v0: i64):
+    v1 = load.i16 region0 big v0
+    store.i16 region0 big v1, v0
+    return
+}
+
+; function %idempotent_store_matching_endianness(i64) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64):
+;     v1 = load.i16 big region0 v0
+;     return
+; }
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Implicit (native) versus explicit byte order
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; We do not resolve an unspecified byte order to the target's native byte
+;; order, so an access that leaves the byte order implicit never forwards into
+;; one that spells it out, even when they agree on this target. This is
+;; conservative: it costs an optimization, but is never wrong.
+function %rle_implicit_versus_explicit_endianness(i64) -> i16, i16 {
+    region0 = 0 "heap"
+block0(v0: i64):
+    v1 = load.i16 region0 v0
+    v2 = load.i16 region0 little v0
+    return v1, v2
+}
+
+; function %rle_implicit_versus_explicit_endianness(i64) -> i16, i16 fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64):
+;     v1 = load.i16 region0 v0
+;     v2 = load.i16 little region0 v0
+;     return v1, v2
+; }
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Dead-store elimination
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Dead-store elimination does not care about byte order: both stores write
+;; exactly the same range of bytes, and the second one's bytes are the ones
+;; that survive regardless of the order within that range. So the first store
+;; is dead even though the two disagree about byte order.
+function %dead_store_mismatched_endianness(i64, i16, i16) {
+    region0 = 0 "heap"
+block0(v0: i64, v1: i16, v2: i16):
+    store.i16 region0 big v1, v0
+    store.i16 region0 little v2, v0
+    return
+}
+
+; function %dead_store_mismatched_endianness(i64, i16, i16) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i16, v2: i16):
+;     store little region0 v2, v0
+;     return
+; }
+
+;; Removing a dead store whose byte order differs from its overwriter's must
+;; still roll the last-store state back to the version before the dead store,
+;; so that the overwriter is recognized as idempotent on reprocessing. Both
+;; stores should be gone here.
+function %dead_store_then_idempotent_store_mismatched_endianness(i64, i16) {
+    region0 = 0 "heap"
+block0(v0: i64, v1: i16):
+    v2 = load.i16 notrap region0 big v0
+    store.i16 region0 little v1, v0
+    store.i16 region0 big v2, v0
+    return
+}
+
+; function %dead_store_then_idempotent_store_mismatched_endianness(i64, i16) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i16):
+;     v2 = load.i16 notrap big region0 v0
+;     return
+; }

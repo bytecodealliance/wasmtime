@@ -1,0 +1,51 @@
+test interpret
+test run
+set opt_level=speed
+
+;; XXX: only the s390x and Pulley backends implement non-native byte order for
+;; memory accesses at the time of writing, and these tests need a mismatched
+;; pair to exercise the alias-analysis behavior at all.
+target s390x
+target pulley64
+
+;; Redundant-load elimination between a little-endian and a big-endian load:
+;; the big-endian load must not be replaced with the little-endian one's
+;; result. Correct result: 0x1234 ^ 0x3412 == 0x2626.
+function %rle_across_endianness(i16) -> i16 {
+    ss0 = explicit_slot 8
+block0(v1: i16):
+    v0 = stack_addr.i64 ss0
+    store little v1, v0
+    v2 = load.i16 little v0
+    v3 = load.i16 big v0
+    v4 = bxor v2, v3
+    return v4
+}
+; run: %rle_across_endianness(0x1234) == 0x2626
+
+;; Store-to-load forwarding between a little-endian store and a big-endian
+;; load: the load must not be replaced with the store's data.
+function %stl_across_endianness(i16) -> i16 {
+    ss0 = explicit_slot 8
+block0(v1: i16):
+    v0 = stack_addr.i64 ss0
+    store little v1, v0
+    v2 = load.i16 big v0
+    return v2
+}
+; run: %stl_across_endianness(0x1234) == 0x3412
+
+;; Idempotent-store elimination between a big-endian load and a little-endian
+;; store: the store writes the byte-swapped value, so it is not idempotent and
+;; must not be deleted.
+function %idempotent_store_across_endianness(i16) -> i16 {
+    ss0 = explicit_slot 8
+block0(v1: i16):
+    v0 = stack_addr.i64 ss0
+    store little v1, v0
+    v2 = load.i16 big v0
+    store little v2, v0
+    v3 = load.i16 little v0
+    return v3
+}
+; run: %idempotent_store_across_endianness(0x1234) == 0x3412
