@@ -4,7 +4,135 @@ Unreleased.
 
 ### Added
 
+* Wasmtime has an initial implementation of the component model
+  fixed-length-lists feature.
+  [#12315](https://github.com/bytecodealliance/wasmtime/pull/12315)
+
+* Wasmtime's reflection of component imports/exports now exposes `external-id`
+  information.
+  [#13874](https://github.com/bytecodealliance/wasmtime/pull/13874)
+
+* Cranelift's alias analysis pass now eliminates dead stores.
+  [#13806](https://github.com/bytecodealliance/wasmtime/pull/13806)
+  [#13947](https://github.com/bytecodealliance/wasmtime/pull/13947)
+
+* Winch now supports the wasm SIMD proposal on AArch64.
+  [#13911](https://github.com/bytecodealliance/wasmtime/pull/13911)
+  [#13921](https://github.com/bytecodealliance/wasmtime/pull/13921)
+  [#13928](https://github.com/bytecodealliance/wasmtime/pull/13928)
+  [#13937](https://github.com/bytecodealliance/wasmtime/pull/13937)
+  [#13945](https://github.com/bytecodealliance/wasmtime/pull/13945)
+  [#13938](https://github.com/bytecodealliance/wasmtime/pull/13938)
+  [#13946](https://github.com/bytecodealliance/wasmtime/pull/13946)
+  ...
+
+* Cranelift now supports an AVX512-VNNI lowering for the dot-product wasm
+  instruction and `usdot` on AArch64.
+  [#14006](https://github.com/bytecodealliance/wasmtime/pull/14006)
+  [#14054](https://github.com/bytecodealliance/wasmtime/pull/14054)
+
+* Wasmtime's `bindgen!` macro now has an `include_component_type` option to
+  generate a `COMPONENT_TYPE` constant with the encoded type of the world being
+  bound.
+  [#14013](https://github.com/bytecodealliance/wasmtime/pull/14013)
+
+* Wasmtime now supports configurable fuel costs for variable-length wasm
+  opcodes.
+  [#13931](https://github.com/bytecodealliance/wasmtime/pull/13931)
+
 ### Changed
+
+* Host-implemented traits in `wasmtime-wasi-http` are now the same across
+  wasip2/wasip3 and no longer require separate implementations/structures.
+  [#13810](https://github.com/bytecodealliance/wasmtime/pull/13810)
+  [#13812](https://github.com/bytecodealliance/wasmtime/pull/13812)
+  [#13835](https://github.com/bytecodealliance/wasmtime/pull/13835)
+
+* Wasmtime will now use the `process_madvise` syscall on Linux where available
+  which can improve the performance of the pooling allocator when the
+  deallocation batch size is configured to larger than 1.
+  [#13830](https://github.com/bytecodealliance/wasmtime/pull/13830)
+
+* Synchronous cancellation of streams/futures/subtasks now traps if the waitable
+  was already in a waitable set.
+  [#13708](https://github.com/bytecodealliance/wasmtime/pull/13708)
+
+* Winch is now flagged to be compatible with component-model-async.
+  [#13845](https://github.com/bytecodealliance/wasmtime/pull/13845)
+
+* Wasmtime's pooling allocator now uses more sharding to reduce lock contention.
+  [#13840](https://github.com/bytecodealliance/wasmtime/pull/13840)
+
+* Wasmtime now requires Rust 1.95.0 to build.
+  [#13853](https://github.com/bytecodealliance/wasmtime/pull/13853)
+
+* Cranelift now has a uniform maximum size across all backends on the bounds of
+  a function's stack frame.
+  [#13783](https://github.com/bytecodealliance/wasmtime/pull/13783)
+
+* Wasmtime's `LinkerInstance` for components now supports being reopened to
+  gradually add more items.
+  [#13908](https://github.com/bytecodealliance/wasmtime/pull/13908)
+
+* The `wasmtime-wasi` crate's default configuration now denies creation of
+  TCP/UDP sockets by default.
+  [#13936](https://github.com/bytecodealliance/wasmtime/pull/13936)
+
+* Wasmtime now configures async task context fields on `realloc` calls to zero.
+  [#13949](https://github.com/bytecodealliance/wasmtime/pull/13949)
+
+* Work has continued on continuous verification of Cranelift's lowering rules
+  on AArch64.
+  [#13935](https://github.com/bytecodealliance/wasmtime/pull/13935)
+  [#13929](https://github.com/bytecodealliance/wasmtime/pull/13929)
+  [#13998](https://github.com/bytecodealliance/wasmtime/pull/13998)
+
+* Codegen for loads on AArch64 has been optimized slightly to improve sharing
+  common sub-expressions.
+  [#13766](https://github.com/bytecodealliance/wasmtime/pull/13766)
+
+* Work continues on implementing the stack-switching proposal.
+  [#11717](https://github.com/bytecodealliance/wasmtime/pull/11717)
+  [#13996](https://github.com/bytecodealliance/wasmtime/pull/13996)
+  [#14052](https://github.com/bytecodealliance/wasmtime/pull/14052)
+
+* Permissions for `wasi-filesystem` in the implementation of the `wasmtime-wasi`
+  crate have been simplified to either read-write or read-only for a directory.
+  [#14010](https://github.com/bytecodealliance/wasmtime/pull/14010)
+
+### Fixed
+
+* A late-drop of host-defined stream producers/consumers has been fixed.
+  [#13891](https://github.com/bytecodealliance/wasmtime/pull/13891)
+
+* Call hooks are now invoked around async yields when dealing with concurrent
+  execution.
+  [#13871](https://github.com/bytecodealliance/wasmtime/pull/13871)
+
+* Extreme filesystem timestamps no longer cause panics.
+  [#13894](https://github.com/bytecodealliance/wasmtime/pull/13894)
+
+* An erroneous trap was fixed where an async-delivered write-closed event was
+  sent to a future.
+  [#13914](https://github.com/bytecodealliance/wasmtime/pull/13914)
+
+* An erroneous trap where Wasmtime internally used the wrong thread id has been
+  fixed.
+  [#13926](https://github.com/bytecodealliance/wasmtime/pull/13926)
+
+* Cross-component instance streams are no longer erroneously flagged as being
+  intra-instance.
+  [#14018](https://github.com/bytecodealliance/wasmtime/pull/14018)
+
+* A panic in the `wasmtime` CLI with non-utf8 environment variables has been
+  fixed.
+  [#14017](https://github.com/bytecodealliance/wasmtime/pull/14017)
+
+* Atomic waits on big-endian hosts have been fixed.
+  [#14027](https://github.com/bytecodealliance/wasmtime/pull/14027)
+
+* Enabling MPK with CoW images has been fixed.
+  [#14076](https://github.com/bytecodealliance/wasmtime/pull/14076)
 
 --------------------------------------------------------------------------------
 
