@@ -19,7 +19,6 @@ use wasmparser::component_types::{
 };
 use wasmparser::types::Types;
 use wasmparser::{Chunk, ComponentExternName, Encoding, Parser, Payload, Validator};
-use wasmtime_core::alloc::PanicOnOom;
 
 mod adapt;
 pub use self::adapt::*;
@@ -608,30 +607,21 @@ impl<'a, 'data> Translator<'a, 'data> {
                 let index = DefinedGlobalIndex::new(i);
                 let global = translation.module.global_index(index);
                 if !ambiguous.contains(&(module, EntityIndex::Global(global))) {
-                    translation
-                        .globals_known_to_importers
-                        .insert(index)
-                        .panic_on_oom();
+                    translation.globals_known_to_importers.insert(index);
                 }
             }
             for i in 0..translation.module.num_defined_memories() {
                 let index = DefinedMemoryIndex::new(i);
                 let memory = translation.module.memory_index(index);
                 if !ambiguous.contains(&(module, EntityIndex::Memory(memory))) {
-                    translation
-                        .memories_known_to_importers
-                        .insert(index)
-                        .panic_on_oom();
+                    translation.memories_known_to_importers.insert(index);
                 }
             }
             for i in 0..translation.module.num_defined_tables() {
                 let index = DefinedTableIndex::new(i);
                 let table = translation.module.table_index(index);
                 if !ambiguous.contains(&(module, EntityIndex::Table(table))) {
-                    translation
-                        .tables_known_to_importers
-                        .insert(index)
-                        .panic_on_oom();
+                    translation.tables_known_to_importers.insert(index);
                 }
             }
         }
@@ -1991,10 +1981,7 @@ fn resolve_core_export(
                 // instance's `RuntimeInstanceIndex`, and would panic building an
                 // export of an instance it had not linearized yet. So this walk
                 // strictly decreases and must terminate.
-                debug_assert!(next.instance < instance);
-                if next.instance >= instance {
-                    return None;
-                }
+                assert!(next.instance < instance);
                 instance = next.instance;
                 item = &next.item;
             }

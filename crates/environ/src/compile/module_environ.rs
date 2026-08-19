@@ -13,8 +13,8 @@ use crate::{
     WasmValType, WasmparserTypeConverter,
 };
 use alloc::borrow::Cow;
-use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
+use cranelift_entity::{EntitySet, SecondaryMap};
 use std::collections::HashMap;
 use std::mem;
 use std::path::PathBuf;
@@ -125,13 +125,35 @@ pub struct ModuleTranslation<'data> {
     /// conservative `AliasRegionKey::Public{Global,Memory,Table}` region that is
     /// shared by every entity of that kind which crosses a module boundary.
     ///
-    /// XXX: Being known requires more here than it does for functions: it is
+    /// XXX: Being "known" requires more here than it does for functions: it is
     /// not enough that *this* module's import is always the same entity,
     /// *every* module that may import that entity must also always import that
     /// same entity. Otherwise a function from one of those other modules, which
     /// accesses the entity via the conservative region, could be inlined next
     /// to one of our accesses via the precise region, and accessing the same
     /// memory through two different alias regions is invalid.
+    ///
+    /// This extra condition is an artifact of this implementation, and how we
+    /// consume this data to choose the alias region for loads and stores to a
+    /// global/memory/table, not something inherent to knowing exactly which
+    /// entity satisfies a particular import. Really, there are two independent
+    /// axes here:
+    ///
+    /// 1. Is this import always satisfied by the same defined entity?
+    ///
+    /// 2. Is that entity's identity additionally known to *every* other module
+    ///    that may import it?
+    ///
+    /// Only alias regions need (2), but other theoretical optimizations could
+    /// be perfectly happy with just (1). For example, if we know that an import
+    /// of an immutable global is always a particular defined global, then we
+    /// could inline that global's value at each `global.get` of the import,
+    /// regardless what any other module does or does not know about that
+    /// global.
+    ///
+    /// TODO(#14164): Actually record (1) and (2) in separate maps, enabling
+    /// optimizations that rely on just (1) but not (2), instead of folding them
+    /// into this same map.
     pub known_imported_globals: SecondaryMap<GlobalIndex, Option<KnownEntity<DefinedGlobalIndex>>>,
 
     /// Same as `known_imported_globals`, but for memories.
@@ -150,13 +172,13 @@ pub struct ModuleTranslation<'data> {
     ///
     /// This can only be determined by looking at the whole component, so it is
     /// always `false` for standalone modules.
-    pub globals_known_to_importers: TryEntitySet<DefinedGlobalIndex>,
+    pub globals_known_to_importers: EntitySet<DefinedGlobalIndex>,
 
     /// Same as [`Self::globals_known_to_importers`], but for memories.
-    pub memories_known_to_importers: TryEntitySet<DefinedMemoryIndex>,
+    pub memories_known_to_importers: EntitySet<DefinedMemoryIndex>,
 
     /// Same as [`Self::globals_known_to_importers`], but for tables.
-    pub tables_known_to_importers: TryEntitySet<DefinedTableIndex>,
+    pub tables_known_to_importers: EntitySet<DefinedTableIndex>,
 
     /// A list of type signatures which are considered exported from this
     /// module, or those that can possibly be called. This list is sorted, and
@@ -282,9 +304,9 @@ impl<'data> ModuleTranslation<'data> {
             known_imported_globals: SecondaryMap::default(),
             known_imported_memories: SecondaryMap::default(),
             known_imported_tables: SecondaryMap::default(),
-            globals_known_to_importers: TryEntitySet::default(),
-            memories_known_to_importers: TryEntitySet::default(),
-            tables_known_to_importers: TryEntitySet::default(),
+            globals_known_to_importers: EntitySet::new(),
+            memories_known_to_importers: EntitySet::new(),
+            tables_known_to_importers: EntitySet::new(),
             exported_signatures: Vec::default(),
             debuginfo: DebugInfoData::default(),
             has_unparsed_debuginfo: false,
