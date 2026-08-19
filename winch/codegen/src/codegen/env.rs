@@ -13,8 +13,9 @@ use std::mem;
 use wasmparser::BlockType;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedFuncIndex, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
-    MemoryIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, Table, TableIndex,
-    TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType, collections::TryClone as _,
+    MemoryIndex, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap,
+    PtrSize, Table, TableIndex, TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType,
+    collections::TryClone as _,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -175,6 +176,14 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     /// Derive the [`WasmType`] from the pointer size.
     pub(crate) fn ptr_type(&self) -> WasmValType {
         self.ptr_type
+    }
+
+    /// Returns the byte offset of `index` in the module's shared type-ID array.
+    pub(crate) fn shared_type_index_offset(&self, index: ModuleInternedTypeIndex) -> u32 {
+        index
+            .as_u32()
+            .checked_mul(u32::from(self.vmoffsets.size_of_vmshared_type_index()))
+            .unwrap()
     }
 
     /// Resolves a [`Callee::FuncRef`] from a type index.

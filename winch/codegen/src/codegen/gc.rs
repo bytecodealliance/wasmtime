@@ -200,10 +200,7 @@ where
             OperandSize::S32,
         )?;
         let shared_ty_size = self.env.vmoffsets.size_of_vmshared_type_index();
-        let shared_ty_offset = interned
-            .as_u32()
-            .checked_mul(u32::from(shared_ty_size))
-            .unwrap();
+        let shared_ty_offset = self.env.shared_type_index_offset(interned);
         let type_ids_offset = self.env.vmoffsets.ptr.vmctx().type_ids();
         self.masm.with_scratch::<IntScratch, _>(|masm, shared_ty| {
             masm.load_ptr(
@@ -256,10 +253,7 @@ where
         align: u32,
     ) -> Result<(TypedReg, Reg)> {
         let shared_ty_size = self.env.vmoffsets.size_of_vmshared_type_index();
-        let shared_ty_offset = interned
-            .as_u32()
-            .checked_mul(u32::from(shared_ty_size))
-            .unwrap();
+        let shared_ty_offset = self.env.shared_type_index_offset(interned);
 
         // The shared type ID is a call argument, so allocate it here and let
         // call emission consume it rather than keeping a caller-owned register
