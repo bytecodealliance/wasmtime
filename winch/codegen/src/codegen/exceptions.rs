@@ -106,7 +106,7 @@ where
         mut gc_ref: TypedReg,
         mut object_addr: Reg,
     ) -> Result<TypedReg> {
-        debug_assert_eq!(field_types.len(), field_offsets.len());
+        assert_eq!(field_types.len(), field_offsets.len());
 
         for (field_ty, field_offset) in field_types
             .iter()

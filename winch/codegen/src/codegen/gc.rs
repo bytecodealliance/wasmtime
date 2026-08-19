@@ -2,6 +2,7 @@ use super::{CodeGen, CodeGenError, Emission};
 use crate::{
     Result,
     codegen::{Callee, FnCall},
+    ensure,
     masm::{IntCmpKind, IntScratch, MacroAssembler, OperandSize, RegImm},
     reg::{Reg, writable},
     stack::{TypedReg, Val},
@@ -188,6 +189,10 @@ where
         // kind; the size occupies the remaining lower 26 bits, so bitwise OR
         // packs both values without overlap.
         let kind_and_size = kind | size;
+        ensure!(
+            VMGcKind::value_fits_in_unused_bits(size),
+            CodeGenError::allocation_too_large()
+        );
         self.masm.store(
             RegImm::i32(kind_and_size.cast_signed()),
             self.masm
