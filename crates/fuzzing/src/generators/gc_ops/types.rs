@@ -2,6 +2,7 @@
 
 use crate::generators::gc_ops::limits::GcOpsLimits;
 use crate::generators::gc_ops::ops::GcOp;
+use mutatis::Generate;
 use serde::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -16,9 +17,20 @@ pub struct RecGroupId(pub(crate) u32);
 
 /// Identifies a type within a rec group.
 #[derive(
-    Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Ord, Hash, Default, Serialize, Deserialize,
+    Debug,
+    Copy,
+    Clone,
+    Eq,
+    PartialOrd,
+    PartialEq,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize,
+    mutatis::Mutate,
 )]
-pub struct TypeId(pub(crate) u32);
+pub struct TypeId(#[mutatis(default_mutate)] pub(crate) u32);
 
 macro_rules! for_each_field_type {
     ( $mac:ident ) => {
@@ -69,26 +81,34 @@ macro_rules! for_each_field_type {
 macro_rules! define_field_type_enum {
     ( $( #[storage($storage:expr)] #[default_val($default_val:expr)] $variant:ident, )* ) => {
         /// The storage type of a struct field.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, mutatis::Mutate,
+        )]
         #[allow(missing_docs, reason = "self-describing")]
         pub enum FieldType {
             $( $variant, )*
+
             /// Abstract `(ref null? struct)`.
-            StructRef { nullable: bool },
+            StructRef {
+                #[mutatis(ignore)]
+                nullable: bool,
+            },
+
             /// Concrete `(ref null? $t)` referencing a defined struct type.
-            Ref { nullable: bool, type_id: TypeId },
+            Ref {
+                // `nullable` is ignored because support for non-nullable
+                // references isn't implemented yet and so `Types::fixup`
+                // unconditionally forces it to `true`. Mutating it here would
+                // be a waste of time.
+                #[mutatis(ignore)]
+                nullable: bool,
+
+                #[mutatis(default_mutate)]
+                type_id: TypeId,
+            },
         }
 
         impl FieldType {
-            /// All scalar/abstract-leaf field type variants, for random selection.
-            pub const ALL: &[FieldType] = &[ $( FieldType::$variant, )* ];
-
-            /// Pick a random scalar/abstract-leaf field type.
-            pub fn random(rng: &mut mutatis::Rng) -> FieldType {
-                let idx = rng.gen_index(FieldType::ALL.len()).unwrap();
-                FieldType::ALL[idx]
-            }
-
             /// Convert to a `wasm_encoder::StorageType`.
             pub fn to_storage_type(
                 self,
@@ -169,56 +189,40 @@ macro_rules! define_field_type_enum {
 }
 for_each_field_type!(define_field_type_enum);
 
-impl FieldType {
-    /// Generate a random field type, including reference types.
-    pub fn generate(rng: &mut mutatis::Rng, candidates: &[TypeId]) -> FieldType {
-        match rng.gen_u32() % 4 {
-            // Abstract `structref`.
-            0 => FieldType::StructRef { nullable: true },
-            // Concrete `(ref null $t)`, when we have a type to point at.
-            1 => match rng.choose(candidates).copied() {
-                Some(type_id) => FieldType::Ref {
-                    nullable: true,
-                    type_id,
-                },
-                None => FieldType::random(rng),
-            },
-            // Scalar / abstract-leaf type.
-            _ => FieldType::random(rng),
-        }
-    }
-}
-
 /// A single field within a struct type.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, mutatis::Mutate)]
 pub struct StructField {
     /// The storage type of this field.
+    #[mutatis(default_mutate)]
     pub(crate) field_type: FieldType,
     /// Whether this field is mutable.
+    #[mutatis(default_mutate)]
     pub(crate) mutable: bool,
 }
 
 /// A struct type definition.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, mutatis::Mutate)]
 pub struct StructType {
     /// The fields of this struct type.
+    #[mutatis(default_mutate)]
     pub(crate) fields: Vec<StructField>,
 }
 
 /// An array type definition: a single element storage type plus mutability.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, mutatis::Mutate)]
 pub struct ArrayType {
     /// The element storage type of this array type.
+    #[mutatis(default_mutate)]
     pub(crate) element: StructField,
 }
 
 /// A composite type: either a struct or an array.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, mutatis::Mutate)]
 pub enum CompositeType {
     /// A struct composite type.
-    Struct(StructType),
+    Struct(#[mutatis(default_mutate)] StructType),
     /// An array composite type.
-    Array(ArrayType),
+    Array(#[mutatis(default_mutate)] ArrayType),
 }
 
 impl CompositeType {
@@ -227,8 +231,8 @@ impl CompositeType {
         matches!(self, CompositeType::Array(_))
     }
 
-    /// The storage fields of this composite type.
-    ///  All struct fields or the single array element.
+    /// The storage fields of this composite type: all struct fields or the
+    /// single array element.
     pub(crate) fn fields(&self) -> &[StructField] {
         match self {
             CompositeType::Struct(st) => &st.fields,
@@ -236,7 +240,7 @@ impl CompositeType {
         }
     }
 
-    /// Mutable view of the storage fields; see [`CompositeType::fields`].
+    /// Mutable view of the storage fields.
     pub(crate) fn fields_mut(&mut self) -> &mut [StructField] {
         match self {
             CompositeType::Struct(st) => &mut st.fields,
@@ -246,10 +250,13 @@ impl CompositeType {
 }
 
 /// A sub-type definition (the per-type payload).
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, mutatis::Mutate)]
 pub struct SubType {
+    #[mutatis(default_mutate)]
     pub(crate) is_final: bool,
+    #[mutatis(default_mutate)]
     pub(crate) supertype: Option<TypeId>,
+    #[mutatis(default_mutate)]
     pub(crate) composite_type: CompositeType,
 }
 
@@ -377,12 +384,30 @@ impl Graph<RecGroupNode> for DenseRecGroupGraph {
 ///
 /// Rec groups own sets of [`TypeId`]s; moving a type between groups is
 /// just a set remove + set insert with no cascading index fixups.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Types {
     /// Map from rec-group id to the set of types it contains.
     pub(crate) rec_groups: BTreeMap<RecGroupId, BTreeSet<TypeId>>,
     /// Map from type id to its definition.
     pub(crate) type_defs: BTreeMap<TypeId, SubType>,
+}
+
+/// The live id at or after `id`, wrapping around, skipping `exclude`.
+fn nearest_live_type_id(
+    live: &BTreeSet<TypeId>,
+    id: TypeId,
+    exclude: Option<TypeId>,
+) -> Option<TypeId> {
+    // Type ids are drawn uniformly from the whole `u32` range (see
+    // `Types::fresh_type_id`), so walking the sorted id ring from an arbitrary
+    // starting point spreads resolutions evenly over the live
+    // types. Additionally, unlike indexing modulo the type count, it is also
+    // stable: adding or removing an unrelated type only changes the ids that
+    // fall in its immediate neighborhood.
+    live.range(id..)
+        .chain(live.range(..id))
+        .copied()
+        .find(|t| Some(*t) != exclude)
 }
 
 impl Types {
@@ -685,6 +710,48 @@ impl Types {
         }
     }
 
+    /// Point every supertype edge at a type that may legally be a supertype:
+    /// one that exists, is not final, and has the same composite kind as the
+    /// subtype.
+    ///
+    /// This does not consider cycles; that is left to `break_supertype_cycles`.
+    fn fixup_supertypes(&mut self) {
+        // Only non-final types may be named as a supertype, and only by a
+        // subtype of the same composite kind.
+        let mut structs = BTreeSet::new();
+        let mut arrays = BTreeSet::new();
+        for (id, def) in self.type_defs.iter() {
+            if def.is_final {
+                continue;
+            }
+            if def.composite_type.is_array() {
+                arrays.insert(*id);
+            } else {
+                structs.insert(*id);
+            }
+        }
+
+        let ids: Vec<TypeId> = self.type_defs.keys().copied().collect();
+        for tid in ids {
+            let def = &self.type_defs[&tid];
+            let Some(supertype) = def.supertype else {
+                continue;
+            };
+            let candidates = if def.composite_type.is_array() {
+                &arrays
+            } else {
+                &structs
+            };
+            // A type cannot be its own supertype.
+            let resolved = if candidates.contains(&supertype) && supertype != tid {
+                Some(supertype)
+            } else {
+                nearest_live_type_id(candidates, supertype, Some(tid))
+            };
+            self.type_defs.get_mut(&tid).unwrap().supertype = resolved;
+        }
+    }
+
     /// Fix up the types to ensure they are within the limits.
     pub fn fixup(
         &mut self,
@@ -736,47 +803,10 @@ impl Types {
             }
         }
 
-        // 6. Clear supertypes that reference removed types.
-        let valid_type_ids: BTreeSet<TypeId> = self.type_defs.keys().copied().collect();
-        for def in self.type_defs.values_mut() {
-            if let Some(st) = def.supertype {
-                if !valid_type_ids.contains(&st) {
-                    def.supertype = None;
-                }
-            }
-        }
+        // 6. Repair supertype edges.
+        self.fixup_supertypes();
 
-        // 7. A subtype cannot have a final supertype.
-        let final_type_ids: BTreeSet<TypeId> = self
-            .type_defs
-            .iter()
-            .filter(|(_, d)| d.is_final)
-            .map(|(id, _)| *id)
-            .collect();
-        for def in self.type_defs.values_mut() {
-            if let Some(st) = def.supertype {
-                if final_type_ids.contains(&st) {
-                    def.supertype = None;
-                }
-            }
-        }
-
-        // 7b. A subtype must have the same composite kind as its supertype
-        //     (a struct cannot subtype an array, or vice versa).
-        let kinds: BTreeMap<TypeId, bool> = self
-            .type_defs
-            .iter()
-            .map(|(id, d)| (*id, d.composite_type.is_array()))
-            .collect();
-        for (tid, def) in self.type_defs.iter_mut() {
-            if let Some(super_id) = def.supertype {
-                if kinds.get(&super_id) != kinds.get(tid) {
-                    def.supertype = None;
-                }
-            }
-        }
-
-        // 8. Trim struct fields to max_fields limit (arrays always have exactly
+        // 7. Trim struct fields to max_fields limit (arrays always have exactly
         //    one element).
         let max_fields = usize::try_from(limits.max_fields).unwrap();
         for def in self.type_defs.values_mut() {
@@ -785,16 +815,24 @@ impl Types {
             }
         }
 
-        // 9. Normalize reference fields (struct fields and array elements alike).
+        // 8. Normalize reference fields (struct fields and array elements alike).
         let valid_type_ids: BTreeSet<TypeId> = self.type_defs.keys().copied().collect();
         for def in self.type_defs.values_mut() {
             for field in def.composite_type.fields_mut() {
                 match &mut field.field_type {
                     FieldType::StructRef { nullable } => *nullable = true,
                     FieldType::Ref { nullable, type_id } => {
+                        if !valid_type_ids.contains(type_id) {
+                            if let Some(live) =
+                                nearest_live_type_id(&valid_type_ids, *type_id, None)
+                            {
+                                *type_id = live;
+                            }
+                        }
                         if valid_type_ids.contains(type_id) {
                             *nullable = true;
                         } else {
+                            // There are no types at all to point at.
                             field.field_type = FieldType::StructRef { nullable: true };
                         }
                     }
@@ -803,7 +841,7 @@ impl Types {
             }
         }
 
-        // 10. Break supertype cycles and merge rec-group reference cycles, so
+        // 9. Break supertype cycles and merge rec-group reference cycles, so
         //     the type graph is well-founded before we encode it.
         self.break_supertype_cycles();
         let type_to_group = self.type_to_group_map();
@@ -812,7 +850,7 @@ impl Types {
         // the encoding-order computation below.
         let type_to_group = self.type_to_group_map();
 
-        // 11. Ensure subtype fields are prefix-compatible with supertype fields.
+        // 10. Ensure subtype fields are prefix-compatible with supertype fields.
         //     Process in topological order (supertype before subtype).
         let mut topo_order = Vec::new();
         self.sort_types_topo(&mut topo_order);
@@ -826,7 +864,7 @@ impl Types {
             let Some(super_def) = self.type_defs.get(&super_id) else {
                 continue;
             };
-            // Step 7b guarantees the subtype and supertype share a composite
+            // Step 6 guarantees the subtype and supertype share a composite
             // kind. so match on the supertype and repair the subtype to match.
             match &super_def.composite_type {
                 CompositeType::Struct(super_st) => {
@@ -861,7 +899,7 @@ impl Types {
 
         debug_assert!(self.is_well_formed(limits));
 
-        // 12. Compute encoding order (reuses type_to_group from step 10).
+        // 11. Compute encoding order (reuses type_to_group from step 9).
         self.encoding_order_grouped(encoding_order_grouped, &type_to_group);
     }
 
