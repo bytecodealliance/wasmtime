@@ -47,5 +47,4 @@
   (func (export "run") (alias export $B "run"))
 )
 
-(assert_trap (invoke "run") "wasm trap: cannot block a synchronous task before returning")
-(assert_trap (invoke "run") "wasm trap: cannot enter component instance")
+(assert_return (invoke "run"))

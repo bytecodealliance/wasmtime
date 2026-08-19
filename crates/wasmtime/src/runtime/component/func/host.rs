@@ -283,10 +283,6 @@ where
     T: 'static,
     R: Send + Sync + 'static,
 {
-    /// Whether or not this is `async` function from the perspective of the
-    /// component model.
-    const ASYNC: bool;
-
     /// Performs a type-check to ensure that this host function can be imported
     /// with the provided signature that a component is using.
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()>;
@@ -362,13 +358,6 @@ where
     ) -> Result<()> {
         let vminstance = instance.id().get(store.0);
         let async_ = vminstance.component().env_component().options[options].async_;
-
-        // If this is a synchronous-lower of a host-async function, then the
-        // guest is blocking. Test, in the context of the guest task, if that's
-        // allowed.
-        if !async_ && Self::ASYNC {
-            store.0.check_blocking()?;
-        }
 
         if async_ {
             #[cfg(feature = "component-model-async")]
@@ -631,8 +620,6 @@ where
     P: ComponentNamedList + Lift + 'static,
     R: ComponentNamedList + Lower + 'static,
 {
-    const ASYNC: bool = ASYNC;
-
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()> {
         let ty = &types.types[ty];
         typecheck_async(ASYNC, ty.async_)?;
@@ -709,8 +696,6 @@ where
     T: 'static,
     F: Fn(StoreContextMut<'_, T>, ComponentFunc, Vec<Val>, usize) -> HostResult<Vec<Val>>,
 {
-    const ASYNC: bool = ASYNC;
-
     /// This function performs dynamic type checks on its parameters and
     /// results and subsequently does not need to perform up-front type
     /// checks. However, we _do_ verify async-ness here.

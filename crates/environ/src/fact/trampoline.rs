@@ -769,25 +769,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let saved_lower_may_leave =
             self.trap_if_not_may_leave(adapter.lower.flags, Trap::CannotLeaveComponent);
 
-        let old_task_may_block = if self.module.tunables.concurrency_support {
-            // Save, clear, and later restore the `may_block` field.
-            let task_may_block = self.module.import_task_may_block();
-            let old_task_may_block = if self.types[adapter.lift.ty].async_ {
-                self.instruction(GlobalGet(task_may_block.as_u32()));
-                self.instruction(I32Eqz);
-                self.instruction(If(BlockType::Empty));
-                self.trap(Trap::CannotBlockSyncTask);
-                self.instruction(End);
-                None
-            } else {
-                let task_may_block = self.module.import_task_may_block();
-                self.instruction(GlobalGet(task_may_block.as_u32()));
-                let old_task_may_block = self.local_set_new_tmp(ValType::I32);
-                self.instruction(I32Const(0));
-                self.instruction(GlobalSet(task_may_block.as_u32()));
-                Some(old_task_may_block)
-            };
-
+        if self.module.tunables.concurrency_support {
             // Push a task onto the current task stack.
             //
             // Note that for sync-to-sync calls, we replace this call with
@@ -809,8 +791,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             ));
             let enter_sync_call = self.module.import_enter_sync_call();
             self.instruction(Call(enter_sync_call.as_u32()));
-
-            old_task_may_block
         } else if self.emit_resource_call {
             assert!(!self.types[adapter.lift.ty].async_);
             self.instruction(I32Const(
@@ -822,10 +802,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             ));
             let enter_sync_call = self.module.import_enter_sync_call();
             self.instruction(Call(enter_sync_call.as_u32()));
-            None
-        } else {
-            None
-        };
+        }
 
         // Perform the translation of arguments. Note that the `may_leave` flag
         // is cleared around this invocation for the callee as per the
@@ -874,7 +851,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // With all the arguments on the stack the actual target function is
         // now invoked. The core wasm results of the function are then placed
         // into locals for result translation afterwards.
+
         self.instruction(Call(adapter.callee.as_u32()));
+
         let mut result_locals = Vec::with_capacity(lift_sig.results.len());
         let mut temps = Vec::new();
         for ty in lift_sig.results.iter().rev() {
@@ -942,16 +921,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         for tmp in temps {
             self.free_temp_local(tmp);
-        }
-
-        if self.module.tunables.concurrency_support {
-            // Restore old `may_block_field`
-            if let Some(old_task_may_block) = old_task_may_block {
-                let task_may_block = self.module.import_task_may_block();
-                self.instruction(LocalGet(old_task_may_block.idx));
-                self.instruction(GlobalSet(task_may_block.as_u32()));
-                self.free_temp_local(old_task_may_block);
-            }
         }
 
         self.exit_exception_barrier();

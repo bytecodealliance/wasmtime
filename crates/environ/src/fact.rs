@@ -113,8 +113,6 @@ pub struct Module<'a> {
     helper_worklist: Vec<(FunctionId, Helper)>,
 
     exports: Vec<(u32, String)>,
-
-    task_may_block: Option<GlobalIndex>,
 }
 
 struct AdapterData {
@@ -298,7 +296,6 @@ impl<'a> Module<'a> {
             imported_unsafe_intrinsics: HashMap::new(),
             imported_traps: HashMap::new(),
             exports: Vec::new(),
-            task_may_block: None,
         }
     }
 
@@ -489,25 +486,6 @@ impl<'a> Module<'a> {
         self.imported.insert(def.clone(), idx.index());
         self.imports.push(Import::CoreDef(def));
         idx
-    }
-
-    fn import_task_may_block(&mut self) -> GlobalIndex {
-        if let Some(task_may_block) = self.task_may_block {
-            task_may_block
-        } else {
-            let task_may_block = self.import_global(
-                "instance",
-                "task_may_block",
-                GlobalType {
-                    val_type: ValType::I32,
-                    mutable: true,
-                    shared: false,
-                },
-                CoreDef::TaskMayBlock,
-            );
-            self.task_may_block = Some(task_may_block);
-            task_may_block
-        }
     }
 
     fn import_transcoder(&mut self, transcoder: transcode::Transcoder) -> FuncIndex {

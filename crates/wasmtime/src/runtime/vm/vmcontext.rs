@@ -183,8 +183,6 @@ pub enum VMGlobalKind {
     /// Flags for a component instance, stored in `VMComponentContext`.
     #[cfg(feature = "component-model")]
     ComponentFlags(wasmtime_environ::component::RuntimeComponentInstanceIndex),
-    #[cfg(feature = "component-model")]
-    TaskMayBlock,
 }
 
 // SAFETY: the above enum is repr(C) and stores nothing else
