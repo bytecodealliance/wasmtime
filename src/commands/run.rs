@@ -389,15 +389,7 @@ impl RunCommand {
 
         let mut store = Store::new(&engine, host);
         self.populate_with_wasi(&mut linker, &mut store)?;
-
-        store.data_mut().limits = self.run.store_limits();
-        store.limiter(|t| &mut t.limits);
-
-        // If fuel has been configured, we want to add the configured
-        // fuel amount to this store.
-        if let Some(fuel) = self.run.common.wasm.fuel {
-            store.set_fuel(fuel)?;
-        }
+        self.run.configure_store(&mut store, |t| &mut t.limits)?;
 
         Ok((store, linker))
     }
@@ -1349,18 +1341,7 @@ impl RunCommand {
             builder.inherit_stderr();
         }
         self.run.configure_wasip2(&mut builder)?;
-        let mut ctx = builder.build_p1();
-        if let Some(max) = self.run.common.wasi.max_resources {
-            ctx.ctx().table.set_max_capacity(max);
-            #[cfg(feature = "component-model-async")]
-            if let Some(table) = store.concurrent_resource_table() {
-                table.set_max_capacity(max);
-            }
-        }
-        if let Some(fuel) = self.run.common.wasi.hostcall_fuel {
-            store.set_hostcall_fuel(fuel);
-        }
-        store.data_mut().wasip1_ctx = Some(ctx);
+        store.data_mut().wasip1_ctx = Some(builder.build_p1());
         Ok(())
     }
 
