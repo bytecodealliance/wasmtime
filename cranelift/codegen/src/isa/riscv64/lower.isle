@@ -2178,30 +2178,6 @@
 (rule (lower (trapnz value code))
   (gen_trapif (is_nonzero_cmp value) code))
 
-;;;;;  Rules for `uload8`;;;;;;;;;
-(rule (lower (uload8 _ (little_or_native_endian flags) addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lbu) flags))
-
-;;;;;  Rules for `sload8`;;;;;;;;;
-(rule (lower (sload8 _ (little_or_native_endian flags) addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lb) flags))
-
-;;;;;  Rules for `uload16`;;;;;;;;;
-(rule (lower (uload16 _ (little_or_native_endian flags) addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lhu) flags))
-
-;;;;;  Rules for `iload16`;;;;;;;;;
-(rule (lower (sload16 _ (little_or_native_endian flags) addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lh) flags))
-
-;;;;;  Rules for `uload32`;;;;;;;;;
-(rule (lower (uload32 _ (little_or_native_endian flags) addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lwu) flags))
-
-;;;;;  Rules for `sload32`;;;;;;;;;
-(rule (lower (sload32 _ (little_or_native_endian flags) addr offset))
-  (gen_load (amode addr offset) (LoadOP.Lw) flags))
-
 ;;;;;  Rules for `load`;;;;;;;;;
 (rule (lower (load ty (little_or_native_endian flags) addr offset))
   (gen_load (amode addr offset) (load_op ty) flags))
@@ -2261,18 +2237,6 @@
 ;;;;;  Rules for `sload32x2`;;;;;;;;;
 (rule (lower (sload32x2 (ty_supported_vec ty @ $I64X2) (little_or_native_endian flags) addr offset))
   (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset)))
-
-;;;;;  Rules for `istore8`;;;;;;;;;
-(rule (lower (istore8 (little_or_native_endian flags) src addr offset))
-  (rv_store (amode addr offset) (StoreOP.Sb) flags src))
-
-;;;;;  Rules for `istore16`;;;;;;;;;
-(rule (lower (istore16 (little_or_native_endian flags) src addr offset))
-  (rv_store (amode addr offset) (StoreOP.Sh) flags src))
-
-;;;;;  Rules for `istore32`;;;;;;;;;
-(rule (lower (istore32 (little_or_native_endian flags) src addr offset))
-  (rv_store (amode addr offset) (StoreOP.Sw) flags src))
 
 ;;;;;  Rules for `store`;;;;;;;;;
 (rule (lower (store (little_or_native_endian flags) src @ (value_type ty) addr offset))

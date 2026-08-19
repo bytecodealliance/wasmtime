@@ -51,9 +51,10 @@
 ;;       lghi    %r5, 0
 ;;       lgr     %r6, %r4
 ;;       ag      %r6, 0x38(%r2)
-;;       aghik   %r7, %r6, 0x1000
+;;       aghik   %r2, %r6, 0x1000
 ;;       clgr    %r4, %r3
-;;       locgrh  %r7, %r5
-;;       llc     %r2, 0(%r7)
+;;       locgrh  %r2, %r5
+;;       llc     %r2, 0(%r2)
+;;       llcr    %r2, %r2
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

@@ -40,10 +40,11 @@
 ;;       movl    %edx, %r8d
 ;;       subq    $0x1001, %rsi
 ;;       cmpq    %rsi, %r8
-;;       ja      0x6d
-;;   5b: movq    0x38(%rdi), %r9
-;;       movzbq  0x1000(%r9, %r8), %rax
+;;       ja      0x71
+;;   5b: movq    0x38(%rdi), %r10
+;;       movzbq  0x1000(%r10, %r8), %r10
+;;       movzbl  %r10b, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   6d: ud2
+;;   71: ud2

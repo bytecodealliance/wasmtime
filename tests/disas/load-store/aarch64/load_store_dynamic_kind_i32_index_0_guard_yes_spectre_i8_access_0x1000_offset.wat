@@ -38,16 +38,17 @@
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       ldr     x14, [x2, #0x40]
-;;       ldr     x13, [x2, #0x38]
-;;       mov     w12, w4
-;;       mov     x15, #0x1001
-;;       sub     x14, x14, x15
-;;       mov     x15, #0
-;;       add     x13, x13, w4, uxtw
-;;       add     x13, x13, #1, lsl #12
-;;       cmp     x12, x14
-;;       csel    x13, x15, x13, hi
-;;       ldrb    w2, [x13]
+;;       ldr     x15, [x2, #0x40]
+;;       ldr     x14, [x2, #0x38]
+;;       mov     w13, w4
+;;       mov     x0, #0x1001
+;;       sub     x15, x15, x0
+;;       mov     x0, #0
+;;       add     x14, x14, w4, uxtw
+;;       add     x14, x14, #1, lsl #12
+;;       cmp     x13, x15
+;;       csel    x14, x0, x14, hi
+;;       ldrb    w14, [x14]
+;;       uxtb    w2, w14
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

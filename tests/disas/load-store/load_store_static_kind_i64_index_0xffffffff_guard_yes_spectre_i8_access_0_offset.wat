@@ -36,7 +36,8 @@
 ;; @0040                               v7 = iadd v6, v2
 ;; @0040                               v8 = iconst.i64 0
 ;; @0040                               v9 = select_spectre_guard v5, v8, v7  ; v8 = 0
-;; @0040                               istore8 little region4 v3, v9
+;; @0040                               v10 = ireduce.i8 v3
+;; @0040                               store little region4 v10, v9
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
@@ -61,9 +62,10 @@
 ;; @0048                               v6 = iadd v5, v2
 ;; @0048                               v7 = iconst.i64 0
 ;; @0048                               v8 = select_spectre_guard v4, v7, v6  ; v7 = 0
-;; @0048                               v9 = uload8.i32 little region4 v8
+;; @0048                               v9 = load.i8 little region4 v8
+;; @0048                               v10 = uextend.i32 v9
 ;; @004b                               jump block1
 ;;
 ;;                                 block1:
-;; @004b                               return v9
+;; @004b                               return v10
 ;; }

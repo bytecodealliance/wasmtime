@@ -35,7 +35,8 @@
 ;;       movl    %edx, %esi
 ;;       addq    0x38(%rdi), %rsi
 ;;       movl    $0xffff0000, %edi
-;;       movzbq  (%rsi, %rdi), %rax
+;;       movzbq  (%rsi, %rdi), %rdi
+;;       movzbl  %dil, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

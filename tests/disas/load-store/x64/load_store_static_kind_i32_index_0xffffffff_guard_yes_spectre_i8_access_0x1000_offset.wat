@@ -33,7 +33,8 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    0x38(%rdi), %rsi
 ;;       movl    %edx, %edi
-;;       movzbq  0x1000(%rsi, %rdi), %rax
+;;       movzbq  0x1000(%rsi, %rdi), %rsi
+;;       movzbl  %sil, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

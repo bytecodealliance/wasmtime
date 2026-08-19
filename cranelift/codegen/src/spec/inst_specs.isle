@@ -522,92 +522,8 @@
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
 
-; Unsigned N-bit load
-(macro (uloadN clif_load size_bits p offset loaded_value result)
-    (and
-        ; Activate the CLIF load effect.
-        (clif_load_activate! clif_load size_bits p offset)
-
-        ; Loaded value is zero-extended.
-        (= result (zero_ext (widthof result) (conv_to size_bits loaded_value)))))
-
-; Unsigned 8-bit load
-(spec (uload8 ty flags p offset)
-    (modifies clif_load)
-    (modifies loaded_value)
-    (provide (uloadN! clif_load 8 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
-(instantiate uload8
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 16)))
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
-
-; Unsigned 16-bit load
-(spec (uload16 ty flags p offset)
-    (modifies clif_load)
-    (modifies loaded_value)
-    (provide (uloadN! clif_load 16 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
-(instantiate uload16
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
-
-; Unsigned 32-bit load
-(spec (uload32 ty flags p offset)
-    (modifies clif_load)
-    (modifies loaded_value)
-    (provide (uloadN! clif_load 32 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
-(instantiate uload32
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
-
-; Signed N-bit load
-(macro (sloadN clif_load size_bits p offset loaded_value result)
-    (and
-        ; Activate the CLIF load effect.
-        (clif_load_activate! clif_load size_bits p offset)
-
-        ; Loaded value is sign-extended.
-        (= result (sign_ext (widthof result) (conv_to size_bits loaded_value)))))
-
-; Signed 8-bit load
-(spec (sload8 ty flags p offset)
-    (modifies clif_load)
-    (modifies loaded_value)
-    (provide (sloadN! clif_load 8 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
-(instantiate sload8
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 16)))
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
-
-; Signed 16-bit load
-(spec (sload16 ty flags p offset)
-    (modifies clif_load)
-    (modifies loaded_value)
-    (provide (sloadN! clif_load 16 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
-(instantiate sload16
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
-
-; Signed 32-bit load
-(spec (sload32 ty flags p offset)
-    (modifies clif_load)
-    (modifies loaded_value)
-    (provide (sloadN! clif_load 32 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
-(instantiate sload32
-    ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
-
 ; Loads have a large number of expansions and instantiations.
 (attr load (tag slow))
-(attr uload8 (tag slow))
-(attr uload16 (tag slow))
-(attr uload32 (tag slow))
-(attr sload8 (tag slow))
-(attr sload16 (tag slow))
-(attr sload32 (tag slow))
 
 ;; Store Instructions
 
@@ -645,35 +561,8 @@
     ((args (named MemFlagsData) (bv 32) (named Value) (named Offset32)) (ret (bv 1)))
     ((args (named MemFlagsData) (bv 64) (named Value) (named Offset32)) (ret (bv 1))))
 
-; 8-bit store
-(spec (istore8 flags value p offset)
-    (modifies clif_store)
-    (provide (store! clif_store flags (extract 7 0 value) p offset result)))
-(instantiate istore8
-    ((args (named MemFlagsData) (bv 16) (named Value) (named Offset32)) (ret (bv 1)))
-    ((args (named MemFlagsData) (bv 32) (named Value) (named Offset32)) (ret (bv 1)))
-    ((args (named MemFlagsData) (bv 64) (named Value) (named Offset32)) (ret (bv 1))))
-
-; 16-bit store
-(spec (istore16 flags value p offset)
-    (modifies clif_store)
-    (provide (store! clif_store flags (extract 15 0 value) p offset result)))
-(instantiate istore16
-    ((args (named MemFlagsData) (bv 32) (named Value) (named Offset32)) (ret (bv 1)))
-    ((args (named MemFlagsData) (bv 64) (named Value) (named Offset32)) (ret (bv 1))))
-
-; 32-bit store
-(spec (istore32 flags value p offset)
-    (modifies clif_store)
-    (provide (store! clif_store flags (extract 31 0 value) p offset result)))
-(instantiate istore32
-    ((args (named MemFlagsData) (bv 64) (named Value) (named Offset32)) (ret (bv 1))))
-
 ; Stores have a large number of expansions and instantiations.
 (attr store (tag slow))
-(attr istore8 (tag slow))
-(attr istore16 (tag slow))
-(attr istore32 (tag slow))
 
 ;; Floating Point Instructions
 

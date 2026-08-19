@@ -1992,14 +1992,6 @@
       (if (memarg_symbol_offset_sum sym_offset load_offset))
       inst)
 
-(decl pure partial uload16_sym (Inst) Inst)
-(rule (uload16_sym inst)
-      (if-let (uload16 _ _ (symbol_value _ (symbol_value_data _ (RelocDistance.Near) sym_offset))
-                       (i64_from_offset load_offset))
-          inst)
-      (if (memarg_symbol_offset_sum sym_offset load_offset))
-      inst)
-
 
 ;; Helpers for stack-slot addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2042,63 +2034,53 @@
 (extractor (sinkable_load_16 inst)
            (and (value_type $I16) (sinkable_load inst)))
 
+;; Sinkable big-endian load instruction (32-bit types only).
+(decl sinkable_load_32 (Inst) Value)
+(extractor (sinkable_load_32 inst)
+           (and (value_type $I32) (sinkable_load inst)))
+
+;; Sinkable 8-bit load instruction.
+;;
+;; A single byte has no byte order, so unlike `sinkable_load` this matches
+;; little-endian loads as well.
+(decl sinkable_load_8 (Inst) Value)
+(extractor (sinkable_load_8 inst)
+           (and (value_type $I8)
+                (sinkable_inst (and inst (load _ _flags _addr _offset)))))
+
 ;; Sinkable little-endian load instruction.
 (decl sinkable_load_little (Inst) Value)
 (extractor (sinkable_load_little inst)
            (sinkable_inst (and inst (load _ (mem_flags_data (littleendian)) _addr _offset))))
 
-;; Sinkable big-endian sload16 instruction.
+;; Sinkable big-endian 16-bit load feeding a `sextend`.
+;;
+;; Note that both the `sextend` and the load itself must be sinkable: the load
+;; is consumed by `sink_load`, so if the `sextend` had any other user it would
+;; end up reading a value that was never produced.
 (decl sinkable_sload16 (Inst) Value)
 (extractor (sinkable_sload16 inst)
-           (sinkable_inst (and inst (sload16 _ (mem_flags_data (bigendian)) _addr _offset))))
+           (sinkable_inst (sextend _ (sinkable_load_16 inst))))
 
-;; Sinkable big-endian sload32 instruction.
+;; Sinkable big-endian 32-bit load feeding a `sextend`.
 (decl sinkable_sload32 (Inst) Value)
 (extractor (sinkable_sload32 inst)
-           (sinkable_inst (and inst (sload32 _ (mem_flags_data (bigendian)) _addr _offset))))
+           (sinkable_inst (sextend _ (sinkable_load_32 inst))))
 
-;; Sinkable big-endian uload16 instruction.
+;; Sinkable big-endian 16-bit load feeding a `uextend`.
 (decl sinkable_uload16 (Inst) Value)
 (extractor (sinkable_uload16 inst)
-           (sinkable_inst (and inst (uload16 _ (mem_flags_data (bigendian)) _addr _offset))))
+           (sinkable_inst (uextend _ (sinkable_load_16 inst))))
 
-;; Sinkable big-endian uload32 instruction.
+;; Sinkable big-endian 32-bit load feeding a `uextend`.
 (decl sinkable_uload32 (Inst) Value)
 (extractor (sinkable_uload32 inst)
-           (sinkable_inst (and inst (uload32 _ (mem_flags_data (bigendian)) _addr _offset))))
+           (sinkable_inst (uextend _ (sinkable_load_32 inst))))
 
 ;; Sink a load instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_load (Inst) MemArg)
 (rule (sink_load inst @ (load _ (mem_flags_data flags) addr offset))
-      (let ((_ Unit (sink_inst inst)))
-        (lower_address flags addr offset)))
-
-;; Sink a sload16 instruction, returning its address as `MemArg`.
-;; This is a side-effectful operation, see `sink_inst`.
-(decl sink_sload16 (Inst) MemArg)
-(rule (sink_sload16 inst @ (sload16 _ (mem_flags_data flags) addr offset))
-      (let ((_ Unit (sink_inst inst)))
-        (lower_address flags addr offset)))
-
-;; Sink a sload32 instruction, returning its address as `MemArg`.
-;; This is a side-effectful operation, see `sink_inst`.
-(decl sink_sload32 (Inst) MemArg)
-(rule (sink_sload32 inst @ (sload32 _ (mem_flags_data flags) addr offset))
-      (let ((_ Unit (sink_inst inst)))
-        (lower_address flags addr offset)))
-
-;; Sink a uload16 instruction, returning its address as `MemArg`.
-;; This is a side-effectful operation, see `sink_inst`.
-(decl sink_uload16 (Inst) MemArg)
-(rule (sink_uload16 inst @ (uload16 _ (mem_flags_data flags) addr offset))
-      (let ((_ Unit (sink_inst inst)))
-        (lower_address flags addr offset)))
-
-;; Sink a uload32 instruction, returning its address as `MemArg`.
-;; This is a side-effectful operation, see `sink_inst`.
-(decl sink_uload32 (Inst) MemArg)
-(rule (sink_uload32 inst @ (uload32 _ (mem_flags_data flags) addr offset))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
@@ -3271,6 +3253,8 @@
 (decl put_in_reg_zext32 (Value) Reg)
 (rule 3 (put_in_reg_zext32 (and (value_type ty) (u64_from_value val)))
       (imm (ty_ext32 ty) val))
+(rule 4 (put_in_reg_zext32 (sinkable_load_8 load))
+      (zext32_mem $I8 (sink_load load)))
 (rule 1 (put_in_reg_zext32 (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (zext32_mem ty (sink_load load)))
 (rule 0 (put_in_reg_zext32 val @ (value_type (fits_in_16 ty)))
@@ -3282,6 +3266,8 @@
 (decl put_in_reg_sext32 (Value) Reg)
 (rule 3 (put_in_reg_sext32 (and (value_type ty) (u64_from_signed_value val)))
       (imm (ty_ext32 ty) val))
+(rule 4 (put_in_reg_sext32 (sinkable_load_8 load))
+      (sext32_mem $I8 (sink_load load)))
 (rule 1 (put_in_reg_sext32 (and (value_type (fits_in_16 ty)) (sinkable_load load)))
       (sext32_mem ty (sink_load load)))
 (rule 0 (put_in_reg_sext32 val @ (value_type (fits_in_16 ty)))
@@ -3293,6 +3279,8 @@
 (decl put_in_reg_zext64 (Value) Reg)
 (rule 3 (put_in_reg_zext64 (and (value_type ty) (u64_from_value val)))
       (imm (ty_ext64 ty) val))
+(rule 4 (put_in_reg_zext64 (sinkable_load_8 load))
+      (zext64_mem $I8 (sink_load load)))
 (rule 1 (put_in_reg_zext64 (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (zext64_mem ty (sink_load load)))
 (rule 0 (put_in_reg_zext64 val @ (value_type (gpr32_ty ty)))
@@ -3304,6 +3292,8 @@
 (decl put_in_reg_sext64 (Value) Reg)
 (rule 3 (put_in_reg_sext64 (and (value_type ty) (u64_from_signed_value val)))
       (imm (ty_ext64 ty) val))
+(rule 4 (put_in_reg_sext64 (sinkable_load_8 load))
+      (sext64_mem $I8 (sink_load load)))
 (rule 1 (put_in_reg_sext64 (and (value_type (gpr32_ty ty)) (sinkable_load load)))
       (sext64_mem ty (sink_load load)))
 (rule 0 (put_in_reg_sext64 val @ (value_type (gpr32_ty ty)))

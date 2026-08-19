@@ -38,7 +38,8 @@ block0:
 
 function %uload8_i64(i64) -> i64 {
 block0(v0: i64):
-  v1 = uload8.i64 v0
+  v2 = load.i8 v0
+  v1 = uextend.i64 v2
   return v1
 }
 
@@ -55,7 +56,8 @@ block0(v0: i64):
 function %uload8_i64_i64_offset(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = iadd v0, v1
-  v3 = uload8.i64 v2+100000
+  v4 = load.i8 v2+100000
+  v3 = uextend.i64 v4
   return v3
 }
 
@@ -72,7 +74,8 @@ block0(v0: i64, v1: i64):
 function %uload8_i64_i64_offset_too_big(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = iadd v0, v1
-  v3 = uload8.i64 v2+10000000
+  v4 = load.i8 v2+10000000
+  v3 = uextend.i64 v4
   return v3
 }
 
@@ -91,7 +94,8 @@ block0(v0: i64, v1: i64):
 
 function %sload8_i64(i64) -> i64 {
 block0(v0: i64):
-  v1 = sload8.i64 v0
+  v2 = load.i8 v0
+  v1 = sextend.i64 v2
   return v1
 }
 
@@ -107,7 +111,8 @@ block0(v0: i64):
 
 function %uload16_i64(i64) -> i64 {
 block0(v0: i64):
-  v1 = uload16.i64 v0
+  v2 = load.i16 v0
+  v1 = uextend.i64 v2
   return v1
 }
 
@@ -125,7 +130,8 @@ function %uload16_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = uload16.i64 aligned v0
+  v2 = load.i16 aligned v0
+  v1 = uextend.i64 v2
   return v1
 }
 
@@ -141,7 +147,8 @@ block0:
 
 function %sload16_i64(i64) -> i64 {
 block0(v0: i64):
-  v1 = sload16.i64 v0
+  v2 = load.i16 v0
+  v1 = sextend.i64 v2
   return v1
 }
 
@@ -159,7 +166,8 @@ function %sload16_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = sload16.i64 aligned v0
+  v2 = load.i16 aligned v0
+  v1 = sextend.i64 v2
   return v1
 }
 
@@ -175,7 +183,8 @@ block0:
 
 function %uload32_i64(i64) -> i64 {
 block0(v0: i64):
-  v1 = uload32.i64 v0
+  v2 = load.i32 v0
+  v1 = uextend.i64 v2
   return v1
 }
 
@@ -193,7 +202,8 @@ function %uload32_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = uload32.i64 aligned v0
+  v2 = load.i32 aligned v0
+  v1 = uextend.i64 v2
   return v1
 }
 
@@ -209,7 +219,8 @@ block0:
 
 function %sload32_i64(i64) -> i64 {
 block0(v0: i64):
-  v1 = sload32.i64 v0
+  v2 = load.i32 v0
+  v1 = sextend.i64 v2
   return v1
 }
 
@@ -227,7 +238,8 @@ function %sload32_i64_sym() -> i64 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = sload32.i64 aligned v0
+  v2 = load.i32 aligned v0
+  v1 = sextend.i64 v2
   return v1
 }
 
@@ -293,7 +305,8 @@ block0(v0: i64):
 
 function %uload8_i32(i64) -> i32 {
 block0(v0: i64):
-  v1 = uload8.i32 v0
+  v2 = load.i8 v0
+  v1 = uextend.i32 v2
   return v1
 }
 
@@ -309,7 +322,8 @@ block0(v0: i64):
 
 function %sload8_i32(i64) -> i32 {
 block0(v0: i64):
-  v1 = sload8.i32 v0
+  v2 = load.i8 v0
+  v1 = sextend.i32 v2
   return v1
 }
 
@@ -325,7 +339,8 @@ block0(v0: i64):
 
 function %uload16_i32(i64) -> i32 {
 block0(v0: i64):
-  v1 = uload16.i32 v0
+  v2 = load.i16 v0
+  v1 = uextend.i32 v2
   return v1
 }
 
@@ -343,7 +358,8 @@ function %uload16_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = uload16.i32 aligned v0
+  v2 = load.i16 aligned v0
+  v1 = uextend.i32 v2
   return v1
 }
 
@@ -359,7 +375,8 @@ block0:
 
 function %sload16_i32(i64) -> i32 {
 block0(v0: i64):
-  v1 = sload16.i32 v0
+  v2 = load.i16 v0
+  v1 = sextend.i32 v2
   return v1
 }
 
@@ -375,7 +392,8 @@ block0(v0: i64):
 
 function %sload16_i32_off(i64) -> i32 {
 block0(v0: i64):
-  v1 = sload16.i32 v0+4096
+  v2 = load.i16 v0+4096
+  v1 = sextend.i32 v2
   return v1
 }
 
@@ -393,7 +411,8 @@ function %sload16_i32_sym() -> i32 {
   gv0 = symbol colocated %sym
 block0:
   v0 = symbol_value.i64 gv0
-  v1 = sload16.i32 aligned v0
+  v2 = load.i16 aligned v0
+  v1 = sextend.i32 v2
   return v1
 }
 
@@ -443,7 +462,8 @@ block0:
 
 function %uload8_i16(i64) -> i16 {
 block0(v0: i64):
-  v1 = uload8.i16 v0
+  v2 = load.i8 v0
+  v1 = uextend.i16 v2
   return v1
 }
 
@@ -459,7 +479,8 @@ block0(v0: i64):
 
 function %sload8_i16(i64) -> i16 {
 block0(v0: i64):
-  v1 = sload8.i16 v0
+  v2 = load.i8 v0
+  v1 = sextend.i16 v2
   return v1
 }
 

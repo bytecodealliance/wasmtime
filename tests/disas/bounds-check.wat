@@ -36,21 +36,21 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @002a                               v3 = iconst.i32 0
+;;                                     v26 = iconst.i8 0
 ;; @002c                               v5 = load.i64 notrap aligned readonly can_move region2 v0+56
 ;; @002c                               v4 = uextend.i64 v2
 ;; @002c                               v6 = iadd v5, v4
-;; @002c                               istore8 little region4 v3, v6  ; v3 = 0
-;; @0033                               v11 = iconst.i64 0x07ff_ffff
-;; @0033                               v12 = iadd v6, v11  ; v11 = 0x07ff_ffff
-;; @0033                               istore8 little region4 v3, v12  ; v3 = 0
-;; @003d                               v15 = load.i64 notrap aligned region3 v0+64
-;; @003d                               v16 = icmp ugt v4, v15
-;; @003d                               v21 = iconst.i64 0
-;; @003d                               v19 = iconst.i64 0xffff_ffff
-;; @003d                               v20 = iadd v6, v19  ; v19 = 0xffff_ffff
-;; @003d                               v22 = select_spectre_guard v16, v21, v20  ; v21 = 0
-;; @003d                               istore8 little region4 v3, v22  ; v3 = 0
+;; @002c                               store little region4 v26, v6  ; v26 = 0
+;; @0033                               v12 = iconst.i64 0x07ff_ffff
+;; @0033                               v13 = iadd v6, v12  ; v12 = 0x07ff_ffff
+;; @0033                               store little region4 v26, v13  ; v26 = 0
+;; @003d                               v17 = load.i64 notrap aligned region3 v0+64
+;; @003d                               v18 = icmp ugt v4, v17
+;; @003d                               v23 = iconst.i64 0
+;; @003d                               v21 = iconst.i64 0xffff_ffff
+;; @003d                               v22 = iadd v6, v21  ; v21 = 0xffff_ffff
+;; @003d                               v24 = select_spectre_guard v18, v23, v22  ; v23 = 0
+;; @003d                               store little region4 v26, v24  ; v26 = 0
 ;; @0044                               jump block1
 ;;
 ;;                                 block1:

@@ -48,7 +48,8 @@
 ;;       add     a0, a0, a2
 ;;       lui     t6, 1
 ;;       add     t6, t6, a0
-;;       lbu     a0, 0(t6)
+;;       lb      a0, 0(t6)
+;;       andi    a0, a0, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

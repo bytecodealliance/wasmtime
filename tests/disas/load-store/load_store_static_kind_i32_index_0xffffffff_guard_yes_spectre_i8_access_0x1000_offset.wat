@@ -35,7 +35,8 @@
 ;; @0040                               v6 = iadd v5, v4
 ;; @0040                               v7 = iconst.i64 4096
 ;; @0040                               v8 = iadd v6, v7  ; v7 = 4096
-;; @0040                               istore8 little region4 v3, v8
+;; @0040                               v9 = ireduce.i8 v3
+;; @0040                               store little region4 v9, v8
 ;; @0044                               jump block1
 ;;
 ;;                                 block1:
@@ -59,9 +60,10 @@
 ;; @0049                               v5 = iadd v4, v3
 ;; @0049                               v6 = iconst.i64 4096
 ;; @0049                               v7 = iadd v5, v6  ; v6 = 4096
-;; @0049                               v8 = uload8.i32 little region4 v7
+;; @0049                               v8 = load.i8 little region4 v7
+;; @0049                               v9 = uextend.i32 v8
 ;; @004d                               jump block1
 ;;
 ;;                                 block1:
-;; @004d                               return v8
+;; @004d                               return v9
 ;; }

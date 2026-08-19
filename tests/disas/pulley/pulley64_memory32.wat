@@ -59,20 +59,22 @@
 )
 ;; wasm[0]::function[0]::load8:
 ;;       push_frame
-;;       xload64le_o32 x5, x0, 64
+;;       xload64le_o32 x6, x0, 64
 ;;       ╰─╼ addrmap: 0x47
-;;       xload64le_o32 x6, x0, 56
-;;       xload8_u32_g32 x0, x6, x5, x2, 0
+;;       xload64le_o32 x7, x0, 56
+;;       xload8_u32_g32 x6, x7, x6, x2, 0
+;;       zext8 x0, x6
 ;;       pop_frame
 ;;       ╰─╼ addrmap: 0x4a
 ;;       ret
 ;;
 ;; wasm[0]::function[1]::load16:
 ;;       push_frame
-;;       xload64le_o32 x5, x0, 64
+;;       xload64le_o32 x6, x0, 64
 ;;       ╰─╼ addrmap: 0x4f
-;;       xload64le_o32 x6, x0, 56
-;;       xload16le_u32_g32 x0, x6, x5, x2, 0
+;;       xload64le_o32 x7, x0, 56
+;;       xload16le_u32_g32 x6, x7, x6, x2, 0
+;;       zext16 x0, x6
 ;;       pop_frame
 ;;       ╰─╼ addrmap: 0x52
 ;;       ret
@@ -139,20 +141,22 @@
 ;;
 ;; wasm[0]::function[8]::load8_offset:
 ;;       push_frame
-;;       xload64le_o32 x5, x0, 64
+;;       xload64le_o32 x6, x0, 64
 ;;       ╰─╼ addrmap: 0x8f
-;;       xload64le_o32 x6, x0, 56
-;;       xload8_u32_g32 x0, x6, x5, x2, 32
+;;       xload64le_o32 x7, x0, 56
+;;       xload8_u32_g32 x6, x7, x6, x2, 32
+;;       zext8 x0, x6
 ;;       pop_frame
 ;;       ╰─╼ addrmap: 0x92
 ;;       ret
 ;;
 ;; wasm[0]::function[9]::load16_offset:
 ;;       push_frame
-;;       xload64le_o32 x5, x0, 64
+;;       xload64le_o32 x6, x0, 64
 ;;       ╰─╼ addrmap: 0x97
-;;       xload64le_o32 x6, x0, 56
-;;       xload16le_u32_g32 x0, x6, x5, x2, 32
+;;       xload64le_o32 x7, x0, 56
+;;       xload16le_u32_g32 x6, x7, x6, x2, 32
+;;       zext16 x0, x6
 ;;       pop_frame
 ;;       ╰─╼ addrmap: 0x9a
 ;;       ret
@@ -219,11 +223,15 @@
 ;;
 ;; wasm[0]::function[16]::load16_two:
 ;;       push_frame
-;;       xload64le_o32 x7, x0, 64
+;;       xload64le_o32 x9, x0, 64
 ;;       ╰─╼ addrmap: 0xd7
-;;       xload64le_o32 x8, x0, 56
-;;       xload16le_u32_g32 x0, x8, x7, x2, 0
-;;       xload16le_u32_g32 x1, x8, x7, x3, 0
+;;       xload64le_o32 x11, x0, 56
+;;       xload16le_u32_g32 x10, x11, x9, x2, 0
+;;       xload16le_u32_g32 x9, x11, x9, x3, 0
+;;       ╰─╼ addrmap: 0xdc
+;;       zext16 x0, x10
+;;       ╰─╼ addrmap: 0xd7
+;;       zext16 x1, x9
 ;;       ╰─╼ addrmap: 0xdc
 ;;       pop_frame
 ;;       ╰─╼ addrmap: 0xdf

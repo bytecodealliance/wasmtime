@@ -47,7 +47,8 @@
 ;;       clgfi   %r4, 0xffff
 ;;       jgh     0x7c
 ;;       ag      %r4, 0x38(%r2)
-;;       llilh   %r7, 0xffff
-;;       llc     %r2, 0(%r7, %r4)
+;;       llilh   %r2, 0xffff
+;;       llc     %r2, 0(%r2, %r4)
+;;       llcr    %r2, %r2
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14

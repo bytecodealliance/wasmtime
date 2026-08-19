@@ -18,7 +18,8 @@ block0(v0: i64):
 
 function %load_i8_s32(i64) -> i32 {
 block0(v0: i64):
-    v1 = sload8.i32 v0
+    v2 = load.i8 v0
+    v1 = sextend.i32 v2
     return v1
 }
 
@@ -33,7 +34,8 @@ block0(v0: i64):
 
 function %load_i8_u32(i64) -> i32 {
 block0(v0: i64):
-    v1 = uload8.i32 v0
+    v2 = load.i8 v0
+    v1 = uextend.i32 v2
     return v1
 }
 
@@ -63,7 +65,8 @@ block0(v0: i64):
 
 function %load_i16_s32(i64) -> i32 {
 block0(v0: i64):
-    v1 = sload16.i32 v0
+    v2 = load.i16 v0
+    v1 = sextend.i32 v2
     return v1
 }
 
@@ -78,7 +81,8 @@ block0(v0: i64):
 
 function %load_i16_u32(i64) -> i32 {
 block0(v0: i64):
-    v1 = uload16.i32 v0
+    v2 = load.i16 v0
+    v1 = uextend.i32 v2
     return v1
 }
 
@@ -108,7 +112,8 @@ block0(v0: i64):
 
 function %load_i32_s64(i64) -> i64 {
 block0(v0: i64):
-    v1 = sload32.i64 v0
+    v2 = load.i32 v0
+    v1 = sextend.i64 v2
     return v1
 }
 
@@ -125,7 +130,8 @@ block0(v0: i64):
 
 function %load_i32_u64(i64) -> i64 {
 block0(v0: i64):
-    v1 = uload32.i64 v0
+    v2 = load.i32 v0
+    v1 = uextend.i64 v2
     return v1
 }
 
@@ -172,7 +178,8 @@ block0(v0: i64):
 
 function %load_i8_s32_offset(i64) -> i32 {
 block0(v0: i64):
-    v1 = sload8.i32 v0+4
+    v2 = load.i8 v0+4
+    v1 = sextend.i32 v2
     return v1
 }
 
@@ -187,7 +194,8 @@ block0(v0: i64):
 
 function %load_i8_u32_offset(i64) -> i32 {
 block0(v0: i64):
-    v1 = uload8.i32 v0+4
+    v2 = load.i8 v0+4
+    v1 = uextend.i32 v2
     return v1
 }
 
@@ -217,7 +225,8 @@ block0(v0: i64):
 
 function %load_i16_s32_offset(i64) -> i32 {
 block0(v0: i64):
-    v1 = sload16.i32 v0+4
+    v2 = load.i16 v0+4
+    v1 = sextend.i32 v2
     return v1
 }
 
@@ -232,7 +241,8 @@ block0(v0: i64):
 
 function %load_i16_u32_offset(i64) -> i32 {
 block0(v0: i64):
-    v1 = uload16.i32 v0+4
+    v2 = load.i16 v0+4
+    v1 = uextend.i32 v2
     return v1
 }
 
@@ -262,7 +272,8 @@ block0(v0: i64):
 
 function %load_i32_s64_offset(i64) -> i64 {
 block0(v0: i64):
-    v1 = sload32.i64 v0+4
+    v2 = load.i32 v0+4
+    v1 = sextend.i64 v2
     return v1
 }
 
@@ -279,7 +290,8 @@ block0(v0: i64):
 
 function %load_i32_u64_offset(i64) -> i64 {
 block0(v0: i64):
-    v1 = uload32.i64 v0+4
+    v2 = load.i32 v0+4
+    v1 = uextend.i64 v2
     return v1
 }
 
@@ -326,7 +338,8 @@ block0(v0: i64):
 
 function %load_i8_s32_big_offset(i64) -> i32 {
 block0(v0: i64):
-    v1 = sload8.i32 v0+65536
+    v2 = load.i8 v0+65536
+    v1 = sextend.i32 v2
     return v1
 }
 
@@ -341,7 +354,8 @@ block0(v0: i64):
 
 function %load_i8_u32_big_offset(i64) -> i32 {
 block0(v0: i64):
-    v1 = uload8.i32 v0+65536
+    v2 = load.i8 v0+65536
+    v1 = uextend.i32 v2
     return v1
 }
 
@@ -371,7 +385,8 @@ block0(v0: i64):
 
 function %load_i16_s32_big_offset(i64) -> i32 {
 block0(v0: i64):
-    v1 = sload16.i32 v0+65536
+    v2 = load.i16 v0+65536
+    v1 = sextend.i32 v2
     return v1
 }
 
@@ -386,7 +401,8 @@ block0(v0: i64):
 
 function %load_i16_u32_big_offset(i64) -> i32 {
 block0(v0: i64):
-    v1 = uload16.i32 v0+65536
+    v2 = load.i16 v0+65536
+    v1 = uextend.i32 v2
     return v1
 }
 
@@ -416,7 +432,8 @@ block0(v0: i64):
 
 function %load_i32_s64_big_offset(i64) -> i64 {
 block0(v0: i64):
-    v1 = sload32.i64 v0+65536
+    v2 = load.i32 v0+65536
+    v1 = sextend.i64 v2
     return v1
 }
 
@@ -433,7 +450,8 @@ block0(v0: i64):
 
 function %load_i32_u64_big_offset(i64) -> i64 {
 block0(v0: i64):
-    v1 = uload32.i64 v0+65536
+    v2 = load.i32 v0+65536
+    v1 = uextend.i64 v2
     return v1
 }
 

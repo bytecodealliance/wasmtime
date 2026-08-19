@@ -2604,25 +2604,6 @@
       (aarch64_fpuload128 (amode $I8X16 address offset) flags))
 
 (rule (lower
-       (uload8 _ (little_or_native_endian flags) address offset))
-      (aarch64_uload8 (amode $I8 address offset) flags))
-(rule (lower
-       (sload8 _ (little_or_native_endian flags) address offset))
-      (aarch64_sload8 (amode $I8 address offset) flags))
-(rule (lower
-       (uload16 _ (little_or_native_endian flags) address offset))
-      (aarch64_uload16 (amode $I16 address offset) flags))
-(rule (lower
-       (sload16 _ (little_or_native_endian flags) address offset))
-      (aarch64_sload16 (amode $I16 address offset) flags))
-(rule (lower
-       (uload32 _ (little_or_native_endian flags) address offset))
-      (aarch64_uload32 (amode $I32 address offset) flags))
-(rule (lower
-       (sload32 _ (little_or_native_endian flags) address offset))
-      (aarch64_sload32 (amode $I32 address offset) flags))
-
-(rule (lower
        (sload8x8 _ (little_or_native_endian flags) address offset))
       (vec_extend (VecExtendOp.Sxtl)
                   (aarch64_fpuload64 (amode $F64 address offset) flags)
@@ -2677,19 +2658,6 @@
        (store (little_or_native_endian flags) value @ (value_type $I64) address offset))
       (side_effect
        (aarch64_store64 (amode $I64 address offset) flags value)))
-
-(rule (lower
-       (istore8 (little_or_native_endian flags) value address offset))
-      (side_effect
-       (aarch64_store8 (amode $I8 address offset) flags value)))
-(rule (lower
-       (istore16 (little_or_native_endian flags) value address offset))
-      (side_effect
-       (aarch64_store16 (amode $I16 address offset) flags value)))
-(rule (lower
-       (istore32 (little_or_native_endian flags) value address offset))
-      (side_effect
-       (aarch64_store32 (amode $I32 address offset) flags value)))
 
 (rule store_i128 (lower
        (store (little_or_native_endian flags) value @ (value_type $I128) address offset))

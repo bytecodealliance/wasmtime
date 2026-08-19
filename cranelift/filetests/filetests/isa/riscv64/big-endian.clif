@@ -73,37 +73,43 @@ function %f(i64) -> f64x2 {
 
 function %f(i64) -> i32 {
     block0(v0: i64):
-        v1 = uload8.i32 big v0+8
+        v2 = load.i8 big v0+8
+        v1 = uextend.i32 v2
         return v1
 }
 
 function %f(i64) -> i32 {
     block0(v0: i64):
-        v1 = sload8.i32 big v0+8
+        v2 = load.i8 big v0+8
+        v1 = sextend.i32 v2
         return v1
 }
 
 function %f(i64) -> i32 {
     block0(v0: i64):
-        v1 = uload16.i32 big v0+8
+        v2 = load.i16 big v0+8
+        v1 = uextend.i32 v2
         return v1
 }
 
 function %f(i64) -> i32 {
     block0(v0: i64):
-        v1 = sload16.i32 big v0+8
+        v2 = load.i16 big v0+8
+        v1 = sextend.i32 v2
         return v1
 }
 
 function %f(i64) -> i64 {
     block0(v0: i64):
-        v1 = uload32.i64 big v0+8
+        v2 = load.i32 big v0+8
+        v1 = uextend.i64 v2
         return v1
 }
 
 function %f(i64) -> i64 {
     block0(v0: i64):
-        v1 = sload32.i64 big v0+8
+        v2 = load.i32 big v0+8
+        v1 = sextend.i64 v2
         return v1
 }
 
@@ -139,19 +145,22 @@ function %f(i64, i128) {
 
 function %f(i64, i64) {
     block0(v0: i64, v1: i64):
-        istore8.i64 big v1, v0+8
+        v2 = ireduce.i8 v1
+        store big v2, v0+8
         return
 }
 
 function %f(i64, i64) {
     block0(v0: i64, v1: i64):
-        istore16.i64 big v1, v0+8
+        v2 = ireduce.i16 v1
+        store big v2, v0+8
         return
 }
 
 function %f(i64, i64) {
     block0(v0: i64, v1: i64):
-        istore32.i64 big v1, v0+8
+        v2 = ireduce.i32 v1
+        store big v2, v0+8
         return
 }
 

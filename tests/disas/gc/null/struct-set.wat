@@ -58,13 +58,14 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @003f                               trapz v2, user16
+;; @003f                               v10 = ireduce.i8 v3
 ;; @003f                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @003f                               v6 = load.i64 notrap aligned readonly can_move region2 v5+32
 ;; @003f                               v4 = uextend.i64 v2
 ;; @003f                               v7 = iadd v6, v4
 ;; @003f                               v8 = iconst.i64 12
 ;; @003f                               v9 = iadd v7, v8  ; v8 = 12
-;; @003f                               istore8 user2 little region4 v3, v9
+;; @003f                               store user2 little region4 v10, v9
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:

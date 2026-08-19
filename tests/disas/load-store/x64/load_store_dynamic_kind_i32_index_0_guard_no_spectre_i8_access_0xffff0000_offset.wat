@@ -45,16 +45,19 @@
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %esi
 ;;       movq    %rsi, %r8
-;;       addq    0x28(%rip), %r8
-;;       jb      0x74
+;;       addq    0x30(%rip), %r8
+;;       jb      0x78
 ;;   56: cmpq    0x40(%rdi), %r8
-;;       ja      0x76
+;;       ja      0x7a
 ;;   60: addq    0x38(%rdi), %rsi
-;;       movl    $0xffff0000, %r10d
-;;       movzbq  (%rsi, %r10), %rax
+;;       movl    $0xffff0000, %r11d
+;;       movzbq  (%rsi, %r11), %r11
+;;       movzbl  %r11b, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   74: ud2
-;;   76: ud2
-;;   78: addl    %eax, (%rax)
+;;   78: ud2
+;;   7a: ud2
+;;   7c: addb    %al, (%rax)
+;;   7e: addb    %al, (%rax)
+;;   80: addl    %eax, (%rax)

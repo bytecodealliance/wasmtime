@@ -44,17 +44,18 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       ld      a1, 0x40(a0)
-;;       slli    a2, a2, 0x20
-;;       srli    a2, a2, 0x20
-;;       bgeu    a1, a2, 8
+;;       ld      a4, 0x40(a0)
+;;       slli    a1, a2, 0x20
+;;       srli    a3, a1, 0x20
+;;       bgeu    a4, a3, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a3, 0x38(a0)
-;;       add     a2, a3, a2
-;;       lui     a1, 0xffff
-;;       slli    a3, a1, 4
-;;       add     a2, a2, a3
-;;       lbu     a0, 0(a2)
+;;       ld      a4, 0x38(a0)
+;;       add     a3, a4, a3
+;;       lui     a2, 0xffff
+;;       slli    a4, a2, 4
+;;       add     a3, a3, a4
+;;       lb      a3, 0(a3)
+;;       andi    a0, a3, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10

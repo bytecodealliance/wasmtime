@@ -36,7 +36,8 @@
 ;; @0040                               trapnz v6, heap_oob
 ;; @0040                               v7 = load.i64 notrap aligned can_move region2 v0+56
 ;; @0040                               v8 = iadd v7, v4
-;; @0040                               istore8 little region4 v3, v8
+;; @0040                               v9 = ireduce.i8 v3
+;; @0040                               store little region4 v9, v8
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
@@ -61,9 +62,10 @@
 ;; @0048                               trapnz v5, heap_oob
 ;; @0048                               v6 = load.i64 notrap aligned can_move region2 v0+56
 ;; @0048                               v7 = iadd v6, v3
-;; @0048                               v8 = uload8.i32 little region4 v7
+;; @0048                               v8 = load.i8 little region4 v7
+;; @0048                               v9 = uextend.i32 v8
 ;; @004b                               jump block1
 ;;
 ;;                                 block1:
-;; @004b                               return v8
+;; @004b                               return v9
 ;; }

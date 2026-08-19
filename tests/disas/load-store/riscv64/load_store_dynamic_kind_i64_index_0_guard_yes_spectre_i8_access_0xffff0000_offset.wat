@@ -51,25 +51,27 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       auipc   a5, 0
-;;       ld      a5, 0x50(a5)
-;;       add     a5, a2, a5
-;;       bgeu    a5, a2, 8
+;;       auipc   a1, 0
+;;       ld      a1, 0x58(a1)
+;;       add     a1, a2, a1
+;;       bgeu    a1, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x40(a0)
-;;       ld      a3, 0x38(a0)
-;;       sltu    a0, a1, a5
-;;       add     a1, a3, a2
-;;       lui     a5, 0xffff
-;;       slli    a2, a5, 4
+;;       ld      a3, 0x40(a0)
+;;       ld      a4, 0x38(a0)
+;;       sltu    a0, a3, a1
+;;       add     a1, a4, a2
+;;       lui     a2, 0xffff
+;;       slli    a2, a2, 4
 ;;       add     a1, a1, a2
-;;       neg     a4, a0
-;;       not     a0, a4
+;;       neg     a5, a0
+;;       not     a0, a5
 ;;       and     a0, a1, a0
-;;       lbu     a0, 0(a0)
+;;       lb      a0, 0(a0)
+;;       andi    a0, a0, 0xff
 ;;       ld      ra, 8(sp)
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
 ;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;       .byte   0x01, 0x00, 0xff, 0xff
 ;;       .byte   0x00, 0x00, 0x00, 0x00

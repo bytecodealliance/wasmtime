@@ -29,7 +29,7 @@
 ;;       movq    0x18(%r10), %r10
 ;;       addq    $0x50, %r10
 ;;       cmpq    %rsp, %r10
-;;       ja      0x11a
+;;       ja      0x117
 ;;   19: subq    $0x40, %rsp
 ;;       movq    %rbx, 0x10(%rsp)
 ;;       movq    %r12, 0x18(%rsp)
@@ -42,7 +42,7 @@
 ;;       leaq    0x20(%rcx), %rdx
 ;;       movl    4(%rsi), %r8d
 ;;       cmpq    %r8, %rdx
-;;       ja      0xe6
+;;       ja      0xe3
 ;;   4f: movq    %rdi, 8(%rsp)
 ;;       leal    0x20(%rax), %edi
 ;;       movl    %edi, (%rsi)
@@ -56,8 +56,7 @@
 ;;       movl    (%r8), %r8d
 ;;       movl    %r8d, 4(%rdi, %rcx)
 ;;       ╰─╼ trap: GcHeapCorrupt
-;;       movl    $0x20, %r8d
-;;       movl    %r8d, 8(%rdi, %rcx)
+;;       movl    $0x20, 8(%rdi, %rcx)
 ;;       ╰─╼ trap: GcHeapCorrupt
 ;;       movl    %eax, (%rsp)
 ;;       movl    $0x2a, 0x10(%rsi)
@@ -68,12 +67,12 @@
 ;;       movq    8(%rsp), %rsi
 ;;       callq   *%rax
 ;;       ├─╼ exception frame offset: SP = FP - 0x40
-;;       ╰─╼ exception handler: default handler, context at [SP+0x8], handler=0xa6
+;;       ╰─╼ exception handler: default handler, context at [SP+0x8], handler=0xa3
 ;;       movl    (%rsp), %eax
 ;;       ╰─╼ stack_map: frame_size=64, frame_offsets=[0]
 ;;       testl   %eax, %eax
-;;       je      0x11c
-;;   b1: movq    8(%rsp), %r9
+;;       je      0x119
+;;   ae: movq    8(%rsp), %r9
 ;;       movq    8(%r9), %rcx
 ;;       movq    0x20(%rcx), %rcx
 ;;       movl    %eax, %eax
@@ -88,19 +87,19 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   e6: movl    $0xb0000002, %esi
-;;   eb: movq    0x28(%rdi), %rax
-;;   ef: movq    %rdi, 8(%rsp)
-;;   f4: movl    (%rax), %edx
-;;   f6: movl    $0x20, %ecx
-;;   fb: movl    $0x10, %r8d
-;;  101: callq   0x286
-;;  106: movq    8(%rsp), %r9
-;;  10b: movq    8(%r9), %rcx
-;;  10f: movl    %eax, %esi
-;;  111: addq    0x20(%rcx), %rsi
-;;  115: jmp     0x88
-;;  11a: ud2
+;;   e3: movl    $0xb0000002, %esi
+;;   e8: movq    0x28(%rdi), %rax
+;;   ec: movq    %rdi, 8(%rsp)
+;;   f1: movl    (%rax), %edx
+;;   f3: movl    $0x20, %ecx
+;;   f8: movl    $0x10, %r8d
+;;   fe: callq   0x283
+;;  103: movq    8(%rsp), %r9
+;;  108: movq    8(%r9), %rcx
+;;  10c: movl    %eax, %esi
+;;  10e: addq    0x20(%rcx), %rsi
+;;  112: jmp     0x85
+;;  117: ud2
 ;;       ╰─╼ trap: Normal(StackOverflow)
-;;  11c: ud2
+;;  119: ud2
 ;;       ╰─╼ trap: Normal(NullReference)

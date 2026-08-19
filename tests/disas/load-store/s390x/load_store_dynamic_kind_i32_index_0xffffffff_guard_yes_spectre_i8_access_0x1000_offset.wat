@@ -57,5 +57,6 @@
 ;;       clgr    %r5, %r6
 ;;       locgrh  %r2, %r3
 ;;       llc     %r2, 0(%r2)
+;;       llcr    %r2, %r2
 ;;       lmg     %r14, %r15, 0x110(%r15)
 ;;       br      %r14
