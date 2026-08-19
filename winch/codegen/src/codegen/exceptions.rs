@@ -1,20 +1,280 @@
-use super::{Callee, CodeGen, CodeGenError, Emission, FnCall};
+use super::{Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall};
 use crate::{
-    Result, format_err,
+    Result,
+    codegen::{UnconditionalBranch, control_index},
+    ensure, format_err,
     masm::{IntScratch, MacroAssembler, OperandSize, RegImm},
-    reg::Reg,
-    stack::TypedReg,
+    reg::{Reg, writable},
+    stack::{TypedReg, Val},
 };
-use wasmtime_environ::copying::InlineTraceInfo;
+use cranelift_codegen::{MachExceptionHandler, MachLabel, ir::ExceptionTag};
+use smallvec::SmallVec;
 use wasmtime_environ::{
     Collector, GcStructLayout, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TagIndex, VMGcKind,
-    WasmExnType, WasmHeapType, WasmStorageType, WasmValType,
+    WasmExnType, WasmHeapType, WasmStorageType, WasmValType, packed_option::ReservedValue,
 };
+use wasmtime_environ::{WasmCompositeInnerType, copying::InlineTraceInfo};
+
+/// The exception handlers that are currently in scope.
+#[derive(Default)]
+pub(crate) struct HandlerState {
+    handlers: Vec<(Option<ExceptionTag>, MachLabel)>,
+}
+
+/// A checkpoint that can restore the exception handlers in scope.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct HandlerStateCheckpoint(usize);
+
+#[derive(Debug)]
+pub(crate) struct CatchInfo {
+    pub(crate) tag: Option<TagIndex>,
+    pub(crate) target_depth: u32,
+    pub(crate) landing_pad: MachLabel,
+}
+
+#[derive(Debug)]
+pub(crate) struct TryTableInfo {
+    pub(crate) checkpoint: HandlerStateCheckpoint,
+    pub(crate) catches: Vec<CatchInfo>,
+}
+
+impl HandlerState {
+    /// Adds an exception handler.
+    pub(crate) fn add_handler(&mut self, tag: Option<ExceptionTag>, label: MachLabel) {
+        self.handlers.push((tag, label));
+    }
+
+    /// Takes a checkpoint of the exception handlers currently in scope.
+    pub(crate) fn take_checkpoint(&self) -> HandlerStateCheckpoint {
+        HandlerStateCheckpoint(self.handlers.len())
+    }
+
+    /// Restores the exception handlers to a previous checkpoint.
+    pub(crate) fn restore_checkpoint(&mut self, checkpoint: HandlerStateCheckpoint) {
+        assert!(checkpoint.0 <= self.handlers.len());
+        self.handlers.truncate(checkpoint.0);
+    }
+
+    /// Iterates over exception handlers from the innermost to the outermost.
+    pub(crate) fn handlers(&self) -> impl Iterator<Item = MachExceptionHandler> + '_ {
+        self.handlers
+            .iter()
+            .copied()
+            .rev()
+            .map(|(tag, label)| match tag {
+                Some(tag) => MachExceptionHandler::Tag(tag, label),
+                None => MachExceptionHandler::Default(label),
+            })
+    }
+
+    /// Returns whether there are no exception handlers in scope.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.handlers.is_empty()
+    }
+}
 
 impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {
+    /// Emits the end of a try-table block and its exception landing pads.
+    pub(crate) fn emit_try_table_end(
+        &mut self,
+        mut control: ControlStackFrame,
+        info: TryTableInfo,
+    ) -> Result<()> {
+        let stack_state = *control.stack_state();
+
+        let fallthrough_reachable = self.context.reachable;
+        let end_reachable = fallthrough_reachable || control.is_next_sequence_reachable();
+
+        if fallthrough_reachable {
+            ensure!(
+                control.stack_state().target_len == self.context.stack.len(),
+                CodeGenError::control_frame_state_mismatch()
+            );
+
+            control.pop_abi_results(&mut self.context, self.masm, |results, _, _| {
+                Ok(results.ret_area().copied())
+            })?;
+
+            self.masm.jmp(*control.label())?;
+        }
+
+        for catch in info.catches {
+            self.masm.bind(catch.landing_pad)?;
+
+            self.context.reachable = true;
+            let exception_reg = self
+                .masm
+                .prepare_for_exception_handler(stack_state.base_offset)?;
+            self.context.truncate_stack_to(stack_state.base_len)?;
+            self.context.load_vmctx(self.masm)?;
+
+            if let Some(tag) = catch.tag {
+                let exception_reg = self.context.reg(exception_reg, self.masm)?;
+                self.emit_load_exception_payload_fields(tag, exception_reg)?;
+            }
+            self.emit_catch_branch(catch.target_depth)?;
+        }
+
+        self.context.reachable = end_reachable;
+
+        if end_reachable {
+            if !fallthrough_reachable {
+                control.ensure_stack_state(self.masm, &mut self.context)?;
+            }
+            control.bind_end(self.masm, &mut self.context)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn emit_catch_branch(&mut self, target_depth: u32) -> Result<()> {
+        let index = control_index(target_depth, self.control_frames.len())?;
+        let frame = &mut self.control_frames[index];
+
+        self.context
+            .br::<_, _, UnconditionalBranch>(frame, self.masm, |masm, context, frame| {
+                frame.pop_abi_results::<M, _>(context, masm, |results, _, _| {
+                    Ok(results.ret_area().copied())
+                })
+            })
+    }
+
+    fn emit_load_exception_payload_fields(
+        &mut self,
+        tag_index: TagIndex,
+        mut exception_reg: Reg,
+    ) -> Result<()> {
+        let interned = self.env.translation.module.tags[tag_index]
+            .exception
+            .unwrap_module_type_index();
+
+        let exn_ty = match &self.env.types[interned].composite_type.inner {
+            WasmCompositeInnerType::Exn(exn_ty) => exn_ty,
+            _ => return Err(format_err!(CodeGenError::unsupported_wasm_type())),
+        };
+        let gc_codegen_config = self.require_gc_codegen_config();
+        let layouts = gc_codegen_config.layouts();
+
+        let layout = layouts
+            .exn_layout(exn_ty)
+            .map_err(|_| format_err!(CodeGenError::unsupported_wasm_type()))?;
+
+        let fields: SmallVec<[(WasmStorageType, u32); 8]> = exn_ty
+            .fields
+            .iter()
+            .zip(layout.fields.iter())
+            .map(|(field_ty, field_layout)| (field_ty.element_type, field_layout.offset))
+            .collect();
+
+        let (heap_base, heap_bound) = self.emit_load_gc_heap_base_and_bound()?;
+
+        self.emit_gc_ref_bounds_check(exception_reg, heap_bound, i64::from(layout.size))?;
+
+        self.context.free_reg(heap_bound);
+
+        let mut object_addr = Some(self.emit_gc_ref_addr(exception_reg, heap_base)?);
+        self.context.free_reg(heap_base);
+        for (field_ty, field_offset) in fields {
+            let field_base = match object_addr {
+                Some(reg) => reg,
+                None => {
+                    let (heap_base, heap_bound) = self.emit_load_gc_heap_base_and_bound()?;
+                    self.context.free_reg(heap_bound);
+                    let object_addr = self.emit_gc_ref_addr(exception_reg, heap_base)?;
+                    self.context.free_reg(heap_base);
+                    object_addr
+                }
+            };
+            object_addr = Some(field_base);
+
+            let ty = match field_ty {
+                WasmStorageType::Val(ty @ WasmValType::Ref(r))
+                    if r.heap_type == WasmHeapType::Func =>
+                {
+                    let func_ref_id = self.context.any_gpr(self.masm)?;
+                    let addr = self.masm.address_at_reg(field_base, field_offset)?;
+                    self.masm
+                        .load(addr, writable!(func_ref_id), OperandSize::S32)?;
+
+                    // The builtin call can clobber allocated registers. Preserve
+                    // the exception and its object address beneath the call's
+                    // arguments so later payload fields can still be loaded.
+                    self.context.stack.push(TypedReg::i64(field_base).into());
+                    self.context.stack.push(TypedReg::i32(exception_reg).into());
+                    self.context.stack.push(TypedReg::i32(func_ref_id).into());
+                    self.context.stack.push(Val::i32(
+                        ModuleInternedTypeIndex::reserved_value()
+                            .as_bits()
+                            .cast_signed(),
+                    ));
+
+                    let get = self.env.builtins.get_interned_func_ref::<M::ABI>()?;
+                    FnCall::emit::<M>(
+                        &mut self.env,
+                        self.masm,
+                        &mut self.context,
+                        Callee::Builtin(get),
+                    )?;
+
+                    let func_ref = self.context.pop_to_reg(self.masm, None)?;
+                    exception_reg = self.context.pop_to_reg(self.masm, None)?.reg;
+                    object_addr = Some(self.context.pop_to_reg(self.masm, None)?.reg);
+                    self.context
+                        .stack
+                        .push(TypedReg::new(ty, func_ref.reg).into());
+                    continue;
+                }
+                WasmStorageType::Val(ty @ WasmValType::Ref(r))
+                    if r.heap_type == WasmHeapType::Extern =>
+                {
+                    let addr = self.masm.address_at_reg(field_base, field_offset)?;
+                    if gc_codegen_config.collector() == Collector::DeferredReferenceCounting {
+                        // The DRC read barrier can make an out-of-line call and
+                        // consumes the field's base register. Preserve the
+                        // exception so a later field can recompute its address.
+                        // The runtime rooted the exception when transferring it
+                        // to this handler; this stack value only preserves its
+                        // raw bits across the call.
+                        self.context.stack.push(TypedReg::i32(exception_reg).into());
+                        self.emit_drc_read_barrier(ty, field_base, addr)?;
+                        let payload = self.context.pop_to_reg(self.masm, None)?;
+                        exception_reg = self.context.pop_to_reg(self.masm, None)?.reg;
+                        self.context.stack.push(payload.into());
+                        object_addr = None;
+                    } else {
+                        let value = self.context.reg_for_type(ty, self.masm)?;
+                        self.masm.load(addr, writable!(value), ty.try_into()?)?;
+                        self.context.stack.push(TypedReg::new(ty, value).into());
+                    }
+                    continue;
+                }
+                WasmStorageType::Val(WasmValType::Ref(_)) => {
+                    return Err(format_err!(CodeGenError::unsupported_wasm_type()));
+                }
+                WasmStorageType::Val(ty) => ty,
+                WasmStorageType::I8 | WasmStorageType::I16 => {
+                    return Err(format_err!(CodeGenError::unsupported_wasm_type()));
+                }
+            };
+
+            let value = self.context.reg_for_type(ty, self.masm)?;
+            let addr = self.masm.address_at_reg(field_base, field_offset)?;
+
+            self.masm.load(addr, writable!(value), ty.try_into()?)?;
+
+            self.context.stack.push(TypedReg::new(ty, value).into());
+        }
+
+        if let Some(object_addr) = object_addr {
+            self.context.free_reg(object_addr);
+        }
+        self.context.free_reg(exception_reg);
+        Ok(())
+    }
+
     /// Allocates an exception and initializes its tag identity.
     ///
     /// Exception tags are identified by the defining instance and the tag's
@@ -99,7 +359,7 @@ where
     ///
     /// This method consumes and frees `object_addr`. It returns `gc_ref`, which
     /// remains owned by the caller.
-    pub(crate) fn emit_exception_payload_fields(
+    pub(crate) fn emit_store_exception_payload_fields(
         &mut self,
         exn_ty: &WasmExnType,
         layout: &GcStructLayout,

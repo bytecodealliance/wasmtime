@@ -3,7 +3,9 @@ use crate::{
     Result,
     abi::{ABIOperand, ABIResults, RetArea, vmctx},
     bail,
-    codegen::{BranchState, CodeGenError, CodeGenPhase, Emission, Prologue},
+    codegen::{
+        BranchState, CodeGenError, CodeGenPhase, Emission, Prologue, exceptions::HandlerState,
+    },
     ensure, format_err,
     frame::Frame,
     isa::reg::RegClass,
@@ -45,6 +47,8 @@ pub(crate) struct CodeGenContext<'a, P: CodeGenPhase> {
     pub reachable: bool,
     /// A reference to the VMOffsets.
     pub vmoffsets: &'a VMOffsets<u8>,
+    /// The exception handlers currently in scope.
+    pub exception_handlers: HandlerState,
 }
 
 impl<'a> CodeGenContext<'a, Emission> {
@@ -123,6 +127,7 @@ impl<'a> CodeGenContext<'a, Prologue> {
             frame,
             reachable: true,
             vmoffsets,
+            exception_handlers: Default::default(),
         }
     }
 
@@ -134,6 +139,7 @@ impl<'a> CodeGenContext<'a, Prologue> {
             reachable: self.reachable,
             vmoffsets: self.vmoffsets,
             frame: self.frame.for_emission(),
+            exception_handlers: self.exception_handlers,
         }
     }
 }

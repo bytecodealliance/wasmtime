@@ -567,9 +567,6 @@ impl WastTest {
                 "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
                 "misc_testsuite/no-panic.wast",
-                // Winch does not implement exception handlers yet.
-                "misc_testsuite/traps-skip-catch-all.wast",
-                "spec_testsuite/throw.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

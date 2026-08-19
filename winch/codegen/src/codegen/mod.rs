@@ -42,6 +42,7 @@ pub use builtin::*;
 pub(crate) mod bounds;
 mod drc;
 mod exceptions;
+pub(crate) use exceptions::{CatchInfo, TryTableInfo};
 mod gc;
 use gc::GcCodegenConfig;
 
@@ -318,9 +319,17 @@ where
 
     /// Pops a control frame from the control frame stack.
     pub fn pop_control_frame(&mut self) -> Result<ControlStackFrame> {
-        self.control_frames
+        let frame = self
+            .control_frames
             .pop()
-            .ok_or_else(|| format_err!(CodeGenError::control_frame_expected()))
+            .ok_or_else(|| format_err!(CodeGenError::control_frame_expected()))?;
+        if let Some(info) = frame.try_table_info() {
+            self.context
+                .exception_handlers
+                .restore_checkpoint(info.checkpoint);
+        }
+
+        Ok(frame)
     }
 
     /// Derives a [RelSourceLoc] from a [SourceLoc].
@@ -358,6 +367,9 @@ where
 
     pub fn handle_unreachable_end(&mut self) -> Result<()> {
         let mut frame = self.pop_control_frame()?;
+        if let Some(info) = frame.take_try_table_info() {
+            return self.emit_try_table_end(frame, info);
+        }
         // We just popped the outermost block.
         let is_outermost = self.control_frames.len() == 0;
 
@@ -439,7 +451,7 @@ where
         fn visit_op_when_unreachable(op: &Operator) -> bool {
             use Operator::*;
             match op {
-                If { .. } | Block { .. } | Loop { .. } | Else | End => true,
+                If { .. } | Block { .. } | TryTable { .. } | Loop { .. } | Else | End => true,
                 _ => false,
             }
         }
