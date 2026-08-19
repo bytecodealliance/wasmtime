@@ -66,4 +66,5 @@ block0():
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %bh, %bh
+;   .byte 0x3f
 
