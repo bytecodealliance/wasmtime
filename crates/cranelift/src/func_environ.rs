@@ -342,70 +342,116 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.isa.pointer_type()
     }
 
+    /// Get the alias region to use for accesses of the given memory.
+    ///
+    /// XXX: Keep the `{memory,global,table}_alias_region` methods in sync with
+    /// each other.
     pub(crate) fn memory_alias_region(
         &mut self,
         func: &mut Function,
         memory: MemoryIndex,
     ) -> ir::AliasRegion {
-        if self.module.is_exported_memory(memory) {
-            // A function that operates on an exported defined memory can be
-            // inlined into a different module caller, where that that caller's
-            // module also imports that exported memory. That caller will access
-            // the memory with `AliasRegionKey::PublicMemory`, so we must also
-            // conservatively do the same here, even though we potentially know
-            // the precise static module index and defined memory index, because
-            // memory accessed with two different alias regions must not
-            // actually alias, or else we will get miscompiles.
-            self.alias_regions.public_memory_region(func)
-        } else {
-            match self.module.defined_memory_index(memory) {
-                Some(def) => self.alias_regions.defined_memory_region(
-                    func,
-                    self.translation.module_index(),
-                    def,
-                ),
-                None => self.alias_regions.public_memory_region(func),
+        match self.module.defined_memory_index(memory) {
+            // A memory defined by this module. When it is exported, a function
+            // that operates on it can be inlined into a caller in a different
+            // module that imports that memory, and vice versa. That other module
+            // accesses the memory with `AliasRegionKey::PublicMemory` unless it
+            // statically knows that its import is always this memory, so we can
+            // only use this memory's precise region when every module that may
+            // import it does know that. Memory accessed with two different alias
+            // regions must not actually alias, or else we will get miscompiles.
+            Some(def) => {
+                if self.module.is_exported_memory(memory)
+                    && !self.translation.memories_known_to_importers.contains(def)
+                {
+                    self.alias_regions.public_memory_region(func)
+                } else {
+                    self.alias_regions.defined_memory_region(
+                        func,
+                        self.translation.module_index(),
+                        def,
+                    )
+                }
             }
+
+            // A memory imported by this module: use the precise region when we
+            // statically know which defined memory always satisfies the import
+            // and everything else that imports it knows the same.
+            None => match self.translation.known_imported_memories[memory] {
+                Some(known) => {
+                    self.alias_regions
+                        .defined_memory_region(func, known.module, known.index)
+                }
+                None => self.alias_regions.public_memory_region(func),
+            },
         }
     }
 
+    /// Get the alias region to use for accesses of the given table.
+    ///
+    /// XXX: Keep the `{memory,global,table}_alias_region` methods in sync with
+    /// each other.
     pub(crate) fn table_alias_region(
         &mut self,
         func: &mut Function,
         table: TableIndex,
     ) -> ir::AliasRegion {
-        if self.module.is_exported_table(table) {
-            // See the comment in `memory_alias_region` for details.
-            self.alias_regions.public_table_region(func)
-        } else {
-            match self.module.defined_table_index(table) {
-                Some(def) => self.alias_regions.defined_table_region(
-                    func,
-                    self.translation.module_index(),
-                    def,
-                ),
-                None => self.alias_regions.public_table_region(func),
+        // See the comments in `memory_alias_region` for details.
+        match self.module.defined_table_index(table) {
+            Some(def) => {
+                if self.module.is_exported_table(table)
+                    && !self.translation.tables_known_to_importers.contains(def)
+                {
+                    self.alias_regions.public_table_region(func)
+                } else {
+                    self.alias_regions.defined_table_region(
+                        func,
+                        self.translation.module_index(),
+                        def,
+                    )
+                }
             }
+            None => match self.translation.known_imported_tables[table] {
+                Some(known) => {
+                    self.alias_regions
+                        .defined_table_region(func, known.module, known.index)
+                }
+                None => self.alias_regions.public_table_region(func),
+            },
         }
     }
 
+    /// Get the alias region to use for accesses of the given global.
+    ///
+    /// XXX: Keep the `{memory,global,table}_alias_region` methods in sync with
+    /// each other.
     pub(crate) fn global_alias_region(
         &mut self,
         func: &mut Function,
         global: GlobalIndex,
     ) -> ir::AliasRegion {
-        if self.module.is_exported_global(global) {
-            // See the comment in `memory_alias_region` for details.
-            self.alias_regions.public_global_region(func)
-        } else {
-            match self.module.defined_global_index(global) {
-                Some(def) => self.alias_regions.defined_global_region(
-                    func,
-                    self.translation.module_index(),
-                    def,
-                ),
-                None => self.alias_regions.public_global_region(func),
+        // See the comments in `memory_alias_region` for details.
+        match self.module.defined_global_index(global) {
+            Some(def) => {
+                if self.module.is_exported_global(global)
+                    && !self.translation.globals_known_to_importers.contains(def)
+                {
+                    self.alias_regions.public_global_region(func)
+                } else {
+                    self.alias_regions.defined_global_region(
+                        func,
+                        self.translation.module_index(),
+                        def,
+                    )
+                }
             }
+            None => match self.translation.known_imported_globals[global] {
+                Some(known) => {
+                    self.alias_regions
+                        .defined_global_region(func, known.module, known.index)
+                }
+                None => self.alias_regions.public_global_region(func),
+            },
         }
     }
 

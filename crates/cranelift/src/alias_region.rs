@@ -75,8 +75,8 @@ enum AliasRegionKey {
         offset: u32,
     },
 
-    /// An imported or exported memory access (shared across all
-    /// imported/exported memories).
+    /// An access of a memory that crosses a module boundary and whose
+    /// definition we do not statically know (shared across all such memories).
     PublicMemory,
 
     /// A defined memory access.
@@ -87,8 +87,8 @@ enum AliasRegionKey {
         index: DefinedMemoryIndex,
     },
 
-    /// An imported or exported table access (shared across all
-    /// imported/exported tables).
+    /// An access of a table that crosses a module boundary and whose definition
+    /// we do not statically know (shared across all such tables).
     PublicTable,
 
     /// A defined table access.
@@ -99,8 +99,8 @@ enum AliasRegionKey {
         index: DefinedTableIndex,
     },
 
-    /// An imported or exported global access (shared across all
-    /// imported/exported globals).
+    /// An access of a global that crosses a module boundary and whose definition
+    /// we do not statically know (shared across all such globals).
     PublicGlobal,
 
     /// A defined global access.
@@ -937,14 +937,13 @@ where
         self.region(func, AliasRegionKey::GcHeap)
     }
 
-    /// Get the alias region for an imported or exported memory access (shared
-    /// across all imported/exported memories).
+    /// Get the alias region shared by all memories that cross a module boundary
+    /// and whose definition we do not statically know.
     pub fn public_memory_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
         self.region(func, AliasRegionKey::PublicMemory)
     }
 
-    /// Get the alias region for accessing a defined memory that is not
-    /// exported.
+    /// Get the alias region for accessing a particular defined memory.
     pub fn defined_memory_region(
         &mut self,
         func: &mut ir::Function,
@@ -954,14 +953,13 @@ where
         self.region(func, AliasRegionKey::DefinedMemory { module, index })
     }
 
-    /// Get the alias region for an imported or exported table access (shared
-    /// across all imported/exported memories).
+    /// Get the alias region shared by all tables that cross a module boundary
+    /// and whose definition we do not statically know.
     pub fn public_table_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
         self.region(func, AliasRegionKey::PublicTable)
     }
 
-    /// Get the alias region for accessing a defined table that is not
-    /// exported.
+    /// Get the alias region for accessing a particular defined table.
     pub fn defined_table_region(
         &mut self,
         func: &mut ir::Function,
@@ -971,14 +969,13 @@ where
         self.region(func, AliasRegionKey::DefinedTable { module, index })
     }
 
-    /// Get the alias region for an imported or exported global access (shared
-    /// across all imported/exported memories).
+    /// Get the alias region shared by all globals that cross a module boundary
+    /// and whose definition we do not statically know.
     pub fn public_global_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
         self.region(func, AliasRegionKey::PublicGlobal)
     }
 
-    /// Get the alias region for accessing a defined global that is not
-    /// exported.
+    /// Get the alias region for accessing a particular defined global.
     pub fn defined_global_region(
         &mut self,
         func: &mut ir::Function,

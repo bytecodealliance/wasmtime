@@ -3,12 +3,23 @@ use wasmtime_core::error::OutOfMemory;
 
 /// Like `cranelift_entity::EntitySet` but enforces fallible allocation for all
 /// methods that allocate.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TryEntitySet<K>
 where
     K: EntityRef,
 {
     inner: cranelift_entity::EntitySet<K>,
+}
+
+impl<K> Default for TryEntitySet<K>
+where
+    K: EntityRef,
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+        }
+    }
 }
 
 impl<K> TryEntitySet<K>
