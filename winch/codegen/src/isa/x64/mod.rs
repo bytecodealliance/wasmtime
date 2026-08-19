@@ -119,7 +119,14 @@ impl TargetIsa for X64 {
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         let regalloc = RegAlloc::from(gpr_bit_set(), fpr_bit_set());
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
-        let codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
+        let codegen = CodeGen::new(
+            tunables,
+            &mut masm,
+            codegen_context,
+            env,
+            abi_sig,
+            validator.features(),
+        )?;
 
         let mut body_codegen = codegen.emit_prologue()?;
 

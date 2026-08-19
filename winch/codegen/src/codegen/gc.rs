@@ -1,8 +1,7 @@
-use super::{CodeGen, CodeGenError, Emission};
+use super::{CodeGen, Emission};
 use crate::{
     Result,
     codegen::{Callee, FnCall},
-    format_err,
     masm::{IntCmpKind, IntScratch, MacroAssembler, OperandSize, RegImm},
     reg::{Reg, writable},
     stack::{TypedReg, Val},
@@ -10,14 +9,48 @@ use crate::{
 use cranelift_codegen::MachLabel;
 use wasmtime_cranelift::{TRAP_ALLOCATION_TOO_LARGE, TRAP_GC_HEAP_CORRUPT};
 use wasmtime_environ::{
-    Collector, I31_DISCRIMINANT, ModuleInternedTypeIndex, PtrSize, VM_GC_HEADER_KIND_OFFSET,
-    VM_GC_HEADER_TYPE_INDEX_OFFSET, VMGcKind,
+    Collector, GcTypeLayouts, I31_DISCRIMINANT, ModuleInternedTypeIndex, PtrSize,
+    VM_GC_HEADER_KIND_OFFSET, VM_GC_HEADER_TYPE_INDEX_OFFSET, VMGcKind,
+    copying::CopyingTypeLayouts, drc::DrcTypeLayouts, null::NullTypeLayouts,
 };
+
+/// Collector-specific configuration used while generating GC operations.
+#[derive(Clone, Copy)]
+pub(crate) struct GcCodegenConfig {
+    collector: Collector,
+    layouts: &'static dyn GcTypeLayouts,
+}
+
+impl GcCodegenConfig {
+    pub(super) fn new(collector: Collector) -> Self {
+        let layouts = match collector {
+            Collector::DeferredReferenceCounting => &DrcTypeLayouts as &dyn GcTypeLayouts,
+            Collector::Null => &NullTypeLayouts,
+            Collector::Copying => &CopyingTypeLayouts,
+        };
+        Self { collector, layouts }
+    }
+
+    pub(crate) fn collector(self) -> Collector {
+        self.collector
+    }
+
+    pub(crate) fn layouts(self) -> &'static dyn GcTypeLayouts {
+        self.layouts
+    }
+}
 
 impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {
+    /// Returns the collector configuration required by a GC operation.
+    pub(crate) fn require_gc_codegen_config(&self) -> GcCodegenConfig {
+        self.gc_codegen_config.expect(
+            "attempted GC code generation when GC support was not enabled at configuration time",
+        )
+    }
+
     /// Allocates an uninitialized GC object and returns both its encoded heap
     /// reference and native address.
     ///
@@ -33,12 +66,11 @@ where
         reserved_bits: u32,
     ) -> Result<(TypedReg, Reg)> {
         let kind = kind.as_u32() | reserved_bits;
-        match self.tunables.collector {
-            Some(Collector::Null) => self.emit_null_gc_raw_alloc(kind, interned, size, align),
-            Some(Collector::DeferredReferenceCounting) | Some(Collector::Copying) => {
+        match self.require_gc_codegen_config().collector() {
+            Collector::Null => self.emit_null_gc_raw_alloc(kind, interned, size, align),
+            Collector::DeferredReferenceCounting | Collector::Copying => {
                 self.emit_builtin_gc_raw_alloc(kind, interned, size, align)
             }
-            None => Err(format_err!(CodeGenError::unsupported_wasm_type())),
         }
     }
 

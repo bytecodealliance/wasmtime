@@ -27,13 +27,9 @@ use wasmparser::{
     VisitSimdOperator,
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
-use wasmtime_environ::copying::CopyingTypeLayouts;
-use wasmtime_environ::drc::DrcTypeLayouts;
-use wasmtime_environ::null::NullTypeLayouts;
 use wasmtime_environ::{
-    Collector, DataIndex, ElemIndex, FuncIndex, GcTypeLayouts, GlobalIndex, MemoryIndex,
-    TableIndex, TagIndex, TypeIndex, WasmCompositeInnerType, WasmHeapType, WasmStorageType,
-    WasmValType,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeIndex,
+    WasmCompositeInnerType, WasmHeapType, WasmStorageType, WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -1874,12 +1870,7 @@ where
             WasmCompositeInnerType::Exn(exn_ty) => exn_ty,
             _ => return Err(format_err!(CodeGenError::unsupported_wasm_type())),
         };
-        let layouts: &dyn GcTypeLayouts = match self.tunables.collector {
-            Some(Collector::DeferredReferenceCounting) => &DrcTypeLayouts,
-            Some(Collector::Null) => &NullTypeLayouts,
-            Some(Collector::Copying) => &CopyingTypeLayouts,
-            None => return Err(format_err!(CodeGenError::unsupported_wasm_type())),
-        };
+        let layouts = self.require_gc_codegen_config().layouts();
 
         let layout = layouts
             .exn_layout(exn_ty)
