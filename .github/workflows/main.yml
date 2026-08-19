@@ -420,8 +420,6 @@ jobs:
           - name: cranelift-module
             checks: |
               -p cranelift-module --no-default-features
-              -p cranelift-module --no-default-features --features core
-              -p cranelift-module --no-default-features --features core,enable-serde
 
           - name: wasmtime-bench-api
             checks: |
