@@ -2,14 +2,11 @@
 ;;! test = "winch"
 ;;! flags = "-W exceptions -C collector=copying"
 
-;; `throw` builds an exception that escapes to the host, while `try_table`
-;; still compiles as a plain block.
+;; Store an external reference in an exception payload.
 (module
-  (tag $e (param i32))
-  (func (result i32)
-    (block $h (result i32)
-      (try_table (result i32) (catch $e $h)
-        (throw $e (i32.const 42))))))
+  (tag $e (param externref))
+  (func (param externref)
+    (throw $e (local.get 0))))
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
@@ -18,40 +15,51 @@
 ;;       ldur    x16, [x0, #8]
 ;;       ldur    x16, [x16, #0x18]
 ;;       mov     x17, #0
-;;       movk    x17, #0x20
+;;       movk    x17, #0x30
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x124
+;;       b.lo    #0x150
 ;;   2c: mov     x9, x0
-;;       sub     x28, x28, #0x10
+;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
-;;       stur    x0, [x28, #8]
-;;       stur    x1, [x28]
+;;       stur    x0, [x28, #0x10]
+;;       stur    x1, [x28, #8]
+;;       stur    w2, [x28, #4]
+;;       ldur    w16, [x28, #4]
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
+;;       stur    w16, [x28]
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
 ;;       mov     x0, x9
-;;       bl      #0x260
-;;   48: ldur    x9, [x28, #8]
+;;       bl      #0x21c
+;;   64: add     x28, x28, #4
+;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[4, 12]
+;;       mov     sp, x28
+;;       ldur    x9, [x28, #0x14]
 ;;       ldur    x1, [x9, #0x28]
-;;       ldur    w1, [x1, #8]
+;;       ldur    w1, [x1, #4]
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       stur    w0, [x28]
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       stur    w1, [x28]
-;;       sub     x28, x28, #8
+;;       sub     x28, x28, #0xc
 ;;       mov     sp, x28
 ;;       mov     x0, x9
-;;       mov     w1, #2
+;;       mov     w1, #0x22
 ;;       movk    w1, #0x400, lsl #16
-;;       ldur    w2, [x28, #8]
+;;       ldur    w2, [x28, #0xc]
 ;;       mov     x3, #0x20
 ;;       mov     x4, #0x10
-;;       bl      #0x210
-;;   90: add     x28, x28, #8
+;;       bl      #0x1cc
+;;   b4: add     x28, x28, #0xc
+;;       ╰─╼ stack_map: frame_size=64, frame_offsets=[20, 28]
 ;;       mov     sp, x28
 ;;       add     x28, x28, #4
 ;;       mov     sp, x28
-;;       ldur    x9, [x28, #0xc]
+;;       ldur    x9, [x28, #0x18]
 ;;       ldur    x1, [x9, #8]
 ;;       ldur    x2, [x1, #0x28]
 ;;       ldur    x1, [x1, #0x20]
@@ -63,25 +71,28 @@
 ;;       stur    w1, [x2, #0x10]
 ;;       mov     x16, #0
 ;;       stur    w16, [x2, #0x14]
-;;       mov     x16, #0x2a
+;;       ldur    w16, [x28]
+;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    w16, [x2, #0x18]
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       stur    w0, [x28]
-;;       sub     x28, x28, #0xc
+;;       sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       mov     x0, x9
-;;       ldur    w1, [x28, #0xc]
-;;       bl      #0x290
-;;   f8: add     x28, x28, #0xc
+;;       ldur    w1, [x28, #4]
+;;       bl      #0x24c
+;;  124: add     x28, x28, #4
+;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[12]
 ;;       mov     sp, x28
 ;;       add     x28, x28, #4
 ;;       mov     sp, x28
-;;       ldur    x9, [x28, #8]
-;;       add     x28, x28, #0x10
+;;       ldur    x9, [x28, #0x10]
+;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  124: udf     #0xc11f
+;;  150: udf     #0xc11f

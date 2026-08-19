@@ -2,14 +2,11 @@
 ;;! test = "winch"
 ;;! flags = "-W exceptions -C collector=null"
 
-;; `throw` builds an exception that escapes to the host, while `try_table`
-;; still compiles as a plain block.
+;; A function reference is interned before it is stored in the exception.
 (module
-  (tag $e (param i32))
-  (func (result i32)
-    (block $h (result i32)
-      (try_table (result i32) (catch $e $h)
-        (throw $e (i32.const 42))))))
+  (tag $e (param funcref))
+  (func (param funcref)
+    (throw $e (local.get 0))))
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
@@ -18,27 +15,32 @@
 ;;       ldur    x16, [x0, #8]
 ;;       ldur    x16, [x16, #0x18]
 ;;       mov     x17, #0
-;;       movk    x17, #0x20
+;;       movk    x17, #0x30
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x190
+;;       b.lo    #0x210
 ;;   2c: mov     x9, x0
-;;       sub     x28, x28, #0x10
+;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
-;;       stur    x0, [x28, #8]
-;;       stur    x1, [x28]
+;;       stur    x0, [x28, #0x10]
+;;       stur    x1, [x28, #8]
+;;       stur    x2, [x28]
+;;       ldur    x16, [x28]
+;;       sub     x28, x28, #8
+;;       mov     sp, x28
+;;       stur    x16, [x28]
 ;;       mov     x0, x9
-;;       bl      #0x2d8
-;;   48: ldur    x9, [x28, #8]
+;;       bl      #0x318
+;;   5c: ldur    x9, [x28, #0x18]
 ;;       ldur    x16, [x9, #0x20]
 ;;       ldur    w1, [x16]
 ;;       adds    w1, w1, #7
-;;       b.hs    #0x194
-;;   5c: and     w1, w1, #0xfffffff8
+;;       b.hs    #0x214
+;;   70: and     w1, w1, #0xfffffff8
 ;;       mov     w2, w1
 ;;       adds    w2, w2, #0x18
-;;       b.hs    #0x198
-;;   6c: sub     x28, x28, #4
+;;       b.hs    #0x218
+;;   80: sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       stur    w0, [x28]
 ;;       sub     x28, x28, #4
@@ -54,18 +56,18 @@
 ;;       ldur    x2, [x1, #0x28]
 ;;       ldur    x1, [x1, #0x20]
 ;;       cmp     x0, x2, uxtx
-;;       b.ls    #0xdc
-;;       b       #0xb4
-;;   b4: sub     x0, x0, x2, uxtx
+;;       b.ls    #0xf0
+;;       b       #0xc8
+;;   c8: sub     x0, x0, x2, uxtx
 ;;       sub     x28, x28, #8
 ;;       mov     sp, x28
 ;;       stur    x0, [x28]
 ;;       mov     x0, x9
 ;;       ldur    x1, [x28]
-;;       bl      #0x284
-;;   d0: add     x28, x28, #8
+;;       bl      #0x294
+;;   e4: add     x28, x28, #8
 ;;       mov     sp, x28
-;;       ldur    x9, [x28, #0x10]
+;;       ldur    x9, [x28, #0x20]
 ;;       ldur    w0, [x28]
 ;;       add     x28, x28, #4
 ;;       mov     sp, x28
@@ -78,7 +80,7 @@
 ;;       movk    w16, #0x400, lsl #16
 ;;       stur    w16, [x2]
 ;;       ldur    x16, [x9, #0x28]
-;;       ldur    w16, [x16, #8]
+;;       ldur    w16, [x16, #4]
 ;;       stur    w16, [x2, #4]
 ;;       ldur    x1, [x9, #0x20]
 ;;       mov     w16, w0
@@ -90,27 +92,54 @@
 ;;       stur    w1, [x2, #8]
 ;;       mov     x16, #0
 ;;       stur    w16, [x2, #0xc]
-;;       mov     x16, #0x2a
-;;       stur    w16, [x2, #0x10]
+;;       ldur    x1, [x28]
+;;       add     x28, x28, #8
+;;       mov     sp, x28
+;;       sub     x28, x28, #8
+;;       mov     sp, x28
+;;       stur    x2, [x28]
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       stur    w0, [x28]
-;;       sub     x28, x28, #0xc
+;;       sub     x28, x28, #8
+;;       mov     sp, x28
+;;       stur    x1, [x28]
+;;       sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       mov     x0, x9
-;;       ldur    w1, [x28, #0xc]
-;;       bl      #0x308
-;;  164: add     x28, x28, #0xc
+;;       ldur    x1, [x28, #4]
+;;       bl      #0x2e8
+;;  194: add     x28, x28, #4
+;;       mov     sp, x28
+;;       add     x28, x28, #8
+;;       mov     sp, x28
+;;       ldur    x9, [x28, #0x1c]
+;;       ldur    w1, [x28]
+;;       add     x28, x28, #4
+;;       mov     sp, x28
+;;       ldur    x2, [x28]
+;;       add     x28, x28, #8
+;;       mov     sp, x28
+;;       stur    w0, [x2, #0x10]
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
+;;       stur    w1, [x28]
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
+;;       mov     x0, x9
+;;       ldur    w1, [x28, #4]
+;;       bl      #0x348
+;;  1e4: add     x28, x28, #4
 ;;       mov     sp, x28
 ;;       add     x28, x28, #4
 ;;       mov     sp, x28
-;;       ldur    x9, [x28, #8]
-;;       add     x28, x28, #0x10
+;;       ldur    x9, [x28, #0x10]
+;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  190: udf     #0xc11f
-;;  194: udf     #0xc11f
-;;  198: udf     #0xc11f
+;;  210: udf     #0xc11f
+;;  214: udf     #0xc11f
+;;  218: udf     #0xc11f

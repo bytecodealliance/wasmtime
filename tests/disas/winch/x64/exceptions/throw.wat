@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = ["-W", "exceptions"]
+;;! flags = "-W exceptions -C collector=copying"
 
 ;; `throw` builds an exception that escapes to the host, while `try_table`
 ;; still compiles as a plain block.

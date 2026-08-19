@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=copying"
+;;! flags = "-W exceptions -C collector=drc"
 
 ;; A function reference is interned before it is stored in the exception.
 (module
@@ -34,10 +34,10 @@
 ;;       subq    $4, %rsp
 ;;       movl    %ecx, (%rsp)
 ;;       movq    %r14, %rdi
-;;       movl    $0x4000002, %esi
+;;       movl    $0x4000000, %esi
 ;;       movl    (%rsp), %edx
-;;       movl    $0x20, %ecx
-;;       movl    $0x10, %r8d
+;;       movl    $0x28, %ecx
+;;       movl    $8, %r8d
 ;;       callq   0x19a
 ;;       addq    $4, %rsp
 ;;       movq    0x24(%rsp), %r14
@@ -48,8 +48,8 @@
 ;;       addq    %rax, %rdx
 ;;       movl    (%rsp), %ecx
 ;;       addq    $4, %rsp
-;;       movl    %ecx, 0x10(%rdx)
-;;       movl    $0, 0x14(%rdx)
+;;       movl    %ecx, 0x18(%rdx)
+;;       movl    $0, 0x1c(%rdx)
 ;;       popq    %rcx
 ;;       pushq   %rdx
 ;;       subq    $4, %rsp
@@ -65,7 +65,7 @@
 ;;       movl    (%rsp), %ecx
 ;;       addq    $4, %rsp
 ;;       popq    %rdx
-;;       movl    %eax, 0x18(%rdx)
+;;       movl    %eax, 0x20(%rdx)
 ;;       subq    $4, %rsp
 ;;       movl    %ecx, (%rsp)
 ;;       subq    $0xc, %rsp
