@@ -38,10 +38,10 @@
 //! To get this must-alias property, we compute a sparse table of
 //! "memory values": these are known equivalences between SSA `Value`s
 //! and particular locations in memory. The memory-values table is a
-//! mapping from (last store, address expression, type) to SSA
-//! value. At a store, we can insert into this table directly. At a
-//! load, we can also insert, if we don't already have a value (from
-//! the store that produced the load's value).
+//! mapping from a memory location (address, type, byte order, etc...)
+//! to a known value. At a store, we can insert into this table
+//! directly. At a load, we can also insert, if we don't already have a
+//! value (from the store that produced the load's value).
 //!
 //! Then we do a few optimizations at once given this table:
 //!
@@ -80,7 +80,9 @@ use crate::{
     dominator_tree::DominatorTree,
     flowgraph::ControlFlowGraph,
     inst_predicates::{inst_addr_offset_type, inst_store_data, visit_block_succs},
-    ir::{AliasRegion, Block, Function, Inst, Opcode, Type, Value, immediates::Offset32},
+    ir::{
+        AliasRegion, Block, Endianness, Function, Inst, Opcode, Type, Value, immediates::Offset32,
+    },
     post_dominator_tree::PostDominatorTree,
     trace,
 };
@@ -542,8 +544,9 @@ impl LastStores {
 /// instruction to touch the disjoint category of abstract state we're
 /// accessing); (ii) the address must be the same (here ensured by
 /// having the same SSA value, which doesn't change after computed);
-/// (iii) the offset must be the same; and (iv) the accessed type and
-/// extension mode (e.g., 8-to-32, signed) must be the same.
+/// (iii) the offset must be the same; (iv) the accessed type and
+/// extension mode (e.g., 8-to-32, signed) must be the same; and (v)
+/// the byte order of the two accesses must be the same.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct MemoryLoc {
     last_store: PackedOption<Inst>,
@@ -562,6 +565,21 @@ struct MemoryLoc {
     /// in place of extending loads when we know the memory value, but
     /// we haven't yet done this.
     extending_opcode: Option<Opcode>,
+    /// The byte order of this access, as explicitly specified in its memory
+    /// flags, or `None` when the access uses the target's native byte order.
+    ///
+    /// Without this, two accesses to the same address that disagree about byte
+    /// order would share a key, and we would happily forward a value from one
+    /// to the other, dropping the byte swap that the mismatch implies.
+    ///
+    /// We only record the *explicit* byte order here, rather than resolving
+    /// `None` to the target's native byte order. This keeps the pass
+    /// independent of the target, but does mean we never share a key between an
+    /// access that spells out the native byte order and one that leaves it
+    /// implicit. That scenario leads to missed optimizations, never
+    /// miscompiles, and is exceedingly rare, so we deem the trade off worth it
+    /// for simplicity.
+    endianness: Option<Endianness>,
 }
 
 /// What is known to be in memory at an associated `MemoryLoc`.
@@ -636,8 +654,7 @@ pub struct AliasAnalysis<'a> {
     block_input: FxHashMap<Block, LastStores>,
 
     /// Known memory-value equivalences. This is the result of the
-    /// analysis. This is a mapping from (last store, address
-    /// expression, offset, type) to SSA `Value`.
+    /// analysis. This is a mapping from a memory location to its known value.
     mem_values: FxHashMap<MemoryLoc, KnownValue>,
 }
 
@@ -807,12 +824,19 @@ impl<'a> AliasAnalysis<'a> {
                         // layout, so drop its entry from `mem_values`. This
                         // maintains the invariant that `mem_values` only ever
                         // references instructions that are still in the layout.
+                        //
+                        // NB: the entry we are looking for was keyed on the
+                        // *dead* store's byte order, which `fully_overwrites`
+                        // does not require to match this store's byte order.
+                        // Everything else in the key does have to match, so we
+                        // can take it from this store.
                         let dead_loc = MemoryLoc {
                             last_store: last_store.into(),
                             address,
                             offset,
                             ty,
                             extending_opcode: get_ext_opcode(opcode),
+                            endianness: get_endianness(func, last_store),
                         };
                         let dead_entry = self.mem_values.remove(&dead_loc);
 
@@ -858,6 +882,7 @@ impl<'a> AliasAnalysis<'a> {
                     offset,
                     ty,
                     extending_opcode: get_ext_opcode(opcode),
+                    endianness: get_endianness(func, inst),
                 };
                 if let Some(KnownValue {
                     def_inst,
@@ -899,6 +924,7 @@ impl<'a> AliasAnalysis<'a> {
                     offset,
                     ty,
                     extending_opcode: get_ext_opcode(opcode),
+                    endianness: get_endianness(func, inst),
                 };
                 trace!("  --> updating known values in memory: {mem_loc:?} = {store_data}");
                 self.mem_values.insert(
@@ -924,6 +950,7 @@ impl<'a> AliasAnalysis<'a> {
                     offset,
                     ty,
                     extending_opcode: get_ext_opcode(opcode),
+                    endianness: get_endianness(func, inst),
                 };
                 trace!("  load with last_store at loc {mem_loc:?}");
 
@@ -1040,6 +1067,14 @@ impl<'a> AliasAnalysis<'a> {
     }
 }
 
+/// Get the explicitly-specified byte order of the given memory access,
+/// if any.
+fn get_endianness(func: &Function, inst: Inst) -> Option<Endianness> {
+    func.dfg.insts[inst]
+        .memflags_data(&func.dfg)
+        .and_then(|flags| flags.explicit_endianness())
+}
+
 fn get_ext_opcode(op: Opcode) -> Option<Opcode> {
     debug_assert!(op.can_load() || op.can_store());
     match op {
@@ -1103,6 +1138,12 @@ fn fully_overwrites(
     {
         return false;
     }
+
+    // NB: unlike store-to-load forwarding and redundant-load
+    // elimination, our two stores' byte orders do *not* have to match
+    // Both write the same range of bytes, just in a different order
+    // within that range, and the overwriting store's bytes are the
+    // ones that survive either way.
 
     // Both must write the same address, offset, and type.
     match inst_addr_offset_type(func, maybe_dead) {
