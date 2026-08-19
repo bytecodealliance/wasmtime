@@ -269,7 +269,9 @@ async fn repeated_calls_have_no_state_leak() -> Result<()> {
 
 #[tokio::test]
 async fn trap_then_instantiate_uses_freed_deferred_thread() -> Result<()> {
-    let trapping = r#"
+    let trapping = [
+        // Root -> Mid -> Leaf then trap
+        r#"
 (component
   (component $Leaf
     (core module $M (func (export "leaf'") (param i32) (result i32) unreachable))
@@ -296,7 +298,136 @@ async fn trap_then_instantiate_uses_freed_deferred_thread() -> Result<()> {
   (instance $root (instantiate $Root (with "mid" (func $mid "mid"))))
   (export "root" (func $root "root"))
 )
-    "#;
+        "#,
+        // A -> B -> uncaught exception
+        r#"
+(component
+  (component $A
+    (core module $M
+      (type $t (func))
+      (tag $t (type $t))
+      (func (export "run") throw $t)
+    )
+    (core instance $m (instantiate $M))
+    (func (export "run") (canon lift (core func $m "run")))
+  )
+  (component $B
+    (import "run" (func $run))
+    (core func $run (canon lower (func $run)))
+    (core module $M
+      (import "" "run" (func $run))
+      (func (export "root") (result i32)
+        call $run
+        i32.const 0
+      )
+    )
+    (core instance $m (instantiate $M (with "" (instance (export "run" (func $run))))))
+    (func (export "root") (result u32) (canon lift (core func $m "root")))
+  )
+  (instance $A (instantiate $A))
+  (instance $B (instantiate $B (with "run" (func $A "run"))))
+  (export "root" (func $B "root"))
+)
+        "#,
+        // Trapping resource destructor
+        r#"
+(component
+  (component $R
+    (core module $M
+      (func (export "dtor") (param i32) unreachable)
+    )
+    (core instance $i (instantiate $M))
+    (type $R (resource (rep i32) (dtor (core func $i "dtor"))))
+    (export $R' "R" (type $R))
+    (core func $new (canon resource.new $R))
+    (func (export "new") (param "x" u32) (result (own $R'))
+      (canon lift (core func $new))
+    )
+  )
+  (component $B
+    (import "R" (instance $R
+      (export "R" (type $R (sub resource)))
+      (export "new" (func (param "x" u32) (result (own $R))))
+    ))
+
+    (core module $M
+      (import "" "new" (func $new (param i32) (result i32)))
+      (import "" "dtor" (func $dtor (param i32)))
+
+      (func (export "run") (result i32)
+        (call $dtor (call $new (i32.const 10)))
+
+        i32.const 0
+      )
+    )
+    (core func $new (canon lower (func $R "new")))
+    (core func $dtor (canon resource.drop (type $R "R")))
+    (core instance $i (instantiate $M
+      (with "" (instance
+        (export "new" (func $new))
+        (export "dtor" (func $dtor))
+      ))
+    ))
+    (func (export "run") (result u32)
+      (canon lift (core func $i "run"))
+    )
+  )
+  (instance $R (instantiate $R))
+  (instance $B (instantiate $B (with "R" (instance $R))))
+  (export "root" (func $B "run"))
+)
+        "#,
+        // resource destructor with uncaught exception
+        r#"
+(component
+  (component $R
+    (core module $M
+      (type $t (func))
+      (tag $t (type $t))
+      (func (export "dtor") (param i32) throw $t)
+    )
+    (core instance $i (instantiate $M))
+    (type $R (resource (rep i32) (dtor (core func $i "dtor"))))
+    (export $R' "R" (type $R))
+    (core func $new (canon resource.new $R))
+    (func (export "new") (param "x" u32) (result (own $R'))
+      (canon lift (core func $new))
+    )
+  )
+  (component $B
+    (import "R" (instance $R
+      (export "R" (type $R (sub resource)))
+      (export "new" (func (param "x" u32) (result (own $R))))
+    ))
+
+    (core module $M
+      (import "" "new" (func $new (param i32) (result i32)))
+      (import "" "dtor" (func $dtor (param i32)))
+
+      (func (export "run") (result i32)
+        (call $dtor (call $new (i32.const 10)))
+
+        i32.const 0
+      )
+    )
+    (core func $new (canon lower (func $R "new")))
+    (core func $dtor (canon resource.drop (type $R "R")))
+    (core instance $i (instantiate $M
+      (with "" (instance
+        (export "new" (func $new))
+        (export "dtor" (func $dtor))
+      ))
+    ))
+    (func (export "run") (result u32)
+      (canon lift (core func $i "run"))
+    )
+  )
+  (instance $R (instantiate $R))
+  (instance $B (instantiate $B (with "R" (instance $R))))
+  (export "root" (func $B "run"))
+)
+        "#,
+    ];
 
     let other = r#"
 (component
@@ -306,19 +437,22 @@ async fn trap_then_instantiate_uses_freed_deferred_thread() -> Result<()> {
     "#;
 
     let engine = engine();
-    let trapping = Component::new(&engine, trapping)?;
     let other = Component::new(&engine, other)?;
-    let mut store = Store::new(&engine, 0u32);
-    let linker = Linker::new(&engine);
+    for trapping in trapping {
+        let trapping = Component::new(&engine, trapping)?;
+        let mut store = Store::new(&engine, 0u32);
+        let linker = Linker::new(&engine);
 
-    let instance = linker.instantiate_async(&mut store, &trapping).await?;
-    let root = instance.get_typed_func::<(), (u32,)>(&mut store, "root")?;
-    let err = root.call_async(&mut store, ()).await.unwrap_err();
-    assert!(
-        err.downcast_ref::<wasmtime::Trap>().is_some(),
-        "expected a trap, got: {err:?}"
-    );
+        let instance = linker.instantiate_async(&mut store, &trapping).await?;
+        let root = instance.get_typed_func::<(), (u32,)>(&mut store, "root")?;
+        let err = root.call_async(&mut store, ()).await.unwrap_err();
+        assert!(
+            err.downcast_ref::<wasmtime::Trap>().is_some(),
+            "expected a trap, got: {err:?}"
+        );
 
-    let _ = linker.instantiate_async(&mut store, &other).await?;
+        let _ = linker.instantiate_async(&mut store, &other).await?;
+        wasmtime::component::FutureReader::new(&mut store, async move { wasmtime::error::Ok(1) })?;
+    }
     Ok(())
 }
