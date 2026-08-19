@@ -1,4 +1,4 @@
-use super::{CodeGen, Emission};
+use super::{CodeGen, CodeGenError, Emission};
 use crate::{
     Result,
     codegen::{Callee, FnCall},
@@ -61,11 +61,14 @@ where
         &mut self,
         kind: VMGcKind,
         interned: ModuleInternedTypeIndex,
-        size: u32,
-        align: u32,
+        layout: &core::alloc::Layout,
         reserved_bits: u32,
     ) -> Result<(TypedReg, Reg)> {
         let kind = kind.as_u32() | reserved_bits;
+        let size =
+            u32::try_from(layout.size()).map_err(|_| CodeGenError::allocation_too_large())?;
+        let align =
+            u32::try_from(layout.align()).map_err(|_| CodeGenError::allocation_too_large())?;
         match self.require_gc_codegen_config().collector() {
             Collector::Null => self.emit_null_gc_raw_alloc(kind, interned, size, align),
             Collector::DeferredReferenceCounting | Collector::Copying => {

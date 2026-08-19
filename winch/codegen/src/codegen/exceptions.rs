@@ -48,13 +48,8 @@ where
             Some(Collector::Copying) => InlineTraceInfo::r#struct(layout).encode(),
             _ => 0,
         };
-        let (gc_ref, object_addr) = self.emit_gc_raw_alloc(
-            VMGcKind::ExnRef,
-            interned,
-            layout.size,
-            layout.align,
-            reserved_bits,
-        )?;
+        let (gc_ref, object_addr) =
+            self.emit_gc_raw_alloc(VMGcKind::ExnRef, interned, &layout.layout(), reserved_bits)?;
 
         // Store the tag as its defining instance ID and its index within that
         // instance.
