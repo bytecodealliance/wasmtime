@@ -22,3 +22,35 @@ wasmtime --invoke _start foo.wasm
 For more information be sure to check out [how to install the
 CLI](cli-install.md), [the list of options you can
 pass](cli-options.md), and [how to enable logging](cli-logging.md).
+
+## `wasmtime serve` command
+
+The `wasmtime serve` command runs a WASI HTTP component as a local HTTP server
+for development and testing purposes.
+
+```console
+wasmtime serve app.wasm
+```
+
+This starts an HTTP server on `http://0.0.0.0:8080` that routes incoming requests
+to your component.
+
+### ⚠️ Security Warning
+
+> **Not recommended for production use**
+>
+> The `wasmtime serve` command is intended solely for local development and
+> testing. It **does not** implement safeguards against:
+> - Unbounded outbound HTTP requests
+> - Rate limiting or connection throttling
+> - DDoS protections
+> - Request size limits
+> - TLS/HTTPS termination
+>
+> **Do not deploy `wasmtime serve` in a production environment** without an
+> additional reverse proxy or gateway layer (e.g., Nginx, Envoy, or a dedicated
+> WASI host) that enforces request limits, authentication, and security controls.
+
+### Options
+
+Run `wasmtime serve --help` for a complete list of options.
