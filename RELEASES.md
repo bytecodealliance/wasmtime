@@ -1,6 +1,6 @@
 ## 48.0.0
 
-Unreleased.
+Released 2026-08-20.
 
 ### Added
 
