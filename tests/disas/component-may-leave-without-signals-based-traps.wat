@@ -24,7 +24,7 @@
 ;;       movq    %rbp, %rcx
 ;;       movq    8(%rcx), %rcx
 ;;       movq    %rcx, 0x38(%rax)
-;;       movl    0x20(%rdi), %eax
+;;       movl    0x30(%rdi), %eax
 ;;       testl   %eax, %eax
 ;;       je      0x13b
 ;;   fb: movq    8(%rdi), %rax

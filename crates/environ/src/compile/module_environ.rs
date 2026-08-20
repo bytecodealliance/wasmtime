@@ -74,12 +74,29 @@ impl From<FactInlineIntrinsic> for KnownFunc {
 }
 
 /// A statically-known import of a core Wasm global, memory, or table.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct KnownEntity<T> {
     /// The module that defines this entity.
     pub module: StaticModuleIndex,
     /// The entity's index in the defining module's defined-entity index space.
     pub index: T,
+}
+
+/// A statically-known import of a core wasm global.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum KnownGlobal {
+    /// A global defined by a module in the same component.
+    Defined(KnownEntity<DefinedGlobalIndex>),
+
+    /// A component instance's runtime-managed flags, such as its `may-leave`
+    /// flag.
+    #[cfg(feature = "component-model")]
+    ComponentInstanceFlags(crate::component::RuntimeComponentInstanceIndex),
+
+    /// The runtime-managed flag recording whether the currently-executing task
+    /// may perform blocking operations.
+    #[cfg(feature = "component-model")]
+    TaskMayBlock,
 }
 
 /// The result of translating via `ModuleEnvironment`.
@@ -154,7 +171,7 @@ pub struct ModuleTranslation<'data> {
     /// TODO(#14164): Actually record (1) and (2) in separate maps, enabling
     /// optimizations that rely on just (1) but not (2), instead of folding them
     /// into this same map.
-    pub known_imported_globals: SecondaryMap<GlobalIndex, Option<KnownEntity<DefinedGlobalIndex>>>,
+    pub known_imported_globals: SecondaryMap<GlobalIndex, Option<KnownGlobal>>,
 
     /// Same as `known_imported_globals`, but for memories.
     pub known_imported_memories: SecondaryMap<MemoryIndex, Option<KnownEntity<DefinedMemoryIndex>>>,

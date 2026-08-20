@@ -150,13 +150,14 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 67108888 "VMStoreContext+0x18"
 ;;     region2 = 1476395008 "VMGlobalImport+0x0"
-;;     region3 = 402653184 "PublicGlobal"
+;;     region3 = 738197584 "VMComponentContext+0x50"
 ;;     region4 = 1207959576 "VMFunctionImport+0x18"
-;;     region5 = 1275068416 "VMMemoryImport+0x0"
-;;     region6 = 603979776 "VMMemoryDefinition+0x0"
-;;     region7 = 603979784 "VMMemoryDefinition+0x8"
-;;     region8 = 201326592 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
-;;     region9 = 201588736 "DefinedMemory(StaticModuleIndex(1), DefinedMemoryIndex(0))"
+;;     region5 = 738197568 "VMComponentContext+0x40"
+;;     region6 = 1275068416 "VMMemoryImport+0x0"
+;;     region7 = 603979776 "VMMemoryDefinition+0x0"
+;;     region8 = 603979784 "VMMemoryDefinition+0x8"
+;;     region9 = 201326592 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region10 = 201588736 "DefinedMemory(StaticModuleIndex(1), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -179,7 +180,7 @@
 ;;
 ;;                                 block7:
 ;; @0103                               v10 = load.i64 notrap aligned readonly can_move region2 v0+320
-;; @0103                               v11 = load.i32 notrap aligned region3 v10
+;; @0103                               v11 = load.i32 notrap aligned region5 v10
 ;; @0111                               v15 = load.i64 notrap aligned readonly can_move region4 v0+184
 ;; @0111                               try_call fn0(v15, v0, v2), sig1, block9(ret0), [ context v0, default: block6(exn0) ]
 ;;
@@ -192,8 +193,8 @@
 ;; @011e                               jump block11
 ;;
 ;;                                 block11:
-;; @0128                               v22 = load.i64 notrap aligned readonly can_move region5 v0+48
-;; @0128                               v23 = load.i64 notrap aligned region7 v22+8
+;; @0128                               v22 = load.i64 notrap aligned readonly can_move region6 v0+48
+;; @0128                               v23 = load.i64 notrap aligned region8 v22+8
 ;; @0128                               v24 = iconst.i64 16
 ;; @0128                               v25 = ushr v23, v24  ; v24 = 16
 ;; @0128                               v26 = ireduce.i32 v25
@@ -218,8 +219,8 @@
 ;; @0142                               jump block16
 ;;
 ;;                                 block16:
-;; @014c                               v40 = load.i64 notrap aligned readonly can_move region5 v0+72
-;; @014c                               v41 = load.i64 notrap aligned region7 v40+8
+;; @014c                               v40 = load.i64 notrap aligned readonly can_move region6 v0+72
+;; @014c                               v41 = load.i64 notrap aligned region8 v40+8
 ;;                                     v82 = iconst.i64 16
 ;;                                     v83 = ushr v41, v82  ; v82 = 16
 ;; @014c                               v44 = ireduce.i32 v83
@@ -238,17 +239,17 @@
 ;; @015d                               trap user4
 ;;
 ;;                                 block17:
-;; @0165                               v57 = load.i64 notrap aligned readonly can_move region6 v22
+;; @0165                               v57 = load.i64 notrap aligned readonly can_move region7 v22
 ;; @0165                               v58 = iadd v57, v30
-;; @0165                               v59 = load.i32 little region8 v58
-;; @0168                               v62 = load.i64 notrap aligned readonly can_move region6 v40
+;; @0165                               v59 = load.i32 little region9 v58
+;; @0168                               v62 = load.i64 notrap aligned readonly can_move region7 v40
 ;; @0168                               v63 = iadd v62, v48
-;; @0168                               store little region9 v59, v63
+;; @0168                               store little region10 v59, v63
 ;; @0170                               v68 = iconst.i64 4
 ;; @0170                               v69 = iadd v58, v68  ; v68 = 4
-;; @0170                               v70 = load.i32 little region8 v69
+;; @0170                               v70 = load.i32 little region9 v69
 ;; @0173                               v76 = iadd v63, v68  ; v68 = 4
-;; @0173                               store little region9 v70, v76
+;; @0173                               store little region10 v70, v76
 ;; @0179                               store.i32 notrap aligned region3 v8, v7
 ;; @017b                               jump block5
 ;;

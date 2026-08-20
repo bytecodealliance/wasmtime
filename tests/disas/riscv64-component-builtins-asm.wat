@@ -26,7 +26,7 @@
 ;;       sd      a3, 0x30(a1)
 ;;       ld      a2, 8(s0)
 ;;       sd      a2, 0x38(a1)
-;;       lw      a1, 0x20(a0)
+;;       lw      a1, 0x30(a0)
 ;;       sext.w  a1, a1
 ;;       bnez    a1, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00

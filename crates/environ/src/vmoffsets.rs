@@ -224,10 +224,16 @@ macro_rules! define_vm_type_offsets {
 /// Generate a `struct VMContext<P: PtrSize>(P)`-style wrapper for each vmctx
 /// type, with a method per statically-positioned field returning that field's
 /// offset.
+#[allow(
+    unused_macro_rules,
+    reason = "only `VMComponentContext` has a `#[ptr_size_offset]` prefix in its \
+              `dynamic` section, so those arms go unused for `VMContext`"
+)]
 macro_rules! define_vmctx_static_offsets {
     // Munch the `static` section, threading a closed-form expression for the
-    // running offset.
-    (@chain $p:ident [ $($prev:tt)* ] []) => {
+    // running offset. Once it is exhausted, keep going into the `dynamic`
+    // section's `#[ptr_size_offset]` prefix, whose offsets are closed-form too.
+    (@chain $p:ident [ $($prev:tt)* ] [] [ $($dyn:tt)* ]) => {
         /// The offset just past this type's last statically-positioned field.
         ///
         /// Everything after this point is dynamically sized.
@@ -237,17 +243,20 @@ macro_rules! define_vmctx_static_offsets {
             let _ = $p;
             u8::try_from($($prev)*).unwrap()
         }
+
+        define_vmctx_static_offsets!(@dyn_chain $p [ $($prev)* ] [ $($dyn)* ]);
     };
-    (@chain $p:ident [ $($prev:tt)* ] [ align { $al:tt } $($rest:tt)* ]) => {
+    (@chain $p:ident [ $($prev:tt)* ] [ align { $al:tt } $($rest:tt)* ] $dyn:tt) => {
         define_vmctx_static_offsets!(
             @chain $p
             [ crate::vmctxtypes::align_up($($prev)*, vmctx_align_value!(($p) $al)) ]
             [ $($rest)* ]
+            $dyn
         );
     };
     (@chain $p:ident [ $($prev:tt)* ] [
         field { $(# $fattr:tt)* $fname:ident : $($fty:tt)* } $($rest:tt)*
-    ]) => {
+    ] $dyn:tt) => {
         #[doc = concat!("The offset of the `", stringify!($fname), "` field.")]
         #[inline]
         pub fn $fname(&self) -> u8 {
@@ -259,8 +268,63 @@ macro_rules! define_vmctx_static_offsets {
             @chain $p
             [ $($prev)* + vmctx_field_size!(($p) $($fty)*) ]
             [ $($rest)* ]
+            $dyn
         );
     };
+
+    // Munch the `dynamic` section's leading run of `#[ptr_size_offset]` entries,
+    // continuing to thread the closed-form running offset.
+    (@dyn_chain $p:ident [ $($prev:tt)* ] [ align { $al:tt } $($rest:tt)* ]) => {
+        define_vmctx_static_offsets!(
+            @dyn_chain $p
+            [ crate::vmctxtypes::align_up($($prev)*, vmctx_align_value!(($p) $al)) ]
+            [ $($rest)* ]
+        );
+    };
+    (@dyn_chain $p:ident [ $($prev:tt)* ] [
+        field { #[ptr_size_offset] $(# $fattr:tt)* $fname:ident : $($fty:tt)* } $($rest:tt)*
+    ]) => {
+        #[doc = concat!("The offset of the `", stringify!($fname), "` field.")]
+        #[inline]
+        pub fn $fname(&self) -> u32 {
+            let $p = self.0.size();
+            let _ = $p;
+            $($prev)*
+        }
+        define_vmctx_static_offsets!(
+            @dyn_chain $p
+            [ $($prev)* + vmctx_field_size!(($p) $($fty)*) ]
+            [ $($rest)* ]
+        );
+    };
+    (@dyn_chain $p:ident [ $($prev:tt)* ] [
+        array {
+            #[ptr_size_offset] $(# $fattr:tt)*
+            $fname:ident [ $count:ident ; $Index:ident ] : $($fty:tt)*
+        } $($rest:tt)*
+    ]) => {
+        // NB: this takes `impl VmctxArrayIndex` rather than the declared
+        // `$Index` because these wrappers are compiled even when the
+        // `component-model` feature is off, and some of the index types are not.
+        #[doc = concat!(
+            "The offset of the `index`th element of the `", stringify!($fname),
+            "` array.\n\nThis is not bounds checked: the array's length is a \
+             property of the particular module or component being compiled, which \
+             is exactly what this wrapper does not know."
+        )]
+        #[inline]
+        pub fn $fname(&self, index: impl crate::VmctxArrayIndex) -> u32 {
+            let $p = self.0.size();
+            let _ = $p;
+            let index = index.vmctx_array_index();
+            ($($prev)*) + vmctx_field_size!(($p) $($fty)*) * index
+        }
+        // An array's size depends on how many elements this particular module or
+        // component needs, so nothing after it has a closed-form offset and the
+        // chain necessarily stops here.
+    };
+    // Anything else ends the closed-form prefix.
+    (@dyn_chain $p:ident [ $($prev:tt)* ] [ $($rest:tt)* ]) => {};
 
     ( $(
         {
@@ -275,7 +339,7 @@ macro_rules! define_vmctx_static_offsets {
             pub struct $Name<P: PtrSize>(pub P);
 
             impl<P: PtrSize> $Name<P> {
-                define_vmctx_static_offsets!(@chain ptr [ 0u32 ] [ $($stat)* ]);
+                define_vmctx_static_offsets!(@chain ptr [ 0u32 ] [ $($stat)* ] [ $($dyn)* ]);
             }
         )*
     };

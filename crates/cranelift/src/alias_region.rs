@@ -456,10 +456,15 @@ impl<'a, Offsets> Field<'a, Offsets> {
         self
     }
 
+    /// Get-or-create this field's alias region.
+    pub fn region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        self.regions.region(func, self.key)
+    }
+
     /// Get-or-create this field's alias region and mix it into this field's
     /// base flags.
     fn flags_with_region(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
-        let region = self.regions.region(func, self.key);
+        let region = self.region(func);
         self.flags.with_alias_region(Some(region))
     }
 
@@ -710,7 +715,10 @@ wasmtime_environ::for_each_vm_type!(define_vm_type_alias_region_helpers);
 /// pointer size, so their accessors are available for any `Offsets: GetPtrSize`.
 /// Its `dynamic` fields sit at offsets that additionally depend on the module or
 /// component being compiled, so their accessors are only available when the
-/// `AliasRegions` carries that vmctx's own fully-computed offsets.
+/// `AliasRegions` carries that vmctx's own fully-computed offsets. The exception
+/// is a `dynamic` field marked `#[ptr_size_offset]`, whose offsets are derived
+/// only from the pointer size; these live in the `Offsets: GetPtrSize` block as
+/// well.
 ///
 /// A field marked `#[aggregate]` gets no accessor, for the same reason it gets
 /// none in [`define_vm_type_alias_region_helpers!`]: it has no single Cranelift
@@ -748,6 +756,7 @@ macro_rules! define_vmctx_alias_region_helpers {
     (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly() };
     (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move() };
     (@apply_attr $flags:expr, [access_as = $($t:tt)*]) => { $flags };
+    (@apply_attr $flags:expr, [ptr_size_offset]) => { $flags };
 
     // Compute a field's access flags and Cranelift type from its declared type
     // and marker attributes, and build the `Field` for it at `$offset`.
@@ -784,7 +793,52 @@ macro_rules! define_vmctx_alias_region_helpers {
         }
     };
 
+    // ### `dynamic` Section Entries Marked `#[ptr_size_offset]`
+    //
+    // These get their offsets from the pointer-size-only `offsets::VMFoo<P>`
+    // wrapper, and don't require a full `VMOffsets` parameterization.
+
+    (@ptr_size_entry $Name:ident $snake:ident field {
+        #[ptr_size_offset] $(# $fattr:tt)* $fname:ident : $($fty:tt)*
+    }) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the `", stringify!($fname), "` field of `",
+            stringify!($Name), "`."
+        )]
+        pub fn $fname(self) -> Field<'a, Offsets> {
+            let offset = self.regions.offsets.get_ptr_size().$snake().$fname();
+            define_vmctx_alias_region_helpers!(
+                @field $Name (self, offset) [ $($fty)* ] [ $(# $fattr)* ]
+            )
+        }
+    };
+
+    (@ptr_size_entry $Name:ident $snake:ident array {
+        #[ptr_size_offset] $(# $fattr:tt)* $fname:ident [ $count:ident ; $Index:ident ] : $($fty:tt)*
+    }) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the `index`th element of `", stringify!($Name),
+            "`'s `", stringify!($fname), "` array.\n\nThis is not bounds checked: \
+             the array's length depends on the module or component being compiled, \
+             which is precisely what this accessor does not require knowing."
+        )]
+        pub fn $fname(self, index: $Index) -> Field<'a, Offsets> {
+            let offset = self.regions.offsets.get_ptr_size().$snake().$fname(index);
+            define_vmctx_alias_region_helpers!(
+                @field $Name (self, offset) [ $($fty)* ] [ $(# $fattr)* ]
+            )
+        }
+    };
+
+    (@ptr_size_entry $Name:ident $snake:ident $kind:ident $entry:tt) => {};
+
     // ### `dynamic` Section Entries
+
+    // Entries marked `#[ptr_size_offset]` were already handled above; emitting
+    // them here too would be a duplicate definition.
+    (@dynamic_entry $Name:ident $Offsets:tt $kind:ident {
+        #[ptr_size_offset] $($rest:tt)*
+    }) => {};
 
     (@dynamic_entry $Name:ident $Offsets:tt align { $al:tt }) => {};
 
@@ -848,7 +902,7 @@ macro_rules! define_vmctx_alias_region_helpers {
     // Emit the accessor `struct` and both `impl` blocks for one vmctx type.
     (@emit $Name:ident $snake:ident $Offsets:tt
         static { $($skind:ident $sentry:tt)* }
-        dynamic { $($dyn:tt)* }
+        dynamic { $($dkind:ident $dentry:tt)* }
     ) => {
         #[doc = concat!(
             "An [`AliasRegions`] accessor for the fields of a `", stringify!($Name),
@@ -879,13 +933,14 @@ macro_rules! define_vmctx_alias_region_helpers {
             Offsets: GetPtrSize,
         {
             $( define_vmctx_alias_region_helpers!(@static_entry $Name $snake $skind $sentry); )*
+            $( define_vmctx_alias_region_helpers!(@ptr_size_entry $Name $snake $dkind $dentry); )*
         }
 
         // A dynamically-positioned field's offset depends on the module or
         // component being compiled, so these accessors require this vmctx's own
         // fully-computed offsets.
         define_vmctx_alias_region_helpers!(
-            @dynamic_impl $Name $Offsets $Offsets { $($dyn)* }
+            @dynamic_impl $Name $Offsets $Offsets { $($dkind $dentry)* }
         );
     };
 

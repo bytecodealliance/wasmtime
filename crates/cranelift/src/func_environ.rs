@@ -37,8 +37,8 @@ use wasmtime_environ::{
     BuiltinFunctionIndex, ComponentPC, ConstExpr, ConstOp, DataIndex, DefinedFuncIndex,
     DefinedGlobalIndex, DefinedTableIndex, ElemIndex, EngineOrModuleTypeIndex, FactInlineIntrinsic,
     FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
-    IndexType, KnownFunc, Memory, MemoryIndex, MemoryInit, MemorySegmentOffset, MemoryTunables,
-    Module, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder,
+    IndexType, KnownFunc, KnownGlobal, Memory, MemoryIndex, MemoryInit, MemorySegmentOffset,
+    MemoryTunables, Module, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder,
     NUM_COMPONENT_CONTEXT_SLOTS, PassiveElemIndex, PtrSize, RuntimeDataIndex, Table, TableIndex,
     TableInitialValue, TableSegment, TableSegmentElements, TagIndex, Tunables, TypeConvert,
     TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType,
@@ -446,10 +446,20 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 }
             }
             None => match self.translation.known_imported_globals[global] {
-                Some(known) => {
+                Some(KnownGlobal::Defined(known)) => {
                     self.alias_regions
                         .defined_global_region(func, known.module, known.index)
                 }
+                Some(KnownGlobal::ComponentInstanceFlags(instance)) => self
+                    .alias_regions
+                    .vmcomponent()
+                    .may_leave(instance)
+                    .region(func),
+                Some(KnownGlobal::TaskMayBlock) => self
+                    .alias_regions
+                    .vmcomponent()
+                    .task_may_block()
+                    .region(func),
                 None => self.alias_regions.public_global_region(func),
             },
         }
