@@ -464,7 +464,9 @@ impl<D> StreamConsumer<D> for WriteStreamConsumer {
         let me = &mut *self;
         let task = me.task.get_or_insert_with(|| {
             debug_assert!(me.buffer.is_empty());
-            me.buffer.extend_from_slice(src.remaining());
+            let remaining = src.remaining();
+            let n = remaining.len().min(DEFAULT_BUFFER_CAPACITY);
+            me.buffer.extend_from_slice(&remaining[..n]);
             let buf = mem::take(&mut me.buffer);
             let file = Arc::clone(me.file.as_file());
             let location = me.location;
