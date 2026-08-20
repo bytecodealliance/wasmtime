@@ -291,7 +291,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 pc: cx.uc_mcontext.pc as usize,
                 fp: cx.uc_mcontext.regs[29] as usize,
             }
-        } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
+        } else if #[cfg(all(target_os = "linux", target_arch = "s390x", not(target_env = "musl")))] {
             // On s390x, SIGILL and SIGFPE are delivered with the PSW address
             // pointing *after* the faulting instruction, while SIGSEGV and
             // SIGBUS are delivered with the PSW address pointing *to* the
@@ -312,6 +312,30 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                     pc: (cx.uc_mcontext.psw.addr - trap_offset) as usize,
                     fp: *(cx.uc_mcontext.gregs[15] as *const usize),
                 }
+            }
+        } else if #[cfg(all(target_os = "linux", target_arch = "s390x", target_env = "musl"))] {
+            // Calculate trap offset like in the glibc case
+            let trap_offset = match _signum {
+                libc::SIGILL | libc::SIGFPE => 1,
+                _ => 0,
+            };
+
+            // For musl on s390x, we need to cast to a raw pointer and access fields directly
+            // as musl doesn't expose the context types in libc
+            #[repr(C)]
+            struct S390xRegs {
+                gregs: [u64; 16], // S390x has 16 general purpose registers
+                // Other fields we don't need
+            }
+
+            // Cast to our own structure that matches the C layout
+            let cx = &*(cx as *const S390xRegs);
+
+            TrapRegisters {
+                // Register 1 on s390x is the PSW address
+                pc: (cx.gregs[1] - trap_offset) as usize,
+                // Register 15 is the frame pointer on s390x
+                fp: cx.gregs[15] as usize,
             }
         } else if #[cfg(all(target_vendor = "apple", target_arch = "x86_64"))] {
             unsafe {
