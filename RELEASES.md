@@ -1,3 +1,17 @@
+## 46.0.3
+
+Released 2026-08-20
+
+### Fixed
+
+* Guest controlled-size host heap allocation through WASIp3 streams.
+  [GHSA-x84v-gj2h-g759](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-x84v-gj2h-g759)
+
+* Filesystem sandbox escape when paths or symlinks contain trailing slashes.
+  [GHSA-vqjp-4c8c-hfgg](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-vqjp-4c8c-hfgg)
+
+--------------------------------------------------------------------------------
+
 ## 46.0.2
 
 Released 2026-07-31.
