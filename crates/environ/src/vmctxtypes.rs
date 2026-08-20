@@ -85,6 +85,12 @@
 ///   example, the component context's `may_leave` flags are each stored in a
 ///   whole `VMGlobalDefinition` but only ever accessed as a `u32`.
 ///
+/// * `#[ptr_size_offset]` (`dynamic` only): this field's offset is a function
+///   of the target pointer size alone, even though it lives in the `dynamic`
+///   section, because it and everything before it have sizes that do not depend
+///   on the vmctx's shape. These fields get generated accessors that do not
+///   need to be parameterized over `VMOffsets`, only `GetPtrSize`.
+///
 /// Doc comments are deliberately *not* accepted on fields; use `//` comments for
 /// prose about the layout. Accessor documentation is synthesized from the field
 /// names instead, so that there is only one place a field can be described.
@@ -230,15 +236,15 @@ macro_rules! for_each_vmctx_type {
                     //
                     // NB: these flags come first, before any field whose offset
                     // depends on the component's shape, so that their offsets
-                    // are a function of the target pointer size alone. Core Wasm
-                    // compilation does not have the enclosing
-                    // `VMComponentContext`'s offsets on hand, but must still be
-                    // able to compute these flags' offsets to build the alias
-                    // regions for accessing them; see
-                    // `VMComponentOffsets::{task_may_block,may_leave}_offset`.
-                    field { #[access_as = u32] task_may_block: VMGlobalDefinition }
+                    // are a function of the target pointer size alone, as marked
+                    // by `#[ptr_size_offset]`. Core Wasm compilation does not
+                    // have the enclosing `VMComponentContext`'s offsets on hand,
+                    // but must still be able to compute these flags' offsets to
+                    // build the alias regions for accessing them.
+                    field { #[ptr_size_offset] #[access_as = u32] task_may_block: VMGlobalDefinition }
 
                     array {
+                        #[ptr_size_offset]
                         #[access_as = u32]
                         may_leave[num_runtime_component_instances; RuntimeComponentInstanceIndex]: VMGlobalDefinition
                     }

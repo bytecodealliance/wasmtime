@@ -452,8 +452,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 }
                 Some(KnownGlobal::ComponentInstanceFlags(instance)) => self
                     .alias_regions
-                    .component_instance_flags_region(func, instance),
-                Some(KnownGlobal::TaskMayBlock) => self.alias_regions.task_may_block_region(func),
+                    .vmcomponent()
+                    .may_leave(instance)
+                    .region(func),
+                Some(KnownGlobal::TaskMayBlock) => self
+                    .alias_regions
+                    .vmcomponent()
+                    .task_may_block()
+                    .region(func),
                 None => self.alias_regions.public_global_region(func),
             },
         }
