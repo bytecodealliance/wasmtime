@@ -3647,7 +3647,7 @@ end = "2025-02-15"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-12-11"
-end = "2024-07-14"
+end = "2027-08-20"
 
 [[trusted.cap-net-ext]]
 criteria = "safe-to-deploy"
@@ -3655,23 +3655,29 @@ user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-12-11"
 end = "2024-07-14"
 
+[[trusted.cap-net-ext]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2023-04-07"
+end = "2027-08-20"
+
 [[trusted.cap-primitives]]
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-08-07"
-end = "2024-07-14"
+end = "2027-08-20"
 
 [[trusted.cap-rand]]
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-09-24"
-end = "2024-07-14"
+end = "2027-08-20"
 
 [[trusted.cap-std]]
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-06-25"
-end = "2024-07-14"
+end = "2027-08-20"
 
 [[trusted.cap-tempfile]]
 criteria = "safe-to-deploy"
@@ -3683,7 +3689,7 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-09-21"
-end = "2024-07-14"
+end = "2027-08-20"
 
 [[trusted.clap]]
 criteria = "safe-to-deploy"
@@ -3737,7 +3743,7 @@ end = "2024-07-11"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2023-08-29"
-end = "2024-11-14"
+end = "2027-08-20"
 
 [[trusted.fd-lock]]
 criteria = "safe-to-deploy"
@@ -3817,6 +3823,12 @@ user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2021-01-27"
 end = "2024-07-06"
 
+[[trusted.libc]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2024-08-15"
+end = "2027-08-20"
+
 [[trusted.libm]]
 criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
@@ -3827,7 +3839,7 @@ end = "2024-07-06"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2021-06-12"
-end = "2024-07-14"
+end = "2027-08-20"
 
 [[trusted.lock_api]]
 criteria = "safe-to-deploy"
@@ -3899,7 +3911,13 @@ end = "2024-07-15"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2021-10-29"
-end = "2024-07-14"
+end = "2027-08-20"
+
+[[trusted.rustix-linux-procfs]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2025-03-06"
+end = "2027-08-20"
 
 [[trusted.ryu]]
 criteria = "safe-to-deploy"

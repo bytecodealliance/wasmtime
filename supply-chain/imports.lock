@@ -2605,6 +2605,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-fs-ext]]
+version = "3.4.6"
+when = "2026-08-20"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-net-ext]]
 version = "3.0.0"
 when = "2024-01-11"
@@ -2615,6 +2622,13 @@ user-name = "Dan Gohman"
 [[publisher.cap-net-ext]]
 version = "3.2.0"
 when = "2024-07-08"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-net-ext]]
+version = "3.4.6"
+when = "2026-08-20"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -2633,6 +2647,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-primitives]]
+version = "3.4.6"
+when = "2026-08-20"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-rand]]
 version = "3.0.0"
 when = "2024-01-11"
@@ -2643,6 +2664,13 @@ user-name = "Dan Gohman"
 [[publisher.cap-rand]]
 version = "3.2.0"
 when = "2024-07-08"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-rand]]
+version = "3.4.6"
+when = "2026-08-20"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -2661,6 +2689,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-std]]
+version = "3.4.6"
+when = "2026-08-20"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-time-ext]]
 version = "3.0.0"
 when = "2024-01-11"
@@ -2671,6 +2706,13 @@ user-name = "Dan Gohman"
 [[publisher.cap-time-ext]]
 version = "3.2.0"
 when = "2024-07-08"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-time-ext]]
+version = "3.4.6"
+when = "2026-08-20"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -3386,6 +3428,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.errno]]
+version = "0.3.14"
+when = "2025-09-09"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.fd-lock]]
 version = "4.0.2"
 when = "2023-12-29"
@@ -3484,6 +3533,12 @@ user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
+[[publisher.libc]]
+version = "0.2.189"
+when = "2026-07-21"
+user-id = 55123
+user-login = "rust-lang-owner"
+
 [[publisher.libm]]
 version = "0.2.7"
 when = "2023-05-15"
@@ -3501,6 +3556,13 @@ user-name = "Dan Gohman"
 [[publisher.linux-raw-sys]]
 version = "0.4.14"
 when = "2024-05-17"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.linux-raw-sys]]
+version = "0.12.1"
+when = "2025-12-23"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -3592,6 +3654,20 @@ user-name = "Dan Gohman"
 [[publisher.rustix]]
 version = "0.38.34"
 when = "2024-04-22"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.rustix]]
+version = "1.1.4"
+when = "2026-02-22"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.rustix-linux-procfs]]
+version = "0.1.1"
+when = "2025-04-21"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
