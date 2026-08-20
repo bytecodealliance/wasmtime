@@ -53,6 +53,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-bforest]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -104,6 +108,10 @@ audited_as = "0.111.10"
 [[unpublished.cranelift-bforest]]
 version = "0.111.12"
 audited_as = "0.111.11"
+
+[[unpublished.cranelift-bforest]]
+version = "0.111.13"
+audited_as = "0.111.12"
 
 [[unpublished.cranelift-bitset]]
 version = "0.111.0"
@@ -157,6 +165,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-bitset]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-codegen]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -208,6 +220,10 @@ audited_as = "0.111.10"
 [[unpublished.cranelift-codegen]]
 version = "0.111.12"
 audited_as = "0.111.11"
+
+[[unpublished.cranelift-codegen]]
+version = "0.111.13"
+audited_as = "0.111.12"
 
 [[unpublished.cranelift-codegen-meta]]
 version = "0.111.0"
@@ -261,6 +277,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-codegen-meta]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-codegen-shared]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -312,6 +332,10 @@ audited_as = "0.111.10"
 [[unpublished.cranelift-codegen-shared]]
 version = "0.111.12"
 audited_as = "0.111.11"
+
+[[unpublished.cranelift-codegen-shared]]
+version = "0.111.13"
+audited_as = "0.111.12"
 
 [[unpublished.cranelift-control]]
 version = "0.111.0"
@@ -365,6 +389,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-control]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-entity]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -417,6 +445,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-entity]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-frontend]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -469,6 +501,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-frontend]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-interpreter]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -521,6 +557,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-interpreter]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-isle]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -573,6 +613,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-isle]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-jit]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -625,6 +669,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-jit]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-module]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -677,6 +725,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-module]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-native]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -729,6 +781,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-native]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-object]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -781,6 +837,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-object]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-reader]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -833,6 +893,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-reader]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-serde]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -885,6 +949,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-serde]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.cranelift-wasm]]
 version = "0.111.0"
 audited_as = "0.110.1"
@@ -937,6 +1005,10 @@ audited_as = "0.111.10"
 version = "0.111.12"
 audited_as = "0.111.11"
 
+[[unpublished.cranelift-wasm]]
+version = "0.111.13"
+audited_as = "0.111.12"
+
 [[unpublished.wasi-common]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -988,6 +1060,10 @@ audited_as = "24.0.10"
 [[unpublished.wasi-common]]
 version = "24.0.12"
 audited_as = "24.0.11"
+
+[[unpublished.wasi-common]]
+version = "24.0.13"
+audited_as = "24.0.12"
 
 [[unpublished.wasmtime]]
 version = "24.0.0"
@@ -1041,6 +1117,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-asm-macros]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1092,6 +1172,10 @@ audited_as = "24.0.10"
 [[unpublished.wasmtime-asm-macros]]
 version = "24.0.12"
 audited_as = "24.0.11"
+
+[[unpublished.wasmtime-asm-macros]]
+version = "24.0.13"
+audited_as = "24.0.12"
 
 [[unpublished.wasmtime-cache]]
 version = "24.0.0"
@@ -1145,6 +1229,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-cache]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-cli]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1196,6 +1284,10 @@ audited_as = "24.0.10"
 [[unpublished.wasmtime-cli]]
 version = "24.0.12"
 audited_as = "24.0.11"
+
+[[unpublished.wasmtime-cli]]
+version = "24.0.13"
+audited_as = "24.0.12"
 
 [[unpublished.wasmtime-cli-flags]]
 version = "24.0.0"
@@ -1249,6 +1341,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-cli-flags]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-component-macro]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1301,6 +1397,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-component-macro]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-component-util]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1353,6 +1453,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-component-util]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-cranelift]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1405,6 +1509,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-cranelift]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-environ]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1457,6 +1565,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-environ]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-explorer]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1509,6 +1621,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-explorer]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-fiber]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1561,6 +1677,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-fiber]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-jit-debug]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1613,6 +1733,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-jit-debug]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-jit-icache-coherence]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1665,6 +1789,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-jit-icache-coherence]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-slab]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1717,6 +1845,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-slab]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-types]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1769,6 +1901,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-types]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-wasi]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1821,6 +1957,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-wasi]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-wasi-http]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1872,6 +2012,10 @@ audited_as = "24.0.10"
 [[unpublished.wasmtime-wasi-http]]
 version = "24.0.12"
 audited_as = "24.0.11"
+
+[[unpublished.wasmtime-wasi-http]]
+version = "24.0.13"
+audited_as = "24.0.12"
 
 [[unpublished.wasmtime-wasi-keyvalue]]
 version = "24.0.1"
@@ -1921,6 +2065,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-wasi-keyvalue]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-wasi-nn]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -1973,6 +2121,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-wasi-nn]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-wasi-runtime-config]]
 version = "24.0.1"
 audited_as = "24.0.0"
@@ -2020,6 +2172,10 @@ audited_as = "24.0.10"
 [[unpublished.wasmtime-wasi-runtime-config]]
 version = "24.0.12"
 audited_as = "24.0.11"
+
+[[unpublished.wasmtime-wasi-runtime-config]]
+version = "24.0.13"
+audited_as = "24.0.12"
 
 [[unpublished.wasmtime-wasi-threads]]
 version = "24.0.0"
@@ -2073,6 +2229,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-wasi-threads]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-wast]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -2125,6 +2285,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-wast]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-winch]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -2177,6 +2341,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-winch]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-wit-bindgen]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -2229,6 +2397,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-wit-bindgen]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wasmtime-wmemcheck]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -2281,6 +2453,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wasmtime-wmemcheck]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wiggle]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -2333,6 +2509,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wiggle]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wiggle-generate]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -2385,6 +2565,10 @@ audited_as = "24.0.10"
 version = "24.0.12"
 audited_as = "24.0.11"
 
+[[unpublished.wiggle-generate]]
+version = "24.0.13"
+audited_as = "24.0.12"
+
 [[unpublished.wiggle-macro]]
 version = "24.0.0"
 audited_as = "23.0.1"
@@ -2436,6 +2620,10 @@ audited_as = "24.0.10"
 [[unpublished.wiggle-macro]]
 version = "24.0.12"
 audited_as = "24.0.11"
+
+[[unpublished.wiggle-macro]]
+version = "24.0.13"
+audited_as = "24.0.12"
 
 [[unpublished.wiggle-test]]
 version = "0.0.0"
@@ -2492,6 +2680,10 @@ audited_as = "0.22.10"
 [[unpublished.winch-codegen]]
 version = "0.22.12"
 audited_as = "0.22.11"
+
+[[unpublished.winch-codegen]]
+version = "0.22.13"
+audited_as = "0.22.12"
 
 [[publisher.aho-corasick]]
 version = "1.0.2"
