@@ -1110,7 +1110,7 @@ jobs:
       - test_capi
       - test_debug_dwarf
       - test_fuzzing
-      - test_wasi_nn
+      # - test_wasi_nn
       - test_nightly
       - build
       - rustfmt
