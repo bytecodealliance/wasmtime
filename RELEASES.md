@@ -1,3 +1,14 @@
+## 36.0.14
+
+Released 2026-08-20
+
+### Fixed
+
+* Filesystem sandbox escape when paths or symlinks contain trailing slashes.
+  [GHSA-vqjp-4c8c-hfgg](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-vqjp-4c8c-hfgg)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.13
 
 Released 2026-07-31.
