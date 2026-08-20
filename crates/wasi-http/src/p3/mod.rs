@@ -21,9 +21,7 @@ pub use request::default_send_request;
 pub use request::{Request, RequestOptions};
 pub use response::Response;
 
-/// The default value configured for [`WasiHttpHooks::p3_outgoing_body_chunk_size`].
-///
-/// [`WasiHttpHooks::p3_outgoing_body_chunk_size`]: crate::WasiHttpHooks::p3_outgoing_body_chunk_size
+/// The default value configured for `WasiHttpHooks::p3_outgoing_body_chunk_size`.
 pub const DEFAULT_OUTGOING_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 
 use crate::p3::bindings::http::types::ErrorCode;
