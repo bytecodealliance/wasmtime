@@ -932,6 +932,17 @@ where
         }
     }
 
+    /// The Cranelift type of a pointer on the target being compiled for.
+    pub fn pointer_type(&self) -> ir::Type {
+        self.pointer_type
+    }
+
+    /// The pointer size of the target being compiled for, used to compute the
+    /// layout of Wasmtime's vmctx types.
+    pub fn ptr_size(&self) -> &Offsets::Ptr {
+        self.offsets.get_ptr_size()
+    }
+
     /// Get the alias region for accesses into the GC heap.
     pub fn gc_heap_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
         self.region(func, AliasRegionKey::GcHeap)
