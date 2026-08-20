@@ -170,6 +170,22 @@ Furthermore, an address can be specified via:
 wasmtime serve --addr=0.0.0.0:8081 foo.wasm
 ```
 
+### ⚠️ Security Warning
+
+> **Not recommended for production use**
+>
+> The `wasmtime serve` command is intended solely for local development and
+> testing. It **does not** implement safeguards against:
+> - Unbounded outbound HTTP requests
+> - Rate limiting or connection throttling
+> - DDoS protections
+> - Request size limits
+> - TLS/HTTPS termination
+>
+> **Do not deploy `wasmtime serve` in a production environment** without an
+> additional reverse proxy or gateway layer (e.g., Nginx, Envoy, or a dedicated
+> WASI host) that enforces request limits, authentication, and security controls.
+
 At the time of writing, the `wasi:http/proxy` world is still experimental and
 requires setup of some `wit` dependencies. For more information, see
 the [hello-wasi-http](https://github.com/sunfishcode/hello-wasi-http/) example.
