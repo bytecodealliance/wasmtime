@@ -177,6 +177,7 @@ struct LimitedGuestBodyConsumer {
     limit: u64,
     /// Number of bytes sent
     sent: u64,
+    max_chunk_size: usize,
     // `true` when the other side of `contents_tx` was unexpectedly closed
     closed: bool,
 }
@@ -217,7 +218,8 @@ impl<D> StreamConsumer<D> for LimitedGuestBodyConsumer {
         debug_assert!(!self.closed);
         let mut src = src.as_direct(store);
         let buf = src.remaining();
-        let n = buf.len();
+        let n = buf.len().min(self.max_chunk_size);
+        let buf = &buf[..n];
 
         // Perform `content-length` check early and precompute the next value
         let Ok(sent) = n.try_into() else {
@@ -260,7 +262,10 @@ impl<D> StreamConsumer<D> for LimitedGuestBodyConsumer {
 
 /// [StreamConsumer] implementation for bodies originating in the guest without `Content-Length`
 /// header set.
-struct UnlimitedGuestBodyConsumer(PollSender<Result<Bytes, ErrorCode>>);
+struct UnlimitedGuestBodyConsumer {
+    contents_tx: PollSender<Result<Bytes, ErrorCode>>,
+    max_chunk_size: usize,
+}
 
 impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
     type Item = u8;
@@ -272,13 +277,13 @@ impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
         src: Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        match self.0.poll_reserve(cx) {
+        match self.contents_tx.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
                 let mut src = src.as_direct(store);
                 let buf = src.remaining();
-                let n = buf.len();
-                let buf = Bytes::copy_from_slice(buf);
-                match self.0.send_item(Ok(buf)) {
+                let n = buf.len().min(self.max_chunk_size);
+                let buf = Bytes::copy_from_slice(&buf[..n]);
+                match self.contents_tx.send_item(Ok(buf)) {
                     Ok(()) => {
                         src.mark_read(n);
                         Poll::Ready(Ok(StreamResult::Completed))
@@ -329,6 +334,11 @@ impl GuestBody {
             Ok(())
         })?;
 
+        let max_chunk_size = getter(store.as_context_mut().data_mut())
+            .hooks
+            .p3_outgoing_body_chunk_size()
+            .max(1);
+
         let contents_rx = if let Some(rx) = contents_rx {
             let (http_tx, http_rx) = mpsc::channel(1);
             let contents_tx = PollSender::new(http_tx);
@@ -348,12 +358,19 @@ impl GuestBody {
                         make_error,
                         limit,
                         sent: 0,
+                        max_chunk_size,
                         closed: false,
                     },
                 )?;
             } else {
                 _ = result_tx.send(Box::new(result_fut));
-                rx.pipe(store, UnlimitedGuestBodyConsumer(contents_tx))?;
+                rx.pipe(
+                    store,
+                    UnlimitedGuestBodyConsumer {
+                        contents_tx,
+                        max_chunk_size,
+                    },
+                )?;
             };
             Some(http_rx)
         } else {
