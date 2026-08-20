@@ -52,7 +52,7 @@ async fn test_chunked_write(dir: &Descriptor, filename: &str) {
                 // host, something should have done a short write earlier.
                 assert!(len <= 128 << 20);
                 let (result, remaining) = tx.write(bytes(&mut pos, len)).await;
-                std::assert_matches!(result, StreamResult::Complete(_));
+                assert!(matches!(result, StreamResult::Complete(_)), "bad result {result:?}");
                 if remaining.remaining() == 0 {
                     len = len.checked_mul(2).unwrap();
                 } else {
