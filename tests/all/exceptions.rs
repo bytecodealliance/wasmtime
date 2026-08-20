@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
-// Currently exceptions trap on throw, re-enable after catch is implemented.
+// Winch does not implement catches yet. Re-enable after catch is implemented.
 #[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn basic_throw(config: &mut Config) -> Result<()> {
@@ -40,7 +40,7 @@ fn basic_throw(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// Currently exceptions trap on throw, re-enable after catch is implemented.
+// Winch does not implement catches yet. Re-enable after catch is implemented.
 #[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn dynamic_tags(config: &mut Config) -> Result<()> {
@@ -101,8 +101,7 @@ fn dynamic_tags(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// Currently exceptions trap on throw, re-enable after catch is implemented.
-#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
+#[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn exception_escape_to_host(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -135,7 +134,134 @@ fn exception_escape_to_host(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// Currently exceptions trap on throw, re-enable after catch is implemented.
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn defined_exception_escape_to_host(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (export "e") (param i64))
+          (func (export "throw")
+                (throw $e (i64.const 84))))
+          "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let tag = instance.get_tag(&mut store, "e").unwrap();
+    let func = instance.get_func(&mut store, "throw").unwrap();
+    let result = func.call(&mut store, &[], &mut []);
+    assert!(result.unwrap_err().is::<ThrownException>());
+    let exn = store.take_pending_exception().unwrap();
+    let exntag = exn.tag(&mut store)?;
+    assert!(Tag::eq(&exntag, &tag, &store));
+    assert_eq!(exn.field(&mut store, 0)?.unwrap_i64(), 84);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[cfg_attr(miri, ignore)]
+fn funcref_exception_payload_escape_to_host(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param funcref))
+          (func (export "throw") (param funcref)
+                (throw $e (local.get 0))))
+          "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "throw").unwrap();
+    let expected = Func::wrap(&mut store, || 126_i32);
+    let result = func.call(&mut store, &[Val::FuncRef(Some(expected))], &mut []);
+    assert!(result.unwrap_err().is::<ThrownException>());
+    let exn = store.take_pending_exception().unwrap();
+    let payload = exn.field(&mut store, 0)?;
+    let payload = payload.unwrap_funcref().unwrap();
+    let payload = payload.typed::<(), i32>(&store)?;
+    assert_eq!(payload.call(&mut store, ())?, 126);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[cfg_attr(miri, ignore)]
+fn thrown_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
+    config.collector(Collector::DeferredReferenceCounting);
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param externref))
+          (func (export "throw") (param externref)
+            (throw $e (local.get 0))))
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "throw").unwrap();
+    let dropped = Arc::new(AtomicBool::new(false));
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let payload = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
+        let result = func.call(&mut scope, &[Val::ExternRef(Some(payload))], &mut []);
+        assert!(result.unwrap_err().is::<ThrownException>());
+    }
+
+    store.gc(None)?;
+    assert!(!dropped.load(Relaxed));
+
+    let exn = store.take_pending_exception().unwrap();
+    let payload = exn
+        .field(&mut store, 0)?
+        .unwrap_externref()
+        .copied()
+        .unwrap();
+    assert!(payload.data(&store)?.is_some());
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn throw_with_null_collector(config: &mut Config) -> Result<()> {
+    config.collector(Collector::Null);
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32))
+          (func (export "throw")
+            (throw $e (i32.const 42))))
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "throw").unwrap();
+    let result = func.call(&mut store, &[], &mut []);
+    assert!(result.unwrap_err().is::<ThrownException>());
+
+    let exn = store.take_pending_exception().unwrap();
+    assert_eq!(exn.field(&mut store, 0)?.unwrap_i32(), 42);
+
+    Ok(())
+}
+
+// Winch does not implement catches yet. Re-enable after catch is implemented.
 #[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn exception_from_host(config: &mut Config) -> Result<()> {
@@ -276,7 +402,7 @@ fn thrown_exception_without_throwing(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// Currently exceptions trap on throw, re-enable after catch is implemented.
+// Winch does not implement catches yet. Re-enable after catch is implemented.
 #[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
@@ -303,7 +429,7 @@ fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// Currently exceptions trap on throw, re-enable after catch is implemented.
+// Winch does not implement catches yet. Re-enable after catch is implemented.
 #[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
@@ -359,7 +485,7 @@ fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
     Ok(())
 }
 
-// Currently exceptions trap on throw, re-enable after catch is implemented.
+// Winch does not implement catches yet. Re-enable after catch is implemented.
 #[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> {

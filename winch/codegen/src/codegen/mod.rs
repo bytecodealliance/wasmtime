@@ -20,13 +20,13 @@ use smallvec::SmallVec;
 use std::marker::PhantomData;
 use wasmparser::{
     BinaryReader, FuncValidator, MemArg, Operator, OperatorsReader, ValidatorResources,
-    VisitOperator, VisitSimdOperator,
+    VisitOperator, VisitSimdOperator, WasmFeatures,
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FUNCREF_INIT_BIT, FUNCREF_MASK, GlobalIndex, IndexType, MemoryIndex,
     MemoryKind, MemoryTunables, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType,
-    WasmValType,
+    WasmValType, wasm_unsupported,
 };
 
 mod context;
@@ -41,7 +41,9 @@ mod builtin;
 pub use builtin::*;
 pub(crate) mod bounds;
 mod drc;
+mod exceptions;
 mod gc;
+use gc::GcCodegenConfig;
 
 use bounds::{Bounds, ImmOffset, Index};
 
@@ -120,6 +122,12 @@ where
 
     /// Local counter to track fuel consumption.
     pub fuel_consumed: i64,
+
+    /// Whether this function accesses the store's GC heap.
+    pub needs_gc_heap: bool,
+
+    /// Collector-specific configuration for generating GC operations.
+    gc_codegen_config: Option<GcCodegenConfig>,
     phase: PhantomData<P>,
 }
 
@@ -133,8 +141,19 @@ where
         context: CodeGenContext<'a, Prologue>,
         env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
         sig: ABISig,
-    ) -> CodeGen<'a, 'translation, 'data, M, Prologue> {
-        Self {
+        wasm_features: &WasmFeatures,
+    ) -> Result<CodeGen<'a, 'translation, 'data, M, Prologue>> {
+        let gc_codegen_config = match tunables.collector {
+            Some(collector) => Some(GcCodegenConfig::new(collector)),
+            None if wasm_features.contains(WasmFeatures::EXCEPTIONS) => {
+                return Err(format_err!(wasm_unsupported!(
+                    "support for GC types disabled at configuration time"
+                )));
+            }
+            None => None,
+        };
+
+        Ok(Self {
             sig,
             context,
             masm,
@@ -144,8 +163,10 @@ where
             control_frames: Default::default(),
             // Empty functions should consume at least 1 fuel unit.
             fuel_consumed: 1,
+            needs_gc_heap: false,
+            gc_codegen_config,
             phase: PhantomData,
-        }
+        })
     }
 
     /// Code generation prologue.
@@ -205,6 +226,8 @@ where
             source_location: self.source_location,
             control_frames: self.control_frames,
             fuel_consumed: self.fuel_consumed,
+            needs_gc_heap: self.needs_gc_heap,
+            gc_codegen_config: self.gc_codegen_config,
             phase: PhantomData,
         })
     }
@@ -510,10 +533,7 @@ where
         let sig_index_bytes = self.env.vmoffsets.size_of_vmshared_type_index();
         let sig_size = OperandSize::from_bytes(sig_index_bytes);
         let sig_index = self.env.translation.module.types[type_index].unwrap_module_type_index();
-        let sig_offset = sig_index
-            .as_u32()
-            .checked_mul(sig_index_bytes.into())
-            .unwrap();
+        let sig_offset = self.env.shared_type_index_offset(sig_index);
         let signatures_base_offset = self.env.vmoffsets.ptr.vmctx().type_ids();
         let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref().type_index();
         // Get the caller id.

@@ -91,7 +91,7 @@ impl TargetIsa for X64 {
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
         tunables: &Tunables,
-    ) -> Result<CompiledFunction> {
+    ) -> Result<(CompiledFunction, bool)> {
         let pointer_bytes = self.pointer_bytes();
         let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
 
@@ -119,18 +119,25 @@ impl TargetIsa for X64 {
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         let regalloc = RegAlloc::from(gpr_bit_set(), fpr_bit_set());
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
-        let codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
+        let codegen = CodeGen::new(
+            tunables,
+            &mut masm,
+            codegen_context,
+            env,
+            abi_sig,
+            validator.features(),
+        )?;
 
         let mut body_codegen = codegen.emit_prologue()?;
 
         body_codegen.emit(body, validator)?;
+        let needs_gc_heap = body_codegen.needs_gc_heap;
         let base = body_codegen.source_location.base;
 
         let names = body_codegen.env.take_name_map();
-        Ok(CompiledFunction::new(
-            masm.finalize(base)?,
-            names,
-            self.function_alignment(),
+        Ok((
+            CompiledFunction::new(masm.finalize(base)?, names, self.function_alignment()),
+            needs_gc_heap,
         ))
     }
 

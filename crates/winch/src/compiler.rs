@@ -146,7 +146,7 @@ impl wasmtime_environ::Compiler for Compiler {
             )
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_context(context, validator.into_allocations());
-        let mut func = func?;
+        let (mut func, needs_gc_heap) = func?;
 
         let reader = body.get_binary_reader();
         func.set_address_map(
@@ -161,8 +161,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiled_function(func),
-            // TODO: Winch doesn't support GC objects and stack maps and all that yet.
-            needs_gc_heap: false,
+            needs_gc_heap,
         })
     }
 

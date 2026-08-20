@@ -32,6 +32,9 @@ pub(crate) enum CodeGenError {
     /// Unsupported eager initialization of tables.
     #[error("Unsupported eager initialization of tables")]
     UnsupportedTableEagerInit,
+    /// An allocation is too large to represent.
+    #[error("Allocation size is too large")]
+    AllocationTooLarge,
     /// An internal error.
     ///
     /// This error means that an internal invariant was not met and usually
@@ -111,6 +114,10 @@ impl CodeGenError {
 
     pub(crate) const fn unsupported_32_bit_platform() -> Self {
         Self::Unsupported32BitPlatform
+    }
+
+    pub(crate) const fn allocation_too_large() -> Self {
+        Self::AllocationTooLarge
     }
 
     pub(crate) const fn unexpected_function_call() -> Self {

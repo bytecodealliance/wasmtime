@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=copying"
+;;! flags = "-W exceptions -C collector=drc"
 
 ;; `throw` builds an exception that escapes to the host, while `try_table`
 ;; still compiles as a plain block.
@@ -33,10 +33,10 @@
 ;;       movl    %ecx, (%rsp)
 ;;       subq    $8, %rsp
 ;;       movq    %r14, %rdi
-;;       movl    $0x4000002, %esi
+;;       movl    $0x4000000, %esi
 ;;       movl    8(%rsp), %edx
-;;       movl    $0x20, %ecx
-;;       movl    $0x10, %r8d
+;;       movl    $0x28, %ecx
+;;       movl    $8, %r8d
 ;;       callq   0x1a9
 ;;       addq    $8, %rsp
 ;;       addq    $4, %rsp
@@ -48,9 +48,9 @@
 ;;       addq    %rax, %rdx
 ;;       movl    (%rsp), %ecx
 ;;       addq    $4, %rsp
-;;       movl    %ecx, 0x10(%rdx)
-;;       movl    $0, 0x14(%rdx)
-;;       movl    $0x2a, 0x18(%rdx)
+;;       movl    %ecx, 0x18(%rdx)
+;;       movl    $0, 0x1c(%rdx)
+;;       movl    $0x2a, 0x20(%rdx)
 ;;       subq    $4, %rsp
 ;;       movl    %eax, (%rsp)
 ;;       subq    $0xc, %rsp

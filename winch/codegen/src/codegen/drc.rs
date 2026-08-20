@@ -11,6 +11,9 @@ use wasmtime_environ::{
     WasmValType,
 };
 
+/// The DRC header stores its reference count as a `u64`.
+const DRC_REF_COUNT_SIZE: u32 = 8;
+
 #[derive(Clone, Copy)]
 enum RefCountMutation {
     Increment,
@@ -21,6 +24,30 @@ impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {
+    /// Emits a DRC initialization barrier for a reference stored at `addr`.
+    ///
+    /// A newly initialized field has no old reference to release. Non-null,
+    /// non-i31 heap references are retained before the field is initialized.
+    pub(crate) fn emit_drc_init_barrier(
+        &mut self,
+        ty: WasmValType,
+        addr: M::Address,
+    ) -> Result<()> {
+        let new_ref = self.context.pop_to_reg(self.masm, None)?;
+        let skip_inc = self.masm.get_label()?;
+        self.emit_skip_if_gc_ref_is_null_or_i31(new_ref.reg, skip_inc)?;
+
+        let (heap_reg, bound_reg) = self.emit_load_gc_heap_base_and_bound()?;
+        self.emit_drc_retain_gc_ref(new_ref.reg, heap_reg, bound_reg)?;
+        self.context.free_reg(bound_reg);
+        self.context.free_reg(heap_reg);
+
+        self.masm.bind(skip_inc)?;
+        self.masm.store(new_ref.reg.into(), addr, ty.try_into()?)?;
+        self.context.free_reg(new_ref.reg);
+        Ok(())
+    }
+
     /// Emits a DRC read barrier for a value loaded from `addr`.
     ///
     /// The loaded reference is first pushed and spilled so it is represented
@@ -122,18 +149,13 @@ where
         self.masm.load(addr, writable!(old_reg), OperandSize::S32)?;
 
         let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
-        let header_extent = i64::from(ref_count_offset) + 8;
+        let header_extent = i64::from(ref_count_offset + DRC_REF_COUNT_SIZE);
 
         // Retain the new heap reference before publishing it. This ordering
         // keeps self-assignment from temporarily dropping the final owner.
         let skip_inc = self.masm.get_label()?;
         self.emit_skip_if_gc_ref_is_null_or_i31(new_ref.reg, skip_inc)?;
-        self.emit_gc_ref_bounds_check(new_ref.reg, bound_reg, header_extent)?;
-        let new_addr = self.emit_gc_ref_addr(new_ref.reg, heap_reg)?;
-        let count = self.emit_mutate_ref_count(new_addr, RefCountMutation::Increment)?;
-        self.emit_store_ref_count(new_addr, count)?;
-        self.context.free_reg(count);
-        self.context.free_reg(new_addr);
+        self.emit_drc_retain_gc_ref(new_ref.reg, heap_reg, bound_reg)?;
 
         self.masm.bind(skip_inc)?;
         // Publish the new value before releasing the old one because the
@@ -284,9 +306,7 @@ where
         })?;
 
         // Retain the object for the list's ownership.
-        let count = self.emit_mutate_ref_count(object_addr, RefCountMutation::Increment)?;
-        self.emit_store_ref_count(object_addr, count)?;
-        self.context.free_reg(count);
+        self.emit_increment_ref_count(object_addr)?;
 
         // Publish the new head, then the updated length. The length outlives
         // this helper, so it gets its own allocated register.
@@ -375,6 +395,34 @@ where
         self.context.pop_and_free(self.masm)?;
 
         self.masm.bind(skip_gc)
+    }
+
+    /// Retains a non-null, non-i31 GC reference.
+    ///
+    /// The bounds check covers the complete `u64` reference-count field. The
+    /// caller retains ownership of all register arguments.
+    fn emit_drc_retain_gc_ref(
+        &mut self,
+        gc_ref: Reg,
+        heap_base: Reg,
+        heap_bound: Reg,
+    ) -> Result<()> {
+        let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+        let header_extent = i64::from(ref_count_offset + DRC_REF_COUNT_SIZE);
+        self.emit_gc_ref_bounds_check(gc_ref, heap_bound, header_extent)?;
+
+        let object_addr = self.emit_gc_ref_addr(gc_ref, heap_base)?;
+        self.emit_increment_ref_count(object_addr)?;
+        self.context.free_reg(object_addr);
+        Ok(())
+    }
+
+    /// Increments and stores the reference count at `object_addr`.
+    fn emit_increment_ref_count(&mut self, object_addr: Reg) -> Result<()> {
+        let count = self.emit_mutate_ref_count(object_addr, RefCountMutation::Increment)?;
+        self.emit_store_ref_count(object_addr, count)?;
+        self.context.free_reg(count);
+        Ok(())
     }
 
     /// Loads a reference count and applies `mutation`, returning the register

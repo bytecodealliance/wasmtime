@@ -26,10 +26,10 @@ use wasmparser::{
     BlockType, BrTable, HeapType, Ieee32, Ieee64, MemArg, TryTable, V128, ValType, VisitOperator,
     VisitSimdOperator,
 };
-use wasmtime_cranelift::{TRAP_INDIRECT_CALL_TO_NULL, TRAP_UNHANDLED_TAG};
+use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
-    WasmValType,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeIndex,
+    WasmCompositeInnerType, WasmHeapType, WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -1848,9 +1848,9 @@ where
         Ok(())
     }
 
-    // Exceptions currently trap on throw, so a `try_table` compiles like
-    // a `block`. The catch clauses are unreachable and no handler metadata
-    // is emitted.
+    // Winch does not implement exception handlers yet, so a `try_table`
+    // compiles like a `block`. Thrown exceptions escape to the host, and no
+    // handler metadata is emitted.
     fn visit_try_table(&mut self, try_table: TryTable) -> Self::Output {
         self.control_frames.push(ControlStackFrame::block(
             self.env.resolve_block_sig(try_table.ty)?,
@@ -1861,25 +1861,43 @@ where
         Ok(())
     }
 
-    // A thrown exception is compiled as an unhandled-tag trap; see
-    // `visit_try_table`.
-    fn visit_throw(&mut self, _tag_index: u32) -> Self::Output {
-        self.masm.trap(TRAP_UNHANDLED_TAG)?;
-        self.context.reachable = false;
-        let outermost = &mut self.control_frames[0];
-        outermost.set_as_target();
+    fn visit_throw(&mut self, tag_index: u32) -> Self::Output {
+        let tag_index = TagIndex::from_u32(tag_index);
+        let interned = self.env.translation.module.tags[tag_index]
+            .exception
+            .unwrap_module_type_index();
+        let types = self.env.types;
+        let exn_ty = match &types[interned].composite_type.inner {
+            WasmCompositeInnerType::Exn(exn_ty) => exn_ty,
+            _ => return Err(format_err!(CodeGenError::unsupported_wasm_type())),
+        };
+        let layouts = self.require_gc_codegen_config().layouts();
 
-        Ok(())
+        let layout = layouts
+            .exn_layout(exn_ty)
+            .map_err(|_| format_err!(CodeGenError::unsupported_wasm_type()))?;
+
+        let (gc_ref, object_addr) =
+            self.emit_exception_alloc(tag_index, interned, &layout, layouts)?;
+        let gc_ref = self.emit_exception_payload_fields(exn_ty, &layout, gc_ref, object_addr)?;
+        self.context.stack.push(gc_ref.into());
+        self.visit_throw_ref()
     }
 
-    // A rethrown exception is compiled as an unhandled-tag trap; see
-    // `visit_try_table`.
+    // The exception reference is on top of the value stack. Forward it to the
+    // runtime, then mark the remaining Wasm code unreachable because throwing
+    // does not return to this function.
     fn visit_throw_ref(&mut self) -> Self::Output {
-        self.masm.trap(TRAP_UNHANDLED_TAG)?;
+        let throw_ref = self.env.builtins.throw_ref::<M::ABI>()?;
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(throw_ref),
+        )?;
         self.context.reachable = false;
         let outermost = &mut self.control_frames[0];
         outermost.set_as_target();
-
         Ok(())
     }
 
