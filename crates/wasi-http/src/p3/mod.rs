@@ -21,6 +21,9 @@ pub use request::default_send_request;
 pub use request::{Request, RequestOptions};
 pub use response::Response;
 
+/// The default value configured for `WasiHttpHooks::p3_outgoing_body_chunk_size`.
+pub const DEFAULT_OUTGOING_BODY_CHUNK_SIZE: usize = 1024 * 1024;
+
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::{DEFAULT_FORBIDDEN_HEADERS, FieldMapError, WasiHttpCtx};
 use bindings::http::{client, types};
@@ -160,6 +163,13 @@ pub trait WasiHttpHooks: Send {
                 )>,
             > + Send,
     >;
+
+    /// Maximum number of bytes the implementation will copy out of the guest in
+    /// a single write to an outgoing body's stream.
+    #[cfg(feature = "p3")]
+    fn p3_outgoing_body_chunk_size(&mut self) -> usize {
+        crate::p3::DEFAULT_OUTGOING_BODY_CHUNK_SIZE
+    }
 }
 
 #[cfg(feature = "default-send-request")]
