@@ -645,11 +645,11 @@ pub enum InterfaceType {
 /// memory32 and memory64-based types.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct CanonicalAbiInfo {
-    /// The byte-size of this type in a 32-bit memory.
+    /// The byte-size of this type in a 32-bit memory, saturated at [`u32::MAX`].
     pub size32: u32,
     /// The byte-alignment of this type in a 32-bit memory.
     pub align32: u32,
-    /// The byte-size of this type in a 64-bit memory.
+    /// The byte-size of this type in a 64-bit memory, saturated at [`u32::MAX`].
     pub size64: u32,
     /// The byte-alignment of this type in a 64-bit memory.
     pub align64: u32,
@@ -677,6 +677,24 @@ impl Default for CanonicalAbiInfo {
 const fn align_to(a: u32, b: u32) -> u32 {
     assert!(b.is_power_of_two());
     (a + (b - 1)) & !(b - 1)
+}
+
+const fn saturating_size(size: u64) -> u32 {
+    if size > u32::MAX as u64 {
+        u32::MAX
+    } else {
+        size as u32
+    }
+}
+
+const fn align_size_to(size: u32, align: u32) -> u32 {
+    assert!(align.is_power_of_two());
+    let align = align as u64;
+    saturating_size((size as u64 + (align - 1)) & !(align - 1))
+}
+
+const fn add_sizes(a: u32, b: u32) -> u32 {
+    saturating_size(a as u64 + b as u64)
 }
 
 const fn max(a: u32, b: u32) -> u32 {
@@ -728,14 +746,14 @@ impl CanonicalAbiInfo {
 
         let mut ret = CanonicalAbiInfo::default();
         for field in fields {
-            ret.size32 = align_to(ret.size32, field.align32) + field.size32;
+            ret.size32 = add_sizes(align_size_to(ret.size32, field.align32), field.size32);
             ret.align32 = ret.align32.max(field.align32);
-            ret.size64 = align_to(ret.size64, field.align64) + field.size64;
+            ret.size64 = add_sizes(align_size_to(ret.size64, field.align64), field.size64);
             ret.align64 = ret.align64.max(field.align64);
             ret.flat_count = add_flat(ret.flat_count, field.flat_count);
         }
-        ret.size32 = align_to(ret.size32, ret.align32);
-        ret.size64 = align_to(ret.size64, ret.align64);
+        ret.size32 = align_size_to(ret.size32, ret.align32);
+        ret.size64 = align_size_to(ret.size64, ret.align64);
         return ret;
     }
 
@@ -748,15 +766,15 @@ impl CanonicalAbiInfo {
         let mut i = 0;
         while i < fields.len() {
             let field = &fields[i];
-            ret.size32 = align_to(ret.size32, field.align32) + field.size32;
+            ret.size32 = add_sizes(align_size_to(ret.size32, field.align32), field.size32);
             ret.align32 = max(ret.align32, field.align32);
-            ret.size64 = align_to(ret.size64, field.align64) + field.size64;
+            ret.size64 = add_sizes(align_size_to(ret.size64, field.align64), field.size64);
             ret.align64 = max(ret.align64, field.align64);
             ret.flat_count = add_flat(ret.flat_count, field.flat_count);
             i += 1;
         }
-        ret.size32 = align_to(ret.size32, ret.align32);
-        ret.size64 = align_to(ret.size64, ret.align64);
+        ret.size32 = align_size_to(ret.size32, ret.align32);
+        ret.size64 = align_size_to(ret.size64, ret.align64);
         return ret;
     }
 
@@ -874,13 +892,13 @@ impl CanonicalAbiInfo {
             }
         }
         CanonicalAbiInfo {
-            size32: align_to(
-                align_to(discrim_size, max_align32) + max_size32,
+            size32: align_size_to(
+                add_sizes(align_size_to(discrim_size, max_align32), max_size32),
                 max_align32,
             ),
             align32: max_align32,
-            size64: align_to(
-                align_to(discrim_size, max_align64) + max_size64,
+            size64: align_size_to(
+                add_sizes(align_size_to(discrim_size, max_align64), max_size64),
                 max_align64,
             ),
             align64: max_align64,
@@ -915,13 +933,13 @@ impl CanonicalAbiInfo {
             i += 1;
         }
         CanonicalAbiInfo {
-            size32: align_to(
-                align_to(discrim_size, max_align32) + max_size32,
+            size32: align_size_to(
+                add_sizes(align_size_to(discrim_size, max_align32), max_size32),
                 max_align32,
             ),
             align32: max_align32,
-            size64: align_to(
-                align_to(discrim_size, max_align64) + max_size64,
+            size64: align_size_to(
+                add_sizes(align_size_to(discrim_size, max_align64), max_size64),
                 max_align64,
             ),
             align64: max_align64,
