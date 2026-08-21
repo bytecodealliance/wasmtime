@@ -445,20 +445,7 @@ impl ServeCommand {
         }
 
         let mut store = Store::new(engine, host);
-
-        if let Some(fuel) = self.run.common.wasi.hostcall_fuel {
-            store.set_hostcall_fuel(fuel);
-        }
-
-        store.data_mut().limits = self.run.store_limits();
-        store.limiter(|t| &mut t.limits);
-
-        // If fuel has been configured, we want to add the configured
-        // fuel amount to this store.
-        if let Some(fuel) = self.run.common.wasm.fuel {
-            store.set_fuel(fuel)?;
-        }
-
+        self.run.configure_store(&mut store, |t| &mut t.limits)?;
         Ok(store)
     }
 
