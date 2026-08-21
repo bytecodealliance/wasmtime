@@ -3,7 +3,7 @@ use crate::ir;
 use cranelift_control::ControlPlane;
 
 /// State carried between emissions of a sequence of instructions.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct EmitState {
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
@@ -16,6 +16,21 @@ pub struct EmitState {
     /// A copy of the frame layout, used during the emission of `Inst::ReturnCallKnown` and
     /// `Inst::ReturnCallUnknown` instructions and exception callsites.
     pub frame_layout: FrameLayout,
+
+    /// The function's calling convention, used for return-call epilogue
+    /// teardown (e.g. FP-less GHC frames).
+    pub call_conv: CallConv,
+}
+
+impl Default for EmitState {
+    fn default() -> Self {
+        EmitState {
+            user_stack_map: None,
+            ctrl_plane: ControlPlane::default(),
+            frame_layout: FrameLayout::default(),
+            call_conv: CallConv::SystemV,
+        }
+    }
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -24,6 +39,7 @@ impl MachInstEmitState<Inst> for EmitState {
             user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
+            call_conv: abi.call_conv(),
         }
     }
 

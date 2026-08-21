@@ -1871,22 +1871,31 @@ fn emit_return_call_common_sequence<T>(
     state: &mut EmitState,
     call_info: &ReturnCallInfo<T>,
 ) {
-    assert!(
-        info.flags.preserve_frame_pointers(),
-        "frame pointers aren't fundamentally required for tail calls, \
+    let call_conv = state.call_conv;
+    match call_conv {
+        CallConv::Ghc => {
+            // GHC frames are FP-less; %rbp holds STG Sp and must not be
+            // restored as a frame pointer.
+        }
+        CallConv::Tail => {
+            assert!(
+                info.flags.preserve_frame_pointers(),
+                "frame pointers aren't fundamentally required for tail calls, \
                  but the current implementation relies on them being present"
-    );
+            );
+        }
+        other => panic!("return_call is only supported for Tail and Ghc, got {other:?}"),
+    }
 
     let tmp = call_info.tmp.to_writable_reg();
 
-    for inst in
-        X64ABIMachineSpec::gen_clobber_restore(CallConv::Tail, &info.flags, state.frame_layout())
+    for inst in X64ABIMachineSpec::gen_clobber_restore(call_conv, &info.flags, state.frame_layout())
     {
         inst.emit(sink, info, state);
     }
 
     for inst in X64ABIMachineSpec::gen_epilogue_frame_restore(
-        CallConv::Tail,
+        call_conv,
         &info.flags,
         &info.isa_flags,
         state.frame_layout(),
@@ -1896,6 +1905,7 @@ fn emit_return_call_common_sequence<T>(
 
     let incoming_args_diff = state.frame_layout().tail_args_size - call_info.new_stack_arg_size;
     if incoming_args_diff > 0 {
+        debug_assert_ne!(call_conv, CallConv::Ghc);
         // Move the saved return address up by `incoming_args_diff`.
         let addr = Amode::imm_reg(0, regs::rsp());
         asm::inst::movq_rm::new(tmp, addr).emit(sink, info, state);
