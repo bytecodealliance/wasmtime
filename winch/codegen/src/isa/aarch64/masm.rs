@@ -29,14 +29,16 @@ use crate::{
     stack::{TypedReg, Val},
 };
 use cranelift_codegen::{
-    Final, MachBufferFinalized, MachLabel,
+    ExceptionContextLoc, Final, MachBufferFinalized, MachExceptionHandler, MachLabel,
     binemit::CodeOffset,
     ir::{MemFlagsData, RelSourceLoc, SourceLoc, types},
-    isa::aarch64,
-    isa::aarch64::inst::{
-        self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, ScalarSize,
-        VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecRRLongOp, VecRRNarrowOp,
-        VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmOp, VectorSize,
+    isa::aarch64::{
+        self,
+        inst::{
+            self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, ScalarSize,
+            VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecRRLongOp, VecRRNarrowOp,
+            VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmOp, VectorSize,
+        },
     },
     settings,
 };
@@ -317,6 +319,28 @@ impl Masm for MacroAssembler {
     fn reset_stack_pointer(&mut self, offset: SPOffset) -> Result<()> {
         self.sp_offset = offset.as_u32();
         Ok(())
+    }
+
+    fn prepare_for_exception_handler(&mut self, target_offset: SPOffset) -> Result<Reg> {
+        let shadow_sp = regs::shadow_sp();
+
+        self.asm
+            .mov_rr(regs::fp(), writable!(shadow_sp), OperandSize::S64);
+
+        let initial_offset =
+            Imm12::maybe_from_u64(u64::from(SHADOW_STACK_POINTER_SLOT_SIZE)).unwrap();
+        self.asm.sub_ir(
+            initial_offset,
+            shadow_sp,
+            writable!(shadow_sp),
+            OperandSize::S64,
+        );
+
+        self.move_shadow_sp_to_sp();
+        self.sp_offset = 0;
+        self.reserve_stack(target_offset.as_u32())?;
+
+        Ok(regs::xreg(0))
     }
 
     fn local_address(&mut self, local: &LocalSlot) -> Result<Address> {
@@ -1359,6 +1383,30 @@ impl Masm for MacroAssembler {
         self.asm
             .buffer_mut()
             .push_user_stack_map_sp_relative(return_addr, frame_size, map);
+        Ok(())
+    }
+
+    fn emit_try_call_site(
+        &mut self,
+        sp_offset: SPOffset,
+        vmctx_slot_offset: u32,
+        handlers: impl Iterator<Item = MachExceptionHandler>,
+    ) -> Result<()> {
+        let frame_offset = sp_offset.as_u32() + u32::from(SHADOW_STACK_POINTER_SLOT_SIZE);
+        let vmctx_offset = sp_offset
+            .as_u32()
+            .checked_sub(vmctx_slot_offset)
+            .ok_or_else(CodeGenError::invalid_local_offset)?;
+
+        let handlers = std::iter::once(MachExceptionHandler::Context(
+            ExceptionContextLoc::SPOffset(vmctx_offset),
+        ))
+        .chain(handlers);
+
+        self.asm
+            .buffer_mut()
+            .add_try_call_site(Some(frame_offset), handlers);
+
         Ok(())
     }
 
