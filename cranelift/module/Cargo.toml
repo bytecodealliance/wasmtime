@@ -17,7 +17,7 @@ workspace = true
 [dependencies]
 cranelift-codegen = { workspace = true }
 cranelift-control = { workspace = true }
-hashbrown = { workspace = true, optional = true }
+hashbrown = { workspace = true }
 anyhow = { workspace = true, features = ['std'] }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
@@ -25,7 +25,9 @@ serde_derive = { workspace = true, optional = true }
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std"]
-core = ["hashbrown", "cranelift-codegen/core"]
+# The "core" feature no longer does anything here either: hashbrown is now an
+# unconditional dependency. Kept, empty, for backward compatibility.
+core = []
 
 # For dependent crates that want to serialize some parts of cranelift
 enable-serde = ["serde", "serde_derive", "cranelift-codegen/enable-serde"]
