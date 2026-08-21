@@ -145,7 +145,7 @@ where
     fn emit_load_exception_payload_fields(
         &mut self,
         tag_index: TagIndex,
-        mut exception_reg: Reg,
+        exception_reg: Reg,
     ) -> Result<()> {
         let interned = self.env.translation.module.tags[tag_index]
             .exception
@@ -175,35 +175,23 @@ where
 
         self.context.free_reg(heap_bound);
 
-        let mut object_addr = Some(self.emit_gc_ref_addr(exception_reg, heap_base)?);
+        let mut object_addr = self.emit_gc_ref_addr(exception_reg, heap_base)?;
         self.context.free_reg(heap_base);
+        self.context.free_reg(exception_reg);
         for (field_ty, field_offset) in fields {
-            let field_base = match object_addr {
-                Some(reg) => reg,
-                None => {
-                    let (heap_base, heap_bound) = self.emit_load_gc_heap_base_and_bound()?;
-                    self.context.free_reg(heap_bound);
-                    let object_addr = self.emit_gc_ref_addr(exception_reg, heap_base)?;
-                    self.context.free_reg(heap_base);
-                    object_addr
-                }
-            };
-            object_addr = Some(field_base);
-
             let ty = match field_ty {
                 WasmStorageType::Val(ty @ WasmValType::Ref(r))
                     if r.heap_type == WasmHeapType::Func =>
                 {
                     let func_ref_id = self.context.any_gpr(self.masm)?;
-                    let addr = self.masm.address_at_reg(field_base, field_offset)?;
+                    let addr = self.masm.address_at_reg(object_addr, field_offset)?;
                     self.masm
                         .load(addr, writable!(func_ref_id), OperandSize::S32)?;
 
                     // The builtin call can clobber allocated registers. Preserve
-                    // the exception and its object address beneath the call's
-                    // arguments so later payload fields can still be loaded.
-                    self.context.stack.push(TypedReg::i64(field_base).into());
-                    self.context.stack.push(TypedReg::i32(exception_reg).into());
+                    // the object address beneath the call's arguments so later
+                    // payload fields can still be loaded.
+                    self.context.stack.push(TypedReg::i64(object_addr).into());
                     self.context.stack.push(TypedReg::i32(func_ref_id).into());
                     self.context.stack.push(Val::i32(
                         ModuleInternedTypeIndex::reserved_value()
@@ -220,8 +208,7 @@ where
                     )?;
 
                     let func_ref = self.context.pop_to_reg(self.masm, None)?;
-                    exception_reg = self.context.pop_to_reg(self.masm, None)?.reg;
-                    object_addr = Some(self.context.pop_to_reg(self.masm, None)?.reg);
+                    object_addr = self.context.pop_to_reg(self.masm, None)?.reg;
                     self.context
                         .stack
                         .push(TypedReg::new(ty, func_ref.reg).into());
@@ -230,20 +217,18 @@ where
                 WasmStorageType::Val(ty @ WasmValType::Ref(r))
                     if r.heap_type == WasmHeapType::Extern =>
                 {
-                    let addr = self.masm.address_at_reg(field_base, field_offset)?;
+                    let addr = self.masm.address_at_reg(object_addr, field_offset)?;
                     if gc_codegen_config.collector() == Collector::DeferredReferenceCounting {
-                        // The DRC read barrier can make an out-of-line call and
-                        // consumes the field's base register. Preserve the
-                        // exception so a later field can recompute its address.
-                        // The runtime rooted the exception when transferring it
-                        // to this handler; this stack value only preserves its
-                        // raw bits across the call.
-                        self.context.stack.push(TypedReg::i32(exception_reg).into());
-                        self.emit_drc_read_barrier(ty, field_base, addr)?;
+                        // The DRC read barrier can make an out-of-line call.
+                        // Preserve the object address across the call so later
+                        // payload fields can still be loaded.
+                        let gc_ref = self.context.reg_for_type(ty, self.masm)?;
+                        self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
+                        self.context.stack.push(TypedReg::i64(object_addr).into());
+                        self.emit_drc_read_barrier(ty, gc_ref)?;
                         let payload = self.context.pop_to_reg(self.masm, None)?;
-                        exception_reg = self.context.pop_to_reg(self.masm, None)?.reg;
+                        object_addr = self.context.pop_to_reg(self.masm, None)?.reg;
                         self.context.stack.push(payload.into());
-                        object_addr = None;
                     } else {
                         let value = self.context.reg_for_type(ty, self.masm)?;
                         self.masm.load(addr, writable!(value), ty.try_into()?)?;
@@ -261,17 +246,14 @@ where
             };
 
             let value = self.context.reg_for_type(ty, self.masm)?;
-            let addr = self.masm.address_at_reg(field_base, field_offset)?;
+            let addr = self.masm.address_at_reg(object_addr, field_offset)?;
 
             self.masm.load(addr, writable!(value), ty.try_into()?)?;
 
             self.context.stack.push(TypedReg::new(ty, value).into());
         }
 
-        if let Some(object_addr) = object_addr {
-            self.context.free_reg(object_addr);
-        }
-        self.context.free_reg(exception_reg);
+        self.context.free_reg(object_addr);
         Ok(())
     }
 

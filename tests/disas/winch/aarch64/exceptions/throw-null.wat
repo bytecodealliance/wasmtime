@@ -21,25 +21,25 @@
 ;;       movk    x17, #0x20
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x1d4
+;;       b.lo    #0x1d0
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
 ;;       mov     x0, x9
-;;       bl      #0x320
+;;       bl      #0x31c
 ;;       ├─╼ exception frame offset: SP = FP - 0x20
 ;;       ╰─╼ exception handler: tag=0, context at [SP+0x8], handler=0x178
 ;;   48: ldur    x9, [x28, #8]
 ;;       ldur    x16, [x9, #0x20]
 ;;       ldur    w1, [x16]
 ;;       adds    w1, w1, #7
-;;       b.hs    #0x1d8
+;;       b.hs    #0x1d4
 ;;   5c: and     w1, w1, #0xfffffff8
 ;;       mov     w2, w1
 ;;       adds    w2, w2, #0x18
-;;       b.hs    #0x1dc
+;;       b.hs    #0x1d8
 ;;   6c: sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       stur    w0, [x28]
@@ -64,7 +64,7 @@
 ;;       stur    x0, [x28]
 ;;       mov     x0, x9
 ;;       ldur    x1, [x28]
-;;       bl      #0x2cc
+;;       bl      #0x2c8
 ;;       ├─╼ exception frame offset: SP = FP - 0x30
 ;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x178
 ;;   d0: add     x28, x28, #8
@@ -103,7 +103,7 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       ldur    w1, [x28, #0xc]
-;;       bl      #0x350
+;;       bl      #0x34c
 ;;       ├─╼ exception frame offset: SP = FP - 0x30
 ;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x178
 ;;  164: add     x28, x28, #0xc
@@ -123,18 +123,17 @@
 ;;       mov     x16, x0
 ;;       add     x16, x16, #0x18
 ;;       cmp     x16, x2, uxtx
-;;       b.hi    #0x1e0
+;;       b.hi    #0x1dc
 ;;  1ac: mov     x2, x1
 ;;       add     x2, x2, x0, uxtx
-;;       ldur    w1, [x2, #0x10]
-;;       mov     w0, w1
+;;       ldur    w0, [x2, #0x10]
 ;;       add     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
+;;  1d0: udf     #0xc11f
 ;;  1d4: udf     #0xc11f
 ;;  1d8: udf     #0xc11f
 ;;  1dc: udf     #0xc11f
-;;  1e0: udf     #0xc11f

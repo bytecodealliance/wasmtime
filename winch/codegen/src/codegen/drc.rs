@@ -48,7 +48,7 @@ where
         Ok(())
     }
 
-    /// Emits a DRC read barrier for a value loaded from `addr`.
+    /// Emits a DRC read barrier for the value in `gc_ref`.
     ///
     /// The loaded reference is first pushed and spilled so it is represented
     /// in a stack map if this barrier calls `force_gc`. Null and i31 references
@@ -59,16 +59,8 @@ where
     /// Finally it forces a collection when the roots list reaches both the
     /// proportional and absolute thresholds.
     ///
-    /// Leaves the loaded reference on the value stack and marks
-    /// `storage_base` available for register reuse before returning.
-    pub(crate) fn emit_drc_read_barrier(
-        &mut self,
-        ty: WasmValType,
-        storage_base: Reg,
-        addr: M::Address,
-    ) -> Result<()> {
-        let gc_ref = self.context.reg_for_type(ty, self.masm)?;
-        self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
+    /// Leaves the loaded reference on the value stack.
+    pub(crate) fn emit_drc_read_barrier(&mut self, ty: WasmValType, gc_ref: Reg) -> Result<()> {
         self.context.stack.push(Val::reg(gc_ref, ty));
 
         // Spill the loaded result into a stack-map-visible slot before the
@@ -121,7 +113,6 @@ where
         self.emit_maybe_force_gc(roots_len, heap_data_reg)?;
 
         self.masm.bind(skip_barrier)?;
-        self.context.free_reg(storage_base);
         Ok(())
     }
 

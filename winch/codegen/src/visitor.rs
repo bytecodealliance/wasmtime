@@ -2160,14 +2160,14 @@ where
         let index = GlobalIndex::from_u32(global_index);
         let (ty, base, offset) = self.emit_get_global_addr(index)?;
         let addr = self.masm.address_at_reg(base, offset)?;
-        if self.gc_barrier_needed(&ty) {
-            self.emit_drc_read_barrier(ty, base, addr)?;
-        } else {
-            let gc_ref = self.context.reg_for_type(ty, self.masm)?;
-            self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
-            self.context.stack.push(Val::reg(gc_ref, ty));
+        let gc_ref = self.context.reg_for_type(ty, self.masm)?;
+        self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
+        self.context.free_reg(base);
 
-            self.context.free_reg(base);
+        if self.gc_barrier_needed(&ty) {
+            self.emit_drc_read_barrier(ty, gc_ref)?;
+        } else {
+            self.context.stack.push(Val::reg(gc_ref, ty));
         }
 
         Ok(())
