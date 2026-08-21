@@ -629,4 +629,30 @@ mod test {
         let assembled = assemble(&inst.into());
         assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1801CA");
     }
+
+    /// Companion to [`apx_addq_rvm_ndd_encoding`] covering a memory operand.
+    ///
+    /// APX map-4 instructions are legacy instructions promoted into EVEX, so
+    /// their `disp8` keeps legacy semantics: a plain byte offset. The
+    /// compressed-displacement scheme that divides `disp8` by a tuple-derived
+    /// factor `N` applies only to the vector EVEX encodings. Encoding
+    /// `0x50(%rdi)` must therefore emit `0x50` and not `0x50 / 16 = 0x05`,
+    /// which would silently address the wrong memory.
+    #[test]
+    fn apx_addq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::addq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = addq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418017F50");
+    }
 }
