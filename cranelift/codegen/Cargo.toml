@@ -92,6 +92,7 @@ unwind = ["gimli"]
 # ISA targets for which we should build.
 # If no ISA targets are explicitly enabled, the ISA target for the host machine is enabled.
 x86 = []
+arm32 = []
 arm64 = []
 s390x = []
 riscv64 = []
@@ -109,7 +110,7 @@ all-arch = ["all-native-arch", "pulley"]
 
 # Option to enable all architectures that correspond to an actual native target
 # (that is, exclude Pulley).
-all-native-arch = ["x86", "arm64", "s390x", "riscv64"]
+all-native-arch = ["x86", "arm32", "arm64", "s390x", "riscv64"]
 
 # For dependent crates that want to serialize some parts of cranelift
 enable-serde = [
