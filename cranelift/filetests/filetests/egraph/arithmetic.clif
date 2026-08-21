@@ -485,3 +485,23 @@ block0(v0: i32):
     ; check: v12 = bnot v0
     ; check: return v12
 }
+
+function %ineg_const() -> i32 {
+block0:
+    v0 = iconst.i32 5
+    v1 = ineg v0
+    return v1
+    ; check: v2 = iconst.i32 -5
+    ; check: return v2
+}
+
+function %ineg_mul_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = imul v0, v1
+    v3 = ineg v2
+    return v3
+    ; check: v4 = iconst.i32 -5
+    ; check: v5 = imul v0, v4
+    ; check: return v5
+}

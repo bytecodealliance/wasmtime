@@ -702,18 +702,6 @@
 (rule (simplify (eq rty (bnot cty y) (band cty (bnot cty y) x))) (eq rty (bor cty y x) (iconst_s cty -1)))
 (rule (simplify (eq rty (bnot cty y) (band cty x (bnot cty y)))) (eq rty (bor cty y x) (iconst_s cty -1)))
 
-;; x >=_u (x & y), and (x & y) <=_u x, are always true.
-(rule (simplify (uge ty x (band ty x y))) (cmp_true ty))
-(rule (simplify (uge ty x (band ty y x))) (cmp_true ty))
-(rule (simplify (ule ty (band ty x y) x)) (cmp_true ty))
-(rule (simplify (ule ty (band ty y x) x)) (cmp_true ty))
-
-;; (x | y) >=_u x, and x <=_u (x | y), are always true.
-(rule (simplify (uge ty (bor ty x y) x)) (cmp_true ty))
-(rule (simplify (uge ty (bor ty y x) x)) (cmp_true ty))
-(rule (simplify (ule ty x (bor ty x y))) (cmp_true ty))
-(rule (simplify (ule ty x (bor ty y x))) (cmp_true ty))
-
 ;; (~x & y) & x == (x & ~y) & y == 0.
 (rule (simplify (band ty (band ty (bnot ty x) y) x))
       (subsume (all_zero ty)))
@@ -733,3 +721,23 @@
       (subsume (all_zero ty)))
 (rule (simplify (band ty x (bnot ty (bor ty y x))))
       (subsume (all_zero ty)))
+
+;; x >=_u (x & y), and (x & y) <=_u x --> true
+(rule (simplify (uge rty x (band ty x y))) (cmp_true rty))
+(rule (simplify (uge rty x (band ty y x))) (cmp_true rty))
+(rule (simplify (ule rty (band ty x y) x)) (cmp_true rty))
+(rule (simplify (ule rty (band ty y x) x)) (cmp_true rty))
+(rule (simplify (ugt rty (band ty x y) x)) (subsume (all_zero rty)))
+(rule (simplify (ugt rty (band ty y x) x)) (subsume (all_zero rty)))
+(rule (simplify (ult rty x (band ty x y))) (subsume (all_zero rty)))
+(rule (simplify (ult rty x (band ty y x))) (subsume (all_zero rty)))
+
+;; (x | y) >=_u x, and x <=_u (x | y) --> true
+(rule (simplify (uge rty (bor ty x y) x)) (cmp_true rty))
+(rule (simplify (uge rty (bor ty y x) x)) (cmp_true rty))
+(rule (simplify (ule rty x (bor ty x y))) (cmp_true rty))
+(rule (simplify (ule rty x (bor ty y x))) (cmp_true rty))
+(rule (simplify (ult rty (bor ty x y) x)) (subsume (all_zero rty)))
+(rule (simplify (ult rty (bor ty y x) x)) (subsume (all_zero rty)))
+(rule (simplify (ugt rty x (bor ty x y))) (subsume (all_zero rty)))
+(rule (simplify (ugt rty x (bor ty y x))) (subsume (all_zero rty)))

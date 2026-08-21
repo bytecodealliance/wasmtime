@@ -280,6 +280,105 @@ block0(v0: i32, v1: i32):
 ;     return v4
 ; }
 
+;; x >=_u (x - y) --> x >=_u y
+function %uge_x_isub_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp uge v0, v2
+    return v3
+}
+
+; function %uge_x_isub_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = icmp uge v0, v1
+;     return v4
+; }
+
+;; x <_u (x - y) --> x <_u y
+function %ult_x_isub_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ult v0, v2
+    return v3
+}
+
+; function %ult_x_isub_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = icmp ult v0, v1
+;     return v4
+; }
+
+;; x >=_u (x >>_u y) --> true
+function %uge_x_ushr_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp uge v0, v2
+    return v3
+}
+
+; function %uge_x_ushr_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i8 1
+;     return v4  ; v4 = 1
+; }
+
+;; (x >>_u y) <=_u x --> true
+function %ule_ushr_x_y_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp ule v2, v0
+    return v3
+}
+
+; function %ule_ushr_x_y_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i8 1
+;     return v4  ; v4 = 1
+; }
+
+;; (x >>_u y) >_u x --> false
+function %ugt_ushr_x_y_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp ugt v2, v0
+    return v3
+}
+
+; function %ugt_ushr_x_y_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i8 0
+;     return v4  ; v4 = 0
+; }
+
+;; x <_u (x >>_u y) --> false
+function %ult_x_ushr_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp ult v0, v2
+    return v3
+}
+
+; function %ult_x_ushr_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i8 0
+;     return v4  ; v4 = 0
+; }
+
+function %ugt_ushr_x_y_x_i32x2(i32x2, i32) -> i32x2 fast {
+block0(v0: i32x2, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp ugt v2, v0
+    return v3
+}
+
+; function %ugt_ushr_x_y_x_i32x2(i32x2, i32) -> i32x2 fast {
+;     const0 = 0x0000000000000000
+;
+; block0(v0: i32x2, v1: i32):
+;     v4 = vconst.i32x2 const0
+;     return v4  ; v4 = const0
+; }
+
 ;; (ne cty (select ty (slt cty x y) x y) x) -> (sgt cty x y)
 function %simplify_select_slt_ne_i32(i32, i32) -> i8 fast {
 block0(v0: i32, v1: i32):
