@@ -1,4 +1,3 @@
-use anyhow::Context;
 use std::net::SocketAddr;
 use std::time::Duration;
 use test_programs::p3::wasi::http::types::{ErrorCode, Method, Scheme};
@@ -13,7 +12,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         let addr = SocketAddr::from(([203, 0, 113, 12], 80)).to_string();
         let timeout = Duration::from_millis(200);
         let connect_timeout: Option<u64> = Some(timeout.as_nanos() as u64);
-        let res = test_programs::p3::http::request(
+        let (transmit, _response) = test_programs::p3::http::request_with_transmit_result(
             Method::Get,
             Scheme::Http,
             &addr,
@@ -25,10 +24,9 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             None,
         )
         .await
-        .context("/get");
+        .expect("failed to construct request");
 
-        assert!(res.is_err());
-        let err = res.unwrap_err();
+        let err = transmit.expect_err("expected request transmission to fail");
         assert!(
             matches!(
                 err.downcast_ref::<ErrorCode>(),
