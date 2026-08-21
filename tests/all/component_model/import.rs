@@ -757,8 +757,12 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 WasmStr,
                 WasmStr,
             ),)| {
-                accessor.with(|v| assert_eq!(arg.0.to_str(&v).unwrap(), "abc"));
-                Box::pin(async { Ok((3u32,)) })
+                Box::pin(async move {
+                    accessor
+                        .with(|v| assert_eq!(arg.0.to_str(&v).unwrap(), "abc"))
+                        .await;
+                    Ok((3u32,))
+                })
             },
         )?;
         linker
@@ -781,8 +785,12 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
                 WasmStr,
                 WasmStr,
             ),)| {
-                accessor.with(|v| assert_eq!(arg.0.to_str(&v).unwrap(), "abc"));
-                Box::pin(async { Ok(("xyz".to_string(),)) })
+                Box::pin(async move {
+                    accessor
+                        .with(|v| assert_eq!(arg.0.to_str(&v).unwrap(), "abc"))
+                        .await;
+                    Ok(("xyz".to_string(),))
+                })
             },
         )?;
     } else {

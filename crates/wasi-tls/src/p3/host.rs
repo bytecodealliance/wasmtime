@@ -184,31 +184,33 @@ impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
         fn connect_err(msg: &'static str) -> BoxFutureTlsStream {
             Box::pin(async move { Err(Error::msg(msg)) })
         }
-        let (fut, connection) = accessor.with(
-            move |mut access| -> wasmtime::Result<(BoxFutureTlsStream, _)> {
-                let WasiTlsCtxView { table, ctx } = access.get();
-                let connector = table.delete(this)?;
-                let connection = connector.connection;
+        let (fut, connection) = accessor
+            .with(
+                move |mut access| -> wasmtime::Result<(BoxFutureTlsStream, _)> {
+                    let WasiTlsCtxView { table, ctx } = access.get();
+                    let connector = table.delete(this)?;
+                    let connection = connector.connection;
 
-                let Some(ciphertext_writer) = connector.send else {
-                    return Ok((
-                        connect_err("send() must be called before connect()"),
-                        connection,
-                    ));
-                };
-                let Some(ciphertext_reader) = connector.recv else {
-                    return Ok((
-                        connect_err("receive() must be called before connect()"),
-                        connection,
-                    ));
-                };
+                    let Some(ciphertext_writer) = connector.send else {
+                        return Ok((
+                            connect_err("send() must be called before connect()"),
+                            connection,
+                        ));
+                    };
+                    let Some(ciphertext_reader) = connector.recv else {
+                        return Ok((
+                            connect_err("receive() must be called before connect()"),
+                            connection,
+                        ));
+                    };
 
-                let transport = Box::new(tokio::io::join(ciphertext_reader, ciphertext_writer));
-                let fut = ctx.provider.connect(server_name, transport);
+                    let transport = Box::new(tokio::io::join(ciphertext_reader, ciphertext_writer));
+                    let fut = ctx.provider.connect(server_name, transport);
 
-                Ok((fut, connection))
-            },
-        )?;
+                    Ok((fut, connection))
+                },
+            )
+            .await?;
 
         match fut.await {
             Ok(tls_stream) => {
@@ -217,7 +219,9 @@ impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
             }
             Err(e) => {
                 connection.lock().resolve(Box::new(Closed(e.clone())));
-                let resource = accessor.with(|mut access| access.get().table.push(e))?;
+                let resource = accessor
+                    .with(|mut access| access.get().table.push(e))
+                    .await?;
                 Ok(Err(resource))
             }
         }
