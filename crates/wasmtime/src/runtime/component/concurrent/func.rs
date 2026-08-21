@@ -183,7 +183,7 @@ impl Func {
                 })
             },
             move |func, store, results| {
-                let max_flat = if func.abi_async(store) {
+                let max_flat = if func.abi_async() {
                     MAX_FLAT_PARAMS
                 } else {
                     MAX_FLAT_RESULTS
@@ -431,7 +431,7 @@ where
         } else {
             1
         };
-        let max_results = if self.func().abi_async(store.0) {
+        let max_results = if self.func().abi_async() {
             MAX_FLAT_PARAMS
         } else {
             MAX_FLAT_RESULTS

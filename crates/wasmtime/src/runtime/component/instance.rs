@@ -167,7 +167,7 @@ impl Instance {
         }
 
         // And package up the indices!
-        Some(Func::from_lifted_func(*self, index))
+        Some(Func::from_lifted_func(store, *self, index))
     }
 
     /// Looks up an exported [`Func`] value by name and with its type.

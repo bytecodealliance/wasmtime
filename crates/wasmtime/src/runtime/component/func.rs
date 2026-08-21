@@ -5,7 +5,7 @@ use crate::component::types::ComponentFunc;
 use crate::component::values::Val;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, InstanceFlags};
-use crate::runtime::vm::{Export, VMFuncRef};
+use crate::runtime::vm::{Export, SendSyncPtr, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use core::mem::{self, MaybeUninit};
@@ -33,24 +33,80 @@ pub use self::typed::*;
 #[repr(C)] // here for the C API.
 pub struct Func {
     instance: Instance,
-    index: ExportIndex,
+
+    /// The component type index of this lifted function.
+    ty: TypeFuncIndex,
+
+    /// The index of the canonical `options` for this lifted function.
+    options: OptionsIndex,
+
+    /// Whether this lifted function uses the async canonical ABI.
+    abi_async: bool,
+
+    /// The resolved core `VMFuncRef` for this lifted function, whose lifetime
+    /// is bound to the `Store` this `Func` belongs to.
+    ///
+    /// Note that this field has an `unsafe_*` prefix to discourage use of it.
+    /// This is only safe to read/use if the store that owns `instance`
+    /// (identified by `instance.id().store_id()`) is in scope. Use the
+    /// `self.lifted_core_func()` method instead of this field to perform this
+    /// check.
+    unsafe_func_ref: SendSyncPtr<VMFuncRef>,
+
+    /// The resolved core `VMFuncRef` for this function's `post-return`, if any.
+    ///
+    /// Same store-lifetime rules as `unsafe_func_ref`: only valid to read while
+    /// the owning store is in scope. Read via [`Func::post_return_core_func`],
+    /// which validates the store id first.
+    post_return_func_ref: Option<SendSyncPtr<VMFuncRef>>,
 }
 
-// Double-check that the C representation in `component/instance.h` matches our
+// Double-check that the C representation in `component/func.h` matches our
 // in-Rust representation here in terms of size/alignment/etc.
 const _: () = {
     #[repr(C)]
     struct T(u64, u32);
     #[repr(C)]
-    struct C(T, u32);
+    struct C(T, u32, u32, u32, bool, *mut u8, *mut u8);
     assert!(core::mem::size_of::<C>() == core::mem::size_of::<Func>());
     assert!(core::mem::align_of::<C>() == core::mem::align_of::<Func>());
     assert!(core::mem::offset_of!(Func, instance) == 0);
 };
 
 impl Func {
-    pub(crate) fn from_lifted_func(instance: Instance, index: ExportIndex) -> Func {
-        Func { instance, index }
+    pub(crate) fn from_lifted_func(
+        store: &mut StoreOpaque,
+        instance: Instance,
+        index: ExportIndex,
+    ) -> Func {
+        let def = {
+            let vminstance = instance.id().get(store);
+            let (_ty, def, _options) = vminstance.component().export_lifted_function(index);
+            def.clone()
+        };
+        let unsafe_func_ref = match instance.lookup_vmdef(store, &def) {
+            Export::Function(f) => f.vm_func_ref(store),
+            _ => unreachable!(),
+        }
+        .into();
+
+        let vminstance = instance.id().get(store);
+        let component = vminstance.component();
+        let (ty, _def, options) = component.export_lifted_function(index);
+        let raw_options = &component.env_component().options[options];
+        let abi_async = raw_options.async_;
+        let post_return_func_ref = raw_options
+            .post_return
+            .map(|i| SendSyncPtr::from(vminstance.runtime_post_return(i)));
+
+        Func {
+            instance,
+            ty,
+            options,
+            abi_async,
+            unsafe_func_ref,
+            post_return_func_ref,
+        }
     }
 
     /// Attempt to cast this [`Func`] to a statically typed [`TypedFunc`] with
@@ -167,7 +223,7 @@ impl Func {
         Return: ComponentNamedList + Lift,
     {
         let cx = InstanceType::new(instance.unwrap_or_else(|| self.instance.id().get(store)));
-        let ty = &cx.types[self.ty_index(store)];
+        let ty = &cx.types[self.ty];
 
         Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
             .context("type mismatch with parameters")?;
@@ -184,14 +240,7 @@ impl Func {
 
     fn ty_(&self, store: &StoreOpaque) -> ComponentFunc {
         let cx = InstanceType::new(self.instance.id().get(store));
-        let ty = self.ty_index(store);
-        ComponentFunc::from(ty, &cx)
-    }
-
-    fn ty_index(&self, store: &StoreOpaque) -> TypeFuncIndex {
-        let instance = self.instance.id().get(store);
-        let (ty, _, _) = instance.component().export_lifted_function(self.index);
-        ty
+        ComponentFunc::from(self.ty, &cx)
     }
 
     /// Invokes this function with the `params` given and returns the result.
@@ -313,7 +362,7 @@ impl Func {
 
         self.check_params_results(store.as_context_mut(), params, results)?;
 
-        if self.abi_async(store.0) {
+        if self.abi_async() {
             unreachable!(
                 "async-lifted exports should have failed validation \
                  when `component-model-async` feature disabled"
@@ -361,31 +410,20 @@ impl Func {
         self.post_return_impl(store, post_return_arg)
     }
 
-    pub(crate) fn lifted_core_func(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
-        let def = {
-            let instance = self.instance.id().get(store);
-            let (_ty, def, _options) = instance.component().export_lifted_function(self.index);
-            def.clone()
-        };
-        match self.instance.lookup_vmdef(store, &def) {
-            Export::Function(f) => f.vm_func_ref(store),
-            _ => unreachable!(),
-        }
+    #[inline]
+    pub(crate) fn lifted_core_func(&self, store: &StoreOpaque) -> NonNull<VMFuncRef> {
+        self.instance.id().assert_belongs_to(store.id());
+        self.unsafe_func_ref.as_non_null()
     }
 
+    #[inline]
     pub(crate) fn post_return_core_func(&self, store: &StoreOpaque) -> Option<NonNull<VMFuncRef>> {
-        let instance = self.instance.id().get(store);
-        let component = instance.component();
-        let (_ty, _def, options) = component.export_lifted_function(self.index);
-        let post_return = component.env_component().options[options].post_return;
-        post_return.map(|i| instance.runtime_post_return(i))
+        self.instance.id().assert_belongs_to(store.id());
+        self.post_return_func_ref.map(|p| p.as_non_null())
     }
 
-    pub(crate) fn abi_async(&self, store: &StoreOpaque) -> bool {
-        let instance = self.instance.id().get(store);
-        let component = instance.component();
-        let (_ty, _def, options) = component.export_lifted_function(self.index);
-        component.env_component().options[options].async_
+    pub(crate) fn abi_async(&self) -> bool {
+        self.abi_async
     }
 
     pub(crate) fn abi_info<'a>(
@@ -398,13 +436,11 @@ impl Func {
         &'a CanonicalOptions,
     ) {
         let vminstance = self.instance.id().get(store);
-        let component = vminstance.component();
-        let (ty, _def, options_index) = component.export_lifted_function(self.index);
-        let raw_options = &component.env_component().options[options_index];
+        let raw_options = &vminstance.component().env_component().options[self.options];
         (
-            options_index,
+            self.options,
             vminstance.instance_flags(raw_options.instance),
-            ty,
+            self.ty,
             raw_options,
         )
     }
@@ -446,7 +482,7 @@ impl Func {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
-        let async_type = self.abi_async(store.0);
+        let async_type = self.abi_async();
         store.0.enter_guest_sync_call(None, async_type, instance)?;
 
         #[repr(C)]
@@ -550,12 +586,11 @@ impl Func {
     pub(crate) fn post_return_impl(&self, mut store: impl AsContextMut, arg: ValRaw) -> Result<()> {
         let mut store = store.as_context_mut();
 
-        let index = self.index;
         let vminstance = self.instance.id().get(store.0);
         let component = vminstance.component();
-        let (_ty, _def, options) = component.export_lifted_function(index);
         let post_return = self.post_return_core_func(store.0);
-        let flags = vminstance.instance_flags(component.env_component().options[options].instance);
+        let flags =
+            vminstance.instance_flags(component.env_component().options[self.options].instance);
 
         unsafe {
             call_post_return(&mut store, post_return, arg, flags)?;
