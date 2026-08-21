@@ -6,7 +6,16 @@ use cranelift_module::{ModuleError, ModuleReloc, ModuleRelocTarget, ModuleResult
 use crate::JITMemoryProvider;
 use crate::memory::JITMemoryKind;
 
-const VENEER_SIZE: usize = 24; // ldr + br + pointer
+/// Size reserved per veneer. This is exactly the size of the largest veneer:
+/// 16 bytes on AArch64 (`ldr` + `br` + 8-byte target address). The x86_64
+/// veneer is 14 bytes (`jmp qword ptr [rip]` + 8-byte target address).
+///
+/// Veneers are placed directly after the compiled code, followed by the GOT
+/// entries: `[code][veneers][GOT entries]`.
+const VENEER_SIZE: usize = 16;
+
+/// Size of a GOT entry: the absolute 8-byte address of a symbol.
+const GOT_ENTRY_SIZE: usize = 8;
 
 /// Reads a 32bit instruction at `iptr`, and writes it again after
 /// being altered by `modifier`
@@ -22,6 +31,7 @@ pub(crate) struct CompiledBlob {
     size: usize,
     relocs: Vec<ModuleReloc>,
     veneer_count: usize,
+    got_count: usize,
     #[cfg(feature = "wasmtime-unwinder")]
     wasmtime_exception_data: Option<Vec<u8>>,
 }
@@ -37,17 +47,28 @@ impl CompiledBlob {
         #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
         kind: JITMemoryKind,
     ) -> ModuleResult<Self> {
-        // Reserve veneers for all function calls just in case
+        // Reserve a worst-case veneer slot for every branch relocation and a
+        // GOT entry for every GOT-relative load in case its target is out of
+        // range.
         let mut veneer_count = 0;
+        let mut got_count = 0;
         for reloc in &relocs {
             match reloc.kind {
-                Reloc::Arm64Call => veneer_count += 1,
+                Reloc::Arm64Call | Reloc::X86CallPCRel4 | Reloc::X86CallPLTRel4 => {
+                    veneer_count += 1
+                }
+                Reloc::X86GOTPCRel4 => got_count += 1,
                 _ => {}
             }
         }
 
+        let mut alloc_size = data.len() + veneer_count * VENEER_SIZE;
+        if got_count > 0 {
+            alloc_size = alloc_size.next_multiple_of(GOT_ENTRY_SIZE) + got_count * GOT_ENTRY_SIZE;
+        }
+
         let ptr = memory
-            .allocate(data.len() + veneer_count * VENEER_SIZE, align, kind)
+            .allocate(alloc_size, align, kind)
             .map_err(|e| ModuleError::Allocation { err: e })?;
 
         unsafe {
@@ -59,6 +80,7 @@ impl CompiledBlob {
             size: data.len(),
             relocs,
             veneer_count,
+            got_count,
             #[cfg(feature = "wasmtime-unwinder")]
             wasmtime_exception_data,
         })
@@ -83,6 +105,7 @@ impl CompiledBlob {
             size,
             relocs,
             veneer_count: 0,
+            got_count: 0,
             #[cfg(feature = "wasmtime-unwinder")]
             wasmtime_exception_data,
         })
@@ -101,6 +124,12 @@ impl CompiledBlob {
         self.wasmtime_exception_data.as_deref()
     }
 
+    /// Offset of the GOT entries within the allocation: after the code and
+    /// the veneers, aligned to the entry size.
+    fn got_offset(&self) -> usize {
+        (self.size + self.veneer_count * VENEER_SIZE).next_multiple_of(GOT_ENTRY_SIZE)
+    }
+
     pub(crate) fn perform_relocations(
         &self,
         get_address: impl Fn(&ModuleRelocTarget) -> *const u8,
@@ -108,6 +137,7 @@ impl CompiledBlob {
         use std::ptr::write_unaligned;
 
         let mut next_veneer_idx = 0;
+        let mut next_got_idx = 0;
         let relocation_target_addr = |name: &ModuleRelocTarget, addend: Addend| {
             let addend = isize::try_from(addend).unwrap();
             get_address(name)
@@ -137,16 +167,88 @@ impl CompiledBlob {
                     let what = relocation_target_addr(name, addend);
                     unsafe { write_unaligned(at as *mut u64, u64::try_from(what).unwrap()) };
                 }
-                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
+                Reloc::X86PCRel4 => {
                     let what = relocation_target_addr(name, addend);
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
-                Reloc::X86GOTPCRel4 => {
-                    panic!("GOT relocation shouldn't be generated when !is_pic");
+                Reloc::X86CallPCRel4 | Reloc::X86CallPLTRel4 => {
+                    // These relocations are applied to the 32-bit displacement of a `call`
+                    // or `jmp` instruction, which is relative to the end of the
+                    // instruction, i.e. 4 bytes past `at`. The addend (always -4 as
+                    // emitted by the x64 backend) accounts for this, so the instruction
+                    // transfers control to `what + 4`. The PLT form additionally permits
+                    // resolution through a stub, which the veneer below provides.
+                    let what = relocation_target_addr(name, addend);
+                    if let Ok(pcrel) = i32::try_from((what as isize) - (at as isize)) {
+                        unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    } else {
+                        // The target is out of range for the 32-bit displacement, so
+                        // redirect the call through a veneer at the end of the function,
+                        // just like for `Arm64Call` below: `jmp qword ptr [rip]` followed
+                        // by the absolute target address.
+                        let veneer_idx = next_veneer_idx;
+                        next_veneer_idx += 1;
+                        assert!(veneer_idx < self.veneer_count);
+                        let veneer =
+                            unsafe { self.ptr.byte_add(self.size + veneer_idx * VENEER_SIZE) };
+
+                        let target = u64::try_from(what.checked_add(4).unwrap()).unwrap();
+                        unsafe {
+                            ptr::copy_nonoverlapping([0xff, 0x25, 0, 0, 0, 0].as_ptr(), veneer, 6);
+                            write_unaligned(veneer.byte_add(6).cast::<u64>(), target);
+                        }
+
+                        // Point the original instruction at the veneer instead; the
+                        // displacement is again relative to the end of the 4-byte field.
+                        let pcrel = i32::try_from((veneer as isize) - (at as isize) - 4).unwrap();
+                        unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    }
                 }
-                Reloc::X86CallPLTRel4 => {
-                    panic!("PLT relocation shouldn't be generated when !is_pic");
+                Reloc::X86GOTPCRel4 => {
+                    // This relocation is applied to the 32-bit displacement of a
+                    // `mov reg, qword ptr [rip + disp]` instruction that loads the
+                    // address of a symbol from its GOT entry. The addend (always -4 as
+                    // emitted by the x64 backend) accounts for the displacement being
+                    // relative to the end of the instruction, and any symbol offset is
+                    // added by a separately emitted instruction, so the GOT entry holds
+                    // the address of the symbol itself: `what + 4`.
+                    let what = relocation_target_addr(name, addend);
+                    let symbol_addr = u64::try_from(what.checked_add(4).unwrap()).unwrap();
+
+                    // If the symbol is within displacement range, relax the load to a
+                    // `lea` computing its address directly, the same way linkers relax
+                    // `R_X86_64_REX_GOTPCRELX`. The instruction is expected to be a REX
+                    // prefix, the `mov` opcode 0x8b, and a ModRM byte with mod=0b00 and
+                    // r/m=0b101 (RIP-relative); only rewrite it if it matches.
+                    let insn = (offset >= 3)
+                        .then(|| unsafe { at.cast_const().sub(3).cast::<[u8; 3]>().read() });
+                    let is_rip_relative_mov = insn.is_some_and(
+                        |insn| matches!(insn, [0x48..=0x4f, 0x8b, modrm] if modrm & 0xc7 == 0x05),
+                    );
+                    let direct_pcrel = i32::try_from((what as isize) - (at as isize));
+                    match (is_rip_relative_mov, direct_pcrel) {
+                        (true, Ok(pcrel)) => unsafe {
+                            at.sub(2).write(0x8d); // mov -> lea
+                            write_unaligned(at as *mut i32, pcrel);
+                        },
+                        _ => {
+                            // Resolve through a GOT entry at the end of the allocation,
+                            // which is always in range of the load.
+                            let got_idx = next_got_idx;
+                            next_got_idx += 1;
+                            assert!(got_idx < self.got_count);
+                            let entry = unsafe {
+                                self.ptr
+                                    .byte_add(self.got_offset() + got_idx * GOT_ENTRY_SIZE)
+                            };
+                            unsafe { write_unaligned(entry.cast::<u64>(), symbol_addr) };
+
+                            let pcrel =
+                                i32::try_from((entry as isize) - (at as isize) - 4).unwrap();
+                            unsafe { write_unaligned(at as *mut i32, pcrel) };
+                        }
+                    }
                 }
                 Reloc::S390xPCRel32Dbl | Reloc::S390xPLTRel32Dbl => {
                     let what = relocation_target_addr(name, addend);
@@ -176,7 +278,7 @@ impl CompiledBlob {
                         // end of the function.
                         let veneer_idx = next_veneer_idx;
                         next_veneer_idx += 1;
-                        assert!(veneer_idx <= self.veneer_count);
+                        assert!(veneer_idx < self.veneer_count);
                         let veneer =
                             unsafe { self.ptr.byte_add(self.size + veneer_idx * VENEER_SIZE) };
 

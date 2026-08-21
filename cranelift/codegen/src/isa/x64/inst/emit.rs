@@ -1419,9 +1419,16 @@ pub(crate) fn emit(
                 // If we know the distance to the name is within 2GB (e.g., a
                 // module-local function), we can generate a RIP-relative
                 // address, with a relocation.
+                //
+                // Note that this is `X86PCRel4` rather than `X86CallPCRel4`:
+                // the latter is reserved for the displacement of `call`/`jmp`
+                // instructions, which relocation consumers (e.g.
+                // `cranelift-jit`) may redirect through a veneer if the target
+                // turns out to be out of range. This `lea` computes the address
+                // of the symbol itself, so no such redirection is possible.
                 asm::inst::leaq_rm::new(*dst, riprel).emit(sink, info, state);
                 let cur = sink.cur_offset();
-                sink.add_reloc_at_offset(cur - 4, Reloc::X86CallPCRel4, name, *offset - 4);
+                sink.add_reloc_at_offset(cur - 4, Reloc::X86PCRel4, name, *offset - 4);
             } else {
                 // The full address can be encoded in the register, with a
                 // relocation.
