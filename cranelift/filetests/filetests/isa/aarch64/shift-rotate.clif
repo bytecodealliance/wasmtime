@@ -763,3 +763,42 @@ block0(v0: i64):
 ;   sbfx x3, x0, #8, #0x2c
 ;   add x0, x3, x0, lsl #12
 ;   ret
+
+function %f33(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i32 48
+  v2 = ishl.i64 v0, v1
+  v3 = iconst.i32 54
+  v4 = ushr.i64 v2, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   ubfm x0, x0, #6, #15
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ubfx x0, x0, #6, #0xa
+;   ret
+
+function %f34(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i32 48
+  v2 = ishl.i64 v0, v1
+  v3 = iconst.i32 32
+  v4 = ushr.i64 v2, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   ubfm x0, x0, #48, #15
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ubfiz x0, x0, #0x10, #0x10
+;   ret
+

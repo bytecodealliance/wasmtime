@@ -1704,6 +1704,9 @@
 (rule sbfm 1 (lower
   (sshr (ty_32_or_64 ty) (ishl _ x (u64_from_iconst a)) (u64_from_iconst b)))
   (bitfield_move ty (BfmOp.SBfm) x (sbfm_immr ty a b) (sbfm_imms ty a b)))
+(rule ubfm 1 (lower
+  (ushr (ty_32_or_64 ty) (ishl _ x (u64_from_iconst a)) (u64_from_iconst b)))
+  (bitfield_move ty (BfmOp.UBfm) x (sbfm_immr ty a b) (sbfm_imms ty a b)))
 
 ;; Helper methods for constructing the correct `immr` and `imms` immediates.
 (decl sbfm_immr (Type u64 u64) UImm6)
