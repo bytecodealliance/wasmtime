@@ -252,7 +252,10 @@ where
                             WasmHeapType::Func => {
                                 self.masm.store_ptr(*reg, addr)?;
                             }
-                            WasmHeapType::Extern => {
+                            WasmHeapType::Extern
+                            | WasmHeapType::Exn
+                            | WasmHeapType::ConcreteExn(_)
+                            | WasmHeapType::NoExn => {
                                 self.masm.store((*reg).into(), addr, (*ty).try_into()?)?;
                             }
                             _ => bail!(CodeGenError::unsupported_wasm_type()),

@@ -197,6 +197,11 @@ fn spec_test_config(test: &Path) -> TestConfig {
             {
                 ret.gc = Some(true);
             }
+            if test_name == "throw_ref.wast" {
+                // This test only uses exception references, which do not
+                // require enabling the GC proposal.
+                ret.gc = Some(false);
+            }
             if test_name.contains("return_") || test_name.contains("try_table") {
                 ret.tail_call = Some(true);
             }

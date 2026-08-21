@@ -1671,9 +1671,11 @@ where
         match slot.ty {
             I32 | I64 | F32 | F64 | V128 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func | WasmHeapType::Extern => {
-                    context.stack.push(Val::local(index, slot.ty))
-                }
+                WasmHeapType::Func
+                | WasmHeapType::Extern
+                | WasmHeapType::Exn
+                | WasmHeapType::ConcreteExn(_)
+                | WasmHeapType::NoExn => context.stack.push(Val::local(index, slot.ty)),
                 _ => bail!(CodeGenError::unsupported_wasm_type()),
             },
         }
@@ -1860,12 +1862,15 @@ where
         let mut catches = Vec::with_capacity(try_table.catches.len());
 
         for catch in try_table.catches.iter().rev() {
-            let (tag, target_depth) = match catch {
-                wasmparser::Catch::One { tag, label } => (Some(TagIndex::from_u32(*tag)), *label),
-                wasmparser::Catch::All { label } => (None, *label),
-                wasmparser::Catch::OneRef { .. } | wasmparser::Catch::AllRef { .. } => {
-                    bail!(CodeGenError::unimplemented_wasm_instruction())
+            let (is_ref, tag, target_depth) = match catch {
+                wasmparser::Catch::One { tag, label } => {
+                    (false, Some(TagIndex::from_u32(*tag)), *label)
                 }
+                wasmparser::Catch::OneRef { tag, label } => {
+                    (true, Some(TagIndex::from_u32(*tag)), *label)
+                }
+                wasmparser::Catch::All { label } => (false, None, *label),
+                wasmparser::Catch::AllRef { label } => (true, None, *label),
             };
 
             let landing_pad = self.masm.get_label()?;
@@ -1879,6 +1884,7 @@ where
                 .add_handler(exception_tag, landing_pad);
 
             catches.push(CatchInfo {
+                is_ref,
                 tag,
                 target_depth,
                 landing_pad,
@@ -2224,8 +2230,8 @@ where
     }
 
     fn visit_ref_null(&mut self, hty: HeapType) -> Self::Output {
-        match hty {
-            HeapType::FUNC => {
+        match self.env.convert_heap_type(hty)? {
+            WasmHeapType::Func => {
                 let ptr_type = self.env.ptr_type();
                 match ptr_type {
                     WasmValType::I64 => self.context.stack.push(Val::i64(0)),
@@ -2234,7 +2240,10 @@ where
                 }
                 Ok(())
             }
-            HeapType::EXTERN => {
+            WasmHeapType::Extern
+            | WasmHeapType::Exn
+            | WasmHeapType::ConcreteExn(_)
+            | WasmHeapType::NoExn => {
                 self.context.stack.push(Val::i32(0));
                 Ok(())
             }
@@ -4728,7 +4737,10 @@ impl TryFrom<WasmValType> for OperandSize {
                     // to be updated in such a way that the calculation of the
                     // OperandSize will depend on the target's  pointer size.
                     WasmHeapType::Func => OperandSize::S64,
-                    WasmHeapType::Extern => OperandSize::S32,
+                    WasmHeapType::Extern
+                    | WasmHeapType::Exn
+                    | WasmHeapType::ConcreteExn(_)
+                    | WasmHeapType::NoExn => OperandSize::S32,
                     _ => bail!(CodeGenError::unsupported_wasm_type()),
                 }
             }

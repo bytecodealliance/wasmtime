@@ -11,7 +11,8 @@ use cranelift_codegen::{MachExceptionHandler, MachLabel, ir::ExceptionTag};
 use smallvec::SmallVec;
 use wasmtime_environ::{
     Collector, GcStructLayout, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TagIndex, VMGcKind,
-    WasmExnType, WasmHeapType, WasmStorageType, WasmValType, packed_option::ReservedValue,
+    WasmExnType, WasmHeapType, WasmRefType, WasmStorageType, WasmValType,
+    packed_option::ReservedValue,
 };
 use wasmtime_environ::{WasmCompositeInnerType, copying::InlineTraceInfo};
 
@@ -27,6 +28,7 @@ pub(crate) struct HandlerStateCheckpoint(usize);
 
 #[derive(Debug)]
 pub(crate) struct CatchInfo {
+    pub(crate) is_ref: bool,
     pub(crate) tag: Option<TagIndex>,
     pub(crate) target_depth: u32,
     pub(crate) landing_pad: MachLabel,
@@ -116,8 +118,24 @@ where
             self.context.truncate_stack_to(stack_state.base_len)?;
             self.context.load_vmctx(self.masm)?;
 
+            let mut exception_reg = None;
             if let Some(tag) = catch.tag {
-                self.emit_load_exception_payload_fields(tag, raw_exception_reg)?;
+                exception_reg =
+                    self.emit_load_exception_payload_fields(tag, raw_exception_reg, catch.is_ref)?;
+            }
+            if catch.is_ref {
+                // The runtime exposes the pending exception to Wasm before
+                // entering the landing pad. Append that reference after any
+                // tagged payload fields, as required by the reference catches.
+                let reg = match exception_reg {
+                    Some(reg) => reg,
+                    None => self.context.reg(raw_exception_reg, self.masm)?,
+                };
+                let ty = WasmValType::Ref(WasmRefType {
+                    nullable: false,
+                    heap_type: WasmHeapType::Exn,
+                });
+                self.context.stack.push(TypedReg::new(ty, reg).into());
             }
             self.emit_catch_branch(catch.target_depth)?;
         }
@@ -146,12 +164,19 @@ where
             })
     }
 
+    /// Loads a tagged exception's payload fields.
+    ///
+    /// When `preserve_exception` is true, the exception reference is kept live
+    /// across any calls made while loading the payload and returned to the
+    /// caller. Otherwise its register is released after computing the object
+    /// address.
     fn emit_load_exception_payload_fields(
         &mut self,
         tag_index: TagIndex,
         raw_exception_reg: Reg,
-    ) -> Result<()> {
-        let exception_reg = self.context.reg(raw_exception_reg, self.masm)?;
+        preserve_exception: bool,
+    ) -> Result<Option<Reg>> {
+        let mut exception_reg = self.context.reg(raw_exception_reg, self.masm)?;
         let interned = self.env.translation.module.tags[tag_index]
             .exception
             .unwrap_module_type_index();
@@ -182,7 +207,9 @@ where
 
         let mut object_addr = self.emit_gc_ref_addr(exception_reg, heap_base)?;
         self.context.free_reg(heap_base);
-        self.context.free_reg(exception_reg);
+        if !preserve_exception {
+            self.context.free_reg(exception_reg);
+        }
         for (field_ty, field_offset) in fields {
             let ty = match field_ty {
                 WasmStorageType::Val(ty @ WasmValType::Ref(r))
@@ -194,9 +221,18 @@ where
                         .load(addr, writable!(func_ref_id), OperandSize::S32)?;
 
                     // The builtin call can clobber allocated registers. Preserve
-                    // the object address beneath the call's arguments so later
-                    // payload fields can still be loaded.
+                    // the object address, and the exception when requested,
+                    // beneath the call's arguments.
                     self.context.stack.push(TypedReg::i64(object_addr).into());
+                    if preserve_exception {
+                        let ty = WasmValType::Ref(WasmRefType {
+                            nullable: false,
+                            heap_type: WasmHeapType::Exn,
+                        });
+                        self.context
+                            .stack
+                            .push(TypedReg::new(ty, exception_reg).into());
+                    }
                     self.context.stack.push(TypedReg::i32(func_ref_id).into());
                     self.context.stack.push(Val::i32(
                         ModuleInternedTypeIndex::reserved_value()
@@ -213,6 +249,9 @@ where
                     )?;
 
                     let func_ref = self.context.pop_to_reg(self.masm, None)?;
+                    if preserve_exception {
+                        exception_reg = self.context.pop_to_reg(self.masm, None)?.reg;
+                    }
                     object_addr = self.context.pop_to_reg(self.masm, None)?.reg;
                     self.context
                         .stack
@@ -225,13 +264,25 @@ where
                     let addr = self.masm.address_at_reg(object_addr, field_offset)?;
                     if gc_codegen_config.collector() == Collector::DeferredReferenceCounting {
                         // The DRC read barrier can make an out-of-line call.
-                        // Preserve the object address across the call so later
-                        // payload fields can still be loaded.
+                        // Preserve the object address, and the exception when
+                        // requested, across the call.
                         let gc_ref = self.context.reg_for_type(ty, self.masm)?;
                         self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
                         self.context.stack.push(TypedReg::i64(object_addr).into());
+                        if preserve_exception {
+                            let ty = WasmValType::Ref(WasmRefType {
+                                nullable: false,
+                                heap_type: WasmHeapType::Exn,
+                            });
+                            self.context
+                                .stack
+                                .push(TypedReg::new(ty, exception_reg).into());
+                        }
                         self.emit_drc_read_barrier(ty, gc_ref)?;
                         let payload = self.context.pop_to_reg(self.masm, None)?;
+                        if preserve_exception {
+                            exception_reg = self.context.pop_to_reg(self.masm, None)?.reg;
+                        }
                         object_addr = self.context.pop_to_reg(self.masm, None)?.reg;
                         self.context.stack.push(payload.into());
                     } else {
@@ -259,7 +310,7 @@ where
         }
 
         self.context.free_reg(object_addr);
-        Ok(())
+        Ok(preserve_exception.then_some(exception_reg))
     }
 
     /// Allocates an exception and initializes its tag identity.

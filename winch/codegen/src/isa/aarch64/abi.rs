@@ -131,7 +131,10 @@ impl ABI for Aarch64ABI {
         Ok(match ty {
             WasmValType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => Self::word_bytes(),
-                WasmHeapType::Extern => Self::word_bytes() / 2,
+                WasmHeapType::Extern
+                | WasmHeapType::Exn
+                | WasmHeapType::ConcreteExn(_)
+                | WasmHeapType::NoExn => Self::word_bytes() / 2,
                 ht => bail!("{}: {ht}", CodeGenError::unsupported_wasm_type()),
             },
             WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),
@@ -222,6 +225,7 @@ mod tests {
             Aarch64ABI::word_bytes()
         );
         assert_eq!(Aarch64ABI::sizeof(&ty(WasmHeapType::Extern))?, 4);
+        assert_eq!(Aarch64ABI::sizeof(&ty(WasmHeapType::Exn))?, 4);
         Ok(())
     }
 
