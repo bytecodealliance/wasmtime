@@ -488,6 +488,27 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rt);
             collector.reg_use(rn);
         }
+        Inst::AtomicCAS128 { args } => {
+            let AtomicCAS128Args {
+                rd_lo,
+                rd_hi,
+                rs_lo,
+                rs_hi,
+                rt_lo,
+                rt_hi,
+                rn,
+                flags: _,
+            } = &mut **args;
+            // `casp` requires two consecutive even-aligned register pairs,
+            // which regalloc2 cannot express, so pin everything down.
+            collector.reg_fixed_use(rs_lo, xreg(24));
+            collector.reg_fixed_use(rs_hi, xreg(25));
+            collector.reg_fixed_def(rd_lo, xreg(24));
+            collector.reg_fixed_def(rd_hi, xreg(25));
+            collector.reg_fixed_use(rt_lo, xreg(26));
+            collector.reg_fixed_use(rt_hi, xreg(27));
+            collector.reg_fixed_use(rn, xreg(28));
+        }
         Inst::AtomicCASLoop {
             addr,
             expected,
@@ -1627,6 +1648,28 @@ impl Inst {
                 let rn = pretty_print_ireg(rn, OperandSize::Size64);
 
                 format!("{op} {rd}, {rs}, {rt}, [{rn}]")
+            }
+            Inst::AtomicCAS128 { args } => {
+                let &AtomicCAS128Args {
+                    rd_lo,
+                    rd_hi,
+                    rs_lo,
+                    rs_hi,
+                    rt_lo,
+                    rt_hi,
+                    rn,
+                    flags: _,
+                } = &**args;
+                let size = OperandSize::Size64;
+                let rd_lo = pretty_print_ireg(rd_lo.to_reg(), size);
+                let rd_hi = pretty_print_ireg(rd_hi.to_reg(), size);
+                let rs_lo = pretty_print_ireg(rs_lo, size);
+                let rs_hi = pretty_print_ireg(rs_hi, size);
+                let rt_lo = pretty_print_ireg(rt_lo, size);
+                let rt_hi = pretty_print_ireg(rt_hi, size);
+                let rn = pretty_print_ireg(rn, size);
+
+                format!("caspal {rd_lo}, {rd_hi}, {rs_lo}, {rs_hi}, {rt_lo}, {rt_hi}, [{rn}]")
             }
             &Inst::AtomicCASLoop {
                 ty,
