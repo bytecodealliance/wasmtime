@@ -310,35 +310,48 @@ impl dsl::Format {
         // Figure out, according to table 2-34 and 2-35 in the Intel manual,
         // what the scaling factor is for 8-bit displacements to pass through to
         // encoding.
-        let evex_scaling = Some(match evex.tuple_type {
-            dsl::TupleType::Full => {
-                assert!(!bcast);
-                length_bytes
-            }
-            dsl::TupleType::Half => {
-                assert!(!bcast);
-                length_bytes / 2
-            }
-            dsl::TupleType::FullMem => length_bytes,
-            // FIXME: according to table 2-35 this needs to take into account
-            // "InputSize" which isn't accounted for in our `Evex` structure at
-            // this time.
-            dsl::TupleType::Tuple1Scalar => unimplemented!(),
-            dsl::TupleType::Tuple1Fixed => unimplemented!(),
-            dsl::TupleType::Tuple2 => unimplemented!(),
-            dsl::TupleType::Tuple4 => unimplemented!(),
-            dsl::TupleType::Tuple8 => 32,
-            dsl::TupleType::HalfMem => length_bytes / 2,
-            dsl::TupleType::QuarterMem => length_bytes / 4,
-            dsl::TupleType::EigthMem => length_bytes / 8,
-            dsl::TupleType::Mem128 => 16,
-            dsl::TupleType::Movddup => match evex.length {
-                dsl::Length::LZ | dsl::Length::LIG => unimplemented!(),
-                dsl::Length::L128 => 8,
-                dsl::Length::L256 => 32,
-                dsl::Length::L512 => 64,
-            },
-        });
+        //
+        // The compressed-displacement scheme of section 2.7.5 only applies to
+        // the vector EVEX encodings. APX promotes legacy general-purpose-
+        // register instructions into extended-EVEX "map 4", and those keep
+        // legacy displacement semantics: `disp8` is a plain byte offset rather
+        // than a multiple of a tuple-derived scaling factor `N`. Scaling them
+        // would emit an offset wrong by a factor of `N`. Note this is specific
+        // to the legacy-GPR class; promoted vector instructions and APX-extended
+        // AVX-512 instructions still use compressed displacements.
+        let evex_scaling = if matches!(evex.apx, Some(dsl::ApxClass::LegacyGpr)) {
+            None
+        } else {
+            Some(match evex.tuple_type {
+                dsl::TupleType::Full => {
+                    assert!(!bcast);
+                    length_bytes
+                }
+                dsl::TupleType::Half => {
+                    assert!(!bcast);
+                    length_bytes / 2
+                }
+                dsl::TupleType::FullMem => length_bytes,
+                // FIXME: according to table 2-35 this needs to take into account
+                // "InputSize" which isn't accounted for in our `Evex` structure at
+                // this time.
+                dsl::TupleType::Tuple1Scalar => unimplemented!(),
+                dsl::TupleType::Tuple1Fixed => unimplemented!(),
+                dsl::TupleType::Tuple2 => unimplemented!(),
+                dsl::TupleType::Tuple4 => unimplemented!(),
+                dsl::TupleType::Tuple8 => 32,
+                dsl::TupleType::HalfMem => length_bytes / 2,
+                dsl::TupleType::QuarterMem => length_bytes / 4,
+                dsl::TupleType::EigthMem => length_bytes / 8,
+                dsl::TupleType::Mem128 => 16,
+                dsl::TupleType::Movddup => match evex.length {
+                    dsl::Length::LZ | dsl::Length::LIG => unimplemented!(),
+                    dsl::Length::L128 => 8,
+                    dsl::Length::L256 => 32,
+                    dsl::Length::L512 => 64,
+                },
+            })
+        };
 
         self.generate_vex_or_evex_prefix(f, "EvexPrefix", &bits, is4, evex_scaling, two_op, three_op, || {
             evex.unwrap_digit()
