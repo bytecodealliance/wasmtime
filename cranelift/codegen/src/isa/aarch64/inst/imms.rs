@@ -547,11 +547,26 @@ pub struct ImmShift {
 impl ImmShift {
     /// Create an ImmShift from raw bits, if possible.
     pub fn maybe_from_u64(val: u64) -> Option<ImmShift> {
-        if val < 64 {
-            Some(ImmShift { imm: val as u8 })
-        } else {
-            None
-        }
+        (val < 64).then_some(ImmShift { imm: val as u8 })
+    }
+
+    /// Get the immediate value.
+    pub fn value(&self) -> u8 {
+        self.imm
+    }
+}
+
+/// A 6-bit immediate used by the `immr` and `imms` fields of bitfield move instructions.
+#[derive(Copy, Clone, Debug)]
+pub struct UImm6 {
+    /// 6-bit immediate.
+    pub imm: u8,
+}
+
+impl UImm6 {
+    /// Create a UImm6 from raw bits, if possible.
+    pub fn maybe_from_u8(val: u8) -> Option<UImm6> {
+        (val < 64).then_some(UImm6 { imm: val })
     }
 
     /// Get the immediate value.
@@ -910,6 +925,12 @@ impl PrettyPrint for ImmLogic {
 }
 
 impl PrettyPrint for ImmShift {
+    fn pretty_print(&self, _: u8) -> String {
+        format!("#{}", self.imm)
+    }
+}
+
+impl PrettyPrint for UImm6 {
     fn pretty_print(&self, _: u8) -> String {
         format!("#{}", self.imm)
     }

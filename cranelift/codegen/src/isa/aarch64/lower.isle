@@ -1699,6 +1699,12 @@
 (rule sshr_64 (lower (sshr $I64 x y))
       (do_shift (ALUOp.Asr) $I64 (put_in_reg_sext64 x) y))
 
+;; Specialized lowerings to generate the `sbfm` instruction.
+(rule sbfm 1 (lower
+  (sshr $I64 (ishl $I64 x (u8_from_iconst a)) (u8_from_iconst b)))
+  (if-let true (u8_lt_eq a b))
+  (bitfield_move $I64 (BfmOp.SBfm) x (u8_sub b a) (u8_sub 63 a)))
+
 ;; Shift for i128.
 (rule (lower (sshr $I128 x y))
       (lower_sshr128 x (value_regs_get y 0)))

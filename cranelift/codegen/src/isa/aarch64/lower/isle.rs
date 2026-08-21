@@ -9,7 +9,7 @@ use super::{
     ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
     FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, MachLabel, MemLabel,
     MoveWideConst, MoveWideOp, NZCV, Opcode, OperandSize, Reg, SImm9, ScalarSize, ShiftOpAndAmt,
-    UImm5, UImm12Scaled, VecMisc2, VectorSize, fp_reg, lower_condcode, stack_reg,
+    UImm5, UImm6, UImm12Scaled, VecMisc2, VectorSize, fp_reg, lower_condcode, stack_reg,
     writable_link_reg, writable_zero_reg, zero_reg,
 };
 use crate::ir::{ArgumentExtension, condcodes};
@@ -239,6 +239,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     fn imm_shift_from_u8(&mut self, n: u8) -> ImmShift {
         ImmShift::maybe_from_u64(n.into()).unwrap()
+    }
+
+    fn uimm6_from_u8(&mut self, n: u8) -> UImm6 {
+        UImm6::maybe_from_u8(n.into()).unwrap()
     }
 
     fn lshr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {

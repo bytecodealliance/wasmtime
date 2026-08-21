@@ -666,3 +666,21 @@ block0(v0: i64):
 ;   lsl x0, x0, #0x11
 ;   ret
 
+function %f28(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i32 32
+  v2 = ishl.i64 v0, v1
+  v3 = iconst.i32 52
+  v4 = sshr.i64 v2, v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   sbfm x0, x0, #20, #31
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sbfx x0, x0, #0x14, #0xc
+;   ret
