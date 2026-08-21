@@ -13,7 +13,18 @@
 //! 0xAfe0 +-----------------------+
 //!        | args buffer, size:    |
 //!        | (16 * args_capacity)  |
-//! 0xAfc0 +-----------------------+   <- below: beginning of usable stack space
+//! 0xAfc0 +-----------------------+
+//!        | optional GC-reference |
+//!        | markers (16B-aligned) |
+//! 0xAfb0 +-----------------------+   <- RSP after consuming the launch record
+//!        | func_ref              |
+//! 0xAfa8 +-----------------------+
+//!        | caller_vmctx          |
+//! 0xAfa0 +-----------------------+
+//!        | args descriptor ptr   |
+//! 0xAf98 +-----------------------+
+//!        | return value count    |
+//! 0xAf90 +-----------------------+   <- initial RSP; consumable launch record
 //!        |                       |      (16-byte aligned)
 //!        |                       |
 //!        ~        ...            ~   <- actual native stack space to use
@@ -57,6 +68,15 @@
 //! the args buffer is args_capacity * 16 bytes. The start address (0xAfc0 in
 //! the example above, thus assuming args_capacity = 2) is saved as the `data`
 //! field of the VMContRef's `args` object.
+//!
+//! The example above assumes `args_capacity = 2` and that GC-reference marker
+//! storage is present. The argument and marker buffers are persistent launch
+//! storage: they remain above RSP while the continuation executes. The four
+//! words below them form a consumable launch record. The
+//! `wasmtime_continuation_start` trampoline begins with RSP at 0xAf90 and pops
+//! those words; afterwards RSP is 0xAfb0, immediately below the persistent
+//! buffers. Calls and stack frames then grow towards lower addresses, reusing
+//! the consumed launch record without overwriting the buffers.
 
 use core::ptr::NonNull;
 use std::io;
@@ -64,7 +84,7 @@ use std::ops::Range;
 use std::ptr;
 
 use crate::prelude::*;
-use crate::runtime::vm::stack_switching::VMHostArray;
+use crate::runtime::vm::stack_switching::{VMHostArray, VMPayloads};
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -191,14 +211,17 @@ impl VMContinuationStack {
     ///
     /// Concretely, switching to the stack prepared by this function
     /// causes that we enter `wasmtime_continuation_start`, which then in turn
-    /// calls `fiber_start` with  the following arguments:
-    /// TOS, func_ref, caller_vmctx, args_ptr, args_capacity
+    /// calls `fiber_start` with the following arguments:
+    /// func_ref, caller_vmctx, args_ptr, return_value_count
     ///
-    /// Note that at this point we also allocate the args buffer
-    /// (see picture at the top of this file).
+    /// Note that at this point we also allocate persistent launch storage for
+    /// the args buffer and, when `GC_REFS` is true, its parallel
+    /// GC-reference-marker buffer (see picture at the top of this file).
     /// We define `args_capacity` as the max of parameter and return value count.
-    /// Then the size s of the actual buffer size is calculated as follows:
-    /// s = size_of(ValRaw) * `args_capacity`,
+    /// Their combined, 16-byte-aligned size `s` is calculated as follows when
+    /// `GC_REFS` is true:
+    /// s = size_of(ValRaw) * `args_capacity`
+    ///   + align_up(`args_capacity`, 16),
     ///
     /// Note that this value is used below, and we may have s = 0.
     ///
@@ -215,20 +238,27 @@ impl VMContinuationStack {
     ///       -0x20     | args_capacity
     ///
     ///
-    /// The data stored behind the args buffer is as follows:
+    /// The consumable launch record stored immediately below the persistent
+    /// buffer(s) is as follows:
     ///
     ///  Offset from    |
     ///       TOS       | Contents
     ///  ---------------|-------------------------------------------------------
     ///       -0x28 - s | func_ref
     ///       -0x30 - s | caller_vmctx
-    ///       -0x38 - s | args (of type *mut ArrayRef<ValRaw>)
+    ///       -0x38 - s | args (of type *mut VMHostArray<u128>)
     ///       -0x40 - s | return_value_count
-    pub fn initialize(
+    ///
+    /// The saved RSP points at `TOS - 0x40 - s`. On entry,
+    /// `wasmtime_continuation_start` pops the four launch-record words, leaving
+    /// RSP at `TOS - 0x20 - s`, immediately below the persistent buffers.
+    /// Subsequent stack frames grow towards lower addresses and may reuse the
+    /// consumed launch-record storage.
+    pub fn initialize<const GC_REFS: bool>(
         &self,
         func_ref: *const VMFuncRef,
         caller_vmctx: *mut VMContext,
-        args: *mut VMHostArray<ValRaw>,
+        args: *mut VMPayloads,
         parameter_count: u32,
         return_value_count: u32,
     ) -> Result<()> {
@@ -240,23 +270,51 @@ impl VMContinuationStack {
                 target.write(value)
             };
 
-            let args_ref = &mut *args;
+            let payloads = &mut *args;
+            let args_ref = &mut payloads.buffer;
             let args_capacity = std::cmp::max(parameter_count, return_value_count);
             // The args object must currently be empty.
             debug_assert_eq!(args_ref.capacity, 0);
             debug_assert_eq!(args_ref.length, 0);
 
-            let total_control_size = usize::try_from(args_capacity)?
+            let args_data_size = usize::try_from(args_capacity)?
                 .checked_mul(std::mem::size_of::<ValRaw>())
-                .and_then(|s| s.checked_add(0x40))
                 .ok_or_else(|| {
                     format_err!(
                         "continuation function type with {args_capacity} args \
                          overflows stack control data size calculation"
                     )
                 })?;
-            let args_data_size = total_control_size - 0x40;
-
+            // Keep the fixed startup data 16-byte aligned.
+            let gc_refs_data_size = if cfg!(feature = "gc") && GC_REFS {
+                usize::try_from(args_capacity)?
+                    .checked_add(15)
+                    .map(|s| s & !15)
+                    .ok_or_else(|| {
+                        format_err!(
+                            "continuation function type with {args_capacity} args \
+                             overflows stack control data size calculation"
+                        )
+                    })?
+            } else {
+                0
+            };
+            let dynamic_data_size = args_data_size
+                .checked_add(gc_refs_data_size)
+                .ok_or_else(|| {
+                    format_err!(
+                        "continuation function type with {args_capacity} args \
+                         overflows stack control data size calculation"
+                    )
+                })?;
+            let total_control_size = dynamic_data_size
+                .checked_add(0x40)
+                .ok_or_else(|| {
+                    format_err!(
+                        "continuation function type with {args_capacity} args \
+                         overflows stack control data size calculation"
+                    )
+                })?;
             // Ensure the control data (fixed header + args buffer) fits
             // within the usable stack space. For Mmap allocations,
             // self.len includes the guard page, which is not writable.
@@ -279,9 +337,20 @@ impl VMContinuationStack {
             } else {
                 tos.sub(0x20 + args_data_size)
             };
-
             args_ref.capacity = args_capacity;
-            args_ref.data = args_data_ptr.cast::<ValRaw>();
+            args_ref.data = args_data_ptr.cast::<u128>();
+            #[cfg(feature = "gc")]
+            if GC_REFS {
+                let data = if args_capacity == 0 {
+                    ptr::null_mut()
+                } else {
+                    tos.sub(0x20 + dynamic_data_size)
+                };
+                if args_capacity > 0 {
+                    data.write_bytes(0, usize::try_from(args_capacity)?);
+                }
+                payloads.gc_ref_data = data;
+            }
 
             let to_store = [
                 // Data near top of stack:
@@ -290,10 +359,16 @@ impl VMContinuationStack {
                 (0x18, tos.sub(total_control_size).addr()),
                 (0x20, usize::try_from(args_capacity)?),
                 // Data after the args buffer:
-                (0x28 + args_data_size, func_ref.addr()),
-                (0x30 + args_data_size, caller_vmctx.addr()),
-                (0x38 + args_data_size, args.addr()),
-                (0x40 + args_data_size, usize::try_from(return_value_count)?),
+                (0x28 + dynamic_data_size, func_ref.addr()),
+                (0x30 + dynamic_data_size, caller_vmctx.addr()),
+                (
+                    0x38 + dynamic_data_size,
+                    (args_ref as *mut VMHostArray<u128>).addr(),
+                ),
+                (
+                    0x40 + dynamic_data_size,
+                    usize::try_from(return_value_count)?,
+                ),
             ];
 
             for (offset, data) in to_store {
@@ -324,7 +399,7 @@ impl Drop for VMContinuationStack {
 unsafe extern "C" fn fiber_start(
     func_ref: *mut VMFuncRef,
     caller_vmctx: *mut VMContext,
-    args: *mut VMHostArray<ValRaw>,
+    args: *mut VMHostArray<u128>,
     return_value_count: u32,
 ) -> bool {
     unsafe {
@@ -334,8 +409,11 @@ unsafe extern "C" fn fiber_start(
         let params_and_returns: NonNull<[ValRaw]> = if args.capacity == 0 {
             NonNull::from(&[])
         } else {
-            std::slice::from_raw_parts_mut(args.data, usize::try_from(args.capacity).unwrap())
-                .into()
+            std::slice::from_raw_parts_mut(
+                args.data.cast::<ValRaw>(),
+                usize::try_from(args.capacity).unwrap(),
+            )
+            .into()
         };
 
         // NOTE(frank-emrich) The usage of the `caller_vmctx` is probably not

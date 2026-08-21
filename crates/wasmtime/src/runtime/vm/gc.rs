@@ -8,6 +8,8 @@ mod disabled;
 #[cfg(not(feature = "gc"))]
 pub use disabled::*;
 
+#[cfg(feature = "stack-switching")]
+mod cont_ref;
 mod data;
 mod func_ref;
 mod gc_ref;
@@ -15,6 +17,8 @@ mod gc_runtime;
 mod host_data;
 mod i31;
 
+#[cfg(feature = "stack-switching")]
+pub use cont_ref::*;
 pub use data::*;
 pub use func_ref::*;
 pub use gc_ref::*;
@@ -53,6 +57,10 @@ pub struct GcStore {
 
     /// The function-references table for this GC heap.
     pub func_ref_table: FuncRefTable,
+
+    /// The continuation references table for this GC heap.
+    #[cfg(feature = "stack-switching")]
+    pub cont_ref_table: ContRefTable,
 
     /// The total allocated bytes recorded after the last GC collection.
     /// `None` if no collection has been performed yet. Used by the
@@ -96,6 +104,8 @@ impl GcStore {
     ) -> Self {
         let host_data_table = ExternRefHostDataTable::default();
         let func_ref_table = FuncRefTable::default();
+        #[cfg(feature = "stack-switching")]
+        let cont_ref_table = ContRefTable::default();
 
         let _ = &gc_zeal_alloc_counter;
 
@@ -104,6 +114,8 @@ impl GcStore {
             gc_heap,
             host_data_table,
             func_ref_table,
+            #[cfg(feature = "stack-switching")]
+            cont_ref_table,
             last_post_gc_allocated_bytes: None,
             #[cfg(gc_zeal)]
             gc_zeal_alloc_counter,

@@ -3158,25 +3158,14 @@ pub fn translate_operator(
             let arg_count = src_types.len() - dst_arity;
 
             let arg_types = &src_types[0..arg_count];
-            for arg_type in arg_types {
-                // We can't bind GC objects using cont.bind at the moment: We
-                // don't have the necessary infrastructure to traverse the
-                // buffers used by cont.bind when looking for GC roots. Thus,
-                // this crude check ensures that these buffers can never contain
-                // GC roots to begin with.
-                if arg_type.is_vmgcref_type_and_not_i31() {
-                    return Err(wasmtime_environ::WasmError::Unsupported(
-                        "cont.bind does not support GC types at the moment".into(),
-                    ));
-                }
-            }
-
             let (original_contobj, args) =
                 environ.stacks.peekn(arg_count + 1).split_last().unwrap();
             let original_contobj = *original_contobj;
             let args = args.to_vec();
 
-            let new_contobj = environ.translate_cont_bind(builder, original_contobj, &args);
+            let arg_types = arg_types.to_vec();
+            let new_contobj =
+                environ.translate_cont_bind(builder, original_contobj, &args, &arg_types);
 
             environ.stacks.popn(arg_count + 1);
             environ.stacks.push1(new_contobj);
@@ -3184,17 +3173,18 @@ pub fn translate_operator(
         Operator::Suspend { tag_index } => {
             let tag_index = TagIndex::from_u32(*tag_index);
             let param_types = environ.tag_params(tag_index).to_vec();
-            let return_types: SmallVec<[_; 8]> = environ
-                .tag_returns(tag_index)
-                .iter()
-                .map(|ty| crate::value_type(environ.isa(), *ty))
-                .collect();
+            let return_types = environ.tag_returns(tag_index).to_vec();
 
             let params = environ.stacks.peekn(param_types.len()).to_vec();
             let param_count = params.len();
 
-            let return_values =
-                environ.translate_suspend(builder, tag_index.as_u32(), &params, &return_types)?;
+            let return_values = environ.translate_suspend(
+                builder,
+                tag_index.as_u32(),
+                &params,
+                &param_types,
+                &return_types,
+            )?;
 
             environ.stacks.popn(param_count);
             environ.stacks.pushn(&return_values);
@@ -3316,45 +3306,43 @@ pub fn translate_operator(
             tag_index,
         } => {
             // Arguments of the continuation we are going to switch to
-            let continuation_argument_types: SmallVec<[_; 8]> = environ
+            let switch_arg_types: SmallVec<[_; 8]> = environ
                 .continuation_arguments(TypeIndex::from_u32(*cont_type_index))
                 .to_smallvec();
             // Arity includes the continuation argument
-            let arity = continuation_argument_types.len();
+            let arity = switch_arg_types.len();
             let (contobj, switch_args) = environ.stacks.peekn(arity).split_last().unwrap();
             let contobj = *contobj;
             let switch_args = switch_args.to_vec();
 
             // Type of the continuation we are going to create by suspending the
             // currently running stack
-            let current_continuation_type = continuation_argument_types.last().unwrap();
+            let current_continuation_type = switch_arg_types.last().unwrap();
             let current_continuation_type = current_continuation_type.unwrap_ref_type();
 
             // Argument types of current_continuation_type. These will in turn
             // be the types of the arguments we receive when someone switches
             // back to this switch instruction
-            let current_continuation_arg_types: SmallVec<[_; 8]> =
-                match current_continuation_type.heap_type {
-                    WasmHeapType::ConcreteCont(index) => {
-                        let mti = index
-                            .as_module_type_index()
-                            .expect("expected module-local type index");
+            let return_types: SmallVec<[_; 8]> = match current_continuation_type.heap_type {
+                WasmHeapType::ConcreteCont(index) => {
+                    let mti = index
+                        .as_module_type_index()
+                        .expect("expected module-local type index");
 
-                        environ
-                            .continuation_arguments_from_interned(mti)
-                            .iter()
-                            .map(|ty| crate::value_type(environ.isa(), *ty))
-                            .collect()
-                    }
-                    _ => panic!("Invalid type on switch"),
-                };
+                    environ
+                        .continuation_arguments_from_interned(mti)
+                        .to_smallvec()
+                }
+                _ => panic!("Invalid type on switch"),
+            };
 
             let switch_return_values = environ.translate_switch(
                 builder,
                 *tag_index,
                 contobj,
                 &switch_args,
-                &current_continuation_arg_types,
+                &switch_arg_types,
+                &return_types,
             )?;
 
             environ.stacks.popn(arity);
