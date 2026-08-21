@@ -207,7 +207,7 @@ where
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
         let mut store = store.as_context_mut();
 
-        if self.func.abi_async(store.0) {
+        if self.func.abi_async() {
             bail!("must enable the `component-model-async` feature to call async-lifted exports")
         }
 
