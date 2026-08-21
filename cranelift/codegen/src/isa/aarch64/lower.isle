@@ -1699,11 +1699,17 @@
 (rule sshr_64 (lower (sshr $I64 x y))
       (do_shift (ALUOp.Asr) $I64 (put_in_reg_sext64 x) y))
 
-;; Specialized lowerings to generate the `sbfm` instruction.
+;; Specialized lowerings to generate the `sbfm` instruction from
+;; an appropriate pair of `ishl` and `ushr`/`sshr` instructions.
 (rule sbfm 1 (lower
-  (sshr $I64 (ishl $I64 x (u8_from_iconst a)) (u8_from_iconst b)))
-  (if-let true (u8_lt_eq a b))
-  (bitfield_move $I64 (BfmOp.SBfm) x (u8_sub b a) (u8_sub 63 a)))
+  (sshr (ty_32_or_64 ty) (ishl _ x (u64_from_iconst a)) (u64_from_iconst b)))
+  (bitfield_move ty (BfmOp.SBfm) x (sbfm_immr ty a b) (sbfm_imms ty a b)))
+
+;; Helper methods for constructing the correct `immr` and `imms` immediates.
+(decl sbfm_immr (Type u64 u64) UImm6)
+(extern constructor sbfm_immr sbfm_immr)
+(decl sbfm_imms (Type u64 u64) UImm6)
+(extern constructor sbfm_imms sbfm_imms)
 
 ;; Shift for i128.
 (rule (lower (sshr $I128 x y))

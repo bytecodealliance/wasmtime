@@ -241,8 +241,21 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         ImmShift::maybe_from_u64(n.into()).unwrap()
     }
 
-    fn uimm6_from_u8(&mut self, n: u8) -> UImm6 {
-        UImm6::maybe_from_u8(n.into()).unwrap()
+    /// Compute the `immr` value for an `sbfm` instruction,
+    /// derived by fusing an `ishl` by amount `a`, with an `sshr` by amount `b`.
+    fn sbfm_immr(&mut self, ty: Type, a: u64, b: u64) -> UImm6 {
+        let w = ty.lane_bits() as u8;
+        let a = (a as u8) & (w - 1);
+        let b = (b as u8) & (w - 1);
+        UImm6::maybe_from_u8(if a <= b { b - a } else { w - (a - b) }).unwrap()
+    }
+
+    /// Compute the `imms` value for an `sbfm` instruction,
+    /// derived by fusing an `ishl` by amount `a`, with an `sshr` by amount `b`.
+    fn sbfm_imms(&mut self, ty: Type, a: u64, _b: u64) -> UImm6 {
+        let w = ty.lane_bits() as u8;
+        let a = (a as u8) & (w - 1);
+        UImm6::maybe_from_u8(w - 1 - (a & (w - 1))).unwrap()
     }
 
     fn lshr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {

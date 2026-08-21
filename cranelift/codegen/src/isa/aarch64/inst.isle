@@ -2209,13 +2209,6 @@
 (decl imm_shift_from_u8 (u8) ImmShift)
 (extern constructor imm_shift_from_u8 imm_shift_from_u8)
 
-(spec (uimm6_from_u8 n)
-      (provide (= result (extract 5 0 n)))
-      (require (bvult n #x40))
-)
-(decl uimm6_from_u8 (u8) UImm6)
-(extern constructor uimm6_from_u8 uimm6_from_u8)
-
 (spec (imm12_from_u64 imm12)
       (provide
             (= result
@@ -2984,11 +2977,9 @@
 
 ;; Helper for emitting `MInst.BitfieldMove` instructions.
 (attr bitfield_move (veri chain))
-(decl bitfield_move (Type BfmOp Reg u8 u8) Reg)
+(decl bitfield_move (Type BfmOp Reg UImm6 UImm6) Reg)
 (rule (bitfield_move ty bfm_op rn immr imms)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (immr UImm6 (uimm6_from_u8 immr))
-            (imms UImm6 (uimm6_from_u8 imms))
             (_ Unit (emit (MInst.BitfieldMove (operand_size ty) bfm_op dst rn immr imms))))
         dst))
 
