@@ -93,6 +93,13 @@ pub async fn default_send_request(
     .await
     .map_err(|_| Error::ConnectionTimeout)??;
 
+    if !req.headers().contains_key(hyper::header::HOST)
+        && let Some(authority) = req.uri().authority()
+        && let Ok(value) = hyper::header::HeaderValue::from_str(authority.as_str())
+    {
+        req.headers_mut().insert(hyper::header::HOST, value);
+    }
+
     // at this point, the request contains the scheme and the authority, but
     // the http packet should only include those if addressing a proxy, so
     // remove them here, since SendRequest::send_request does not do it for us

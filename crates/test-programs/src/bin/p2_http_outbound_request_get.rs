@@ -26,5 +26,7 @@ fn main() {
         std::str::from_utf8(uri).unwrap(),
         format!("/get?some=arg&goes=here")
     );
+    let host = res.header("x-wasmtime-test-host").unwrap();
+    assert_eq!(std::str::from_utf8(host).unwrap(), addr);
     assert_eq!(res.body, b"");
 }

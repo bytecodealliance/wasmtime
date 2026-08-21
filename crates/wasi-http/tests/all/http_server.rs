@@ -1,4 +1,4 @@
-use http::header::CONTENT_LENGTH;
+use http::header::{CONTENT_LENGTH, HOST};
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use std::future::Future;
@@ -15,9 +15,15 @@ async fn test(
     debug!(?req, "preparing mocked response for request");
     let method = req.method().to_string();
     let uri = req.uri().to_string();
+    let host = req.headers().get(HOST).cloned();
     let resp = Response::builder()
         .header("x-wasmtime-test-method", method)
         .header("x-wasmtime-test-uri", uri);
+    let resp = if let Some(host) = host {
+        resp.header("x-wasmtime-test-host", host)
+    } else {
+        resp
+    };
     let resp = if let Some(content_length) = req.headers().get(CONTENT_LENGTH) {
         resp.header(CONTENT_LENGTH, content_length)
     } else {
