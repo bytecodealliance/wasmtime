@@ -2192,6 +2192,7 @@ block0(v0: i128, v1: i128):
 ;   addb %ah, (%rax, %rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
+;   .byte 0x00
 
 function %uadd_overflow_as_i128(i64, i64) -> i64, i64 {
 block0(v0: i64, v1: i64):
