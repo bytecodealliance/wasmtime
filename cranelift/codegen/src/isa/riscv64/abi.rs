@@ -431,6 +431,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
         flags: &settings::Flags,
+        isa_flags: &RiscvFlags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
@@ -479,61 +480,91 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             });
         }
 
-        // Adjust the stack pointer downward for clobbers, the function fixed
-        // frame (spillslots and storage slots), and outgoing arguments.
-        let stack_size = frame_layout.clobber_size
-            + frame_layout.fixed_frame_storage_size
-            + frame_layout.outgoing_args_size;
+        let clobber_size = frame_layout.clobber_size;
+        let remaining_frame_size =
+            frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
 
-        // Store each clobbered register in order at offsets from SP,
-        // placing them above the fixed frame slots.
-        if stack_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
+        // When the Zca extension is available, split the SP adjustment so
+        // callee-save stores use small offsets that fit in c.sdsp (≤504 bytes).
+        // Without Zca, use a single combined decrement to avoid an extra instruction.
+        let split_adjustment = isa_flags.has_zca() && clobber_size > 0 && remaining_frame_size > 0;
 
-            let mut cur_offset = 0;
-            for reg in &frame_layout.clobbered_callee_saves {
-                let r_reg = reg.to_reg();
-                let ty = match r_reg.class() {
-                    RegClass::Int => I64,
-                    RegClass::Float => F64,
-                    RegClass::Vector => I8X16,
-                };
-                cur_offset = align_to(cur_offset, ty.bytes());
-                insts.push(Inst::gen_store(
-                    AMode::SPOffset(i64::from(stack_size - cur_offset - ty.bytes())),
-                    Reg::from(reg.to_reg()),
-                    ty,
-                    MemFlagsData::trusted(),
-                ));
-
-                if flags.unwind_info() {
-                    insts.push(Inst::Unwind {
-                        inst: UnwindInst::SaveReg {
-                            clobber_offset: frame_layout.clobber_size - cur_offset - ty.bytes(),
-                            reg: r_reg,
-                        },
-                    });
-                }
-
-                cur_offset += ty.bytes();
-                assert!(cur_offset <= stack_size);
+        if split_adjustment {
+            insts.extend(Self::gen_sp_reg_adjust(-(clobber_size as i32)));
+        } else {
+            let stack_size = clobber_size + remaining_frame_size;
+            if stack_size > 0 {
+                insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
             }
         }
+
+        let store_base = if split_adjustment {
+            clobber_size
+        } else {
+            clobber_size + remaining_frame_size
+        };
+
+        let mut cur_offset = 0;
+        for reg in &frame_layout.clobbered_callee_saves {
+            let r_reg = reg.to_reg();
+            let ty = match r_reg.class() {
+                RegClass::Int => I64,
+                RegClass::Float => F64,
+                RegClass::Vector => I8X16,
+            };
+            cur_offset = align_to(cur_offset, ty.bytes());
+            insts.push(Inst::gen_store(
+                AMode::SPOffset(i64::from(store_base - cur_offset - ty.bytes())),
+                Reg::from(reg.to_reg()),
+                ty,
+                MemFlagsData::trusted(),
+            ));
+
+            if flags.unwind_info() {
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::SaveReg {
+                        clobber_offset: clobber_size - cur_offset - ty.bytes(),
+                        reg: r_reg,
+                    },
+                });
+            }
+
+            cur_offset += ty.bytes();
+            assert!(cur_offset <= clobber_size);
+        }
+
+        if split_adjustment {
+            insts.extend(Self::gen_sp_reg_adjust(-(remaining_frame_size as i32)));
+        }
+
         insts
     }
 
     fn gen_clobber_restore(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
+        isa_flags: &RiscvFlags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
 
-        let stack_size = frame_layout.clobber_size
-            + frame_layout.fixed_frame_storage_size
-            + frame_layout.outgoing_args_size;
-        let mut cur_offset = 0;
+        let clobber_size = frame_layout.clobber_size;
+        let remaining_frame_size =
+            frame_layout.fixed_frame_storage_size + frame_layout.outgoing_args_size;
 
+        let split_adjustment = isa_flags.has_zca() && clobber_size > 0 && remaining_frame_size > 0;
+
+        if split_adjustment {
+            insts.extend(Self::gen_sp_reg_adjust(remaining_frame_size as i32));
+        }
+
+        let load_base = if split_adjustment {
+            clobber_size
+        } else {
+            clobber_size + remaining_frame_size
+        };
+
+        let mut cur_offset = 0;
         for reg in &frame_layout.clobbered_callee_saves {
             let rreg = reg.to_reg();
             let ty = match rreg.class() {
@@ -544,15 +575,20 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             cur_offset = align_to(cur_offset, ty.bytes());
             insts.push(Inst::gen_load(
                 reg.map(Reg::from),
-                AMode::SPOffset(i64::from(stack_size - cur_offset - ty.bytes())),
+                AMode::SPOffset(i64::from(load_base - cur_offset - ty.bytes())),
                 ty,
                 MemFlagsData::trusted(),
             ));
             cur_offset += ty.bytes();
         }
 
-        if stack_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
+        let restore_size = if split_adjustment {
+            clobber_size
+        } else {
+            clobber_size + remaining_frame_size
+        };
+        if restore_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(restore_size as i32));
         }
 
         insts
