@@ -260,9 +260,16 @@ impl dsl::Format {
         fmtln!(f, "let w = {};", vex.w.as_bool());
         let bits = "len, pp, mmmmm, w";
 
-        self.generate_vex_or_evex_prefix(f, "VexPrefix", &bits, vex.is4, None, "two_op", "three_op", || {
-            vex.unwrap_digit()
-        })
+        self.generate_vex_or_evex_prefix(
+            f,
+            "VexPrefix",
+            &bits,
+            vex.is4,
+            None,
+            "two_op",
+            "three_op",
+            || vex.unwrap_digit(),
+        )
     }
 
     fn generate_evex_prefix(&self, f: &mut Formatter, evex: &dsl::Evex) -> ModRmStyle {
@@ -353,9 +360,16 @@ impl dsl::Format {
             })
         };
 
-        self.generate_vex_or_evex_prefix(f, "EvexPrefix", &bits, is4, evex_scaling, two_op, three_op, || {
-            evex.unwrap_digit()
-        })
+        self.generate_vex_or_evex_prefix(
+            f,
+            "EvexPrefix",
+            &bits,
+            is4,
+            evex_scaling,
+            two_op,
+            three_op,
+            || evex.unwrap_digit(),
+        )
     }
 
     /// Helper function to generate either a vex or evex prefix, mostly handling

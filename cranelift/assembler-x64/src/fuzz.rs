@@ -624,8 +624,7 @@ mod test {
         // Format is `RVM` = [ModRM.reg source, vvvv destination, ModRM.rm
         // source], so the constructor arguments are (reg source = %rcx,
         // destination = %rax, r/m source = %rdx).
-        let inst =
-            addq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let inst = addq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
         let assembled = assemble(&inst.into());
         assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1801CA");
     }
