@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
 use crate::{ir::AtomicRmwOp, ir::types};
-use generated_code::{AssemblerOutputs, Context, MInst, RegisterClass};
+use generated_code::{AssemblerOutputs, Context, MInst, ProduceFlagsOp, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::external::{CraneliftRegisters, PairedGpr, PairedXmm, isle_assembler_methods};
@@ -11,13 +11,15 @@ use super::{MergeableLoadSize, is_int_or_ref_ty, is_mergeable_load, lower_to_amo
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::immediates::*;
 use crate::ir::types::*;
-use crate::ir::{BlockCall, Inst, InstructionData, LibCall, Opcode, TrapCode, Value, ValueList};
+use crate::ir::{
+    BlockCall, Inst, InstructionData, LibCall, Opcode, TrapCode, Value, ValueDef, ValueList,
+};
 use crate::isa::x64::X64Backend;
 use crate::isa::x64::inst::{ReturnCallInfo, args::*, regs};
 use crate::isa::x64::lower::{InsnInput, emit_vm_call};
 use crate::machinst::isle::*;
 use crate::machinst::{
-    ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, MachInst, VCodeConstant,
+    ArgPair, CallArgList, CallInfo, CallRetList, InstOutput, Lower, MachInst, VCodeConstant,
     VCodeConstantData,
 };
 use alloc::boxed::Box;
@@ -1934,6 +1936,36 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             None
         }
     }
+
+    fn overflow_alu_flag(
+        &mut self,
+        of: Value,
+    ) -> Option<(Value, Value, Value, CC, ProduceFlagsOp, Inst)> {
+        let (inst, sum, x, y, opcode) = overflow_flag_common(self.lower_ctx, of)?;
+        let (cc, op) = match opcode {
+            Opcode::UaddOverflow => (CC::B, ProduceFlagsOp::Add),
+            Opcode::SaddOverflow => (CC::O, ProduceFlagsOp::Add),
+            Opcode::UsubOverflow => (CC::B, ProduceFlagsOp::Sub),
+            Opcode::SsubOverflow => (CC::O, ProduceFlagsOp::Sub),
+            _ => return None,
+        };
+        Some((sum, x, y, cc, op, inst))
+    }
+
+    fn overflow_mul_flag(&mut self, of: Value) -> Option<(Value, Value, Value, bool, Inst)> {
+        let (inst, sum, x, y, opcode) = overflow_flag_common(self.lower_ctx, of)?;
+        let signed = match opcode {
+            Opcode::UmulOverflow => false,
+            Opcode::SmulOverflow => true,
+            _ => return None,
+        };
+        Some((sum, x, y, signed, inst))
+    }
+
+    fn absorb_overflow_inst(&mut self, inst: Inst, sum_regs: ValueRegs) -> Unit {
+        use crate::machinst::ValueRegs as VR;
+        self.lower_ctx.absorb_inst(inst, &[sum_regs, VR::invalid()]);
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
@@ -2058,6 +2090,45 @@ impl IsleContext<'_, '_, MInst, X64Backend> {
     fn convert_amode_to_assembler_amode(&mut self, amode: &SyntheticAmode) -> asm::Amode<Gpr> {
         amode.clone().into()
     }
+}
+
+/// Shared fuse-safety checks for matching an overflow-flag value.
+fn overflow_flag_common(
+    lower_ctx: &Lower<MInst>,
+    of: Value,
+) -> Option<(Inst, Value, Value, Value, Opcode)> {
+    let ValueDef::Result(inst, 1) = lower_ctx.dfg().value_def(of) else {
+        return None;
+    };
+    if lower_ctx.inst_is_sunk(inst) {
+        return None;
+    }
+    // Flag must not already be forced into a register, and must have a single
+    // IR use (this consumer) so we can skip materializing `setcc`.
+    if lower_ctx.value_has_lowered_uses(of) || !lower_ctx.value_is_once_used(of) {
+        return None;
+    }
+    let cur = lower_ctx.cur_inst()?;
+    let results = lower_ctx.dfg().inst_results(inst);
+    if results.len() != 2 {
+        return None;
+    }
+    let sum = results[0];
+    let ty = lower_ctx.dfg().value_type(sum);
+    if ty.bits() > 64 || !ty.is_int() {
+        return None;
+    }
+    // Do not fuse if the arithmetic result is used in the same block between
+    // the overflow op and this consumer (flags would be clobbered / order wrong).
+    if lower_ctx.has_same_block_use_between(sum, inst, cur) {
+        return None;
+    }
+    let opcode = lower_ctx.data(inst).opcode();
+    let args = lower_ctx.dfg().inst_args(inst);
+    if args.len() != 2 {
+        return None;
+    }
+    Some((inst, sum, args[0], args[1], opcode))
 }
 
 // Since x64 doesn't have 8x16 shifts and we must use a 16x8 shift instead, we
