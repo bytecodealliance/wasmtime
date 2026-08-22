@@ -417,7 +417,14 @@ fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) 
         | nzcv.bits()
 }
 
-fn enc_bfm(opc: u8, size: OperandSize, rd: Writable<Reg>, rn: Reg, immr: u8, imms: u8) -> u32 {
+fn enc_bfm(
+    bfm_op: BfmOp,
+    size: OperandSize,
+    rd: Writable<Reg>,
+    rn: Reg,
+    immr: u8,
+    imms: u8,
+) -> u32 {
     match size {
         OperandSize::Size64 => {
             debug_assert!(immr <= 63);
@@ -428,11 +435,15 @@ fn enc_bfm(opc: u8, size: OperandSize, rd: Writable<Reg>, rn: Reg, immr: u8, imm
             debug_assert!(imms <= 31);
         }
     }
-    debug_assert_eq!(opc & 0b11, opc);
+    let opc = match bfm_op {
+        BfmOp::Bfm => 0b01,
+        BfmOp::UBfm => 0b10,
+        BfmOp::SBfm => 0b00,
+    };
     let n_bit = size.sf_bit();
     0b0_00_100110_0_000000_000000_00000_00000
         | size.sf_bit() << 31
-        | u32::from(opc) << 29
+        | opc << 29
         | n_bit << 22
         | u32::from(immr) << 16
         | u32::from(imms) << 10
@@ -2920,12 +2931,22 @@ impl MachInstEmit for Inst {
                 from_bits,
                 to_bits,
             } => {
-                let (opc, size) = if signed {
-                    (0b00, OperandSize::from_bits(to_bits))
+                let (bfm_op, size) = if signed {
+                    (BfmOp::SBfm, OperandSize::from_bits(to_bits))
                 } else {
-                    (0b10, OperandSize::Size32)
+                    (BfmOp::UBfm, OperandSize::Size32)
                 };
-                sink.put4(enc_bfm(opc, size, rd, rn, 0, from_bits - 1));
+                sink.put4(enc_bfm(bfm_op, size, rd, rn, 0, from_bits - 1));
+            }
+            &Inst::BitfieldMove {
+                size,
+                bfm_op,
+                rd,
+                rn,
+                immr,
+                imms,
+            } => {
+                sink.put4(enc_bfm(bfm_op, size, rd, rn, immr.value(), imms.value()));
             }
             &Inst::Jump { ref dest } => {
                 let off = sink.cur_offset();
