@@ -760,6 +760,95 @@ fn import_works() -> Result<()> {
 }
 
 #[test]
+fn func_is_same_and_identity_key() -> Result<()> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    fn hash_of(k: impl Hash) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        k.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    let mut store = Store::<()>::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (table (export "t") 1 1 funcref)
+                (func (export "f") (result i32) i32.const 0)
+                (elem (i32.const 0) 0))
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    // Fetched by name and by name again: same function.
+    let f1 = instance.get_func(&mut store, "f").unwrap();
+    let f2 = instance.get_func(&mut store, "f").unwrap();
+    assert!(Func::is_same(&store, &f1, &f2));
+    assert_eq!(
+        hash_of(f1.identity_key(&store)),
+        hash_of(f2.identity_key(&store))
+    );
+
+    // Fetched via `exports()`: same function.
+    let f3 = instance
+        .exports(&mut store)
+        .find_map(|e| e.into_func())
+        .unwrap();
+    assert!(Func::is_same(&store, &f1, &f3));
+
+    // Fetched through a table: same function.
+    let t = instance.get_table(&mut store, "t").unwrap();
+    let f4 = *t.get(&mut store, 0).unwrap().unwrap_func().unwrap();
+    assert!(Func::is_same(&store, &f1, &f4));
+
+    // Passed as an import to another instance and re-exported: still the
+    // same function, even though the two `Func`s wrap distinct pointers.
+    let importer = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (import "" "f" (func $g (result i32)))
+                (export "reexported" (func $g)))
+        "#,
+    )?;
+    let importer_instance = Instance::new(&mut store, &importer, &[f1.into()])?;
+    let f5 = importer_instance
+        .get_func(&mut store, "reexported")
+        .unwrap();
+    assert!(Func::is_same(&store, &f1, &f5));
+    assert_eq!(
+        hash_of(f1.identity_key(&store)),
+        hash_of(f5.identity_key(&store))
+    );
+
+    // A different function is not the same.
+    let other = Func::wrap(&mut store, || {});
+    assert!(!Func::is_same(&store, &f1, &other));
+
+    // Two `Func`s wrapping the same closure *type* (so they share a
+    // monomorphized trampoline) are still not the same: only their
+    // individual `vmctx`s (heap-allocated per `wrap` call) distinguish them.
+    let c = || {};
+    let host1 = Func::wrap(&mut store, c);
+    let host2 = Func::wrap(&mut store, c);
+    assert!(!Func::is_same(&store, &host1, &host2));
+
+    // A host function's `identity_key` is stable even though Wasmtime fills
+    // in its Wasm-calling-convention trampoline lazily, the first time it's
+    // paired with a module that has one -- so `identity_key` can't rely on
+    // that trampoline either.
+    let key_before = hash_of(host1.identity_key(&store));
+    let importer_of_host1 = Module::new(store.engine(), r#"(module (import "" "" (func)))"#)?;
+    Instance::new(&mut store, &importer_of_host1, &[host1.into()])?;
+    let key_after = hash_of(host1.identity_key(&store));
+    assert_eq!(key_before, key_after);
+
+    Ok(())
+}
+
+#[test]
 #[cfg_attr(miri, ignore)]
 fn trap_smoke() -> Result<()> {
     let mut store = Store::<()>::default();
