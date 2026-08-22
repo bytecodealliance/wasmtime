@@ -3,7 +3,7 @@
 use crate::generators::gc_ops::types::StackType;
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
-    types::{CompositeType, RecGroupId, TypeId, Types},
+    types::{CompositeType, RecGroupId, StructField, TypeId, Types},
 };
 use mutatis::Generate;
 use serde::{Deserialize, Serialize};
@@ -24,6 +24,20 @@ fn pick_type_index(indices: &[u32], raw: u32) -> Option<u32> {
     }
 }
 
+fn array_element<'a>(
+    types: &'a Types,
+    encoding_order: &[TypeId],
+    type_index: u32,
+) -> Option<&'a StructField> {
+    encoding_order
+        .get(usize::try_from(type_index).unwrap())
+        .and_then(|tid| types.type_defs.get(tid))
+        .and_then(|def| match &def.composite_type {
+            CompositeType::Array(at) => Some(&at.element),
+            CompositeType::Struct(_) => None,
+        })
+}
+
 /// The base offsets and indices for various Wasm entities within
 /// their index spaces in the the encoded Wasm binary.
 #[derive(Clone, Copy)]
@@ -35,6 +49,7 @@ struct WasmEncodingBases {
     i31_local_idx: u32,
     array_local_idx: u32,
     typed_local_base: u32,
+    typed_local2_base: u32,
     struct_global_idx: u32,
     eq_global_idx: u32,
     i31_global_idx: u32,
@@ -482,15 +497,18 @@ impl GcOps {
         ));
 
         let typed_local_base: u32 = array_local_idx + 1;
-        for i in 0..concrete_count {
-            let concrete = struct_type_base + i;
-            local_decls.push((
-                1,
-                ValType::Ref(RefType {
-                    nullable: true,
-                    heap_type: wasm_encoder::HeapType::Concrete(concrete),
-                }),
-            ));
+        let typed_local2_base: u32 = typed_local_base + concrete_count;
+        for _ in 0..2 {
+            for i in 0..concrete_count {
+                let concrete = struct_type_base + i;
+                local_decls.push((
+                    1,
+                    ValType::Ref(RefType {
+                        nullable: true,
+                        heap_type: wasm_encoder::HeapType::Concrete(concrete),
+                    }),
+                ));
+            }
         }
 
         let storage_bases = WasmEncodingBases {
@@ -501,6 +519,7 @@ impl GcOps {
             i31_local_idx,
             array_local_idx,
             typed_local_base,
+            typed_local2_base,
             struct_global_idx,
             eq_global_idx,
             i31_global_idx,
@@ -697,6 +716,13 @@ macro_rules! for_each_gc_op {
             })]
             StructNew { type_index: u32 },
 
+            #[operands([])]
+            #[results([Struct(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
+            })]
+            StructNewDefault { type_index: u32 },
+
             #[operands([Some(Struct(None))])]
             #[results([])]
             TakeStructCall,
@@ -879,6 +905,13 @@ macro_rules! for_each_gc_op {
             #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
+            StructGetU { type_index: u32, field_index: u32 },
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
+            })]
             StructSet { type_index: u32, field_index: u32 },
 
             #[operands([])]
@@ -959,7 +992,22 @@ macro_rules! for_each_gc_op {
             #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 type_index = pick_type_index(array_type_indices, type_index)?;
             })]
+            ArrayNewDefault { type_index: u32 },
+
+            #[operands([])]
+            #[results([Array(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
             ArrayNew { type_index: u32 },
+
+            #[operands([])]
+            #[results([Array(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                n = n % (limits.array_length + 1);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            ArrayNewFixed { type_index: u32, n: u32 },
 
             #[operands([])]
             #[results([Array(None)])]
@@ -1098,7 +1146,34 @@ macro_rules! for_each_gc_op {
                 index = index % (limits.array_length + 1);
                 type_index = pick_type_index(array_type_indices, type_index)?;
             })]
+            ArrayGetU { type_index: u32, index: u32 },
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                index = index % (limits.array_length + 1);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
             ArraySet { type_index: u32, index: u32 },
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                offset = offset % (limits.array_length + 1);
+                len = len % (limits.array_length - offset + 2);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            ArrayFill { type_index: u32, offset: u32, len: u32 },
+
+            #[operands([Some(Array(Some(type_index))), Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                dst_offset = dst_offset % (limits.array_length + 1);
+                src_offset = src_offset % (limits.array_length + 1);
+                len = len % (limits.array_length - dst_offset.max(src_offset) + 2);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            ArrayCopy { type_index: u32, dst_offset: u32, src_offset: u32, len: u32 },
 
             #[operands([Some(Array(None))])]
             #[results([])]
@@ -1394,7 +1469,12 @@ impl GcOp {
                 }
                 func.instruction(&Instruction::StructNew(encoding_bases.struct_type_base + x));
             }
-            Self::ArrayNew { type_index: x } => {
+            Self::StructNewDefault { type_index: x } => {
+                func.instruction(&Instruction::StructNewDefault(
+                    encoding_bases.struct_type_base + x,
+                ));
+            }
+            Self::ArrayNewDefault { type_index: x } => {
                 // Create a default-initialized array of a fixed length so most
                 // subsequent indexed accesses are in-bounds.
                 func.instruction(&Instruction::I32Const(
@@ -1403,6 +1483,30 @@ impl GcOp {
                 func.instruction(&Instruction::ArrayNewDefault(
                     encoding_bases.struct_type_base + x,
                 ));
+            }
+            Self::ArrayNew { type_index: x } => {
+                if let Some(element) = array_element(types, encoding_order, x) {
+                    element
+                        .field_type
+                        .emit_default_const(func, type_ids_to_index);
+                }
+                func.instruction(&Instruction::I32Const(
+                    encoding_bases.array_length.cast_signed(),
+                ));
+                func.instruction(&Instruction::ArrayNew(encoding_bases.struct_type_base + x));
+            }
+            Self::ArrayNewFixed { type_index: x, n } => {
+                if let Some(element) = array_element(types, encoding_order, x) {
+                    for _ in 0..n {
+                        element
+                            .field_type
+                            .emit_default_const(func, type_ids_to_index);
+                    }
+                }
+                func.instruction(&Instruction::ArrayNewFixed {
+                    array_type_index: encoding_bases.struct_type_base + x,
+                    array_size: n,
+                });
             }
             Self::TakeStructCall => {
                 func.instruction(&Instruction::Call(take_structref_idx));
@@ -1561,6 +1665,10 @@ impl GcOp {
             Self::StructGet {
                 type_index,
                 field_index,
+            }
+            | Self::StructGetU {
+                type_index,
+                field_index,
             } => {
                 let wasm_type = encoding_bases.struct_type_base + type_index;
                 let fields = encoding_order
@@ -1582,10 +1690,17 @@ impl GcOp {
                         func.instruction(&Instruction::LocalGet(typed_local));
                         let idx = field_index % u32::try_from(fields.len()).unwrap();
                         if fields[usize::try_from(idx).unwrap()].field_type.is_packed() {
-                            func.instruction(&Instruction::StructGetS {
-                                struct_type_index: wasm_type,
-                                field_index: idx,
-                            });
+                            if matches!(self, Self::StructGetU { .. }) {
+                                func.instruction(&Instruction::StructGetU {
+                                    struct_type_index: wasm_type,
+                                    field_index: idx,
+                                });
+                            } else {
+                                func.instruction(&Instruction::StructGetS {
+                                    struct_type_index: wasm_type,
+                                    field_index: idx,
+                                });
+                            }
                         } else {
                             func.instruction(&Instruction::StructGet {
                                 struct_type_index: wasm_type,
@@ -1767,7 +1882,7 @@ impl GcOp {
                 func.instruction(&Instruction::LocalGet(encoding_bases.array_local_idx));
                 func.instruction(&Instruction::TableSet(encoding_bases.array_table_idx));
             }
-            Self::ArrayGet { type_index, index } => {
+            Self::ArrayGet { type_index, index } | Self::ArrayGetU { type_index, index } => {
                 let wasm_type = encoding_bases.struct_type_base + type_index;
                 let typed_local = encoding_bases.typed_local_base + type_index;
                 let element = encoding_order
@@ -1789,7 +1904,11 @@ impl GcOp {
                         func.instruction(&Instruction::LocalGet(typed_local));
                         func.instruction(&Instruction::I32Const(index.cast_signed()));
                         if element.field_type.is_packed() {
-                            func.instruction(&Instruction::ArrayGetS(wasm_type));
+                            if matches!(self, Self::ArrayGetU { .. }) {
+                                func.instruction(&Instruction::ArrayGetU(wasm_type));
+                            } else {
+                                func.instruction(&Instruction::ArrayGetS(wasm_type));
+                            }
                         } else {
                             func.instruction(&Instruction::ArrayGet(wasm_type));
                         }
@@ -1830,6 +1949,70 @@ impl GcOp {
                     }
                     // Immutable element or non-array: just drop the operand.
                     _ => {
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
+            }
+            Self::ArrayFill {
+                type_index,
+                offset,
+                len,
+            } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let typed_local = encoding_bases.typed_local_base + type_index;
+                match array_element(types, encoding_order, type_index) {
+                    Some(element) if element.mutable => {
+                        func.instruction(&Instruction::LocalTee(typed_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                        func.instruction(&Instruction::Else);
+                        func.instruction(&Instruction::LocalGet(typed_local));
+                        func.instruction(&Instruction::I32Const(offset.cast_signed()));
+                        element
+                            .field_type
+                            .emit_default_const(func, type_ids_to_index);
+                        func.instruction(&Instruction::I32Const(len.cast_signed()));
+                        func.instruction(&Instruction::ArrayFill(wasm_type));
+                        func.instruction(&Instruction::End);
+                    }
+                    _ => {
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
+            }
+            Self::ArrayCopy {
+                type_index,
+                dst_offset,
+                src_offset,
+                len,
+            } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let dst_local = encoding_bases.typed_local_base + type_index;
+                let src_local = encoding_bases.typed_local2_base + type_index;
+                match array_element(types, encoding_order, type_index) {
+                    Some(element) if element.mutable => {
+                        func.instruction(&Instruction::LocalSet(src_local));
+                        func.instruction(&Instruction::LocalSet(dst_local));
+                        func.instruction(&Instruction::LocalGet(dst_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::LocalGet(src_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::I32Or);
+                        func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                        func.instruction(&Instruction::Else);
+                        func.instruction(&Instruction::LocalGet(dst_local));
+                        func.instruction(&Instruction::I32Const(dst_offset.cast_signed()));
+                        func.instruction(&Instruction::LocalGet(src_local));
+                        func.instruction(&Instruction::I32Const(src_offset.cast_signed()));
+                        func.instruction(&Instruction::I32Const(len.cast_signed()));
+                        func.instruction(&Instruction::ArrayCopy {
+                            array_type_index_dst: wasm_type,
+                            array_type_index_src: wasm_type,
+                        });
+                        func.instruction(&Instruction::End);
+                    }
+                    _ => {
+                        func.instruction(&Instruction::Drop);
                         func.instruction(&Instruction::Drop);
                     }
                 }
