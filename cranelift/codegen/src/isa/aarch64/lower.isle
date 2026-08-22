@@ -1699,8 +1699,8 @@
 (rule sshr_64 (lower (sshr $I64 x y))
       (do_shift (ALUOp.Asr) $I64 (put_in_reg_sext64 x) y))
 
-;; Specialized lowerings to generate the `sbfm` instruction from
-;; an appropriate pair of `ishl` and `ushr`/`sshr` instructions.
+;; Specialized lowerings to generate a single `ubfm`/`sbfm` instruction from
+;; an appropriate pair of `ishl` and `ushr`/`sshr` operations.
 (rule sbfm 1 (lower
   (sshr (ty_32_or_64 ty) (ishl _ x (u64_from_iconst a)) (u64_from_iconst b)))
   (bitfield_move ty (BfmOp.SBfm) x (sbfm_immr ty a b) (sbfm_imms ty a b)))
