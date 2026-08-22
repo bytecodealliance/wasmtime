@@ -324,8 +324,9 @@ impl dsl::Inst {
                                 None => fmtln!(f, "let {location} = {to_string};"),
                             }
                         }
-                        let ordered_ops = self.format.generate_att_style_operands();
-                        let xed_ops = self.format.generate_xed_style_operands();
+                        let nd = self.encoding.is_nd();
+                        let ordered_ops = self.format.generate_att_style_operands(nd);
+                        let xed_ops = self.format.generate_xed_style_operands(nd);
                         let mut implicit_ops = self.format.generate_implicit_operands();
                         if self.has_trap {
                             fmtln!(f, "let trap = self.trap;");

@@ -54,29 +54,46 @@ impl dsl::Format {
     /// once Cranelift has switched to using this assembler predominantly
     /// (TODO).
     #[must_use]
-    pub(crate) fn generate_att_style_operands(&self) -> String {
-        let ordered_ops: Vec<_> = self
-            .operands
-            .iter()
-            .filter(|o| !o.implicit)
-            .rev()
-            .map(|o| format!("{{{}}}", o.location))
-            .collect();
-        ordered_ops.join(", ")
+    pub(crate) fn generate_att_style_operands(&self, nd: bool) -> String {
+        self.ordered_operands(nd, false)
     }
 
     /// Like [`Self::generate_att_style_operands`], but omits the fixed `%xmm0`
     /// mask operand, which XED leaves implicit.
     #[must_use]
-    pub(crate) fn generate_xed_style_operands(&self) -> String {
-        let ordered_ops: Vec<_> = self
+    pub(crate) fn generate_xed_style_operands(&self, nd: bool) -> String {
+        self.ordered_operands(nd, true)
+    }
+
+    /// Shared operand ordering for AT&T-style printing.
+    ///
+    /// Normally this is just the reverse of the DSL's Intel-style order. APX
+    /// "new data destination" (NDD) forms are the exception: their
+    /// architectural destination is the `vvvv`-encoded register, which the DSL
+    /// must list in the middle so that the positional slot assignment in
+    /// `generate_vex_or_evex_prefix` maps operands to `reg`/`vvvv`/`rm`
+    /// correctly. Blindly reversing would therefore print the destination in
+    /// the middle. Instead, for `ND = 1` the sources keep their DSL order and
+    /// the destination is printed last, which matches both AT&T convention and
+    /// the XED disassembly used as a fuzzing oracle.
+    #[must_use]
+    fn ordered_operands(&self, nd: bool, xed_style: bool) -> String {
+        let ops = self
             .operands
             .iter()
-            .filter(|o| !o.implicit && o.location != dsl::Location::xmm0)
-            .rev()
+            .filter(|o| !o.implicit && !(xed_style && o.location == dsl::Location::xmm0));
+        let ordered: Vec<&dsl::Operand> = if nd {
+            let (dst, srcs): (Vec<_>, Vec<_>) =
+                ops.partition(|o| matches!(o.mutability, dsl::Mutability::Write));
+            srcs.into_iter().chain(dst).collect()
+        } else {
+            ops.rev().collect()
+        };
+        ordered
+            .into_iter()
             .map(|o| format!("{{{}}}", o.location))
-            .collect();
-        ordered_ops.join(", ")
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     #[must_use]
@@ -243,24 +260,51 @@ impl dsl::Format {
         fmtln!(f, "let w = {};", vex.w.as_bool());
         let bits = "len, pp, mmmmm, w";
 
-        self.generate_vex_or_evex_prefix(f, "VexPrefix", &bits, vex.is4, None, || {
-            vex.unwrap_digit()
-        })
+        self.generate_vex_or_evex_prefix(
+            f,
+            "VexPrefix",
+            &bits,
+            vex.is4,
+            None,
+            "two_op",
+            "three_op",
+            || vex.unwrap_digit(),
+        )
     }
 
     fn generate_evex_prefix(&self, f: &mut Formatter, evex: &dsl::Evex) -> ModRmStyle {
         f.empty_line();
         f.comment("Emit EVEX prefix.");
-        let ll = evex.length.evex_bits();
-        fmtln!(f, "let ll = {ll:#04b};");
+
+        // Intel APX promotes legacy GPR instructions into "EVEX map 4" using a
+        // re-purposed payload layout (see `EvexPrefix::legacy` in the runtime
+        // assembler and section 3.1.2.3.1 of the APX spec). In that case we
+        // emit the ND/NF bits and select the `legacy_*` constructors instead of
+        // the AVX-512 ones.
+        let apx_legacy = matches!(evex.apx, Some(dsl::ApxClass::LegacyGpr));
+
         fmtln!(f, "let pp = {:#04b};", evex.pp.map_or(0b00, |pp| pp.bits()));
         fmtln!(f, "let mmm = {:#07b};", evex.mmm.unwrap().bits());
         fmtln!(f, "let w = {};", evex.w.as_bool());
-        // NB: when bcast is supported in the future the `evex_scaling`
-        // calculation for `Full` and `Half` below need to be updated.
+
+        let (bits, two_op, three_op);
+        if apx_legacy {
+            fmtln!(f, "let nd = {};", evex.nd == Some(true));
+            fmtln!(f, "let nf = {};", evex.nf == Some(true));
+            bits = String::from("pp, mmm, w, nd, nf");
+            two_op = "legacy_two_op";
+            three_op = "legacy_three_op";
+        } else {
+            let ll = evex.length.evex_bits();
+            fmtln!(f, "let ll = {ll:#04b};");
+            // NB: when bcast is supported in the future the `evex_scaling`
+            // calculation for `Full` and `Half` below need to be updated.
+            fmtln!(f, "let bcast = false;");
+            bits = String::from("ll, pp, mmm, w, bcast");
+            two_op = "two_op";
+            three_op = "three_op";
+        }
         let bcast = false;
-        fmtln!(f, "let bcast = {bcast};");
-        let bits = format!("ll, pp, mmm, w, bcast");
         let is4 = false;
 
         let length_bytes = match evex.length {
@@ -273,39 +317,59 @@ impl dsl::Format {
         // Figure out, according to table 2-34 and 2-35 in the Intel manual,
         // what the scaling factor is for 8-bit displacements to pass through to
         // encoding.
-        let evex_scaling = Some(match evex.tuple_type {
-            dsl::TupleType::Full => {
-                assert!(!bcast);
-                length_bytes
-            }
-            dsl::TupleType::Half => {
-                assert!(!bcast);
-                length_bytes / 2
-            }
-            dsl::TupleType::FullMem => length_bytes,
-            // FIXME: according to table 2-35 this needs to take into account
-            // "InputSize" which isn't accounted for in our `Evex` structure at
-            // this time.
-            dsl::TupleType::Tuple1Scalar => unimplemented!(),
-            dsl::TupleType::Tuple1Fixed => unimplemented!(),
-            dsl::TupleType::Tuple2 => unimplemented!(),
-            dsl::TupleType::Tuple4 => unimplemented!(),
-            dsl::TupleType::Tuple8 => 32,
-            dsl::TupleType::HalfMem => length_bytes / 2,
-            dsl::TupleType::QuarterMem => length_bytes / 4,
-            dsl::TupleType::EigthMem => length_bytes / 8,
-            dsl::TupleType::Mem128 => 16,
-            dsl::TupleType::Movddup => match evex.length {
-                dsl::Length::LZ | dsl::Length::LIG => unimplemented!(),
-                dsl::Length::L128 => 8,
-                dsl::Length::L256 => 32,
-                dsl::Length::L512 => 64,
-            },
-        });
+        //
+        // The compressed-displacement scheme of section 2.7.5 only applies to
+        // the vector EVEX encodings. APX promotes legacy general-purpose-
+        // register instructions into extended-EVEX "map 4", and those keep
+        // legacy displacement semantics: `disp8` is a plain byte offset rather
+        // than a multiple of a tuple-derived scaling factor `N`. Scaling them
+        // would emit an offset wrong by a factor of `N`. Note this is specific
+        // to the legacy-GPR class; promoted vector instructions and APX-extended
+        // AVX-512 instructions still use compressed displacements.
+        let evex_scaling = if matches!(evex.apx, Some(dsl::ApxClass::LegacyGpr)) {
+            None
+        } else {
+            Some(match evex.tuple_type {
+                dsl::TupleType::Full => {
+                    assert!(!bcast);
+                    length_bytes
+                }
+                dsl::TupleType::Half => {
+                    assert!(!bcast);
+                    length_bytes / 2
+                }
+                dsl::TupleType::FullMem => length_bytes,
+                // FIXME: according to table 2-35 this needs to take into account
+                // "InputSize" which isn't accounted for in our `Evex` structure at
+                // this time.
+                dsl::TupleType::Tuple1Scalar => unimplemented!(),
+                dsl::TupleType::Tuple1Fixed => unimplemented!(),
+                dsl::TupleType::Tuple2 => unimplemented!(),
+                dsl::TupleType::Tuple4 => unimplemented!(),
+                dsl::TupleType::Tuple8 => 32,
+                dsl::TupleType::HalfMem => length_bytes / 2,
+                dsl::TupleType::QuarterMem => length_bytes / 4,
+                dsl::TupleType::EigthMem => length_bytes / 8,
+                dsl::TupleType::Mem128 => 16,
+                dsl::TupleType::Movddup => match evex.length {
+                    dsl::Length::LZ | dsl::Length::LIG => unimplemented!(),
+                    dsl::Length::L128 => 8,
+                    dsl::Length::L256 => 32,
+                    dsl::Length::L512 => 64,
+                },
+            })
+        };
 
-        self.generate_vex_or_evex_prefix(f, "EvexPrefix", &bits, is4, evex_scaling, || {
-            evex.unwrap_digit()
-        })
+        self.generate_vex_or_evex_prefix(
+            f,
+            "EvexPrefix",
+            &bits,
+            is4,
+            evex_scaling,
+            two_op,
+            three_op,
+            || evex.unwrap_digit(),
+        )
     }
 
     /// Helper function to generate either a vex or evex prefix, mostly handling
@@ -318,6 +382,8 @@ impl dsl::Format {
         bits: &str,
         is4: bool,
         evex_scaling: Option<i8>,
+        two_op: &str,
+        three_op: &str,
         unwrap_digit: impl Fn() -> Option<u8>,
     ) -> ModRmStyle {
         use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
@@ -330,7 +396,7 @@ impl dsl::Format {
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(
                     f,
-                    "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                    "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                 );
                 ModRmStyle::Reg {
                     reg: ModRmReg::Reg(*reg),
@@ -347,7 +413,7 @@ impl dsl::Format {
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(
                     f,
-                    "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                    "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                 );
                 ModRmStyle::RegMem {
                     reg: ModRmReg::Reg(*reg),
@@ -362,7 +428,7 @@ impl dsl::Format {
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(
                     f,
-                    "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                    "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                 );
                 ModRmStyle::RegMemIs4 {
                     reg: ModRmReg::Reg(*reg),
@@ -382,7 +448,7 @@ impl dsl::Format {
                     fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                     fmtln!(
                         f,
-                        "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                        "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                     );
                     ModRmStyle::RegMem {
                         reg: ModRmReg::Digit(digit),
@@ -395,7 +461,7 @@ impl dsl::Format {
                     let reg = reg_or_vvvv;
                     fmtln!(f, "let reg = self.{reg}.enc();");
                     fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                    fmtln!(f, "let prefix = {prefix_type}::two_op(reg, rm, {bits});");
+                    fmtln!(f, "let prefix = {prefix_type}::{two_op}(reg, rm, {bits});");
                     ModRmStyle::RegMem {
                         reg: ModRmReg::Reg(*reg),
                         rm: *rm,
@@ -413,7 +479,7 @@ impl dsl::Format {
                         fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                         fmtln!(
                             f,
-                            "let prefix = {prefix_type}::three_op(reg, vvvv, rm, {bits});"
+                            "let prefix = {prefix_type}::{three_op}(reg, vvvv, rm, {bits});"
                         );
                         ModRmStyle::Reg {
                             reg: ModRmReg::Digit(digit),
@@ -425,7 +491,7 @@ impl dsl::Format {
                         let reg = reg_or_vvvv;
                         fmtln!(f, "let reg = self.{reg}.enc();");
                         fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                        fmtln!(f, "let prefix = {prefix_type}::two_op(reg, rm, {bits});");
+                        fmtln!(f, "let prefix = {prefix_type}::{two_op}(reg, rm, {bits});");
                         ModRmStyle::Reg {
                             reg: ModRmReg::Reg(*reg),
                             rm: *rm,
@@ -437,7 +503,7 @@ impl dsl::Format {
                 assert!(!is4);
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                fmtln!(f, "let prefix = {prefix_type}::two_op(reg, rm, {bits});");
+                fmtln!(f, "let prefix = {prefix_type}::{two_op}(reg, rm, {bits});");
                 ModRmStyle::RegMem {
                     reg: ModRmReg::Reg(*reg),
                     rm: *rm,
