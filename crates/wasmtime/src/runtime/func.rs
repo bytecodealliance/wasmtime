@@ -277,7 +277,7 @@ pub struct Func {
     /// Note that this field has an `unsafe_*` prefix to discourage use of it.
     /// This is only safe to read/use if `self.store` is validated to belong to
     /// an ambiently provided `StoreOpaque` or similar. Use the
-    /// `self.func_ref()` method instead of this field to perform this check.
+    /// `self.vm_func_ref()` method instead of this field to perform this check.
     unsafe_func_ref: SendSyncPtr<VMFuncRef>,
 }
 
