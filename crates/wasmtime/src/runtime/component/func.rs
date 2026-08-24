@@ -34,14 +34,8 @@ pub use self::typed::*;
 pub struct Func {
     instance: Instance,
 
-    /// The component type index of this lifted function.
-    ty: TypeFuncIndex,
-
-    /// The index of the canonical `options` for this lifted function.
-    options: OptionsIndex,
-
-    /// Whether this lifted function uses the async canonical ABI.
-    abi_async: bool,
+    /// The export index of this lifted function within its component.
+    index: ExportIndex,
 
     /// The resolved core `VMFuncRef` for this lifted function, whose lifetime
     /// is bound to the `Store` this `Func` belongs to.
@@ -52,13 +46,6 @@ pub struct Func {
     /// `self.lifted_core_func()` method instead of this field to perform this
     /// check.
     unsafe_func_ref: SendSyncPtr<VMFuncRef>,
-
-    /// The resolved core `VMFuncRef` for this function's `post-return`, if any.
-    ///
-    /// Same store-lifetime rules as `unsafe_func_ref`: only valid to read while
-    /// the owning store is in scope. Read via [`Func::post_return_core_func`],
-    /// which validates the store id first.
-    post_return_func_ref: Option<SendSyncPtr<VMFuncRef>>,
 }
 
 // Double-check that the C representation in `component/func.h` matches our
@@ -67,7 +54,7 @@ const _: () = {
     #[repr(C)]
     struct T(u64, u32);
     #[repr(C)]
-    struct C(T, u32, u32, u32, bool, *mut u8, *mut u8);
+    struct C(T, u32, *mut u8);
     assert!(core::mem::size_of::<C>() == core::mem::size_of::<Func>());
     assert!(core::mem::align_of::<C>() == core::mem::align_of::<Func>());
     assert!(core::mem::offset_of!(Func, instance) == 0);
@@ -90,22 +77,10 @@ impl Func {
         }
         .into();
 
-        let vminstance = instance.id().get(store);
-        let component = vminstance.component();
-        let (ty, _def, options) = component.export_lifted_function(index);
-        let raw_options = &component.env_component().options[options];
-        let abi_async = raw_options.async_;
-        let post_return_func_ref = raw_options
-            .post_return
-            .map(|i| SendSyncPtr::from(vminstance.runtime_post_return(i)));
-
         Func {
             instance,
-            ty,
-            options,
-            abi_async,
+            index,
             unsafe_func_ref,
-            post_return_func_ref,
         }
     }
 
@@ -223,7 +198,7 @@ impl Func {
         Return: ComponentNamedList + Lift,
     {
         let cx = InstanceType::new(instance.unwrap_or_else(|| self.instance.id().get(store)));
-        let ty = &cx.types[self.ty];
+        let ty = &cx.types[self.ty_index(store)];
 
         Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
             .context("type mismatch with parameters")?;
@@ -235,12 +210,16 @@ impl Func {
 
     /// Get the type of this function.
     pub fn ty(&self, store: impl AsContext) -> ComponentFunc {
-        self.ty_(store.as_context().0)
+        let store = store.as_context().0;
+        let cx = InstanceType::new(self.instance.id().get(store));
+        let ty = self.ty_index(store);
+        ComponentFunc::from(ty, &cx)
     }
 
-    fn ty_(&self, store: &StoreOpaque) -> ComponentFunc {
-        let cx = InstanceType::new(self.instance.id().get(store));
-        ComponentFunc::from(self.ty, &cx)
+    fn ty_index(&self, store: &StoreOpaque) -> TypeFuncIndex {
+        let instance = self.instance.id().get(store);
+        let (ty, _, _) = instance.component().export_lifted_function(self.index);
+        ty
     }
 
     /// Invokes this function with the `params` given and returns the result.
@@ -362,7 +341,7 @@ impl Func {
 
         self.check_params_results(store.as_context_mut(), params, results)?;
 
-        if self.abi_async() {
+        if self.abi_async(store.0) {
             unreachable!(
                 "async-lifted exports should have failed validation \
                  when `component-model-async` feature disabled"
@@ -385,7 +364,7 @@ impl Func {
         //   safe in Rust, however, due to `ValRaw` being a `union`. The
         //   contents should dynamically not be read due to the type of the
         //   function used here matching the actual lift.
-        let (_, post_return_arg) = unsafe {
+        unsafe {
             self.call_raw(
                 store.as_context_mut(),
                 |cx, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
@@ -404,10 +383,10 @@ impl Func {
                     }
                     Ok(())
                 },
-            )?
-        };
+            )?;
+        }
 
-        self.post_return_impl(store, post_return_arg)
+        Ok(())
     }
 
     #[inline]
@@ -416,14 +395,11 @@ impl Func {
         self.unsafe_func_ref.as_non_null()
     }
 
-    #[inline]
-    pub(crate) fn post_return_core_func(&self, store: &StoreOpaque) -> Option<NonNull<VMFuncRef>> {
-        self.instance.id().assert_belongs_to(store.id());
-        self.post_return_func_ref.map(|p| p.as_non_null())
-    }
-
-    pub(crate) fn abi_async(&self) -> bool {
-        self.abi_async
+    pub(crate) fn abi_async(&self, store: &StoreOpaque) -> bool {
+        let instance = self.instance.id().get(store);
+        let component = instance.component();
+        let (_ty, _def, options) = component.export_lifted_function(self.index);
+        component.env_component().options[options].async_
     }
 
     pub(crate) fn abi_info<'a>(
@@ -436,11 +412,13 @@ impl Func {
         &'a CanonicalOptions,
     ) {
         let vminstance = self.instance.id().get(store);
-        let raw_options = &vminstance.component().env_component().options[self.options];
+        let component = vminstance.component();
+        let (ty, _def, options_index) = component.export_lifted_function(self.index);
+        let raw_options = &component.env_component().options[options_index];
         (
-            self.options,
+            options_index,
             vminstance.instance_flags(raw_options.instance),
-            self.ty,
+            ty,
             raw_options,
         )
     }
@@ -469,21 +447,25 @@ impl Func {
             &mut MaybeUninit<LowerParams>,
         ) -> Result<()>,
         lift: impl FnOnce(&mut LiftContext<'_>, InterfaceType, &LowerReturn) -> Result<Return>,
-    ) -> Result<(Return, ValRaw)>
+    ) -> Result<Return>
     where
         LowerParams: Copy,
         LowerReturn: Copy,
     {
         let export = self.lifted_core_func(store.0);
-        let (_options, _flags, _ty, raw_options) = self.abi_info(store.0);
+
+        let (options_idx, flags, ty, raw_options) = self.abi_info(store.0);
+        let post_return = raw_options
+            .post_return
+            .map(|i| self.instance.id().get(store.0).runtime_post_return(i));
         let instance = self.instance.runtime_instance(raw_options.instance);
+        let async_ = raw_options.async_;
 
         if !store.0.may_enter(instance)? {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
-        let async_type = self.abi_async();
-        store.0.enter_guest_sync_call(None, async_type, instance)?;
+        store.0.enter_guest_sync_call(None, async_, instance)?;
 
         #[repr(C)]
         union Union<Params: Copy, Return: Copy> {
@@ -508,9 +490,14 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        self.with_lower_context(store.as_context_mut(), |cx, ty| {
-            lower(cx, ty, map_maybe_uninit!(space.params))
-        })?;
+        Func::with_lower_context(
+            self.instance,
+            store.as_context_mut(),
+            options_idx,
+            flags,
+            ty,
+            |cx, ty| lower(cx, ty, map_maybe_uninit!(space.params)),
+        )?;
 
         // SAFETY: We are providing the guarantee that all the inputs are valid.
         // The various pointers passed in for the function are all valid since
@@ -547,27 +534,28 @@ impl Func {
         // return values).
         let ret: &LowerReturn = unsafe { map_maybe_uninit!(space.ret).assume_init_ref() };
 
-        // Lift the result into the host while managing post-return state
-        // here as well.
-        //
-        // After a successful lift the return value of the function, which
-        // is currently required to be 0 or 1 values according to the
-        // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
-        // later get used in post-return.
-        let val = self.with_lift_context(store.0, |cx, ty| lift(cx, ty, ret))?;
+        let val = Func::with_lift_context(self.instance, store.0, options_idx, ty, |cx, ty| {
+            lift(cx, ty, ret)
+        })?;
 
         // SAFETY: it's a contract of this function that `LowerReturn` is an
         // appropriate representation of the result of this function.
         let ret_slice = unsafe { storage_as_slice(ret) };
+        let post_return_arg = match ret_slice.len() {
+            0 => ValRaw::i32(0),
+            1 => ret_slice[0],
+            _ => unreachable!(),
+        };
 
-        Ok((
-            val,
-            match ret_slice.len() {
-                0 => ValRaw::i32(0),
-                1 => ret_slice[0],
-                _ => unreachable!(),
-            },
-        ))
+        // SAFETY: `post_return` and `flags` were resolved from this function's
+        // own canonical options above, and `store` is the store this call is
+        // running in.
+        unsafe {
+            call_post_return(&mut store, post_return, post_return_arg, flags)?;
+        }
+        store.0.exit_guest_sync_call()?;
+
+        Ok(val)
     }
 
     #[doc(hidden)]
@@ -580,22 +568,6 @@ impl Func {
     #[deprecated(note = "no longer needs to be called; this function has no effect")]
     #[cfg(feature = "async")]
     pub async fn post_return_async(&self, _store: impl AsContextMut<Data: Send>) -> Result<()> {
-        Ok(())
-    }
-
-    pub(crate) fn post_return_impl(&self, mut store: impl AsContextMut, arg: ValRaw) -> Result<()> {
-        let mut store = store.as_context_mut();
-
-        let vminstance = self.instance.id().get(store.0);
-        let component = vminstance.component();
-        let post_return = self.post_return_core_func(store.0);
-        let flags =
-            vminstance.instance_flags(component.env_component().options[self.options].instance);
-
-        unsafe {
-            call_post_return(&mut store, post_return, arg, flags)?;
-            store.0.exit_guest_sync_call()?;
-        }
         Ok(())
     }
 
@@ -694,44 +666,46 @@ impl Func {
         self.instance
     }
 
-    /// Creates a `LowerContext` using the configuration values of this lifted
-    /// function.
+    /// Creates a `LowerContext` using the provided configuration values and runs
+    /// the given `lower` closure within it.
     ///
     /// The `lower` closure provided should perform the actual lowering and
     /// return the result of the lowering operation which is then returned from
     /// this function as well.
     pub(crate) fn with_lower_context<T>(
-        self,
+        instance: Instance,
         mut store: StoreContextMut<T>,
+        options: OptionsIndex,
+        mut flags: InstanceFlags,
+        ty: TypeFuncIndex,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
-        let (options_idx, mut flags, ty, _) = self.abi_info(store.0);
-
         // Perform the actual lowering, where while this is running the
         // component is forbidden from calling imports.
         unsafe {
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
         }
-        let mut cx = LowerContext::new(store.as_context_mut(), options_idx, self.instance);
+        let mut cx = LowerContext::new(store.as_context_mut(), options, instance);
         let param_ty = InterfaceType::Tuple(cx.types[ty].params);
         let result = lower(&mut cx, param_ty);
         unsafe { flags.set_may_leave(true) };
         result
     }
 
-    /// Creates a `LiftContext` using the configuration values with this lifted
-    /// function.
+    /// Creates a `LiftContext` using the provided configuration values and runs
+    /// the given `lift` closure within it.
     ///
     /// The closure `lift` provided should actually perform the lift itself and
     /// the result of that closure is returned from this function call as well.
     pub(crate) fn with_lift_context<R>(
-        self,
+        instance: Instance,
         store: &mut StoreOpaque,
+        options: OptionsIndex,
+        ty: TypeFuncIndex,
         lift: impl FnOnce(&mut LiftContext, InterfaceType) -> Result<R>,
     ) -> Result<R> {
-        let (options, _flags, ty, _) = self.abi_info(store);
-        let mut cx = LiftContext::new(store, options, self.instance)?;
+        let mut cx = LiftContext::new(store, options, instance)?;
         let ty = InterfaceType::Tuple(cx.types[ty].results);
         lift(&mut cx, ty)
     }

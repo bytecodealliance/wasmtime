@@ -5828,11 +5828,11 @@ pub(crate) fn prepare_call<T, R>(
     handle: Func,
     param_count: usize,
     host_future_present: bool,
-    lower_params: impl FnOnce(Func, StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
+    lower_params: impl FnOnce(StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
     + Send
     + Sync
     + 'static,
-    lift_result: impl FnOnce(Func, &mut StoreOpaque, &[ValRaw]) -> Result<Box<dyn Any + Send + Sync>>
+    lift_result: impl FnOnce(&mut StoreOpaque, &[ValRaw]) -> Result<Box<dyn Any + Send + Sync>>
     + Send
     + Sync
     + 'static,
@@ -5861,11 +5861,11 @@ pub(crate) fn prepare_call<T, R>(
     let thread = GuestTask::new(
         state,
         Box::new(for_any_lower(move |store, params| {
-            lower_params(handle, token.as_context_mut(store), params)
+            lower_params(token.as_context_mut(store), params)
         })),
         LiftResult {
             lift: Box::new(for_any_lift(move |store, result| {
-                lift_result(handle, store, result)
+                lift_result(store, result)
             })),
             ty: task_return_type,
             memory,
@@ -5976,7 +5976,9 @@ fn queue_call0<T: 'static>(
     let callback = raw_options.callback;
     let instance = handle.instance();
     let callee = handle.lifted_core_func(store.0);
-    let post_return = handle.post_return_core_func(store.0);
+    let post_return = raw_options
+        .post_return
+        .map(|i| instance.id().get(store.0).runtime_post_return(i));
     let callback = callback.map(|i| {
         let instance = instance.id().get(store.0);
         SendSyncPtr::new(instance.runtime_callback(i))

@@ -207,7 +207,7 @@ where
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
         let mut store = store.as_context_mut();
 
-        if self.func.abi_async() {
+        if self.func.abi_async(store.0) {
             bail!("must enable the `component-model-async` feature to call async-lifted exports")
         }
 
@@ -228,7 +228,7 @@ where
         // safety requirements of `Lift` and `Lower` on `Params` and `Return` in
         // combination with checking the various possible branches here and
         // dispatching to appropriately typed functions.
-        let (result, post_return_arg) = unsafe {
+        let result = unsafe {
             // This type is used as `LowerParams` for `call_raw` which is either
             // `Params::Lower` or `ValRaw` representing it's either on the stack
             // or it's on the heap. This allocates 1 extra `ValRaw` on the stack
@@ -261,8 +261,6 @@ where
                 )
             }
         }?;
-
-        self.func.post_return_impl(store, post_return_arg)?;
 
         Ok(result)
     }
