@@ -185,6 +185,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 65536
                     memory.copy
+                    (loop)
                 )
             )
         "#,
@@ -201,6 +202,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 65536
                     memory.fill
+                    (loop)
                 )
             )
         "#,
@@ -219,6 +221,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 65536
                     memory.init $d
+                    (loop)
                 )
 
                 (data $d "{data}")
@@ -238,6 +241,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     table.copy
+                    (loop)
                 )
             )
         "#,
@@ -254,6 +258,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     ref.null func
                     i32.const 20000
                     table.fill
+                    (loop)
                 )
             )
         "#,
@@ -270,6 +275,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 20000
                     table.grow
                     drop
+                    (loop)
                 )
             )
         "#,
@@ -288,6 +294,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     table.init $e
+                    (loop)
                 )
                 (func $f)
                 (elem $e func {elems})
@@ -306,6 +313,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 2_0000
                     array.new_default $a
                     drop
+                    (loop)
                 )
             )
         "#,
@@ -326,6 +334,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     array.copy $a $a
+                    (loop)
                 )
             )
         "#,
@@ -344,6 +353,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     array.fill $a
+                    (loop)
                 )
             )
         "#,
@@ -361,6 +371,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 65536
                     array.new_data $a $d
                     drop
+                    (loop)
                 )
 
                 (data $d "{data}")
@@ -383,6 +394,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     array.init_data $a $d
+                    (loop)
                 )
 
                 (data $d "{data}")
@@ -403,6 +415,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 20000
                     array.new_elem $a $e
                     drop
+                    (loop)
                 )
                 (func $f)
                 (elem $e func {elems})
@@ -425,6 +438,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     array.init_elem $a $e
+                    (loop)
                 )
                 (func $f)
                 (elem $e func {elems})
@@ -444,6 +458,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 20000
                     array.new $a
                     drop
+                    (loop)
                 )
             )
         "#,
@@ -829,44 +844,168 @@ fn custom_variable_operator_cost(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-fn variable_operator_cost_failed_growth(config: &mut Config) -> Result<()> {
+const COST_MEMORY_GROW_PER_PAGE: u64 = 7;
+const COST_TABLE_GROW_PER_ELEMENT: u64 = 19;
+const COST_MEMORY_GROW: u64 = 2;
+const COST_TABLE_GROW: u64 = 3;
+
+const SMALL_UNITS: u64 = 5;
+const LARGE_UNITS: u64 = 200;
+const DYNAMIC_UNITS: u64 = 50;
+
+const SMALL_COST: u64 = 128;
+
+const _: () = assert!(SMALL_UNITS * COST_MEMORY_GROW_PER_PAGE <= SMALL_COST);
+const _: () = assert!(SMALL_UNITS * COST_TABLE_GROW_PER_ELEMENT <= SMALL_COST);
+const _: () = assert!(LARGE_UNITS * COST_MEMORY_GROW_PER_PAGE > SMALL_COST);
+const _: () = assert!(LARGE_UNITS * COST_TABLE_GROW_PER_ELEMENT > SMALL_COST);
+
+const GROW_FIXED_FUEL: u64 = COST_MEMORY_GROW + COST_TABLE_GROW + 1;
+
+#[derive(Clone, Copy)]
+enum GrowSize {
+    ConstSmall,
+    ConstLarge,
+    Dynamic,
+}
+
+impl GrowSize {
+    fn units(self) -> u64 {
+        match self {
+            GrowSize::ConstSmall => SMALL_UNITS,
+            GrowSize::ConstLarge => LARGE_UNITS,
+            GrowSize::Dynamic => DYNAMIC_UNITS,
+        }
+    }
+
+    fn fuel_consumed(self) -> u64 {
+        self.units() * (COST_MEMORY_GROW_PER_PAGE + COST_TABLE_GROW_PER_ELEMENT)
+    }
+}
+
+/// Runs a wasm which grows a memory and a table each by `size` and returns the
+/// fuel consumed. The memory and table max sizes will be set so that the grow
+/// succeeds or fails as determined by the `succeeds` parameter.
+fn grow_fuel_consumed(config: &mut Config, size: GrowSize, succeeds: bool) -> Result<u64> {
     config.consume_fuel(true);
-    let mut op_cost = OperatorCost {
+    let op_cost = OperatorCost {
         I32Const: 0,
+        LocalGet: 0,
         RefNull: 0,
-        MemoryGrow: 0,
-        TableGrow: 0,
+        MemoryGrow: COST_MEMORY_GROW as u8,
+        TableGrow: COST_TABLE_GROW as u8,
+        variable: VariableOperatorCost {
+            memory_grow_per_page: COST_MEMORY_GROW_PER_PAGE as u8,
+            table_grow_per_element: COST_TABLE_GROW_PER_ELEMENT as u8,
+            ..Default::default()
+        },
         ..Default::default()
     };
-    op_cost.variable.memory_grow_per_page = 7;
-    op_cost.variable.table_grow_per_element = 19;
-    config.operator_cost(op_cost.clone());
+    config.operator_cost(op_cost);
+
+    let delta = size.units();
+    let maximum = if succeeds { delta } else { 0 };
+    // A constant delta is baked into the code so the compiler knows its size; a
+    // dynamic delta is read from a parameter so the size is unknown until run
+    // time.
+    let (params, grow_arg) = match size {
+        GrowSize::Dynamic => ("(param i32)", "local.get 0".to_string()),
+        _ => ("", format!("i32.const {delta}")),
+    };
 
     let engine = Engine::new(config)?;
     let module = Module::new(
         &engine,
-        r#"(module
-            (memory 1 1)
-            (table 0 0 funcref)
-            (func (export "main")
-                ;; these exceed the max limits so they fail
-                i32.const 5 memory.grow drop
-                ref.null func i32.const 5 table.grow drop)
-        )"#,
+        &format!(
+            r#"(module
+                (memory 0 {maximum})
+                (table 0 {maximum} funcref)
+                (func (export "main") {params} (result i32 i32)
+                    {grow_arg} memory.grow 
+                    ref.null func {grow_arg} table.grow
+                )
+            )"#
+        ),
     )?;
     let mut store = Store::new(&engine, ());
-    store.set_fuel(1_000)?;
+    store.set_fuel(1_000_000)?;
     let instance = Instance::new(&mut store, &module, &[])?;
-    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
 
     let initial_fuel = store.get_fuel()?;
-    main.call(&mut store, ())?;
-    let cost_of_execution = 5 * u64::from(op_cost.variable.memory_grow_per_page)
-        + 5 * u64::from(op_cost.variable.table_grow_per_element)
-        + 1;
-    assert_eq!(store.get_fuel()?, initial_fuel - cost_of_execution);
+    let result = match size {
+        GrowSize::Dynamic => {
+            let main = instance.get_typed_func::<i32, (i32, i32)>(&mut store, "main")?;
+            main.call(&mut store, delta as i32)?
+        }
+        _ => {
+            let main = instance.get_typed_func::<(), (i32, i32)>(&mut store, "main")?;
+            main.call(&mut store, ())?
+        }
+    };
+    if succeeds {
+        assert_eq!(result, (0, 0));
+    } else {
+        assert_eq!(result, (-1, -1));
+    }
+    Ok(initial_fuel - store.get_fuel()?)
+}
+
+#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn const_small_grow_success(config: &mut Config) -> Result<()> {
+    let size = GrowSize::ConstSmall;
+    let consumed = grow_fuel_consumed(config, size, true)?;
+    assert_eq!(consumed, size.fuel_consumed() + GROW_FIXED_FUEL);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn const_small_grow_failure(config: &mut Config) -> Result<()> {
+    let size = GrowSize::ConstSmall;
+    let consumed = grow_fuel_consumed(config, size, false)?;
+    assert_eq!(consumed, size.fuel_consumed() + GROW_FIXED_FUEL);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn const_large_grow_success(config: &mut Config) -> Result<()> {
+    let size = GrowSize::ConstLarge;
+    let consumed = grow_fuel_consumed(config, size, true)?;
+    assert_eq!(consumed, size.fuel_consumed() + GROW_FIXED_FUEL);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn const_large_grow_failure(config: &mut Config) -> Result<()> {
+    let size = GrowSize::ConstLarge;
+    let consumed = grow_fuel_consumed(config, size, false)?;
+    assert_eq!(consumed, GROW_FIXED_FUEL);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn dynamic_grow_success(config: &mut Config) -> Result<()> {
+    let size = GrowSize::Dynamic;
+    let consumed = grow_fuel_consumed(config, size, true)?;
+    assert_eq!(consumed, size.fuel_consumed() + GROW_FIXED_FUEL);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn dynamic_grow_failure(config: &mut Config) -> Result<()> {
+    let size = GrowSize::Dynamic;
+    let consumed = grow_fuel_consumed(config, size, false)?;
+    assert_eq!(consumed, GROW_FIXED_FUEL);
 
     Ok(())
 }
@@ -911,61 +1050,54 @@ fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(memory64), strategies(not(Winch)))]
+#[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
 #[cfg_attr(miri, ignore)]
-fn memory64_variable_operator_cost_saturates(config: &mut Config) -> Result<()> {
+fn variable_operator_cost_charged_only_on_success(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
-    let mut operator_cost = OperatorCost::default();
-    operator_cost.variable.memory_grow_per_page = 2;
-    config.operator_cost(operator_cost);
+    let op_cost = OperatorCost {
+        I32Const: 0,
+        LocalGet: 0,
+        MemoryFill: 0,
+        variable: VariableOperatorCost {
+            memory_fill_per_byte: 3,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    config.operator_cost(op_cost);
 
     let engine = Engine::new(config)?;
     let module = Module::new(
         &engine,
         r#"(module
-            (memory i64 0 0)
-            (func (export "grow") (param i64) (result i64)
-                local.get 0 memory.grow)
+            (memory 1)
+            (func (export "fill") (param $dst i32) (param $len i32)
+                local.get $dst
+                i32.const 0
+                local.get $len
+                memory.fill)
         )"#,
     )?;
     let mut store = Store::new(&engine, ());
-    store.set_fuel(10_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let grow = instance.get_typed_func::<i64, i64>(&mut store, "grow")?;
+    let fill = {
+        let instance = Instance::new(&mut store, &module, &[])?;
+        instance.get_typed_func::<(i32, i32), ()>(&mut store, "fill")?
+    };
 
-    // i64::MAX * 2 must saturate at i64::MAX rather than wrap to -2.
-    let error = grow.call(&mut store, i64::MAX).unwrap_err();
-    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
+    // In-bounds fill of 1000 bytes: billed 1000 * 3 on the success path, plus
+    // the single baseline unit.
+    store.set_fuel(1_000_000)?;
+    let initial_fuel = store.get_fuel()?;
+    fill.call(&mut store, (0, 1000))?;
+    assert_eq!(initial_fuel - store.get_fuel()?, 1000 * 3 + 1);
 
-    Ok(())
-}
+    // Out-of-bounds fill isn't charged.
+    store.set_fuel(1_000_000)?;
+    let initial_fuel = store.get_fuel()?;
+    let error = fill.call(&mut store, (65_000, 1000)).unwrap_err();
+    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
+    assert_eq!(store.get_fuel()?, initial_fuel);
 
-#[wasmtime_test(wasm_features(memory64, reference_types), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-#[cfg(target_pointer_width = "64")]
-fn table64_variable_operator_cost_saturates(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let mut operator_cost = OperatorCost::default();
-    operator_cost.variable.table_grow_per_element = 2;
-    config.operator_cost(operator_cost);
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (table i64 0 0 funcref)
-            (func (export "grow") (param i64) (result i64)
-                ref.null func local.get 0 table.grow)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(10_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let grow = instance.get_typed_func::<i64, i64>(&mut store, "grow")?;
-
-    // i64::MAX * 2 must saturate at i64::MAX rather than wrap to -2.
-    let error = grow.call(&mut store, i64::MAX).unwrap_err();
-    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
     Ok(())
 }
 

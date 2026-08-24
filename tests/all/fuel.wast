@@ -385,3 +385,131 @@
       drop
     )
     (start $f)))
+
+;; The bulk operations below request enough units (> 128, the
+;; `SMALL_BULK_OP_COST` fast-path threshold) that the size-proportional
+;; "variable" fuel is deferred and consumed after the op runs, rather than up
+;; front like the smaller ops above.
+(assert_fuel 207
+  (module
+    (memory 1)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      memory.copy
+    )
+    (start $f)))
+
+(assert_fuel 207
+  (module
+    (memory 1)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      memory.fill
+    )
+    (start $f)))
+
+(assert_fuel 207
+  (module
+    (memory 1)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      memory.init $d
+    )
+    (start $f)
+    (data $d "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")))
+
+(assert_fuel 207
+  (module
+    (table 200 funcref)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      table.copy
+    )
+    (start $f)))
+
+(assert_fuel 207
+  (module
+    (table 200 funcref)
+    (func $f
+      i32.const 0
+      ref.null func
+      i32.const 200
+      table.fill
+    )
+    (start $f)))
+
+(assert_fuel 206
+  (module
+    (table 0 funcref)
+    (func $f
+      ref.null func
+      i32.const 200
+      table.grow
+      drop
+    )
+    (start $f)))
+
+(assert_fuel 207
+  (module
+    (table 200 funcref)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      table.init $e
+    )
+    (start $f)
+    (elem $e func $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f)))
+
+(assert_fuel 205
+  (module
+    (type $a (array (mut funcref)))
+    (func $f
+      i32.const 200
+      array.new_default $a
+      drop
+    )
+    (start $f)))
+
+(assert_fuel 206
+  (module
+    (type $a (array (mut i8)))
+    (func $f
+      i32.const 0
+      i32.const 200
+      array.new_data $a $d
+      drop
+    )
+    (data $d "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    (start $f)))
+
+(assert_fuel 206
+  (module
+    (type $a (array (mut funcref)))
+    (func $f
+      i32.const 0
+      i32.const 200
+      array.new_elem $a $e
+      drop
+    )
+    (start $f)
+    (elem $e func $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f)))
+
+(assert_fuel 206
+  (module
+    (type $a (array (mut funcref)))
+    (func $f
+      ref.null func
+      i32.const 200
+      array.new $a
+      drop
+    )
+    (start $f)))
