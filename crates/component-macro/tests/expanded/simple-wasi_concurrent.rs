@@ -273,10 +273,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::create_directory_at(host)
                                 .await;
                             Ok((r,))
@@ -290,10 +290,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::stat(host).await;
                             Ok((r,))
                         })
