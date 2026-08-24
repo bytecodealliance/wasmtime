@@ -10,6 +10,8 @@ use crate::runtime::vm::SendSyncPtr;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
 use crate::vm::stack_switching::VMStackChain;
+#[cfg(has_mmu_interruption)]
+use alloc::sync::Arc;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
 use core::fmt;
@@ -17,6 +19,7 @@ use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::ops::Range;
 use core::ptr::{self, NonNull};
+#[cfg(has_mmu_interruption)]
 use core::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(has_mmu_interruption)]
 use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect, munmap};
@@ -1388,10 +1391,15 @@ impl VMStoreContext {
 
     /// Iff MMU interruption is on, returns an object from which we can
     /// perform an interrupt (that is, protect the interrupt page).
-    pub fn mmu_interrupter(&self) -> Option<MmuInterrupter> {
+    ///
+    /// `running` is the store's "a fiber of this store is currently resumed"
+    /// flag, maintained by `StoreOpaque`; see
+    /// [`MmuInterrupter::is_running()`].
+    pub fn mmu_interrupter(&self, fibers_on_stack: Arc<AtomicUsize>) -> Option<MmuInterrupter> {
         if self.mmu_interrupt_page_ptr.is_some() {
             Some(MmuInterrupter {
                 vm_store_context: crate::runtime::vm::SendSyncPtr::new(NonNull::from(self)),
+                fibers_on_stack,
             })
         } else {
             None
@@ -1451,6 +1459,7 @@ impl VMStoreContext {
 #[derive(Clone)]
 pub struct MmuInterrupter {
     vm_store_context: SendSyncPtr<VMStoreContext>,
+    fibers_on_stack: Arc<AtomicUsize>,
 }
 
 #[cfg(has_mmu_interruption)]
@@ -1464,6 +1473,17 @@ impl MmuInterrupter {
         // the ptr is stable for the store's lifetime, and we here perform only
         // a thread-safe `mprotect`.
         unsafe { self.vm_store_context.as_ref().protect_interrupt_page() }
+    }
+
+    /// Returns whether the Store this is associated with is actually running
+    /// Wasm code at the moment. If it isn't, we oughtn't bother interrupting
+    /// it, lest it interrupt itself immediately after it leaves the idle state.
+    ///
+    /// This also returns true if the Store is executing a host call that was
+    /// called from Wasm, so it's a bit of an overshoot.
+    #[cfg(has_mmu_interruption)]
+    pub fn is_running(&self) -> bool {
+        self.fibers_on_stack.load(Ordering::Relaxed) > 0
     }
 }
 

@@ -21,6 +21,7 @@ use tokio::io::{self, AsyncWrite};
 use tokio::sync::{Notify, Semaphore};
 use wasmtime::component::{Component, GuestTaskId, Linker};
 use wasmtime::error::Context as _;
+//use wasmtime::runtime::MmuInterrupter;
 use wasmtime::{
     AsContextMut as _, Engine, Result, Store, StoreContextMut, StoreLimits, UpdateDeadline, bail,
 };
@@ -677,7 +678,7 @@ impl ServeCommand {
         let (interrupter_registry, _interrupter_thread) = if using_mmu_timeout {
             let registry = Arc::new(MmuInterrupterRegistry::default());
             let thread = MmuInterruptThread::spawn(
-                EPOCH_INTERRUPT_PERIOD.min(self.run.common.wasm.timeout.unwrap_or(Duration::MAX)),
+                mmu_interrupt_period().min(self.run.common.wasm.timeout.unwrap_or(Duration::MAX)),
                 registry.clone(),
             );
             (Some(registry), Some(thread))
@@ -941,7 +942,12 @@ impl HandlerState for HostHandlerState {
         #[cfg(has_mmu_interruption)]
         if let Some(registry) = &self.interrupter_registry {
             if let Some(interrupter) = store.mmu_interrupter() {
-                registry.register(instance_id, Box::new(move || interrupter.interrupt()));
+                let interrupter_again = interrupter.clone();
+                registry.register(
+                    instance_id,
+                    Box::new(move || interrupter.interrupt()),
+                    Box::new(move || interrupter_again.is_running()),
+                );
             }
         }
 
@@ -1035,7 +1041,36 @@ impl GracefulShutdown {
 /// When executing with a timeout enabled, this is how frequently epoch or (at
 /// floor) MMU interrupts will be executed to check for timeouts. If guest
 /// profiling is enabled, the guest epoch period will be used.
-const EPOCH_INTERRUPT_PERIOD: Duration = Duration::from_millis(50);
+const EPOCH_INTERRUPT_PERIOD: Duration = Duration::from_millis(12);
+
+/// The target per-store interrupt period, i.e. how often we aim to interrupt
+/// each *running* store.
+///
+/// Normally [`EPOCH_INTERRUPT_PERIOD`], but overridable in milliseconds via
+/// `WASMTIME_MMU_INTERRUPT_PERIOD_MS` so the period can be swept while
+/// benchmarking without a rebuild. Note that batching only engages when this
+/// drops below `running_stores * MIN_INTERRUPT_SLEEP`; above that, the period
+/// is reachable by ticking faster and each tick interrupts one store.
+#[cfg(has_mmu_interruption)]
+fn mmu_interrupt_period() -> Duration {
+    match std::env::var("WASMTIME_MMU_INTERRUPT_PERIOD_MS") {
+        Ok(value) => match value.parse::<f64>() {
+            Ok(ms) if ms > 0.0 => {
+                let period = Duration::from_secs_f64(ms / 1000.0);
+                log::info!("MMU interrupt period overridden to {period:?}");
+                period
+            }
+            _ => {
+                log::warn!(
+                    "ignoring un-parseable WASMTIME_MMU_INTERRUPT_PERIOD_MS={value:?}; \
+                     using {EPOCH_INTERRUPT_PERIOD:?}"
+                );
+                EPOCH_INTERRUPT_PERIOD
+            }
+        },
+        Err(_) => EPOCH_INTERRUPT_PERIOD,
+    }
+}
 
 struct EpochThread {
     shutdown: Arc<AtomicBool>,
@@ -1081,8 +1116,8 @@ struct MmuInterrupterRegistry {
 #[derive(Default)]
 struct MmuInterrupterRegistryInner {
     entries: Vec<MmuInterrupterEntry>,
-    /// Index of the `entries` element that will next be interrupted by
-    /// `interrupt_next()`:
+    /// Index of the `entries` element at which the next round of interruption
+    /// will begin.
     next: usize,
 }
 
@@ -1090,6 +1125,13 @@ struct MmuInterrupterRegistryInner {
 struct MmuInterrupterEntry {
     instance_id: u64,
     interrupt: Box<dyn Fn() + Send + Sync>,
+    /// Whether a fiber of this store is currently resumed, i.e. whether it
+    /// could possibly be running guest code right now.
+    ///
+    /// TODO (This and `interrupt` would more naturally be a single
+    /// `wasmtime::runtime::vm::MmuInterrupter`, but that type is not nameable
+    /// from outside the `wasmtime` crate.)
+    is_running: Box<dyn Fn() -> bool + Send + Sync>,
 }
 
 #[cfg(has_mmu_interruption)]
@@ -1099,11 +1141,17 @@ impl MmuInterrupterRegistry {
     }
 
     /// Registers a store's interrupter by its `instance_id`.
-    fn register(&self, instance_id: u64, interrupt: Box<dyn Fn() + Send + Sync>) {
+    fn register(
+        &self,
+        instance_id: u64,
+        interrupt: Box<dyn Fn() + Send + Sync>,
+        is_running: Box<dyn Fn() -> bool + Send + Sync>,
+    ) {
         let mut inner = self.lock();
         inner.entries.push(MmuInterrupterEntry {
             instance_id,
             interrupt,
+            is_running,
         });
     }
 
@@ -1125,7 +1173,11 @@ impl MmuInterrupterRegistry {
     }
 
     /// Interrupts the next store in round-robin order, returning the number of
-    /// stores currently registered.
+    /// stores currently running Wasm code.
+    ///
+    /// We skip stores that aren't currently running. Interrupting them would be
+    /// counterproductive, as the interruption would take effect very soon after
+    /// they swap back in, rubbing them of their timeslice.
     fn interrupt_next(&self) -> usize {
         // It's vital to hold this lock while interrupt() runs. Otherwise,
         // unregister() could be called before or during, and interrupt() could
@@ -1139,14 +1191,34 @@ impl MmuInterrupterRegistry {
         if inner.next >= len {
             inner.next = 0;
         }
-        (inner.entries[inner.next].interrupt)();
-        inner.next += 1;
-        len
+
+        let mut running = 0;
+        let mut interrupted_i: Option<usize> = None;
+        let (head, tail) = inner.entries.split_at(inner.next);
+        let head_enum = head.iter().enumerate();
+        let tail_enum = tail.iter().enumerate().map(|(i, e)| (i + inner.next, e));
+        for (i, entry) in tail_enum.chain(head_enum) {
+            if (entry.is_running)() {
+                running += 1;
+                if interrupted_i.is_none() {
+                    (entry.interrupt)();
+                    interrupted_i = Some(i);
+                }
+            }
+        }
+        inner.next = match interrupted_i {
+            Some(index) => index + 1,
+            // If nothing was found running, still advance so we don't just wait
+            // around for this entry to start, pouncing on it as soon as it
+            // does.
+            None => inner.next + 1,
+        };
+        running
     }
 }
 
 /// A background thread that triggers MMU interrupts, in round-robin order,
-/// across all live stores registered in an [`MmuInterruptRegistry`].
+/// across the live, *running* stores registered in an [`MmuInterrupterRegistry`].
 ///
 /// The cadence is adaptive: with `N` live stores and one interrupt per tick,
 /// ticking every `period / N` interrupts every store about once per timeout
@@ -1161,27 +1233,26 @@ struct MmuInterruptThread {
 
 #[cfg(has_mmu_interruption)]
 impl MmuInterruptThread {
-    /// Spins off a thread to periodically interrupt each worker in a passed-in
-    /// registry. Each worker is interrupted about once per `period`. There's a
-    /// little bit of slop because we update our worker count only after each
-    /// interruption.
+    /// Spins off a thread to periodically interrupt each running worker in a
+    /// passed-in registry. Each is interrupted about once per `period`. There's
+    /// a little bit of slop because we update our running count only after each
+    /// round of interruption.
     fn spawn(period: Duration, registry: Arc<MmuInterrupterRegistry>) -> Self {
         let shutdown = Arc::new(AtomicBool::new(false));
         let handle = {
             let shutdown = Arc::clone(&shutdown);
             std::thread::spawn(move || {
-                let mut live = 0;
+                let mut running: usize = 0;
                 while !shutdown.load(Ordering::Relaxed) {
-                    // Even if nothing is running now (`live` = 0), be there to
+                    // Even if nothing is running now (`running` = 0), be there to
                     // interrupt within `period` in case something starts up.
                     let period_between_workers =
-                        period / u32::try_from(live.max(1)).unwrap_or(u32::MAX);
-                    // At the least, wait a little bit to avoid turning this
-                    // into a busy loop.
-                    let duration = period_between_workers.max(Duration::from_micros(500));
+                        period / u32::try_from(running.max(1)).unwrap_or(u32::MAX);
 
-                    std::thread::sleep(duration);
-                    live = registry.interrupt_next();
+                    // sleep() can't sleep much shorter than 169µs. Introduce
+                    // batching or something if we need better.
+                    std::thread::sleep(period_between_workers);
+                    running = registry.interrupt_next();
                 }
             })
         };

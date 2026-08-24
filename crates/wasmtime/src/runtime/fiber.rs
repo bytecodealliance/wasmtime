@@ -7,6 +7,8 @@ use core::mem;
 use core::ops::Range;
 use core::pin::Pin;
 use core::ptr::{self, NonNull};
+#[cfg(has_mmu_interruption)]
+use core::sync::atomic::Ordering;
 use core::task::{Context, Poll};
 use wasmtime_fiber::{Fiber, FiberStack, Suspend};
 #[cfg(all(feature = "component-model-async", feature = "gc"))]
@@ -618,6 +620,10 @@ impl FiberResumeState {
             .unwrap_or(ptr::null_mut()..ptr::null_mut());
         let mut executor = self.executor;
         store.swap_executor(&mut executor);
+
+        #[cfg(has_mmu_interruption)]
+        store.increment_fibers();
+
         PriorFiberResumeState {
             tls,
             mpk,
@@ -667,7 +673,39 @@ impl StoreOpaque {
     ) -> Option<NonNull<Context<'static>>> {
         mem::replace(&mut self.fiber_async_state_mut().current_future_cx, ptr)
     }
+
+    /// Increments the count of fibers currently stacked up to run on this store.
+    #[cfg(has_mmu_interruption)]
+    fn increment_fibers(&mut self) {
+        // We can Relax here, since this thread is the only one that ever
+        // mutates running_fibers.
+        let num = self.fibers_on_stack.load(Ordering::Relaxed);
+
+        // There's no way wrapping should happen if stack frames are
+        // non-zero in size. You'd run out of addressible memory first.
+        debug_assert!(
+            num < usize::MAX,
+            "The fibers-on-stack count for a Store exceeded the size of a usize."
+        );
+        self.fibers_on_stack
+            .store(num.wrapping_add(1), Ordering::Relaxed);
+    }
+
+    /// Decrements the count of fibers currently stacked up to run on this store.
+    #[cfg(has_mmu_interruption)]
+    fn decrement_fibers(&mut self) {
+        let num = self.fibers_on_stack.load(Ordering::Relaxed);
+        debug_assert!(
+            num > 0,
+            "The fibers-on-stack count for a Store was about to go negative."
+        );
+        self.fibers_on_stack
+            .store(num.wrapping_sub(1), Ordering::Relaxed);
+    }
 }
+
+// Relaxed is fine: any reader must tolerate a stale answer anyway
+// since the truth can change the instant after it is read.
 
 struct PriorFiberResumeState {
     tls: crate::runtime::vm::PreviousAsyncWasmCallState,
@@ -697,6 +735,9 @@ impl PriorFiberResumeState {
 
         let mut executor = self.executor;
         store.swap_executor(&mut executor);
+
+        #[cfg(has_mmu_interruption)]
+        store.decrement_fibers();
 
         FiberResumeState {
             tls,

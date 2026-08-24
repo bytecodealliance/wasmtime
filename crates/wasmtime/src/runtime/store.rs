@@ -98,6 +98,8 @@ use crate::trampoline::VMHostGlobalContext;
 use crate::{BreakpointState, DebugHandler, FrameDataCache};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Table};
+#[cfg(has_mmu_interruption)]
+use alloc::sync::Arc;
 use core::convert::Infallible;
 use core::fmt;
 #[cfg(any(feature = "async", feature = "gc"))]
@@ -108,6 +110,8 @@ use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
 use core::ptr::NonNull;
+#[cfg(has_mmu_interruption)]
+use core::sync::atomic::AtomicUsize;
 #[cfg(any(feature = "async", feature = "gc"))]
 use core::task::Poll;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
@@ -569,6 +573,13 @@ pub struct StoreOpaque {
     /// enabled, so the key-space is unique for each store.)
     #[cfg(feature = "debug")]
     frame_data_cache: FrameDataCache,
+
+    /// The number of fibers currently executing on this Store, including ones
+    /// further down in the call stack which, directly or indirectly, caused the
+    /// current one to run. Used for efficiency of MMU interruption, by letting
+    /// it ignore non-running Stores.
+    #[cfg(has_mmu_interruption)]
+    pub(super) fibers_on_stack: Arc<AtomicUsize>,
 }
 
 /// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
@@ -789,6 +800,8 @@ impl<T> Store<T> {
             hostcall_val_storage: Vec::new(),
             wasm_val_raw_storage: TryVec::new(),
             pkey,
+            #[cfg(has_mmu_interruption)]
+            fibers_on_stack: Arc::new(AtomicUsize::new(0)),
             executor: Executor::new(engine)?,
             #[cfg(feature = "debug")]
             breakpoints: Default::default(),
@@ -1198,7 +1211,9 @@ impl<T> Store<T> {
     /// deadline-based epochs.
     #[cfg(has_mmu_interruption)]
     pub fn mmu_interrupter(&self) -> Option<vm::MmuInterrupter> {
-        self.inner.vm_store_context().mmu_interrupter()
+        self.inner
+            .vm_store_context()
+            .mmu_interrupter(self.inner.fibers_on_stack.clone())
     }
 
     /// Tests whether there is a pending exception.
