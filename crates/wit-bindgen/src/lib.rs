@@ -2856,7 +2856,10 @@ pub fn add_to_linker<T, D>(
         }
 
         if func.kind.is_async() {
-            uwriteln!(self.src, "let host = &caller.with_getter::<D>(host_getter);");
+            uwriteln!(
+                self.src,
+                "let host = &caller.with_getter::<D>(host_getter);"
+            );
         } else if flags.contains(FunctionFlags::STORE) {
             uwriteln!(
                 self.src,
