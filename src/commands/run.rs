@@ -893,9 +893,7 @@ impl RunCommand {
     #[cfg(feature = "debug")]
     pub(crate) async fn invoke_debugger<
         T: Send + 'static,
-        F: for<'a> FnOnce(
-                &'a mut Store<T>,
-            ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
+        F: FnOnce(&mut Store<T>) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>
             + Send
             + 'static,
     >(

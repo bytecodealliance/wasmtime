@@ -1720,7 +1720,7 @@ impl Wasmtime {
                         {id_outer}move |caller: &{wt}::component::Accessor::<T>, rep| {{
                             {id_inner}
                             {wt}::component::__internal::Box::pin(async move {{
-                                let accessor = &caller.with_getter(host_getter);
+                                let accessor = &caller.with_getter::<D>(host_getter);
                                 {wt}::ToWasmtimeResult::to_wasmtime_result(
                                     Host{camel}WithStore::<T>::drop(accessor, {id_arg}{wt}::component::Resource::new_own(rep)).await
                                 )
@@ -1748,7 +1748,7 @@ impl Wasmtime {
         } else {
             let (first_arg, trait_suffix) = if flags.contains(FunctionFlags::STORE) {
                 (
-                    format!("{wt}::component::Access::new(store, host_getter)"),
+                    format!("{wt}::component::Access::<T, D>::new(store, host_getter)"),
                     "WithStore::<T>",
                 )
             } else {
@@ -2856,7 +2856,7 @@ pub fn add_to_linker<T, D>(
         }
 
         if func.kind.is_async() {
-            uwriteln!(self.src, "let host = &caller.with_getter(host_getter);");
+            uwriteln!(self.src, "let host = &caller.with_getter::<D>(host_getter);");
         } else if flags.contains(FunctionFlags::STORE) {
             uwriteln!(
                 self.src,
@@ -2864,7 +2864,7 @@ pub fn add_to_linker<T, D>(
             );
             uwriteln!(
                 self.src,
-                "let host = {wt}::component::Access::new(access_cx, host_getter);"
+                "let host = {wt}::component::Access::<T, D>::new(access_cx, host_getter);"
             );
         } else {
             self.src
