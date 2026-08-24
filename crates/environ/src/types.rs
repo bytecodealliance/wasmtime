@@ -2098,7 +2098,7 @@ impl ConstOp {
     pub fn from_wasmparser(
         env: &dyn TypeConvert,
         op: wasmparser::Operator<'_>,
-        offset: usize,
+        offset: u64,
     ) -> WasmResult<Self> {
         use wasmparser::Operator as O;
         Ok(match op {

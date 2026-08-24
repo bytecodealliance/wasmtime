@@ -344,7 +344,7 @@ fn validate_op_and_get_operand_types<'a>(
     environ: &mut FuncEnvironment<'_>,
     operand_types: &'a mut Vec<wasmtime_environ::WasmValType>,
     op: &wasmparser::Operator<'_>,
-    pos: usize,
+    pos: u64,
 ) -> WasmResult<Option<&'a [wasmtime_environ::WasmValType]>> {
     // Get the operand types for this operator.
     //

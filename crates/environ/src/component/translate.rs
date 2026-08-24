@@ -1367,7 +1367,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 .translate(
                     parser,
                     component
-                        .get(unchecked_range.start..unchecked_range.end)
+                        .get(unchecked_range.start as usize..unchecked_range.end as usize)
                         .ok_or_else(|| {
                             format_err!(
                                 "section range {}..{} is out of bounds (bound = {})",
@@ -1379,7 +1379,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                         })?,
                 )?;
 
-                translation.wasm_module_offset = u64::try_from(unchecked_range.start).unwrap();
+                translation.wasm_module_offset = unchecked_range.start;
                 let static_module_index2 = self.static_modules.push(translation);
                 assert_eq!(static_module_index, static_module_index2);
                 let types = self.validator.types(0).unwrap();
@@ -1387,7 +1387,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                 self.result
                     .initializers
                     .push(LocalInitializer::ModuleStatic(static_module_index, ty));
-                return Ok(Action::Skip(unchecked_range.end - unchecked_range.start));
+                return Ok(Action::Skip(
+                    (unchecked_range.end - unchecked_range.start) as usize,
+                ));
             }
 
             // When a sub-component is found then the current translation state

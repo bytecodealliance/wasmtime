@@ -415,7 +415,7 @@ where
         ops.finish()?;
         return Ok(());
 
-        struct ValidateThenVisit<'a, T, U>(T, &'a mut U, usize);
+        struct ValidateThenVisit<'a, T, U>(T, &'a mut U, u64);
 
         macro_rules! validate_then_visit {
             ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident $ann:tt)*) => {
@@ -448,7 +448,7 @@ where
         /// operator.
         trait VisitorHooks {
             /// Hook prior to visiting an operator.
-            fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()>;
+            fn before_visit_op(&mut self, operator: &Operator, offset: u64) -> Result<()>;
             /// Hook after visiting an operator.
             fn after_visit_op(&mut self) -> Result<()>;
 
@@ -470,7 +470,7 @@ where
                 self.context.reachable || visit_op_when_unreachable(op)
             }
 
-            fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()> {
+            fn before_visit_op(&mut self, operator: &Operator, offset: u64) -> Result<()> {
                 // Handle source location mapping.
                 self.source_location_before_visit_op(offset)?;
 
@@ -2375,7 +2375,7 @@ where
     }
 
     // Hook to handle source location mapping before visiting an operator.
-    fn source_location_before_visit_op(&mut self, offset: usize) -> Result<()> {
+    fn source_location_before_visit_op(&mut self, offset: u64) -> Result<()> {
         let loc = SourceLoc::new(offset as u32);
         let rel = self.source_loc_from(loc);
         self.source_location.current = self.masm.start_source_loc(rel)?;

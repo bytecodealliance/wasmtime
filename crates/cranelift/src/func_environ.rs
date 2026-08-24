@@ -236,7 +236,7 @@ pub struct FuncEnvironment<'module_environment> {
     /// carries no hints.
     branch_hints: Option<Peekable<SectionLimitedIntoIter<'module_environment, BranchHint>>>,
     /// Module-relative byte offset of the current function body's start.
-    func_body_offset: usize,
+    func_body_offset: u64,
 
     /// Cached alias regions for alias analysis.
     pub(crate) alias_regions: AliasRegions<VMOffsets<u8>>,
@@ -250,7 +250,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         wasm_func_ty: &'module_environment WasmFuncType,
         key: FuncKey,
         func_index: Option<FuncIndex>,
-        func_body_offset: usize,
+        func_body_offset: u64,
     ) -> Self {
         let tunables = compiler.tunables();
         let builtin_functions = BuiltinFunctions::new(compiler);
@@ -316,7 +316,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Consume the branch hint for the instruction at module-relative `offset`
     /// (i.e. `builder.srcloc().bits()`), if any. The lazy decoder only moves
     /// forward, making this O(n) over a function body.
-    pub(crate) fn take_branch_hint(&mut self, offset: usize) -> Option<BranchHint> {
+    pub(crate) fn take_branch_hint(&mut self, offset: u64) -> Option<BranchHint> {
         // Fast path: no hints (always so when the proposal is off), and this
         // runs for every `if`/`br_if`.
         let hints = self.branch_hints.as_mut()?;
