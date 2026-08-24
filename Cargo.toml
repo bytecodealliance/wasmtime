@@ -791,3 +791,18 @@ fpr = "fpr"
 
 [workspace.metadata.typos.files]
 extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt", "*.isle" ]
+
+[patch.crates-io]
+wasmparser = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wat = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wast = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wasmprinter = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wasm-encoder = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wasm-smith = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wasm-mutate = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wit-parser = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wit-component = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wasm-wave = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+wasm-metadata = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
+json-from-wast = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "a7a7254c359e82c7a55b9827ddca30a42eecb1e9" }
