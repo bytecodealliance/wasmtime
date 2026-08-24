@@ -24,6 +24,7 @@ fn pick_type_index(indices: &[u32], raw: u32) -> Option<u32> {
     }
 }
 
+/// Returns the element field if the indexed type is an array
 fn array_element<'a>(
     types: &'a Types,
     encoding_order: &[TypeId],
