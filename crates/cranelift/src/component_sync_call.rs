@@ -69,21 +69,27 @@ where
         .load(&mut builder.cursor(), vmctx);
 
     // Link the previous current thread in as this frame's parent.
-    let parent = alias_regions.vmstore_context_current_thread(&mut builder.cursor(), vmstore);
-    alias_regions.store_vmdeferred_thread_parent(&mut builder.cursor(), slot_addr, parent);
+    let parent = alias_regions
+        .vm_store_context()
+        .current_thread()
+        .load(&mut builder.cursor(), vmstore);
+    alias_regions
+        .vm_deferred_thread()
+        .parent()
+        .store(&mut builder.cursor(), slot_addr, parent);
 
     // Record the deferred `enter_sync_call` arguments.
-    alias_regions.store_vmdeferred_thread_caller_instance(
+    alias_regions.vm_deferred_thread().caller_instance().store(
         &mut builder.cursor(),
         slot_addr,
         args.caller_instance,
     );
-    alias_regions.store_vmdeferred_thread_callee_async(
+    alias_regions.vm_deferred_thread().callee_async().store(
         &mut builder.cursor(),
         slot_addr,
         args.callee_async,
     );
-    alias_regions.store_vmdeferred_thread_callee_instance(
+    alias_regions.vm_deferred_thread().callee_instance().store(
         &mut builder.cursor(),
         slot_addr,
         args.callee_instance,
@@ -114,7 +120,11 @@ where
     }
 
     // Publish the deferred thread as the store's current thread.
-    alias_regions.store_vmstore_context_current_thread(&mut builder.cursor(), vmstore, slot_addr);
+    alias_regions.vm_store_context().current_thread().store(
+        &mut builder.cursor(),
+        vmstore,
+        slot_addr,
+    );
 
     slot
 }
@@ -159,7 +169,10 @@ where
         .vmctx()
         .store_context()
         .load(&mut builder.cursor(), vmctx);
-    let cur = alias_regions.vmstore_context_current_thread(&mut builder.cursor(), vmstore);
+    let cur = alias_regions
+        .vm_store_context()
+        .current_thread()
+        .load(&mut builder.cursor(), vmstore);
     let is_fast = builder.ins().icmp(IntCC::Equal, cur, slot_addr);
 
     let fast_block = builder.create_block();
@@ -173,8 +186,14 @@ where
 
     // Fast path: pop the deferred thread and restore the caller's context.
     builder.switch_to_block(fast_block);
-    let parent = alias_regions.vmdeferred_thread_parent(&mut builder.cursor(), slot_addr);
-    alias_regions.store_vmstore_context_current_thread(&mut builder.cursor(), vmstore, parent);
+    let parent = alias_regions
+        .vm_deferred_thread()
+        .parent()
+        .load(&mut builder.cursor(), slot_addr);
+    alias_regions
+        .vm_store_context()
+        .current_thread()
+        .store(&mut builder.cursor(), vmstore, parent);
     for i in 0..u8::try_from(NUM_COMPONENT_CONTEXT_SLOTS).unwrap() {
         let saved =
             alias_regions.vmdeferred_thread_saved_context(&mut builder.cursor(), slot_addr, i);

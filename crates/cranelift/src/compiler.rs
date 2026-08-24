@@ -41,7 +41,7 @@ use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
     FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize, HostCall,
-    InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder,
+    InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder, PtrSize,
     StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables,
     WasmFuncType, WasmValType, prelude::*,
 };
@@ -252,8 +252,15 @@ impl Compiler {
 
         // Load the actual callee out of the
         // `VMArrayCallHostFuncContext::host_func`.
+        let func_ref_offset = alias_regions
+            .offsets()
+            .get_ptr_size()
+            .vmarray_call_host_func_context_func_ref();
         let callee = alias_regions
-            .vmarray_call_host_func_context_array_call(&mut builder.cursor(), callee_vmctx);
+            .vm_func_ref()
+            .array_call()
+            .relative_to(func_ref_offset.into())
+            .load(&mut builder.cursor(), callee_vmctx);
 
         // Do an indirect call to the callee.
         let callee_signature = builder.func.import_signature(array_call_sig);
@@ -273,9 +280,11 @@ impl Compiler {
                 .store_context()
                 .load(&mut builder.cursor(), caller_vmctx);
             let old_version = alias_regions
-                .vmstore_context_execution_version(&mut builder.cursor(), vmstore_ctx_ptr);
+                .vm_store_context()
+                .execution_version()
+                .load(&mut builder.cursor(), vmstore_ctx_ptr);
             let new_version = builder.ins().iadd_imm_s(old_version, 1);
-            alias_regions.store_vmstore_context_execution_version(
+            alias_regions.vm_store_context().execution_version().store(
                 &mut builder.cursor(),
                 vmstore_ctx_ptr,
                 new_version,
@@ -562,7 +571,9 @@ impl wasmtime_environ::Compiler for Compiler {
                 .to_deferred_load(&mut context.func);
             let stack_limit = func_env
                 .alias_regions
-                .vmstore_context_stack_limit_load(&mut context.func);
+                .vm_store_context()
+                .stack_limit()
+                .to_deferred_load(&mut context.func);
             let stack_limit = VmctxLoadChain::new([store_ctx, stack_limit].into());
             if self.tunables.signals_based_traps {
                 let stack_limit = stack_limit.emit_global(&mut context.func);
@@ -1588,7 +1599,7 @@ impl Compiler {
                 pointer_type,
                 i64::try_from(wasmtime_environ::VM_LAZY_THREAD_FORCED).unwrap(),
             );
-            alias_regions.store_vmstore_context_current_thread(
+            alias_regions.vm_store_context().current_thread().store(
                 &mut builder.cursor(),
                 vm_store_ctx,
                 forced,
@@ -1858,13 +1869,13 @@ fn save_last_wasm_entry_context<O>(
 {
     // Save the current fp/sp of the entry trampoline into the `VMStoreContext`.
     let fp = builder.ins().get_frame_pointer(pointer_type);
-    alias_regions.store_vmstore_context_last_wasm_entry_fp(
+    alias_regions.vm_store_context().last_wasm_entry_fp().store(
         &mut builder.cursor(),
         vm_store_context,
         fp,
     );
     let sp = builder.ins().get_stack_pointer(pointer_type);
-    alias_regions.store_vmstore_context_last_wasm_entry_sp(
+    alias_regions.vm_store_context().last_wasm_entry_sp().store(
         &mut builder.cursor(),
         vm_store_context,
         sp,
@@ -1875,11 +1886,10 @@ fn save_last_wasm_entry_context<O>(
     let trap_handler = builder
         .ins()
         .get_exception_handler_address(pointer_type, block, 0);
-    alias_regions.store_vmstore_context_last_wasm_entry_trap_handler(
-        &mut builder.cursor(),
-        vm_store_context,
-        trap_handler,
-    );
+    alias_regions
+        .vm_store_context()
+        .last_wasm_entry_trap_handler()
+        .store(&mut builder.cursor(), vm_store_context, trap_handler);
 }
 
 fn save_last_wasm_exit_fp_and_pc<O>(
@@ -1894,15 +1904,18 @@ fn save_last_wasm_exit_fp_and_pc<O>(
     // this so that it can know the SP (bottom of frame) for the very
     // last Wasm frame.
     let trampoline_fp = builder.ins().get_frame_pointer(pointer_type);
-    alias_regions.store_vmstore_context_last_wasm_exit_trampoline_fp(
-        &mut builder.cursor(),
-        limits,
-        trampoline_fp,
-    );
+    alias_regions
+        .vm_store_context()
+        .last_wasm_exit_trampoline_fp()
+        .store(&mut builder.cursor(), limits, trampoline_fp);
 
     // Finally save the Wasm return address to the limits.
     let wasm_pc = builder.ins().get_return_address(pointer_type);
-    alias_regions.store_vmstore_context_last_wasm_exit_pc(&mut builder.cursor(), limits, wasm_pc);
+    alias_regions.vm_store_context().last_wasm_exit_pc().store(
+        &mut builder.cursor(),
+        limits,
+        wasm_pc,
+    );
 }
 
 fn key_to_name(key: FuncKey) -> ir::UserFuncName {

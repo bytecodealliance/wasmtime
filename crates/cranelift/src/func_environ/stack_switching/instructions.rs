@@ -790,7 +790,7 @@ pub(crate) mod stack_switching_helpers {
             let stack_limit = env
                 .alias_regions
                 .stack_limit(&mut builder.cursor(), stack_limits_ptr);
-            env.alias_regions.store_vmstore_context_stack_limit(
+            env.alias_regions.vm_store_context().stack_limit().store(
                 &mut builder.cursor(),
                 vmruntime_limits_ptr,
                 stack_limit,
@@ -799,26 +799,34 @@ pub(crate) mod stack_switching_helpers {
             let last_wasm_entry_fp = env
                 .alias_regions
                 .last_wasm_entry_fp(&mut builder.cursor(), stack_limits_ptr);
-            env.alias_regions.store_vmstore_context_last_wasm_entry_fp(
-                &mut builder.cursor(),
-                vmruntime_limits_ptr,
-                last_wasm_entry_fp,
-            );
+            env.alias_regions
+                .vm_store_context()
+                .last_wasm_entry_fp()
+                .store(
+                    &mut builder.cursor(),
+                    vmruntime_limits_ptr,
+                    last_wasm_entry_fp,
+                );
 
             let last_wasm_entry_sp = env
                 .alias_regions
                 .last_wasm_entry_sp(&mut builder.cursor(), stack_limits_ptr);
-            env.alias_regions.store_vmstore_context_last_wasm_entry_sp(
-                &mut builder.cursor(),
-                vmruntime_limits_ptr,
-                last_wasm_entry_sp,
-            );
+            env.alias_regions
+                .vm_store_context()
+                .last_wasm_entry_sp()
+                .store(
+                    &mut builder.cursor(),
+                    vmruntime_limits_ptr,
+                    last_wasm_entry_sp,
+                );
 
             let last_wasm_entry_trap_handler = env
                 .alias_regions
                 .last_wasm_entry_trap_handler(&mut builder.cursor(), stack_limits_ptr);
             env.alias_regions
-                .store_vmstore_context_last_wasm_entry_trap_handler(
+                .vm_store_context()
+                .last_wasm_entry_trap_handler()
+                .store(
                     &mut builder.cursor(),
                     vmruntime_limits_ptr,
                     last_wasm_entry_trap_handler,
@@ -843,16 +851,19 @@ pub(crate) mod stack_switching_helpers {
             // continuation's inline `VMStackLimits`.
             let last_wasm_entry_fp = env
                 .alias_regions
-                .vmstore_context_last_wasm_entry_fp(&mut builder.cursor(), vmruntime_limits_ptr);
+                .vm_store_context()
+                .last_wasm_entry_fp()
+                .load(&mut builder.cursor(), vmruntime_limits_ptr);
             let last_wasm_entry_sp = env
                 .alias_regions
-                .vmstore_context_last_wasm_entry_sp(&mut builder.cursor(), vmruntime_limits_ptr);
+                .vm_store_context()
+                .last_wasm_entry_sp()
+                .load(&mut builder.cursor(), vmruntime_limits_ptr);
             let last_wasm_entry_trap_handler = env
                 .alias_regions
-                .vmstore_context_last_wasm_entry_trap_handler(
-                    &mut builder.cursor(),
-                    vmruntime_limits_ptr,
-                );
+                .vm_store_context()
+                .last_wasm_entry_trap_handler()
+                .load(&mut builder.cursor(), vmruntime_limits_ptr);
 
             let vmcontref_region = env.alias_regions.vmcontref_region(builder.func);
             let our_memflags =
@@ -884,7 +895,9 @@ pub(crate) mod stack_switching_helpers {
                 // Load from the `VMStoreContext`...
                 let stack_limit = env
                     .alias_regions
-                    .vmstore_context_stack_limit(&mut builder.cursor(), vmruntime_limits_ptr);
+                    .vm_store_context()
+                    .stack_limit()
+                    .load(&mut builder.cursor(), vmruntime_limits_ptr);
                 // ...and store to this continuation's inline `VMStackLimits`.
                 let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
                 builder.ins().store(
