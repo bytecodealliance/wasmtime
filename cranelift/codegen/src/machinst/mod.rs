@@ -703,6 +703,44 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
 
                 writeln!(buf)?;
             }
+
+            // `disasm_all` stops at the first instruction it cannot decode and
+            // reports success rather than an error, so without this the rest of
+            // the block would silently vanish from the listing. That matters
+            // most for `precise-output` filetests, whose expectations would
+            // then assert nothing at all about those bytes. Print them as
+            // `.byte` directives instead, the same form capstone itself
+            // produces for undecodable s390x instructions.
+            let decoded: usize = insns.iter().map(|i| i.bytes().len()).sum();
+            for (chunk_idx, chunk) in buffer[decoded..].chunks(8).enumerate() {
+                let addr = start as u64 + decoded as u64 + (chunk_idx * 8) as u64;
+                let chunk_end = addr + chunk.len() as u64;
+                let contains = |off| addr <= off && off < chunk_end;
+
+                write!(buf, "  .byte ")?;
+                for (i, byte) in chunk.iter().enumerate() {
+                    if i > 0 {
+                        write!(buf, ", ")?;
+                    }
+                    write!(buf, "{byte:#04x}")?;
+                }
+
+                for reloc in relocs.iter().filter(|reloc| contains(reloc.offset as u64)) {
+                    write!(
+                        buf,
+                        " ; reloc_external {} {} {}",
+                        reloc.kind,
+                        reloc.target.display(params),
+                        reloc.addend,
+                    )?;
+                }
+
+                if let Some(trap) = traps.iter().find(|trap| contains(trap.offset as u64)) {
+                    write!(buf, " ; trap: {}", trap.code)?;
+                }
+
+                writeln!(buf)?;
+            }
         }
 
         return Ok(buf);

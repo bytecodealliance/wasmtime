@@ -1,0 +1,52 @@
+test compile precise-output
+set unwind_info=false
+target x86_64 has_avx has_avx_vnni
+
+;; The bundled capstone build cannot decode AVX-VNNI, and capstone stops at the
+;; first instruction it does not recognize rather than reporting an error. The
+;; remaining bytes are therefore printed as `.byte` directives so that they stay
+;; visible here instead of silently disappearing from this expectation. Note
+;; that x86 instruction length cannot be determined without decoding, so there
+;; is no way to resynchronize: everything after `vpdpbusd`, including the
+;; epilogue, is covered by the byte dump.
+
+function %vpdpbusd_i8x16(i8x16, i8x16, i32x4) -> i32x4 {
+block0(v0: i8x16, v1: i8x16, v2: i32x4):
+    v3 = swiden_low v0
+    v4 = uwiden_low v1
+    v5 = imul v3, v4
+    v6 = swiden_high v0
+    v7 = uwiden_high v1
+    v8 = imul v6, v7
+    v9 = swiden_low v5
+    v10 = swiden_high v5
+    v11 = iadd_pairwise v9, v10
+    v12 = swiden_low v8
+    v13 = swiden_high v8
+    v14 = iadd_pairwise v12, v13
+    v15 = iadd_pairwise v11, v14
+    v16 = iadd v15, v2
+    return v16
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqa %xmm0, %xmm5
+;   movdqa %xmm2, %xmm0
+;   vpdpbusd %xmm5, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm5
+;   movdqa %xmm2, %xmm0
+;   .byte 0xc4, 0xe2, 0x71, 0x50, 0xc5, 0x48, 0x89, 0xec
+;   .byte 0x5d, 0xc3
+
