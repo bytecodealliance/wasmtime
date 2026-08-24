@@ -1,3 +1,17 @@
+## 48.0.1
+
+Released 2026-08-24.
+
+### Fixed
+
+* Context slots in component compositions are now correctly managed.
+  [#14139](https://github.com/bytecodealliance/wasmtime/pull/14139)
+
+* The `Host` header is now set by default for HTTP requests sent with WASIp2.
+  [#14167](https://github.com/bytecodealliance/wasmtime/pull/14167)
+
+--------------------------------------------------------------------------------
+
 ## 48.0.0
 
 Released 2026-08-20.

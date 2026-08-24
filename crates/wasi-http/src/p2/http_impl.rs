@@ -44,12 +44,25 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
             },
         });
 
-        let scheme = match req.scheme.unwrap_or(Scheme::Https) {
-            Scheme::Http => http::uri::Scheme::HTTP,
-            Scheme::Https => http::uri::Scheme::HTTPS,
-
-            // We can only support http/https
-            Scheme::Other(_) => return Err(types::ErrorCode::HttpProtocolError.into()),
+        let scheme = match req.scheme {
+            Some(scheme) => {
+                let scheme = match scheme {
+                    Scheme::Http => http::uri::Scheme::HTTP,
+                    Scheme::Https => http::uri::Scheme::HTTPS,
+                    Scheme::Other(scheme) => http::uri::Scheme::try_from(scheme.as_str())
+                        .map_err(|_| types::ErrorCode::HttpProtocolError)?,
+                };
+                if !self.hooks.is_supported_scheme(&scheme) {
+                    return Err(types::ErrorCode::HttpProtocolError.into());
+                }
+                scheme
+            }
+            // Note that a hook returning `None` here means that guests are
+            // required to specify a scheme themselves.
+            None => self
+                .hooks
+                .default_scheme()
+                .ok_or(types::ErrorCode::HttpProtocolError)?,
         };
 
         let authority = req.authority.unwrap_or_else(String::new);
@@ -63,6 +76,10 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
         }
 
         builder = builder.uri(uri.build().map_err(http_request_error)?);
+
+        if self.hooks.set_host_header() {
+            builder = builder.header(http::header::HOST, authority.as_str());
+        }
 
         for (k, v) in req.headers.iter() {
             builder = builder.header(k, v);
