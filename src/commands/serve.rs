@@ -721,7 +721,10 @@ impl ServeCommand {
             // task to handle this client.
             match &mut debuggee_store {
                 Some(store) => {
-                    handle_client(stream, &handler, Some(store)).await;
+                    // Boxed to avoid triggering rustc's recursion limit.
+                    let client: Pin<Box<dyn Future<Output = _> + Send + '_>> =
+                        Box::pin(handle_client(stream, &handler, Some(store)));
+                    client.await;
                 }
                 None => {
                     let handler = handler.clone();
