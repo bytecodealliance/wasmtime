@@ -480,3 +480,13 @@
 
 ;; ~x != x --> 1
 (rule (simplify (ne ty (bnot cty x) x)) (subsume (cmp_true ty)))
+
+;; x >=_u (x - y) --> x >=_u y, and the opposites
+(rule (simplify (uge rty x (isub ty x y))) (uge rty x y))
+(rule (simplify (ult rty x (isub ty x y))) (ult rty x y))
+
+;; x >=_u (x >>_u y) --> true, and the opposites
+(rule (simplify (uge rty x (ushr ty x y))) (cmp_true rty))
+(rule (simplify (ule rty (ushr ty x y) x)) (cmp_true rty))
+(rule (simplify (ugt rty (ushr ty x y) x)) (subsume (all_zero rty)))
+(rule (simplify (ult rty x (ushr ty x y))) (subsume (all_zero rty)))

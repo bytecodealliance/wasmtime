@@ -577,3 +577,11 @@
 
 ;; -1 - x --> ~x
 (rule (simplify (isub ty (iconst_s ty -1) x)) (bnot ty x))
+
+;; Negate integer constants at compile time.
+(rule (simplify (ineg (fits_in_64 ty) (iconst ty x)))
+      (iconst ty (imm64_neg ty x)))
+
+;; -(X * C) = X * (-C)
+(rule (simplify (ineg (fits_in_64 ty) (imul ty x (iconst ty c))))
+      (imul ty x (iconst ty (imm64_neg ty c))))
