@@ -6,6 +6,12 @@ Unreleased.
 
 ### Changed
 
+* `Config::operator_cost` now applies to operators inside constant expressions
+  (global initializers, element and data segment offsets, element segment
+  expressions) and to the synthesized call to a module's `start` function.
+  Previously each of those was charged 1 fuel unit regardless of the configured
+  cost.
+
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective

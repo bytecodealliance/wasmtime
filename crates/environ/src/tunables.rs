@@ -563,6 +563,13 @@ impl OperatorCostStrategy {
 }
 
 const DEFAULT_VARIABLE_OPERATOR_COST: VariableOperatorCost = VariableOperatorCost::new();
+
+/// The default cost table, used to serve [`OperatorCostStrategy::const_op_cost`]
+/// for the [`OperatorCostStrategy::Default`] strategy.
+///
+/// The `default_cost!` costs baked in here must stay in sync with
+/// `default_operator_cost`, which serves the same strategy for
+/// [`OperatorCostStrategy::cost`].
 const DEFAULT_OPERATOR_COST: OperatorCost = OperatorCost::new();
 
 /// Fuel costs for operators whose work is proportional to a runtime operand.

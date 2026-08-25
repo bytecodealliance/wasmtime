@@ -1061,16 +1061,16 @@ fn fuel_around_table_grow() -> Result<()> {
 /// `(start ...)` function is what flushes the buffered charges into the fuel
 /// counter, so it must be present for the charges to be observable.
 ///
-/// Expected accounting with `I32Add = 100` and every other cost left at its
-/// default of 1:
+/// Expected accounting with `I32Const = 7`, `I32Add = 100`, and every other
+/// cost left at its default of 1:
 ///
 /// | module-startup function entry | 1   |
-/// | `i32.const 1`                 | 1   |
-/// | `i32.const 2`                 | 1   |
+/// | `i32.const 1`                 | 7   |
+/// | `i32.const 2`                 | 7   |
 /// | `i32.add`                     | 100 |
 /// | synthesized `call $start`     | 1   |
 /// | `$start` function entry       | 1   |
-/// | total                         | 105 |
+/// | total                         | 117 |
 ///
 /// With the default table every op costs 1, so the same module totals 6.
 #[test]
@@ -1105,11 +1105,12 @@ fn const_expr_honors_operator_cost() -> Result<()> {
 
     assert_eq!(instantiation_fuel(OperatorCost::default())?, 6);
 
-    let expensive_add = OperatorCost {
+    let custom = OperatorCost {
+        I32Const: 7,
         I32Add: 100,
         ..Default::default()
     };
-    assert_eq!(instantiation_fuel(expensive_add)?, 105);
+    assert_eq!(instantiation_fuel(custom)?, 117);
 
     Ok(())
 }
@@ -1126,6 +1127,10 @@ fn const_expr_honors_operator_cost() -> Result<()> {
 /// | synthesized `call $start`     | 50 |
 /// | `$start` function entry       | 1  |
 /// | total                         | 52 |
+///
+/// The two entry rows are the flat per-function entry charge
+/// (`FuncEnvironment::new`'s `fuel_consumed: 1`, flushed by `fuel_check` on
+/// function entry), not derived from any operator's cost.
 #[test]
 #[cfg_attr(miri, ignore)]
 fn module_start_call_honors_operator_cost() -> Result<()> {
