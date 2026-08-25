@@ -209,8 +209,9 @@
         (from_bits u8)
         (to_bits u8))
 
-        ;; A bitfield move instruction, which encompasses
-        ;; the BFM, UBFM and SBFM instructions.
+        ;; A bitfield move instruction, either UBFM or SBFM.
+        ;; BFM has been intentionally excluded as it leaves some bits
+        ;; in `rd` unchanged, rather than overwriting all of them.
         (BitfieldMove
          (size OperandSize)
          (bfm_op BfmOp)
@@ -1274,9 +1275,9 @@
 ))
 
 ;; A bitfield move operation.
+;; Note that BFM is excluded as it modifies rather than overwrites `rd`.
 (type BfmOp
   (enum
-    (Bfm)
     (UBfm)
     (SBfm)
 ))

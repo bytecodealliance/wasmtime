@@ -436,9 +436,9 @@ fn enc_bfm(
         }
     }
     let opc = match bfm_op {
-        BfmOp::Bfm => 0b01,
         BfmOp::UBfm => 0b10,
         BfmOp::SBfm => 0b00,
+        // Note: BFM (`01`) is intentionally excluded
     };
     let n_bit = size.sf_bit();
     0b0_00_100110_0_000000_000000_00000_00000

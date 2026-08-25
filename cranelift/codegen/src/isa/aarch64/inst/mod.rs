@@ -64,7 +64,6 @@ impl BfmOp {
     /// Get the assembly mnemonic for this opcode.
     pub fn op_str(&self) -> &'static str {
         match self {
-            BfmOp::Bfm => "bfm",
             BfmOp::UBfm => "ubfm",
             BfmOp::SBfm => "sbfm",
         }
@@ -803,6 +802,10 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rn);
         }
         Inst::BitfieldMove { rd, rn, .. } => {
+            // BFM has been excluded from this instruction format
+            // as it can leave some bits of `rd` unchanged.
+            // In contrast, the UBFM and SBFM instructions always
+            // replace all bits in `rd`, making it a true def.
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
