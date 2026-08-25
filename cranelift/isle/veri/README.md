@@ -38,6 +38,27 @@ Alternatively, on Linux or MacOS you can install from Github release with:
 
 If you use this method, ensure that `<install_path>/bin` is on your `$PATH`.
 
+## Sharing the cache with CI
+
+To keep local runs fast, CI maintains a shared copy of the verifier's SMT query
+cache. On every push to `main`, the "ISLE Verifier" workflow
+([`.github/workflows/isle-veri.yml`](../../.github/workflows/isle-veri.yml))
+runs `verify.sh rebuild-cache` on top of the previously published cache and
+publishes the result as the `isle-veri-cache.tar.gz` asset on the rolling
+[`dev` release](https://github.com/bytecodealliance/wasmtime/releases/tag/dev).
+Pull requests also run the verifier against the latest `main` cache (read-only).
+
+To start a local session from the cache CI is currently using, run:
+
+```
+./cranelift/isle/veri/setup/download-cache.sh
+```
+
+This downloads the latest asset from the `dev` release and installs it as
+`cranelift/isle/veri/cache`. You can then verify incrementally on top of it
+with `./cranelift/isle/veri/verify.sh` (and check full cache coverage with
+`verify.sh cache-only`).
+
 ## Configuration files
 
 Rather than configuring arguments on the command line, you can store
