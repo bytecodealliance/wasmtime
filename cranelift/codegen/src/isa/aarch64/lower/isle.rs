@@ -25,7 +25,7 @@ use crate::{
     },
     isa::aarch64::abi::AArch64MachineDeps,
     isa::aarch64::inst::SImm7Scaled,
-    isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
+    isa::aarch64::inst::args::{AtomicCAS128Args, ShiftOp, ShiftOpShiftImm},
     machinst::{
         CallArgList, CallRetList, InstOutput, MachInst, VCodeConstant, VCodeConstantData,
         abi::ArgPair, ty_bits,
@@ -42,6 +42,7 @@ type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxExternalName = Box<ExternalName>;
 type VecArgPair = Vec<ArgPair>;
+type BoxAtomicCAS128Args = Box<AtomicCAS128Args>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
@@ -176,6 +177,29 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         } else {
             None
         }
+    }
+
+    fn atomic_cas_128_args(
+        &mut self,
+        rd_lo: WritableReg,
+        rd_hi: WritableReg,
+        rs_lo: Reg,
+        rs_hi: Reg,
+        rt_lo: Reg,
+        rt_hi: Reg,
+        rn: Reg,
+        flags: MemFlagsData,
+    ) -> BoxAtomicCAS128Args {
+        Box::new(AtomicCAS128Args {
+            rd_lo,
+            rd_hi,
+            rs_lo,
+            rs_hi,
+            rt_lo,
+            rt_hi,
+            rn,
+            flags,
+        })
     }
 
     fn use_dotprod(&mut self, _: Inst) -> Option<()> {
