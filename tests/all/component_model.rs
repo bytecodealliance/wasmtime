@@ -14,6 +14,7 @@ mod bindgen;
 mod call_hook;
 mod dynamic;
 mod fixed_length_list;
+mod forward;
 mod func;
 mod import;
 mod instance;

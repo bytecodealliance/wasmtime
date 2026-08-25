@@ -401,6 +401,17 @@ impl<'a> TrampolineCompiler<'a> {
                     );
                 }
             }
+            Trampoline::StreamForward { instance, ty } => {
+                self.translate_libcall(
+                    host::stream_forward,
+                    TrapSentinel::Falsy,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                        params.push(me.index_value(*ty));
+                    },
+                );
+            }
             Trampoline::StreamCancelRead {
                 instance,
                 ty,
@@ -495,6 +506,17 @@ impl<'a> TrampolineCompiler<'a> {
                         params.push(me.index_value(*instance));
                         params.push(me.index_value(*ty));
                         params.push(me.index_value(*options));
+                    },
+                );
+            }
+            Trampoline::FutureForward { instance, ty } => {
+                self.translate_libcall(
+                    host::future_forward,
+                    TrapSentinel::Falsy,
+                    WasmArgs::InRegisters,
+                    |me, params| {
+                        params.push(me.index_value(*instance));
+                        params.push(me.index_value(*ty));
                     },
                 );
             }
@@ -1551,6 +1573,7 @@ impl<'a> TrampolineCompiler<'a> {
             | Trampoline::StreamNew { instance, .. }
             | Trampoline::StreamRead { instance, .. }
             | Trampoline::StreamWrite { instance, .. }
+            | Trampoline::StreamForward { instance, .. }
             | Trampoline::StreamCancelRead { instance, .. }
             | Trampoline::StreamCancelWrite { instance, .. }
             | Trampoline::StreamDropReadable { instance, .. }
@@ -1558,6 +1581,7 @@ impl<'a> TrampolineCompiler<'a> {
             | Trampoline::FutureNew { instance, .. }
             | Trampoline::FutureRead { instance, .. }
             | Trampoline::FutureWrite { instance, .. }
+            | Trampoline::FutureForward { instance, .. }
             | Trampoline::FutureCancelRead { instance, .. }
             | Trampoline::FutureCancelWrite { instance, .. }
             | Trampoline::FutureDropReadable { instance, .. }

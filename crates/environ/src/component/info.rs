@@ -887,6 +887,16 @@ pub enum Trampoline {
         options: OptionsIndex,
     },
 
+    /// A `stream.forward` intrinsic to forward all remaining elements from the
+    /// readable end of one `stream` into the writable end of another `stream`
+    /// of the specified type.
+    StreamForward {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// The table index for the specific `stream` type and caller instance.
+        ty: TypeStreamTableIndex,
+    },
+
     /// A `stream.cancel-read` intrinsic to cancel an in-progress read from a
     /// `stream` of the specified type.
     StreamCancelRead {
@@ -958,6 +968,16 @@ pub enum Trampoline {
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: OptionsIndex,
+    },
+
+    /// A `future.forward` intrinsic to forward the value of the `future` with
+    /// the specified readable end into the `future` with the specified
+    /// writable end.
+    FutureForward {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// The table index for the specific `future` type and caller instance.
+        ty: TypeFutureTableIndex,
     },
 
     /// A `future.cancel-read` intrinsic to cancel an in-progress read from a
@@ -1225,6 +1245,7 @@ impl Trampoline {
             StreamNew { .. } => format!("stream-new"),
             StreamRead { .. } => format!("stream-read"),
             StreamWrite { .. } => format!("stream-write"),
+            StreamForward { .. } => format!("stream-forward"),
             StreamCancelRead { .. } => format!("stream-cancel-read"),
             StreamCancelWrite { .. } => format!("stream-cancel-write"),
             StreamDropReadable { .. } => format!("stream-drop-readable"),
@@ -1232,6 +1253,7 @@ impl Trampoline {
             FutureNew { .. } => format!("future-new"),
             FutureRead { .. } => format!("future-read"),
             FutureWrite { .. } => format!("future-write"),
+            FutureForward { .. } => format!("future-forward"),
             FutureCancelRead { .. } => format!("future-cancel-read"),
             FutureCancelWrite { .. } => format!("future-cancel-write"),
             FutureDropReadable { .. } => format!("future-drop-readable"),

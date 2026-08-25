@@ -146,6 +146,8 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             future_read(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, future: u32, address: u32) -> u64;
             #[cfg(feature = "component-model-async")]
+            future_forward(vmctx: vmctx, caller_instance: u32, ty: u32, reader: u32, writer: u32) -> bool;
+            #[cfg(feature = "component-model-async")]
             future_cancel_write(vmctx: vmctx, caller_instance: u32, ty: u32, async_: u8, writer: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             future_cancel_read(vmctx: vmctx, caller_instance: u32, ty: u32, async_: u8, reader: u32) -> u64;
@@ -159,6 +161,8 @@ macro_rules! foreach_builtin_component_function {
             stream_write(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             stream_read(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
+            #[cfg(feature = "component-model-async")]
+            stream_forward(vmctx: vmctx, caller_instance: u32, ty: u32, reader: u32, writer: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             stream_cancel_write(vmctx: vmctx, caller_instance: u32, ty: u32, async_: u8, writer: u32) -> u64;
             #[cfg(feature = "component-model-async")]

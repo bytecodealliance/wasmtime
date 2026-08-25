@@ -4205,6 +4205,15 @@ pub trait VMComponentAsyncStore {
         address: u32,
     ) -> Result<u32>;
 
+    /// The `future.forward` intrinsic.
+    fn future_forward(
+        &mut self,
+        instance: Instance,
+        ty: TypeFutureTableIndex,
+        reader: u32,
+        writer: u32,
+    ) -> Result<()>;
+
     /// The `future.drop-writable` intrinsic.
     fn future_drop_writable(
         &mut self,
@@ -4266,6 +4275,15 @@ pub trait VMComponentAsyncStore {
         address: u32,
         count: u32,
     ) -> Result<u32>;
+
+    /// The `stream.forward` intrinsic.
+    fn stream_forward(
+        &mut self,
+        instance: Instance,
+        ty: TypeStreamTableIndex,
+        reader: u32,
+        writer: u32,
+    ) -> Result<()>;
 
     /// The `stream.drop-writable` intrinsic.
     fn stream_drop_writable(
@@ -4494,6 +4512,21 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
             .map(|result| result.encode())
     }
 
+    fn future_forward(
+        &mut self,
+        instance: Instance,
+        ty: TypeFutureTableIndex,
+        reader: u32,
+        writer: u32,
+    ) -> Result<()> {
+        instance.guest_forward(
+            StoreContextMut(self),
+            TransmitIndex::Future(ty),
+            reader,
+            writer,
+        )
+    }
+
     fn future_drop_writable(
         &mut self,
         instance: Instance,
@@ -4559,6 +4592,21 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
                 count,
             )
             .map(|result| result.encode())
+    }
+
+    fn stream_forward(
+        &mut self,
+        instance: Instance,
+        ty: TypeStreamTableIndex,
+        reader: u32,
+        writer: u32,
+    ) -> Result<()> {
+        instance.guest_forward(
+            StoreContextMut(self),
+            TransmitIndex::Stream(ty),
+            reader,
+            writer,
+        )
     }
 
     fn stream_drop_writable(
