@@ -1,7 +1,7 @@
 use crate::runtime::vm::{FuncRefTableId, GcHeap, GcStore, I31, SendSyncPtr};
 use crate::store::AutoAssertNoGc;
 use crate::{
-    AnyRef, ExnRef, ExternRef, Func, HeapType, Result, StorageType, Val, ValType, bail_bug,
+    AnyRef, ExnRef, ExternRef, Func, HeapTopType, Result, StorageType, Val, ValType, bail_bug,
 };
 use core::fmt;
 use core::marker;
@@ -440,19 +440,19 @@ impl VMGcRef {
             StorageType::ValType(ValType::F64) => Val::F64(data.read_u64(offset)?),
             StorageType::ValType(ValType::V128) => Val::V128(data.read_v128(offset)?),
             StorageType::ValType(ValType::Ref(r)) => match r.heap_type().top() {
-                HeapType::Extern => {
+                HeapTopType::Extern => {
                     let raw = data.read_u32(offset)?;
                     Val::ExternRef(ExternRef::_from_raw(store, raw))
                 }
-                HeapType::Any => {
+                HeapTopType::Any => {
                     let raw = data.read_u32(offset)?;
                     Val::AnyRef(AnyRef::_from_raw(store, raw))
                 }
-                HeapType::Exn => {
+                HeapTopType::Exn => {
                     let raw = data.read_u32(offset)?;
                     Val::ExnRef(ExnRef::_from_raw(store, raw))
                 }
-                HeapType::Func => {
+                HeapTopType::Func => {
                     let func_ref_id = data.read_u32(offset)?;
                     let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
                     let func_ref = store
@@ -463,7 +463,7 @@ impl VMGcRef {
                         func_ref.map(|p| Func::from_vm_func_ref(store.id(), p.as_non_null()))
                     })
                 }
-                otherwise => bail_bug!("not a top type: {otherwise:?}"),
+                HeapTopType::Cont => bail_bug!("continuation references are unsupported"),
             },
         })
     }
