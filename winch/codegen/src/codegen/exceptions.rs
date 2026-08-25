@@ -98,6 +98,11 @@ where
                 Ok(results.ret_area().copied())
             })?;
 
+            ensure!(
+                self.masm.sp_offset()? == stack_state.target_offset,
+                CodeGenError::invalid_sp_offset()
+            );
+
             self.masm.jmp(*control.label())?;
         }
 
@@ -105,15 +110,14 @@ where
             self.masm.bind(catch.landing_pad)?;
 
             self.context.reachable = true;
-            let exception_reg = self
+            let raw_exception_reg = self
                 .masm
                 .prepare_for_exception_handler(stack_state.base_offset)?;
             self.context.truncate_stack_to(stack_state.base_len)?;
             self.context.load_vmctx(self.masm)?;
 
             if let Some(tag) = catch.tag {
-                let exception_reg = self.context.reg(exception_reg, self.masm)?;
-                self.emit_load_exception_payload_fields(tag, exception_reg)?;
+                self.emit_load_exception_payload_fields(tag, raw_exception_reg)?;
             }
             self.emit_catch_branch(catch.target_depth)?;
         }
@@ -121,9 +125,9 @@ where
         self.context.reachable = end_reachable;
 
         if end_reachable {
-            if !fallthrough_reachable {
-                control.ensure_stack_state(self.masm, &mut self.context)?;
-            }
+            // Landing pads leave the Masm tracking handler state, so restore
+            // the block's end state before binding the join.
+            control.ensure_stack_state(self.masm, &mut self.context)?;
             control.bind_end(self.masm, &mut self.context)
         } else {
             Ok(())
@@ -145,8 +149,9 @@ where
     fn emit_load_exception_payload_fields(
         &mut self,
         tag_index: TagIndex,
-        exception_reg: Reg,
+        raw_exception_reg: Reg,
     ) -> Result<()> {
+        let exception_reg = self.context.reg(raw_exception_reg, self.masm)?;
         let interned = self.env.translation.module.tags[tag_index]
             .exception
             .unwrap_module_type_index();

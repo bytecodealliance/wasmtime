@@ -41,6 +41,146 @@ fn basic_throw(config: &mut Config) -> Result<()> {
 
 #[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
+fn try_table_fallthrough_with_multi_value_results(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32))
+          (func $callee (result i32) (i32.const 9))
+          (func (export "f") (result i32)
+            (block $h (result i32)
+              (try_table (result i32 i32 i32 i32 i32 i32) (catch $e $h)
+                (i32.const 1)
+                (i32.const 2)
+                (i32.const 3)
+                (i32.const 4)
+                (i32.const 5)
+                (call $callee))
+              drop drop drop drop drop)))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, ())?, 1);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn try_table_exception_with_multi_value_payload(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32 i32 i32 i32 i32 i32))
+
+          (func $throw (result i32 i32 i32 i32 i32 i32)
+            (throw $e
+              (i32.const 1)
+              (i32.const 2)
+              (i32.const 3)
+              (i32.const 4)
+              (i32.const 5)
+              (i32.const 6)))
+
+          (func (export "f") (result i32)
+            (block $handler (result i32 i32 i32 i32 i32 i32)
+              (try_table
+                (result i32 i32 i32 i32 i32 i32)
+                (catch $e $handler)
+                (call $throw)))
+            drop drop drop drop drop))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, ())?, 1);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn try_table_branch_and_fallthrough_with_multi_value_results(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32))
+
+          (func (export "f") (param $branch i32) (result i32)
+            (block $handler (result i32)
+              (try_table
+                (result i32 i32 i32 i32 i32 i32)
+                (catch $e $handler)
+                (i32.const 1)
+                (i32.const 2)
+                (i32.const 3)
+                (i32.const 4)
+                (i32.const 5)
+                (i32.const 6)
+                (local.get $branch)
+                br_if 0)
+              drop drop drop drop drop)))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<i32, i32>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, 0)?, 1);
+    assert_eq!(f.call(&mut store, 1)?, 1);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn try_table_unreachable_fallthrough_with_multi_value_results(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32))
+          (func $callee)
+
+          (func (export "f") (result i32)
+            (block $handler (result i32)
+              (try_table
+                (result i32 i32 i32 i32 i32 i32)
+                (catch $e $handler)
+                (call $callee)
+                (i32.const 1)
+                (i32.const 2)
+                (i32.const 3)
+                (i32.const 4)
+                (i32.const 5)
+                (i32.const 6)
+                br 0)
+              drop drop drop drop drop)))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, ())?, 1);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
 fn dynamic_tags(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
@@ -246,6 +386,20 @@ fn funcref_exception_payload_escape_to_host(config: &mut Config) -> Result<()> {
 #[wasmtime_test(wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn caught_funcref_payload(config: &mut Config) -> Result<()> {
+    for collector in [
+        Collector::Null,
+        Collector::Copying,
+        Collector::DeferredReferenceCounting,
+    ] {
+        println!("Using GC collector: {collector:?}");
+        config.collector(collector);
+        run_caught_funcref_payload(config)?;
+    }
+
+    Ok(())
+}
+
+fn run_caught_funcref_payload(config: &Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -334,7 +488,11 @@ fn run_thrown_externref_payload_survives_gc(config: &Config) -> Result<()> {
 #[wasmtime_test(wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn caught_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
-    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+    for collector in [
+        Collector::Null,
+        Collector::Copying,
+        Collector::DeferredReferenceCounting,
+    ] {
         println!("Using GC collector: {collector:?}");
         config.collector(collector);
         run_caught_externref_payload_survives_gc(config)?;
