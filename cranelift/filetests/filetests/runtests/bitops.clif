@@ -845,3 +845,47 @@ block0(v0: i32, v1: i32):
 ; run: %test_band_bnot_bor_x_y_x(0, 0) == 0
 ; run: %test_band_bnot_bor_x_y_x(0x12345678, 0x87654321) == 0
 ; run: %test_band_bnot_bor_x_y_x(-1, 0x55555555) == 0
+
+function %band_band_common_first_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_band_common_first_rt(0, -1, 0xaaaaaaaa) == 0
+; run: %band_band_common_first_rt(0xf0f0f0f0, 0xcccccccc, 0xaaaaaaaa) == 0x80808080
+
+function %band_band_common_second_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_band_common_second_rt(0, -1, 0xaaaaaaaa) == 0
+; run: %band_band_common_second_rt(0xf0f0f0f0, 0xcccccccc, 0xaaaaaaaa) == 0x80808080
+
+function %band_band_common_third_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v2, v0
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_band_common_third_rt(0, -1, 0xaaaaaaaa) == 0
+; run: %band_band_common_third_rt(0xf0f0f0f0, 0xcccccccc, 0xaaaaaaaa) == 0x80808080
+
+function %band_band_common_fourth_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v2, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_band_common_fourth_rt(0, -1, 0xaaaaaaaa) == 0
+; run: %band_band_common_fourth_rt(0xf0f0f0f0, 0xcccccccc, 0xaaaaaaaa) == 0x80808080

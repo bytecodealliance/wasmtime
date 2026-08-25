@@ -662,3 +662,67 @@ block0(v0: i32x4, v1: i32x4):
 ;     v4 = vconst.i32x4 const0
 ;     return v4  ; v4 = const0
 ; }
+
+;; (x & y) & (x & z) --> (x & y) & z
+function %band_band_common_first(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_band_common_first(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v3 = band v0, v1
+;     v6 = band v3, v2
+;     return v6
+; }
+
+;; (x & y) & (y & z) --> (y & x) & z
+function %band_band_common_second(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_band_common_second(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = band v1, v0
+;     v7 = band v6, v2
+;     return v7
+; }
+
+;; (x & y) & (z & x) --> (x & y) & z
+function %band_band_common_third(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v2, v0
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_band_common_third(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v3 = band v0, v1
+;     v6 = band v3, v2
+;     return v6
+; }
+
+;; (x & y) & (z & y) --> (y & x) & z
+function %band_band_common_fourth(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v2, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_band_common_fourth(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = band v1, v0
+;     v7 = band v6, v2
+;     return v7
+; }
