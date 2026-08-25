@@ -1077,3 +1077,17 @@ block0(v0: i32):
 ; run: %fold_isub_minus_one_lhs_to_bnot_i32_rt(1) == -2
 ; run: %fold_isub_minus_one_lhs_to_bnot_i32_rt(-1) == 0
 ; run: %fold_isub_minus_one_lhs_to_bnot_i32_rt(0x7fffffff) == 0x80000000
+
+function %isub_ishl_ineg_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = ineg v1
+    v4 = ishl v3, v2
+    v5 = isub v0, v4
+    return v5
+}
+
+; run: %isub_ishl_ineg_rt(0, 0, 0) == 0
+; run: %isub_ishl_ineg_rt(5, 3, 1) == 11
+; run: %isub_ishl_ineg_rt(10, -2, 4) == -22
+; run: %isub_ishl_ineg_rt(0x80000000, 1, 31) == 0
+; run: %isub_ishl_ineg_rt(7, 1, 32) == 8

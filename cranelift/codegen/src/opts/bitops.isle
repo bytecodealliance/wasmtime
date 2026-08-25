@@ -741,3 +741,10 @@
 (rule (simplify (ult rty (bor ty y x) x)) (subsume (all_zero rty)))
 (rule (simplify (ugt rty x (bor ty x y))) (subsume (all_zero rty)))
 (rule (simplify (ugt rty x (bor ty y x))) (subsume (all_zero rty)))
+
+;; (x & y) & (x & z) --> (x & y) & z
+(rule (simplify (band ty (band ty x y) (band ty x z))) (band ty (band ty x y) z))
+(rule (simplify (band ty (band ty x y) (band ty y z))) (band ty (band ty y x) z))
+(rule (simplify (band ty (band ty x y) (band ty z x))) (band ty (band ty x y) z))
+(rule (simplify (band ty (band ty x y) (band ty z y))) (band ty (band ty y x) z))
+
