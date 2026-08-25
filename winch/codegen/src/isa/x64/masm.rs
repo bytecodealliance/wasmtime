@@ -34,7 +34,7 @@ use crate::{
     masm::CalleeKind,
 };
 use cranelift_codegen::{
-    Final, MachBufferFinalized, MachLabel,
+    ExceptionContextLoc, Final, MachBufferFinalized, MachExceptionHandler, MachLabel,
     binemit::CodeOffset,
     ir::{MemFlagsData, RelSourceLoc, SourceLoc},
     isa::{
@@ -221,6 +221,13 @@ impl Masm for MacroAssembler {
         self.sp_offset = offset.as_u32();
 
         Ok(())
+    }
+
+    fn prepare_for_exception_handler(&mut self, target_offset: SPOffset) -> Result<Reg> {
+        self.asm.mov_rr(rbp(), writable!(rsp()), OperandSize::S64);
+        self.sp_offset = 0;
+        self.reserve_stack(target_offset.as_u32())?;
+        Ok(regs::rax())
     }
 
     fn local_address(&mut self, local: &LocalSlot) -> Result<Address> {
@@ -1416,6 +1423,29 @@ impl Masm for MacroAssembler {
         self.asm
             .buffer_mut()
             .push_user_stack_map_sp_relative(return_addr, frame_size, map);
+        Ok(())
+    }
+
+    fn emit_try_call_site(
+        &mut self,
+        sp_offset: SPOffset,
+        vmctx_slot_offset: u32,
+        handlers: impl Iterator<Item = MachExceptionHandler>,
+    ) -> Result<()> {
+        let frame_offset = sp_offset.as_u32();
+        let vmctx_offset = frame_offset
+            .checked_sub(vmctx_slot_offset)
+            .ok_or_else(CodeGenError::invalid_local_offset)?;
+
+        let handlers = std::iter::once(MachExceptionHandler::Context(
+            ExceptionContextLoc::SPOffset(vmctx_offset),
+        ))
+        .chain(handlers);
+
+        self.asm
+            .buffer_mut()
+            .add_try_call_site(Some(frame_offset), handlers);
+
         Ok(())
     }
 
