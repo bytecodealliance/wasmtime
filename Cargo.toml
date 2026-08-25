@@ -372,8 +372,8 @@ cap-primitives = "4.0.3"
 cap-fs-ext-avoid-using-this = { version = "4.0.3", package = 'cap-fs-ext' }
 rustix = "1.1.4"
 # wit-bindgen:
-wit-bindgen = { version = "0.61.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.61.0", default-features = false }
+wit-bindgen = { version = "0.61.1", default-features = false }
+wit-bindgen-rust-macro = { version = "0.61.1", default-features = false }
 
 # wasm-tools family:
 wasmparser = { version = "0.258.0", default-features = false, features = ['simd'] }

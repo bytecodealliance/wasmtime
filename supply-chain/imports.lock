@@ -1590,8 +1590,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen]]
-version = "0.61.0"
-when = "2026-08-24"
+version = "0.61.1"
+when = "2026-08-25"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
@@ -1600,8 +1600,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
-version = "0.61.0"
-when = "2026-08-24"
+version = "0.61.1"
+when = "2026-08-25"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rt]]
@@ -1616,8 +1616,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.61.0"
-when = "2026-08-24"
+version = "0.61.1"
+when = "2026-08-25"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
@@ -1626,8 +1626,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.61.0"
-when = "2026-08-24"
+version = "0.61.1"
+when = "2026-08-25"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-component]]
