@@ -5,8 +5,8 @@
 # cranelift/isle/veri/cache, so a local run of verify.sh starts from the same
 # state CI is currently using.
 #
-# The `dev` release is refreshed on every push to `main` by the
-# "ISLE Verifier" CI workflow (see .github/workflows/isle-veri.yml).
+# The `dev` release is refreshed on runs landing on `main` by the
+# "ISLE verifier full check" CI job (see .github/workflows/main.yml).
 #
 # Usage:
 #   ./cranelift/isle/veri/setup/download-cache.sh

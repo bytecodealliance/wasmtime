@@ -3,9 +3,9 @@
 # Driver for VeriISLE verification with the SMT query cache.
 #
 # The cache lives locally at cranelift/isle/veri/cache (gitignored). CI
-# refreshes the cache on every push to main and publishes it as
-# isle-veri-cache.tar.gz on the `dev` release (see
-# .github/workflows/isle-veri.yml); local users can download it with
+# refreshes the cache on runs that land on main and publishes it as
+# isle-veri-cache.tar.gz on the `dev` release (see the isle_veri_full_check
+# job in .github/workflows/main.yml); local users can download it with
 # setup/download-cache.sh.
 #
 # Usage:

@@ -1363,20 +1363,105 @@ jobs:
     - run: ${{ matrix.script }}
       if: ${{ matrix.script }}
 
-  # Check the ISLE verifier builds/runs (without invoking the SMT solver, for now).
-  isle_veri_basic_check:
-    needs: determine
-    if: needs.determine.outputs.run-full
-    name: ISLE verifier basic check
+  # Run the full ISLE verifier (see cranelift/isle/veri/) incrementally on top
+  # of a shared SMT query cache. Cache misses are solved with cvc5/z3, so this
+  # is fast when the shared cache is warm and can take a long time (up to the
+  # timeout) when it is cold.
+  #
+  # The cache is shared across runs via the actions cache under the key
+  # prefix `isle-veri-cache-v1` (bump the version if the cache format
+  # changes). Cache entries are immutable, so each run saves under a unique
+  # key and restores the most recent entry by prefix. Caches are
+  # branch-scoped: only runs that land on `main` (the merge queue) write to
+  # the shared cache; PR and release-branch runs restore it read-only.
+  #
+  # Runs that land on `main` also publish the rebuilt cache as the
+  # `isle-veri-cache.tar.gz` asset on the rolling `dev` release and as a run
+  # artifact, so local users can download it with
+  # `cranelift/isle/veri/setup/download-cache.sh`.
+  isle_veri_full_check:
+    name: ISLE verifier full check
     runs-on: ubuntu-latest
+    # Runs can be cold (no cached SMT queries) and are slow then; use the
+    # maximum allowed timeout to be safe.
+    timeout-minutes: 360
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-fast.args --skip-solver
-    - run: cargo run -p cranelift-isle-veri --bin veri -- --name x64 --rule iadd_base_case_32_or_64_lea --skip-solver
-    - run: cargo run -p cranelift-isle-veri --bin veri -- --name opt --only-root simplify --default-excludes --skip-solver
+    - name: Read pinned solver versions
+      run: |
+        echo "CVC5_VERSION=$(sed -n 's/^version=\"([^\"]*)\".*/\1/p' cranelift/isle/veri/setup/install-cvc5.sh)" >> "${GITHUB_ENV}"
+        echo "Z3_VERSION=$(sed -n 's/^version=\"([^\"]*)\".*/\1/p' cranelift/isle/veri/setup/install-z3.sh)" >> "${GITHUB_ENV}"
+    - uses: actions/cache/restore@v5
+      id: smt-solvers
+      with:
+        path: ~/.cache/smt-solvers
+        key: isle-veri-solvers-${{ runner.os }}-cvc5-${{ env.CVC5_VERSION }}-z3-${{ env.Z3_VERSION }}
+    - uses: ./.github/actions/apt-get-install
+      if: steps.smt-solvers.outputs.cache-hit != 'true'
+      with:
+        packages: wget unzip
+    - name: Install SMT solvers (cvc5, z3)
+      if: steps.smt-solvers.outputs.cache-hit != 'true'
+      run: |
+        solver_dir="$HOME/.cache/smt-solvers"
+        mkdir -p "${solver_dir}/bin"
+        ./cranelift/isle/veri/setup/install-cvc5.sh -i "${solver_dir}"
+        ./cranelift/isle/veri/setup/install-z3.sh -b "${solver_dir}/bin"
+    - uses: actions/cache/save@v5
+      if: steps.smt-solvers.outputs.cache-hit != 'true'
+      with:
+        path: ~/.cache/smt-solvers
+        key: isle-veri-solvers-${{ runner.os }}-cvc5-${{ env.CVC5_VERSION }}-z3-${{ env.Z3_VERSION }}
+    - name: Add solvers to PATH
+      run: echo "$HOME/.cache/smt-solvers/bin" >> "${GITHUB_PATH}"
+    - name: Restore verifier SMT query cache
+      uses: actions/cache/restore@v5
+      with:
+        path: cranelift/isle/veri/cache
+        # Cache entries are immutable: each run saves under a unique key and
+        # restores the most recent entry by prefix. Bump `v1` if the cache
+        # format changes.
+        key: isle-veri-cache-v1-${{ github.run_id }}
+        restore-keys: |
+          isle-veri-cache-v1-
+    - name: Verify and rebuild cache
+      run: |
+        mkdir -p cranelift/isle/veri/cache
+        ./cranelift/isle/veri/verify.sh rebuild-cache
+    - name: Save verifier SMT query cache
+      # Only runs landing on `main` write to the shared cache; PR and
+      # release-branch runs restore it read-only.
+      if: github.ref_name == 'main'
+      uses: actions/cache/save@v5
+      with:
+        path: cranelift/isle/veri/cache
+        key: isle-veri-cache-v1-${{ github.run_id }}
+    - name: Package rebuilt cache
+      run: tar czf isle-veri-cache.tar.gz -C cranelift/isle/veri cache
+    - name: Upload cache tarball as run artifact
+      uses: actions/upload-artifact@v6
+      with:
+        name: isle-veri-cache
+        path: isle-veri-cache.tar.gz
+    - name: Update dev release
+      if: github.ref_name == 'main'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if gh release view dev >/dev/null 2>&1; then
+            gh release upload dev isle-veri-cache.tar.gz --clobber
+        else
+            # Can happen on the very first run, before publish-artifacts
+            # has created the dev release yet. The tarball is still
+            # available as a run artifact, and the next run will pick up
+            # the rebuilt cache from the actions cache anyway.
+            echo "::warning::The dev release does not exist yet; skipping the release upload."
+        fi
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
@@ -1487,7 +1572,7 @@ jobs:
       - verify-publish
       - determine
       - miri
-      - isle_veri_basic_check
+      - isle_veri_full_check
       - build-preview1-component-adapter
       - build-preview1-component-adapter-provider
       - test-min-platform-example

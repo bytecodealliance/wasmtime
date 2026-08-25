@@ -41,10 +41,11 @@ If you use this method, ensure that `<install_path>/bin` is on your `$PATH`.
 ## Sharing the cache with CI
 
 To keep local runs fast, CI maintains a shared copy of the verifier's SMT query
-cache. On every push to `main`, the "ISLE Verifier" workflow
-([`.github/workflows/isle-veri.yml`](../../.github/workflows/isle-veri.yml))
-runs `verify.sh rebuild-cache` on top of the previously published cache and
-publishes the result as the `isle-veri-cache.tar.gz` asset on the rolling
+cache. The "ISLE verifier full check" job in the CI workflow
+([`.github/workflows/main.yml`](../../.github/workflows/main.yml))
+runs `verify.sh rebuild-cache` on top of the previously published cache and,
+for runs that land on `main`, publishes the result as the
+`isle-veri-cache.tar.gz` asset on the rolling
 [`dev` release](https://github.com/bytecodealliance/wasmtime/releases/tag/dev).
 Pull requests also run the verifier against the latest `main` cache (read-only).
 
