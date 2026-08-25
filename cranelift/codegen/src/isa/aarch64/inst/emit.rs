@@ -417,14 +417,16 @@ fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) 
         | nzcv.bits()
 }
 
-fn enc_bfm(
-    bfm_op: BfmOp,
-    size: OperandSize,
-    rd: Writable<Reg>,
-    rn: Reg,
-    immr: u8,
-    imms: u8,
-) -> u32 {
+impl BfmOp {
+    fn opc(self) -> u8 {
+        match self {
+            BfmOp::UBfm => 0b10,
+            BfmOp::SBfm => 0b00,
+        }
+    }
+}
+
+fn enc_bfm(opc: u8, size: OperandSize, rd: Writable<Reg>, rn: Reg, immr: u8, imms: u8) -> u32 {
     match size {
         OperandSize::Size64 => {
             debug_assert!(immr <= 63);
@@ -435,15 +437,11 @@ fn enc_bfm(
             debug_assert!(imms <= 31);
         }
     }
-    let opc = match bfm_op {
-        BfmOp::UBfm => 0b10,
-        BfmOp::SBfm => 0b00,
-        // Note: BFM (`01`) is intentionally excluded
-    };
+    debug_assert_eq!(opc & 0b11, opc);
     let n_bit = size.sf_bit();
     0b0_00_100110_0_000000_000000_00000_00000
         | size.sf_bit() << 31
-        | opc << 29
+        | u32::from(opc) << 29
         | n_bit << 22
         | u32::from(immr) << 16
         | u32::from(imms) << 10
@@ -2936,7 +2934,8 @@ impl MachInstEmit for Inst {
                 } else {
                     (BfmOp::UBfm, OperandSize::Size32)
                 };
-                sink.put4(enc_bfm(bfm_op, size, rd, rn, 0, from_bits - 1));
+                let opc = bfm_op.opc();
+                sink.put4(enc_bfm(opc, size, rd, rn, 0, from_bits - 1));
             }
             &Inst::BitfieldMove {
                 size,
@@ -2946,7 +2945,19 @@ impl MachInstEmit for Inst {
                 immr,
                 imms,
             } => {
-                sink.put4(enc_bfm(bfm_op, size, rd, rn, immr.value(), imms.value()));
+                let opc = bfm_op.opc();
+                sink.put4(enc_bfm(opc, size, rd, rn, immr.value(), imms.value()));
+            }
+            &Inst::BitfieldMoveMod {
+                size,
+                rd,
+                ri,
+                rn,
+                immr,
+                imms,
+            } => {
+                debug_assert_eq!(rd.to_reg(), ri);
+                sink.put4(enc_bfm(0b01, size, rd, rn, immr.value(), imms.value()));
             }
             &Inst::Jump { ref dest } => {
                 let off = sink.cur_offset();

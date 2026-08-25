@@ -210,12 +210,22 @@
         (to_bits u8))
 
         ;; A bitfield move instruction, either UBFM or SBFM.
-        ;; BFM has been intentionally excluded as it leaves some bits
-        ;; in `rd` unchanged, rather than overwriting all of them.
+        ;; The BFM instruction is instead encoded as BitfieldMoveMod.
         (BitfieldMove
          (size OperandSize)
          (bfm_op BfmOp)
          (rd WritableReg)
+         (rn Reg)
+         (immr UImm6)
+         (imms UImm6))
+
+        ;; The bitfield move instruction that modifies its `rd`, i.e. BFM.
+        ;; The input state of `rd` is represented as `ri` (for "input"),
+        ;; and is constrained with `rd` so they use the same register.
+        (BitfieldMoveMod
+         (size OperandSize)
+         (rd WritableReg)
+         (ri Reg)
          (rn Reg)
          (immr UImm6)
          (imms UImm6))

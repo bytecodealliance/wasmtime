@@ -802,11 +802,14 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rn);
         }
         Inst::BitfieldMove { rd, rn, .. } => {
-            // BFM has been excluded from this instruction format
-            // as it can leave some bits of `rd` unchanged.
-            // In contrast, the UBFM and SBFM instructions always
-            // replace all bits in `rd`, making it a true def.
+            // The UBFM and SBFM instructions overwrite all bits in `rd`,
+            // unlike BFM which is represented as `BitfieldMoveMod` instead.
             collector.reg_def(rd);
+            collector.reg_use(rn);
+        }
+        Inst::BitfieldMoveMod { rd, ri, rn, .. } => {
+            collector.reg_reuse_def(rd, 1); // `rd` == `ri`.
+            collector.reg_use(ri);
             collector.reg_use(rn);
         }
         Inst::Args { args } => {
@@ -2626,6 +2629,21 @@ impl Inst {
                 let immr = immr.pretty_print(0);
                 let imms = imms.pretty_print(0);
                 format!("{op} {rd}, {rn}, {immr}, {imms}")
+            }
+            &Inst::BitfieldMoveMod {
+                size,
+                rd,
+                ri,
+                rn,
+                immr,
+                imms,
+            } => {
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let ri = pretty_print_ireg(ri, size);
+                let rn = pretty_print_ireg(rn, size);
+                let immr = immr.pretty_print(0);
+                let imms = imms.pretty_print(0);
+                format!("bfm {rd}, {ri}, {rn}, {immr}, {imms}")
             }
             &Inst::Call { ref info } => {
                 let try_call = info
