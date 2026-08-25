@@ -6115,7 +6115,9 @@ impl FuncEnvironment<'_> {
         // Manuall manage fuel around the call as the `Call` opcode does for
         // normal wasm to ensure that it's correctly accounted for.
         if self.tunables.consume_fuel {
-            self.fuel_consumed += 1;
+            self.fuel_consumed += self.tunables.operator_cost.cost(&Operator::Call {
+                function_index: func.as_u32(),
+            });
             self.fuel_increment_var(builder);
             self.fuel_save_from_var(builder);
         }

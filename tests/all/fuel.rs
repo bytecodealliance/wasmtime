@@ -1113,3 +1113,40 @@ fn const_expr_honors_operator_cost() -> Result<()> {
 
     Ok(())
 }
+
+/// `module_start` synthesizes the call to the wasm `(start ...)` function and
+/// hand-rolls the fuel accounting that `Operator::Call` normally receives from
+/// `fuel_before_op`. That accounting must use the configured `Call` cost rather
+/// than a hardcoded 1.
+///
+/// The module has no globals and no segments, and an empty start function, so
+/// the only charges are:
+///
+/// | module-startup function entry | 1  |
+/// | synthesized `call $start`     | 50 |
+/// | `$start` function entry       | 1  |
+/// | total                         | 52 |
+#[test]
+#[cfg_attr(miri, ignore)]
+fn module_start_call_honors_operator_cost() -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (func $start)
+          (start $start))
+    "#;
+
+    let mut config = Config::new();
+    config.consume_fuel(true).operator_cost(OperatorCost {
+        Call: 50,
+        ..Default::default()
+    });
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, WAT)?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(10_000)?;
+    Instance::new(&mut store, &module, &[])?;
+
+    assert_eq!(10_000 - store.get_fuel()?, 52);
+    Ok(())
+}
