@@ -372,22 +372,22 @@ cap-primitives = "4.0.3"
 cap-fs-ext-avoid-using-this = { version = "4.0.3", package = 'cap-fs-ext' }
 rustix = "1.1.4"
 # wit-bindgen:
-wit-bindgen = { version = "0.60.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.60.0", default-features = false }
+wit-bindgen = { version = "0.61.1", default-features = false }
+wit-bindgen-rust-macro = { version = "0.61.1", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.254.0", default-features = false, features = ['simd'] }
-wat = "1.254.0"
-wast = "254.0.0"
-wasmprinter = "0.254.0"
-wasm-encoder = "0.254.0"
-wasm-smith = "0.254.0"
-wasm-mutate = "0.254.0"
-wit-parser = "0.254.0"
-wit-component = "0.254.0"
-wasm-wave = "0.254.0"
-wasm-compose = { version = "0.254.0", default-features = false }
-json-from-wast = "0.254.0"
+wasmparser = { version = "0.258.0", default-features = false, features = ['simd'] }
+wat = "1.258.0"
+wast = "258.0.0"
+wasmprinter = "0.258.0"
+wasm-encoder = "0.258.0"
+wasm-smith = "0.258.0"
+wasm-mutate = "0.258.0"
+wit-parser = "0.258.0"
+wit-component = "0.258.0"
+wasm-wave = "0.258.0"
+wasm-compose = { version = "0.258.0", default-features = false }
+json-from-wast = "0.258.0"
 
 wstd = "0.6.5"
 wasip2 = "1.0"

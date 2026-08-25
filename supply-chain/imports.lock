@@ -740,8 +740,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.json-from-wast]]
-version = "0.254.0"
-when = "2026-07-20"
+version = "0.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.libc]]
@@ -1213,8 +1213,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-compose]]
-version = "0.254.0"
-when = "2026-07-20"
+version = "0.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasm-encoder]]
@@ -1223,8 +1223,8 @@ when = "2026-01-06"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasm-encoder]]
-version = "0.254.0"
-when = "2026-07-20"
+version = "0.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasm-metadata]]
@@ -1234,13 +1234,13 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-metadata]]
-version = "0.254.0"
-when = "2026-07-20"
+version = "0.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasm-wave]]
-version = "0.254.0"
-when = "2026-07-20"
+version = "0.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasmparser]]
@@ -1249,13 +1249,13 @@ when = "2026-01-06"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasmparser]]
-version = "0.254.0"
-when = "2026-07-20"
+version = "0.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasmprinter]]
-version = "0.254.0"
-when = "2026-07-20"
+version = "0.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasmtime]]
@@ -1409,13 +1409,13 @@ when = "2026-07-31"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wast]]
-version = "254.0.0"
-when = "2026-07-20"
+version = "258.0.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wat]]
-version = "1.254.0"
-when = "2026-07-20"
+version = "1.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wiggle]]
@@ -1590,8 +1590,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen]]
-version = "0.60.0"
-when = "2026-07-22"
+version = "0.61.1"
+when = "2026-08-25"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
@@ -1600,8 +1600,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
-version = "0.60.0"
-when = "2026-07-22"
+version = "0.61.1"
+when = "2026-08-25"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rt]]
@@ -1616,8 +1616,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.60.0"
-when = "2026-07-22"
+version = "0.61.1"
+when = "2026-08-25"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
@@ -1626,8 +1626,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.60.0"
-when = "2026-07-22"
+version = "0.61.1"
+when = "2026-08-25"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-component]]
@@ -1636,8 +1636,8 @@ when = "2026-01-06"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wit-component]]
-version = "0.254.0"
-when = "2026-07-20"
+version = "0.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wit-parser]]
@@ -1646,8 +1646,8 @@ when = "2026-01-06"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wit-parser]]
-version = "0.254.0"
-when = "2026-07-20"
+version = "0.258.0"
+when = "2026-08-24"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.witx]]

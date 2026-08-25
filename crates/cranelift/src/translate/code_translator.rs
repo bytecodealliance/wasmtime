@@ -289,7 +289,7 @@ pub fn translate_operator(
         }
         Operator::If { blockty } => {
             // Read the hint before `environ` is borrowed mutably below.
-            let branch_hint = environ.take_branch_hint(builder.srcloc().bits() as usize);
+            let branch_hint = environ.take_branch_hint(builder.srcloc().bits().into());
 
             let val = environ.stacks.pop1();
 
@@ -4108,7 +4108,7 @@ fn translate_br_if(
     env: &mut FuncEnvironment<'_>,
 ) {
     // Read the hint before `env` is borrowed mutably below.
-    let branch_hint = env.take_branch_hint(builder.srcloc().bits() as usize);
+    let branch_hint = env.take_branch_hint(builder.srcloc().bits().into());
 
     let val = env.stacks.pop1();
     let (br_destination, inputs) = translate_br_if_args(relative_depth, env);
