@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::{IndexType, Limits, Memory, TripleExt};
+use crate::{ConstOp, IndexType, Limits, Memory, TripleExt};
 use core::num::NonZeroU32;
 use core::{fmt, str::FromStr};
 use serde_derive::{Deserialize, Serialize};
@@ -541,6 +541,18 @@ impl OperatorCostStrategy {
         }
     }
 
+    /// Get the cost of an operator inside a constant expression.
+    ///
+    /// Constant expressions are stored as [`ConstOp`] rather than
+    /// `wasmparser::Operator`, so they need their own lookup, but the costs
+    /// come from the same table as [`OperatorCostStrategy::cost`].
+    pub fn const_op_cost(&self, op: &ConstOp) -> i64 {
+        match self {
+            OperatorCostStrategy::Table(cost) => cost.const_op_cost(op),
+            OperatorCostStrategy::Default => DEFAULT_OPERATOR_COST.const_op_cost(op),
+        }
+    }
+
     /// Get the costs of work whose size is only known at runtime.
     pub fn variable(&self) -> &VariableOperatorCost {
         match self {
@@ -551,6 +563,7 @@ impl OperatorCostStrategy {
 }
 
 const DEFAULT_VARIABLE_OPERATOR_COST: VariableOperatorCost = VariableOperatorCost::new();
+const DEFAULT_OPERATOR_COST: OperatorCost = OperatorCost::new();
 
 /// Fuel costs for operators whose work is proportional to a runtime operand.
 ///
@@ -728,3 +741,38 @@ macro_rules! define_operator_cost {
 }
 
 wasmparser::for_each_operator!(define_operator_cost);
+
+impl OperatorCost {
+    /// Returns the cost of an operator appearing in a constant expression.
+    ///
+    /// This mirrors [`OperatorCost::cost`] for the [`ConstOp`] representation
+    /// used by global initializers, element and data segment offsets, and
+    /// element segment expressions.
+    pub fn const_op_cost(&self, op: &ConstOp) -> i64 {
+        let cost = match op {
+            ConstOp::I32Const(_) => self.I32Const,
+            ConstOp::I64Const(_) => self.I64Const,
+            ConstOp::F32Const(_) => self.F32Const,
+            ConstOp::F64Const(_) => self.F64Const,
+            ConstOp::V128Const(_) => self.V128Const,
+            ConstOp::GlobalGet(_) => self.GlobalGet,
+            ConstOp::RefI31 => self.RefI31,
+            ConstOp::RefNull(_) => self.RefNull,
+            ConstOp::RefFunc(_) => self.RefFunc,
+            ConstOp::I32Add => self.I32Add,
+            ConstOp::I32Sub => self.I32Sub,
+            ConstOp::I32Mul => self.I32Mul,
+            ConstOp::I64Add => self.I64Add,
+            ConstOp::I64Sub => self.I64Sub,
+            ConstOp::I64Mul => self.I64Mul,
+            ConstOp::StructNew { .. } => self.StructNew,
+            ConstOp::StructNewDefault { .. } => self.StructNewDefault,
+            ConstOp::ArrayNew { .. } => self.ArrayNew,
+            ConstOp::ArrayNewDefault { .. } => self.ArrayNewDefault,
+            ConstOp::ArrayNewFixed { .. } => self.ArrayNewFixed,
+            ConstOp::ExternConvertAny => self.ExternConvertAny,
+            ConstOp::AnyConvertExtern => self.AnyConvertExtern,
+        };
+        i64::from(cost)
+    }
+}

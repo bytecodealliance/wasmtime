@@ -1052,3 +1052,64 @@ fn fuel_around_table_grow() -> Result<()> {
     assert_eq!(trap, Trap::TableOutOfBounds);
     Ok(())
 }
+
+/// A const-expr operator must be charged its configured cost, not a hardcoded 1.
+///
+/// The module's global initializer is a three-op const-expr. Wasmtime does not
+/// constant-fold `i32.add` at compile time, so the expression is translated into
+/// the synthesized module-startup function and executed at instantiation. The
+/// `(start ...)` function is what flushes the buffered charges into the fuel
+/// counter, so it must be present for the charges to be observable.
+///
+/// Expected accounting with `I32Add = 100` and every other cost left at its
+/// default of 1:
+///
+/// | module-startup function entry | 1   |
+/// | `i32.const 1`                 | 1   |
+/// | `i32.const 2`                 | 1   |
+/// | `i32.add`                     | 100 |
+/// | synthesized `call $start`     | 1   |
+/// | `$start` function entry       | 1   |
+/// | total                         | 105 |
+///
+/// With the default table every op costs 1, so the same module totals 6.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn const_expr_honors_operator_cost() -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (global $g i32 (i32.add (i32.const 1) (i32.const 2)))
+          (export "g" (global $g))
+          (func $start)
+          (start $start))
+    "#;
+
+    fn instantiation_fuel(op_cost: OperatorCost) -> Result<u64> {
+        let mut config = Config::new();
+        config.consume_fuel(true).operator_cost(op_cost);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(&engine, WAT)?;
+
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(10_000)?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        let g = instance
+            .get_global(&mut store, "g")
+            .unwrap()
+            .get(&mut store);
+        assert_eq!(g.i32(), Some(3), "global initializer did not run");
+
+        Ok(10_000 - store.get_fuel()?)
+    }
+
+    assert_eq!(instantiation_fuel(OperatorCost::default())?, 6);
+
+    let expensive_add = OperatorCost {
+        I32Add: 100,
+        ..Default::default()
+    };
+    assert_eq!(instantiation_fuel(expensive_add)?, 105);
+
+    Ok(())
+}
