@@ -585,3 +585,10 @@
 ;; -(X * C) = X * (-C)
 (rule (simplify (ineg (fits_in_64 ty) (imul ty x (iconst ty c))))
       (imul ty x (iconst ty (imm64_neg ty c))))
+
+(rule (simplify (isub ty x (ishl ty (ineg ty y) z))) (iadd ty x (ishl ty y z)))
+
+(rule (simplify (bxor ty (ishl ty x y) (ishl ty z y))) (ishl ty (bxor ty x z) y))
+(rule (simplify (bxor ty (sshr ty x y) (sshr ty z y))) (sshr ty (bxor ty x z) y))
+(rule (simplify (bxor ty (ushr ty x y) (ushr ty z y))) (ushr ty (bxor ty x z) y))
+
