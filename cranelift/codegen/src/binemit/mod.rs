@@ -32,7 +32,7 @@ pub enum Reloc {
     /// or `jmp` instruction, never to address materialization (e.g. `lea`,
     /// which uses [`Reloc::X86PCRel4`] instead). Consumers may therefore
     /// redirect the control transfer through a veneer when the target is out
-    /// of range of the 32-bit displacement, as `cranelift-jit` does.
+    /// of range of the 32-bit displacement.
     X86CallPCRel4,
     /// x86 call to PLT-relative 4-byte
     X86CallPLTRel4,
