@@ -1379,7 +1379,7 @@ jobs:
   # is fast when the cache is warm and can take a long time when it is cold.
   #
   # The cache is a named entry in the actions cache, keyed by a hash of the
-  # ISLE sources and the ISLE toolchain (see the "Compute ISLE hash" step).
+  # ISLE sources and the ISLE toolchain (see `hashFiles` in the cache key).
   # Caches saved by merge-queue runs are stored in the default branch's
   # cache scope and are visible to every PR and future merge-queue run, so
   # each distinct ISLE state gets exactly one immutable entry on `main`, and
@@ -1417,21 +1417,14 @@ jobs:
         ./cranelift/isle/veri/setup/install-z3.sh -b "${solver_dir}/bin"
     - name: Add solvers to PATH
       run: echo "$HOME/.cache/smt-solvers/bin" >> "${GITHUB_PATH}"
-    - name: Compute ISLE hash
-      id: isle-hash
-      run: |
-        # Hash of the ISLE sources and the ISLE toolchain itself: list the
-        # cranelift/isle/**/*.rs and cranelift/codegen/**/*.isle files,
-        # sort the file list, hash each file individually (path and
-        # content), then hash the resulting manifest.
-        files=$(git ls-files 'cranelift/isle/**/*.rs' 'cranelift/codegen/**/*.isle' | LC_ALL=C sort -u)
-        echo "hash=$(printf '%s\n' "$files" | xargs -r -d '\n' sha256sum | sha256sum | cut -c1-32)" >> "$GITHUB_OUTPUT"
     - name: Restore and save verifier cache
       uses: actions/cache@v5
       with:
         path: cranelift/isle/veri/cache
-        # Bump `v1` if the cache format changes.
-        key: isle-veri-cache-v1-${{ steps.isle-hash.outputs.hash }}
+        # Bump `v1` if the cache format changes. `hashFiles` covers the ISLE
+        # sources and the ISLE toolchain itself by hashing the paths and
+        # contents of all matching files.
+        key: isle-veri-cache-v1-${{ hashFiles('cranelift/isle/**/*.rs', 'cranelift/codegen/**/*.isle') }}
         restore-keys: |
           isle-veri-cache-v1-
     - name: Verify and rebuild cache
