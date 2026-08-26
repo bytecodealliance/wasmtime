@@ -1,5 +1,6 @@
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
+use wasmtime_wast::{Async, WastContext};
 use wast::parser::{self, Parse, ParseBuffer, Parser};
 use wast::token::Span;
 
@@ -1099,6 +1100,35 @@ fn variable_operator_cost_charged_only_on_success(config: &mut Config) -> Result
     assert_eq!(store.get_fuel()?, initial_fuel);
 
     Ok(())
+}
+
+/// Regression test for #14161. Previously this test failed because the fill
+/// operations would consume fuel.
+#[wasmtime_test(wasm_features(bulk_memory, memory64), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn oob_memory_fill_does_not_consume_fuel(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let mut wast = WastContext::new(&engine, Async::No, |store| {
+        store.set_fuel(u64::MAX).unwrap();
+    });
+    wast.run_wast(
+        "memory_fill.reduced.wast",
+        br#"
+            (module
+              (memory i64 1)
+              (func (export "fill64") (param $dst i64) (param $len i64)
+                local.get $dst
+                i32.const 0
+                local.get $len
+                memory.fill))
+
+            ;; Drains fuel to ~0 but still traps out-of-bounds correctly.
+            (assert_trap (invoke "fill64" (i64.const 0) (i64.const -1)) "out of bounds")
+            ;; No fuel left: must still trap "out of bounds", not "all fuel consumed".
+            (assert_trap (invoke "fill64" (i64.const 0) (i64.const -1)) "out of bounds")
+        "#,
+    )
 }
 
 #[test]
