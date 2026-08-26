@@ -46,12 +46,6 @@ jobs:
           git push origin dev:dev -f
           gh release create dev --prerelease dist/* ||
             gh release upload dev --clobber dist/*
-          # Refresh the ISLE verifier's shared SMT query cache (see the
-          # isle_veri_full_check job in main.yml), if the CI run produced
-          # one (the job is skipped for runs where the verifier didn't run).
-          if [ -f isle-veri-cache/isle-veri-cache.tar.gz ]; then
-            gh release upload dev --clobber isle-veri-cache/isle-veri-cache.tar.gz
-          fi
       env:
         GH_TOKEN: ${{ github.token }}
 
