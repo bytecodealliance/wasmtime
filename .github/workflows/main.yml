@@ -1437,7 +1437,7 @@ jobs:
     - name: Verify and rebuild cache
       run: |
         mkdir -p cranelift/isle/veri/cache
-        ./cranelift/isle/veri/verify.sh rebuild-cache aarch64-fast aarch64 opt-fast opt x64-iadd-base-case
+        ./cranelift/isle/veri/verify.sh rebuild-cache aarch64-fast opt-fast x64-iadd-base-case
     - name: Package rebuilt cache
       run: tar czf isle-veri-cache.tar.gz -C cranelift/isle/veri cache
     - name: Upload cache tarball as run artifact
