@@ -1435,6 +1435,10 @@ jobs:
         restore-keys: |
           isle-veri-cache-v1-
     - name: Verify and rebuild cache
+      env:
+        # Per-SMT-query timeout, in seconds (see the `--timeout` option in
+        # cranelift/isle/veri/veri/src/bin/veri.rs).
+        ISLE_VERI_TIMEOUT: "120"
       run: |
         mkdir -p cranelift/isle/veri/cache
         ./cranelift/isle/veri/verify.sh rebuild-cache aarch64-fast opt-fast x64-iadd-base-case
