@@ -383,23 +383,9 @@ fn funcref_exception_payload_escape_to_host(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[wasmtime_test(collectors(All), wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn caught_funcref_payload(config: &mut Config) -> Result<()> {
-    for collector in [
-        Collector::Null,
-        Collector::Copying,
-        Collector::DeferredReferenceCounting,
-    ] {
-        println!("Using GC collector: {collector:?}");
-        config.collector(collector);
-        run_caught_funcref_payload(config)?;
-    }
-
-    Ok(())
-}
-
-fn run_caught_funcref_payload(config: &Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -435,19 +421,12 @@ fn run_caught_funcref_payload(config: &Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[wasmtime_test(
+    collectors(Copying, DeferredReferenceCounting),
+    wasm_features(exceptions, reference_types)
+)]
 #[cfg_attr(miri, ignore)]
 fn thrown_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
-    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
-        println!("Using GC collector: {collector:?}");
-        config.collector(collector);
-        run_thrown_externref_payload_survives_gc(config)?;
-    }
-
-    Ok(())
-}
-
-fn run_thrown_externref_payload_survives_gc(config: &Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -485,23 +464,9 @@ fn run_thrown_externref_payload_survives_gc(config: &Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[wasmtime_test(collectors(All), wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn caught_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
-    for collector in [
-        Collector::Null,
-        Collector::Copying,
-        Collector::DeferredReferenceCounting,
-    ] {
-        println!("Using GC collector: {collector:?}");
-        config.collector(collector);
-        run_caught_externref_payload_survives_gc(config)?;
-    }
-
-    Ok(())
-}
-
-fn run_caught_externref_payload_survives_gc(config: &Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -545,10 +510,9 @@ fn run_caught_externref_payload_survives_gc(config: &Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+#[wasmtime_test(collectors(Null), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn throw_with_null_collector(config: &mut Config) -> Result<()> {
-    config.collector(Collector::Null);
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -738,10 +702,9 @@ fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+#[wasmtime_test(collectors(DeferredReferenceCounting), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -793,22 +756,9 @@ fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[wasmtime_test(collectors(All), wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> {
-    for collector in [
-        Collector::Null,
-        Collector::Copying,
-        Collector::DeferredReferenceCounting,
-    ] {
-        config.collector(collector);
-        run_store_pending_exnref_is_exposed(config)?;
-    }
-
-    Ok(())
-}
-
-fn run_store_pending_exnref_is_exposed(config: &Config) -> wasmtime::Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -893,10 +843,12 @@ fn run_store_pending_exnref_is_exposed(config: &Config) -> wasmtime::Result<()> 
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[wasmtime_test(
+    collectors(DeferredReferenceCounting),
+    wasm_features(exceptions, reference_types)
+)]
 #[cfg_attr(miri, ignore)]
 fn catch_ref_preserves_externref_payload(config: &mut Config) -> wasmtime::Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -962,9 +914,8 @@ impl Drop for SetFlagOnDrop {
     }
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+#[wasmtime_test(collectors(DeferredReferenceCounting), wasm_features(exceptions))]
 fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 

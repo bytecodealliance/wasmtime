@@ -1,8 +1,8 @@
 //! Wasmtime test macro.
 //!
 //! This macro is a helper to define tests that exercise multiple configuration
-//! combinations for Wasmtime. Currently compiler strategies and wasm features
-//! are supported.
+//! combinations for Wasmtime. Currently compiler strategies, garbage
+//! collectors, and wasm features are supported.
 //!
 //! Usage
 //!
@@ -24,7 +24,18 @@
 //! }
 //! ```
 //!
-//! To explicitly indicate that a wasm features is needed
+//! To use specific garbage collectors:
+//!
+//! ```rust
+//! #[wasmtime_test(collectors(Null, DeferredReferenceCounting))]
+//! fn my_test(config: &mut Config) -> Result<()> {
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Use `collectors(All)` to test all concrete garbage collectors.
+//!
+//! To explicitly indicate that a wasm feature is needed:
 //! ```
 //! #[wasmtime_test(wasm_features(gc))]
 //! fn my_wasm_gc_test(config: &mut Config) -> Result<()> {
@@ -45,11 +56,12 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input, token,
 };
-use wasmtime_test_util::wast::Compiler;
+use wasmtime_test_util::wast::{Collector, Compiler};
 
 /// Test configuration.
 struct TestConfig {
     strategies: Vec<Compiler>,
+    collectors: Vec<Collector>,
     flags: wasmtime_test_util::wast::TestConfig,
 }
 
@@ -111,6 +123,52 @@ impl TestConfig {
 
         Ok(())
     }
+
+    fn collectors_from(&mut self, meta: &ParseNestedMeta) -> Result<()> {
+        let mut collectors = Vec::new();
+        meta.parse_nested_meta(|meta| {
+            if meta.path.is_ident("All") {
+                if !collectors.is_empty() {
+                    return Err(meta.error("`All` cannot be combined with other collectors"));
+                }
+                collectors.extend([
+                    Collector::Null,
+                    Collector::Copying,
+                    Collector::DeferredReferenceCounting,
+                ]);
+                return Ok(());
+            }
+
+            let collector = if meta.path.is_ident("Auto") {
+                Collector::Auto
+            } else if meta.path.is_ident("Null") {
+                Collector::Null
+            } else if meta.path.is_ident("DeferredReferenceCounting") {
+                Collector::DeferredReferenceCounting
+            } else if meta.path.is_ident("Copying") {
+                Collector::Copying
+            } else {
+                return Err(meta.error("Unknown collector"));
+            };
+
+            if collector == Collector::Auto && !collectors.is_empty()
+                || collector != Collector::Auto && collectors.contains(&Collector::Auto)
+            {
+                return Err(meta.error("`Auto` cannot be combined with other collectors"));
+            }
+            if collectors.contains(&collector) {
+                return Err(meta.error("Duplicate collector"));
+            }
+            collectors.push(collector);
+            Ok(())
+        })?;
+
+        if collectors.is_empty() {
+            return Err(meta.error("Expected at least one collector"));
+        }
+        self.collectors = collectors;
+        Ok(())
+    }
 }
 
 impl Default for TestConfig {
@@ -121,6 +179,7 @@ impl Default for TestConfig {
                 Compiler::Winch,
                 Compiler::CraneliftPulley,
             ],
+            collectors: vec![Collector::Auto],
             flags: Default::default(),
         }
     }
@@ -193,6 +252,8 @@ pub fn run(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let config_parser = syn::meta::parser(|meta| {
         if meta.path.is_ident("strategies") {
             test_config.strategies_from(&meta)
+        } else if meta.path.is_ident("collectors") {
+            test_config.collectors_from(&meta)
         } else if meta.path.is_ident("wasm_features") {
             test_config.wasm_features_from(&meta)
         } else {
@@ -211,6 +272,14 @@ pub fn run(attrs: TokenStream, item: TokenStream) -> TokenStream {
 fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
     let mut tests = vec![quote! { #func }];
     let attrs = &func.attrs;
+    let func_name = &func.sig.ident;
+
+    match &func.sig.output {
+        ReturnType::Default => {
+            return Err(syn::Error::new(func_name.span(), "Expected `Result<()>`"));
+        }
+        ReturnType::Type(..) => {}
+    };
 
     let test_attr = if func.sig.asyncness.is_some() {
         quote! { #[tokio::test] }
@@ -225,17 +294,6 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         } else {
             (quote! {}, quote! {})
         };
-        let func_name = &func.sig.ident;
-        match &func.sig.output {
-            ReturnType::Default => {
-                return Err(syn::Error::new(func_name.span(), "Expected `Result<()>`"));
-            }
-            ReturnType::Type(..) => {}
-        };
-        let test_name = Ident::new(
-            &format!("{}_{}", strategy_name.to_lowercase(), func_name),
-            func_name.span(),
-        );
 
         // Ignore non-pulley tests in Miri as that's the only compiler which
         // works in Miri.
@@ -244,46 +302,67 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             _ => quote!(#[cfg_attr(miri, ignore)]),
         };
 
-        let test_config = format!("wasmtime_test_util::wast::{:?}", test_config.flags)
+        let flags = format!("wasmtime_test_util::wast::{:?}", test_config.flags)
             .parse::<proc_macro2::TokenStream>()
             .unwrap();
         let strategy_ident = quote::format_ident!("{strategy_name}");
 
-        let tok = quote! {
-            #test_attr
-            #(#attrs)*
-            #ignore_miri
-            #asyncness fn #test_name() {
-                // Skip this test completely if the compiler doesn't support
-                // this host.
-                let compiler = wasmtime_test_util::wast::Compiler::#strategy_ident;
-                if !compiler.supports_host() {
-                    return;
-                }
-                let _ = env_logger::try_init();
-                let mut config = Config::new();
-                wasmtime_test_util::wasmtime_wast::apply_test_config(
-                    &mut config,
-                    &#test_config,
-                );
-                wasmtime_test_util::wasmtime_wast::apply_wast_config(
-                    &mut config,
-                    &wasmtime_test_util::wast::WastConfig {
-                        compiler,
-                        pooling: false,
-                        collector: wasmtime_test_util::wast::Collector::Auto,
-                    },
-                );
-                let result = #func_name(&mut config) #await_;
-                if compiler.should_fail(&#test_config) {
-                    assert!(result.is_err());
-                } else {
-                    result.unwrap();
-                }
-            }
-        };
+        for collector in &test_config.collectors {
+            let collector_name = format!("{collector:?}");
+            let collector_ident = quote::format_ident!("{collector_name}");
+            let collector_suffix = match collector {
+                Collector::Auto => None,
+                Collector::Null => Some("null"),
+                Collector::DeferredReferenceCounting => Some("drc"),
+                Collector::Copying => Some("copying"),
+            };
+            let test_name = match collector_suffix {
+                Some(collector) => format!(
+                    "{}_{}_{}",
+                    strategy_name.to_lowercase(),
+                    collector,
+                    func_name
+                ),
+                None => format!("{}_{}", strategy_name.to_lowercase(), func_name),
+            };
+            let test_name = Ident::new(&test_name, func_name.span());
 
-        tests.push(tok);
+            let tok = quote! {
+                #test_attr
+                #(#attrs)*
+                #ignore_miri
+                #asyncness fn #test_name() {
+                    // Skip this test completely if the compiler doesn't support
+                    // this host.
+                    let compiler = wasmtime_test_util::wast::Compiler::#strategy_ident;
+                    if !compiler.supports_host() {
+                        return;
+                    }
+                    let _ = env_logger::try_init();
+                    let mut config = Config::new();
+                    wasmtime_test_util::wasmtime_wast::apply_test_config(
+                        &mut config,
+                        &#flags,
+                    );
+                    wasmtime_test_util::wasmtime_wast::apply_wast_config(
+                        &mut config,
+                        &wasmtime_test_util::wast::WastConfig {
+                            compiler,
+                            pooling: false,
+                            collector: wasmtime_test_util::wast::Collector::#collector_ident,
+                        },
+                    );
+                    let result = #func_name(&mut config) #await_;
+                    if compiler.should_fail(&#flags) {
+                        assert!(result.is_err());
+                    } else {
+                        result.unwrap();
+                    }
+                }
+            };
+
+            tests.push(tok);
+        }
     }
     Ok(quote! {
         #(#tests)*
