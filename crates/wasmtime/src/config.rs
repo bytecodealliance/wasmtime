@@ -2467,8 +2467,6 @@ impl Config {
                 }
             }
             Some(Strategy::Winch) => {
-                // Exception handling in Winch is a work in progress. Throws currently
-                // compile as uncatchable traps.
                 unsupported |= WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD

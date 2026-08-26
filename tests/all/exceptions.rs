@@ -383,23 +383,9 @@ fn funcref_exception_payload_escape_to_host(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[wasmtime_test(collectors(All), wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn caught_funcref_payload(config: &mut Config) -> Result<()> {
-    for collector in [
-        Collector::Null,
-        Collector::Copying,
-        Collector::DeferredReferenceCounting,
-    ] {
-        println!("Using GC collector: {collector:?}");
-        config.collector(collector);
-        run_caught_funcref_payload(config)?;
-    }
-
-    Ok(())
-}
-
-fn run_caught_funcref_payload(config: &Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -435,19 +421,12 @@ fn run_caught_funcref_payload(config: &Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[wasmtime_test(
+    collectors(Copying, DeferredReferenceCounting),
+    wasm_features(exceptions, reference_types)
+)]
 #[cfg_attr(miri, ignore)]
 fn thrown_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
-    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
-        println!("Using GC collector: {collector:?}");
-        config.collector(collector);
-        run_thrown_externref_payload_survives_gc(config)?;
-    }
-
-    Ok(())
-}
-
-fn run_thrown_externref_payload_survives_gc(config: &Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -485,23 +464,9 @@ fn run_thrown_externref_payload_survives_gc(config: &Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[wasmtime_test(collectors(All), wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn caught_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
-    for collector in [
-        Collector::Null,
-        Collector::Copying,
-        Collector::DeferredReferenceCounting,
-    ] {
-        println!("Using GC collector: {collector:?}");
-        config.collector(collector);
-        run_caught_externref_payload_survives_gc(config)?;
-    }
-
-    Ok(())
-}
-
-fn run_caught_externref_payload_survives_gc(config: &Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -545,10 +510,9 @@ fn run_caught_externref_payload_survives_gc(config: &Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+#[wasmtime_test(collectors(Null), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn throw_with_null_collector(config: &mut Config) -> Result<()> {
-    config.collector(Collector::Null);
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -738,10 +702,9 @@ fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+#[wasmtime_test(collectors(DeferredReferenceCounting), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -793,12 +756,10 @@ fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
     Ok(())
 }
 
-// Winch does not implement `catch_ref` yet.
-#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions, reference_types))]
+#[wasmtime_test(collectors(All), wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
     let module = Module::new(
@@ -812,6 +773,17 @@ fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> 
           (func (export "run") (result i32 (ref exn))
             (block $h (result i32 (ref exn))
               (try_table (result i32) (catch_ref $t1 $h)
+                call $throw_t1
+                unreachable
+              )
+              unreachable
+            )
+            call $gc
+          )
+
+          (func (export "run_all") (result (ref exn))
+            (block $h (result (ref exn))
+              (try_table (catch_all_ref $h)
                 call $throw_t1
                 unreachable
               )
@@ -861,6 +833,76 @@ fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> 
     store.gc(None)?;
 
     assert_eq!(exnref.field(&mut store, 0)?.unwrap_i32(), 0x1111_1111);
+
+    let run_all = instance.get_typed_func::<(), Rooted<ExnRef>>(&mut store, "run_all")?;
+    let exnref = run_all.call(&mut store, ())?;
+
+    store.gc(None)?;
+
+    assert_eq!(exnref.field(&mut store, 0)?.unwrap_i32(), 0x1111_1111);
+    Ok(())
+}
+
+#[wasmtime_test(
+    collectors(DeferredReferenceCounting),
+    wasm_features(exceptions, reference_types)
+)]
+#[cfg_attr(miri, ignore)]
+fn catch_ref_preserves_externref_payload(config: &mut Config) -> wasmtime::Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (import "" "gc" (func $gc))
+          (tag $e (param externref i32))
+
+          (func $throw (param externref)
+            (throw $e (local.get 0) (i32.const 42)))
+
+          (func (export "catch") (param externref) (result externref i32 (ref exn))
+            (block $handler (result externref i32 (ref exn))
+              (try_table (catch_ref $e $handler)
+                (call $throw (local.get 0)))
+              unreachable)
+            call $gc)
+        )
+        "#,
+    )?;
+
+    let gc = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| -> Result<()> {
+        caller.gc(None)?;
+        Ok(())
+    });
+    let instance = Instance::new(&mut store, &module, &[gc.into()])?;
+    let catch = instance
+        .get_typed_func::<
+            Option<Rooted<ExternRef>>,
+            (Option<Rooted<ExternRef>>, i32, Rooted<ExnRef>),
+        >(
+            &mut store, "catch",
+        )?;
+
+    let payload = ExternRef::new(&mut store, 0xDECAFu32)?;
+    let (caught, value, exnref) = catch.call(&mut store, Some(payload))?;
+    assert_eq!(value, 42);
+    let caught = caught.expect("catch_ref should return the payload");
+    let caught_data = caught
+        .data(&store)?
+        .and_then(|data| data.downcast_ref::<u32>().copied());
+    assert_eq!(caught_data, Some(0xDECAF));
+
+    let field = exnref.field(&mut store, 0)?;
+    let field = field
+        .unwrap_externref()
+        .expect("the exception payload should not be null");
+    let field_data = field
+        .data(&store)?
+        .and_then(|data| data.downcast_ref::<u32>().copied());
+    assert_eq!(field_data, Some(0xDECAF));
+    assert_eq!(exnref.field(&mut store, 1)?.unwrap_i32(), 42);
     Ok(())
 }
 
@@ -872,9 +914,8 @@ impl Drop for SetFlagOnDrop {
     }
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+#[wasmtime_test(collectors(DeferredReferenceCounting), wasm_features(exceptions))]
 fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -914,23 +955,23 @@ fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Resu
     Ok(())
 }
 
-// Winch does not support exnref values yet. Modules that place an exnref
-// in a value position should fail with a compile error instead of
-// panicking.
-#[wasmtime_test(strategies(only(Winch)), wasm_features(exceptions, reference_types))]
+#[wasmtime_test(wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
-fn exnref_local_is_unsupported(config: &mut Config) -> Result<()> {
+fn exnref_local_defaults_to_null(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
-    let wat = r#"
+    let module = Module::new(
+        &engine,
+        r#"
         (module
-          (func (result i32)
+          (func (export "run") (result i32)
             (local exnref)
-            (i32.const 0)))
-    "#;
-    let err = Module::new(&engine, wat).unwrap_err();
-    assert!(
-        format!("{err:?}").contains("Unsupported Wasm type"),
-        "unexpected error: {err:?}"
-    );
+            local.get 0
+            ref.is_null))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    assert_eq!(run.call(&mut store, ())?, 1);
     Ok(())
 }
