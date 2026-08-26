@@ -45,6 +45,36 @@ pub async fn request(
     first_by_timeout: Option<u64>,
     between_bytes_timeout: Option<u64>,
 ) -> Result<Response> {
+    let (transmit, response) = request_with_transmit_result(
+        method,
+        scheme,
+        authority,
+        path_with_query,
+        body,
+        additional_headers,
+        connect_timeout,
+        first_by_timeout,
+        between_bytes_timeout,
+    )
+    .await?;
+    transmit?;
+    response
+}
+
+/// Attempts to send the request. Return value will be an error if we were
+/// unable to properly construct the request. The inner values are the result of
+/// transmitting the request and the result of receiving the response.
+pub async fn request_with_transmit_result(
+    method: types::Method,
+    scheme: types::Scheme,
+    authority: &str,
+    path_with_query: &str,
+    body: Option<&[u8]>,
+    additional_headers: Option<&[(String, Vec<u8>)]>,
+    connect_timeout: Option<u64>,
+    first_by_timeout: Option<u64>,
+    between_bytes_timeout: Option<u64>,
+) -> Result<(Result<()>, Result<Response>)> {
     fn header_val(v: &str) -> Vec<u8> {
         v.to_string().into_bytes()
     }
@@ -116,7 +146,5 @@ pub async fn request(
             })
         },
     );
-    let response = handle?;
-    transmit?;
-    Ok(response)
+    Ok((transmit, handle))
 }
