@@ -5,8 +5,9 @@
 # cranelift/isle/veri/cache, so a local run of verify.sh starts from the same
 # state CI is currently using.
 #
-# The `dev` release is refreshed on runs landing on `main` by the
-# "ISLE verifier full check" CI job (see .github/workflows/main.yml).
+# The `dev` release asset is refreshed by the `publish-artifacts.yml`
+# workflow from the "ISLE verifier full check" CI job's artifact (see
+# .github/workflows/main.yml).
 #
 # Usage:
 #   ./cranelift/isle/veri/setup/download-cache.sh

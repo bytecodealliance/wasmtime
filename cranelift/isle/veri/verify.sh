@@ -3,13 +3,15 @@
 # Driver for VeriISLE verification with the SMT query cache.
 #
 # The cache lives locally at cranelift/isle/veri/cache (gitignored). CI
-# refreshes the cache on runs that land on main and publishes it as
-# isle-veri-cache.tar.gz on the `dev` release (see the isle_veri_full_check
-# job in .github/workflows/main.yml); local users can download it with
-# setup/download-cache.sh.
+# (the isle_veri_full_check job in .github/workflows/main.yml) verifies on
+# top of the shared entry in the GitHub Actions cache (keyed by a hash of
+# the ISLE sources and toolchain) and also uploads the rebuilt cache as a
+# run artifact, which the publish-artifacts.yml workflow publishes as
+# isle-veri-cache.tar.gz on the `dev` release when the run lands on main,
+# for local use. Local users can download it with setup/download-cache.sh.
 #
 # Usage:
-#   ./cranelift/isle/veri/verify.sh [MODE]
+#   ./cranelift/isle/veri/verify.sh [MODE] [CONFIG ...]
 #
 # Modes:
 #   cache-only     Verify purely from the local cache, in read-only, enforcing
@@ -27,16 +29,30 @@
 #                  Serves cached results where possible and invokes the solver
 #                  on misses, writing new entries back to the cache.
 #
+# CONFIG names (without the .args suffix) optionally select the
+# configurations to run from cranelift/isle/veri/configs/; the default is
+# CONFIGS below.
+
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 MODE="${1:-local}"
+shift || true
 
 CACHE_DIR="cranelift/isle/veri/cache"
+# The default set of configurations to verify.
 CONFIGS=(
     cranelift/isle/veri/configs/aarch64.args
     cranelift/isle/veri/configs/x64-iadd-base-case.args
 )
+# CI passes its own list (see the isle_veri_full_check job in
+# .github/workflows/main.yml).
+if [ $# -gt 0 ]; then
+    CONFIGS=()
+    for name in "$@"; do
+        CONFIGS+=("cranelift/isle/veri/configs/${name}.args")
+    done
+fi
 
 # Run the verifier for every configuration, forwarding the given cache flags.
 run_all() {
@@ -96,8 +112,9 @@ local | "")
     ;;
 
 *)
-    echo "usage: $0 [cache-only | rebuild-cache]" >&2
+    echo "usage: $0 [cache-only | rebuild-cache] [CONFIG ...]" >&2
     echo "       (no argument runs a local, in-place read-write verification)" >&2
+    echo "       (CONFIG names are .args files in cranelift/isle/veri/configs/)" >&2
     exit 1
     ;;
 esac

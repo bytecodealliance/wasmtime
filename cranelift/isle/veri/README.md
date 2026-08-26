@@ -40,14 +40,24 @@ If you use this method, ensure that `<install_path>/bin` is on your `$PATH`.
 
 ## Sharing the cache with CI
 
-To keep local runs fast, CI maintains a shared copy of the verifier's SMT query
-cache. The "ISLE verifier full check" job in the CI workflow
-([`.github/workflows/main.yml`](../../.github/workflows/main.yml))
-runs `verify.sh rebuild-cache` on top of the previously published cache and,
-for runs that land on `main`, publishes the result as the
-`isle-veri-cache.tar.gz` asset on the rolling
-[`dev` release](https://github.com/bytecodealliance/wasmtime/releases/tag/dev).
-Pull requests also run the verifier against the latest `main` cache (read-only).
+To keep local runs fast, CI maintains a shared copy of the verifier's SMT
+query cache in the GitHub Actions cache under keys of the form
+`isle-veri-cache-v1-<hash>`, where `<hash>` is derived from the ISLE sources
+and toolchain. Runs in the merge queue save entries in the default branch's
+cache scope, so every subsequent PR restores the most recent entry and
+verifies incrementally on top of it.
+
+The current cache is also published as the `isle-veri-cache.tar.gz` asset on
+the rolling
+[`dev` release](https://github.com/bytecodealliance/wasmtime/releases/tag/dev)
+for local use: the "ISLE verifier full check" job in the CI workflow
+([`.github/workflows/main.yml`](../../.github/workflows/main.yml)) uploads the
+rebuilt cache as a run artifact, and the
+[`publish-artifacts.yml`](../../.github/workflows/publish-artifacts.yml)
+workflow publishes it to the `dev` release when the run lands on `main`. The
+job runs on full CI and, on pull requests, when the PR touches the ISLE
+sources (`cranelift/codegen/**/*.isle`) or the ISLE toolchain
+(`cranelift/isle`), or a commit message contains `prtest:full`.
 
 To start a local session from the cache CI is currently using, run:
 
@@ -74,7 +84,7 @@ Blank lines and anything following a `#` (whole-line or trailing comments) are i
 The arguments from the file are applied *before* any passed on the command line, so the command line always takes precedence (for example, you can reuse a config but override its `--timeout`).
 Multi-valued arguments such as `--filter` accumulate, while single-valued arguments (like `--name`) take their last value.
 
-Three example configurations live in [`configs/`](configs):
+Five example configurations live in [`configs/`](configs):
 
 | File                              | Equivalent to                                                       |
 | --------------------------------- | ------------------------------------------------------------------- |
