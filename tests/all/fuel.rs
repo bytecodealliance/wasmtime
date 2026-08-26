@@ -847,46 +847,6 @@ fn custom_variable_operator_cost(config: &mut Config) -> Result<()> {
 
 #[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
 #[cfg_attr(miri, ignore)]
-fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let op_cost = OperatorCost {
-        I32Const: 0,
-        MemoryFill: 0,
-        variable: VariableOperatorCost {
-            memory_fill_per_byte: 7,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    config.operator_cost(op_cost);
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (memory 1)
-            (func (export "main")
-                ;; out of bounds fill
-                i32.const 65535 i32.const 0 i32.const 5 memory.fill)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(1_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
-
-    let initial_fuel = store.get_fuel()?;
-    let error = main.call(&mut store, ()).unwrap_err();
-    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
-    // The operation traps during bounds validation, before its five-byte
-    // variable charge or the pending function-entry unit is flushed.
-    assert_eq!(store.get_fuel()?, initial_fuel);
-
-    Ok(())
-}
-
-#[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
 fn variable_operator_cost_charged_only_on_success(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
     let op_cost = OperatorCost {
@@ -931,6 +891,46 @@ fn variable_operator_cost_charged_only_on_success(config: &mut Config) -> Result
     let initial_fuel = store.get_fuel()?;
     let error = fill.call(&mut store, (65_000, 1000)).unwrap_err();
     assert_eq!(error.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
+    assert_eq!(store.get_fuel()?, initial_fuel);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let op_cost = OperatorCost {
+        I32Const: 0,
+        MemoryFill: 0,
+        variable: VariableOperatorCost {
+            memory_fill_per_byte: 7,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    config.operator_cost(op_cost);
+
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (memory 1)
+            (func (export "main")
+                ;; out of bounds fill
+                i32.const 65535 i32.const 0 i32.const 5 memory.fill)
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(1_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+
+    let initial_fuel = store.get_fuel()?;
+    let error = main.call(&mut store, ()).unwrap_err();
+    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
+    // The operation traps during bounds validation, before its five-byte
+    // variable charge or the pending function-entry unit is flushed.
     assert_eq!(store.get_fuel()?, initial_fuel);
 
     Ok(())
