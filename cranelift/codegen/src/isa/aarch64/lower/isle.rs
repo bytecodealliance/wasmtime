@@ -243,7 +243,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     /// Compute the `immr` value for an `sbfm` instruction,
     /// derived by fusing an `ishl` by amount `a`, with an `sshr` by amount `b`.
-    fn sbfm_immr(&mut self, ty: Type, a: u64, b: u64) -> UImm6 {
+    fn bfm_immr(&mut self, ty: Type, a: u64, b: u64) -> UImm6 {
         let w = ty.lane_bits() as u8;
         debug_assert!(w <= 64);
 
@@ -255,7 +255,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     /// Compute the `imms` value for an `sbfm` instruction,
     /// derived by fusing an `ishl` by amount `a`, with an `sshr` by amount `b`.
-    fn sbfm_imms(&mut self, ty: Type, a: u64, _b: u64) -> UImm6 {
+    fn bfm_imms(&mut self, ty: Type, a: u64, _b: u64) -> UImm6 {
         let w = ty.lane_bits() as u8;
         debug_assert!(w <= 64);
 

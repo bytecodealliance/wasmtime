@@ -1703,16 +1703,26 @@
 ;; an appropriate pair of `ishl` and `ushr`/`sshr` operations.
 (rule sbfm 1 (lower
   (sshr (ty_32_or_64 ty) (ishl _ x (u64_from_iconst a)) (u64_from_iconst b)))
-  (bitfield_move ty (BfmOp.SBfm) x (sbfm_immr ty a b) (sbfm_imms ty a b)))
+  (bitfield_move ty (BfmOp.SBfm) x (bfm_immr ty a b) (bfm_imms ty a b)))
 (rule ubfm 1 (lower
   (ushr (ty_32_or_64 ty) (ishl _ x (u64_from_iconst a)) (u64_from_iconst b)))
-  (bitfield_move ty (BfmOp.UBfm) x (sbfm_immr ty a b) (sbfm_imms ty a b)))
+  (bitfield_move ty (BfmOp.UBfm) x (bfm_immr ty a b) (bfm_imms ty a b)))
 
 ;; Helper methods for constructing the correct `immr` and `imms` immediates.
-(decl sbfm_immr (Type u64 u64) UImm6)
-(extern constructor sbfm_immr sbfm_immr)
-(decl sbfm_imms (Type u64 u64) UImm6)
-(extern constructor sbfm_imms sbfm_imms)
+(spec (bfm_immr ty a b)
+      (provide (bvult result #x40))
+      (require (bvult a #x40))
+      (require (bvult b #x40))
+)
+(decl bfm_immr (Type u64 u64) UImm6)
+(extern constructor bfm_immr bfm_immr)
+(spec (bfm_imms ty a b)
+      (provide (bvult result #x40))
+      (require (bvult a #x40))
+      (require (bvult b #x40))
+)
+(decl bfm_imms (Type u64 u64) UImm6)
+(extern constructor bfm_imms bfm_imms)
 
 ;; Shift for i128.
 (rule (lower (sshr $I128 x y))
