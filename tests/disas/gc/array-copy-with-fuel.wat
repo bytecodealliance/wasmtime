@@ -107,8 +107,6 @@
 ;; @002b                               brif.i32 v6, block6, block9
 ;;
 ;;                                 block6:
-;;                                     v143 = load.i32 notrap aligned region6 v162
-;;                                     v145 = load.i32 notrap aligned region7 v163
 ;; @002b                               v102 = icmp.i64 ult v58, v82
 ;; @002b                               v107 = iadd.i64 v58, v170
 ;; @002b                               v108 = iadd.i64 v82, v170

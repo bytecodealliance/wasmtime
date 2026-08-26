@@ -86,7 +86,8 @@ use crate::{
     post_dominator_tree::PostDominatorTree,
     trace,
 };
-use core::cmp::Ordering;
+use alloc::collections::BinaryHeap;
+use core::cmp::{Ordering, Reverse};
 use cranelift_entity::{EntityRef, SecondaryMap, packed_option::PackedOption};
 
 /// Determine whether this opcode behaves as a memory fence, i.e.,
@@ -708,13 +709,21 @@ impl<'a> AliasAnalysis<'a> {
     }
 
     fn compute_block_input_states(&mut self, func: &Function) {
-        let mut queue = vec![];
+        // Drain the worklist in reverse postorder: a LIFO worklist redoes the
+        // whole tail of the function each time it comes back to the other side
+        // of a branch, which is quadratic for a long chain of diamonds.
+        let mut rpo_index = SecondaryMap::with_default(usize::MAX);
+        for (i, block) in self.domtree.cfg_rpo().enumerate() {
+            rpo_index[*block] = i;
+        }
+
+        let mut queue = BinaryHeap::new();
         let mut queue_set = FxHashSet::default();
         let entry = func.layout.entry_block().unwrap();
-        queue.push(entry);
+        queue.push(Reverse((rpo_index[entry], entry)));
         queue_set.insert(entry);
 
-        while let Some(block) = queue.pop() {
+        while let Some(Reverse((_, block))) = queue.pop() {
             queue_set.remove(&block);
             let mut state = self
                 .block_input
@@ -747,7 +756,7 @@ impl<'a> AliasAnalysis<'a> {
                 };
 
                 if updated && queue_set.insert(succ) {
-                    queue.push(succ);
+                    queue.push(Reverse((rpo_index[succ], succ)));
                 }
             });
         }
