@@ -17,6 +17,7 @@ use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
+use wasmtime::error::Context;
 use wasmtime::{Result, bail, format_err};
 
 /// Characters which can be safely ignored while parsing numeric options to wasmtime
@@ -25,6 +26,7 @@ const IGNORED_NUMBER_CHARS: [char; 1] = ['_'];
 #[macro_export]
 macro_rules! wasmtime_option_group {
     (
+        #[env = $env:tt]
         $(#[$attr:meta])*
         pub struct $opts:ident {
             $(
@@ -74,6 +76,7 @@ macro_rules! wasmtime_option_group {
         }
 
         impl $crate::opt::WasmtimeOption for $option {
+            const ENV_PREFIX: &'static str = concat!("WASMTIME_", $env);
             const OPTIONS: &'static [$crate::opt::OptionDesc<$option>] = &[
                 $(
                     $crate::opt::OptionDesc {
@@ -126,18 +129,24 @@ macro_rules! wasmtime_option_group {
         }
 
         impl $opts {
-            fn configure_with(&mut self, opts: &[$crate::opt::CommaSeparated<$option>]) {
-                for opt in opts.iter().flat_map(|o| o.0.iter()) {
-                    match opt {
-                        $(
-                            $option::$opt(val) => {
-                                $crate::opt::OptionContainer::push(&mut self.$opt, val.clone());
-                            }
-                        )+
-                        $(
-                            $option::$prefixed(key, val) => self.$prefixed.push((key.clone(), val.clone())),
-                        )?
-                    }
+            fn configure_with(&mut self, opts: &[$crate::opt::CommaSeparated<$option>]) -> Result<()> {
+                let env_opts = <$option as $crate::opt::WasmtimeOption>::parse_env()?;
+                for opt in env_opts.iter().chain(opts.iter().flat_map(|o| o.0.iter())) {
+                    self.configure(opt);
+                }
+                Ok(())
+            }
+
+            fn configure(&mut self, opt: &$option) {
+                match opt {
+                    $(
+                        $option::$opt(val) => {
+                            $crate::opt::OptionContainer::push(&mut self.$opt, val.clone());
+                        }
+                    )+
+                    $(
+                        $option::$prefixed(key, val) => self.$prefixed.push((key.clone(), val.clone())),
+                    )?
                 }
             }
 
@@ -251,6 +260,62 @@ where
             std::process::exit(0);
         }
 
+        T::parse_csv(&val).map(CommaSeparated).map_err(|e| {
+            Error::raw(
+                ErrorKind::InvalidValue,
+                format!("failed to parse -{arg_short} / --{arg_long} option: {e:?}\n"),
+            )
+        })
+    }
+}
+
+/// Helper trait used by `CommaSeparated` which contains a list of all options
+/// supported by the option group.
+pub trait WasmtimeOption: Sized + Send + Sync + Clone + 'static {
+    const OPTIONS: &'static [OptionDesc<Self>];
+    const ENV_PREFIX: &'static str;
+
+    /// Parse all environment variables that relate to this option, returning
+    /// all parsed variables as a list.
+    ///
+    /// Returns an error if any environment variable has invalid syntax and/or
+    /// failed to parse.
+    fn parse_env() -> Result<Vec<Self>> {
+        let mut ret = Vec::new();
+        if let Some(val) = std::env::var_os(Self::ENV_PREFIX) {
+            let val = match val.to_str() {
+                Some(s) => s,
+                None => bail!("env var `{}` is not valid UTF-8", Self::ENV_PREFIX),
+            };
+            ret.extend(
+                Self::parse_csv(&val)
+                    .with_context(|| format!("failed to parse env var `{}`", Self::ENV_PREFIX))?,
+            );
+        }
+
+        for option in Self::OPTIONS {
+            let key = match &option.name {
+                OptName::Name(s) => format!("{}_{}", Self::ENV_PREFIX, s.to_ascii_uppercase()),
+                OptName::Prefix(_) => continue,
+            };
+            let val = match std::env::var_os(&key) {
+                Some(val) => val,
+                None => continue,
+            };
+            let val = match val.to_str() {
+                Some(s) => s,
+                None => bail!("env var `{key}` is not valid UTF-8"),
+            };
+            ret.push(
+                (option.parse)(&key, Some(val))
+                    .with_context(|| format!("failed to parse env var `{key}`"))?,
+            );
+        }
+        Ok(ret)
+    }
+
+    /// Parses `val` as a comma-separated list of values for `Self::OPTIONS`.
+    fn parse_csv(val: &str) -> Result<Vec<Self>> {
         let mut result = Vec::new();
         for val in val.split(',') {
             // Split `k=v` into `k` and `v` where `v` is optional
@@ -259,7 +324,7 @@ where
             let key_val = iter.next();
 
             // Find `key` within `T::OPTIONS`
-            let option = options
+            let option = Self::OPTIONS
                 .iter()
                 .filter_map(|d| match d.name {
                     OptName::Name(s) => {
@@ -275,32 +340,16 @@ where
 
             let (desc, key) = match option {
                 Some(pair) => pair,
-                None => {
-                    let err = Error::raw(
-                        ErrorKind::InvalidValue,
-                        format!("unknown -{arg_short} / --{arg_long} option: {key}\n"),
-                    );
-                    return Err(err.with_cmd(cmd));
-                }
+                None => bail!("unknown option: {key}\n"),
             };
 
-            result.push((desc.parse)(&key, key_val).map_err(|e| {
-                Error::raw(
-                    ErrorKind::InvalidValue,
-                    format!("failed to parse -{arg_short} option `{val}`: {e:?}\n"),
-                )
-                .with_cmd(cmd)
-            })?)
+            result.push(
+                (desc.parse)(&key, key_val)
+                    .with_context(|| format!("failed to parse option `{val}`"))?,
+            );
         }
-
-        Ok(CommaSeparated(result))
+        Ok(result)
     }
-}
-
-/// Helper trait used by `CommaSeparated` which contains a list of all options
-/// supported by the option group.
-pub trait WasmtimeOption: Sized + Send + Sync + Clone + 'static {
-    const OPTIONS: &'static [OptionDesc<Self>];
 }
 
 pub struct OptionDesc<T> {

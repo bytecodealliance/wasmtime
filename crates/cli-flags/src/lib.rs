@@ -47,6 +47,7 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 }
 
 wasmtime_option_group! {
+    #[env = "OPTIMIZE"]
     pub struct OptimizeOptions {
         /// Optimization level of generated code (0-2, s; default: 2)
         #[serde(default)]
@@ -234,6 +235,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "CODEGEN"]
     pub struct CodegenOptions {
         /// Either `cranelift` or `winch`.
         ///
@@ -296,6 +298,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "DEBUG"]
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
         pub debug_info: Option<bool>,
@@ -337,6 +340,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "WASM"]
     pub struct WasmOptions {
         /// Enable canonicalization of all NaN values.
         pub nan_canonicalization: Option<bool>,
@@ -487,6 +491,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "WASI"]
     pub struct WasiOptions {
         /// Enable support for WASI CLI APIs, including filesystems, sockets, clocks, and random.
         pub cli: Option<bool>,
@@ -587,6 +592,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "RECORD"]
     pub struct RecordOptions {
         /// Filename for the recorded execution trace (or empty string to skip writing a file).
         pub path: Option<String>,
@@ -801,12 +807,12 @@ impl CommonOptions {
                 );
             }
         }
-        self.opts.configure_with(&self.opts_raw);
-        self.codegen.configure_with(&self.codegen_raw);
-        self.debug.configure_with(&self.debug_raw);
-        self.wasm.configure_with(&self.wasm_raw);
-        self.wasi.configure_with(&self.wasi_raw);
-        self.record.configure_with(&self.record_raw);
+        self.opts.configure_with(&self.opts_raw)?;
+        self.codegen.configure_with(&self.codegen_raw)?;
+        self.debug.configure_with(&self.debug_raw)?;
+        self.wasm.configure_with(&self.wasm_raw)?;
+        self.wasi.configure_with(&self.wasi_raw)?;
+        self.record.configure_with(&self.record_raw)?;
         Ok(())
     }
 

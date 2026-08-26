@@ -3573,3 +3573,82 @@ fn compile_empty_component_with_debug_info() -> Result<()> {
     assert_eq!(stdout, "");
     Ok(())
 }
+
+#[test]
+fn environment_configuration() -> Result<()> {
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("empty-component.cwasm");
+    run_wasmtime(&[
+        "compile",
+        "tests/all/cli_tests/empty_component.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+    ])?;
+
+    // Pass option bag of arguments
+    let output = wasmtime(&[
+        "compile",
+        "tests/all/cli_tests/empty_component.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+    ])?
+    .env("WASMTIME_WASM", "component-model=n")
+    .output()?;
+    assert!(!output.status.success());
+
+    // Pass specific argument
+    let output = wasmtime(&[
+        "compile",
+        "tests/all/cli_tests/empty_component.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+    ])?
+    .env("WASMTIME_WASM_COMPONENT_MODEL", "n")
+    .output()?;
+    assert!(!output.status.success());
+
+    // Pass invalid argument
+    let output = wasmtime(&["tests/all/cli_tests/simple.wat"])?
+        .env("WASMTIME_WASM_COMPONENT_MODEL", "invalid")
+        .output()?;
+    assert!(!output.status.success());
+    let output = wasmtime(&["tests/all/cli_tests/simple.wat"])?
+        .env("WASMTIME_WASM", "invalid")
+        .output()?;
+    assert!(!output.status.success());
+
+    // CLI overrides env vars
+    run_cmd(
+        wasmtime(&[
+            "compile",
+            "-Wcomponent-model",
+            "tests/all/cli_tests/empty_component.wat",
+            "-o",
+            cwasm.to_str().unwrap(),
+        ])?
+        .env("WASMTIME_WASM_COMPONENT_MODEL", "n"),
+    )?;
+    run_cmd(
+        wasmtime(&[
+            "compile",
+            "-Wcomponent-model",
+            "tests/all/cli_tests/empty_component.wat",
+            "-o",
+            cwasm.to_str().unwrap(),
+        ])?
+        .env("WASMTIME_WASM", "component-model=n"),
+    )?;
+
+    // specific env var overrides general
+    run_cmd(
+        wasmtime(&[
+            "compile",
+            "tests/all/cli_tests/empty_component.wat",
+            "-o",
+            cwasm.to_str().unwrap(),
+        ])?
+        .env("WASMTIME_WASM", "component-model=n")
+        .env("WASMTIME_WASM_COMPONENT_MODEL", "y"),
+    )?;
+    Ok(())
+}
