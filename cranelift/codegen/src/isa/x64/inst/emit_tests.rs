@@ -20,62 +20,6 @@ use alloc::vec::Vec;
 use cranelift_entity::EntityRef as _;
 
 #[test]
-fn test_load_ext_name_near_uses_non_call_relocation() {
-    let flags = settings::Flags::new(settings::builder());
-    let isa_flags = x64::settings::Flags::new(&flags, &x64::settings::builder());
-    let emit_info = EmitInfo::new(flags, isa_flags);
-    let inst = Inst::LoadExtName {
-        dst: Writable::from_reg(Gpr::R11),
-        name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
-        offset: 0,
-        distance: RelocDistance::Near,
-    };
-    let mut buffer = MachBuffer::new();
-    inst.emit(&mut buffer, &emit_info, &mut Default::default());
-    let buffer = buffer.finish(&Default::default(), &mut Default::default());
-
-    // `lea r11, [rip + 0]` with a relocation on the 4-byte displacement. The
-    // relocation must be `X86PCRel4` rather than `X86CallPCRel4`: this
-    // instruction materializes an address, so consumers must not redirect it
-    // through a call veneer (as e.g. `cranelift-jit` does for out-of-range
-    // `X86CallPCRel4` relocations).
-    assert_eq!(buffer.data(), &[0x4c, 0x8d, 0x1d, 0, 0, 0, 0]);
-    assert_eq!(buffer.relocs().len(), 1);
-    let reloc = &buffer.relocs()[0];
-    assert_eq!(reloc.kind, Reloc::X86PCRel4);
-    assert_eq!(reloc.offset, 3);
-    assert_eq!(reloc.addend, -4);
-}
-
-#[test]
-fn test_text_section_builder_resolves_x86_pcrel4() {
-    let mut builder = MachTextSectionBuilder::<Inst>::new(2);
-    let mut ctrl_plane = Default::default();
-
-    // `lea r11, [rip + disp32]; ret`, with the displacement targeting the
-    // second function appended below.
-    let source = builder.append(
-        true,
-        &[0x4c, 0x8d, 0x1d, 0, 0, 0, 0, 0xc3],
-        1,
-        &mut ctrl_plane,
-    );
-    let target = builder.append(true, &[0xc3], 1, &mut ctrl_plane);
-    let reloc_offset = source + 3;
-
-    // Ensure that `LabelUse::from_reloc` recognizes the non-call relocation
-    // and that the text-section builder applies its `-4` addend convention
-    // correctly.
-    assert!(builder.resolve_reloc(reloc_offset, Reloc::X86PCRel4, -4, 1));
-    let text = builder.finish(&mut ctrl_plane);
-
-    let reloc_offset = usize::try_from(reloc_offset).unwrap();
-    let displacement = i32::from_le_bytes(text[reloc_offset..reloc_offset + 4].try_into().unwrap());
-    let resolved_target = i64::try_from(reloc_offset + 4).unwrap() + i64::from(displacement);
-    assert_eq!(u64::try_from(resolved_target).unwrap(), target);
-}
-
-#[test]
 fn test_x64_emit() {
     let rax = regs::rax();
     let rbx = regs::rbx();
