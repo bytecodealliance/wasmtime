@@ -845,6 +845,181 @@ fn custom_variable_operator_cost(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
+#[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let op_cost = OperatorCost {
+        I32Const: 0,
+        MemoryFill: 0,
+        variable: VariableOperatorCost {
+            memory_fill_per_byte: 7,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    config.operator_cost(op_cost);
+
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (memory 1)
+            (func (export "main")
+                ;; out of bounds fill
+                i32.const 65535 i32.const 0 i32.const 5 memory.fill)
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(1_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+
+    let initial_fuel = store.get_fuel()?;
+    let error = main.call(&mut store, ()).unwrap_err();
+    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
+    // The operation traps during bounds validation, before its five-byte
+    // variable charge or the pending function-entry unit is flushed.
+    assert_eq!(store.get_fuel()?, initial_fuel);
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn variable_operator_cost_charged_only_on_success(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let op_cost = OperatorCost {
+        I32Const: 0,
+        LocalGet: 0,
+        MemoryFill: 0,
+        variable: VariableOperatorCost {
+            memory_fill_per_byte: 3,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    config.operator_cost(op_cost);
+
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (memory 1)
+            (func (export "fill") (param $dst i32) (param $len i32)
+                local.get $dst
+                i32.const 0
+                local.get $len
+                memory.fill)
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let fill = {
+        let instance = Instance::new(&mut store, &module, &[])?;
+        instance.get_typed_func::<(i32, i32), ()>(&mut store, "fill")?
+    };
+
+    // In-bounds fill of 1000 bytes: billed 1000 * 3 on the success path, plus
+    // the single baseline unit.
+    store.set_fuel(1_000_000)?;
+    let initial_fuel = store.get_fuel()?;
+    fill.call(&mut store, (0, 1000))?;
+    assert_eq!(initial_fuel - store.get_fuel()?, 1000 * 3 + 1);
+
+    // Out-of-bounds fill isn't charged.
+    store.set_fuel(1_000_000)?;
+    let initial_fuel = store.get_fuel()?;
+    let error = fill.call(&mut store, (65_000, 1000)).unwrap_err();
+    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
+    assert_eq!(store.get_fuel()?, initial_fuel);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn huge_table64_grow_cannot_mint_fuel() -> Result<()> {
+    huge_table64_grow_cannot_mint_fuel_impl(
+        r#"
+        (module
+          (table $t i64 0 0x10000 (ref null func))
+          (func (export "run") (param $delta i64)
+            (loop $l
+              (drop (table.grow $t (ref.null func) (local.get $delta)))
+              (br $l))))
+        "#,
+    )
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn huge_table64_grow_cannot_mint_fuel_const() -> Result<()> {
+    huge_table64_grow_cannot_mint_fuel_impl(
+        r#"
+        (module
+          (table $t i64 0 0x10000 (ref null func))
+          (func (export "run") (param $delta i64)
+            (loop $l
+              (drop (table.grow $t (ref.null func) (i64.const -500)))
+              (br $l))))
+        "#,
+    )
+}
+
+fn huge_table64_grow_cannot_mint_fuel_impl(wat: &str) -> Result<()> {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, wat)?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<i64, ()>(&mut store, "run")?;
+
+    let trap = run.call(&mut store, -500).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap, Trap::OutOfFuel);
+    assert_eq!(store.get_fuel()?, 0);
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn fuel_around_table_grow() -> Result<()> {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (type $ft (func))
+              (func $f (type $ft))
+              (table $t 1 10000000 (ref $ft) (ref.func $f))
+              (func (export "grow") (result i32)
+                (table.grow $t (ref.func $f) (i32.const 9999999)))
+              (func (export "call") (param i32)
+                (call_indirect $t (type $ft) (local.get 0))))
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(2)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let grow = instance.get_typed_func::<(), i32>(&mut store, "grow")?;
+    let trap = grow.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap, Trap::OutOfFuel);
+
+    store.set_fuel(u64::MAX)?;
+    let call = instance.get_typed_func::<i32, ()>(&mut store, "call")?;
+    let trap = call
+        .call(&mut store, 9999999)
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::TableOutOfBounds);
+    Ok(())
+}
+
 const COST_MEMORY_GROW_PER_PAGE: u64 = 7;
 const COST_TABLE_GROW_PER_ELEMENT: u64 = 19;
 const COST_MEMORY_GROW: u64 = 2;
@@ -1011,97 +1186,6 @@ fn dynamic_grow_failure(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let op_cost = OperatorCost {
-        I32Const: 0,
-        MemoryFill: 0,
-        variable: VariableOperatorCost {
-            memory_fill_per_byte: 7,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    config.operator_cost(op_cost);
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (memory 1)
-            (func (export "main")
-                ;; out of bounds fill
-                i32.const 65535 i32.const 0 i32.const 5 memory.fill)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(1_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
-
-    let initial_fuel = store.get_fuel()?;
-    let error = main.call(&mut store, ()).unwrap_err();
-    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
-    // The operation traps during bounds validation, before its five-byte
-    // variable charge or the pending function-entry unit is flushed.
-    assert_eq!(store.get_fuel()?, initial_fuel);
-
-    Ok(())
-}
-
-#[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-fn variable_operator_cost_charged_only_on_success(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let op_cost = OperatorCost {
-        I32Const: 0,
-        LocalGet: 0,
-        MemoryFill: 0,
-        variable: VariableOperatorCost {
-            memory_fill_per_byte: 3,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    config.operator_cost(op_cost);
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (memory 1)
-            (func (export "fill") (param $dst i32) (param $len i32)
-                local.get $dst
-                i32.const 0
-                local.get $len
-                memory.fill)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    let fill = {
-        let instance = Instance::new(&mut store, &module, &[])?;
-        instance.get_typed_func::<(i32, i32), ()>(&mut store, "fill")?
-    };
-
-    // In-bounds fill of 1000 bytes: billed 1000 * 3 on the success path, plus
-    // the single baseline unit.
-    store.set_fuel(1_000_000)?;
-    let initial_fuel = store.get_fuel()?;
-    fill.call(&mut store, (0, 1000))?;
-    assert_eq!(initial_fuel - store.get_fuel()?, 1000 * 3 + 1);
-
-    // Out-of-bounds fill isn't charged.
-    store.set_fuel(1_000_000)?;
-    let initial_fuel = store.get_fuel()?;
-    let error = fill.call(&mut store, (65_000, 1000)).unwrap_err();
-    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::MemoryOutOfBounds);
-    assert_eq!(store.get_fuel()?, initial_fuel);
-
-    Ok(())
-}
-
 /// Regression test for #14161. Previously this test failed because the fill
 /// operations would consume fuel.
 #[wasmtime_test(wasm_features(bulk_memory, memory64), strategies(not(Winch)))]
@@ -1129,88 +1213,4 @@ fn oob_memory_fill_does_not_consume_fuel(config: &mut Config) -> Result<()> {
             (assert_trap (invoke "fill64" (i64.const 0) (i64.const -1)) "out of bounds")
         "#,
     )
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn huge_table64_grow_cannot_mint_fuel() -> Result<()> {
-    huge_table64_grow_cannot_mint_fuel_impl(
-        r#"
-        (module
-          (table $t i64 0 0x10000 (ref null func))
-          (func (export "run") (param $delta i64)
-            (loop $l
-              (drop (table.grow $t (ref.null func) (local.get $delta)))
-              (br $l))))
-        "#,
-    )
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn huge_table64_grow_cannot_mint_fuel_const() -> Result<()> {
-    huge_table64_grow_cannot_mint_fuel_impl(
-        r#"
-        (module
-          (table $t i64 0 0x10000 (ref null func))
-          (func (export "run") (param $delta i64)
-            (loop $l
-              (drop (table.grow $t (ref.null func) (i64.const -500)))
-              (br $l))))
-        "#,
-    )
-}
-
-fn huge_table64_grow_cannot_mint_fuel_impl(wat: &str) -> Result<()> {
-    let mut config = Config::new();
-    config.consume_fuel(true);
-    let engine = Engine::new(&config)?;
-    let module = Module::new(&engine, wat)?;
-
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(100_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let run = instance.get_typed_func::<i64, ()>(&mut store, "run")?;
-
-    let trap = run.call(&mut store, -500).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap, Trap::OutOfFuel);
-    assert_eq!(store.get_fuel()?, 0);
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn fuel_around_table_grow() -> Result<()> {
-    let mut config = Config::new();
-    config.consume_fuel(true);
-    let engine = Engine::new(&config)?;
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-              (type $ft (func))
-              (func $f (type $ft))
-              (table $t 1 10000000 (ref $ft) (ref.func $f))
-              (func (export "grow") (result i32)
-                (table.grow $t (ref.func $f) (i32.const 9999999)))
-              (func (export "call") (param i32)
-                (call_indirect $t (type $ft) (local.get 0))))
-        "#,
-    )?;
-
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(2)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let grow = instance.get_typed_func::<(), i32>(&mut store, "grow")?;
-    let trap = grow.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap, Trap::OutOfFuel);
-
-    store.set_fuel(u64::MAX)?;
-    let call = instance.get_typed_func::<i32, ()>(&mut store, "call")?;
-    let trap = call
-        .call(&mut store, 9999999)
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert_eq!(trap, Trap::TableOutOfBounds);
-    Ok(())
 }
