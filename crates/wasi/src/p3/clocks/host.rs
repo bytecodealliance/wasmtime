@@ -27,7 +27,9 @@ impl<U> monotonic_clock::HostWithStore<U> for WasiClocks {
         store: &Accessor<U, Self>,
         when: monotonic_clock::Mark,
     ) -> wasmtime::Result<()> {
-        let clock_now = store.with(|mut view| view.get().ctx.monotonic_clock.now());
+        let clock_now = store
+            .with(|mut view| view.get().ctx.monotonic_clock.now())
+            .await;
         if when > clock_now {
             sleep(Duration::from_nanos(when - clock_now)).await;
         };

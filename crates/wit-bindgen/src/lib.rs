@@ -2942,7 +2942,7 @@ pub fn add_to_linker<T, D>(
             };
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
             let convert = if func.kind.is_async() {
-                format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))")
+                format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e)).await")
             } else if flags.contains(FunctionFlags::STORE) {
                 format!("{convert}(&mut host_getter(caller.data_mut()), e)")
             } else {

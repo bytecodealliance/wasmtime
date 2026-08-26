@@ -118,7 +118,9 @@ impl Func {
         results: &mut [Val],
     ) -> Result<()> {
         let accessor = accessor.as_accessor();
-        let call = accessor.with(|store| self.start_call_concurrent(store, params, results))?;
+        let call = accessor
+            .with(|store| self.start_call_concurrent(store, params, results))
+            .await?;
         self.finish_call_concurrent(accessor, call).await
     }
 
@@ -351,7 +353,8 @@ where
     {
         let call = accessor
             .as_accessor()
-            .with(|store| self.start_call_concurrent(store, params))?;
+            .with(|store| self.start_call_concurrent(store, params))
+            .await?;
         self.finish_call_concurrent(accessor, call).await
     }
 

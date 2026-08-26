@@ -370,15 +370,17 @@ pub async fn async_readiness() -> Result<()> {
                 .call_start(accessor, rx, expected)
                 .await?;
 
-            accessor.with(|access| {
-                rx.pipe(
-                    access,
-                    DelayedStreamConsumer {
-                        inner: BufferStreamConsumer { expected },
-                        maybe_yield: yield_times(10).boxed(),
-                    },
-                )
-            })?;
+            accessor
+                .with(|access| {
+                    rx.pipe(
+                        access,
+                        DelayedStreamConsumer {
+                            inner: BufferStreamConsumer { expected },
+                            maybe_yield: yield_times(10).boxed(),
+                        },
+                    )
+                })
+                .await?;
 
             Ok(())
         })
@@ -630,17 +632,19 @@ impl TransmitTest for DynamicTransmitTest {
         instance: &'a Self::Instance,
         params: Self::Params,
     ) -> Result<Self::Result> {
-        let exchange_function = accessor.with(|mut store| {
-            let transmit_instance = instance
-                .get_export_index(store.as_context_mut(), None, "local:local/transmit")
-                .ok_or_else(|| format_err!("can't find `local:local/transmit` in instance"))?;
-            let exchange_function = instance
-                .get_export_index(store.as_context_mut(), Some(&transmit_instance), "exchange")
-                .ok_or_else(|| format_err!("can't find `exchange` in instance"))?;
-            instance
-                .get_func(store.as_context_mut(), exchange_function)
-                .ok_or_else(|| format_err!("can't find `exchange` in instance"))
-        })?;
+        let exchange_function = accessor
+            .with(|mut store| {
+                let transmit_instance = instance
+                    .get_export_index(store.as_context_mut(), None, "local:local/transmit")
+                    .ok_or_else(|| format_err!("can't find `local:local/transmit` in instance"))?;
+                let exchange_function = instance
+                    .get_export_index(store.as_context_mut(), Some(&transmit_instance), "exchange")
+                    .ok_or_else(|| format_err!("can't find `exchange` in instance"))?;
+                instance
+                    .get_func(store.as_context_mut(), exchange_function)
+                    .ok_or_else(|| format_err!("can't find `exchange` in instance"))
+            })
+            .await?;
 
         let mut results = vec![Val::Bool(false)];
         exchange_function
@@ -776,15 +780,17 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
                 .boxed(),
             );
 
-            let params = accessor.with(|s| {
-                Test::into_params(
-                    s,
-                    control_rx,
-                    caller_stream_rx,
-                    caller_future1_rx,
-                    caller_future2_rx,
-                )
-            });
+            let params = accessor
+                .with(|s| {
+                    Test::into_params(
+                        s,
+                        control_rx,
+                        caller_stream_rx,
+                        caller_future1_rx,
+                        caller_future2_rx,
+                    )
+                })
+                .await;
 
             futures.push(
                 Test::call(accessor, &test, params)
@@ -795,19 +801,21 @@ async fn test_transmit_with<Test: TransmitTest + 'static>(component: &str) -> Re
             while let Some(event) = futures.try_next().await? {
                 match event {
                     Event::Result(result) => {
-                        accessor.with(|mut store| {
-                            let (callee_stream_rx, callee_future1_rx, _) =
-                                Test::from_result(&mut store, result)?;
-                            callee_stream_rx.pipe(
-                                &mut store,
-                                PipeConsumer::new(callee_stream_tx.take().unwrap()),
-                            )?;
-                            callee_future1_rx.pipe(
-                                &mut store,
-                                OneshotConsumer::new(callee_future1_tx.take().unwrap()),
-                            )?;
-                            wasmtime::error::Ok(())
-                        })?;
+                        accessor
+                            .with(|mut store| {
+                                let (callee_stream_rx, callee_future1_rx, _) =
+                                    Test::from_result(&mut store, result)?;
+                                callee_stream_rx.pipe(
+                                    &mut store,
+                                    PipeConsumer::new(callee_stream_tx.take().unwrap()),
+                                )?;
+                                callee_future1_rx.pipe(
+                                    &mut store,
+                                    OneshotConsumer::new(callee_future1_tx.take().unwrap()),
+                                )?;
+                                wasmtime::error::Ok(())
+                            })
+                            .await?;
                     }
                     Event::ControlWriteA(mut control_tx) => {
                         futures.push(
@@ -958,31 +966,33 @@ async fn test_synchronous_transmit(component: &str, procrastinate: bool) -> Resu
                 .call_start(accessor, stream, stream_expected, future, future_expected)
                 .await?;
 
-            accessor.with(|mut access| -> wasmtime::Result<_> {
-                let consumer = DelayedStreamConsumer {
-                    inner: BufferStreamConsumer {
-                        expected: stream_expected,
-                    },
-                    maybe_yield: yield_times(10).boxed(),
-                };
-                if procrastinate {
-                    stream.pipe(&mut access, ProcrastinatingStreamConsumer(consumer))?;
-                } else {
-                    stream.pipe(&mut access, consumer)?;
-                }
-                let consumer = DelayedFutureConsumer {
-                    inner: ValueFutureConsumer {
-                        expected: future_expected,
-                    },
-                    maybe_yield: yield_times(10).boxed(),
-                };
-                if procrastinate {
-                    future.pipe(access, ProcrastinatingFutureConsumer(consumer))?;
-                } else {
-                    future.pipe(access, consumer)?;
-                }
-                Ok(())
-            })?;
+            accessor
+                .with(|mut access| -> wasmtime::Result<_> {
+                    let consumer = DelayedStreamConsumer {
+                        inner: BufferStreamConsumer {
+                            expected: stream_expected,
+                        },
+                        maybe_yield: yield_times(10).boxed(),
+                    };
+                    if procrastinate {
+                        stream.pipe(&mut access, ProcrastinatingStreamConsumer(consumer))?;
+                    } else {
+                        stream.pipe(&mut access, consumer)?;
+                    }
+                    let consumer = DelayedFutureConsumer {
+                        inner: ValueFutureConsumer {
+                            expected: future_expected,
+                        },
+                        maybe_yield: yield_times(10).boxed(),
+                    };
+                    if procrastinate {
+                        future.pipe(access, ProcrastinatingFutureConsumer(consumer))?;
+                    } else {
+                        future.pipe(access, consumer)?;
+                    }
+                    Ok(())
+                })
+                .await?;
 
             Ok(())
         })

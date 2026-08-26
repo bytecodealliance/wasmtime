@@ -18,7 +18,8 @@ impl Service {
                 .table
                 .push(req.into())
                 .context("failed to push request to table")
-        })?;
+        })
+        .await?;
         match self.wasi_http_handler().call_handle(store, req).await? {
             Ok(res) => {
                 let res = store.with(|mut store| {
@@ -28,7 +29,8 @@ impl Service {
                         .table
                         .delete(res)
                         .context("failed to delete response from table")
-                })?;
+                })
+                .await?;
                 Ok(Ok(res))
             }
             Err(err) => Ok(Err(err)),

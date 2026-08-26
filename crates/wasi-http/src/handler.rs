@@ -521,7 +521,7 @@ where
                 *status.try_lock().unwrap() = (WorkerStatus::Requests, start_time);
 
                 futures.push(async move {
-                    let (prepared, expiration) = prepared?;
+                    let (prepared, expiration) = prepared.await?;
                     let sent = prepared.run(accessor, expiration).await?;
                     wasmtime::error::Ok((sent, start_time))
                 });
@@ -596,7 +596,16 @@ where
                         Poll::Ready(None) | Poll::Pending => {}
                     }
 
-                    let is_ready = accessor.poll_ready_for_concurrent_call(func, cx).is_ready();
+                    // `poll_ready_for_concurrent_call` is an `async` method, but
+                    // its body just drives `Accessor::with`, whose future is
+                    // always immediately ready, so `now_or_never` extracts the
+                    // `Poll` synchronously. The real `cx` is threaded into the
+                    // closure, so the waker is still registered on `Pending`.
+                    let is_ready = accessor
+                        .poll_ready_for_concurrent_call(func, cx)
+                        .now_or_never()
+                        .expect("`Accessor::with` resolves synchronously")
+                        .is_ready();
 
                     // At this point `futures` is either empty or it's `Pending`
                     // meaning nothing is ready. Note that `Pending` here
@@ -655,7 +664,15 @@ where
                     // then we're done with this iteration of `poll`. We'll get
                     // woken up when anything changes, but otherwise it's time
                     // to let something else happen.
-                    if accessor.poll_no_interesting_tasks(cx).is_pending() {
+                    // As with `poll_ready_for_concurrent_call` above, this
+                    // `async` method resolves synchronously, so drive it with
+                    // `now_or_never`; the real `cx` still registers the waker.
+                    if accessor
+                        .poll_no_interesting_tasks(cx)
+                        .now_or_never()
+                        .expect("`Accessor::with` resolves synchronously")
+                        .is_pending()
+                    {
                         break Poll::Pending;
                     }
 
@@ -1077,10 +1094,12 @@ impl<'a, T: Send> Prepared<'a, T> {
                         .await?
                         .0?;
 
-                    accessor.with(|mut store| {
-                        let response = view(store.get()).table.delete(response)?;
-                        response.into_http_with_getter(&mut store, request_io_result, view)
-                    })
+                    accessor
+                        .with(|mut store| {
+                            let response = view(store.get()).table.delete(response)?;
+                            response.into_http_with_getter(&mut store, request_io_result, view)
+                        })
+                        .await
                 });
 
                 // TODO: We should also use `oneshot::Sender::poll_close` to be
