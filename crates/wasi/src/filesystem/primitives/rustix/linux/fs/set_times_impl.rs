@@ -2,26 +2,28 @@
 //! with setting the file times specific to Linux.
 
 use super::procfs::set_times_through_proc_self_fd;
-use crate::filesystem::primitives::{OpenOptions, SystemTimeSpec, open};
+use crate::filesystem::primitives::{OpenOptions, open};
 use std::path::Path;
+use std::time::SystemTime;
 use std::{fs, io};
 
 pub(crate) fn set_times_impl(
     start: &fs::File,
     path: &Path,
-    atime: Option<SystemTimeSpec>,
-    mtime: Option<SystemTimeSpec>,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
 ) -> io::Result<()> {
+    let mut times = fs::FileTimes::new();
+    if let Some(atime) = atime {
+        times = times.set_accessed(atime);
+    }
+    if let Some(mtime) = mtime {
+        times = times.set_modified(mtime);
+    }
     // Try `futimens` with a normal handle. Normal handles need some kind of
     // access, so first try write.
     match open(start, path, OpenOptions::new().write(true)) {
-        Ok(file) => {
-            return fs_set_times::SetTimes::set_times(
-                &file,
-                atime.map(SystemTimeSpec::into_std),
-                mtime.map(SystemTimeSpec::into_std),
-            );
-        }
+        Ok(file) => return file.set_times(times),
         Err(err) => match rustix::io::Errno::from_io_error(&err) {
             Some(rustix::io::Errno::ACCESS) | Some(rustix::io::Errno::ISDIR) => (),
             _ => return Err(err),
@@ -30,13 +32,7 @@ pub(crate) fn set_times_impl(
 
     // Next try read.
     match open(start, path, OpenOptions::new().read(true)) {
-        Ok(file) => {
-            return fs_set_times::SetTimes::set_times(
-                &file,
-                atime.map(SystemTimeSpec::into_std),
-                mtime.map(SystemTimeSpec::into_std),
-            );
-        }
+        Ok(file) => return file.set_times(times),
         Err(err) => match rustix::io::Errno::from_io_error(&err) {
             Some(rustix::io::Errno::ACCESS) => (),
             _ => return Err(err),

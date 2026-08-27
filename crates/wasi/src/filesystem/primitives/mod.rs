@@ -39,7 +39,6 @@ mod rename;
 mod set_times;
 mod stat;
 mod symlink;
-mod system_time_spec;
 
 pub(crate) mod errors;
 pub(crate) mod manually;
@@ -87,6 +86,5 @@ pub use stat::stat;
 pub use symlink::symlink;
 #[cfg(windows)]
 pub use symlink::{symlink_dir, symlink_file};
-pub use system_time_spec::SystemTimeSpec;
 #[cfg(test)]
 mod tests;

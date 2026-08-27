@@ -1,7 +1,5 @@
 use crate::clocks::Datetime;
-use crate::filesystem::primitives::{
-    DirOptions, FollowSymlinks, Metadata, OpenOptions, SystemTimeSpec,
-};
+use crate::filesystem::primitives::{DirOptions, FollowSymlinks, Metadata, OpenOptions};
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use std::collections::hash_map;
 use std::sync::Arc;
@@ -888,8 +886,6 @@ impl Dir {
         if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
-        let atim = atim.map(|t| SystemTimeSpec::Absolute(t));
-        let mtim = mtim.map(|t| SystemTimeSpec::Absolute(t));
         if path_flags.contains(PathFlags::SYMLINK_FOLLOW) {
             self.run_blocking(move |d| {
                 crate::filesystem::primitives::set_times(d, path.as_ref(), atim, mtim)

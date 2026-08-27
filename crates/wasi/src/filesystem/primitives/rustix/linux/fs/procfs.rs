@@ -7,21 +7,20 @@
 //! on top of the paths we open.
 
 use crate::filesystem::primitives::OpenOptionsExt;
-use crate::filesystem::primitives::{
-    OpenOptions, SystemTimeSpec, open, set_times_follow_unchecked,
-};
+use crate::filesystem::primitives::{OpenOptions, open, set_times_follow_unchecked};
 use io_lifetimes::AsFd;
 use rustix::fs::OFlags;
 use rustix::path::DecInt;
 use rustix_linux_procfs::proc_self_fd;
 use std::path::Path;
+use std::time::SystemTime;
 use std::{fs, io};
 
 pub(crate) fn set_times_through_proc_self_fd(
     start: &fs::File,
     path: &Path,
-    atime: Option<SystemTimeSpec>,
-    mtime: Option<SystemTimeSpec>,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
 ) -> io::Result<()> {
     let opath = open(
         start,

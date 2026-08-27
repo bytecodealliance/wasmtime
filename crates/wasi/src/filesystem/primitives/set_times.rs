@@ -3,8 +3,9 @@
 //!
 //! TODO: `check_set_times` etc.
 
-use crate::filesystem::primitives::{SystemTimeSpec, set_times_impl, set_times_nofollow_impl};
+use crate::filesystem::primitives::{set_times_impl, set_times_nofollow_impl};
 use std::path::Path;
+use std::time::SystemTime;
 use std::{fs, io};
 
 /// Perform a `utimensat`-like operation, ensuring that the resolution of the
@@ -14,8 +15,8 @@ use std::{fs, io};
 pub fn set_times(
     start: &fs::File,
     path: &Path,
-    atime: Option<SystemTimeSpec>,
-    mtime: Option<SystemTimeSpec>,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
 ) -> io::Result<()> {
     set_times_impl(start, path, atime, mtime)
 }
@@ -25,8 +26,8 @@ pub fn set_times(
 pub fn set_times_nofollow(
     start: &fs::File,
     path: &Path,
-    atime: Option<SystemTimeSpec>,
-    mtime: Option<SystemTimeSpec>,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
 ) -> io::Result<()> {
     set_times_nofollow_impl(start, path, atime, mtime)
 }
