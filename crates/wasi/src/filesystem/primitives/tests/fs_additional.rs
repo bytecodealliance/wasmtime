@@ -161,6 +161,7 @@ fn dotdot_at_end_of_symlink_all_inside_dir() {
 }
 
 #[test]
+#[cfg_attr(windows, ignore)]
 fn dotdot_slashdot_at_end_of_symlink() {
     let tmpdir = tmpdir();
     let start = h::dir_of(&tmpdir);

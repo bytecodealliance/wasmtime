@@ -117,8 +117,6 @@ pub fn read_to_string(d: &File, path: impl AsRef<Path>) -> io::Result<String> {
     Ok(s)
 }
 
-/// `DirExt::symlink`. On Unix there is only one flavour of symlink; on Windows
-/// the file/dir distinction matters, so these dispatch accordingly.
 #[cfg(not(windows))]
 pub fn symlink(d: &File, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
     p::symlink(src.as_ref(), d, dst.as_ref())
@@ -126,7 +124,11 @@ pub fn symlink(d: &File, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Re
 
 #[cfg(windows)]
 pub fn symlink(d: &File, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    p::symlink_file(src.as_ref(), d, dst.as_ref())
+    if is_dir(d, src.as_ref()) {
+        p::symlink_dir(src.as_ref(), d, dst.as_ref())
+    } else {
+        p::symlink_file(src.as_ref(), d, dst.as_ref())
+    }
 }
 
 #[cfg(not(windows))]
