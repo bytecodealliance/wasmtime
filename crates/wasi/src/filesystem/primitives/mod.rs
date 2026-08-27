@@ -59,16 +59,13 @@ pub(crate) use self::windows::fs::*;
 #[cfg(not(windows))]
 pub(crate) use read_dir::{read_dir_nofollow, read_dir_unchecked};
 
-pub use access::{AccessModes, AccessType, access};
-pub use canonicalize::canonicalize;
-pub use copy::copy;
+pub use access::AccessType;
 pub use create_dir::create_dir;
 pub use dir_builder::*;
 #[cfg(windows)]
 pub use dir_entry::_WindowsDirEntryExt;
 pub use dir_entry::DirEntry;
 pub use dir_options::DirOptions;
-pub use file::FileExt;
 #[cfg(windows)]
 pub use file_type::_WindowsFileTypeExt;
 pub use file_type::FileType;
@@ -81,26 +78,21 @@ pub use is_file_read_write::is_file_read_write;
 pub use metadata::_WindowsByHandle;
 pub use metadata::{Metadata, MetadataExt};
 pub use open::open;
-pub use open_ambient::open_ambient;
 pub use open_dir::*;
 pub use open_options::*;
 pub use permissions::Permissions;
 #[cfg(unix)]
 pub use permissions::PermissionsExt;
-pub use read_dir::{ReadDir, read_base_dir, read_dir};
-pub use read_link::{read_link, read_link_contents};
+pub use read_dir::{ReadDir, read_base_dir};
+pub use read_link::read_link;
 pub use remove_dir::remove_dir;
-pub use remove_dir_all::remove_dir_all;
 pub use remove_file::remove_file;
-pub use remove_open_dir::{remove_open_dir, remove_open_dir_all};
+pub use remove_open_dir::remove_open_dir;
 pub use rename::rename;
-pub use reopen::reopen;
-#[cfg(not(target_os = "wasi"))]
-pub use set_permissions::{set_permissions, set_symlink_permissions};
 pub use set_times::{set_times, set_times_nofollow};
 pub use stat::stat;
 #[cfg(not(windows))]
-pub use symlink::{symlink, symlink_contents};
+pub use symlink::symlink;
 #[cfg(windows)]
 pub use symlink::{symlink_dir, symlink_file};
 pub use system_time_spec::SystemTimeSpec;
