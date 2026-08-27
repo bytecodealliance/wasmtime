@@ -1225,6 +1225,7 @@
 
 ;; Leaves currently without specs: excluded from verification via todo.
 (attr MInst.Udf (tag TODO))
+(attr MInst.BitfieldMove (tag TODO))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
