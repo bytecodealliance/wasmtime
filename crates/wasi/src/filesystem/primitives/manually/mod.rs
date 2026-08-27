@@ -14,9 +14,6 @@ use cow_component::CowComponent;
 use open::internal_open;
 use read_link_one::read_link_one;
 
-#[cfg(racy_asserts)]
-pub(super) use canonicalize::canonicalize_with;
-
 pub(crate) use canonicalize::canonicalize;
 pub(crate) use open::{open, stat};
 #[cfg(not(any(windows, target_os = "freebsd")))]

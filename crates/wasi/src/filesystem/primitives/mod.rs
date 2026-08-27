@@ -1,11 +1,5 @@
 //! Filesystem utilities.
 
-#![allow(warnings)]
-
-#[cfg(racy_asserts)]
-#[macro_use]
-pub(crate) mod assert_same_file;
-
 mod access;
 mod canonicalize;
 mod copy;
@@ -110,14 +104,6 @@ pub use symlink::{symlink, symlink_contents};
 #[cfg(windows)]
 pub use symlink::{symlink_dir, symlink_file};
 pub use system_time_spec::SystemTimeSpec;
-
-#[cfg(racy_asserts)]
-fn map_result<T: Clone>(result: &std::io::Result<T>) -> Result<T, (std::io::ErrorKind, String)> {
-    match result {
-        Ok(t) => Ok(t.clone()),
-        Err(e) => Err((e.kind(), e.to_string())),
-    }
-}
 
 /// Test that `file_path` works on a few miscellaneous directory paths.
 #[test]

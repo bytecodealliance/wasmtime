@@ -60,9 +60,6 @@ struct Context<'start> {
     /// A `PathBuf` that we reuse for calling `read_link_one` to minimize
     /// allocations.
     reuse: PathBuf,
-
-    #[cfg(racy_asserts)]
-    start_clone: MaybeOwnedFile<'start>,
 }
 
 impl<'start> Context<'start> {
@@ -106,9 +103,6 @@ impl<'start> Context<'start> {
             components.extend(path.components().rev().map(CowComponent::borrowed));
         }
 
-        #[cfg(racy_asserts)]
-        let start_clone = MaybeOwnedFile::owned(start.try_clone().unwrap());
-
         Self {
             base: start,
             dirs: Vec::with_capacity(components.len()),
@@ -127,9 +121,6 @@ impl<'start> Context<'start> {
             follow_with_dot: trailing_dot | trailing_dotdot,
 
             reuse: PathBuf::new(),
-
-            #[cfg(racy_asserts)]
-            start_clone,
         }
     }
 
@@ -183,11 +174,6 @@ impl<'start> Context<'start> {
 
     /// Handle a ".." path component.
     fn parent_dir(&mut self) -> io::Result<()> {
-        #[cfg(racy_asserts)]
-        if !self.dirs.is_empty() {
-            assert_different_file!(&self.start_clone, &self.base);
-        }
-
         // We hold onto all the parent directory descriptors so that we
         // don't have to re-open anything when we encounter a `..`. This
         // way, even if the directory is concurrently moved, we don't have
@@ -438,9 +424,6 @@ pub(super) fn internal_open<'start>(
         )?);
     }
 
-    #[cfg(racy_asserts)]
-    check_internal_open(&ctx, path, options);
-
     Ok(ctx.base)
 }
 
@@ -524,40 +507,4 @@ pub(crate) fn stat(start: &fs::File, path: &Path, follow: FollowSymlinks) -> io:
 fn should_emulate_o_path(use_options: &OpenOptions) -> bool {
     (use_options.ext.custom_flags & (OFlags::PATH.bits() as i32)) == (OFlags::PATH.bits() as i32)
         && use_options.follow == FollowSymlinks::Yes
-}
-
-#[cfg(racy_asserts)]
-fn check_internal_open(ctx: &Context, path: &Path, options: &OpenOptions) {
-    match open_unchecked(
-        &ctx.start_clone,
-        ctx.canonical_path.debug.as_ref(),
-        options
-            .clone()
-            .create(false)
-            .create_new(false)
-            .truncate(false),
-    ) {
-        Ok(unchecked_file) => {
-            assert_same_file!(
-                &ctx.base,
-                &unchecked_file,
-                "path resolution inconsistency: start='{:?}', path='{}'; canonical_path='{}'",
-                ctx.start_clone,
-                path.display(),
-                ctx.canonical_path.debug.display(),
-            );
-        }
-        Err(_unchecked_error) => {
-            /* TODO: Check error messages.
-            panic!(
-                "unexpected success opening result={:?} start='{:?}', path='{}'; canonical_path='{}'; \
-                 expected {:?}",
-                ctx.base,
-                ctx.start_clone,
-                path.display(),
-                ctx.canonical_path.debug.display(),
-                unchecked_error,
-            */
-        }
-    }
 }

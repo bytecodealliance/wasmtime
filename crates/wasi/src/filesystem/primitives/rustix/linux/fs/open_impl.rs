@@ -7,8 +7,6 @@
 //!
 //! On older Linux, fall back to `manually::open`.
 
-#[cfg(racy_asserts)]
-use crate::filesystem::primitives::is_same_file;
 use crate::filesystem::primitives::{OpenOptions, manually};
 use std::path::Path;
 use std::{fs, io};
@@ -92,9 +90,6 @@ pub(crate) fn open_beneath(
                 Ok(file) => {
                     let file = fs::File::from_into_fd(file);
 
-                    #[cfg(racy_asserts)]
-                    check_open(start, path, options, &file);
-
                     return Ok(file);
                 }
                 Err(err) => match err {
@@ -129,22 +124,4 @@ pub(crate) fn open_beneath(
         rustix::io::Errno::XDEV => errors::escape_attempt(),
         err => err.into(),
     })
-}
-
-#[cfg(racy_asserts)]
-fn check_open(start: &fs::File, path: &Path, options: &OpenOptions, file: &fs::File) {
-    let check = manually::open(
-        start,
-        path,
-        options
-            .clone()
-            .create(false)
-            .create_new(false)
-            .truncate(false),
-    )
-    .expect("manually::open failed when open_openat2 succeeded");
-    assert!(
-        is_same_file(file, &check).unwrap(),
-        "manually::open should open the same inode as open_openat2"
-    );
 }

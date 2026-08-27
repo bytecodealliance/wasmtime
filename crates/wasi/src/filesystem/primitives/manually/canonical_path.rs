@@ -6,35 +6,20 @@ pub(super) struct CanonicalPath<'path_buf> {
     /// If the user requested a canonical path, a reference to the `PathBuf` to
     /// write it to.
     path: Option<&'path_buf mut PathBuf>,
-
-    /// Our own private copy of the canonical path, for assertion checking.
-    #[cfg(racy_asserts)]
-    pub(super) debug: PathBuf,
 }
 
 impl<'path_buf> CanonicalPath<'path_buf> {
     pub(super) fn new(path: Option<&'path_buf mut PathBuf>) -> Self {
-        Self {
-            #[cfg(racy_asserts)]
-            debug: PathBuf::new(),
-
-            path,
-        }
+        Self { path }
     }
 
     pub(super) fn push(&mut self, one: &OsStr) {
-        #[cfg(racy_asserts)]
-        self.debug.push(one);
-
         if let Some(path) = &mut self.path {
             path.push(one)
         }
     }
 
     pub(super) fn pop(&mut self) -> bool {
-        #[cfg(racy_asserts)]
-        self.debug.pop();
-
         if let Some(path) = &mut self.path {
             path.pop()
         } else {

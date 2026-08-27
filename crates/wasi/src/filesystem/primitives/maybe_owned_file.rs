@@ -3,8 +3,6 @@ use maybe_owned::MaybeOwned;
 use std::ops::Deref;
 use std::path::Component;
 use std::{fmt, fs, io, mem};
-#[cfg(racy_asserts)]
-use {crate::fs::file_path, std::path::PathBuf};
 
 /// Several places in the code need to be able to handle either owned or
 /// borrowed [`std::fs::File]`s. Cloning a `File` to let them always have an
@@ -22,35 +20,20 @@ use {crate::fs::file_path, std::path::PathBuf};
 /// [`Cow`]: std::borrow::Cow
 pub(super) struct MaybeOwnedFile<'borrow> {
     inner: MaybeOwned<'borrow, fs::File>,
-
-    #[cfg(racy_asserts)]
-    path: Option<PathBuf>,
 }
 
 impl<'borrow> MaybeOwnedFile<'borrow> {
     /// Constructs a new `MaybeOwnedFile` which is not owned.
     pub(super) fn borrowed(file: &'borrow fs::File) -> Self {
-        #[cfg(racy_asserts)]
-        let path = file_path(file);
-
         Self {
             inner: MaybeOwned::Borrowed(file),
-
-            #[cfg(racy_asserts)]
-            path,
         }
     }
 
     /// Constructs a new `MaybeOwnedFile` which is owned.
     pub(super) fn owned(file: fs::File) -> Self {
-        #[cfg(racy_asserts)]
-        let path = file_path(&file);
-
         Self {
             inner: MaybeOwned::Owned(file),
-
-            #[cfg(racy_asserts)]
-            path,
         }
     }
 
@@ -59,9 +42,6 @@ impl<'borrow> MaybeOwnedFile<'borrow> {
     pub(super) const fn borrowed_noassert(file: &'borrow fs::File) -> Self {
         Self {
             inner: MaybeOwned::Borrowed(file),
-
-            #[cfg(racy_asserts)]
-            path: None,
         }
     }
 
@@ -70,9 +50,6 @@ impl<'borrow> MaybeOwnedFile<'borrow> {
     pub(super) const fn owned_noassert(file: fs::File) -> Self {
         Self {
             inner: MaybeOwned::Owned(file),
-
-            #[cfg(racy_asserts)]
-            path: None,
         }
     }
 
@@ -80,27 +57,8 @@ impl<'borrow> MaybeOwnedFile<'borrow> {
     /// of the current file. Return a `MaybeOwnedFile` representing the
     /// previous state.
     pub(super) fn descend_to(&mut self, to: MaybeOwnedFile<'borrow>) -> Self {
-        #[cfg(racy_asserts)]
-        let path = self.path.clone();
-
-        #[cfg(racy_asserts)]
-        if let Some(to_path) = file_path(&to) {
-            if let Some(current_path) = &self.path {
-                assert!(
-                    to_path.starts_with(current_path),
-                    "attempted to descend from {:?} to {:?}",
-                    to_path.display(),
-                    current_path.display()
-                );
-            }
-            self.path = Some(to_path);
-        }
-
         Self {
             inner: mem::replace(&mut self.inner, to.inner),
-
-            #[cfg(racy_asserts)]
-            path,
         }
     }
 
