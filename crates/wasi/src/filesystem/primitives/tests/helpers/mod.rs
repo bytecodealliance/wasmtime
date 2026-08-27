@@ -6,7 +6,6 @@
 //! only the operations that add options, flags, or logic live here.
 
 use crate::filesystem::primitives as p;
-use ambient_authority::ambient_authority;
 use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -14,12 +13,12 @@ use tempfile::TempDir;
 
 /// Open a temporary directory as a start-directory handle.
 pub fn dir_of(t: &TempDir) -> File {
-    p::open_ambient_dir(t.path(), ambient_authority()).unwrap()
+    p::open_ambient_dir(t.path()).unwrap()
 }
 
 /// `open_ambient_dir` with the ambient authority supplied.
 pub fn open_ambient_dir(path: impl AsRef<Path>) -> io::Result<File> {
-    p::open_ambient_dir(path.as_ref(), ambient_authority())
+    p::open_ambient_dir(path.as_ref())
 }
 
 /// `Dir::create`: open for writing, creating and truncating.

@@ -4,13 +4,12 @@ use super::sys_common::io::tmpdir;
 #[cfg(unix)]
 use crate::filesystem::primitives::FileTypeExt;
 use crate::filesystem::primitives::{Metadata, OpenOptions, open, open_ambient_dir};
-use ambient_authority::ambient_authority;
 use std::path::Path;
 
 #[test]
 fn test_file_type_ext() {
     let tmpdir = tmpdir();
-    let dir = check!(open_ambient_dir(tmpdir.path(), ambient_authority()));
+    let dir = check!(open_ambient_dir(tmpdir.path(),));
     let a = check!(open(
         &dir,
         Path::new("a"),

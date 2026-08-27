@@ -9,13 +9,12 @@ use super::sys_common::symlink_supported;
 use crate::filesystem::primitives::{
     FollowSymlinks, Metadata, MetadataExt, hard_link, open_ambient_dir, stat,
 };
-use ambient_authority::ambient_authority;
 use std::path::Path;
 
 #[test]
 fn test_metadata_ext() {
     let tmpdir = tmpdir();
-    let dir = check!(open_ambient_dir(tmpdir.path(), ambient_authority()));
+    let dir = check!(open_ambient_dir(tmpdir.path(),));
     let a = check!(h::create(&dir, "a"));
     let b = check!(h::create(&dir, "b"));
     let tmpdir_metadata = check!(Metadata::from_file(&dir));

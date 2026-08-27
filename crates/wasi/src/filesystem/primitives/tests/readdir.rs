@@ -1,5 +1,4 @@
 use crate::filesystem::primitives::{DirEntry, open_ambient_dir, read_base_dir};
-use ambient_authority::ambient_authority;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
@@ -39,7 +38,7 @@ fn test_dir_entries() {
 #[test]
 fn test_reread_entries() {
     let tmpdir = tempfile::tempdir().expect("construct tempdir");
-    let dir = open_ambient_dir(tmpdir.path(), ambient_authority()).unwrap();
+    let dir = open_ambient_dir(tmpdir.path()).unwrap();
 
     let entries = read_entries(&dir);
     assert_eq!(entries.len(), 0, "empty dir");
@@ -70,7 +69,7 @@ fn test_reread_entries() {
 }
 
 fn dir_entries(path: &Path) -> HashMap<String, DirEntry> {
-    let dir = open_ambient_dir(path, ambient_authority()).unwrap();
+    let dir = open_ambient_dir(path).unwrap();
     read_entries(&dir)
 }
 

@@ -14,7 +14,6 @@ use crate::filesystem::primitives::{
     DirOptions, FollowSymlinks, OpenOptions, create_dir, hard_link, open, open_ambient_dir,
     read_link, remove_dir, remove_file, rename, stat,
 };
-use ambient_authority::ambient_authority;
 use std::io;
 use std::path::Path;
 
@@ -43,7 +42,7 @@ fn assert_invalid_input<T>(on: &str, result: io::Result<T>) {
 #[test]
 fn paths_containing_nul() {
     let tmpdir = tmpdir();
-    let dir = open_ambient_dir(tmpdir.path(), ambient_authority()).unwrap();
+    let dir = open_ambient_dir(tmpdir.path()).unwrap();
     let nul = Path::new("\0");
 
     assert_invalid_input("open", open(&dir, nul, OpenOptions::new().read(true)));

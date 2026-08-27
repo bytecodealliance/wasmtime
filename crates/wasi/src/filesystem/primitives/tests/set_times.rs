@@ -1,7 +1,7 @@
 use super::helpers as h;
 use super::sys_common::io::tmpdir;
 use super::sys_common::symlink_supported;
-use crate::filesystem::primitives::{Metadata, SystemTimeSpec, set_times, set_times_nofollow};
+use crate::filesystem::primitives::{Metadata, set_times, set_times_nofollow};
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -23,12 +23,7 @@ fn basic_times() {
     }
 
     let file_time = SystemTime::UNIX_EPOCH;
-    check!(set_times(
-        &dir,
-        Path::new("file"),
-        None,
-        Some(SystemTimeSpec::from(file_time))
-    ));
+    check!(set_times(&dir, Path::new("file"), None, Some(file_time)));
     assert_eq!(modified_time(check!(h::metadata(&dir, "file"))), file_time);
     if test_symlinks {
         assert_eq!(
@@ -38,12 +33,7 @@ fn basic_times() {
     }
 
     let dir_time = SystemTime::UNIX_EPOCH;
-    check!(set_times(
-        &dir,
-        Path::new("dir"),
-        None,
-        Some(SystemTimeSpec::from(dir_time))
-    ));
+    check!(set_times(&dir, Path::new("dir"), None, Some(dir_time)));
     assert_eq!(modified_time(check!(h::metadata(&dir, "dir"))), dir_time);
     if test_symlinks {
         assert_eq!(
@@ -71,7 +61,7 @@ fn symlink_times() {
         &dir,
         Path::new("file_symlink_file"),
         None,
-        Some(SystemTimeSpec::from(file_time))
+        Some(file_time)
     ));
     assert_eq!(modified_time(check!(h::metadata(&dir, "file"))), file_time);
     assert_eq!(
@@ -92,7 +82,7 @@ fn symlink_times() {
         &dir,
         Path::new("dir_symlink_dir"),
         None,
-        Some(SystemTimeSpec::from(file_time))
+        Some(file_time)
     ));
     assert_eq!(modified_time(check!(h::metadata(&dir, "dir"))), dir_time);
     assert_eq!(
@@ -127,7 +117,7 @@ fn symlink_itself_times() {
         &dir,
         Path::new("file_symlink_file"),
         None,
-        Some(SystemTimeSpec::from(file_time))
+        Some(file_time)
     ));
     assert_ne!(modified_time(check!(h::metadata(&dir, "file"))), file_time);
     assert_ne!(
@@ -148,7 +138,7 @@ fn symlink_itself_times() {
         &dir,
         Path::new("dir_symlink_dir"),
         None,
-        Some(SystemTimeSpec::from(file_time))
+        Some(file_time)
     ));
     assert_ne!(modified_time(check!(h::metadata(&dir, "dir"))), dir_time);
     assert_ne!(
