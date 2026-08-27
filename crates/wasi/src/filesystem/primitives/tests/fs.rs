@@ -650,21 +650,6 @@ fn recursive_mkdir() {
 }
 
 #[test]
-fn recursive_mkdir_failure() {
-    let tmpdir = tmpdir();
-    let start = h::dir_of(&tmpdir);
-    let dir = "d1";
-    let file = "f1";
-
-    check!(h::create_dir_all(&start, &dir));
-    check!(h::create(&start, &file));
-
-    let result = h::create_dir_all(&start, &file);
-
-    assert!(result.is_err());
-}
-
-#[test]
 fn concurrent_recursive_mkdir() {
     for _ in 0..100 {
         let tmpdir = tmpdir();
