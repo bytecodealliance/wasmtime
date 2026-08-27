@@ -1,5 +1,5 @@
 use super::get_path::concatenate;
-use crate::filesystem::primitives::{DirEntryInner, FollowSymlinks, open_dir};
+use crate::filesystem::primitives::DirEntryInner;
 use std::path::{Component, Path};
 use std::{fmt, fs, io};
 
@@ -8,16 +8,6 @@ pub(crate) struct ReadDirInner {
 }
 
 impl ReadDirInner {
-    pub(crate) fn new(start: &fs::File, path: &Path, follow: FollowSymlinks) -> io::Result<Self> {
-        assert_eq!(
-            follow,
-            FollowSymlinks::Yes,
-            "`read_dir` without following symlinks is not implemented yet"
-        );
-        let dir = open_dir(start, path)?;
-        Self::new_unchecked(&dir, Component::CurDir.as_ref())
-    }
-
     pub(crate) fn read_base_dir(start: &fs::File) -> io::Result<Self> {
         Self::new_unchecked(&start, Component::CurDir.as_ref())
     }
@@ -27,10 +17,6 @@ impl ReadDirInner {
         Ok(Self {
             std: fs::read_dir(full_path)?,
         })
-    }
-
-    pub(super) fn from_std(std: fs::ReadDir) -> Self {
-        Self { std }
     }
 }
 

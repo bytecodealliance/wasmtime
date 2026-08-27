@@ -3,12 +3,12 @@
 #![allow(unsafe_code)]
 
 use super::create_file_at_w::CreateFileAtW;
-use super::{open_options_to_std, prepare_open_options_for_open};
+use super::prepare_open_options_for_open;
 use crate::filesystem::primitives::{
     FollowSymlinks, OpenOptions, OpenUncheckedError, SymlinkKind, errors, file_path,
     get_access_mode, get_creation_mode, get_flags_and_attributes,
 };
-use ambient_authority::{AmbientAuthority, ambient_authority};
+use ambient_authority::ambient_authority;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::MetadataExt;
@@ -137,18 +137,6 @@ fn open_at(start: &fs::File, path: &Path, opts: &OpenOptions) -> io::Result<fs::
             Err(io::Error::last_os_error())
         }
     }
-}
-
-/// *Unsandboxed* function similar to `open_unchecked`, but which just operates
-/// on a bare path, rather than starting with a handle.
-pub(crate) fn open_ambient_impl(
-    path: &Path,
-    options: &OpenOptions,
-    ambient_authority: AmbientAuthority,
-) -> Result<fs::File, OpenUncheckedError> {
-    let _ = ambient_authority;
-    let (std_opts, manually_trunc) = open_options_to_std(options);
-    handle_open_result(std_opts.open(path), options, manually_trunc)
 }
 
 fn handle_open_result(

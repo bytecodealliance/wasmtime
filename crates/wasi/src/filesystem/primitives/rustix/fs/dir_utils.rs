@@ -90,11 +90,6 @@ pub(crate) fn readdir_options() -> OpenOptions {
         .clone()
 }
 
-/// Return an `OpenOptions` for canonicalizing paths.
-pub(crate) fn canonicalize_options() -> OpenOptions {
-    OpenOptions::new().read(true).clone()
-}
-
 /// Open a directory named by a bare path, using the host process' ambient
 /// authority.
 ///

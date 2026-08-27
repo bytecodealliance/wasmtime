@@ -12,10 +12,3 @@ impl DirOptionsExt {
         }
     }
 }
-
-impl crate::filesystem::primitives::DirBuilderExt for DirOptionsExt {
-    fn mode(&mut self, mode: u32) -> &mut Self {
-        self.mode = mode;
-        self
-    }
-}

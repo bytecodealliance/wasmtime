@@ -31,17 +31,6 @@ fn write_symlink_impl(old_path: &Path, new_start: &fs::File, new_path: &Path) ->
     symlink_impl(old_path, new_start, new_path)
 }
 
-/// Perform a `symlinkat`-like operation, ensuring that the resolution of the
-/// link path never escapes the directory tree rooted at `start`.
-#[cfg(not(windows))]
-pub fn symlink_contents<P: AsRef<Path>, Q: AsRef<Path>>(
-    old_path: P,
-    new_start: &fs::File,
-    new_path: Q,
-) -> io::Result<()> {
-    write_symlink_impl(old_path.as_ref(), new_start, new_path.as_ref())
-}
-
 /// Perform a `symlink_file`-like operation, ensuring that the resolution of
 /// the path never escapes the directory tree rooted at `start`.
 #[cfg(windows)]

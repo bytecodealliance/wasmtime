@@ -13,10 +13,6 @@ pub(crate) fn to_timespec(ft: Option<SystemTimeSpec>) -> io::Result<Timespec> {
             tv_sec: 0,
             tv_nsec: UTIME_OMIT.into(),
         },
-        Some(SystemTimeSpec::SymbolicNow) => Timespec {
-            tv_sec: 0,
-            tv_nsec: UTIME_NOW.into(),
-        },
         Some(SystemTimeSpec::Absolute(ft)) => {
             let duration = ft.duration_since(SystemTime::UNIX_EPOCH).unwrap();
             let nanoseconds = duration.subsec_nanos();

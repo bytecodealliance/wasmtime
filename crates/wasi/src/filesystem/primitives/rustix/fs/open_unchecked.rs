@@ -1,8 +1,6 @@
 use super::compute_oflags;
 use crate::filesystem::primitives::{OpenOptions, OpenUncheckedError, stat_unchecked};
-use ambient_authority::AmbientAuthority;
-use io_lifetimes::AsFilelike;
-use rustix::fs::{CWD, Mode, openat};
+use rustix::fs::{Mode, openat};
 use rustix::io;
 use std::fs;
 use std::path::Path;
@@ -56,16 +54,4 @@ pub(crate) fn open_unchecked(
         }
         _ => Err(OpenUncheckedError::Other(err.into())),
     }
-}
-
-/// *Unsandboxed* function similar to `open`, but which does not perform
-/// sandboxing.
-#[inline]
-pub(crate) fn open_ambient_impl(
-    path: &Path,
-    options: &OpenOptions,
-    ambient_authority: AmbientAuthority,
-) -> Result<fs::File, OpenUncheckedError> {
-    let _ = ambient_authority;
-    open_unchecked(&CWD.as_filelike_view::<fs::File>(), path, options)
 }

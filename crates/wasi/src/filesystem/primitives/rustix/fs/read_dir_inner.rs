@@ -1,7 +1,5 @@
 use crate::filesystem::primitives::{
-    DirEntryInner, FollowSymlinks, Metadata, OpenOptions, ReadDir, open_dir_for_reading,
-    open_dir_for_reading_unchecked, open_entry_impl, read_dir_unchecked, remove_dir_unchecked,
-    remove_file_unchecked, stat_unchecked,
+    DirEntryInner, FollowSymlinks, Metadata, open_dir_for_reading_unchecked, stat_unchecked,
 };
 use io_extras::os::rustix::{AsRawFd, FromRawFd, RawFd};
 use io_lifetimes::AsFd;
@@ -13,7 +11,7 @@ use std::mem::ManuallyDrop;
 use std::os::unix::ffi::OsStrExt;
 #[cfg(target_os = "wasi")]
 use std::os::wasi::ffi::OsStrExt;
-use std::path::{Component, Path};
+use std::path::Component;
 use std::sync::{Arc, Mutex};
 use std::{fmt, fs, io};
 
@@ -27,15 +25,6 @@ pub(crate) struct ReadDirInner {
 }
 
 impl ReadDirInner {
-    pub(crate) fn new(start: &fs::File, path: &Path, follow: FollowSymlinks) -> io::Result<Self> {
-        let fd = open_dir_for_reading(start, path, follow)?;
-        let dir = Dir::read_from(fd.as_fd())?;
-        Ok(Self {
-            raw_fd: fd.as_fd().as_raw_fd(),
-            rustix: Arc::new(Mutex::new((dir, OwnedFd::from(fd)))),
-        })
-    }
-
     pub(crate) fn read_base_dir(start: &fs::File) -> io::Result<Self> {
         // Open ".", to obtain a new independent file descriptor. Don't use
         // `dup` since in that case the resulting file descriptor would share
@@ -50,45 +39,8 @@ impl ReadDirInner {
         })
     }
 
-    pub(crate) fn new_unchecked(
-        start: &fs::File,
-        path: &Path,
-        follow: FollowSymlinks,
-    ) -> io::Result<Self> {
-        let fd = open_dir_for_reading_unchecked(start, path, follow)?;
-        let dir = Dir::read_from(fd.as_fd())?;
-        Ok(Self {
-            raw_fd: fd.as_fd().as_raw_fd(),
-            rustix: Arc::new(Mutex::new((dir, fd.into()))),
-        })
-    }
-
-    pub(super) fn open(&self, file_name: &OsStr, options: &OpenOptions) -> io::Result<fs::File> {
-        open_entry_impl(&self.as_file_view(), file_name, options)
-    }
-
     pub(super) fn metadata(&self, file_name: &OsStr) -> io::Result<Metadata> {
         stat_unchecked(&self.as_file_view(), file_name.as_ref(), FollowSymlinks::No)
-    }
-
-    pub(super) fn remove_file(&self, file_name: &OsStr) -> io::Result<()> {
-        remove_file_unchecked(&self.as_file_view(), file_name.as_ref())
-    }
-
-    pub(super) fn remove_dir(&self, file_name: &OsStr) -> io::Result<()> {
-        remove_dir_unchecked(&self.as_file_view(), file_name.as_ref())
-    }
-
-    pub(super) fn self_metadata(&self) -> io::Result<Metadata> {
-        Metadata::from_file(&self.as_file_view())
-    }
-
-    pub(super) fn read_dir(
-        &self,
-        file_name: &OsStr,
-        follow: FollowSymlinks,
-    ) -> io::Result<ReadDir> {
-        read_dir_unchecked(&self.as_file_view(), file_name.as_ref(), follow)
     }
 
     #[allow(unsafe_code)]

@@ -8,52 +8,14 @@
 
 use crate::filesystem::primitives::OpenOptionsExt;
 use crate::filesystem::primitives::{
-    OpenOptions, SystemTimeSpec, errors, open, read_link_unchecked, set_times_follow_unchecked,
+    OpenOptions, SystemTimeSpec, open, set_times_follow_unchecked,
 };
-use io_lifetimes::{AsFd, AsFilelike};
-use rustix::fs::{AtFlags, Mode, OFlags, RawMode, chmodat};
+use io_lifetimes::AsFd;
+use rustix::fs::OFlags;
 use rustix::path::DecInt;
 use rustix_linux_procfs::proc_self_fd;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::{fs, io};
-
-pub(crate) fn get_path_from_proc_self_fd(file: &fs::File) -> io::Result<PathBuf> {
-    read_link_unchecked(
-        &proc_self_fd()?.as_filelike_view::<fs::File>(),
-        DecInt::from_fd(file).as_ref(),
-        PathBuf::new(),
-    )
-}
-
-/// Linux's `fchmodat` doesn't support `AT_NOFOLLOW_SYMLINK`, so we can't trust
-/// that it won't follow a symlink outside the sandbox. As an alternative, the
-/// symlinks in Linux's /proc/self/fd/* aren't ordinary symlinks, they're
-/// "magic links", which are more transparent, to the point of allowing chmod
-/// to work. So we open the file with `O_PATH` and then do `fchmodat` on the
-/// corresponding /proc/self/fd/* link.
-pub(crate) fn set_permissions_through_proc_self_fd(
-    start: &fs::File,
-    path: &Path,
-    perm: fs::Permissions,
-) -> io::Result<()> {
-    let opath = open(
-        start,
-        path,
-        OpenOptions::new()
-            .read(true)
-            .custom_flags(OFlags::PATH.bits() as i32),
-    )?;
-
-    let dirfd = proc_self_fd()?;
-    let mode = Mode::from_bits(perm.mode() as RawMode).ok_or_else(errors::invalid_flags)?;
-    Ok(chmodat(
-        dirfd,
-        DecInt::from_fd(&opath),
-        mode,
-        AtFlags::empty(),
-    )?)
-}
 
 pub(crate) fn set_times_through_proc_self_fd(
     start: &fs::File,

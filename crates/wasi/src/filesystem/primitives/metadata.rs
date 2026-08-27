@@ -1,4 +1,4 @@
-use crate::filesystem::primitives::{FileType, ImplFileTypeExt, ImplMetadataExt, Permissions};
+use crate::filesystem::primitives::{FileType, ImplFileTypeExt, ImplMetadataExt};
 use std::time::SystemTime;
 use std::{fs, io};
 
@@ -14,7 +14,6 @@ use std::{fs, io};
 pub struct Metadata {
     pub(crate) file_type: FileType,
     pub(crate) len: u64,
-    pub(crate) permissions: Permissions,
     pub(crate) modified: Option<SystemTime>,
     pub(crate) accessed: Option<SystemTime>,
     pub(crate) created: Option<SystemTime>,
@@ -51,7 +50,6 @@ impl Metadata {
         Self {
             file_type,
             len: std.len(),
-            permissions: Permissions::from_std(std.permissions()),
             modified: std.modified().ok(),
             accessed: std.accessed().ok(),
             created: std.created().ok(),
@@ -75,36 +73,12 @@ impl Metadata {
         self.file_type.is_dir()
     }
 
-    /// Returns `true` if this metadata is for a regular file.
-    ///
-    /// This corresponds to [`std::fs::Metadata::is_file`].
-    #[inline]
-    pub fn is_file(&self) -> bool {
-        self.file_type.is_file()
-    }
-
-    /// Returns `true` if this metadata is for a symbolic link.
-    ///
-    /// This corresponds to [`std::fs::Metadata::is_symlink`].
-    #[inline]
-    pub fn is_symlink(&self) -> bool {
-        self.file_type.is_symlink()
-    }
-
     /// Returns the size of the file, in bytes, this metadata is for.
     ///
     /// This corresponds to [`std::fs::Metadata::len`].
     #[inline]
     pub const fn len(&self) -> u64 {
         self.len
-    }
-
-    /// Returns the permissions of the file this metadata is for.
-    ///
-    /// This corresponds to [`std::fs::Metadata::permissions`].
-    #[inline]
-    pub fn permissions(&self) -> Permissions {
-        self.permissions.clone()
     }
 
     /// Returns the last modification time listed in this metadata.
@@ -146,13 +120,6 @@ impl Metadata {
         })
     }
 
-    /// Determine if `self` and `other` refer to the same inode on the same
-    /// device.
-    #[cfg(not(windows))]
-    pub(crate) fn is_same_file(&self, other: &Self) -> bool {
-        self.ext.is_same_file(&other.ext)
-    }
-
     /// `MetadataExt` requires nightly to be implemented, but we sometimes
     /// just need the file attributes.
     #[cfg(windows)]
@@ -171,34 +138,8 @@ pub trait MetadataExt {
     fn dev(&self) -> u64;
     /// Returns the inode number.
     fn ino(&self) -> u64;
-    /// Returns the rights applied to this file.
-    fn mode(&self) -> u32;
     /// Returns the number of hard links pointing to this file.
     fn nlink(&self) -> u64;
-    /// Returns the user ID of the owner of this file.
-    fn uid(&self) -> u32;
-    /// Returns the group ID of the owner of this file.
-    fn gid(&self) -> u32;
-    /// Returns the device ID of this file (if it is a special one).
-    fn rdev(&self) -> u64;
-    /// Returns the total size of this file in bytes.
-    fn size(&self) -> u64;
-    /// Returns the last access time of the file, in seconds since Unix Epoch.
-    fn atime(&self) -> i64;
-    /// Returns the last access time of the file, in nanoseconds since [`atime`].
-    fn atime_nsec(&self) -> i64;
-    /// Returns the last modification time of the file, in seconds since Unix Epoch.
-    fn mtime(&self) -> i64;
-    /// Returns the last modification time of the file, in nanoseconds since [`mtime`].
-    fn mtime_nsec(&self) -> i64;
-    /// Returns the last status change time of the file, in seconds since Unix Epoch.
-    fn ctime(&self) -> i64;
-    /// Returns the last status change time of the file, in nanoseconds since [`ctime`].
-    fn ctime_nsec(&self) -> i64;
-    /// Returns the block size for filesystem I/O.
-    fn blksize(&self) -> u64;
-    /// Returns the number of blocks allocated to the file, in 512-byte units.
-    fn blocks(&self) -> u64;
     #[cfg(target_os = "vxworks")]
     fn attrib(&self) -> u8;
 }
@@ -223,14 +164,6 @@ pub trait MetadataExt {
 pub trait MetadataExt {
     /// Returns the value of the `dwFileAttributes` field of this metadata.
     fn file_attributes(&self) -> u32;
-    /// Returns the value of the `ftCreationTime` field of this metadata.
-    fn creation_time(&self) -> u64;
-    /// Returns the value of the `ftLastAccessTime` field of this metadata.
-    fn last_access_time(&self) -> u64;
-    /// Returns the value of the `ftLastWriteTime` field of this metadata.
-    fn last_write_time(&self) -> u64;
-    /// Returns the value of the `nFileSize{High,Low}` fields of this metadata.
-    fn file_size(&self) -> u64;
 }
 
 #[cfg(unix)]
@@ -246,73 +179,8 @@ impl MetadataExt for Metadata {
     }
 
     #[inline]
-    fn mode(&self) -> u32 {
-        crate::filesystem::primitives::MetadataExt::mode(&self.ext)
-    }
-
-    #[inline]
     fn nlink(&self) -> u64 {
         crate::filesystem::primitives::MetadataExt::nlink(&self.ext)
-    }
-
-    #[inline]
-    fn uid(&self) -> u32 {
-        crate::filesystem::primitives::MetadataExt::uid(&self.ext)
-    }
-
-    #[inline]
-    fn gid(&self) -> u32 {
-        crate::filesystem::primitives::MetadataExt::gid(&self.ext)
-    }
-
-    #[inline]
-    fn rdev(&self) -> u64 {
-        crate::filesystem::primitives::MetadataExt::rdev(&self.ext)
-    }
-
-    #[inline]
-    fn size(&self) -> u64 {
-        crate::filesystem::primitives::MetadataExt::size(&self.ext)
-    }
-
-    #[inline]
-    fn atime(&self) -> i64 {
-        crate::filesystem::primitives::MetadataExt::atime(&self.ext)
-    }
-
-    #[inline]
-    fn atime_nsec(&self) -> i64 {
-        crate::filesystem::primitives::MetadataExt::atime_nsec(&self.ext)
-    }
-
-    #[inline]
-    fn mtime(&self) -> i64 {
-        crate::filesystem::primitives::MetadataExt::mtime(&self.ext)
-    }
-
-    #[inline]
-    fn mtime_nsec(&self) -> i64 {
-        crate::filesystem::primitives::MetadataExt::mtime_nsec(&self.ext)
-    }
-
-    #[inline]
-    fn ctime(&self) -> i64 {
-        crate::filesystem::primitives::MetadataExt::ctime(&self.ext)
-    }
-
-    #[inline]
-    fn ctime_nsec(&self) -> i64 {
-        crate::filesystem::primitives::MetadataExt::ctime_nsec(&self.ext)
-    }
-
-    #[inline]
-    fn blksize(&self) -> u64 {
-        crate::filesystem::primitives::MetadataExt::blksize(&self.ext)
-    }
-
-    #[inline]
-    fn blocks(&self) -> u64 {
-        crate::filesystem::primitives::MetadataExt::blocks(&self.ext)
     }
 }
 
@@ -347,73 +215,8 @@ impl MetadataExt for Metadata {
     }
 
     #[inline]
-    fn mode(&self) -> u32 {
-        self.ext.mode()
-    }
-
-    #[inline]
     fn nlink(&self) -> u64 {
         self.ext.nlink()
-    }
-
-    #[inline]
-    fn uid(&self) -> u32 {
-        self.ext.uid()
-    }
-
-    #[inline]
-    fn gid(&self) -> u32 {
-        self.ext.gid()
-    }
-
-    #[inline]
-    fn rdev(&self) -> u64 {
-        self.ext.rdev()
-    }
-
-    #[inline]
-    fn size(&self) -> u64 {
-        self.ext.size()
-    }
-
-    #[inline]
-    fn atime(&self) -> i64 {
-        self.ext.atime()
-    }
-
-    #[inline]
-    fn atime_nsec(&self) -> i64 {
-        self.ext.atime_nsec()
-    }
-
-    #[inline]
-    fn mtime(&self) -> i64 {
-        self.ext.mtime()
-    }
-
-    #[inline]
-    fn mtime_nsec(&self) -> i64 {
-        self.ext.mtime_nsec()
-    }
-
-    #[inline]
-    fn ctime(&self) -> i64 {
-        self.ext.ctime()
-    }
-
-    #[inline]
-    fn ctime_nsec(&self) -> i64 {
-        self.ext.ctime_nsec()
-    }
-
-    #[inline]
-    fn blksize(&self) -> u64 {
-        self.ext.blksize()
-    }
-
-    #[inline]
-    fn blocks(&self) -> u64 {
-        self.ext.blocks()
     }
 }
 
@@ -422,26 +225,6 @@ impl MetadataExt for Metadata {
     #[inline]
     fn file_attributes(&self) -> u32 {
         self.ext.file_attributes()
-    }
-
-    #[inline]
-    fn creation_time(&self) -> u64 {
-        self.ext.creation_time()
-    }
-
-    #[inline]
-    fn last_access_time(&self) -> u64 {
-        self.ext.last_access_time()
-    }
-
-    #[inline]
-    fn last_write_time(&self) -> u64 {
-        self.ext.last_write_time()
-    }
-
-    #[inline]
-    fn file_size(&self) -> u64 {
-        self.ext.file_size()
     }
 }
 
@@ -453,8 +236,5 @@ impl MetadataExt for Metadata {
 #[cfg(windows)]
 #[doc(hidden)]
 pub trait _WindowsByHandle {
-    fn file_attributes(&self) -> u32;
-    fn volume_serial_number(&self) -> Option<u32>;
     fn number_of_links(&self) -> Option<u32>;
-    fn file_index(&self) -> Option<u64>;
 }

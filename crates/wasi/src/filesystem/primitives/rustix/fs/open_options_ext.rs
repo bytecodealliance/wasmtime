@@ -12,11 +12,6 @@ impl ImplOpenOptionsExt {
         }
     }
 
-    pub(crate) fn mode(&mut self, mode: u32) -> &mut Self {
-        self.mode = mode;
-        self
-    }
-
     pub(crate) fn custom_flags(&mut self, flags: i32) -> &mut Self {
         self.custom_flags = flags;
         self

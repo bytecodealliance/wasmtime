@@ -8,7 +8,7 @@ use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
 use windows_sys::Win32::Storage::FileSystem::{
     CREATE_ALWAYS, CREATE_NEW, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_WRITE, FILE_SHARE_DELETE,
     FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_WRITE_DATA, OPEN_ALWAYS, OPEN_EXISTING,
-    SECURITY_SQOS_PRESENT, TRUNCATE_EXISTING,
+    TRUNCATE_EXISTING,
 };
 
 #[derive(Debug, Clone)]
@@ -48,16 +48,6 @@ impl ImplOpenOptionsExt {
 
     pub(crate) fn custom_flags(&mut self, flags: u32) -> &mut Self {
         self.custom_flags = flags;
-        self
-    }
-
-    pub(crate) fn attributes(&mut self, attributes: u32) -> &mut Self {
-        self.attributes = attributes;
-        self
-    }
-
-    pub(crate) fn security_qos_flags(&mut self, flags: u32) -> &mut Self {
-        self.security_qos_flags = flags | SECURITY_SQOS_PRESENT;
         self
     }
 }

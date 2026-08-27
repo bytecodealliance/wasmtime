@@ -1,25 +1,5 @@
-use crate::filesystem::primitives::{DirEntry, FollowSymlinks, ReadDirInner};
-use std::path::Path;
+use crate::filesystem::primitives::{DirEntry, ReadDirInner};
 use std::{fmt, fs, io};
-
-/// Construct a `ReadDir` to iterate over the contents of a directory,
-/// ensuring that the resolution of the path never escapes the directory
-/// tree rooted at `start`.
-#[inline]
-pub fn read_dir(start: &fs::File, path: &Path) -> io::Result<ReadDir> {
-    Ok(ReadDir {
-        inner: ReadDirInner::new(start, path, FollowSymlinks::Yes)?,
-    })
-}
-
-/// Like `read_dir`, but fails if `path` names a symlink.
-#[inline]
-#[cfg(not(windows))]
-pub(crate) fn read_dir_nofollow(start: &fs::File, path: &Path) -> io::Result<ReadDir> {
-    Ok(ReadDir {
-        inner: ReadDirInner::new(start, path, FollowSymlinks::No)?,
-    })
-}
 
 /// Like `read_dir` but operates on the base directory itself, rather than
 /// on a path based on it.
@@ -27,19 +7,6 @@ pub(crate) fn read_dir_nofollow(start: &fs::File, path: &Path) -> io::Result<Rea
 pub fn read_base_dir(start: &fs::File) -> io::Result<ReadDir> {
     Ok(ReadDir {
         inner: ReadDirInner::read_base_dir(start)?,
-    })
-}
-
-/// Like `read_dir`, but doesn't perform sandboxing.
-#[inline]
-#[cfg(not(windows))]
-pub(crate) fn read_dir_unchecked(
-    start: &fs::File,
-    path: &Path,
-    follow: FollowSymlinks,
-) -> io::Result<ReadDir> {
-    Ok(ReadDir {
-        inner: ReadDirInner::new_unchecked(start, path, follow)?,
     })
 }
 

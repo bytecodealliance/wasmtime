@@ -1,10 +1,8 @@
-use crate::filesystem::primitives::{
-    DirEntryInner, FileType, FollowSymlinks, Metadata, OpenOptions, ReadDir, dir_options,
-};
+use crate::filesystem::primitives::{DirEntryInner, Metadata};
 #[cfg(not(windows))]
 use rustix::fs::DirEntryExt;
 use std::ffi::OsString;
-use std::{fmt, fs, io};
+use std::{fmt, io};
 
 /// Entries returned by the `ReadDir` iterator.
 ///
@@ -25,42 +23,6 @@ pub struct DirEntry {
 }
 
 impl DirEntry {
-    /// Open the file for reading.
-    #[inline]
-    pub fn open(&self) -> io::Result<fs::File> {
-        self.open_with(OpenOptions::new().read(true))
-    }
-
-    /// Open the file with the given options.
-    #[inline]
-    pub fn open_with(&self, options: &OpenOptions) -> io::Result<fs::File> {
-        self.inner.open(options)
-    }
-
-    /// Open the entry as a directory.
-    #[inline]
-    pub fn open_dir(&self) -> io::Result<fs::File> {
-        self.open_with(&dir_options())
-    }
-
-    /// Removes the file from its filesystem.
-    #[inline]
-    pub fn remove_file(&self) -> io::Result<()> {
-        self.inner.remove_file()
-    }
-
-    /// Removes the directory from its filesystem.
-    #[inline]
-    pub fn remove_dir(&self) -> io::Result<()> {
-        self.inner.remove_dir()
-    }
-
-    /// Returns an iterator over the entries within the subdirectory.
-    #[inline]
-    pub fn read_dir(&self) -> io::Result<ReadDir> {
-        self.inner.read_dir(FollowSymlinks::Yes)
-    }
-
     /// Returns the metadata for the file that this entry points at.
     ///
     /// This corresponds to [`std::fs::DirEntry::metadata`].
@@ -79,20 +41,6 @@ impl DirEntry {
         self.inner.metadata()
     }
 
-    /// Returns the file type for the file that this entry points at.
-    ///
-    /// This corresponds to [`std::fs::DirEntry::file_type`].
-    ///
-    /// # Platform-specific behavior
-    ///
-    /// On Windows and most Unix platforms this function is free (no extra system calls needed), but
-    /// some Unix platforms may require the equivalent call to `metadata` to learn about the target
-    /// file type.
-    #[inline]
-    pub fn file_type(&self) -> io::Result<FileType> {
-        self.inner.file_type()
-    }
-
     /// Returns the bare file name of this directory entry without any other
     /// leading path component.
     ///
@@ -100,12 +48,6 @@ impl DirEntry {
     #[inline]
     pub fn file_name(&self) -> OsString {
         self.inner.file_name()
-    }
-
-    #[cfg(not(windows))]
-    #[inline]
-    pub(crate) fn is_same_file(&self, metadata: &Metadata) -> io::Result<bool> {
-        self.inner.is_same_file(metadata)
     }
 }
 
@@ -122,15 +64,4 @@ impl fmt::Debug for DirEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
-}
-
-/// Extension trait to allow `full_metadata` etc. to be exposed by
-/// the `cap-fs-ext` crate.
-///
-/// This is hidden from the main API since this functionality isn't present in
-/// `std`. Use `cap_fs_ext::DirEntryExt` instead of calling this directly.
-#[cfg(windows)]
-#[doc(hidden)]
-pub trait _WindowsDirEntryExt {
-    fn full_metadata(&self) -> io::Result<Metadata>;
 }

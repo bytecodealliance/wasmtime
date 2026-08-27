@@ -14,12 +14,3 @@ pub enum FollowSymlinks {
     /// No, do not follow symlinks in the last component of a path.
     No,
 }
-
-impl FollowSymlinks {
-    /// Convert a bool where true means "follow" and false means "don't follow"
-    /// to a `FollowSymlinks`.
-    #[inline]
-    pub const fn follow(follow: bool) -> Self {
-        if follow { Self::Yes } else { Self::No }
-    }
-}

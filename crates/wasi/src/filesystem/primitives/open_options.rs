@@ -82,15 +82,6 @@ impl OpenOptions {
         self
     }
 
-    /// Sets the option for the append mode.
-    ///
-    /// This corresponds to [`std::fs::OpenOptions::append`].
-    #[inline]
-    pub fn append(&mut self, append: bool) -> &mut Self {
-        self.append = append;
-        self
-    }
-
     /// Sets the option for truncating a previous file.
     ///
     /// This corresponds to [`std::fs::OpenOptions::truncate`].
@@ -133,49 +124,6 @@ impl OpenOptions {
         self
     }
 
-    /// Sets the option to disable an error if the opened object is a
-    /// directory.
-    #[inline]
-    pub(crate) fn maybe_dir(&mut self, maybe_dir: bool) -> &mut Self {
-        self.maybe_dir = maybe_dir;
-        self
-    }
-
-    /// Requests write operations complete as defined by synchronized I/O file
-    /// integrity completion.
-    #[inline]
-    pub(crate) fn sync(&mut self, enable: bool) -> &mut Self {
-        self.sync = enable;
-        self
-    }
-
-    /// Requests write operations complete as defined by synchronized I/O data
-    /// integrity completion.
-    #[inline]
-    pub(crate) fn dsync(&mut self, enable: bool) -> &mut Self {
-        self.dsync = enable;
-        self
-    }
-
-    /// Requests read operations complete as defined by the level of integrity
-    /// specified by `sync` and `dsync`.
-    #[inline]
-    pub(crate) fn rsync(&mut self, enable: bool) -> &mut Self {
-        self.rsync = enable;
-        self
-    }
-
-    /// Requests that I/O operations fail with `std::io::ErrorKind::WouldBlock`
-    /// if they would otherwise block.
-    ///
-    /// This option is commonly not implemented for regular files, so blocking
-    /// may still occur.
-    #[inline]
-    pub(crate) fn nonblock(&mut self, enable: bool) -> &mut Self {
-        self.nonblock = enable;
-        self
-    }
-
     /// Sets the option to request the ability to read directory entries.
     #[inline]
     pub(crate) fn readdir_required(&mut self, readdir_required: bool) -> &mut Self {
@@ -193,69 +141,11 @@ impl OpenOptions {
     pub fn _cap_fs_ext_follow(&mut self, follow: FollowSymlinks) -> &mut Self {
         self.follow(follow)
     }
-
-    /// Wrapper to allow `maybe_dir` to be exposed by the `cap-fs-ext` crate.
-    ///
-    /// This is hidden from the main API since this functionality isn't present
-    /// in `std`. Use `cap_fs_ext::OpenOptionsMaybeDirExt` instead of
-    /// calling this directly.
-    #[doc(hidden)]
-    #[inline]
-    pub fn _cap_fs_ext_maybe_dir(&mut self, maybe_dir: bool) -> &mut Self {
-        self.maybe_dir(maybe_dir)
-    }
-
-    /// Wrapper to allow `sync` to be exposed by the `cap-fs-ext` crate.
-    ///
-    /// This is hidden from the main API since this functionality isn't present
-    /// in `std`. Use `cap_fs_ext::OpenOptionsSyncExt` instead of
-    /// calling this directly.
-    #[doc(hidden)]
-    #[inline]
-    pub fn _cap_fs_ext_sync(&mut self, enable: bool) -> &mut Self {
-        self.sync(enable)
-    }
-
-    /// Wrapper to allow `dsync` to be exposed by the `cap-fs-ext` crate.
-    ///
-    /// This is hidden from the main API since this functionality isn't present
-    /// in `std`. Use `cap_fs_ext::OpenOptionsSyncExt` instead of
-    /// calling this directly.
-    #[doc(hidden)]
-    #[inline]
-    pub fn _cap_fs_ext_dsync(&mut self, enable: bool) -> &mut Self {
-        self.dsync(enable)
-    }
-
-    /// Wrapper to allow `rsync` to be exposed by the `cap-fs-ext` crate.
-    ///
-    /// This is hidden from the main API since this functionality isn't present
-    /// in `std`. Use `cap_fs_ext::OpenOptionsSyncExt` instead of
-    /// calling this directly.
-    #[doc(hidden)]
-    #[inline]
-    pub fn _cap_fs_ext_rsync(&mut self, enable: bool) -> &mut Self {
-        self.rsync(enable)
-    }
-
-    /// Wrapper to allow `nonblock` to be exposed by the `cap-fs-ext` crate.
-    ///
-    /// This is hidden from the main API since this functionality isn't present
-    /// in `std`. Use `cap_fs_ext::OpenOptionsSyncExt` instead of
-    /// calling this directly.
-    #[doc(hidden)]
-    #[inline]
-    pub fn _cap_fs_ext_nonblock(&mut self, enable: bool) -> &mut Self {
-        self.nonblock(enable)
-    }
 }
 
 /// Unix-specific extensions to [`fs::OpenOptions`].
 #[cfg(unix)]
 pub trait OpenOptionsExt {
-    /// Sets the mode bits that a new file will be created with.
-    fn mode(&mut self, mode: u32) -> &mut Self;
-
     /// Pass custom flags to the `flags` argument of `open`.
     fn custom_flags(&mut self, flags: i32) -> &mut Self;
 }
@@ -320,35 +210,10 @@ pub trait OpenOptionsExt {
     /// [`CreateFile`]: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
     /// [`CreateFile2`]: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfile2
     fn custom_flags(&mut self, flags: u32) -> &mut Self;
-
-    /// Sets the `dwFileAttributes` argument to the call to [`CreateFile2`] to
-    /// the specified value (or combines it with `custom_flags` and
-    /// `security_qos_flags` to set the `dwFlagsAndAttributes` for
-    /// [`CreateFile`]).
-    ///
-    /// [`CreateFile`]: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
-    /// [`CreateFile2`]: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfile2
-    fn attributes(&mut self, val: u32) -> &mut Self;
-
-    /// Sets the `dwSecurityQosFlags` argument to the call to [`CreateFile2`] to
-    /// the specified value (or combines it with `custom_flags` and `attributes`
-    /// to set the `dwFlagsAndAttributes` for [`CreateFile`]).
-    ///
-    /// [`CreateFile`]: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
-    /// [`CreateFile2`]: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfile2
-    /// [Impersonation Levels]:
-    ///     https://docs.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-security_impersonation_level
-    fn security_qos_flags(&mut self, flags: u32) -> &mut Self;
 }
 
 #[cfg(unix)]
 impl OpenOptionsExt for OpenOptions {
-    #[inline]
-    fn mode(&mut self, mode: u32) -> &mut Self {
-        self.ext.mode(mode);
-        self
-    }
-
     #[inline]
     fn custom_flags(&mut self, flags: i32) -> &mut Self {
         self.ext.custom_flags(flags);
@@ -433,18 +298,6 @@ impl OpenOptionsExt for OpenOptions {
     #[inline]
     fn custom_flags(&mut self, flags: u32) -> &mut Self {
         self.ext.custom_flags(flags);
-        self
-    }
-
-    #[inline]
-    fn attributes(&mut self, val: u32) -> &mut Self {
-        self.ext.attributes(val);
-        self
-    }
-
-    #[inline]
-    fn security_qos_flags(&mut self, flags: u32) -> &mut Self {
-        self.ext.security_qos_flags(flags);
         self
     }
 }

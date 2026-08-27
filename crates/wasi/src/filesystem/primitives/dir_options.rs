@@ -24,15 +24,6 @@ impl DirOptions {
     }
 }
 
-#[cfg(unix)]
-impl crate::filesystem::primitives::DirBuilderExt for DirOptions {
-    #[inline]
-    fn mode(&mut self, mode: u32) -> &mut Self {
-        self.ext.mode(mode);
-        self
-    }
-}
-
 #[cfg(target_os = "vxworks")]
 impl crate::fs::DirBuilderExt for DirOptions {
     #[inline]

@@ -93,10 +93,6 @@ pub trait FileTypeExt {
     fn is_block_device(&self) -> bool;
     /// Returns `true` if this file type is a character device.
     fn is_char_device(&self) -> bool;
-    /// Returns `true` if this file type is a fifo.
-    fn is_fifo(&self) -> bool;
-    /// Returns `true` if this file type is a socket.
-    fn is_socket(&self) -> bool;
 }
 
 #[cfg(any(unix, target_os = "vxworks"))]
@@ -109,16 +105,6 @@ impl FileTypeExt for FileType {
     #[inline]
     fn is_char_device(&self) -> bool {
         self.0 == Inner::Ext(ImplFileTypeExt::char_device())
-    }
-
-    #[inline]
-    fn is_fifo(&self) -> bool {
-        self.0 == Inner::Ext(ImplFileTypeExt::fifo())
-    }
-
-    #[inline]
-    fn is_socket(&self) -> bool {
-        self.0 == Inner::Ext(ImplFileTypeExt::socket())
     }
 }
 
