@@ -92,15 +92,6 @@ impl DirEntryInner {
     }
 
     #[inline]
-    #[cfg(windows_by_handle)]
-    pub(crate) fn is_same_file(&self, metadata: &Metadata) -> io::Result<bool> {
-        // Don't use `self.metadata()`, because that doesn't include the
-        // volume serial number which we need.
-        // <https://doc.rust-lang.org/std/os/windows/fs/trait.MetadataExt.html#tymethod.volume_serial_number>
-        Ok(Metadata::from_just_metadata(fs::metadata(self.std.path())?).is_same_file(metadata))
-    }
-
-    #[inline]
     pub(super) fn from_std(std: fs::DirEntry) -> Self {
         Self { std }
     }

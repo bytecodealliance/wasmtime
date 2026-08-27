@@ -122,32 +122,6 @@ impl FileTypeExt for FileType {
     }
 }
 
-/// Windows-specific extensions for [`FileType`].
-///
-/// This corresponds to [`std::os::windows::fs::FileTypeExt`].
-#[cfg(all(windows, windows_file_type_ext))]
-pub trait FileTypeExt {
-    /// Returns `true` if this file type is a symbolic link that is also a
-    /// directory.
-    fn is_symlink_dir(&self) -> bool;
-    /// Returns `true` if this file type is a symbolic link that is also a
-    /// file.
-    fn is_symlink_file(&self) -> bool;
-}
-
-#[cfg(all(windows, windows_file_type_ext))]
-impl FileTypeExt for FileType {
-    #[inline]
-    fn is_symlink_dir(&self) -> bool {
-        self.0 == Inner::Ext(ImplFileTypeExt::symlink_dir())
-    }
-
-    #[inline]
-    fn is_symlink_file(&self) -> bool {
-        self.0 == Inner::Ext(ImplFileTypeExt::symlink_file())
-    }
-}
-
 /// Extension trait to allow `is_block_device` etc. to be exposed by
 /// the `cap-fs-ext` crate.
 ///

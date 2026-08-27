@@ -184,7 +184,7 @@ impl Metadata {
 
     /// Determine if `self` and `other` refer to the same inode on the same
     /// device.
-    #[cfg(any(not(windows), windows_by_handle))]
+    #[cfg(not(windows))]
     pub(crate) fn is_same_file(&self, other: &Self) -> bool {
         self.ext.is_same_file(&other.ext)
     }
@@ -267,15 +267,6 @@ pub trait MetadataExt {
     fn last_write_time(&self) -> u64;
     /// Returns the value of the `nFileSize{High,Low}` fields of this metadata.
     fn file_size(&self) -> u64;
-    /// Returns the value of the `dwVolumeSerialNumber` field of this metadata.
-    #[cfg(windows_by_handle)]
-    fn volume_serial_number(&self) -> Option<u32>;
-    /// Returns the value of the `nNumberOfLinks` field of this metadata.
-    #[cfg(windows_by_handle)]
-    fn number_of_links(&self) -> Option<u32>;
-    /// Returns the value of the `nFileIndex{Low,High}` fields of this metadata.
-    #[cfg(windows_by_handle)]
-    fn file_index(&self) -> Option<u64>;
 }
 
 #[cfg(unix)]
@@ -487,24 +478,6 @@ impl MetadataExt for Metadata {
     #[inline]
     fn file_size(&self) -> u64 {
         self.ext.file_size()
-    }
-
-    #[inline]
-    #[cfg(windows_by_handle)]
-    fn volume_serial_number(&self) -> Option<u32> {
-        self.ext.volume_serial_number()
-    }
-
-    #[inline]
-    #[cfg(windows_by_handle)]
-    fn number_of_links(&self) -> Option<u32> {
-        self.ext.number_of_links()
-    }
-
-    #[inline]
-    #[cfg(windows_by_handle)]
-    fn file_index(&self) -> Option<u64> {
-        self.ext.file_index()
     }
 }
 

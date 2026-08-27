@@ -6,10 +6,6 @@ use std::{fs, io};
 pub(crate) enum ImplFileTypeExt {
     CharacterDevice,
     Fifo,
-    #[cfg(windows_file_type_ext)]
-    SymlinkFile,
-    #[cfg(windows_file_type_ext)]
-    SymlinkDir,
     SymlinkUnknown,
 }
 
@@ -54,17 +50,6 @@ impl ImplFileTypeExt {
             return FileType::dir();
         }
 
-        #[cfg(windows_file_type_ext)]
-        {
-            use std::os::windows::fs::FileTypeExt;
-            if std.is_symlink_file() {
-                return FileType::ext(Self::SymlinkFile);
-            }
-            if std.is_symlink_dir() {
-                return FileType::ext(Self::SymlinkDir);
-            }
-        }
-
         if std.is_symlink() {
             return FileType::ext(Self::SymlinkUnknown);
         }
@@ -72,25 +57,9 @@ impl ImplFileTypeExt {
         FileType::unknown()
     }
 
-    /// Creates a `FileType` for which `is_symlink_file()` returns `true`.
-    #[cfg(windows_file_type_ext)]
-    #[inline]
-    pub(crate) const fn symlink_file() -> Self {
-        Self::SymlinkFile
-    }
-
-    /// Creates a `FileType` for which `is_symlink_dir()` returns `true`.
-    #[cfg(windows_file_type_ext)]
-    #[inline]
-    pub(crate) const fn symlink_dir() -> Self {
-        Self::SymlinkDir
-    }
-
     #[inline]
     pub(crate) fn is_symlink(&self) -> bool {
         match self {
-            #[cfg(windows_file_type_ext)]
-            Self::SymlinkFile | Self::SymlinkDir => true,
             Self::SymlinkUnknown => true,
             _ => false,
         }

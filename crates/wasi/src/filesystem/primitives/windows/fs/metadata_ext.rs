@@ -19,25 +19,9 @@ impl ImplMetadataExt {
     /// Constructs a new instance of `Self` from the given [`std::fs::File`]
     /// and [`std::fs::Metadata`].
     #[inline]
-    #[allow(unused_variables)]
     pub(crate) fn from(file: &fs::File, std: &fs::Metadata) -> io::Result<Self> {
         let (mut volume_serial_number, mut number_of_links, mut file_index) = (None, None, None);
 
-        #[cfg(windows_by_handle)]
-        {
-            use std::os::windows::fs::MetadataExt;
-            if let Some(some) = std.volume_serial_number() {
-                volume_serial_number = Some(some);
-            }
-            if let Some(some) = std.number_of_links() {
-                number_of_links = Some(some);
-            }
-            if let Some(some) = std.file_index() {
-                file_index = Some(some);
-            }
-        }
-
-        #[cfg(not(windows_by_handle))]
         if volume_serial_number.is_none() || number_of_links.is_none() || file_index.is_none() {
             let fileinfo = winx::winapi_util::file::information(file)?;
             if volume_serial_number.is_none() {
@@ -71,23 +55,8 @@ impl ImplMetadataExt {
     ///
     /// [`std::fs::Metadata::volume_serial_number`]: https://doc.rust-lang.org/std/os/windows/fs/trait.MetadataExt.html#tymethod.volume_serial_number
     #[inline]
-    #[allow(unused_mut)]
     pub(crate) fn from_just_metadata(std: &fs::Metadata) -> Self {
-        let (mut volume_serial_number, mut number_of_links, mut file_index) = (None, None, None);
-
-        #[cfg(windows_by_handle)]
-        {
-            use std::os::windows::fs::MetadataExt;
-            if let Some(some) = std.volume_serial_number() {
-                volume_serial_number = Some(some);
-            }
-            if let Some(some) = std.number_of_links() {
-                number_of_links = Some(some);
-            }
-            if let Some(some) = std.file_index() {
-                file_index = Some(some);
-            }
-        }
+        let (volume_serial_number, number_of_links, file_index) = (None, None, None);
 
         Self::from_parts(std, volume_serial_number, number_of_links, file_index)
     }
@@ -163,24 +132,6 @@ impl MetadataExt for ImplMetadataExt {
     #[inline]
     fn file_size(&self) -> u64 {
         self.file_size
-    }
-
-    #[inline]
-    #[cfg(windows_by_handle)]
-    fn volume_serial_number(&self) -> Option<u32> {
-        self.volume_serial_number
-    }
-
-    #[inline]
-    #[cfg(windows_by_handle)]
-    fn number_of_links(&self) -> Option<u32> {
-        self.number_of_links
-    }
-
-    #[inline]
-    #[cfg(windows_by_handle)]
-    fn file_index(&self) -> Option<u64> {
-        self.file_index
     }
 }
 

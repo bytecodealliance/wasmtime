@@ -72,7 +72,7 @@ pub use file::FileExt;
 #[cfg(windows)]
 pub use file_type::_WindowsFileTypeExt;
 pub use file_type::FileType;
-#[cfg(any(unix, target_os = "vxworks", all(windows, windows_file_type_ext)))]
+#[cfg(any(unix, target_os = "vxworks"))]
 pub use file_type::FileTypeExt;
 pub use follow_symlinks::FollowSymlinks;
 pub use hard_link::hard_link;
