@@ -294,7 +294,13 @@ impl HostDescriptor for WasiCtxView<'_> {
                 // within this `block` call, rather than delay calculating the metadata
                 // for entries when they're demanded later in the iterator chain.
                 Ok::<_, std::io::Error>(
+<<<<<<< HEAD
                     d.entries()?
+||||||| parent of 5b8dca512d (Import the cap-primitives crate)
+                    cap_primitives::fs::read_base_dir(d)?
+=======
+                    crate::filesystem::primitives::read_base_dir(d)?
+>>>>>>> 5b8dca512d (Import the cap-primitives crate)
                         .map(|entry| {
                             let entry = entry?;
                             let meta = entry.metadata()?;

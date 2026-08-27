@@ -49,11 +49,23 @@ env_logger = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["event", "fs", "net"] }
+rustix-linux-procfs = "0.1.1"
 
 [target.'cfg(windows)'.dependencies]
 io-extras = { workspace = true }
-windows-sys = { workspace = true }
 rustix = { workspace = true, features = ["event", "net"] }
+winx = "0.36.0"
+
+[target.'cfg(windows)'.dependencies.windows-sys]
+workspace = true
+features = [
+  "Wdk_Storage_FileSystem",
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_IO",
+  "Win32_System_Ioctl",
+  "Win32_System_Performance",
+]
 
 [features]
 default = ["preview1"]
