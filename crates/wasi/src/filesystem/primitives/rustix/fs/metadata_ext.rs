@@ -147,7 +147,7 @@ fn system_time_from_rustix(sec: i64, nsec: u64) -> Option<SystemTime> {
         SystemTime::UNIX_EPOCH.checked_add(Duration::new(u64::try_from(sec).unwrap(), nsec as _))
     } else {
         SystemTime::UNIX_EPOCH
-            .checked_sub(Duration::new(u64::try_from(-sec).unwrap(), 0))
+            .checked_sub(Duration::new(sec.unsigned_abs(), 0))
             .map(|t| t.checked_add(Duration::new(0, nsec as u32)))
             .flatten()
     }
