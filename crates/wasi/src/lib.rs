@@ -2,10 +2,10 @@
 
 //! # Wasmtime's WASI Implementation
 //!
-//! This crate provides a Wasmtime host implementations of different versions of WASI.
-//! WASI is implemented with the Rust crates [`tokio`] and
-//! [`cap-primitives`](cap_primitives) primarily, meaning that operations are
-//! implemented in terms of their native platform equivalents by default.
+//! This crate provides a Wasmtime host implementations of different versions of
+//! WASI. WASI is implemented with the Rust crate [`tokio`] combined with custom
+//! implementations in this crate, and operations are implemented in terms of
+//! their native platform equivalents by default.
 //!
 //! For components and WASIp2, see [`p2`].
 //! For WASIp1 and core modules, see the [`p1`] module documentation.
