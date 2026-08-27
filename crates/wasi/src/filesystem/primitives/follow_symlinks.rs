@@ -7,7 +7,6 @@
 /// Instead of passing bare `bool`s as parameters, pass a distinct enum so that
 /// the intent is clear.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum FollowSymlinks {
     /// Yes, do follow symlinks in the last component of a path.
     Yes,

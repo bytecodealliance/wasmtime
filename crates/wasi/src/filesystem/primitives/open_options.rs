@@ -448,34 +448,3 @@ impl OpenOptionsExt for OpenOptions {
         self
     }
 }
-
-#[cfg(feature = "arbitrary")]
-impl arbitrary::Arbitrary<'_> for OpenOptions {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
-        use arbitrary::Arbitrary;
-        let (read, write) = match u.int_in_range(0..=2)? {
-            0 => (true, false),
-            1 => (false, true),
-            2 => (true, true),
-            _ => panic!(),
-        };
-        // TODO: `OpenOptionsExt` options.
-        Ok(Self::new()
-            .read(read)
-            .write(write)
-            .create(<bool as Arbitrary>::arbitrary(u)?)
-            .append(<bool as Arbitrary>::arbitrary(u)?)
-            .truncate(<bool as Arbitrary>::arbitrary(u)?)
-            .create(<bool as Arbitrary>::arbitrary(u)?)
-            .create_new(<bool as Arbitrary>::arbitrary(u)?)
-            .dir_required(<bool as Arbitrary>::arbitrary(u)?)
-            .maybe_dir(<bool as Arbitrary>::arbitrary(u)?)
-            .sync(<bool as Arbitrary>::arbitrary(u)?)
-            .dsync(<bool as Arbitrary>::arbitrary(u)?)
-            .rsync(<bool as Arbitrary>::arbitrary(u)?)
-            .nonblock(<bool as Arbitrary>::arbitrary(u)?)
-            .readdir_required(<bool as Arbitrary>::arbitrary(u)?)
-            .follow(<FollowSymlinks as Arbitrary>::arbitrary(u)?)
-            .clone())
-    }
-}
