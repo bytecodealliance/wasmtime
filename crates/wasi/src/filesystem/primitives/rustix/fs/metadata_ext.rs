@@ -177,7 +177,5 @@ fn negative_time() {
     let system_time = system_time_from_rustix(-1, 1).unwrap();
     let d = SystemTime::UNIX_EPOCH.duration_since(system_time).unwrap();
     assert_eq!(d.as_secs(), 0);
-    if !cfg!(emulate_second_only_system) {
-        assert_eq!(d.subsec_nanos(), 999999999);
-    }
+    assert_eq!(d.subsec_nanos(), 999999999);
 }

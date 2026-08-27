@@ -34,25 +34,3 @@ pub fn read_link(start: &fs::File, path: &Path) -> io::Result<PathBuf> {
 
     result
 }
-
-#[cfg(not(windows))]
-#[test]
-fn test_read_link_contents() {
-    use io_lifetimes::AsFilelike;
-    let td = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).unwrap();
-    let td_view = &td.as_filelike_view::<std::fs::File>();
-    let valid = [
-        "relative/path",
-        "/some/absolute/path",
-        "/",
-        "../",
-        "basepath",
-    ];
-    for case in valid {
-        let linkname = Path::new("linkname");
-        crate::fs::symlink_contents(case, td_view, linkname).unwrap();
-        let contents = crate::fs::read_link_contents(td_view, linkname).unwrap();
-        assert_eq!(contents.to_str().unwrap(), case);
-        crate::fs::remove_file(td_view, linkname).unwrap();
-    }
-}

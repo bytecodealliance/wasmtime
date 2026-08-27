@@ -5,32 +5,29 @@
 // run-pass
 
 #![allow(unused_must_use)]
-#![allow(unused_imports)]
 // This test can't be a unit test in std,
 // because it needs `TempDir`, which is in extra
 
 // ignore-cross-compile
 
-mod sys_common;
-
-use cap_std::fs::{self, File};
-use std::env;
-use std::ffi::CString;
-use std::path::{Path, PathBuf};
-use sys_common::io::tmpdir;
+use super::helpers as h;
+use super::sys_common::io::tmpdir;
+use crate::filesystem::primitives::rename;
+use std::path::Path;
 
 #[test]
 fn rename_directory() {
     let tmpdir = tmpdir();
+    let dir = h::dir_of(&tmpdir);
     let old_path = Path::new("foo/bar/baz");
-    tmpdir.create_dir_all(&old_path).unwrap();
+    h::create_dir_all(&dir, &old_path).unwrap();
     let test_file = &old_path.join("temp.txt");
 
-    tmpdir.create(test_file).unwrap();
+    h::create(&dir, test_file).unwrap();
 
     let new_path = Path::new("quux/blat");
-    tmpdir.create_dir_all(&new_path).unwrap();
-    tmpdir.rename(&old_path, &tmpdir, &new_path.join("newdir"));
-    assert!(tmpdir.is_dir(new_path.join("newdir")));
-    assert!(tmpdir.exists(new_path.join("newdir/temp.txt")));
+    h::create_dir_all(&dir, &new_path).unwrap();
+    rename(&dir, &old_path, &dir, &new_path.join("newdir"));
+    assert!(h::is_dir(&dir, &new_path.join("newdir")));
+    assert!(h::exists(&dir, &new_path.join("newdir/temp.txt")));
 }

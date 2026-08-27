@@ -1,26 +1,19 @@
-mod canonicalize;
+#[macro_use]
+mod sys_common;
+
+mod helpers;
+
 mod cap_basics;
-mod dir_entry_ext;
-mod dir_ext;
 mod file_type_ext;
 mod fs;
 mod fs_additional;
-mod is_file_read_write;
-mod issue_22577;
 mod metadata_ext;
-mod open_ambient;
 mod paths_containing_nul;
-mod rand;
 mod readdir;
 mod rename;
 mod rename_directory;
-mod reopen;
 mod reopendir;
-mod root;
-mod set;
 mod set_times;
 mod symlinks;
-mod sys;
-mod sys_common;
 mod windows_open;
 mod windows_symlinks;

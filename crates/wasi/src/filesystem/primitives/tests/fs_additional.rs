@@ -1,176 +1,352 @@
 // This file contains additional fs tests that didn't make it into `fs.rs`.
 // The reason for additional module to contain those is so that `fs.rs` mirrors
 // Rust's libstd tests.
-
-#[macro_use]
-mod sys_common;
-
-use cap_std::ambient_authority;
-use cap_std::fs::{Dir, DirBuilder, OpenOptions};
-use cap_std::time::SystemClock;
-use std::io::{self, Read, Write};
+use super::helpers as h;
+use super::sys_common::io::tmpdir;
+use super::sys_common::symlink_supported;
+use crate::filesystem::primitives as p;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::str;
-use sys_common::io::tmpdir;
-use sys_common::symlink_supported;
 
-#[cfg(not(windows))]
-fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(src: P, tmpdir: &Dir, dst: Q) -> io::Result<()> {
-    tmpdir.symlink(src, dst)
+#[test]
+fn dir_writable() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "dir"));
+    #[cfg(not(windows))]
+    error_contains!(h::create(&start, "dir"), "Is a directory");
+    #[cfg(windows)]
+    error!(h::create(&start, "dir"), 5);
+    error_contains!(
+        p::open(&start, Path::new("dir"), p::OpenOptions::new().write(true)),
+        "Is a directory"
+    );
+
+    error_contains!(h::create(&start, "dir/."), "Is a directory");
+    error_contains!(
+        p::open(
+            &start,
+            Path::new("dir/."),
+            p::OpenOptions::new().write(true)
+        ),
+        "Is a directory"
+    );
+
+    error_contains!(h::create(&start, "dir/.."), "Is a directory");
+    error_contains!(
+        p::open(
+            &start,
+            Path::new("dir/.."),
+            p::OpenOptions::new().write(true)
+        ),
+        "Is a directory"
+    );
 }
-#[cfg(not(windows))]
-fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(src: P, tmpdir: &Dir, dst: Q) -> io::Result<()> {
-    tmpdir.symlink(src, dst)
+
+#[test]
+fn readdir_write() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "dir"));
+    assert!(p::open(&start, Path::new("dir"), p::OpenOptions::new().write(true)).is_err());
+    assert!(p::open(&start, Path::new("dir/"), p::OpenOptions::new().write(true)).is_err());
+
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    {
+        use crate::filesystem::primitives::OpenOptionsExt;
+        assert!(
+            p::open(
+                &start,
+                Path::new("dir"),
+                p::OpenOptions::new()
+                    .write(true)
+                    .custom_flags(rustix::fs::OFlags::DIRECTORY.bits() as i32)
+            )
+            .is_err()
+        );
+    }
 }
-#[cfg(windows)]
-fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(src: P, tmpdir: &Dir, dst: Q) -> io::Result<()> {
-    tmpdir.symlink_dir(src, dst)
+
+#[test]
+fn maybe_dir() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "dir"));
+
+    // Opening directories works on non-Windows platforms.
+    #[cfg(not(windows))]
+    check!(h::open(&start, "dir"));
+
+    // Opening directories fails on Windows.
+    #[cfg(windows)]
+    assert!(h::open(&start, "dir").is_err());
 }
-#[cfg(windows)]
-fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(src: P, tmpdir: &Dir, dst: Q) -> io::Result<()> {
-    tmpdir.symlink_file(src, dst)
+
+#[test]
+fn optionally_recursive_mkdir() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+    let dir = "d1/d2";
+    check!(h::create_dir_all(&start, dir));
+    assert!(h::is_dir(&start, dir));
+}
+
+#[test]
+fn optionally_nonrecursive_mkdir() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+    let dir = "d1/d2";
+    #[cfg(not(windows))]
+    error!(
+        p::create_dir(&start, Path::new(dir), &p::DirOptions::new()),
+        "No such file"
+    );
+    #[cfg(windows)]
+    error!(
+        p::create_dir(&start, Path::new(dir), &p::DirOptions::new()),
+        2
+    );
+
+    assert!(!h::exists(&start, dir));
+}
+
+#[test]
+fn dotdot_at_end_of_symlink() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+
+    let foo = b"foo";
+    check!(h::write(&start, "target", foo));
+    check!(h::create_dir(&start, "b"));
+    let b = check!(p::open_dir(&start, Path::new("b")));
+    check!(h::symlink_dir(&b, "..", "up"));
+
+    // Do some things with `path` that might break with an `O_PATH` fd.
+    // The `permissions` part of this test is gone with `set_permissions`, but
+    // the `read_dir` part is the part that exercises the `O_PATH` fd.
+    let path = "b/up";
+
+    check!(h::metadata(&start, path));
+
+    let contents = check!(h::read_dir(&start, path));
+    for entry in contents {
+        let _entry = check!(entry);
+    }
+}
+
+#[test]
+fn dotdot_at_end_of_symlink_all_inside_dir() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+
+    let foo = b"foo";
+    check!(h::create_dir(&start, "dir"));
+    check!(h::write(&start, "dir/target", foo));
+    check!(h::create_dir(&start, "dir/b"));
+    let b = check!(p::open_dir(&start, Path::new("dir/b")));
+    check!(h::symlink_dir(&b, "..", "up"));
+
+    // Do some things with `path` that might break with an `O_PATH` fd.
+    // The `permissions` part of this test is gone with `set_permissions`, but
+    // the `read_dir` part is the part that exercises the `O_PATH` fd.
+    let path = "dir/b/up";
+
+    check!(h::metadata(&start, path));
+
+    let contents = check!(h::read_dir(&start, path));
+    for entry in contents {
+        let _entry = check!(entry);
+    }
+}
+
+#[test]
+fn dotdot_slashdot_at_end_of_symlink() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+
+    let foo = b"foo";
+    check!(h::write(&start, "target", foo));
+    check!(h::create_dir(&start, "b"));
+    let b = check!(p::open_dir(&start, Path::new("b")));
+    check!(h::symlink_dir(&b, "../.", "up"));
+
+    // Do some things with `path` that might break with an `O_PATH` fd.
+    // The `permissions` part of this test is gone with `set_permissions`, but
+    // the `read_dir` part is the part that exercises the `O_PATH` fd.
+    let path = "b/up";
+
+    check!(h::metadata(&start, path));
+
+    let contents = check!(h::read_dir(&start, path));
+    for entry in contents {
+        let _entry = check!(entry);
+    }
+}
+
+#[test]
+fn dotdot_slashdot_at_end_of_symlink_all_inside_dir() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+
+    let foo = b"foo";
+    check!(h::create_dir(&start, "dir"));
+    check!(h::write(&start, "dir/target", foo));
+    check!(h::create_dir(&start, "dir/b"));
+    let b = check!(p::open_dir(&start, Path::new("dir/b")));
+    check!(h::symlink_dir(&b, "../.", "up"));
+
+    // Do some things with `path` that might break with an `O_PATH` fd.
+    // The `permissions` part of this test is gone with `set_permissions`, but
+    // the `read_dir` part is the part that exercises the `O_PATH` fd.
+    let path = "dir/b/up";
+
+    check!(h::metadata(&start, path));
+
+    let contents = check!(h::read_dir(&start, path));
+    for entry in contents {
+        let _entry = check!(entry);
+    }
 }
 
 #[test]
 fn recursive_mkdir() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
     let dir = "d1/d2";
-    check!(tmpdir.create_dir_all(dir));
-    assert!(tmpdir.is_dir("d1"));
-    let dir = check!(tmpdir.open_dir("d1"));
-    assert!(dir.is_dir("d2"));
-    assert!(tmpdir.is_dir("d1/d2"));
+    check!(h::create_dir_all(&start, dir));
+    assert!(h::is_dir(&start, "d1"));
+    let dir = check!(p::open_dir(&start, Path::new("d1")));
+    assert!(h::is_dir(&dir, "d2"));
+    assert!(h::is_dir(&start, "d1/d2"));
 }
 
 #[test]
 #[cfg_attr(windows, ignore)] // TODO investigate why this one is failing
 fn open_various() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
     #[cfg(not(windows))]
-    error!(tmpdir.create(""), "No such file");
+    error!(h::create(&start, ""), "No such file");
     #[cfg(windows)]
-    error!(tmpdir.create(""), 2);
+    error!(h::create(&start, ""), 2);
 
     #[cfg(not(windows))]
-    error!(tmpdir.create("."), "Is a directory");
+    error!(h::create(&start, "."), "Is a directory");
     #[cfg(windows)]
-    error!(tmpdir.create("."), 2);
-}
-
-#[test]
-#[cfg_attr(windows, ignore)] // TODO investigate why this one is failing
-fn dir_writable() {
-    let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("dir"));
-    #[cfg(not(windows))]
-    error_contains!(tmpdir.create("dir"), "Is a directory");
-    #[cfg(windows)]
-    error!(tmpdir.create("dir"), 5);
-    error_contains!(
-        tmpdir.open_with("dir", OpenOptions::new().write(true)),
-        "Is a directory"
-    );
-    error_contains!(
-        tmpdir.open_with("dir", OpenOptions::new().append(true)),
-        "Is a directory"
-    );
-
-    error_contains!(tmpdir.create("dir/."), "Is a directory");
-    error_contains!(
-        tmpdir.open_with("dir/.", OpenOptions::new().write(true)),
-        "Is a directory"
-    );
-    error_contains!(
-        tmpdir.open_with("dir/.", OpenOptions::new().append(true)),
-        "Is a directory"
-    );
-
-    error_contains!(tmpdir.create("dir/.."), "Is a directory");
-    error_contains!(
-        tmpdir.open_with("dir/..", OpenOptions::new().write(true)),
-        "Is a directory"
-    );
-    error_contains!(
-        tmpdir.open_with("dir/..", OpenOptions::new().append(true)),
-        "Is a directory"
-    );
+    error!(h::create(&start, "."), 2);
 }
 
 #[test]
 fn trailing_slash() {
     let tmpdir = tmpdir();
-    check!(tmpdir.create("file"));
+    let start = h::dir_of(&tmpdir);
+    check!(h::create(&start, "file"));
 
     #[cfg(not(windows))]
     {
-        error!(tmpdir.open("file/../file"), "Not a directory");
-        error!(tmpdir.open("file/.."), "Not a directory");
-        error!(tmpdir.open("file/."), "Not a directory");
-        error!(tmpdir.open("file/../file/"), "Not a directory");
-        error!(tmpdir.open("file/"), "Not a directory");
-        error!(tmpdir.open_dir("file/../file/"), "Not a directory");
-        error!(tmpdir.open_dir("file/../file"), "Not a directory");
-        error!(tmpdir.open_dir("file/.."), "Not a directory");
-        error!(tmpdir.open_dir("file/."), "Not a directory");
-        error!(tmpdir.open_dir("file/"), "Not a directory");
+        error!(h::open(&start, "file/../file"), "Not a directory");
+        error!(h::open(&start, "file/.."), "Not a directory");
+        error!(h::open(&start, "file/."), "Not a directory");
+        error!(h::open(&start, "file/../file/"), "Not a directory");
+        error!(h::open(&start, "file/"), "Not a directory");
+        error!(
+            p::open_dir(&start, Path::new("file/../file/")),
+            "Not a directory"
+        );
+        error!(
+            p::open_dir(&start, Path::new("file/../file")),
+            "Not a directory"
+        );
+        error!(p::open_dir(&start, Path::new("file/..")), "Not a directory");
+        error!(p::open_dir(&start, Path::new("file/.")), "Not a directory");
+        error!(p::open_dir(&start, Path::new("file/")), "Not a directory");
     }
 
     #[cfg(windows)]
     {
-        assert!(check!(check!(tmpdir.open("file/../file")).metadata()).is_file());
-        assert!(check!(check!(tmpdir.open_dir("file/..")).dir_metadata()).is_dir());
-        assert!(check!(check!(tmpdir.open("file/.")).metadata()).is_file());
-        assert!(tmpdir.open_dir("file/../file/").is_err());
-        assert!(tmpdir.open_dir("file/./").is_err());
-        assert!(tmpdir.open_dir("file//").is_err());
-        assert!(tmpdir.open_dir("file/../file").is_err());
-        assert!(tmpdir.open_dir("file/.").is_err());
-        assert!(tmpdir.open_dir("file/").is_err());
+        assert!(check!(check!(h::open(&start, "file/../file")).metadata()).is_file());
+        assert!(
+            check!(p::Metadata::from_file(&check!(p::open_dir(
+                &start,
+                Path::new("file/..")
+            ))))
+            .is_dir()
+        );
+        assert!(check!(check!(h::open(&start, "file/.")).metadata()).is_file());
+        assert!(p::open_dir(&start, Path::new("file/../file/")).is_err());
+        assert!(p::open_dir(&start, Path::new("file/./")).is_err());
+        assert!(p::open_dir(&start, Path::new("file//")).is_err());
+        assert!(p::open_dir(&start, Path::new("file/../file")).is_err());
+        assert!(p::open_dir(&start, Path::new("file/.")).is_err());
+        assert!(p::open_dir(&start, Path::new("file/")).is_err());
     }
 }
 
 #[test]
 fn trailing_slash_in_dir() {
     let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("dir"));
-    check!(tmpdir.create("dir/file"));
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "dir"));
+    check!(h::create(&start, "dir/file"));
 
     #[cfg(not(windows))]
     {
-        error!(tmpdir.open("dir/file/../file"), "Not a directory");
-        error!(tmpdir.open("dir/file/.."), "Not a directory");
-        error!(tmpdir.open("dir/file/."), "Not a directory");
-        error!(tmpdir.open("dir/file/../file/"), "Not a directory");
-        error!(tmpdir.open("dir/file/"), "Not a directory");
-        error!(tmpdir.open_dir("dir/file/../file/"), "Not a directory");
-        error!(tmpdir.open_dir("dir/file/../file"), "Not a directory");
-        error!(tmpdir.open_dir("dir/file/.."), "Not a directory");
-        error!(tmpdir.open_dir("dir/file/."), "Not a directory");
-        error!(tmpdir.open_dir("dir/file/"), "Not a directory");
+        error!(h::open(&start, "dir/file/../file"), "Not a directory");
+        error!(h::open(&start, "dir/file/.."), "Not a directory");
+        error!(h::open(&start, "dir/file/."), "Not a directory");
+        error!(h::open(&start, "dir/file/../file/"), "Not a directory");
+        error!(h::open(&start, "dir/file/"), "Not a directory");
+        error!(
+            p::open_dir(&start, Path::new("dir/file/../file/")),
+            "Not a directory"
+        );
+        error!(
+            p::open_dir(&start, Path::new("dir/file/../file")),
+            "Not a directory"
+        );
+        error!(
+            p::open_dir(&start, Path::new("dir/file/..")),
+            "Not a directory"
+        );
+        error!(
+            p::open_dir(&start, Path::new("dir/file/.")),
+            "Not a directory"
+        );
+        error!(
+            p::open_dir(&start, Path::new("dir/file/")),
+            "Not a directory"
+        );
     }
 
     #[cfg(windows)]
     {
-        assert!(check!(check!(tmpdir.open("dir/file/../file")).metadata()).is_file());
-        assert!(check!(check!(tmpdir.open_dir("dir/file/..")).dir_metadata()).is_dir());
-        assert!(check!(check!(tmpdir.open("dir/file/.")).metadata()).is_file());
-        assert!(tmpdir.open("dir/file/../file/").is_err());
-        let _ = check!(tmpdir.open("dir/file/../file/."));
-        assert!(tmpdir.open("dir/file/../file/./").is_err());
-        assert!(tmpdir.open("dir/file/").is_err());
-        let _ = check!(tmpdir.open("dir/file/."));
-        let _ = check!(tmpdir.open("dir/file/../file/."));
-        assert!(tmpdir.open("dir/file/../file/./").is_err());
-        assert!(tmpdir.open("dir/file/").is_err());
-        let _ = check!(tmpdir.open("dir/file/."));
-        assert!(tmpdir.open("dir/file/./").is_err());
-        assert!(tmpdir.open_dir("dir/file/../file/").is_err());
-        assert!(tmpdir.open_dir("dir/file/../file/.").is_err());
-        assert!(tmpdir.open_dir("dir/file/../file/./").is_err());
-        assert!(tmpdir.open_dir("dir/file/../file").is_err());
-        assert!(tmpdir.open_dir("dir/file/.").is_err());
-        assert!(tmpdir.open_dir("dir/file/./").is_err());
-        assert!(tmpdir.open_dir("dir/file/").is_err());
+        assert!(check!(check!(h::open(&start, "dir/file/../file")).metadata()).is_file());
+        assert!(
+            check!(p::Metadata::from_file(&check!(p::open_dir(
+                &start,
+                Path::new("dir/file/..")
+            ))))
+            .is_dir()
+        );
+        assert!(check!(check!(h::open(&start, "dir/file/.")).metadata()).is_file());
+        assert!(h::open(&start, "dir/file/../file/").is_err());
+        let _ = check!(h::open(&start, "dir/file/../file/."));
+        assert!(h::open(&start, "dir/file/../file/./").is_err());
+        assert!(h::open(&start, "dir/file/").is_err());
+        let _ = check!(h::open(&start, "dir/file/."));
+        let _ = check!(h::open(&start, "dir/file/../file/."));
+        assert!(h::open(&start, "dir/file/../file/./").is_err());
+        assert!(h::open(&start, "dir/file/").is_err());
+        let _ = check!(h::open(&start, "dir/file/."));
+        assert!(h::open(&start, "dir/file/./").is_err());
+        assert!(p::open_dir(&start, Path::new("dir/file/../file/")).is_err());
+        assert!(p::open_dir(&start, Path::new("dir/file/../file/.")).is_err());
+        assert!(p::open_dir(&start, Path::new("dir/file/../file/./")).is_err());
+        assert!(p::open_dir(&start, Path::new("dir/file/../file")).is_err());
+        assert!(p::open_dir(&start, Path::new("dir/file/.")).is_err());
+        assert!(p::open_dir(&start, Path::new("dir/file/./")).is_err());
+        assert!(p::open_dir(&start, Path::new("dir/file/")).is_err());
     }
 }
 
@@ -178,15 +354,42 @@ fn trailing_slash_in_dir() {
 #[cfg_attr(windows, ignore)] // TODO investigate why this one is failing
 fn rename_slashdots() {
     let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("dir"));
-    check!(tmpdir.rename("dir", &tmpdir, "dir"));
-    check!(tmpdir.rename("dir", &tmpdir, "dir/"));
-    check!(tmpdir.rename("dir/", &tmpdir, "dir"));
-    check!(tmpdir.rename("dir/", &tmpdir, "dir/"));
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "dir"));
+    check!(p::rename(
+        &start,
+        Path::new("dir"),
+        &start,
+        Path::new("dir")
+    ));
+    check!(p::rename(
+        &start,
+        Path::new("dir"),
+        &start,
+        Path::new("dir/")
+    ));
+    check!(p::rename(
+        &start,
+        Path::new("dir/"),
+        &start,
+        Path::new("dir")
+    ));
+    check!(p::rename(
+        &start,
+        Path::new("dir/"),
+        &start,
+        Path::new("dir/")
+    ));
 
     // TODO: Platform-specific error code.
-    error_contains!(tmpdir.rename("dir", &tmpdir, "dir/."), "");
-    error_contains!(tmpdir.rename("dir/.", &tmpdir, "dir"), "");
+    error_contains!(
+        p::rename(&start, Path::new("dir"), &start, Path::new("dir/.")),
+        ""
+    );
+    error_contains!(
+        p::rename(&start, Path::new("dir/."), &start, Path::new("dir")),
+        ""
+    );
 }
 
 #[test]
@@ -224,69 +427,49 @@ fn rename_slashdots_ambient() {
 }
 
 #[test]
-fn optionally_recursive_mkdir() {
-    let tmpdir = tmpdir();
-    let dir = "d1/d2";
-    check!(tmpdir.create_dir_with(dir, DirBuilder::new().recursive(true)));
-    assert!(tmpdir.is_dir(dir));
-}
-
-#[test]
 fn try_exists() {
     let tmpdir = tmpdir();
-    assert_eq!(tmpdir.try_exists("somefile").unwrap(), false);
+    let start = h::dir_of(&tmpdir);
+    assert_eq!(h::exists(&start, "somefile"), false);
     let dir = Path::new("d1/d2");
     let parent = dir.parent().unwrap();
-    assert_eq!(tmpdir.try_exists(parent).unwrap(), false);
-    assert_eq!(tmpdir.try_exists(dir).unwrap(), false);
-    check!(tmpdir.create_dir(parent));
-    assert_eq!(tmpdir.try_exists(parent).unwrap(), true);
-    assert_eq!(tmpdir.try_exists(dir).unwrap(), false);
-    check!(tmpdir.create_dir(dir));
-    assert_eq!(tmpdir.try_exists(dir).unwrap(), true);
-}
-
-#[test]
-fn optionally_nonrecursive_mkdir() {
-    let tmpdir = tmpdir();
-    let dir = "d1/d2";
-    #[cfg(not(windows))]
-    error!(
-        tmpdir.create_dir_with(dir, &DirBuilder::new()),
-        "No such file"
-    );
-    #[cfg(windows)]
-    error!(tmpdir.create_dir_with(dir, &DirBuilder::new()), 2);
-
-    assert!(!tmpdir.exists(dir));
+    assert_eq!(h::exists(&start, parent), false);
+    assert_eq!(h::exists(&start, dir), false);
+    check!(h::create_dir(&start, parent));
+    assert_eq!(h::exists(&start, parent), true);
+    assert_eq!(h::exists(&start, dir), false);
+    check!(h::create_dir(&start, dir));
+    assert_eq!(h::exists(&start, dir), true);
 }
 
 #[test]
 fn file_test_directoryinfo_readdir() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
     let dir = "di_readdir";
-    check!(tmpdir.create_dir(dir));
+    check!(h::create_dir(&start, dir));
     let prefix = "foo";
     for n in 0..3 {
         let f = format!("{}.txt", n);
-        let mut w = check!(tmpdir.create(&f));
+        let mut w = check!(h::create(&start, &f));
         let msg_str = format!("{}{}", prefix, n.to_string());
         let msg = msg_str.as_bytes();
         check!(w.write(msg));
     }
-    let files = check!(tmpdir.read_dir(dir));
+    let sub = check!(p::open_dir(&start, Path::new(dir)));
+    let files = check!(p::read_base_dir(&sub));
     let mut mem = [0; 4];
     for f in files {
         let f = f.unwrap();
         {
-            check!(check!(f.open()).read(&mut mem));
+            check!(check!(h::open(&sub, f.file_name())).read(&mut mem));
             let read_str = str::from_utf8(&mem).unwrap();
             let expected = format!("{}{}", prefix, f.file_name().to_str().unwrap());
             assert_eq!(expected, read_str);
         }
-        check!(f.remove_file());
+        check!(p::remove_file(&sub, Path::new(&f.file_name())));
     }
-    check!(tmpdir.remove_dir(dir));
+    check!(p::remove_dir(&start, Path::new(dir)));
 }
 
 #[test]
@@ -296,44 +479,44 @@ fn follow_dotdot_symlink() {
     }
 
     let tmpdir = tmpdir();
-    check!(tmpdir.create_dir_all("a/b"));
-    check!(symlink_dir("..", &tmpdir, "a/b/c"));
-    check!(symlink_dir("../..", &tmpdir, "a/b/d"));
-    check!(symlink_dir("../../..", &tmpdir, "a/b/e"));
-    check!(symlink_dir("../../../..", &tmpdir, "a/b/f"));
 
-    check!(tmpdir.open_dir("a/b/c"));
-    assert!(check!(tmpdir.metadata("a/b/c")).is_dir());
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir_all(&start, "a/b"));
+    check!(h::symlink_dir(&start, "..", "a/b/c"));
+    check!(h::symlink_dir(&start, "../..", "a/b/d"));
+    check!(h::symlink_dir(&start, "../../..", "a/b/e"));
+    check!(h::symlink_dir(&start, "../../../..", "a/b/f"));
+
+    check!(p::open_dir(&start, Path::new("a/b/c")));
+    assert!(check!(h::metadata(&start, "a/b/c")).is_dir());
 
     #[cfg(windows)]
     {
-        error!(tmpdir.open_dir("a/b/d"), 123);
-        error!(tmpdir.metadata("a/b/d"), 123);
+        error!(p::open_dir(&start, Path::new("a/b/d")), 123);
+        error!(h::metadata(&start, "a/b/d"), 123);
 
-        error!(tmpdir.open_dir("a/b/e"), 123);
-        error!(tmpdir.metadata("a/b/e"), 123);
+        error!(p::open_dir(&start, Path::new("a/b/e")), 123);
+        error!(h::metadata(&start, "a/b/e"), 123);
 
-        error!(tmpdir.open_dir("a/b/f"), 123);
-        error!(tmpdir.metadata("a/b/f"), 123);
+        error!(p::open_dir(&start, Path::new("a/b/f")), 123);
+        error!(h::metadata(&start, "a/b/f"), 123);
     }
 
     #[cfg(not(windows))]
     {
-        check!(tmpdir.open_dir("a/b/d"));
-        assert!(check!(tmpdir.metadata("a/b/d")).is_dir());
+        check!(p::open_dir(&start, Path::new("a/b/d")));
+        assert!(check!(h::metadata(&start, "a/b/d")).is_dir());
 
-        assert!(tmpdir.open_dir("a/b/e").is_err());
-        assert!(tmpdir.metadata("a/b/e").is_err());
+        assert!(p::open_dir(&start, Path::new("a/b/e")).is_err());
+        assert!(h::metadata(&start, "a/b/e").is_err());
 
-        assert!(tmpdir.open_dir("a/b/f").is_err());
-        assert!(tmpdir.metadata("a/b/f").is_err());
+        assert!(p::open_dir(&start, Path::new("a/b/f")).is_err());
+        assert!(h::metadata(&start, "a/b/f").is_err());
     }
 }
 
 #[test]
 fn follow_dotdot_symlink_ambient() {
-    use cap_std::ambient_authority;
-    use cap_std::fs::Dir;
     #[cfg(unix)]
     use std::os::unix::fs::symlink as symlink_dir;
     #[cfg(windows)]
@@ -350,51 +533,30 @@ fn follow_dotdot_symlink_ambient() {
     check!(symlink_dir("../../..", dir.path().join("a/b/e")));
     check!(symlink_dir("../../../..", dir.path().join("a/b/f")));
 
-    check!(Dir::open_ambient_dir(
-        dir.path().join("a/b/c"),
-        ambient_authority()
-    ));
+    check!(h::open_ambient_dir(dir.path().join("a/b/c")));
     assert!(check!(std::fs::metadata(dir.path().join("a/b/c"))).is_dir());
 
     #[cfg(windows)]
     {
-        error!(
-            Dir::open_ambient_dir(dir.path().join("a/b/d"), ambient_authority()),
-            123
-        );
+        error!(h::open_ambient_dir(dir.path().join("a/b/d")), 123);
         error!(std::fs::metadata(dir.path().join("a/b/d")), 123);
 
-        error!(
-            Dir::open_ambient_dir(dir.path().join("a/b/e"), ambient_authority()),
-            123
-        );
+        error!(h::open_ambient_dir(dir.path().join("a/b/e")), 123);
         error!(std::fs::metadata(dir.path().join("a/b/e")), 123);
 
-        error!(
-            Dir::open_ambient_dir(dir.path().join("a/b/f"), ambient_authority()),
-            123
-        );
+        error!(h::open_ambient_dir(dir.path().join("a/b/f")), 123);
         error!(std::fs::metadata(dir.path().join("a/b/f")), 123);
     }
 
     #[cfg(not(windows))]
     {
-        check!(Dir::open_ambient_dir(
-            dir.path().join("a/b/d"),
-            ambient_authority()
-        ));
+        check!(h::open_ambient_dir(dir.path().join("a/b/d")));
         assert!(check!(std::fs::metadata(dir.path().join("a/b/d"))).is_dir());
 
-        check!(Dir::open_ambient_dir(
-            dir.path().join("a/b/e"),
-            ambient_authority()
-        ));
+        check!(h::open_ambient_dir(dir.path().join("a/b/e")));
         assert!(check!(std::fs::metadata(dir.path().join("a/b/e"))).is_dir());
 
-        check!(Dir::open_ambient_dir(
-            dir.path().join("a/b/f"),
-            ambient_authority()
-        ));
+        check!(h::open_ambient_dir(dir.path().join("a/b/f")));
         assert!(check!(std::fs::metadata(dir.path().join("a/b/f"))).is_dir());
     }
 }
@@ -407,56 +569,28 @@ fn follow_file_symlink() {
 
     let tmpdir = tmpdir();
 
-    check!(tmpdir.create("file"));
+    let start = h::dir_of(&tmpdir);
 
-    check!(symlink_file("file", &tmpdir, "link"));
-    check!(symlink_dir("file/", &tmpdir, "link_slash"));
-    check!(symlink_file("file/.", &tmpdir, "link_slashdot"));
-    check!(symlink_dir("file/..", &tmpdir, "link_slashdotdot"));
+    check!(h::create(&start, "file"));
 
-    check!(tmpdir.open("link"));
-    assert!(tmpdir.open("link_slash").is_err());
+    check!(h::symlink_file(&start, "file", "link"));
+    check!(h::symlink_dir(&start, "file/", "link_slash"));
+    check!(h::symlink_file(&start, "file/.", "link_slashdot"));
+    check!(h::symlink_dir(&start, "file/..", "link_slashdotdot"));
+
+    check!(h::open(&start, "link"));
+    assert!(h::open(&start, "link_slash").is_err());
 
     #[cfg(windows)]
     {
-        error!(tmpdir.open("link_slashdot"), 123);
-        error!(tmpdir.open_dir("link_slashdotdot"), 123);
+        error!(h::open(&start, "link_slashdot"), 123);
+        error!(p::open_dir(&start, Path::new("link_slashdotdot")), 123);
     }
     #[cfg(not(windows))]
     {
-        assert!(tmpdir.open("link_slash").is_err());
-        assert!(tmpdir.open("link_slashdot").is_err());
-        assert!(tmpdir.open_dir("link_slashdotdot").is_err());
-    }
-}
-
-#[cfg(unix)]
-#[test]
-fn check_dot_access() {
-    use cap_std::fs::{DirBuilder, DirBuilderExt};
-
-    let tmpdir = tmpdir();
-
-    let mut options = DirBuilder::new();
-    options.mode(0o477);
-    check!(tmpdir.create_dir_with("dir", &options));
-
-    check!(tmpdir.metadata("."));
-    check!(tmpdir.metadata("dir"));
-    check!(tmpdir.metadata("dir/"));
-    check!(tmpdir.metadata("dir//"));
-
-    if !cfg!(target_os = "freebsd") {
-        assert!(tmpdir.metadata("dir/.").is_err());
-        assert!(tmpdir.metadata("dir/./").is_err());
-        assert!(tmpdir.metadata("dir/.//").is_err());
-        assert!(tmpdir.metadata("dir/./.").is_err());
-        assert!(tmpdir.metadata("dir/.//.").is_err());
-        assert!(tmpdir.metadata("dir/..").is_err());
-        assert!(tmpdir.metadata("dir/../").is_err());
-        assert!(tmpdir.metadata("dir/..//").is_err());
-        assert!(tmpdir.metadata("dir/../.").is_err());
-        assert!(tmpdir.metadata("dir/..//.").is_err());
+        assert!(h::open(&start, "link_slash").is_err());
+        assert!(h::open(&start, "link_slashdot").is_err());
+        assert!(p::open_dir(&start, Path::new("link_slashdotdot")).is_err());
     }
 }
 
@@ -500,26 +634,27 @@ fn check_dot_access_ambient() {
 #[test]
 fn file_with_trailing_slashdot() {
     let tmpdir = tmpdir();
-    check!(tmpdir.create("file"));
-    check!(tmpdir.open("file"));
-    check!(tmpdir.open("file\\."));
-    check!(tmpdir.open("file/."));
-    check!(tmpdir.open("file\\.\\."));
-    check!(tmpdir.open("file/./."));
-    assert!(tmpdir.open("file\\").is_err());
-    assert!(tmpdir.open("file/").is_err());
-    assert!(tmpdir.open("file\\.\\").is_err());
-    assert!(tmpdir.open("file/./").is_err());
-    check!(tmpdir.open_dir("file\\.."));
-    check!(tmpdir.open_dir("file/.."));
-    check!(tmpdir.open_dir("file\\.\\.."));
-    check!(tmpdir.open_dir("file/./.."));
-    check!(tmpdir.open_dir("file\\..\\."));
-    check!(tmpdir.open_dir("file/../."));
-    check!(tmpdir.open_dir("file\\..\\"));
-    check!(tmpdir.open_dir("file/../"));
-    assert!(tmpdir.open_dir("file\\...").is_err());
-    assert!(tmpdir.open_dir("file/...").is_err());
+    let start = h::dir_of(&tmpdir);
+    check!(h::create(&start, "file"));
+    check!(h::open(&start, "file"));
+    check!(h::open(&start, "file\\."));
+    check!(h::open(&start, "file/."));
+    check!(h::open(&start, "file\\.\\."));
+    check!(h::open(&start, "file/./."));
+    assert!(h::open(&start, "file\\").is_err());
+    assert!(h::open(&start, "file/").is_err());
+    assert!(h::open(&start, "file\\.\\").is_err());
+    assert!(h::open(&start, "file/./").is_err());
+    check!(p::open_dir(&start, Path::new("file\\..")));
+    check!(p::open_dir(&start, Path::new("file/..")));
+    check!(p::open_dir(&start, Path::new("file\\.\\..")));
+    check!(p::open_dir(&start, Path::new("file/./..")));
+    check!(p::open_dir(&start, Path::new("file\\..\\.")));
+    check!(p::open_dir(&start, Path::new("file/../.")));
+    check!(p::open_dir(&start, Path::new("file\\..\\")));
+    check!(p::open_dir(&start, Path::new("file/../")));
+    assert!(p::open_dir(&start, Path::new("file\\...")).is_err());
+    assert!(p::open_dir(&start, Path::new("file/...")).is_err());
 }
 
 /// This is just to confirm that Windows really does allow one to open "file/."
@@ -527,8 +662,6 @@ fn file_with_trailing_slashdot() {
 #[cfg(windows)]
 #[test]
 fn file_with_trailing_slashdot_ambient() {
-    use cap_std::ambient_authority;
-    use cap_std::fs::Dir;
     let dir = tempfile::tempdir().unwrap();
     check!(std::fs::File::create(dir.path().join("file")));
     check!(std::fs::File::open(dir.path().join("file")));
@@ -540,36 +673,15 @@ fn file_with_trailing_slashdot_ambient() {
     assert!(std::fs::File::open(dir.path().join("file/")).is_err());
     assert!(std::fs::File::open(dir.path().join("file\\.\\")).is_err());
     assert!(std::fs::File::open(dir.path().join("file/./")).is_err());
-    check!(Dir::open_ambient_dir(
-        dir.path().join("file/.."),
-        ambient_authority()
-    ));
-    check!(Dir::open_ambient_dir(
-        dir.path().join("file\\.\\.."),
-        ambient_authority()
-    ));
-    check!(Dir::open_ambient_dir(
-        dir.path().join("file/./.."),
-        ambient_authority()
-    ));
-    check!(Dir::open_ambient_dir(
-        dir.path().join("file\\..\\."),
-        ambient_authority()
-    ));
-    check!(Dir::open_ambient_dir(
-        dir.path().join("file/../."),
-        ambient_authority()
-    ));
-    check!(Dir::open_ambient_dir(
-        dir.path().join("file\\..\\"),
-        ambient_authority()
-    ));
-    check!(Dir::open_ambient_dir(
-        dir.path().join("file/../"),
-        ambient_authority()
-    ));
-    assert!(Dir::open_ambient_dir(dir.path().join("file\\..."), ambient_authority()).is_err());
-    assert!(Dir::open_ambient_dir(dir.path().join("file/..."), ambient_authority()).is_err());
+    check!(h::open_ambient_dir(dir.path().join("file/..")));
+    check!(h::open_ambient_dir(dir.path().join("file\\.\\..")));
+    check!(h::open_ambient_dir(dir.path().join("file/./..")));
+    check!(h::open_ambient_dir(dir.path().join("file\\..\\.")));
+    check!(h::open_ambient_dir(dir.path().join("file/../.")));
+    check!(h::open_ambient_dir(dir.path().join("file\\..\\")));
+    check!(h::open_ambient_dir(dir.path().join("file/../")));
+    assert!(h::open_ambient_dir(dir.path().join("file\\...")).is_err());
+    assert!(h::open_ambient_dir(dir.path().join("file/...")).is_err());
 }
 
 #[cfg(all(
@@ -582,23 +694,6 @@ fn file_with_trailing_slashdot_ambient() {
         target_os = "visionos",
     ))
 ))]
-#[test]
-fn dir_searchable_unreadable() {
-    use cap_std::fs::{DirBuilder, DirBuilderExt};
-
-    let tmpdir = tmpdir();
-
-    let mut options = DirBuilder::new();
-    options.mode(0o333);
-    check!(tmpdir.create_dir_with("dir", &options));
-    check!(tmpdir.create_dir_with("dir/writeable_subdir", &options));
-    options.mode(0o111);
-    check!(tmpdir.create_dir_with("dir/subdir", &options));
-
-    assert!(check!(tmpdir.metadata("dir/.")).is_dir());
-    assert!(check!(tmpdir.metadata("dir/subdir")).is_dir());
-    assert!(check!(tmpdir.metadata("dir/subdir/.")).is_dir());
-}
 
 /// This test is the same as `dir_searchable_unreadable` but uses `std::fs`'
 /// ambient API instead of `cap_std`. The purpose of this test is to
@@ -641,45 +736,6 @@ fn dir_searchable_unreadable_ambient() {
     target_os = "watchos",
     target_os = "visionos",
 ))]
-#[test]
-fn dir_searchable_unreadable() {
-    use cap_std::fs::{DirBuilder, DirBuilderExt};
-
-    let tmpdir = tmpdir();
-
-    let mut options = DirBuilder::new();
-    options.mode(0o333);
-    check!(tmpdir.create_dir_with("dir", &options));
-    assert!(tmpdir
-        .create_dir_with("dir/writeable_subdir", &options)
-        .is_err());
-}
-
-/// Test opening a directory with no permissions.
-#[cfg(unix)]
-#[test]
-fn dir_unsearchable_unreadable() {
-    use cap_std::fs::{DirBuilder, DirBuilderExt};
-
-    let tmpdir = tmpdir();
-
-    let mut options = DirBuilder::new();
-    options.mode(0o000);
-    check!(tmpdir.create_dir_with("dir", &options));
-
-    // Platforms with `O_PATH` can open a directory with no permissions.
-    if cfg!(any(
-        target_os = "android",
-        target_os = "linux",
-        target_os = "redox",
-    )) {
-        let dir = check!(tmpdir.open_dir("dir"));
-        assert!(dir.entries().is_err());
-        assert!(dir.open_dir(".").is_err());
-    } else if !cfg!(target_os = "freebsd") {
-        assert!(tmpdir.open_dir("dir").is_err());
-    }
-}
 
 /// Like `dir_unsearchable_unreadable`, but uses ambient-authority APIs
 /// to test underlying host functionality.
@@ -781,161 +837,91 @@ fn symlink_hard_link() {
 
     let tmpdir = tmpdir();
 
-    check!(tmpdir.create("file"));
-    check!(symlink_file("file", &tmpdir, "symlink"));
-    check!(tmpdir.hard_link("symlink", &tmpdir, "hard_link"));
-    assert!(check!(tmpdir.symlink_metadata("hard_link"))
-        .file_type()
-        .is_symlink());
-    let _ = check!(tmpdir.open("file"));
-    assert!(tmpdir.open("file.renamed").is_err());
-    let _ = check!(tmpdir.open("symlink"));
-    let _ = check!(tmpdir.open("hard_link"));
-    check!(tmpdir.rename("file", &tmpdir, "file.renamed"));
-    assert!(tmpdir.open("file").is_err());
-    let _ = check!(tmpdir.open("file.renamed"));
-    assert!(tmpdir.open("symlink").is_err());
-    assert!(tmpdir.open("hard_link").is_err());
-    assert!(tmpdir.read_link("file").is_err());
-    assert!(tmpdir.read_link("file.renamed").is_err());
-    assert_eq!(check!(tmpdir.read_link("symlink")), Path::new("file"));
-    assert_eq!(check!(tmpdir.read_link("hard_link")), Path::new("file"));
-    check!(tmpdir.remove_file("file.renamed"));
-    assert!(tmpdir.open("file").is_err());
-    assert!(tmpdir.open("file.renamed").is_err());
-    assert!(tmpdir.open("symlink").is_err());
-    assert!(tmpdir.open("hard_link").is_err());
-    assert!(check!(tmpdir.symlink_metadata("hard_link"))
-        .file_type()
-        .is_symlink());
+    let start = h::dir_of(&tmpdir);
+
+    check!(h::create(&start, "file"));
+    check!(h::symlink_file(&start, "file", "symlink"));
+    check!(p::hard_link(
+        &start,
+        Path::new("symlink"),
+        &start,
+        Path::new("hard_link")
+    ));
+    assert!(
+        check!(h::symlink_metadata(&start, "hard_link"))
+            .file_type()
+            .is_symlink()
+    );
+    let _ = check!(h::open(&start, "file"));
+    assert!(h::open(&start, "file.renamed").is_err());
+    let _ = check!(h::open(&start, "symlink"));
+    let _ = check!(h::open(&start, "hard_link"));
+    check!(p::rename(
+        &start,
+        Path::new("file"),
+        &start,
+        Path::new("file.renamed")
+    ));
+    assert!(h::open(&start, "file").is_err());
+    let _ = check!(h::open(&start, "file.renamed"));
+    assert!(h::open(&start, "symlink").is_err());
+    assert!(h::open(&start, "hard_link").is_err());
+    assert!(p::read_link(&start, Path::new("file")).is_err());
+    assert!(p::read_link(&start, Path::new("file.renamed")).is_err());
+    assert_eq!(
+        check!(p::read_link(&start, Path::new("symlink"))),
+        Path::new("file")
+    );
+    assert_eq!(
+        check!(p::read_link(&start, Path::new("hard_link"))),
+        Path::new("file")
+    );
+    check!(p::remove_file(&start, Path::new("file.renamed")));
+    assert!(h::open(&start, "file").is_err());
+    assert!(h::open(&start, "file.renamed").is_err());
+    assert!(h::open(&start, "symlink").is_err());
+    assert!(h::open(&start, "hard_link").is_err());
+    assert!(
+        check!(h::symlink_metadata(&start, "hard_link"))
+            .file_type()
+            .is_symlink()
+    );
 }
 
 #[test]
 fn readdir_with_trailing_slashdot() {
     let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("dir"));
-    check!(tmpdir.create("dir/red"));
-    check!(tmpdir.create("dir/green"));
-    check!(tmpdir.create("dir/blue"));
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "dir"));
+    check!(h::create(&start, "dir/red"));
+    check!(h::create(&start, "dir/green"));
+    check!(h::create(&start, "dir/blue"));
 
-    assert_eq!(check!(tmpdir.read_dir("dir")).count(), 3);
-    assert_eq!(check!(tmpdir.read_dir("dir/")).count(), 3);
-    assert_eq!(check!(tmpdir.read_dir("dir/.")).count(), 3);
-}
-
-#[test]
-fn readdir_write() {
-    let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("dir"));
-    assert!(tmpdir
-        .open_with("dir", OpenOptions::new().write(true))
-        .is_err());
-    assert!(tmpdir
-        .open_with("dir", OpenOptions::new().append(true))
-        .is_err());
-    assert!(tmpdir
-        .open_with("dir/", OpenOptions::new().write(true))
-        .is_err());
-    assert!(tmpdir
-        .open_with("dir/", OpenOptions::new().append(true))
-        .is_err());
-
-    #[cfg(any(target_os = "android", target_os = "linux"))]
-    {
-        use cap_std::fs::OpenOptionsExt;
-        assert!(tmpdir
-            .open_with(
-                "dir",
-                OpenOptions::new()
-                    .write(true)
-                    .custom_flags(rustix::fs::OFlags::DIRECTORY.bits() as i32)
-            )
-            .is_err());
-        assert!(tmpdir
-            .open_with(
-                "dir",
-                OpenOptions::new()
-                    .append(true)
-                    .custom_flags(rustix::fs::OFlags::DIRECTORY.bits() as i32)
-            )
-            .is_err());
-    }
-}
-
-#[test]
-fn maybe_dir() {
-    use cap_fs_ext::OpenOptionsMaybeDirExt;
-
-    let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("dir"));
-
-    // Opening directories works on non-Windows platforms.
-    #[cfg(not(windows))]
-    check!(tmpdir.open("dir"));
-
-    // Opening directories fails on Windows.
-    #[cfg(windows)]
-    assert!(tmpdir.open("dir").is_err());
-
-    // Opening directories works on all platforms with `maybe_dir`.
-    check!(tmpdir.open_with("dir", OpenOptions::new().read(true).maybe_dir(true)));
-}
-
-#[test]
-fn sync() {
-    use cap_fs_ext::OpenOptionsSyncExt;
-
-    let tmpdir = tmpdir();
-    check!(tmpdir.create("file"));
-
-    check!(tmpdir.open_with("file", OpenOptions::new().write(true).sync(true)));
-    check!(tmpdir.open_with("file", OpenOptions::new().write(true).dsync(true)));
-    check!(tmpdir.open_with(
-        "file",
-        OpenOptions::new()
-            .read(true)
-            .write(true)
-            .sync(true)
-            .rsync(true)
-    ));
-    check!(tmpdir.open_with(
-        "file",
-        OpenOptions::new()
-            .read(true)
-            .write(true)
-            .dsync(true)
-            .rsync(true)
-    ));
-}
-
-#[test]
-fn reopen_fd() {
-    use io_lifetimes::AsFilelike;
-    let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("subdir"));
-    let tmpdir2 = check!(cap_std::fs::Dir::reopen_dir(&tmpdir.as_filelike()));
-    assert!(tmpdir2.exists("subdir"));
+    assert_eq!(check!(h::read_dir(&start, "dir")).count(), 3);
+    assert_eq!(check!(h::read_dir(&start, "dir/")).count(), 3);
+    assert_eq!(check!(h::read_dir(&start, "dir/.")).count(), 3);
 }
 
 #[test]
 fn metadata_vs_std_fs() {
     let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("dir"));
-    let dir = check!(tmpdir.open_dir("dir"));
-    let file = check!(dir.create("file"));
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "dir"));
+    let dir = check!(p::open_dir(&start, Path::new("dir")));
+    let file = check!(h::create(&dir, "file"));
 
-    let cap_std_dir = check!(dir.dir_metadata());
-    let cap_std_file = check!(file.metadata());
+    let cap_std_dir = check!(p::Metadata::from_file(&dir));
+    let cap_std_file = check!(p::Metadata::from_file(&file));
     let cap_std_dir_entry = {
-        let mut entries = check!(dir.entries());
+        let mut entries = check!(p::read_base_dir(&dir));
         let entry = check!(entries.next().unwrap());
         assert_eq!(entry.file_name(), "file");
         assert!(entries.next().is_none(), "unexpected dir entry");
         check!(entry.metadata())
     };
 
-    let std_dir = check!(dir.into_std_file().metadata());
-    let std_file = check!(file.into_std().metadata());
+    let std_dir = check!(dir.metadata());
+    let std_file = check!(file.metadata());
 
     match std_dir.created() {
         Ok(_) => println!("std::fs supports file created times"),
@@ -947,10 +933,10 @@ fn metadata_vs_std_fs() {
     check_metadata(&std_file, &cap_std_dir_entry);
 }
 
-fn check_metadata(std: &std::fs::Metadata, cap: &cap_std::fs::Metadata) {
+fn check_metadata(std: &std::fs::Metadata, cap: &p::Metadata) {
     assert_eq!(std.is_dir(), cap.is_dir());
-    assert_eq!(std.is_file(), cap.is_file());
-    assert_eq!(std.is_symlink(), cap.is_symlink());
+    assert_eq!(std.is_file(), cap.file_type().is_file());
+    assert_eq!(std.is_symlink(), cap.file_type().is_symlink());
     assert_eq!(std.file_type().is_dir(), cap.file_type().is_dir());
     assert_eq!(std.file_type().is_file(), cap.file_type().is_file());
     assert_eq!(std.file_type().is_symlink(), cap.file_type().is_symlink());
@@ -958,38 +944,20 @@ fn check_metadata(std: &std::fs::Metadata, cap: &cap_std::fs::Metadata) {
     {
         assert_eq!(
             std::os::unix::fs::FileTypeExt::is_block_device(&std.file_type()),
-            cap_std::fs::FileTypeExt::is_block_device(&cap.file_type())
+            p::FileTypeExt::is_block_device(&cap.file_type())
         );
         assert_eq!(
             std::os::unix::fs::FileTypeExt::is_char_device(&std.file_type()),
-            cap_std::fs::FileTypeExt::is_char_device(&cap.file_type())
-        );
-        assert_eq!(
-            std::os::unix::fs::FileTypeExt::is_fifo(&std.file_type()),
-            cap_std::fs::FileTypeExt::is_fifo(&cap.file_type())
-        );
-        assert_eq!(
-            std::os::unix::fs::FileTypeExt::is_socket(&std.file_type()),
-            cap_std::fs::FileTypeExt::is_socket(&cap.file_type())
+            p::FileTypeExt::is_char_device(&cap.file_type())
         );
     }
 
     assert_eq!(std.len(), cap.len());
 
-    assert_eq!(std.permissions().readonly(), cap.permissions().readonly());
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            std.permissions().mode(),
-            cap_std::fs::PermissionsExt::mode(&cap.permissions())
-        );
-    }
-
     // If the standard library supports file modified/accessed/created times,
-    // then cap-std should too.
+    // then the primitives should too.
     match std.modified() {
-        Ok(expected) => assert_eq!(expected, check!(cap.modified()).into_std()),
+        Ok(expected) => assert_eq!(expected, check!(cap.modified())),
         Err(e) => assert!(
             cap.modified().is_err(),
             "modified time should be error ({}), got {:#?}",
@@ -1005,7 +973,7 @@ fn check_metadata(std: &std::fs::Metadata, cap: &cap_std::fs::Metadata) {
             let access_tolerance = std::time::Duration::from_secs(ACCESS_TOLERANCE_SEC.into());
             assert!(
                 ((expected - access_tolerance)..(expected + access_tolerance))
-                    .contains(&check!(cap.accessed()).into_std()),
+                    .contains(&check!(cap.accessed())),
                 "std accessed {:#?}, cap accessed {:#?}",
                 expected,
                 cap.accessed()
@@ -1019,7 +987,7 @@ fn check_metadata(std: &std::fs::Metadata, cap: &cap_std::fs::Metadata) {
         ),
     }
     match std.created() {
-        Ok(expected) => assert_eq!(expected, check!(cap.created()).into_std()),
+        Ok(expected) => assert_eq!(expected, check!(cap.created())),
         Err(e) => {
             // An earlier bug returned the Unix epoch instead of `None` when
             // created times were unavailable. This tries to catch such errors,
@@ -1030,7 +998,7 @@ fn check_metadata(std: &std::fs::Metadata, cap: &cap_std::fs::Metadata) {
                     "std returned error for created time ({}) but got {:#?}",
                     e, actual
                 );
-                assert_ne!(actual, SystemClock::UNIX_EPOCH);
+                assert_ne!(actual, std::time::SystemTime::UNIX_EPOCH);
             }
         }
     }
@@ -1038,29 +1006,9 @@ fn check_metadata(std: &std::fs::Metadata, cap: &cap_std::fs::Metadata) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        assert_eq!(std.dev(), cap_std::fs::MetadataExt::dev(cap));
-        assert_eq!(std.ino(), cap_std::fs::MetadataExt::ino(cap));
-        assert_eq!(std.mode(), cap_std::fs::MetadataExt::mode(cap));
-        assert_eq!(std.nlink(), cap_std::fs::MetadataExt::nlink(cap));
-        assert_eq!(std.uid(), cap_std::fs::MetadataExt::uid(cap));
-        assert_eq!(std.gid(), cap_std::fs::MetadataExt::gid(cap));
-        assert_eq!(std.rdev(), cap_std::fs::MetadataExt::rdev(cap));
-        assert_eq!(std.size(), cap_std::fs::MetadataExt::size(cap));
-        assert!(
-            ((std.atime() - i64::from(ACCESS_TOLERANCE_SEC))
-                ..(std.atime() + i64::from(ACCESS_TOLERANCE_SEC)))
-                .contains(&cap_std::fs::MetadataExt::atime(cap)),
-            "std atime {}, cap atime {}",
-            std.atime(),
-            cap_std::fs::MetadataExt::atime(cap)
-        );
-        assert!((0..1_000_000_000).contains(&cap_std::fs::MetadataExt::atime_nsec(cap)));
-        assert_eq!(std.mtime(), cap_std::fs::MetadataExt::mtime(cap));
-        assert_eq!(std.mtime_nsec(), cap_std::fs::MetadataExt::mtime_nsec(cap));
-        assert_eq!(std.ctime(), cap_std::fs::MetadataExt::ctime(cap));
-        assert_eq!(std.ctime_nsec(), cap_std::fs::MetadataExt::ctime_nsec(cap));
-        assert_eq!(std.blksize(), cap_std::fs::MetadataExt::blksize(cap));
-        assert_eq!(std.blocks(), cap_std::fs::MetadataExt::blocks(cap));
+        assert_eq!(std.dev(), p::MetadataExt::dev(cap));
+        assert_eq!(std.ino(), p::MetadataExt::ino(cap));
+        assert_eq!(std.nlink(), p::MetadataExt::nlink(cap));
     }
 }
 
@@ -1069,15 +1017,16 @@ fn check_metadata(std: &std::fs::Metadata, cap: &cap_std::fs::Metadata) {
 #[test]
 fn dotdot_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.write("target", foo));
-    check!(tmpdir.create_dir("b"));
-    let b = check!(tmpdir.open_dir("b"));
-    check!(symlink_dir("..", &b, "up"));
+    check!(h::write(&start, "target", foo));
+    check!(h::create_dir(&start, "b"));
+    let b = check!(p::open_dir(&start, Path::new("b")));
+    check!(h::symlink_dir(&b, "..", "up"));
 
     let path = "b/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
@@ -1090,15 +1039,16 @@ fn dotdot_in_middle_of_symlink() {
 #[cfg_attr(windows, ignore)]
 fn dotdot_slashdot_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.write("target", foo));
-    check!(tmpdir.create_dir("b"));
-    let b = check!(tmpdir.open_dir("b"));
-    check!(symlink_dir("../.", &b, "up"));
+    check!(h::write(&start, "target", foo));
+    check!(h::create_dir(&start, "b"));
+    let b = check!(p::open_dir(&start, Path::new("b")));
+    check!(h::symlink_dir(&b, "../.", "up"));
 
     let path = "b/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
@@ -1111,15 +1061,16 @@ fn dotdot_slashdot_in_middle_of_symlink() {
 #[cfg_attr(windows, ignore)]
 fn dotdot_more_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.write("target", foo));
-    check!(tmpdir.create_dir_all("b/c"));
-    let b = check!(tmpdir.open_dir("b"));
-    check!(symlink_dir("c/../..", &b, "up"));
+    check!(h::write(&start, "target", foo));
+    check!(h::create_dir_all(&start, "b/c"));
+    let b = check!(p::open_dir(&start, Path::new("b")));
+    check!(h::symlink_dir(&b, "c/../..", "up"));
 
     let path = "b/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
@@ -1132,15 +1083,16 @@ fn dotdot_more_in_middle_of_symlink() {
 #[cfg_attr(windows, ignore)]
 fn dotdot_slashdot_more_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.write("target", foo));
-    check!(tmpdir.create_dir_all("b/c"));
-    let b = check!(tmpdir.open_dir("b"));
-    check!(symlink_dir("c/../../.", &b, "up"));
+    check!(h::write(&start, "target", foo));
+    check!(h::create_dir_all(&start, "b/c"));
+    let b = check!(p::open_dir(&start, Path::new("b")));
+    check!(h::symlink_dir(&b, "c/../../.", "up"));
 
     let path = "b/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
@@ -1154,15 +1106,16 @@ fn dotdot_slashdot_more_in_middle_of_symlink() {
 #[cfg_attr(windows, ignore)]
 fn dotdot_other_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.write("target", foo));
-    check!(tmpdir.create_dir_all("b/c"));
-    let c = check!(tmpdir.open_dir("b/c"));
-    check!(symlink_dir("../..", &c, "up"));
+    check!(h::write(&start, "target", foo));
+    check!(h::create_dir_all(&start, "b/c"));
+    let c = check!(p::open_dir(&start, Path::new("b/c")));
+    check!(h::symlink_dir(&c, "../..", "up"));
 
     let path = "b/c/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
@@ -1175,15 +1128,16 @@ fn dotdot_other_in_middle_of_symlink() {
 #[cfg_attr(windows, ignore)]
 fn dotdot_slashdot_other_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.write("target", foo));
-    check!(tmpdir.create_dir_all("b/c"));
-    let c = check!(tmpdir.open_dir("b/c"));
-    check!(symlink_dir("../../.", &c, "up"));
+    check!(h::write(&start, "target", foo));
+    check!(h::create_dir_all(&start, "b/c"));
+    let c = check!(p::open_dir(&start, Path::new("b/c")));
+    check!(h::symlink_dir(&c, "../../.", "up"));
 
     let path = "b/c/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
@@ -1194,15 +1148,16 @@ fn dotdot_slashdot_other_in_middle_of_symlink() {
 #[test]
 fn dotdot_even_more_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.create_dir_all("b/c"));
-    check!(tmpdir.write("b/target", foo));
-    let b = check!(tmpdir.open_dir("b"));
-    check!(symlink_dir("c/../../b", &b, "up"));
+    check!(h::create_dir_all(&start, "b/c"));
+    check!(h::write(&start, "b/target", foo));
+    let b = check!(p::open_dir(&start, Path::new("b")));
+    check!(h::symlink_dir(&b, "c/../../b", "up"));
 
     let path = "b/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
@@ -1215,15 +1170,16 @@ fn dotdot_even_more_in_middle_of_symlink() {
 #[cfg_attr(windows, ignore)]
 fn dotdot_slashdot_even_more_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.create_dir_all("b/c"));
-    check!(tmpdir.write("b/target", foo));
-    let b = check!(tmpdir.open_dir("b"));
-    check!(symlink_dir("c/../../b/.", &b, "up"));
+    check!(h::create_dir_all(&start, "b/c"));
+    check!(h::write(&start, "b/target", foo));
+    let b = check!(p::open_dir(&start, Path::new("b")));
+    check!(h::symlink_dir(&b, "c/../../b/.", "up"));
 
     let path = "b/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
@@ -1234,15 +1190,16 @@ fn dotdot_slashdot_even_more_in_middle_of_symlink() {
 #[test]
 fn dotdot_even_other_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.create_dir_all("b/c"));
-    check!(tmpdir.write("b/target", foo));
-    let c = check!(tmpdir.open_dir("b/c"));
-    check!(symlink_dir("../../b", &c, "up"));
+    check!(h::create_dir_all(&start, "b/c"));
+    check!(h::write(&start, "b/target", foo));
+    let c = check!(p::open_dir(&start, Path::new("b/c")));
+    check!(h::symlink_dir(&c, "../../b", "up"));
 
     let path = "b/c/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
@@ -1255,160 +1212,58 @@ fn dotdot_even_other_in_middle_of_symlink() {
 #[cfg_attr(windows, ignore)]
 fn dotdot_slashdot_even_other_in_middle_of_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     let foo = b"foo";
-    check!(tmpdir.create_dir_all("b/c"));
-    check!(tmpdir.write("b/target", foo));
-    let c = check!(tmpdir.open_dir("b/c"));
-    check!(symlink_dir("../../b/.", &c, "up"));
+    check!(h::create_dir_all(&start, "b/c"));
+    check!(h::write(&start, "b/target", foo));
+    let c = check!(p::open_dir(&start, Path::new("b/c")));
+    check!(h::symlink_dir(&c, "../../b/.", "up"));
 
     let path = "b/c/up/target";
-    let mut file = check!(tmpdir.open(path));
+    let mut file = check!(h::open(&start, path));
     let mut data = Vec::new();
     check!(file.read_to_end(&mut data));
     assert_eq!(data, foo);
-}
-
-/// Similar to `dotdot_in_middle_of_symlink`, but this time the symlink to
-/// `..` does happen to be the end of the path, so we need to make sure
-/// the implementation doesn't just do a stack pop when it sees the `..`
-/// leaving us with an `O_PATH` directory handle.
-#[test]
-fn dotdot_at_end_of_symlink() {
-    let tmpdir = tmpdir();
-
-    let foo = b"foo";
-    check!(tmpdir.write("target", foo));
-    check!(tmpdir.create_dir("b"));
-    let b = check!(tmpdir.open_dir("b"));
-    check!(symlink_dir("..", &b, "up"));
-
-    // Do some things with `path` that might break with an `O_PATH` fd.
-    // On Linux, the `permissions` part doesn't because cap-std uses
-    // /proc/self/fd. But the `read_dir` part does.
-    let path = "b/up";
-
-    let perms = check!(tmpdir.metadata(path)).permissions();
-    check!(tmpdir.set_permissions(path, perms));
-
-    let contents = check!(tmpdir.read_dir(path));
-    for entry in contents {
-        let _entry = check!(entry);
-    }
-}
-
-/// Like `dotdot_at_end_of_symlink`, but with a `/.` at the end.
-///
-/// Windows doesn't appear to like symlinks that end with `/.`.
-#[test]
-#[cfg_attr(windows, ignore)]
-fn dotdot_slashdot_at_end_of_symlink() {
-    let tmpdir = tmpdir();
-
-    let foo = b"foo";
-    check!(tmpdir.write("target", foo));
-    check!(tmpdir.create_dir("b"));
-    let b = check!(tmpdir.open_dir("b"));
-    check!(symlink_dir("../.", &b, "up"));
-
-    // Do some things with `path` that might break with an `O_PATH` fd.
-    // On Linux, the `permissions` part doesn't because cap-std uses
-    // /proc/self/fd. But the `read_dir` part does.
-    let path = "b/up";
-
-    let perms = check!(tmpdir.metadata(path)).permissions();
-    check!(tmpdir.set_permissions(path, perms));
-
-    let contents = check!(tmpdir.read_dir(path));
-    for entry in contents {
-        let _entry = check!(entry);
-    }
-}
-
-/// Like `dotdot_at_end_of_symlink`, but do everything inside a new directory,
-/// so that `MaybeOwnedFile` doesn't reopen `.` which would artificially give
-/// us a non-`O_PATH` fd.
-#[test]
-fn dotdot_at_end_of_symlink_all_inside_dir() {
-    let tmpdir = tmpdir();
-
-    let foo = b"foo";
-    check!(tmpdir.create_dir("dir"));
-    check!(tmpdir.write("dir/target", foo));
-    check!(tmpdir.create_dir("dir/b"));
-    let b = check!(tmpdir.open_dir("dir/b"));
-    check!(symlink_dir("..", &b, "up"));
-
-    // Do some things with `path` that might break with an `O_PATH` fd.
-    // On Linux, the `permissions` part doesn't because cap-std uses
-    // /proc/self/fd. But the `read_dir` part does.
-    let path = "dir/b/up";
-
-    let perms = check!(tmpdir.metadata(path)).permissions();
-    check!(tmpdir.set_permissions(path, perms));
-
-    let contents = check!(tmpdir.read_dir(path));
-    for entry in contents {
-        let _entry = check!(entry);
-    }
-}
-
-/// `dotdot_at_end_of_symlink_all_inside_dir`, but with a `/.` at the end.
-///
-/// Windows doesn't appear to like symlinks that end with `/.`.
-#[test]
-#[cfg_attr(windows, ignore)]
-fn dotdot_slashdot_at_end_of_symlink_all_inside_dir() {
-    let tmpdir = tmpdir();
-
-    let foo = b"foo";
-    check!(tmpdir.create_dir("dir"));
-    check!(tmpdir.write("dir/target", foo));
-    check!(tmpdir.create_dir("dir/b"));
-    let b = check!(tmpdir.open_dir("dir/b"));
-    check!(symlink_dir("../.", &b, "up"));
-
-    // Do some things with `path` that might break with an `O_PATH` fd.
-    // On Linux, the `permissions` part doesn't because cap-std uses
-    // /proc/self/fd. But the `read_dir` part does.
-    let path = "dir/b/up";
-
-    let perms = check!(tmpdir.metadata(path)).permissions();
-    check!(tmpdir.set_permissions(path, perms));
-
-    let contents = check!(tmpdir.read_dir(path));
-    for entry in contents {
-        let _entry = check!(entry);
-    }
 }
 
 /// Ensure that a path of "/" is rejected.
 #[test]
 fn statat_slash() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     // FreeBSD 14+ uses `O_RESOLVE_BENEATH` which issues different errors.
     #[cfg(target_os = "freebsd")]
     {
-        error_contains!(tmpdir.metadata("/"), "Capabilities insufficient");
-        error_contains!(tmpdir.metadata("/foo"), "Capabilities insufficient");
-        error_contains!(tmpdir.symlink_metadata("/"), "Capabilities insufficient");
-        error_contains!(tmpdir.symlink_metadata("/foo"), "Capabilities insufficient");
+        error_contains!(h::metadata(&start, "/"), "Capabilities insufficient");
+        error_contains!(h::metadata(&start, "/foo"), "Capabilities insufficient");
+        error_contains!(
+            h::symlink_metadata(&start, "/"),
+            "Capabilities insufficient"
+        );
+        error_contains!(
+            h::symlink_metadata(&start, "/foo"),
+            "Capabilities insufficient"
+        );
     }
 
     #[cfg(not(target_os = "freebsd"))]
     {
-        error_contains!(tmpdir.metadata("/"), "a path led outside of the filesystem");
         error_contains!(
-            tmpdir.metadata("/foo"),
+            h::metadata(&start, "/"),
             "a path led outside of the filesystem"
         );
         error_contains!(
-            tmpdir.symlink_metadata("/"),
+            h::metadata(&start, "/foo"),
+            "a path led outside of the filesystem"
+        );
+        error_contains!(
+            h::symlink_metadata(&start, "/"),
             "a path led outside of the filesyste"
         );
         error_contains!(
-            tmpdir.symlink_metadata("/foo"),
+            h::symlink_metadata(&start, "/foo"),
             "a path led outside of the filesyste"
         );
     }
@@ -1418,24 +1273,21 @@ fn statat_slash() {
 #[test]
 fn trailing_slash_symlink() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
-    check!(tmpdir.create_dir("sandbox"));
-    check!(symlink_dir("../outside", &tmpdir, "sandbox/hidden"));
-    check!(symlink_dir("hidden/", &tmpdir, "sandbox/indirect"));
+    check!(h::create_dir(&start, "sandbox"));
+    check!(h::symlink_dir(&start, "../outside", "sandbox/hidden"));
+    check!(h::symlink_dir(&start, "hidden/", "sandbox/indirect"));
 
-    let sandbox = check!(tmpdir.open_dir("sandbox"));
+    let sandbox = check!(p::open_dir(&start, Path::new("sandbox")));
 
     for path in ["hidden", "hidden/", "indirect", "indirect/"] {
-        error!(
-            sandbox.open_dir(path),
+        error_contains!(
+            p::open_dir(&sandbox, Path::new(path)),
             "a path led outside of the filesystem"
         );
-        error!(
-            sandbox.read_dir(path),
-            "a path led outside of the filesystem"
-        );
-        error!(
-            sandbox.canonicalize(path),
+        error_contains!(
+            h::read_dir(&sandbox, path),
             "a path led outside of the filesystem"
         );
     }
@@ -1483,9 +1335,9 @@ fn trailing_slash_symlink_more() {
         compile_error!("not implemented yet");
     }
 
-    let tmpdir = check!(Dir::open_ambient_dir(tmpdir.path(), ambient_authority()));
+    let start = check!(h::open_ambient_dir(tmpdir.path()));
 
-    let sandbox = check!(tmpdir.open_dir("sandbox"));
+    let sandbox = check!(p::open_dir(&start, Path::new("sandbox")));
 
     for path in [
         "hidden",
@@ -1495,16 +1347,12 @@ fn trailing_slash_symlink_more() {
         "root_link",
         "root_link/",
     ] {
-        error!(
-            sandbox.open_dir(path),
+        error_contains!(
+            p::open_dir(&sandbox, Path::new(path)),
             "a path led outside of the filesystem"
         );
-        error!(
-            sandbox.read_dir(path),
-            "a path led outside of the filesystem"
-        );
-        error!(
-            sandbox.canonicalize(path),
+        error_contains!(
+            h::read_dir(&sandbox, path),
             "a path led outside of the filesystem"
         );
     }

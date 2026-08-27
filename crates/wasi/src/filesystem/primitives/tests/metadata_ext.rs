@@ -1,24 +1,30 @@
-// This file contains tests for `cap_fs_ext::MetatadaExt`.
+// This file contains tests for `MetadataExt`.
+//
+// `dev`/`ino`/`nlink` are only on the Unix `MetadataExt`.
+#![cfg(unix)]
 
-#[macro_use]
-mod sys_common;
-
-use cap_fs_ext::{DirExt, MetadataExt};
-use sys_common::io::tmpdir;
-use sys_common::symlink_supported;
+use super::helpers as h;
+use super::sys_common::io::tmpdir;
+use super::sys_common::symlink_supported;
+use crate::filesystem::primitives::{
+    FollowSymlinks, Metadata, MetadataExt, hard_link, open_ambient_dir, stat,
+};
+use ambient_authority::ambient_authority;
+use std::path::Path;
 
 #[test]
 fn test_metadata_ext() {
     let tmpdir = tmpdir();
-    let a = check!(tmpdir.create("a"));
-    let b = check!(tmpdir.create("b"));
-    let tmpdir_metadata = check!(tmpdir.dir_metadata());
-    let a_metadata = check!(a.metadata());
-    let b_metadata = check!(b.metadata());
-    let a_dir_metadata = check!(tmpdir.metadata("a"));
-    let b_dir_metadata = check!(tmpdir.metadata("b"));
-    let a_symlink_metadata = check!(tmpdir.symlink_metadata("a"));
-    let b_symlink_metadata = check!(tmpdir.symlink_metadata("b"));
+    let dir = check!(open_ambient_dir(tmpdir.path(), ambient_authority()));
+    let a = check!(h::create(&dir, "a"));
+    let b = check!(h::create(&dir, "b"));
+    let tmpdir_metadata = check!(Metadata::from_file(&dir));
+    let a_metadata = check!(Metadata::from_file(&a));
+    let b_metadata = check!(Metadata::from_file(&b));
+    let a_dir_metadata = check!(stat(&dir, Path::new("a"), FollowSymlinks::Yes));
+    let b_dir_metadata = check!(stat(&dir, Path::new("b"), FollowSymlinks::Yes));
+    let a_symlink_metadata = check!(stat(&dir, Path::new("a"), FollowSymlinks::No));
+    let b_symlink_metadata = check!(stat(&dir, Path::new("b"), FollowSymlinks::No));
 
     // The directory and files inside it should be on the same device.
     assert_eq!(tmpdir_metadata.dev(), a_metadata.dev());
@@ -34,8 +40,8 @@ fn test_metadata_ext() {
     assert_eq!(b_metadata.nlink(), 1);
 
     // Add another link and check for it.
-    check!(tmpdir.hard_link("b", &tmpdir, "c"));
-    let b_metadata = check!(b.metadata());
+    check!(hard_link(&dir, Path::new("b"), &dir, Path::new("c")));
+    let b_metadata = check!(Metadata::from_file(&b));
     assert_eq!(b_metadata.nlink(), 2);
 
     // Check that the metadata has dev/nlink/ino.
@@ -62,9 +68,9 @@ fn test_metadata_ext() {
     b_symlink_metadata.ino();
 
     if symlink_supported() {
-        check!(DirExt::symlink_file(&*tmpdir, "b", "d"));
-        let d_metadata = check!(tmpdir.metadata("d"));
-        let d_symlink_metadata = check!(tmpdir.symlink_metadata("d"));
+        check!(h::symlink_file(&dir, "b", "d"));
+        let d_metadata = check!(stat(&dir, Path::new("d"), FollowSymlinks::Yes));
+        let d_symlink_metadata = check!(stat(&dir, Path::new("d"), FollowSymlinks::No));
 
         d_metadata.dev();
         d_metadata.nlink();

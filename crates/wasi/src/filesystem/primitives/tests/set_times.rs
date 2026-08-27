@@ -1,12 +1,11 @@
-#[macro_use]
-mod sys_common;
+use super::helpers as h;
+use super::sys_common::io::tmpdir;
+use super::sys_common::symlink_supported;
+use crate::filesystem::primitives::{Metadata, SystemTimeSpec, set_times, set_times_nofollow};
+use std::path::Path;
+use std::time::SystemTime;
 
-use cap_fs_ext::DirExt;
-use cap_std::time::{SystemClock, SystemTime};
-use sys_common::io::tmpdir;
-use sys_common::symlink_supported;
-
-fn modified_time(meta: cap_std::fs::Metadata) -> SystemTime {
+fn modified_time(meta: Metadata) -> SystemTime {
     meta.modified().unwrap()
 }
 
@@ -15,29 +14,40 @@ fn basic_times() {
     let test_symlinks = symlink_supported();
 
     let tmpdir = tmpdir();
-    check!(tmpdir.create("file"));
-    check!(tmpdir.create_dir("dir"));
+    let dir = h::dir_of(&tmpdir);
+    check!(h::create(&dir, "file"));
+    check!(h::create_dir(&dir, "dir"));
     if test_symlinks {
-        check!(tmpdir.symlink_file("file", "file_symlink_file"));
-        check!(tmpdir.symlink_dir("dir", "dir_symlink_dir"));
+        check!(h::symlink_file(&dir, "file", "file_symlink_file"));
+        check!(h::symlink_dir(&dir, "dir", "dir_symlink_dir"));
     }
 
-    let file_time = SystemClock::UNIX_EPOCH;
-    check!(tmpdir.set_times("file", None, Some(file_time.into())));
-    assert_eq!(modified_time(check!(tmpdir.metadata("file"))), file_time);
+    let file_time = SystemTime::UNIX_EPOCH;
+    check!(set_times(
+        &dir,
+        Path::new("file"),
+        None,
+        Some(SystemTimeSpec::from(file_time))
+    ));
+    assert_eq!(modified_time(check!(h::metadata(&dir, "file"))), file_time);
     if test_symlinks {
         assert_eq!(
-            modified_time(check!(tmpdir.metadata("file_symlink_file"))),
+            modified_time(check!(h::metadata(&dir, "file_symlink_file"))),
             file_time
         );
     }
 
-    let dir_time = SystemClock::UNIX_EPOCH;
-    check!(tmpdir.set_times("dir", None, Some(dir_time.into())));
-    assert_eq!(modified_time(check!(tmpdir.metadata("dir"))), dir_time);
+    let dir_time = SystemTime::UNIX_EPOCH;
+    check!(set_times(
+        &dir,
+        Path::new("dir"),
+        None,
+        Some(SystemTimeSpec::from(dir_time))
+    ));
+    assert_eq!(modified_time(check!(h::metadata(&dir, "dir"))), dir_time);
     if test_symlinks {
         assert_eq!(
-            modified_time(check!(tmpdir.metadata("dir_symlink_dir"))),
+            modified_time(check!(h::metadata(&dir, "dir_symlink_dir"))),
             dir_time
         );
     }
@@ -50,40 +60,51 @@ fn symlink_times() {
     }
 
     let tmpdir = tmpdir();
-    check!(tmpdir.create("file"));
-    check!(tmpdir.create_dir("dir"));
-    check!(tmpdir.symlink_file("file", "file_symlink_file"));
-    check!(tmpdir.symlink_dir("dir", "dir_symlink_dir"));
+    let dir = h::dir_of(&tmpdir);
+    check!(h::create(&dir, "file"));
+    check!(h::create_dir(&dir, "dir"));
+    check!(h::symlink_file(&dir, "file", "file_symlink_file"));
+    check!(h::symlink_dir(&dir, "dir", "dir_symlink_dir"));
 
-    let file_time = SystemClock::UNIX_EPOCH;
-    check!(tmpdir.set_times("file_symlink_file", None, Some(file_time.into())));
-    assert_eq!(modified_time(check!(tmpdir.metadata("file"))), file_time);
+    let file_time = SystemTime::UNIX_EPOCH;
+    check!(set_times(
+        &dir,
+        Path::new("file_symlink_file"),
+        None,
+        Some(SystemTimeSpec::from(file_time))
+    ));
+    assert_eq!(modified_time(check!(h::metadata(&dir, "file"))), file_time);
     assert_eq!(
-        modified_time(check!(tmpdir.metadata("file_symlink_file"))),
+        modified_time(check!(h::metadata(&dir, "file_symlink_file"))),
         file_time
     );
     assert_eq!(
-        modified_time(check!(tmpdir.symlink_metadata("file"))),
+        modified_time(check!(h::symlink_metadata(&dir, "file"))),
         file_time
     );
     assert_ne!(
-        modified_time(check!(tmpdir.symlink_metadata("file_symlink_file"))),
+        modified_time(check!(h::symlink_metadata(&dir, "file_symlink_file"))),
         file_time
     );
 
-    let dir_time = SystemClock::UNIX_EPOCH;
-    check!(tmpdir.set_times("dir_symlink_dir", None, Some(file_time.into())));
-    assert_eq!(modified_time(check!(tmpdir.metadata("dir"))), dir_time);
+    let dir_time = SystemTime::UNIX_EPOCH;
+    check!(set_times(
+        &dir,
+        Path::new("dir_symlink_dir"),
+        None,
+        Some(SystemTimeSpec::from(file_time))
+    ));
+    assert_eq!(modified_time(check!(h::metadata(&dir, "dir"))), dir_time);
     assert_eq!(
-        modified_time(check!(tmpdir.metadata("dir_symlink_dir"))),
+        modified_time(check!(h::metadata(&dir, "dir_symlink_dir"))),
         dir_time
     );
     assert_eq!(
-        modified_time(check!(tmpdir.symlink_metadata("dir"))),
+        modified_time(check!(h::symlink_metadata(&dir, "dir"))),
         dir_time
     );
     assert_ne!(
-        modified_time(check!(tmpdir.symlink_metadata("dir_symlink_dir"))),
+        modified_time(check!(h::symlink_metadata(&dir, "dir_symlink_dir"))),
         dir_time
     );
 }
@@ -95,40 +116,51 @@ fn symlink_itself_times() {
     }
 
     let tmpdir = tmpdir();
-    check!(tmpdir.create("file"));
-    check!(tmpdir.create_dir("dir"));
-    check!(tmpdir.symlink_file("file", "file_symlink_file"));
-    check!(tmpdir.symlink_dir("dir", "dir_symlink_dir"));
+    let dir = h::dir_of(&tmpdir);
+    check!(h::create(&dir, "file"));
+    check!(h::create_dir(&dir, "dir"));
+    check!(h::symlink_file(&dir, "file", "file_symlink_file"));
+    check!(h::symlink_dir(&dir, "dir", "dir_symlink_dir"));
 
-    let file_time = SystemClock::UNIX_EPOCH;
-    check!(tmpdir.set_symlink_times("file_symlink_file", None, Some(file_time.into())));
-    assert_ne!(modified_time(check!(tmpdir.metadata("file"))), file_time);
+    let file_time = SystemTime::UNIX_EPOCH;
+    check!(set_times_nofollow(
+        &dir,
+        Path::new("file_symlink_file"),
+        None,
+        Some(SystemTimeSpec::from(file_time))
+    ));
+    assert_ne!(modified_time(check!(h::metadata(&dir, "file"))), file_time);
     assert_ne!(
-        modified_time(check!(tmpdir.metadata("file_symlink_file"))),
+        modified_time(check!(h::metadata(&dir, "file_symlink_file"))),
         file_time
     );
     assert_ne!(
-        modified_time(check!(tmpdir.symlink_metadata("file"))),
+        modified_time(check!(h::symlink_metadata(&dir, "file"))),
         file_time
     );
     assert_eq!(
-        modified_time(check!(tmpdir.symlink_metadata("file_symlink_file"))),
+        modified_time(check!(h::symlink_metadata(&dir, "file_symlink_file"))),
         file_time
     );
 
-    let dir_time = SystemClock::UNIX_EPOCH;
-    check!(tmpdir.set_symlink_times("dir_symlink_dir", None, Some(file_time.into())));
-    assert_ne!(modified_time(check!(tmpdir.metadata("dir"))), dir_time);
+    let dir_time = SystemTime::UNIX_EPOCH;
+    check!(set_times_nofollow(
+        &dir,
+        Path::new("dir_symlink_dir"),
+        None,
+        Some(SystemTimeSpec::from(file_time))
+    ));
+    assert_ne!(modified_time(check!(h::metadata(&dir, "dir"))), dir_time);
     assert_ne!(
-        modified_time(check!(tmpdir.metadata("dir_symlink_dir"))),
+        modified_time(check!(h::metadata(&dir, "dir_symlink_dir"))),
         dir_time
     );
     assert_ne!(
-        modified_time(check!(tmpdir.symlink_metadata("dir"))),
+        modified_time(check!(h::symlink_metadata(&dir, "dir"))),
         dir_time
     );
     assert_eq!(
-        modified_time(check!(tmpdir.symlink_metadata("dir_symlink_dir"))),
+        modified_time(check!(h::symlink_metadata(&dir, "dir_symlink_dir"))),
         dir_time
     );
 }

@@ -9,10 +9,14 @@
 // ignore-emscripten no files
 // ignore-sgx no files
 
-mod sys_common;
-
+use super::sys_common::io::tmpdir;
+use crate::filesystem::primitives::{
+    DirOptions, FollowSymlinks, OpenOptions, create_dir, hard_link, open, open_ambient_dir,
+    read_link, remove_dir, remove_file, rename, stat,
+};
+use ambient_authority::ambient_authority;
 use std::io;
-use sys_common::io::tmpdir;
+use std::path::Path;
 
 fn assert_invalid_input<T>(on: &str, result: io::Result<T>) {
     fn inner(on: &str, result: io::Result<()>) {
@@ -39,32 +43,36 @@ fn assert_invalid_input<T>(on: &str, result: io::Result<T>) {
 #[test]
 fn paths_containing_nul() {
     let tmpdir = tmpdir();
+    let dir = open_ambient_dir(tmpdir.path(), ambient_authority()).unwrap();
+    let nul = Path::new("\0");
 
-    assert_invalid_input("File::open", tmpdir.open("\0"));
-    assert_invalid_input("File::create", tmpdir.create("\0"));
-    assert_invalid_input("remove_file", tmpdir.remove_file("\0"));
-    assert_invalid_input("metadata", tmpdir.metadata("\0"));
-    assert_invalid_input("symlink_metadata", tmpdir.symlink_metadata("\0"));
+    assert_invalid_input("open", open(&dir, nul, OpenOptions::new().read(true)));
+    assert_invalid_input(
+        "create",
+        open(
+            &dir,
+            nul,
+            OpenOptions::new().write(true).create(true).truncate(true),
+        ),
+    );
+    assert_invalid_input("remove_file", remove_file(&dir, nul));
+    assert_invalid_input("metadata", stat(&dir, nul, FollowSymlinks::Yes));
+    assert_invalid_input("symlink_metadata", stat(&dir, nul, FollowSymlinks::No));
 
     // Create a file inside the sandbox.
-    let dummy_file = "dummy_file";
-    tmpdir.create(dummy_file).expect("creating dummy_file");
+    let dummy_file = Path::new("dummy_file");
+    open(
+        &dir,
+        dummy_file,
+        OpenOptions::new().write(true).create(true).truncate(true),
+    )
+    .expect("creating dummy_file");
 
-    assert_invalid_input("rename1", tmpdir.rename("\0", &tmpdir, "a"));
-    assert_invalid_input("rename2", tmpdir.rename(&dummy_file, &tmpdir, "\0"));
-    assert_invalid_input("copy1", tmpdir.copy("\0", &tmpdir, "a"));
-    assert_invalid_input("copy2", tmpdir.copy(&dummy_file, &tmpdir, "\0"));
-    assert_invalid_input("hard_link1", tmpdir.hard_link("\0", &tmpdir, "a"));
-    assert_invalid_input("hard_link2", tmpdir.hard_link(&dummy_file, &tmpdir, "\0"));
-    //fixmeassert_invalid_input("soft_link1", tmpdir.soft_link("\0", &tmpdir,
-    // "a")); fixmeassert_invalid_input("soft_link2",
-    // tmpdir.soft_link(&dummy_file, &tmpdir, "\0"));
-    assert_invalid_input("read_link", tmpdir.read_link("\0"));
-    assert_invalid_input("canonicalize", tmpdir.canonicalize("\0"));
-    assert_invalid_input("create_dir", tmpdir.create_dir("\0"));
-    assert_invalid_input("create_dir_all", tmpdir.create_dir_all("\0"));
-    assert_invalid_input("remove_dir", tmpdir.remove_dir("\0"));
-    assert_invalid_input("remove_dir_all", tmpdir.remove_dir_all("\0"));
-    assert_invalid_input("read_dir", tmpdir.read_dir("\0"));
-    // `Dir` has no `set_permissions` function.
+    assert_invalid_input("rename1", rename(&dir, nul, &dir, Path::new("a")));
+    assert_invalid_input("rename2", rename(&dir, dummy_file, &dir, nul));
+    assert_invalid_input("hard_link1", hard_link(&dir, nul, &dir, Path::new("a")));
+    assert_invalid_input("hard_link2", hard_link(&dir, dummy_file, &dir, nul));
+    assert_invalid_input("read_link", read_link(&dir, nul));
+    assert_invalid_input("create_dir", create_dir(&dir, nul, &DirOptions::new()));
+    assert_invalid_input("remove_dir", remove_dir(&dir, nul));
 }

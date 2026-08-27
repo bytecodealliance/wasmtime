@@ -3,133 +3,162 @@
 //! sharing modes to prevent open directories from being removed or renamed.
 //! Test that this works.
 
-#[cfg(windows)]
-#[macro_use]
-mod sys_common;
+#![cfg(windows)]
 
-#[cfg(windows)]
-use sys_common::io::tmpdir;
+use super::helpers as h;
+use super::sys_common::io::tmpdir;
+use crate::filesystem::primitives as p;
+use std::path::Path;
 
 #[test]
-#[cfg(windows)]
 fn windows_open_one() {
     let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("aaa"));
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "aaa"));
 
-    let dir = check!(tmpdir.open_dir("aaa"));
+    let dir = check!(p::open_dir(&start, Path::new("aaa")));
 
     // Attempts to remove or rename the open directory should fail.
-    tmpdir.remove_dir("aaa").unwrap_err();
-    tmpdir.rename("aaa", &tmpdir, "zzz").unwrap_err();
+    p::remove_dir(&start, Path::new("aaa")).unwrap_err();
+    p::rename(&start, Path::new("aaa"), &start, Path::new("zzz")).unwrap_err();
 
     drop(dir);
 
     // Now that we've dropped the handle, the same operations should succeed.
-    check!(tmpdir.rename("aaa", &tmpdir, "xxx"));
-    check!(tmpdir.remove_dir("xxx"));
+    check!(p::rename(
+        &start,
+        Path::new("aaa"),
+        &start,
+        Path::new("xxx")
+    ));
+    check!(p::remove_dir(&start, Path::new("xxx")));
 }
 
 #[test]
-#[cfg(windows)]
 fn windows_open_multiple() {
     let tmpdir = tmpdir();
-    check!(tmpdir.create_dir_all("aaa/bbb"));
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir_all(&start, "aaa/bbb"));
 
-    let dir = check!(tmpdir.open_dir("aaa/bbb"));
+    let dir = check!(p::open_dir(&start, Path::new("aaa/bbb")));
 
     // Attempts to remove or rename any component of the open directory should
     // fail.
-    tmpdir.remove_dir("aaa/bbb").unwrap_err();
-    tmpdir.remove_dir("aaa").unwrap_err();
-    tmpdir.rename("aaa/bbb", &tmpdir, "aaa/yyy").unwrap_err();
-    tmpdir.rename("aaa", &tmpdir, "zzz").unwrap_err();
+    p::remove_dir(&start, Path::new("aaa/bbb")).unwrap_err();
+    p::remove_dir(&start, Path::new("aaa")).unwrap_err();
+    p::rename(&start, Path::new("aaa/bbb"), &start, Path::new("aaa/yyy")).unwrap_err();
+    p::rename(&start, Path::new("aaa"), &start, Path::new("zzz")).unwrap_err();
 
     drop(dir);
 
     // Now that we've dropped the handle, the same operations should succeed.
-    check!(tmpdir.rename("aaa/bbb", &tmpdir, "aaa/www"));
-    check!(tmpdir.rename("aaa", &tmpdir, "xxx"));
-    check!(tmpdir.remove_dir("xxx/www"));
-    check!(tmpdir.remove_dir("xxx"));
+    check!(p::rename(
+        &start,
+        Path::new("aaa/bbb"),
+        &start,
+        Path::new("aaa/www")
+    ));
+    check!(p::rename(
+        &start,
+        Path::new("aaa"),
+        &start,
+        Path::new("xxx")
+    ));
+    check!(p::remove_dir(&start, Path::new("xxx/www")));
+    check!(p::remove_dir(&start, Path::new("xxx")));
 }
 
 /// Like `windows_open_multiple`, but does so within a directory that we
 /// can close and then independently mutate.
 #[test]
-#[cfg(windows)]
 fn windows_open_tricky() {
     let tmpdir = tmpdir();
-    check!(tmpdir.create_dir("qqq"));
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "qqq"));
 
-    let qqq = check!(tmpdir.open_dir("qqq"));
-    check!(qqq.create_dir_all("aaa/bbb"));
+    let qqq = check!(p::open_dir(&start, Path::new("qqq")));
+    check!(h::create_dir_all(&qqq, "aaa/bbb"));
 
-    let dir = check!(qqq.open_dir("aaa/bbb"));
+    let dir = check!(p::open_dir(&qqq, Path::new("aaa/bbb")));
 
     // Now drop `qqq`.
     drop(qqq);
 
     // Attempts to remove or rename any component of the open directory should
     // fail.
-    dir.remove_dir("aaa/bbb").unwrap_err();
-    dir.remove_dir("aaa").unwrap_err();
-    dir.rename("aaa/bbb", &tmpdir, "aaa/yyy").unwrap_err();
-    dir.rename("aaa", &tmpdir, "zzz").unwrap_err();
-    tmpdir.remove_dir("qqq/aaa/bbb").unwrap_err();
-    tmpdir.remove_dir("qqq/aaa").unwrap_err();
-    tmpdir.remove_dir("qqq").unwrap_err();
-    tmpdir
-        .rename("qqq/aaa/bbb", &tmpdir, "qqq/aaa/yyy")
-        .unwrap_err();
-    tmpdir.rename("qqq/aaa", &tmpdir, "qqq/zzz").unwrap_err();
-    tmpdir.rename("qqq", &tmpdir, "vvv").unwrap_err();
+    p::remove_dir(&dir, Path::new("aaa/bbb")).unwrap_err();
+    p::remove_dir(&dir, Path::new("aaa")).unwrap_err();
+    p::rename(&dir, Path::new("aaa/bbb"), &dir, Path::new("aaa/yyy")).unwrap_err();
+    p::rename(&dir, Path::new("aaa"), &dir, Path::new("zzz")).unwrap_err();
+    p::remove_dir(&start, Path::new("qqq/aaa/bbb")).unwrap_err();
+    p::remove_dir(&start, Path::new("qqq/aaa")).unwrap_err();
+    p::remove_dir(&start, Path::new("qqq")).unwrap_err();
+    p::rename(
+        &dir,
+        Path::new("qqq/aaa/bbb"),
+        &dir,
+        Path::new("qqq/aaa/yyy"),
+    )
+    .unwrap_err();
+    p::rename(&start, Path::new("qqq/aaa"), &start, Path::new("qqq/zzz")).unwrap_err();
+    p::rename(&start, Path::new("qqq"), &start, Path::new("vvv")).unwrap_err();
 
     drop(dir);
 
     // Now that we've dropped the handle, the same operations should succeed.
-    check!(tmpdir.rename("qqq/aaa/bbb", &tmpdir, "qqq/aaa/www"));
-    check!(tmpdir.rename("qqq/aaa", &tmpdir, "qqq/xxx"));
-    check!(tmpdir.rename("qqq", &tmpdir, "uuu"));
-    check!(tmpdir.remove_dir("uuu/xxx/www"));
-    check!(tmpdir.remove_dir("uuu/xxx"));
-    check!(tmpdir.remove_dir("uuu"));
+    check!(p::rename(
+        &start,
+        Path::new("qqq/aaa/bbb"),
+        &start,
+        Path::new("qqq/aaa/www")
+    ));
+    check!(p::rename(
+        &start,
+        Path::new("qqq/aaa"),
+        &start,
+        Path::new("qqq/xxx")
+    ));
+    check!(p::rename(
+        &start,
+        Path::new("qqq"),
+        &start,
+        Path::new("uuu")
+    ));
+    check!(p::remove_dir(&start, Path::new("uuu/xxx/www")));
+    check!(p::remove_dir(&start, Path::new("uuu/xxx")));
+    check!(p::remove_dir(&start, Path::new("uuu")));
 }
 
 /// Like `windows_open_one` but uses `open_ambient_dir` instead of `open_dir`.
 #[test]
-#[cfg(windows)]
 fn windows_open_ambient() {
-    use cap_std::ambient_authority;
-    use cap_std::fs::Dir;
-
     let ambient_dir = tempfile::tempdir().unwrap();
 
-    let tmpdir = check!(Dir::open_ambient_dir(
-        ambient_dir.path(),
-        ambient_authority()
-    ));
-    check!(tmpdir.create_dir("aaa"));
+    let start = check!(h::open_ambient_dir(ambient_dir.path()));
+    check!(h::create_dir(&start, "aaa"));
 
-    let dir = check!(Dir::open_ambient_dir(
-        ambient_dir.path().join("aaa"),
-        ambient_authority()
-    ));
+    let dir = check!(h::open_ambient_dir(ambient_dir.path().join("aaa")));
 
     // Attempts to remove or rename the open directory should fail.
-    tmpdir.remove_dir("aaa").unwrap_err();
-    tmpdir.rename("aaa", &tmpdir, "zzz").unwrap_err();
+    p::remove_dir(&start, Path::new("aaa")).unwrap_err();
+    p::rename(&start, Path::new("aaa"), &start, Path::new("zzz")).unwrap_err();
 
     drop(dir);
 
     // Now that we've dropped the handle, the same operations should succeed.
-    check!(tmpdir.rename("aaa", &tmpdir, "xxx"));
-    check!(tmpdir.remove_dir("xxx"));
+    check!(p::rename(
+        &start,
+        Path::new("aaa"),
+        &start,
+        Path::new("xxx")
+    ));
+    check!(p::remove_dir(&start, Path::new("xxx")));
 }
 
 #[test]
-#[cfg(windows)]
 fn windows_open_special() {
     let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
 
     // Opening any of these should fail.
     for device in &[
@@ -155,19 +184,22 @@ fn windows_open_special() {
             let name = format!("{}{}", device, suffix);
             eprintln!("testing '{}'", name);
 
-            match tmpdir.open(&name).unwrap_err().kind() {
+            match h::open(&start, &name).unwrap_err().kind() {
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => {}
                 kind => panic!("unexpected error: {:?}", kind),
             }
 
-            let mut options = cap_std::fs::OpenOptions::new();
+            let mut options = p::OpenOptions::new();
             options.write(true);
-            match tmpdir.open_with(&name, &options).unwrap_err().kind() {
+            match p::open(&start, Path::new(&name), &options)
+                .unwrap_err()
+                .kind()
+            {
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => {}
                 kind => panic!("unexpected error: {:?}", kind),
             }
 
-            match tmpdir.create(&name).unwrap_err().kind() {
+            match h::create(&start, &name).unwrap_err().kind() {
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => {}
                 kind => panic!("unexpected error: {:?}", kind),
             }

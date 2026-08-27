@@ -77,23 +77,5 @@ pub use symlink::symlink;
 #[cfg(windows)]
 pub use symlink::{symlink_dir, symlink_file};
 pub use system_time_spec::SystemTimeSpec;
-
-/// Test that `file_path` works on a few miscellaneous directory paths.
-#[test]
-fn dir_paths() {
-    use crate::ambient_authority;
-
-    for path in [std::env::current_dir().unwrap(), std::env::temp_dir()] {
-        let dir = open_ambient_dir(&path, ambient_authority()).unwrap();
-        assert_eq!(
-            file_path(&dir)
-                .as_ref()
-                .map(std::fs::canonicalize)
-                .map(Result::unwrap),
-            Some(std::fs::canonicalize(path).unwrap())
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests;

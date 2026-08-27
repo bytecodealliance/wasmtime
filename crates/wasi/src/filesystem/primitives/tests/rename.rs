@@ -1,7 +1,8 @@
-#[macro_use]
-mod sys_common;
+use super::helpers as h;
+use super::sys_common::io::tmpdir;
+use crate::filesystem::primitives as p;
 
-use sys_common::io::tmpdir;
+use std::path::Path;
 
 /*
 #[cfg(not(windows))]
@@ -68,111 +69,170 @@ cfg_if::cfg_if! {
 #[cfg_attr(windows, ignore)] // TODO: Blocked on error message discrepancies
 fn rename_basics() {
     let tmpdir = tmpdir();
+    let dir = h::dir_of(&tmpdir);
 
-    check!(tmpdir.create_dir_all("foo/bar"));
-    check!(tmpdir.create("foo/bar/file.txt"));
+    check!(h::create_dir_all(&dir, "foo/bar"));
+    check!(h::create(&dir, "foo/bar/file.txt"));
 
-    check!(tmpdir.rename("foo/bar/file.txt", &tmpdir, "foo/bar/renamed.txt"));
-    assert!(!tmpdir.exists("foo/bar/file.txt"));
-    assert!(tmpdir.exists("foo/bar/renamed.txt"));
+    check!(p::rename(
+        &dir,
+        Path::new("foo/bar/file.txt"),
+        &dir,
+        Path::new("foo/bar/renamed.txt")
+    ));
+    assert!(!h::exists(&dir, "foo/bar/file.txt"));
+    assert!(h::exists(&dir, "foo/bar/renamed.txt"));
 
-    check!(tmpdir.rename("foo/bar/renamed.txt", &tmpdir, "foo/bar/renamed.txt"));
+    check!(p::rename(
+        &dir,
+        Path::new("foo/bar/renamed.txt"),
+        &dir,
+        Path::new("foo/bar/renamed.txt")
+    ));
     error_contains!(
-        tmpdir.rename("foo/bar/renamed.txt", &tmpdir, ".."),
+        p::rename(
+            &dir,
+            Path::new("foo/bar/renamed.txt"),
+            &dir,
+            Path::new("..")
+        ),
         "a path led outside of the filesystem"
     );
     error_contains!(
-        tmpdir.rename("foo/bar/renamed.txt", &tmpdir, "foo/../.."),
+        p::rename(
+            &dir,
+            Path::new("foo/bar/renamed.txt"),
+            &dir,
+            Path::new("foo/../..")
+        ),
         "a path led outside of the filesystem"
     );
     error_contains!(
-        tmpdir.rename("foo/bar/renamed.txt", &tmpdir, "/tmp"),
+        p::rename(
+            &dir,
+            Path::new("foo/bar/renamed.txt"),
+            &dir,
+            Path::new("/tmp")
+        ),
         "a path led outside of the filesystem"
     );
     error_contains!(
-        tmpdir.rename("foo/bar/renamed.txt", &tmpdir, "foo/bar/baz/.."),
+        p::rename(
+            &dir,
+            Path::new("foo/bar/renamed.txt"),
+            &dir,
+            Path::new("foo/bar/baz/..")
+        ),
         &no_such_file_or_directory()
     );
     /* // TODO: Platform-specific error code.
     error!(
-        tmpdir.rename("foo/bar/renamed.txt", &tmpdir, "foo/bar"),
+        p::rename(&dir, Path::new("foo/bar/renamed.txt"), &dir, Path::new("foo/bar")),
         &rename_file_over_dir()
     );
     */
-    check!(tmpdir.rename("foo/bar", &tmpdir, "foo/bar"));
-    check!(tmpdir.rename("foo/bar/renamed.txt", &tmpdir, "file.txt"));
-    assert!(!tmpdir.exists("foo/bar/renamed.txt"));
-    assert!(tmpdir.exists("file.txt"));
+    check!(p::rename(
+        &dir,
+        Path::new("foo/bar"),
+        &dir,
+        Path::new("foo/bar")
+    ));
+    check!(p::rename(
+        &dir,
+        Path::new("foo/bar/renamed.txt"),
+        &dir,
+        Path::new("file.txt")
+    ));
+    assert!(!h::exists(&dir, "foo/bar/renamed.txt"));
+    assert!(h::exists(&dir, "file.txt"));
 
     /* // TODO: Platform-specific error code.
     error_contains!(
-        tmpdir.rename("file.txt", &tmpdir, "foo/.."),
+        p::rename(&dir, Path::new("file.txt"), &dir, Path::new("foo/..")),
         &rename_path_in_use()
     );
     error_contains!(
-        tmpdir.rename("file.txt", &tmpdir, "foo/."),
+        p::rename(&dir, Path::new("file.txt"), &dir, Path::new("foo/.")),
         &rename_path_in_use()
     );
     error_contains!(
-        tmpdir.rename("file.txt", &tmpdir, "foo/bar/../.."),
+        p::rename(&dir, Path::new("file.txt"), &dir, Path::new("foo/bar/../..")),
         &rename_path_in_use()
     );
     */
     error_contains!(
-        tmpdir.rename("file.txt", &tmpdir, "foo/bar/../../.."),
+        p::rename(
+            &dir,
+            Path::new("file.txt"),
+            &dir,
+            Path::new("foo/bar/../../..")
+        ),
         "a path led outside of the filesystem"
     );
     error_contains!(
-        tmpdir.rename("file.txt", &tmpdir, "foo/bar/../../../something"),
-        "a path led outside of the filesystem"
-    );
-    error_contains!(tmpdir.rename("file.txt", &tmpdir, ""), "No such file");
-    error_contains!(
-        tmpdir.rename("file.txt", &tmpdir, "/"),
-        "a path led outside of the filesystem"
-    );
-    error_contains!(
-        tmpdir.rename("file.txt", &tmpdir, "/."),
+        p::rename(
+            &dir,
+            Path::new("file.txt"),
+            &dir,
+            Path::new("foo/bar/../../../something")
+        ),
         "a path led outside of the filesystem"
     );
     error_contains!(
-        tmpdir.rename("file.txt", &tmpdir, "/.."),
+        p::rename(&dir, Path::new("file.txt"), &dir, Path::new("")),
+        "No such file"
+    );
+    error_contains!(
+        p::rename(&dir, Path::new("file.txt"), &dir, Path::new("/")),
         "a path led outside of the filesystem"
     );
     error_contains!(
-        tmpdir.rename("/", &tmpdir, "nope.txt"),
+        p::rename(&dir, Path::new("file.txt"), &dir, Path::new("/.")),
         "a path led outside of the filesystem"
     );
     error_contains!(
-        tmpdir.rename("/..", &tmpdir, "nope.txt"),
+        p::rename(&dir, Path::new("file.txt"), &dir, Path::new("/..")),
         "a path led outside of the filesystem"
     );
     error_contains!(
-        tmpdir.rename("file.txt/", &tmpdir, "nope.txt"),
+        p::rename(&dir, Path::new("/"), &dir, Path::new("nope.txt")),
+        "a path led outside of the filesystem"
+    );
+    error_contains!(
+        p::rename(&dir, Path::new("/.."), &dir, Path::new("nope.txt")),
+        "a path led outside of the filesystem"
+    );
+    error_contains!(
+        p::rename(&dir, Path::new("file.txt/"), &dir, Path::new("nope.txt")),
         "Not a directory"
     );
 
     /* // TODO: Platform-specific error code.
     error!(
-        tmpdir.rename("file.txt", &tmpdir, "."),
+        p::rename(&dir, Path::new("file.txt"), &dir, Path::new(".")),
         &rename_file_over_dot()
     );
     error!(
-        tmpdir.rename("file.txt", &tmpdir, ".."),
+        p::rename(&dir, Path::new("file.txt"), &dir, Path::new("..")),
         &rename_path_in_use()
     );
     error!(
-        tmpdir.rename("..", &tmpdir, "nope.txt"),
+        p::rename(&dir, Path::new(".."), &dir, Path::new("nope.txt")),
         &rename_path_in_use()
     );
     error!(
-        tmpdir.rename(".", &tmpdir, "nope.txt"),
+        p::rename(&dir, Path::new("."), &dir, Path::new("nope.txt")),
         &rename_dot_over_file()
     );
     */
 
-    check!(tmpdir.create("existing.txt"));
-    check!(tmpdir.rename("file.txt", &tmpdir, "existing.txt"));
-    assert!(!tmpdir.exists("file.txt"));
-    assert!(tmpdir.exists("existing.txt"));
+    check!(h::create(&dir, "existing.txt"));
+    check!(p::rename(
+        &dir,
+        Path::new("file.txt"),
+        &dir,
+        Path::new("existing.txt")
+    ));
+    assert!(!h::exists(&dir, "file.txt"));
+    assert!(h::exists(&dir, "existing.txt"));
 }
