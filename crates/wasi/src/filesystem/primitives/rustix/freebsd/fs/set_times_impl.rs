@@ -1,13 +1,14 @@
-use crate::filesystem::primitives::{SystemTimeSpec, to_timespec, via_parent};
+use crate::filesystem::primitives::{to_timespec, via_parent};
 use rustix::fs::{AtFlags, Timestamps, utimensat};
 use std::path::Path;
+use std::time::SystemTime;
 use std::{fs, io};
 
 pub(crate) fn set_times_impl(
     start: &fs::File,
     path: &Path,
-    atime: Option<SystemTimeSpec>,
-    mtime: Option<SystemTimeSpec>,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
 ) -> io::Result<()> {
     if !super::beneath_supported() {
         return super::super::super::fs::set_times_manually(start, path, atime, mtime);
@@ -24,8 +25,8 @@ pub(crate) fn set_times_impl(
 pub(crate) fn set_times_nofollow_impl(
     start: &fs::File,
     path: &Path,
-    atime: Option<SystemTimeSpec>,
-    mtime: Option<SystemTimeSpec>,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
 ) -> io::Result<()> {
     if !super::beneath_supported() {
         return via_parent::set_times_nofollow(start, path, atime, mtime);

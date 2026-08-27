@@ -12,6 +12,7 @@ impl ImplOpenOptionsExt {
         }
     }
 
+    #[cfg(target_os = "linux")]
     pub(crate) fn custom_flags(&mut self, flags: i32) -> &mut Self {
         self.custom_flags = flags;
         self

@@ -28,7 +28,7 @@ pub struct OpenOptions {
     pub(crate) maybe_dir: bool,
     pub(crate) sync: bool,
     pub(crate) dsync: bool,
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     pub(crate) rsync: bool,
     #[cfg(not(windows))]
     pub(crate) nonblock: bool,
@@ -58,7 +58,7 @@ impl OpenOptions {
             maybe_dir: false,
             sync: false,
             dsync: false,
-            #[cfg(not(windows))]
+            #[cfg(target_os = "linux")]
             rsync: false,
             #[cfg(not(windows))]
             nonblock: false,
@@ -150,7 +150,7 @@ impl OpenOptions {
 }
 
 /// Unix-specific extensions to [`fs::OpenOptions`].
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 pub trait OpenOptionsExt {
     /// Pass custom flags to the `flags` argument of `open`.
     fn custom_flags(&mut self, flags: i32) -> &mut Self;
@@ -218,7 +218,7 @@ pub trait OpenOptionsExt {
     fn custom_flags(&mut self, flags: u32) -> &mut Self;
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 impl OpenOptionsExt for OpenOptions {
     #[inline]
     fn custom_flags(&mut self, flags: i32) -> &mut Self {

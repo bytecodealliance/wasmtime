@@ -3,8 +3,6 @@ mod dir_entry_inner;
 #[cfg(not(target_os = "wasi"))]
 mod dir_options_ext;
 mod dir_utils;
-#[cfg(not(any(target_os = "android", target_os = "linux")))]
-mod file_path;
 mod file_type_ext;
 mod hard_link_unchecked;
 mod is_same_file;
@@ -17,8 +15,6 @@ mod read_link_unchecked;
 mod remove_dir_unchecked;
 mod remove_file_unchecked;
 mod rename_unchecked;
-#[cfg(not(any(target_os = "android", target_os = "linux", target_os = "wasi")))]
-mod set_permissions_impl;
 #[cfg(not(any(target_os = "android", target_os = "linux")))]
 mod set_times_impl;
 mod stat_unchecked;
@@ -32,14 +28,6 @@ pub(crate) mod errors;
 //
 // On FreeBSD, use optimized implementations based on
 // `O_RESOLVE_BENEATH`/`AT_RESOLVE_BENEATH` and `O_PATH` when available.
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos",
-    target_os = "visionos",
-))]
-pub(crate) use crate::filesystem::primitives::rustix::darwin::fs::*;
 #[cfg(target_os = "freebsd")]
 pub(crate) use crate::filesystem::primitives::rustix::freebsd::fs::*;
 #[cfg(any(target_os = "android", target_os = "linux"))]
@@ -47,39 +35,10 @@ pub(crate) use crate::filesystem::primitives::rustix::linux::fs::*;
 #[cfg(not(any(target_os = "android", target_os = "linux", target_os = "freebsd")))]
 #[rustfmt::skip]
 pub(crate) use crate::filesystem::primitives::{
-    manually::open_entry as open_entry_impl,
     manually::open as open_impl,
     manually::stat as stat_impl,
-    manually::canonicalize as canonicalize_impl,
     via_parent::set_times_nofollow as set_times_nofollow_impl,
 };
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos",
-    target_os = "visionos",
-))]
-pub(super) use file_path::file_path_by_ttyname_or_seaching;
-#[cfg(not(any(
-    target_os = "android",
-    target_os = "linux",
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "tvos",
-    target_os = "watchos",
-    target_os = "visionos",
-)))]
-pub(crate) use file_path::file_path_by_ttyname_or_seaching as file_path;
-#[cfg(not(any(
-    target_os = "android",
-    target_os = "linux",
-    target_os = "freebsd",
-    target_os = "wasi"
-)))]
-pub(crate) use set_permissions_impl::set_permissions_impl;
-#[cfg(target_os = "freebsd")]
-pub(crate) use set_permissions_impl::set_permissions_impl as set_permissions_manually;
 #[cfg(not(any(target_os = "android", target_os = "linux", target_os = "freebsd")))]
 pub(crate) use set_times_impl::set_times_impl;
 #[cfg(target_os = "freebsd")]

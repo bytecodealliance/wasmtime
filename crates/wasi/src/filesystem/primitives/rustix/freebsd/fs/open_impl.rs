@@ -1,6 +1,5 @@
 use super::super::super::fs::compute_oflags;
 use crate::filesystem::primitives::{OpenOptions, errors, manually};
-use io_lifetimes::FromFd;
 use rustix::fs::{Mode, OFlags, RawMode, openat};
 use std::path::Path;
 use std::{fs, io};
@@ -23,7 +22,7 @@ pub(crate) fn open_impl(
     };
 
     match openat(start, path, oflags, mode) {
-        Ok(file) => Ok(fs::File::from_into_fd(file)),
+        Ok(file) => Ok(file.into()),
         Err(rustix::io::Errno::NOTCAPABLE) => Err(errors::escape_attempt()),
         Err(err) => Err(err.into()),
     }
