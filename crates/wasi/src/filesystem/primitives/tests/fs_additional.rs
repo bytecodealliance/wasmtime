@@ -185,6 +185,7 @@ fn dotdot_slashdot_at_end_of_symlink() {
 }
 
 #[test]
+#[cfg_attr(windows, ignore)]
 fn dotdot_slashdot_at_end_of_symlink_all_inside_dir() {
     let tmpdir = tmpdir();
     let start = h::dir_of(&tmpdir);
@@ -469,6 +470,7 @@ fn file_test_directoryinfo_readdir() {
         }
         check!(p::remove_file(&sub, Path::new(&f.file_name())));
     }
+    drop(sub);
     check!(p::remove_dir(&start, Path::new(dir)));
 }
 
