@@ -6,12 +6,6 @@ pub trait FileExt {
     /// Reads a number of bytes starting from a given offset.
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>;
 
-    /// Like `read_at`, except that it reads into a slice of buffers.
-    #[cfg(unix_file_vectored_at)]
-    fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut<'_>], offset: u64) -> io::Result<usize> {
-        default_read_vectored(|b| self.read_at(b, offset), bufs)
-    }
-
     /// Reads the exact number of bytes required to fill `buf` from the given offset.
     fn read_exact_at(&self, mut buf: &mut [u8], mut offset: u64) -> io::Result<()> {
         while !buf.is_empty() {
@@ -39,12 +33,6 @@ pub trait FileExt {
     /// Writes a number of bytes starting from a given offset.
     fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize>;
 
-    /// Like `write_at`, except that it writes from a slice of buffers.
-    #[cfg(unix_file_vectored_at)]
-    fn write_vectored_at(&self, bufs: &[io::IoSlice<'_>], offset: u64) -> io::Result<usize> {
-        default_write_vectored(|b| self.write_at(b, offset), bufs)
-    }
-
     /// Attempts to write an entire buffer starting from a given offset.
     fn write_all_at(&self, mut buf: &[u8], mut offset: u64) -> io::Result<()> {
         while !buf.is_empty() {
@@ -65,30 +53,6 @@ pub trait FileExt {
         }
         Ok(())
     }
-}
-
-#[cfg(unix_file_vectored_at)]
-fn default_read_vectored<F>(read: F, bufs: &mut [io::IoSliceMut<'_>]) -> io::Result<usize>
-where
-    F: FnOnce(&mut [u8]) -> io::Result<usize>,
-{
-    let buf = bufs
-        .iter_mut()
-        .find(|b| !b.is_empty())
-        .map_or(&mut [][..], |b| &mut **b);
-    read(buf)
-}
-
-#[cfg(unix_file_vectored_at)]
-fn default_write_vectored<F>(write: F, bufs: &[io::IoSlice<'_>]) -> io::Result<usize>
-where
-    F: FnOnce(&[u8]) -> io::Result<usize>,
-{
-    let buf = bufs
-        .iter()
-        .find(|b| !b.is_empty())
-        .map_or(&[][..], |b| &**b);
-    write(buf)
 }
 
 /// WASI-specific extensions to [`fs::File`].

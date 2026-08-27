@@ -112,24 +112,12 @@ impl Metadata {
     /// This corresponds to [`std::fs::Metadata::modified`].
     #[inline]
     pub fn modified(&self) -> io::Result<SystemTime> {
-        #[cfg(io_error_uncategorized)]
-        {
-            self.modified.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "modified time metadata not available on this platform",
-                )
-            })
-        }
-        #[cfg(not(io_error_uncategorized))]
-        {
-            self.modified.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "modified time metadata not available on this platform",
-                )
-            })
-        }
+        self.modified.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                "modified time metadata not available on this platform",
+            )
+        })
     }
 
     /// Returns the last access time of this metadata.
@@ -137,24 +125,12 @@ impl Metadata {
     /// This corresponds to [`std::fs::Metadata::accessed`].
     #[inline]
     pub fn accessed(&self) -> io::Result<SystemTime> {
-        #[cfg(io_error_uncategorized)]
-        {
-            self.accessed.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "accessed time metadata not available on this platform",
-                )
-            })
-        }
-        #[cfg(not(io_error_uncategorized))]
-        {
-            self.accessed.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "accessed time metadata not available on this platform",
-                )
-            })
-        }
+        self.accessed.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                "accessed time metadata not available on this platform",
+            )
+        })
     }
 
     /// Returns the creation time listed in this metadata.
@@ -162,24 +138,12 @@ impl Metadata {
     /// This corresponds to [`std::fs::Metadata::created`].
     #[inline]
     pub fn created(&self) -> io::Result<SystemTime> {
-        #[cfg(io_error_uncategorized)]
-        {
-            self.created.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "created time metadata not available on this platform",
-                )
-            })
-        }
-        #[cfg(not(io_error_uncategorized))]
-        {
-            self.created.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "created time metadata not available on this platform",
-                )
-            })
-        }
+        self.created.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                "created time metadata not available on this platform",
+            )
+        })
     }
 
     /// Determine if `self` and `other` refer to the same inode on the same

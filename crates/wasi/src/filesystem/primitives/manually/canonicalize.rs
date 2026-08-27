@@ -38,10 +38,6 @@ pub(crate) fn canonicalize_with(
         Err(err) if err.kind() == io::ErrorKind::InvalidInput => {
             return Err(err);
         }
-        #[cfg(io_error_more)]
-        Err(err) if err.kind() == io::ErrorKind::InvalidFilename => {
-            return Err(err);
-        }
         #[cfg(windows)]
         Err(err)
             if err.raw_os_error()
