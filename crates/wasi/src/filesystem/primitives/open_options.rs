@@ -35,7 +35,7 @@ pub struct OpenOptions {
         target_os = "watchos",
         target_os = "visionos",
         target_os = "freebsd",
-        target_os = "fuchsia"
+        target_os = "fuchsia",
         windows,
     )))]
     pub(crate) rsync: bool,
@@ -74,7 +74,7 @@ impl OpenOptions {
                 target_os = "watchos",
                 target_os = "visionos",
                 target_os = "freebsd",
-                target_os = "fuchsia"
+                target_os = "fuchsia",
                 windows,
             )))]
             rsync: false,
