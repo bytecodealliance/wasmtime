@@ -38,6 +38,7 @@ impl Metadata {
     /// nearby functions, some fields of the resulting metadata will be `None`.
     ///
     /// [`std::fs::Metadata::volume_serial_number`]: https://doc.rust-lang.org/std/os/windows/fs/trait.MetadataExt.html#tymethod.volume_serial_number
+    #[cfg(windows)]
     #[inline]
     pub fn from_just_metadata(std: fs::Metadata) -> Self {
         let ext = ImplMetadataExt::from_just_metadata(&std);

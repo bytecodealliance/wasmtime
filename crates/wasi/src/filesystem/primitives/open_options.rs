@@ -24,10 +24,13 @@ pub struct OpenOptions {
     pub(crate) create: bool,
     pub(crate) create_new: bool,
     pub(crate) dir_required: bool,
+    #[cfg(windows)]
     pub(crate) maybe_dir: bool,
     pub(crate) sync: bool,
     pub(crate) dsync: bool,
+    #[cfg(not(windows))]
     pub(crate) rsync: bool,
+    #[cfg(not(windows))]
     pub(crate) nonblock: bool,
     pub(crate) readdir_required: bool,
     pub(crate) follow: FollowSymlinks,
@@ -51,10 +54,13 @@ impl OpenOptions {
             create: false,
             create_new: false,
             dir_required: false,
+            #[cfg(windows)]
             maybe_dir: false,
             sync: false,
             dsync: false,
+            #[cfg(not(windows))]
             rsync: false,
+            #[cfg(not(windows))]
             nonblock: false,
             readdir_required: false,
             follow: FollowSymlinks::Yes,
