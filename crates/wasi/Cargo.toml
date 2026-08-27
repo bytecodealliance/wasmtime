@@ -27,7 +27,6 @@ bytes = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true, features = ["std", "attributes"] }
 public-cap-primitives = { version = "4.0.3", package = 'cap-primitives' }
-public-cap-fs-ext = { version = "4.0.3", package = 'cap-fs-ext' }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
@@ -35,7 +34,6 @@ url = { workspace = true }
 rand = { workspace = true, features = ['std_rng', 'thread_rng'] }
 
 maybe-owned = "0.3"
-io-lifetimes = { version = "3.0.1", default-features = false }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros", "fs"] }

@@ -8,7 +8,7 @@
 
 use crate::filesystem::primitives::OpenOptionsExt;
 use crate::filesystem::primitives::{OpenOptions, open, set_times_follow_unchecked};
-use io_lifetimes::AsFd;
+use rustix::fd::AsFd;
 use rustix::fs::OFlags;
 use rustix::path::DecInt;
 use rustix_linux_procfs::proc_self_fd;

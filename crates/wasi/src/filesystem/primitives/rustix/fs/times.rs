@@ -1,6 +1,6 @@
-use io_lifetimes::BorrowedFd;
 use rustix::fs::{AtFlags, Timestamps, UTIME_NOW, UTIME_OMIT, utimensat};
 use rustix::time::Timespec;
+use std::os::fd::BorrowedFd;
 use std::path::Path;
 use std::time::SystemTime;
 use std::{fs, io};

@@ -1,8 +1,7 @@
 use crate::filesystem::primitives::{
     DirEntryInner, FollowSymlinks, Metadata, open_dir_for_reading_unchecked, stat_unchecked,
 };
-use io_lifetimes::AsFd;
-use rustix::fd::OwnedFd;
+use rustix::fd::{AsFd, OwnedFd};
 use rustix::fs::Dir;
 use std::ffi::OsStr;
 use std::mem::ManuallyDrop;

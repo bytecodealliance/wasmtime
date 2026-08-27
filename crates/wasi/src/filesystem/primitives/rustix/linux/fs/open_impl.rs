@@ -14,7 +14,6 @@ use std::{fs, io};
 use {
     super::super::super::fs::compute_oflags,
     crate::filesystem::primitives::errors,
-    io_lifetimes::FromFd,
     rustix::fs::{Mode, OFlags, RawMode, ResolveFlags, openat2},
     rustix::path::Arg,
     std::sync::atomic::AtomicBool,
@@ -88,7 +87,7 @@ pub(crate) fn open_beneath(
                 ResolveFlags::BENEATH | ResolveFlags::NO_MAGICLINKS,
             ) {
                 Ok(file) => {
-                    let file = fs::File::from_into_fd(file);
+                    let file = fs::File::from(file);
 
                     return Ok(file);
                 }
