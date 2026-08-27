@@ -1,6 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{ConcurrentState, QualifiedThreadId, WorkItem, tls};
+use crate::component::concurrent::{ConcurrentState, QualifiedThreadId, WaitReason, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::types;
@@ -3968,7 +3968,7 @@ impl Instance {
         handle: TableId<TransmitHandle>,
     ) -> Result<ReturnCode> {
         let waitable = Waitable::Transmit(handle);
-        store.wait_for_event(self.runtime_instance(caller), waitable)?;
+        store.wait_for_event(self.runtime_instance(caller), waitable, WaitReason::Other)?;
         let event = waitable.take_event(store.concurrent_state_mut()?)?;
         if let Some(event @ (Event::StreamWrite { code, .. } | Event::FutureWrite { code, .. })) =
             event
@@ -4061,7 +4061,7 @@ impl Instance {
         handle: TableId<TransmitHandle>,
     ) -> Result<ReturnCode> {
         let waitable = Waitable::Transmit(handle);
-        store.wait_for_event(self.runtime_instance(caller), waitable)?;
+        store.wait_for_event(self.runtime_instance(caller), waitable, WaitReason::Other)?;
         let event = waitable.take_event(store.concurrent_state_mut()?)?;
         if let Some(event @ (Event::StreamRead { code, .. } | Event::FutureRead { code, .. })) =
             event

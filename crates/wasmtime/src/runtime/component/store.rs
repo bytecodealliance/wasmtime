@@ -290,6 +290,13 @@ impl StoreOpaque {
         self.store_data_mut().components.trapped = true;
     }
 
+    /// Determine whether an instance may be entered from the host.
+    ///
+    /// We return `false` here only `self` has been poisoned due to a trap.
+    pub(crate) fn may_enter(&mut self) -> bool {
+        !self.trapped()
+    }
+
     pub(crate) fn component_data(&self) -> &ComponentStoreData {
         &self.store_data().components
     }

@@ -692,10 +692,15 @@ impl WastTest {
             return true;
         }
 
-        // This will require a wasm-tools update:
-        if self
-            .path
-            .ends_with("component-model/test/validation/max-value-size.wast")
+        // These will require a wasm-tools update:
+        let need_wasm_tools_updates = [
+            "component-model/test/validation/max-value-size.wast",
+            "component-model/test/validation/kebab.wast",
+        ];
+
+        if need_wasm_tools_updates
+            .iter()
+            .any(|part| self.path.ends_with(part))
         {
             return true;
         }
