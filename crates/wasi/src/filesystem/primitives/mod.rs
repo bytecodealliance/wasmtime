@@ -1,5 +1,11 @@
 //! Filesystem utilities.
 
+// Allow preexisting warnings that were present in this module before it was
+// imported from the cap-primitives crate. These still probably want to get
+// resolved in a future change.
+#![allow(trivial_numeric_casts)]
+#![allow(unsafe_op_in_unsafe_fn)]
+
 mod access;
 mod canonicalize;
 mod copy;
