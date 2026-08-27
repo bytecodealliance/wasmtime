@@ -59,7 +59,7 @@ pub use self::view::{WasiCtxView, WasiView};
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 #[doc(no_inline)]
-pub use cap_primitives::fs::SystemTimeSpec;
+pub use public_cap_primitives::fs::SystemTimeSpec;
 #[doc(no_inline)]
 pub use rand::Rng;
 #[doc(no_inline)]

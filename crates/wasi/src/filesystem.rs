@@ -1,6 +1,8 @@
 use crate::clocks::Datetime;
+use crate::filesystem::primitives::{
+    DirOptions, FollowSymlinks, Metadata, OpenOptions, SystemTimeSpec,
+};
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
-use cap_primitives::fs::{DirOptions, FollowSymlinks, Metadata, OpenOptions, SystemTimeSpec};
 use std::collections::hash_map;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -276,8 +278,8 @@ pub(crate) enum DescriptorType {
     RegularFile,
 }
 
-impl From<cap_primitives::fs::FileType> for DescriptorType {
-    fn from(ft: cap_primitives::fs::FileType) -> Self {
+impl From<crate::filesystem::primitives::FileType> for DescriptorType {
+    fn from(ft: crate::filesystem::primitives::FileType) -> Self {
         if ft.is_dir() {
             DescriptorType::Directory
         } else if ft.is_symlink() {
@@ -329,15 +331,12 @@ impl DescriptorStat {
             data_access_timestamp: meta
                 .accessed()
                 .ok()
-                .and_then(|t| Datetime::try_from(t.into_std()).ok()),
+                .and_then(|t| Datetime::try_from(t).ok()),
             data_modification_timestamp: meta
                 .modified()
                 .ok()
-                .and_then(|t| Datetime::try_from(t.into_std()).ok()),
-            status_change_timestamp: meta
-                .created()
-                .ok()
-                .and_then(|t| Datetime::try_from(t.into_std()).ok()),
+                .and_then(|t| Datetime::try_from(t).ok()),
+            status_change_timestamp: meta.created().ok().and_then(|t| Datetime::try_from(t).ok()),
         }
     }
 }
@@ -526,7 +525,7 @@ impl Descriptor {
             }
             Self::Dir(d) => {
                 d.run_blocking(|d| {
-                    let d = cap_primitives::fs::open(
+                    let d = crate::filesystem::primitives::open(
                         d,
                         std::path::Component::CurDir.as_ref(),
                         OpenOptions::new().read(true),
@@ -624,7 +623,7 @@ impl Descriptor {
             }
             Self::Dir(d) => {
                 d.run_blocking(|d| {
-                    let d = cap_primitives::fs::open(
+                    let d = crate::filesystem::primitives::open(
                         d,
                         std::path::Component::CurDir.as_ref(),
                         OpenOptions::new().read(true),
@@ -857,7 +856,7 @@ impl Dir {
             return Err(ErrorCode::NotPermitted);
         }
         self.run_blocking(move |d| {
-            cap_primitives::fs::create_dir(d, path.as_ref(), &DirOptions::new())
+            crate::filesystem::primitives::create_dir(d, path.as_ref(), &DirOptions::new())
         })
         .await?;
         Ok(())
@@ -889,16 +888,16 @@ impl Dir {
         if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
-        let atim =
-            atim.map(|t| SystemTimeSpec::Absolute(cap_primitives::time::SystemTime::from_std(t)));
-        let mtim =
-            mtim.map(|t| SystemTimeSpec::Absolute(cap_primitives::time::SystemTime::from_std(t)));
+        let atim = atim.map(|t| SystemTimeSpec::Absolute(t));
+        let mtim = mtim.map(|t| SystemTimeSpec::Absolute(t));
         if path_flags.contains(PathFlags::SYMLINK_FOLLOW) {
-            self.run_blocking(move |d| cap_primitives::fs::set_times(d, path.as_ref(), atim, mtim))
-                .await?;
+            self.run_blocking(move |d| {
+                crate::filesystem::primitives::set_times(d, path.as_ref(), atim, mtim)
+            })
+            .await?;
         } else {
             self.run_blocking(move |d| {
-                cap_primitives::fs::set_times_nofollow(d, path.as_ref(), atim, mtim)
+                crate::filesystem::primitives::set_times_nofollow(d, path.as_ref(), atim, mtim)
             })
             .await?;
         }
@@ -926,7 +925,12 @@ impl Dir {
         }
         let new_dir_handle = Arc::clone(&new_dir.dir);
         self.run_blocking(move |d| {
-            cap_primitives::fs::hard_link(d, old_path.as_ref(), &new_dir_handle, new_path.as_ref())
+            crate::filesystem::primitives::hard_link(
+                d,
+                old_path.as_ref(),
+                &new_dir_handle,
+                new_path.as_ref(),
+            )
         })
         .await?;
         Ok(())
@@ -977,17 +981,10 @@ impl Dir {
             open_mode |= OpenMode::READ;
         }
 
-        // Note that this is intentionally scoped to a separate block to
-        // minimize the surface area that is depended on by cap-fs-ext. Ideally
-        // the underlying functionality in `cap-primitives` would get exposed,
-        // but that'll require an upstream PR.
-        {
-            use cap_fs_ext_avoid_using_this::OpenOptionsFollowExt;
-            if path_flags.contains(PathFlags::SYMLINK_FOLLOW) {
-                opts.follow(FollowSymlinks::Yes);
-            } else {
-                opts.follow(FollowSymlinks::No);
-            }
+        if path_flags.contains(PathFlags::SYMLINK_FOLLOW) {
+            opts.follow(FollowSymlinks::Yes);
+        } else {
+            opts.follow(FollowSymlinks::No);
         }
 
         // These flags are not yet supported in cap-primitives:
@@ -1026,7 +1023,7 @@ impl Dir {
 
         let opened = self
             .run_blocking::<_, std::io::Result<OpenResult>>(move |d| {
-                let opened = cap_primitives::fs::open(d, path.as_ref(), &opts)?;
+                let opened = crate::filesystem::primitives::open(d, path.as_ref(), &opts)?;
                 if Metadata::from_file(&opened)?.is_dir() {
                     Ok(OpenResult::Dir(opened))
                 } else if oflags.contains(OpenFlags::DIRECTORY) {
@@ -1066,7 +1063,7 @@ impl Dir {
 
     pub(crate) async fn readlink_at(&self, path: String) -> Result<String, ErrorCode> {
         let link = self
-            .run_blocking(move |d| cap_primitives::fs::read_link(d, path.as_ref()))
+            .run_blocking(move |d| crate::filesystem::primitives::read_link(d, path.as_ref()))
             .await?;
         link.into_os_string()
             .into_string()
@@ -1077,7 +1074,7 @@ impl Dir {
         if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
-        self.run_blocking(move |d| cap_primitives::fs::remove_dir(d, path.as_ref()))
+        self.run_blocking(move |d| crate::filesystem::primitives::remove_dir(d, path.as_ref()))
             .await?;
         Ok(())
     }
@@ -1099,7 +1096,12 @@ impl Dir {
         }
         let new_dir_handle = Arc::clone(&new_dir.dir);
         self.run_blocking(move |d| {
-            cap_primitives::fs::rename(d, old_path.as_ref(), &new_dir_handle, new_path.as_ref())
+            crate::filesystem::primitives::rename(
+                d,
+                old_path.as_ref(),
+                &new_dir_handle,
+                new_path.as_ref(),
+            )
         })
         .await?;
         Ok(())

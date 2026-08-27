@@ -26,8 +26,8 @@ tokio = { workspace = true,  features = ["time", "sync", "io-std", "io-util", "r
 bytes = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true, features = ["std", "attributes"] }
-cap-primitives = { workspace = true }
-cap-fs-ext-avoid-using-this = { workspace = true }
+public-cap-primitives = { version = "4.0.3", package = 'cap-primitives' }
+public-cap-fs-ext = { version = "4.0.3", package = 'cap-fs-ext' }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
