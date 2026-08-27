@@ -28,7 +28,15 @@ pub struct OpenOptions {
     pub(crate) maybe_dir: bool,
     pub(crate) sync: bool,
     pub(crate) dsync: bool,
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(not(any(
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "tvos",
+        target_os = "watchos",
+        target_os = "visionos",
+        target_os = "freebsd",
+        target_os = "fuchsia"
+    )))]
     pub(crate) rsync: bool,
     #[cfg(not(windows))]
     pub(crate) nonblock: bool,
@@ -58,7 +66,15 @@ impl OpenOptions {
             maybe_dir: false,
             sync: false,
             dsync: false,
-            #[cfg(any(target_os = "linux", target_os = "android"))]
+            #[cfg(not(any(
+                target_os = "ios",
+                target_os = "macos",
+                target_os = "tvos",
+                target_os = "watchos",
+                target_os = "visionos",
+                target_os = "freebsd",
+                target_os = "fuchsia"
+            )))]
             rsync: false,
             #[cfg(not(windows))]
             nonblock: false,
