@@ -1,5 +1,5 @@
 use crate::filesystem::primitives::OpenOptionsExt;
-use crate::filesystem::primitives::{errors, OpenOptions};
+use crate::filesystem::primitives::{OpenOptions, errors};
 use ambient_authority::AmbientAuthority;
 use std::ffi::OsString;
 use std::ops::Deref;

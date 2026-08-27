@@ -5,7 +5,9 @@ use crate::filesystem::primitives::errors;
 #[cfg(all(racy_asserts, not(windows)))]
 use crate::filesystem::primitives::symlink_unchecked;
 #[cfg(racy_asserts)]
-use crate::filesystem::primitives::{FollowSymlinks, Metadata, canonicalize, manually, map_result, stat_unchecked};
+use crate::filesystem::primitives::{
+    FollowSymlinks, Metadata, canonicalize, manually, map_result, stat_unchecked,
+};
 #[cfg(all(racy_asserts, windows))]
 use crate::filesystem::primitives::{symlink_dir_unchecked, symlink_file_unchecked};
 use std::path::Path;

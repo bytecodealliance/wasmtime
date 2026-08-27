@@ -1,8 +1,8 @@
 //! This defines `rename`, the primary entrypoint to sandboxed renaming.
 
-use crate::filesystem::primitives::rename_impl;
 #[cfg(all(racy_asserts, not(windows)))]
 use crate::filesystem::primitives::append_dir_suffix;
+use crate::filesystem::primitives::rename_impl;
 use std::path::Path;
 use std::{fs, io};
 #[cfg(racy_asserts)]

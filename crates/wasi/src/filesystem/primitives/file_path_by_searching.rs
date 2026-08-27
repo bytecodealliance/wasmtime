@@ -1,5 +1,5 @@
 use crate::filesystem::primitives::{
-    is_root_dir, open_dir_unchecked, read_dir_unchecked, FollowSymlinks, MaybeOwnedFile, Metadata,
+    FollowSymlinks, MaybeOwnedFile, Metadata, is_root_dir, open_dir_unchecked, read_dir_unchecked,
 };
 use std::fs;
 use std::path::{Component, PathBuf};

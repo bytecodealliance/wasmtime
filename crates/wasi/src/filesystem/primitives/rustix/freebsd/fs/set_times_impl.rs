@@ -1,5 +1,5 @@
-use crate::filesystem::primitives::{to_timespec, via_parent, SystemTimeSpec};
-use rustix::fs::{utimensat, AtFlags, Timestamps};
+use crate::filesystem::primitives::{SystemTimeSpec, to_timespec, via_parent};
+use rustix::fs::{AtFlags, Timestamps, utimensat};
 use std::path::Path;
 use std::{fs, io};
 

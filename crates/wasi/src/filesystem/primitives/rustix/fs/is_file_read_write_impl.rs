@@ -1,5 +1,5 @@
 use rustix::fd::{AsFd, BorrowedFd};
-use rustix::fs::{fcntl_getfl, OFlags};
+use rustix::fs::{OFlags, fcntl_getfl};
 use std::{fs, io};
 
 #[inline]

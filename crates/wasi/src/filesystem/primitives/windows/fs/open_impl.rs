@@ -1,4 +1,4 @@
-use crate::filesystem::primitives::{manually, OpenOptions};
+use crate::filesystem::primitives::{OpenOptions, manually};
 use std::ffi::OsStr;
 use std::path::Path;
 use std::{fs, io};

@@ -1,5 +1,5 @@
 use super::open_parent;
-use crate::filesystem::primitives::{set_permissions_unchecked, MaybeOwnedFile, Permissions};
+use crate::filesystem::primitives::{MaybeOwnedFile, Permissions, set_permissions_unchecked};
 use std::path::Path;
 use std::{fs, io};
 

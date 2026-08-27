@@ -2,7 +2,7 @@
 //! with setting the file times specific to Linux.
 
 use super::procfs::set_times_through_proc_self_fd;
-use crate::filesystem::primitives::{open, OpenOptions, SystemTimeSpec};
+use crate::filesystem::primitives::{OpenOptions, SystemTimeSpec, open};
 use std::path::Path;
 use std::{fs, io};
 
@@ -20,7 +20,7 @@ pub(crate) fn set_times_impl(
                 &file,
                 atime.map(SystemTimeSpec::into_std),
                 mtime.map(SystemTimeSpec::into_std),
-            )
+            );
         }
         Err(err) => match rustix::io::Errno::from_io_error(&err) {
             Some(rustix::io::Errno::ACCESS) | Some(rustix::io::Errno::ISDIR) => (),
@@ -35,7 +35,7 @@ pub(crate) fn set_times_impl(
                 &file,
                 atime.map(SystemTimeSpec::into_std),
                 mtime.map(SystemTimeSpec::into_std),
-            )
+            );
         }
         Err(err) => match rustix::io::Errno::from_io_error(&err) {
             Some(rustix::io::Errno::ACCESS) => (),

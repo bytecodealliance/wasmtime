@@ -21,10 +21,6 @@ impl FollowSymlinks {
     /// to a `FollowSymlinks`.
     #[inline]
     pub const fn follow(follow: bool) -> Self {
-        if follow {
-            Self::Yes
-        } else {
-            Self::No
-        }
+        if follow { Self::Yes } else { Self::No }
     }
 }

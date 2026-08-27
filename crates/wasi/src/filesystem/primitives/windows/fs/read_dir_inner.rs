@@ -1,5 +1,5 @@
 use super::get_path::concatenate;
-use crate::filesystem::primitives::{open_dir, DirEntryInner, FollowSymlinks};
+use crate::filesystem::primitives::{DirEntryInner, FollowSymlinks, open_dir};
 use std::path::{Component, Path};
 use std::{fmt, fs, io};
 

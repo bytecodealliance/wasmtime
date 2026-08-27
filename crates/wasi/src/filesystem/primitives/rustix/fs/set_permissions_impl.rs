@@ -1,5 +1,5 @@
-use crate::filesystem::primitives::{open, OpenOptions, Permissions};
-use rustix::fs::{fchmod, Mode};
+use crate::filesystem::primitives::{OpenOptions, Permissions, open};
+use rustix::fs::{Mode, fchmod};
 use rustix::io::Errno;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;

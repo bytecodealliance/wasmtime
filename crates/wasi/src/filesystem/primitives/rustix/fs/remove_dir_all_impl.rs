@@ -1,6 +1,6 @@
 use crate::filesystem::primitives::{
-    read_dir_nofollow, read_dir_unchecked, remove_dir, remove_file, remove_open_dir, stat,
-    FollowSymlinks, ReadDir,
+    FollowSymlinks, ReadDir, read_dir_nofollow, read_dir_unchecked, remove_dir, remove_file,
+    remove_open_dir, stat,
 };
 use std::path::{Component, Path};
 use std::{fs, io};

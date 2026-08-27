@@ -1,9 +1,9 @@
 //! This defines `open`, the primary entrypoint to sandboxed file and directory
 //! opening.
 
-use crate::filesystem::primitives::{OpenOptions, open_impl};
 #[cfg(racy_asserts)]
 use crate::filesystem::primitives::{Metadata, file_path, open_unchecked, stat_unchecked};
+use crate::filesystem::primitives::{OpenOptions, open_impl};
 use std::path::Path;
 use std::{fs, io};
 

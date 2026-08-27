@@ -1,7 +1,7 @@
 use super::super::super::fs::compute_oflags;
-use crate::filesystem::primitives::{errors, manually, OpenOptions};
+use crate::filesystem::primitives::{OpenOptions, errors, manually};
 use io_lifetimes::FromFd;
-use rustix::fs::{openat, Mode, OFlags, RawMode};
+use rustix::fs::{Mode, OFlags, RawMode, openat};
 use std::path::Path;
 use std::{fs, io};
 

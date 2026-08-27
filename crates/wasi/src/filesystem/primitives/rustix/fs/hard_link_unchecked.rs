@@ -1,4 +1,4 @@
-use rustix::fs::{linkat, AtFlags};
+use rustix::fs::{AtFlags, linkat};
 use std::path::Path;
 use std::{fs, io};
 

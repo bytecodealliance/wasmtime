@@ -8,10 +8,10 @@
 
 use crate::filesystem::primitives::OpenOptionsExt;
 use crate::filesystem::primitives::{
-    errors, open, read_link_unchecked, set_times_follow_unchecked, OpenOptions, SystemTimeSpec,
+    OpenOptions, SystemTimeSpec, errors, open, read_link_unchecked, set_times_follow_unchecked,
 };
 use io_lifetimes::{AsFd, AsFilelike};
-use rustix::fs::{chmodat, AtFlags, Mode, OFlags, RawMode};
+use rustix::fs::{AtFlags, Mode, OFlags, RawMode, chmodat};
 use rustix::path::DecInt;
 use rustix_linux_procfs::proc_self_fd;
 use std::os::unix::fs::PermissionsExt;

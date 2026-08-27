@@ -1,5 +1,5 @@
 use rustix::cstr;
-use rustix::fs::{openat, statat, AtFlags, Mode, OFlags, CWD};
+use rustix::fs::{AtFlags, CWD, Mode, OFlags, openat, statat};
 use rustix::io::Errno;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 

@@ -1,10 +1,10 @@
 use crate::filesystem::primitives::{FollowSymlinks, ImplMetadataExt, Metadata};
-use rustix::fs::{statat, AtFlags};
+use rustix::fs::{AtFlags, statat};
 use std::path::Path;
 use std::{fs, io};
 
 #[cfg(target_os = "linux")]
-use rustix::fs::{statx, StatxFlags};
+use rustix::fs::{StatxFlags, statx};
 #[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicU8, Ordering};
 
