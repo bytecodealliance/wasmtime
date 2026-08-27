@@ -1,12 +1,12 @@
 use crate::filesystem::primitives::{
     DirEntryInner, FollowSymlinks, Metadata, open_dir_for_reading_unchecked, stat_unchecked,
 };
-use io_extras::os::rustix::{AsRawFd, FromRawFd, RawFd};
 use io_lifetimes::AsFd;
 use rustix::fd::OwnedFd;
 use rustix::fs::Dir;
 use std::ffi::OsStr;
 use std::mem::ManuallyDrop;
+use std::os::fd::{AsRawFd, FromRawFd, RawFd};
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 #[cfg(target_os = "wasi")]

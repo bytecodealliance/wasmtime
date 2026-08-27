@@ -5169,7 +5169,6 @@ dependencies = [
  "cap-primitives",
  "env_logger 0.11.5",
  "futures",
- "io-extras",
  "io-lifetimes 3.0.1",
  "maybe-owned",
  "rand 0.10.1",
