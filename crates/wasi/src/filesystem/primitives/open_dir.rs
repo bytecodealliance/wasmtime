@@ -6,7 +6,6 @@ use crate::filesystem::primitives::open_unchecked;
 use crate::filesystem::primitives::{
     FollowSymlinks, dir_options, open, open_ambient_dir_impl, readdir_options,
 };
-use ambient_authority::AmbientAuthority;
 use std::path::Path;
 use std::{fs, io};
 
@@ -45,6 +44,6 @@ pub(crate) fn open_dir_for_reading_unchecked(
 /// This function is not sandboxed and may trivially access any path that the
 /// host process has access to.
 #[inline]
-pub fn open_ambient_dir(path: &Path, ambient_authority: AmbientAuthority) -> io::Result<fs::File> {
-    open_ambient_dir_impl(path, ambient_authority)
+pub fn open_ambient_dir(path: &Path) -> io::Result<fs::File> {
+    open_ambient_dir_impl(path)
 }

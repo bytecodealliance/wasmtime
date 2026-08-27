@@ -35,7 +35,6 @@ url = { workspace = true }
 rand = { workspace = true, features = ['std_rng', 'thread_rng'] }
 
 maybe-owned = "0.3"
-ambient-authority = "*"
 io-extras = "0.19.0"
 io-lifetimes = { version = "3.0.1", default-features = false }
 winx = "0.36.0"

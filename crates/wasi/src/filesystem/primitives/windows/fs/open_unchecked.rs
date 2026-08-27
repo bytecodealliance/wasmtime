@@ -8,7 +8,6 @@ use crate::filesystem::primitives::{
     FollowSymlinks, OpenOptions, OpenUncheckedError, SymlinkKind, errors, file_path,
     get_access_mode, get_creation_mode, get_flags_and_attributes,
 };
-use ambient_authority::ambient_authority;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::MetadataExt;
@@ -27,8 +26,6 @@ pub(crate) fn open_unchecked(
     path: &Path,
     options: &OpenOptions,
 ) -> Result<fs::File, OpenUncheckedError> {
-    let _ = ambient_authority;
-
     // We have the final `OpenOptions`; now prepare it for an `open`.
     let mut prepared_opts = options.clone();
     let manually_trunc = prepare_open_options_for_open(&mut prepared_opts);

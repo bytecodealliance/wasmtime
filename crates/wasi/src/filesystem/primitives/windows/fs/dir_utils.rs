@@ -1,6 +1,5 @@
 use crate::filesystem::primitives::OpenOptionsExt;
 use crate::filesystem::primitives::{OpenOptions, errors};
-use ambient_authority::AmbientAuthority;
 use std::ffi::OsString;
 use std::ops::Deref;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
@@ -84,13 +83,8 @@ pub(crate) fn readdir_options() -> OpenOptions {
 ///
 /// This function is not sandboxed and may trivially access any path that the
 /// host process has access to.
-pub(crate) fn open_ambient_dir_impl(
-    path: &Path,
-    ambient_authority: AmbientAuthority,
-) -> io::Result<fs::File> {
+pub(crate) fn open_ambient_dir_impl(path: &Path) -> io::Result<fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
-
-    let _ = ambient_authority;
 
     // Set `FILE_FLAG_BACKUP_SEMANTICS` so that we can open directories. Unset
     // `FILE_SHARE_DELETE` so that directories can't be renamed or deleted

@@ -1,5 +1,4 @@
 use crate::filesystem::primitives::OpenOptions;
-use ambient_authority::AmbientAuthority;
 use rustix::fs::OFlags;
 use std::ffi::{OsStr, OsString};
 use std::ops::Deref;
@@ -97,12 +96,7 @@ pub(crate) fn readdir_options() -> OpenOptions {
 ///
 /// This function is not sandboxed and may trivially access any path that the
 /// host process has access to.
-pub(crate) fn open_ambient_dir_impl(
-    path: &Path,
-    ambient_authority: AmbientAuthority,
-) -> io::Result<fs::File> {
-    let _ = ambient_authority;
-
+pub(crate) fn open_ambient_dir_impl(path: &Path) -> io::Result<fs::File> {
     let mut options = fs::OpenOptions::new();
     options.read(true);
 
