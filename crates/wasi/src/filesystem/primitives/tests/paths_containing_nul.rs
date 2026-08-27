@@ -20,7 +20,7 @@ use std::path::Path;
 fn assert_invalid_input<T>(on: &str, result: io::Result<T>) {
     fn inner(on: &str, result: io::Result<()>) {
         match result {
-            Ok(()) => panic!("{} didn't return an error on a path with NUL", on),
+            Ok(()) => panic!("{on} didn't return an error on a path with NUL"),
             Err(_e) => {
                 // TODO: Re-enable this assertion once the `io_error_more`
                 // feature is available.

@@ -15,8 +15,7 @@ fn test_dir_entries() {
     let entries = dir_entries(&tmpdir.path());
     assert!(
         entries.get("file1").is_some(),
-        "directory contains `file1`: {:?}",
-        entries
+        "directory contains `file1`: {entries:?}"
     );
     assert_eq!(entries.len(), 1);
 
@@ -24,13 +23,11 @@ fn test_dir_entries() {
     let entries = dir_entries(&tmpdir.path());
     assert!(
         entries.get("file1").is_some(),
-        "directory contains `file1`: {:?}",
-        entries
+        "directory contains `file1`: {entries:?}"
     );
     assert!(
         entries.get("file2").is_some(),
-        "directory contains `file2`: {:?}",
-        entries
+        "directory contains `file2`: {entries:?}"
     );
     assert_eq!(entries.len(), 2);
 }
@@ -48,8 +45,7 @@ fn test_reread_entries() {
     let entries = read_entries(&dir);
     assert!(
         entries.get("file1").is_some(),
-        "directory contains `file1`: {:?}",
-        entries
+        "directory contains `file1`: {entries:?}"
     );
     assert_eq!(entries.len(), 1);
 
@@ -57,13 +53,11 @@ fn test_reread_entries() {
     let entries = read_entries(&dir);
     assert!(
         entries.get("file1").is_some(),
-        "directory contains `file1`: {:?}",
-        entries
+        "directory contains `file1`: {entries:?}"
     );
     assert!(
         entries.get("file2").is_some(),
-        "directory contains `file2`: {:?}",
-        entries
+        "directory contains `file2`: {entries:?}"
     );
     assert_eq!(entries.len(), 2);
 }
@@ -78,7 +72,7 @@ fn read_entries(dir: &File) -> HashMap<String, DirEntry> {
     for e in read_base_dir(dir).unwrap() {
         let e = e.expect("non-error entry");
         let name = e.file_name().to_str().expect("utf8 filename").to_owned();
-        assert!(out.get(&name).is_none(), "name already read: {}", name);
+        assert!(out.get(&name).is_none(), "name already read: {name}");
         out.insert(name, e);
     }
     out

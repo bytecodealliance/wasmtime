@@ -67,7 +67,7 @@ fn dir_entry_methods() {
             Some("b") => {
                 assert!(file.metadata().unwrap().file_type().is_file());
             }
-            f => panic!("unknown file name: {:?}", f),
+            f => panic!("unknown file name: {f:?}"),
         }
     }
 }
@@ -275,7 +275,7 @@ fn file_test_io_non_positional_read() {
 fn file_test_io_seek_and_tell_smoke_test() {
     let message = "ten-four";
     let mut read_mem = [0; 4];
-    let set_cursor = 4 as u64;
+    let set_cursor = 4_u64;
     let tell_pos_pre_read;
     let tell_pos_post_read;
     let tmpdir = tmpdir();
@@ -594,7 +594,7 @@ fn file_test_directoryinfo_readdir() {
     check!(h::create_dir(&start, dir));
     let prefix = "foo";
     for n in 0..3 {
-        let f = format!("{}.txt", n);
+        let f = format!("{n}.txt");
         let mut w = check!(h::create(&start, &f));
         let msg_str = format!("{}{}", prefix, n.to_string());
         let msg = msg_str.as_bytes();
@@ -1039,7 +1039,7 @@ fn dir_entry_debug() {
     h::create(&start, "b").unwrap();
     let mut read_dir = h::read_dir(&start, ".").unwrap();
     let dir_entry = read_dir.next().unwrap().unwrap();
-    let actual = format!("{:?}", dir_entry);
+    let actual = format!("{dir_entry:?}");
     let expected = format!("DirEntry({:?})", dir_entry.file_name());
     assert_eq!(actual, expected);
 }
@@ -1116,10 +1116,9 @@ fn metadata_access_times() {
             (Ok(t1), Ok(t2)) => assert!(t1 <= t2),
             (Err(e1), Err(e2))
                 if e1.kind() == ErrorKind::Other && e2.kind() == ErrorKind::Other => {}
-            (a, b) => panic!(
-                "creation time must be always supported or not supported: {:?} {:?}",
-                a, b,
-            ),
+            (a, b) => {
+                panic!("creation time must be always supported or not supported: {a:?} {b:?}",)
+            }
         }
     }
 }

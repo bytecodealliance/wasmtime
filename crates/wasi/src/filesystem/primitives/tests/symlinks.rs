@@ -258,7 +258,7 @@ fn open_dir_nofollow() {
 
     // Check various ways of spelling `dir/../symlink_dir`.
     for dir_name in &["dir", "symlink_dir"] {
-        let name = format!("{}/../symlink_dir", dir_name);
+        let name = format!("{dir_name}/../symlink_dir");
         check!(p::open_dir(&dir, Path::new(&name)));
         assert!(h::open_dir_nofollow(&dir, &name).is_err());
     }
@@ -267,11 +267,11 @@ fn open_dir_nofollow() {
     // expansion may end with `/` or a non-symlink).
     for suffix in &[""] {
         for symlink_dir in &["symlink_dot"] {
-            let name = format!("{}{}", symlink_dir, suffix);
+            let name = format!("{symlink_dir}{suffix}");
             check!(p::open_dir(&dir, Path::new(&name)));
             assert!(h::open_dir_nofollow(&dir, &name).is_err());
             for dir_name in &["dir", "symlink_dir"] {
-                let name = format!("{}/../{}", dir_name, name);
+                let name = format!("{dir_name}/../{name}");
                 check!(p::open_dir(&dir, Path::new(&name)));
                 assert!(h::open_dir_nofollow(&dir, &name).is_err());
             }
@@ -288,7 +288,7 @@ fn open_dir_nofollow() {
             "symlink_dir_slashdotdotslash",
             "symlink_dotslash",
         ] {
-            let name = format!("{}{}", symlink_dir, suffix);
+            let name = format!("{symlink_dir}{suffix}");
             #[cfg(windows)]
             {
                 error!(p::open_dir(&dir, Path::new(&name)), 123);
@@ -299,7 +299,7 @@ fn open_dir_nofollow() {
             }
             assert!(h::open_dir_nofollow(&dir, &name).is_err());
             for dir_name in &["dir", "symlink_dir"] {
-                let name = format!("{}/../{}", dir_name, name);
+                let name = format!("{dir_name}/../{name}");
                 #[cfg(windows)]
                 {
                     error!(p::open_dir(&dir, Path::new(&name)), 123);
@@ -317,7 +317,7 @@ fn open_dir_nofollow() {
     // `open_dir_nofollow` can open them.
     for suffix in &["/", "/.", "/./"] {
         for symlink_dir in &["symlink_dir", "symlink_dot"] {
-            let name = format!("{}{}", symlink_dir, suffix);
+            let name = format!("{symlink_dir}{suffix}");
             check!(p::open_dir(&dir, Path::new(&name)));
             // On Windows, a trailing dot is stripped early.
             if cfg!(not(windows)) || suffix != &"/." {
@@ -326,7 +326,7 @@ fn open_dir_nofollow() {
                 assert!(h::open_dir_nofollow(&dir, &name).is_err());
             }
             for dir_name in &["dir", "symlink_dir"] {
-                let name = format!("{}/../{}", dir_name, name);
+                let name = format!("{dir_name}/../{name}");
                 check!(p::open_dir(&dir, Path::new(&name)));
                 // On Windows, a trailing dot is stripped early.
                 if cfg!(not(windows)) || suffix != &"/." {
@@ -349,7 +349,7 @@ fn open_dir_nofollow() {
             "symlink_dir_slashdotdotslash",
             "symlink_dotslash",
         ] {
-            let name = format!("{}{}", symlink_dir, suffix);
+            let name = format!("{symlink_dir}{suffix}");
             #[cfg(windows)]
             {
                 error!(p::open_dir(&dir, Path::new(&name)), 123);
@@ -361,7 +361,7 @@ fn open_dir_nofollow() {
                 check!(h::open_dir_nofollow(&dir, &name));
             }
             for dir_name in &["dir", "symlink_dir"] {
-                let name = format!("{}/../{}", dir_name, name);
+                let name = format!("{dir_name}/../{name}");
                 #[cfg(windows)]
                 {
                     error!(p::open_dir(&dir, Path::new(&name)), 123);
@@ -465,7 +465,7 @@ fn open_dir_nofollow_ambient() {
 
     // Check various ways of spelling `dir/../symlink_dir`.
     for dir_name in &["dir", "symlink_dir"] {
-        let name = format!("{}/../symlink_dir", dir_name);
+        let name = format!("{dir_name}/../symlink_dir");
         check!(h::open_ambient_dir(dir.path().join(&name)));
     }
 
@@ -473,10 +473,10 @@ fn open_dir_nofollow_ambient() {
     // expansion may end with `/` or a non-symlink).
     for suffix in &[""] {
         for symlink_dir in &["symlink_dot"] {
-            let name = format!("{}{}", symlink_dir, suffix);
+            let name = format!("{symlink_dir}{suffix}");
             check!(h::open_ambient_dir(dir.path().join(&name)));
             for dir_name in &["dir", "symlink_dir"] {
-                let name = format!("{}/../{}", dir_name, name);
+                let name = format!("{dir_name}/../{name}");
                 check!(h::open_ambient_dir(dir.path().join(&name)));
             }
         }
@@ -492,7 +492,7 @@ fn open_dir_nofollow_ambient() {
             "symlink_dir_slashdotdotslash",
             "symlink_dotslash",
         ] {
-            let name = format!("{}{}", symlink_dir, suffix);
+            let name = format!("{symlink_dir}{suffix}");
             #[cfg(windows)]
             {
                 error!(h::open_ambient_dir(dir.path().join(&name)), 123);
@@ -502,7 +502,7 @@ fn open_dir_nofollow_ambient() {
                 check!(h::open_ambient_dir(dir.path().join(&name)));
             }
             for dir_name in &["dir", "symlink_dir"] {
-                let name = format!("{}/../{}", dir_name, name);
+                let name = format!("{dir_name}/../{name}");
                 #[cfg(windows)]
                 {
                     error!(h::open_ambient_dir(dir.path().join(&name)), 123);
@@ -518,10 +518,10 @@ fn open_dir_nofollow_ambient() {
     // Check those same paths, but with various suffixes appended.
     for suffix in &["/", "/.", "/./"] {
         for symlink_dir in &["symlink_dir", "symlink_dot"] {
-            let name = format!("{}{}", symlink_dir, suffix);
+            let name = format!("{symlink_dir}{suffix}");
             check!(h::open_ambient_dir(dir.path().join(&name)));
             for dir_name in &["dir", "symlink_dir"] {
-                let name = format!("{}/../{}", dir_name, name);
+                let name = format!("{dir_name}/../{name}");
                 check!(h::open_ambient_dir(dir.path().join(&name)));
             }
         }
@@ -538,7 +538,7 @@ fn open_dir_nofollow_ambient() {
             "symlink_dir_slashdotdotslash",
             "symlink_dotslash",
         ] {
-            let name = format!("{}{}", symlink_dir, suffix);
+            let name = format!("{symlink_dir}{suffix}");
             #[cfg(windows)]
             {
                 error!(h::open_ambient_dir(dir.path().join(&name)), 123);
@@ -548,7 +548,7 @@ fn open_dir_nofollow_ambient() {
                 check!(h::open_ambient_dir(dir.path().join(&name)));
             }
             for dir_name in &["dir", "symlink_dir"] {
-                let name = format!("{}/../{}", dir_name, name);
+                let name = format!("{dir_name}/../{name}");
                 #[cfg(windows)]
                 {
                     error!(h::open_ambient_dir(dir.path().join(&name)), 123);

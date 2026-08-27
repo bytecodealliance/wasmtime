@@ -450,7 +450,7 @@ fn file_test_directoryinfo_readdir() {
     check!(h::create_dir(&start, dir));
     let prefix = "foo";
     for n in 0..3 {
-        let f = format!("{}.txt", n);
+        let f = format!("{n}.txt");
         let mut w = check!(h::create(&start, &f));
         let msg_str = format!("{}{}", prefix, n.to_string());
         let msg = msg_str.as_bytes();
@@ -925,7 +925,7 @@ fn metadata_vs_std_fs() {
 
     match std_dir.created() {
         Ok(_) => println!("std::fs supports file created times"),
-        Err(e) => println!("std::fs doesn't support file created times: {}", e),
+        Err(e) => println!("std::fs doesn't support file created times: {e}"),
     }
 
     check_metadata(&std_dir, &cap_std_dir);
@@ -994,10 +994,7 @@ fn check_metadata(std: &std::fs::Metadata, cap: &p::Metadata) {
             // while also allowing some targets to return valid created times
             // even when std doesn't.
             if let Ok(actual) = cap.created() {
-                println!(
-                    "std returned error for created time ({}) but got {:#?}",
-                    e, actual
-                );
+                println!("std returned error for created time ({e}) but got {actual:#?}");
                 assert_ne!(actual, std::time::SystemTime::UNIX_EPOCH);
             }
         }
