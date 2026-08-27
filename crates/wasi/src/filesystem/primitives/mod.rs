@@ -1,10 +1,21 @@
 //! Filesystem utilities.
 
-// Allow preexisting warnings that were present in this module before it was
-// imported from the cap-primitives crate. These still probably want to get
-// resolved in a future change.
-#![allow(trivial_numeric_casts)]
-#![allow(unsafe_op_in_unsafe_fn)]
+#![allow(
+    trivial_numeric_casts,
+    reason = "preexisting from when cap-primitives was imported"
+)]
+#![allow(
+    unsafe_op_in_unsafe_fn,
+    reason = "preexisting from when cap-primitives was imported"
+)]
+#![allow(
+    clippy::unnecessary_fallible_conversions,
+    reason = "platform-agnostic code can't always take advantage of this"
+)]
+#![allow(
+    clippy::allow_attributes_without_reason,
+    reason = "preexisting from when cap-primitives was imported"
+)]
 
 mod create_dir;
 mod dir_entry;
