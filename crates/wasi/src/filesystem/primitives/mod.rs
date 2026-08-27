@@ -94,3 +94,6 @@ fn dir_paths() {
         );
     }
 }
+
+#[cfg(test)]
+mod tests;
