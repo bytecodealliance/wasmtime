@@ -340,21 +340,7 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
-[[publisher.cap-fs-ext]]
-version = "4.0.3"
-when = "2026-08-20"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
 [[publisher.cap-primitives]]
-version = "4.0.3"
-when = "2026-08-20"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.cap-std]]
 version = "4.0.3"
 when = "2026-08-20"
 user-id = 6825
