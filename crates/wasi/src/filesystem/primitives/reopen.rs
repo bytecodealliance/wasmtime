@@ -1,6 +1,6 @@
 //! Re-open a `fs::File` to produce an independent handle.
 
-use crate::fs::{is_file_read_write, is_same_file, reopen_impl, OpenOptions};
+use crate::filesystem::primitives::{OpenOptions, is_file_read_write, is_same_file, reopen_impl};
 use std::{fs, io};
 
 /// Re-open an `fs::File` to produce an independent handle.

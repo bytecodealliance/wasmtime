@@ -1,4 +1,4 @@
-use crate::fs::file_path_by_searching;
+use crate::filesystem::primitives::file_path_by_searching;
 #[cfg(not(any(target_os = "wasi", target_os = "fuchsia")))]
 use rustix::termios::ttyname;
 #[cfg(not(any(target_os = "wasi", target_os = "fuchsia")))]

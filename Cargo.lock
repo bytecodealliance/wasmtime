@@ -5162,15 +5162,21 @@ dependencies = [
 name = "wasmtime-wasi"
 version = "49.0.0-dev"
 dependencies = [
+ "ambient-authority",
  "async-trait",
  "bitflags 2.11.1",
  "bytes",
  "cap-fs-ext",
  "cap-primitives",
  "env_logger 0.11.5",
+ "fs-set-times",
  "futures",
+ "io-extras",
+ "io-lifetimes 3.0.1",
+ "maybe-owned",
  "rand 0.10.1",
  "rustix 1.1.4",
+ "rustix-linux-procfs",
  "tempfile",
  "test-log",
  "test-programs-artifacts",
@@ -5184,6 +5190,7 @@ dependencies = [
  "wasmtime-wasi-io",
  "wiggle",
  "windows-sys 0.61.2",
+ "winx",
 ]
 
 [[package]]

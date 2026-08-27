@@ -1,5 +1,7 @@
 use super::open_parent;
-use crate::fs::{create_dir_unchecked, strip_dir_suffix, DirOptions, MaybeOwnedFile};
+use crate::filesystem::primitives::{
+    DirOptions, MaybeOwnedFile, create_dir_unchecked, strip_dir_suffix,
+};
 use std::path::Path;
 use std::{fs, io};
 

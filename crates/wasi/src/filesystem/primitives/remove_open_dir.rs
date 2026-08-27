@@ -1,4 +1,4 @@
-use crate::fs::{remove_open_dir_all_impl, remove_open_dir_impl};
+use crate::filesystem::primitives::{remove_open_dir_all_impl, remove_open_dir_impl};
 use std::{fs, io};
 
 /// Given an open directory handle, delete the directory.

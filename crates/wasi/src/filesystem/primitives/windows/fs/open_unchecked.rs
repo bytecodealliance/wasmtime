@@ -4,11 +4,11 @@
 
 use super::create_file_at_w::CreateFileAtW;
 use super::{open_options_to_std, prepare_open_options_for_open};
-use crate::fs::{
-    errors, file_path, get_access_mode, get_creation_mode, get_flags_and_attributes,
-    FollowSymlinks, OpenOptions, OpenUncheckedError, SymlinkKind,
+use crate::filesystem::primitives::{
+    FollowSymlinks, OpenOptions, OpenUncheckedError, SymlinkKind, errors, file_path,
+    get_access_mode, get_creation_mode, get_flags_and_attributes,
 };
-use crate::{ambient_authority, AmbientAuthority};
+use ambient_authority::{AmbientAuthority, ambient_authority};
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::MetadataExt;

@@ -1,7 +1,7 @@
 //! This defines `open_ambient`, for unsandboxed file opening.
 
-use crate::fs::{open_ambient_impl, OpenOptions};
-use crate::AmbientAuthority;
+use crate::filesystem::primitives::{OpenOptions, open_ambient_impl};
+use ambient_authority::AmbientAuthority;
 use std::path::Path;
 use std::{fs, io};
 

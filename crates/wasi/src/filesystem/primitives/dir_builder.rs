@@ -1,4 +1,4 @@
-use crate::fs::DirOptions;
+use crate::filesystem::primitives::DirOptions;
 use std::fmt;
 
 /// A builder used to create directories in various manners.

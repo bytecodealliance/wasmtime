@@ -1,7 +1,7 @@
 //! This module consists of helper types and functions for dealing
 //! with setting the file times.
 
-use crate::fs::{open, OpenOptions, SystemTimeSpec};
+use crate::filesystem::primitives::{open, OpenOptions, SystemTimeSpec};
 use rustix::io::Errno;
 use std::path::Path;
 use std::{fs, io};

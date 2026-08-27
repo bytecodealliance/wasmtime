@@ -1,4 +1,4 @@
-use crate::fs::{open_impl, OpenOptions};
+use crate::filesystem::primitives::{open_impl, OpenOptions};
 use std::ffi::OsStr;
 use std::{fs, io};
 

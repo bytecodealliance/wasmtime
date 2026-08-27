@@ -1,8 +1,8 @@
 //! Path canonicalization using `/proc/self/fd`.
 
 use super::procfs::get_path_from_proc_self_fd;
-use crate::fs::OpenOptionsExt;
-use crate::fs::{manually, open_beneath, FollowSymlinks, OpenOptions};
+use crate::filesystem::primitives::OpenOptionsExt;
+use crate::filesystem::primitives::{manually, open_beneath, FollowSymlinks, OpenOptions};
 use rustix::fs::OFlags;
 use std::path::{Component, Path, PathBuf};
 use std::{fs, io};

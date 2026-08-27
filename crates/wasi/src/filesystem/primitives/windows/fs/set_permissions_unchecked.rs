@@ -1,5 +1,5 @@
 use super::get_path::concatenate;
-use crate::fs::Permissions;
+use crate::filesystem::primitives::Permissions;
 use std::path::Path;
 use std::{fs, io};
 

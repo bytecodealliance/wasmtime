@@ -2,7 +2,7 @@
 //! with setting the file times specific to Linux.
 
 use super::procfs::set_times_through_proc_self_fd;
-use crate::fs::{open, OpenOptions, SystemTimeSpec};
+use crate::filesystem::primitives::{open, OpenOptions, SystemTimeSpec};
 use std::path::Path;
 use std::{fs, io};
 

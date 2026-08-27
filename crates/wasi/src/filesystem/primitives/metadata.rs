@@ -1,5 +1,5 @@
-use crate::fs::{FileType, ImplFileTypeExt, ImplMetadataExt, Permissions};
-use crate::time::SystemTime;
+use crate::filesystem::primitives::{FileType, ImplFileTypeExt, ImplMetadataExt, Permissions};
+use std::time::SystemTime;
 use std::{fs, io};
 
 /// Metadata information about a file.
@@ -52,9 +52,9 @@ impl Metadata {
             file_type,
             len: std.len(),
             permissions: Permissions::from_std(std.permissions()),
-            modified: std.modified().ok().map(SystemTime::from_std),
-            accessed: std.accessed().ok().map(SystemTime::from_std),
-            created: std.created().ok().map(SystemTime::from_std),
+            modified: std.modified().ok(),
+            accessed: std.accessed().ok(),
+            created: std.created().ok(),
             ext,
         }
     }
@@ -282,82 +282,82 @@ pub trait MetadataExt {
 impl MetadataExt for Metadata {
     #[inline]
     fn dev(&self) -> u64 {
-        crate::fs::MetadataExt::dev(&self.ext)
+        crate::filesystem::primitives::MetadataExt::dev(&self.ext)
     }
 
     #[inline]
     fn ino(&self) -> u64 {
-        crate::fs::MetadataExt::ino(&self.ext)
+        crate::filesystem::primitives::MetadataExt::ino(&self.ext)
     }
 
     #[inline]
     fn mode(&self) -> u32 {
-        crate::fs::MetadataExt::mode(&self.ext)
+        crate::filesystem::primitives::MetadataExt::mode(&self.ext)
     }
 
     #[inline]
     fn nlink(&self) -> u64 {
-        crate::fs::MetadataExt::nlink(&self.ext)
+        crate::filesystem::primitives::MetadataExt::nlink(&self.ext)
     }
 
     #[inline]
     fn uid(&self) -> u32 {
-        crate::fs::MetadataExt::uid(&self.ext)
+        crate::filesystem::primitives::MetadataExt::uid(&self.ext)
     }
 
     #[inline]
     fn gid(&self) -> u32 {
-        crate::fs::MetadataExt::gid(&self.ext)
+        crate::filesystem::primitives::MetadataExt::gid(&self.ext)
     }
 
     #[inline]
     fn rdev(&self) -> u64 {
-        crate::fs::MetadataExt::rdev(&self.ext)
+        crate::filesystem::primitives::MetadataExt::rdev(&self.ext)
     }
 
     #[inline]
     fn size(&self) -> u64 {
-        crate::fs::MetadataExt::size(&self.ext)
+        crate::filesystem::primitives::MetadataExt::size(&self.ext)
     }
 
     #[inline]
     fn atime(&self) -> i64 {
-        crate::fs::MetadataExt::atime(&self.ext)
+        crate::filesystem::primitives::MetadataExt::atime(&self.ext)
     }
 
     #[inline]
     fn atime_nsec(&self) -> i64 {
-        crate::fs::MetadataExt::atime_nsec(&self.ext)
+        crate::filesystem::primitives::MetadataExt::atime_nsec(&self.ext)
     }
 
     #[inline]
     fn mtime(&self) -> i64 {
-        crate::fs::MetadataExt::mtime(&self.ext)
+        crate::filesystem::primitives::MetadataExt::mtime(&self.ext)
     }
 
     #[inline]
     fn mtime_nsec(&self) -> i64 {
-        crate::fs::MetadataExt::mtime_nsec(&self.ext)
+        crate::filesystem::primitives::MetadataExt::mtime_nsec(&self.ext)
     }
 
     #[inline]
     fn ctime(&self) -> i64 {
-        crate::fs::MetadataExt::ctime(&self.ext)
+        crate::filesystem::primitives::MetadataExt::ctime(&self.ext)
     }
 
     #[inline]
     fn ctime_nsec(&self) -> i64 {
-        crate::fs::MetadataExt::ctime_nsec(&self.ext)
+        crate::filesystem::primitives::MetadataExt::ctime_nsec(&self.ext)
     }
 
     #[inline]
     fn blksize(&self) -> u64 {
-        crate::fs::MetadataExt::blksize(&self.ext)
+        crate::filesystem::primitives::MetadataExt::blksize(&self.ext)
     }
 
     #[inline]
     fn blocks(&self) -> u64 {
-        crate::fs::MetadataExt::blocks(&self.ext)
+        crate::filesystem::primitives::MetadataExt::blocks(&self.ext)
     }
 }
 
@@ -365,17 +365,17 @@ impl MetadataExt for Metadata {
 impl MetadataExt for Metadata {
     #[inline]
     fn dev(&self) -> u64 {
-        crate::fs::MetadataExt::dev(&self.ext)
+        crate::filesystem::primitives::MetadataExt::dev(&self.ext)
     }
 
     #[inline]
     fn ino(&self) -> u64 {
-        crate::fs::MetadataExt::ino(&self.ext)
+        crate::filesystem::primitives::MetadataExt::ino(&self.ext)
     }
 
     #[inline]
     fn nlink(&self) -> u64 {
-        crate::fs::MetadataExt::nlink(&self.ext)
+        crate::filesystem::primitives::MetadataExt::nlink(&self.ext)
     }
 }
 

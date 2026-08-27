@@ -1,4 +1,4 @@
-use crate::fs::Permissions;
+use crate::filesystem::primitives::Permissions;
 use rustix::fs::RawMode;
 use std::fs;
 
@@ -50,7 +50,7 @@ impl ImplPermissionsExt {
 }
 
 #[cfg(not(target_os = "wasi"))]
-impl crate::fs::PermissionsExt for ImplPermissionsExt {
+impl crate::filesystem::primitives::PermissionsExt for ImplPermissionsExt {
     fn mode(&self) -> u32 {
         self.mode as u32
     }

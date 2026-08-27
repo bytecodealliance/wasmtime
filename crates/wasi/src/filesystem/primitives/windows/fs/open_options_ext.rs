@@ -1,6 +1,6 @@
 #![allow(unsafe_code)]
 
-use crate::fs::OpenOptions;
+use crate::filesystem::primitives::OpenOptions;
 use std::io;
 use std::ptr::null_mut;
 use windows_sys::Win32::Foundation::{ERROR_INVALID_PARAMETER, GENERIC_READ, GENERIC_WRITE};

@@ -1,5 +1,5 @@
 #[cfg(not(target_os = "wasi"))]
-use crate::fs::DirOptionsExt;
+use crate::filesystem::primitives::DirOptionsExt;
 
 /// Options and flags which can be used to configure how a directory is
 /// created.
@@ -25,7 +25,7 @@ impl DirOptions {
 }
 
 #[cfg(unix)]
-impl crate::fs::DirBuilderExt for DirOptions {
+impl crate::filesystem::primitives::DirBuilderExt for DirOptions {
     #[inline]
     fn mode(&mut self, mode: u32) -> &mut Self {
         self.ext.mode(mode);
@@ -46,7 +46,7 @@ impl crate::fs::DirBuilderExt for DirOptions {
 impl arbitrary::Arbitrary<'_> for DirOptions {
     fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
         #[cfg(any(unix, target_os = "vxworks"))]
-        use crate::fs::DirBuilderExt;
+        use crate::filesystem::primitives::DirBuilderExt;
 
         #[allow(unused_mut)]
         let mut dir_options = Self::new();

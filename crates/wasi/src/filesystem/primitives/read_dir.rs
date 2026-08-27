@@ -1,4 +1,4 @@
-use crate::fs::{DirEntry, FollowSymlinks, ReadDirInner};
+use crate::filesystem::primitives::{DirEntry, FollowSymlinks, ReadDirInner};
 use std::path::Path;
 use std::{fmt, fs, io};
 

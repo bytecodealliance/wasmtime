@@ -1,4 +1,4 @@
-use crate::fs::{
+use crate::filesystem::primitives::{
     open_dir_for_reading, open_dir_for_reading_unchecked, open_entry_impl, read_dir_unchecked,
     remove_dir_unchecked, remove_file_unchecked, stat_unchecked, DirEntryInner, FollowSymlinks,
     Metadata, OpenOptions, ReadDir,

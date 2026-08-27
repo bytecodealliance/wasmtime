@@ -1,5 +1,5 @@
 use super::open_parent;
-use crate::fs::{set_times_nofollow_unchecked, MaybeOwnedFile, SystemTimeSpec};
+use crate::filesystem::primitives::{MaybeOwnedFile, SystemTimeSpec, set_times_nofollow_unchecked};
 use std::path::Path;
 use std::{fs, io};
 

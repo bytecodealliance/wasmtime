@@ -1,5 +1,7 @@
 use super::{internal_open, read_link_one};
-use crate::fs::{open_unchecked, FollowSymlinks, MaybeOwnedFile, OpenOptions, OpenUncheckedError};
+use crate::filesystem::primitives::{
+    FollowSymlinks, MaybeOwnedFile, OpenOptions, OpenUncheckedError, open_unchecked,
+};
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::{fs, io};

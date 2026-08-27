@@ -17,6 +17,8 @@ pub(crate) mod windows;
 #[cfg(windows)]
 pub(crate) use windows as sys;
 
+pub(crate) mod primitives;
+
 /// A helper struct which implements [`HasData`] for the `wasi:filesystem` APIs.
 ///
 /// This can be useful when directly calling `add_to_linker` functions directly,

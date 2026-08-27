@@ -1,10 +1,10 @@
 //! This defines `remove_dir`, the primary entrypoint to sandboxed file
 //! removal.
 
-use crate::fs::remove_dir_impl;
+use crate::filesystem::primitives::remove_dir_impl;
 #[cfg(racy_asserts)]
-use crate::fs::{
-    manually, map_result, remove_dir_unchecked, stat_unchecked, FollowSymlinks, Metadata,
+use crate::filesystem::primitives::{
+    FollowSymlinks, Metadata, manually, map_result, remove_dir_unchecked, stat_unchecked,
 };
 use std::path::Path;
 use std::{fs, io};

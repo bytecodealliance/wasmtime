@@ -1,6 +1,6 @@
 use super::compute_oflags;
-use crate::fs::{stat_unchecked, OpenOptions, OpenUncheckedError};
-use crate::AmbientAuthority;
+use crate::filesystem::primitives::{stat_unchecked, OpenOptions, OpenUncheckedError};
+use ambient_authority::AmbientAuthority;
 use io_lifetimes::AsFilelike;
 use rustix::fs::{openat, Mode, CWD};
 use rustix::io;

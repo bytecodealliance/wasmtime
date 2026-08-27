@@ -1,4 +1,4 @@
-use crate::fs::{Permissions, PermissionsExt};
+use crate::filesystem::primitives::{Permissions, PermissionsExt};
 use rustix::fs::{chmodat, AtFlags, Mode};
 use std::path::Path;
 use std::{fs, io};

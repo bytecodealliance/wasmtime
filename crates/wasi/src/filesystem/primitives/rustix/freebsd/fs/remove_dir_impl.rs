@@ -1,4 +1,4 @@
-use crate::fs::via_parent;
+use crate::filesystem::primitives::via_parent;
 use rustix::fs::{unlinkat, AtFlags};
 use std::path::Path;
 use std::{fs, io};

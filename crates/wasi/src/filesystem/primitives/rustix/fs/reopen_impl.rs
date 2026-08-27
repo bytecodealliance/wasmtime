@@ -1,5 +1,5 @@
-use crate::fs::{open_unchecked, OpenOptions};
-use crate::rustix::fs::file_path;
+use crate::filesystem::primitives::rustix::fs::file_path;
+use crate::filesystem::primitives::{OpenOptions, open_unchecked};
 use io_lifetimes::AsFilelike;
 use rustix::fs::CWD;
 use std::{fs, io};

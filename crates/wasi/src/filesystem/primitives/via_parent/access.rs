@@ -1,5 +1,5 @@
 use super::open_parent;
-use crate::fs::{access_unchecked, AccessType, FollowSymlinks, MaybeOwnedFile};
+use crate::filesystem::primitives::{AccessType, FollowSymlinks, MaybeOwnedFile, access_unchecked};
 use std::path::Path;
 use std::{fs, io};
 

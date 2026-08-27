@@ -2,7 +2,7 @@
 /// It opens the parent directory of the given path, and returns the basename,
 /// so that all the `via_parent` functions need to do is make sure they
 /// don't follow symlinks in the basename.
-use crate::fs::{errors, open_dir, path_requires_dir, MaybeOwnedFile};
+use crate::filesystem::primitives::{MaybeOwnedFile, errors, open_dir, path_requires_dir};
 use std::ffi::OsStr;
 use std::io;
 use std::path::{Component, Path};

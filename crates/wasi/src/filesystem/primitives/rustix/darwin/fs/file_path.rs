@@ -2,7 +2,7 @@
 //! library/std/src/sys/unix/fs.rs at revision
 //! 108e90ca78f052c0c1c49c42a22c85620be19712.
 
-use crate::rustix::fs::file_path_by_ttyname_or_seaching;
+use crate::filesystem::primitives::rustix::fs::file_path_by_ttyname_or_seaching;
 use rustix::fs::getpath;
 use std::ffi::OsString;
 use std::fs;

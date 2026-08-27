@@ -1,10 +1,10 @@
 use super::open_options_to_std;
-use crate::ambient_authority;
-use crate::fs::OpenOptionsExt;
-use crate::fs::{
-    open, open_ambient_dir, FileType, FollowSymlinks, ImplFileTypeExt, Metadata, OpenOptions,
-    ReadDir, ReadDirInner,
+use crate::filesystem::primitives::OpenOptionsExt;
+use crate::filesystem::primitives::{
+    FileType, FollowSymlinks, ImplFileTypeExt, Metadata, OpenOptions, ReadDir, ReadDirInner, open,
+    open_ambient_dir,
 };
+use ambient_authority::ambient_authority;
 use std::ffi::OsString;
 use std::{fmt, fs, io};
 use windows_sys::Win32::Storage::FileSystem::{
@@ -114,7 +114,9 @@ impl fmt::Debug for DirEntryInner {
 }
 
 #[doc(hidden)]
-impl crate::fs::_WindowsDirEntryExt for crate::fs::DirEntry {
+impl crate::filesystem::primitives::_WindowsDirEntryExt
+    for crate::filesystem::primitives::DirEntry
+{
     #[inline]
     fn full_metadata(&self) -> io::Result<Metadata> {
         DirEntryInner::full_metadata(&self.inner)

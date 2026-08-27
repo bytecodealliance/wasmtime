@@ -1,4 +1,4 @@
-use crate::fs::{open_unchecked, OpenOptions};
+use crate::filesystem::primitives::{OpenOptions, open_unchecked};
 use maybe_owned::MaybeOwned;
 use std::ops::Deref;
 use std::path::Component;

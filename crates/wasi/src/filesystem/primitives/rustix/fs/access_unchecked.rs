@@ -1,4 +1,4 @@
-use crate::fs::{AccessType, FollowSymlinks};
+use crate::filesystem::primitives::{AccessType, FollowSymlinks};
 use rustix::fs::{Access, AtFlags};
 use std::path::Path;
 use std::{fs, io};

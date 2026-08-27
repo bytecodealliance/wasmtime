@@ -13,12 +13,12 @@ mod set_times_impl;
 mod stat_impl;
 
 #[cfg(target_os = "android")]
-pub(crate) use crate::fs::manually::canonicalize as canonicalize_impl;
+pub(crate) use crate::filesystem::primitives::manually::canonicalize as canonicalize_impl;
 #[cfg(target_os = "android")]
-pub(crate) use crate::fs::manually::open_entry as open_entry_impl;
+pub(crate) use crate::filesystem::primitives::manually::open_entry as open_entry_impl;
 #[cfg(target_os = "android")]
-pub(crate) use crate::fs::manually::stat as stat_impl;
-pub(crate) use crate::fs::via_parent::set_times_nofollow as set_times_nofollow_impl;
+pub(crate) use crate::filesystem::primitives::manually::stat as stat_impl;
+pub(crate) use crate::filesystem::primitives::via_parent::set_times_nofollow as set_times_nofollow_impl;
 #[cfg(target_os = "linux")]
 pub(crate) use canonicalize_impl::canonicalize_impl;
 pub(crate) use file_path::file_path;

@@ -1,4 +1,4 @@
-use crate::fs::OpenOptions;
+use crate::filesystem::primitives::OpenOptions;
 use ambient_authority::AmbientAuthority;
 use rustix::fs::OFlags;
 use std::ffi::{OsStr, OsString};
@@ -154,10 +154,12 @@ pub(crate) const fn target_o_path() -> OFlags {
 #[cfg(racy_asserts)]
 #[test]
 fn append_dir_suffix_tests() {
-    assert!(append_dir_suffix(Path::new("foo").to_path_buf())
-        .display()
-        .to_string()
-        .ends_with('/'));
+    assert!(
+        append_dir_suffix(Path::new("foo").to_path_buf())
+            .display()
+            .to_string()
+            .ends_with('/')
+    );
 }
 
 #[test]

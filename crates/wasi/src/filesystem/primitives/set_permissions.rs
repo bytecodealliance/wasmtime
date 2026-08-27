@@ -1,9 +1,11 @@
 //! This defines `set_permissions`, the primary entrypoint to sandboxed
 //! filesystem permissions modification.
 
+use crate::filesystem::primitives::{
+    Permissions, set_permissions_impl, set_symlink_permissions_impl,
+};
 #[cfg(racy_asserts)]
-use crate::fs::{map_result, stat, stat_unchecked, FollowSymlinks, Metadata};
-use crate::fs::{set_permissions_impl, set_symlink_permissions_impl, Permissions};
+use crate::filesystem::primitives::{FollowSymlinks, Metadata, map_result, stat, stat_unchecked};
 use std::path::Path;
 use std::{fs, io};
 

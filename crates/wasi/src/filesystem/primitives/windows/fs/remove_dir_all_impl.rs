@@ -1,5 +1,5 @@
 use super::get_path::get_path;
-use crate::fs::{open_dir, open_dir_nofollow, remove_dir, stat, FollowSymlinks};
+use crate::filesystem::primitives::{open_dir, open_dir_nofollow, remove_dir, stat, FollowSymlinks};
 use std::path::Path;
 use std::{fs, io};
 

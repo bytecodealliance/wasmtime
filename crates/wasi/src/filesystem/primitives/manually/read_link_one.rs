@@ -1,4 +1,4 @@
-use crate::fs::{errors, read_link_unchecked, MAX_SYMLINK_EXPANSIONS};
+use crate::filesystem::primitives::{MAX_SYMLINK_EXPANSIONS, errors, read_link_unchecked};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::{fs, io};

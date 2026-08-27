@@ -1,6 +1,6 @@
 //! The `FileType` struct.
 
-use crate::fs::ImplFileTypeExt;
+use crate::filesystem::primitives::ImplFileTypeExt;
 
 /// `FileType`'s inner state.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]

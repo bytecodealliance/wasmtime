@@ -1,4 +1,4 @@
-use crate::fs::{ImplMetadataExt, Metadata};
+use crate::filesystem::primitives::{ImplMetadataExt, Metadata};
 use rustix::fs::{statat, AtFlags};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;

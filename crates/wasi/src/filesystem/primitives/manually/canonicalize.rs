@@ -2,7 +2,7 @@
 //! resolution, in order to enforce sandboxing.
 
 use super::internal_open;
-use crate::fs::{canonicalize_options, FollowSymlinks, MaybeOwnedFile};
+use crate::filesystem::primitives::{FollowSymlinks, MaybeOwnedFile, canonicalize_options};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 

@@ -1,13 +1,13 @@
 //! This defines `symlink`, the primary entrypoint to sandboxed symlink
 //! creation.
 
-use crate::fs::errors;
+use crate::filesystem::primitives::errors;
 #[cfg(all(racy_asserts, not(windows)))]
-use crate::fs::symlink_unchecked;
+use crate::filesystem::primitives::symlink_unchecked;
 #[cfg(racy_asserts)]
-use crate::fs::{canonicalize, manually, map_result, stat_unchecked, FollowSymlinks, Metadata};
+use crate::filesystem::primitives::{FollowSymlinks, Metadata, canonicalize, manually, map_result, stat_unchecked};
 #[cfg(all(racy_asserts, windows))]
-use crate::fs::{symlink_dir_unchecked, symlink_file_unchecked};
+use crate::filesystem::primitives::{symlink_dir_unchecked, symlink_file_unchecked};
 use std::path::Path;
 use std::{fs, io};
 
@@ -32,7 +32,7 @@ pub fn symlink(old_path: &Path, new_start: &fs::File, new_path: &Path) -> io::Re
 
 #[cfg(not(windows))]
 fn write_symlink_impl(old_path: &Path, new_start: &fs::File, new_path: &Path) -> io::Result<()> {
-    use crate::fs::symlink_impl;
+    use crate::filesystem::primitives::symlink_impl;
 
     #[cfg(racy_asserts)]
     let stat_before = stat_unchecked(new_start, new_path, FollowSymlinks::No);
@@ -73,7 +73,7 @@ pub fn symlink_contents<P: AsRef<Path>, Q: AsRef<Path>>(
 #[cfg(windows)]
 #[inline]
 pub fn symlink_file(old_path: &Path, new_start: &fs::File, new_path: &Path) -> io::Result<()> {
-    use crate::fs::symlink_file_impl;
+    use crate::filesystem::primitives::symlink_file_impl;
 
     // As above, don't allow creating symlinks to absolute paths.
     if old_path.has_root() {
@@ -108,7 +108,7 @@ pub fn symlink_file(old_path: &Path, new_start: &fs::File, new_path: &Path) -> i
 #[cfg(windows)]
 #[inline]
 pub fn symlink_dir(old_path: &Path, new_start: &fs::File, new_path: &Path) -> io::Result<()> {
-    use crate::fs::symlink_dir_impl;
+    use crate::filesystem::primitives::symlink_dir_impl;
 
     // As above, don't allow creating symlinks to absolute paths.
     if old_path.has_root() {

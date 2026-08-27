@@ -1,4 +1,4 @@
-use crate::fs::{FollowSymlinks, ImplMetadataExt, Metadata};
+use crate::filesystem::primitives::{FollowSymlinks, ImplMetadataExt, Metadata};
 use rustix::fs::{statat, AtFlags};
 use std::path::Path;
 use std::{fs, io};

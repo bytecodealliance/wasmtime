@@ -1,10 +1,10 @@
 //! This defines `hard_link`, the primary entrypoint to sandboxed hard-link
 //! creation.
 
-use crate::fs::hard_link_impl;
+use crate::filesystem::primitives::hard_link_impl;
 #[cfg(racy_asserts)]
-use crate::fs::{
-    canonicalize, hard_link_unchecked, map_result, stat_unchecked, FollowSymlinks, Metadata,
+use crate::filesystem::primitives::{
+    FollowSymlinks, Metadata, canonicalize, hard_link_unchecked, map_result, stat_unchecked,
 };
 use std::path::Path;
 use std::{fs, io};

@@ -1,4 +1,4 @@
-use crate::fs::FileType;
+use crate::filesystem::primitives::FileType;
 use rustix::fs::RawMode;
 use std::{fs, io};
 

@@ -1,6 +1,6 @@
 #![allow(clippy::useless_conversion)]
 
-use crate::fs::MetadataExt;
+use crate::filesystem::primitives::MetadataExt;
 use std::{fs, io};
 
 #[derive(Debug, Clone)]
@@ -185,7 +185,7 @@ impl MetadataExt for ImplMetadataExt {
 }
 
 #[doc(hidden)]
-impl crate::fs::_WindowsByHandle for crate::fs::Metadata {
+impl crate::filesystem::primitives::_WindowsByHandle for crate::filesystem::primitives::Metadata {
     #[inline]
     fn file_attributes(&self) -> u32 {
         self.ext.file_attributes

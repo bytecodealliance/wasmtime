@@ -3,7 +3,7 @@
 //! `fstat` to perform a fast sandboxed `stat`.
 
 use super::file_metadata::file_metadata;
-use crate::fs::{manually, open_beneath, FollowSymlinks, Metadata, OpenOptions};
+use crate::filesystem::primitives::{manually, open_beneath, FollowSymlinks, Metadata, OpenOptions};
 use rustix::fs::OFlags;
 use std::path::Path;
 use std::{fs, io};
@@ -15,7 +15,7 @@ pub(crate) fn stat_impl(
     path: &Path,
     follow: FollowSymlinks,
 ) -> io::Result<Metadata> {
-    use crate::fs::{stat_unchecked, OpenOptionsExt};
+    use crate::filesystem::primitives::{stat_unchecked, OpenOptionsExt};
     use std::path::Component;
 
     // Optimization: if path has exactly one component and it's not ".." or

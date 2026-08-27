@@ -1,4 +1,4 @@
-use crate::fs::copy_impl;
+use crate::filesystem::primitives::copy_impl;
 use std::path::Path;
 use std::{fs, io};
 

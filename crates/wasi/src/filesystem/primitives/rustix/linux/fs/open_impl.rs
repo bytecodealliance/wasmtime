@@ -8,16 +8,16 @@
 //! On older Linux, fall back to `manually::open`.
 
 #[cfg(racy_asserts)]
-use crate::fs::is_same_file;
-use crate::fs::{manually, OpenOptions};
+use crate::filesystem::primitives::is_same_file;
+use crate::filesystem::primitives::{OpenOptions, manually};
 use std::path::Path;
 use std::{fs, io};
 #[cfg(target_os = "linux")]
 use {
     super::super::super::fs::compute_oflags,
-    crate::fs::errors,
+    crate::filesystem::primitives::errors,
     io_lifetimes::FromFd,
-    rustix::fs::{openat2, Mode, OFlags, RawMode, ResolveFlags},
+    rustix::fs::{Mode, OFlags, RawMode, ResolveFlags, openat2},
     rustix::path::Arg,
     std::sync::atomic::AtomicBool,
     std::sync::atomic::Ordering::Relaxed,

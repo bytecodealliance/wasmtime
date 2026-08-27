@@ -1,8 +1,8 @@
 //! Sandboxed path canonicalization.
 
-use crate::fs::canonicalize_impl;
+use crate::filesystem::primitives::canonicalize_impl;
 #[cfg(racy_asserts)]
-use crate::fs::{OpenOptions, file_path, open};
+use crate::filesystem::primitives::{OpenOptions, file_path, open};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 

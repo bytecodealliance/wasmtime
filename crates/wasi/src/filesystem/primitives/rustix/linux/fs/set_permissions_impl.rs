@@ -1,5 +1,5 @@
 use super::procfs::set_permissions_through_proc_self_fd;
-use crate::fs::{open, OpenOptions, Permissions};
+use crate::filesystem::primitives::{open, OpenOptions, Permissions};
 use rustix::fs::{fchmod, Mode, RawMode};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;

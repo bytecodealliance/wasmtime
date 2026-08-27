@@ -1,4 +1,4 @@
-use crate::fs::{open, FollowSymlinks, OpenOptions, OpenOptionsExt};
+use crate::filesystem::primitives::{open, FollowSymlinks, OpenOptions, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 use windows_sys::Win32::Storage::FileSystem::{

@@ -1,4 +1,4 @@
-use crate::fs::is_file_read_write_impl;
+use crate::filesystem::primitives::is_file_read_write_impl;
 use std::{fs, io};
 
 /// Return a pair of booleans indicating whether the given file is opened

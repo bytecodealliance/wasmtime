@@ -1,4 +1,4 @@
-use crate::fs::FileType;
+use crate::filesystem::primitives::FileType;
 use std::{fs, io};
 
 /// A type that implements `FileTypeExt` for this platform.
@@ -98,7 +98,9 @@ impl ImplFileTypeExt {
 }
 
 #[doc(hidden)]
-impl crate::fs::_WindowsFileTypeExt for crate::fs::FileType {
+impl crate::filesystem::primitives::_WindowsFileTypeExt
+    for crate::filesystem::primitives::FileType
+{
     #[inline]
     fn is_block_device(&self) -> bool {
         false

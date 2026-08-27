@@ -1,5 +1,5 @@
 use super::super::super::fs::compute_oflags;
-use crate::fs::{errors, manually, OpenOptions};
+use crate::filesystem::primitives::{errors, manually, OpenOptions};
 use io_lifetimes::FromFd;
 use rustix::fs::{openat, Mode, OFlags, RawMode};
 use std::path::Path;

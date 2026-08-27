@@ -49,14 +49,14 @@ pub(crate) mod errors;
     target_os = "watchos",
     target_os = "visionos",
 ))]
-pub(crate) use crate::rustix::darwin::fs::*;
+pub(crate) use crate::filesystem::primitives::rustix::darwin::fs::*;
 #[cfg(target_os = "freebsd")]
-pub(crate) use crate::rustix::freebsd::fs::*;
+pub(crate) use crate::filesystem::primitives::rustix::freebsd::fs::*;
 #[cfg(any(target_os = "android", target_os = "linux"))]
-pub(crate) use crate::rustix::linux::fs::*;
+pub(crate) use crate::filesystem::primitives::rustix::linux::fs::*;
 #[cfg(not(any(target_os = "android", target_os = "linux", target_os = "freebsd")))]
 #[rustfmt::skip]
-pub(crate) use crate::fs::{
+pub(crate) use crate::filesystem::primitives::{
     manually::open_entry as open_entry_impl,
     manually::open as open_impl,
     manually::stat as stat_impl,
@@ -97,7 +97,7 @@ pub(crate) use set_times_impl::set_times_impl;
 #[cfg(target_os = "freebsd")]
 pub(crate) use set_times_impl::set_times_impl as set_times_manually;
 #[rustfmt::skip]
-pub(crate) use crate::fs::{
+pub(crate) use crate::filesystem::primitives::{
     via_parent::access as access_impl,
     via_parent::hard_link as hard_link_impl,
     via_parent::create_dir as create_dir_impl,
@@ -107,10 +107,10 @@ pub(crate) use crate::fs::{
     remove_open_dir_by_searching as remove_open_dir_impl,
 };
 #[cfg(not(target_os = "wasi"))]
-pub(crate) use crate::fs::via_parent::set_symlink_permissions as set_symlink_permissions_impl;
+pub(crate) use crate::filesystem::primitives::via_parent::set_symlink_permissions as set_symlink_permissions_impl;
 #[cfg(not(target_os = "freebsd"))]
 #[rustfmt::skip]
-pub(crate) use crate::fs::{
+pub(crate) use crate::filesystem::primitives::{
     via_parent::remove_dir as remove_dir_impl,
     via_parent::remove_file as remove_file_impl,
 };

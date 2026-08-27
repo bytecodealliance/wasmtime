@@ -6,8 +6,8 @@
 //! is mounted, with actual `procfs`, and without any additional mount points
 //! on top of the paths we open.
 
-use crate::fs::OpenOptionsExt;
-use crate::fs::{
+use crate::filesystem::primitives::OpenOptionsExt;
+use crate::filesystem::primitives::{
     errors, open, read_link_unchecked, set_times_follow_unchecked, OpenOptions, SystemTimeSpec,
 };
 use io_lifetimes::{AsFd, AsFilelike};

@@ -1,9 +1,9 @@
 use std::io;
 
 #[cfg(not(windows))]
-pub(crate) use crate::rustix::fs::errors::*;
+pub(crate) use crate::filesystem::primitives::rustix::fs::errors::*;
 #[cfg(windows)]
-pub(crate) use crate::windows::fs::errors::*;
+pub(crate) use crate::filesystem::primitives::windows::fs::errors::*;
 
 #[cold]
 pub(crate) fn escape_attempt() -> io::Error {

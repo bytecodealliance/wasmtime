@@ -1,4 +1,4 @@
-use crate::fs::{
+use crate::filesystem::primitives::{
     FileType, FollowSymlinks, Metadata, MetadataExt, OpenOptions, ReadDir, ReadDirInner,
 };
 use rustix::fs::DirEntry;
@@ -44,7 +44,7 @@ impl DirEntryInner {
     #[inline]
     #[allow(clippy::unnecessary_wraps)]
     pub(crate) fn file_type(&self) -> io::Result<FileType> {
-        use crate::fs::ImplFileTypeExt;
+        use crate::filesystem::primitives::ImplFileTypeExt;
 
         Ok(match self.rustix.file_type() {
             rustix::fs::FileType::Directory => FileType::dir(),

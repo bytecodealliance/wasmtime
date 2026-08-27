@@ -1,10 +1,10 @@
 #![allow(clippy::useless_conversion)]
 
-use crate::fs::{ImplFileTypeExt, ImplPermissionsExt, Metadata};
-use crate::time::{Duration, SystemClock, SystemTime};
-#[cfg(target_os = "linux")]
-use rustix::fs::{makedev, Statx, StatxFlags};
+use crate::filesystem::primitives::{ImplFileTypeExt, ImplPermissionsExt, Metadata};
 use rustix::fs::{RawMode, Stat};
+#[cfg(target_os = "linux")]
+use rustix::fs::{Statx, StatxFlags, makedev};
+use std::time::{Duration, SystemTime};
 use std::{fs, io};
 
 #[derive(Debug, Clone)]
@@ -246,16 +246,16 @@ impl ImplMetadataExt {
 #[allow(clippy::similar_names)]
 fn system_time_from_rustix(sec: i64, nsec: u64) -> Option<SystemTime> {
     if sec >= 0 {
-        SystemClock::UNIX_EPOCH.checked_add(Duration::new(u64::try_from(sec).unwrap(), nsec as _))
+        SystemTime::UNIX_EPOCH.checked_add(Duration::new(u64::try_from(sec).unwrap(), nsec as _))
     } else {
-        SystemClock::UNIX_EPOCH
+        SystemTime::UNIX_EPOCH
             .checked_sub(Duration::new(u64::try_from(-sec).unwrap(), 0))
             .map(|t| t.checked_add(Duration::new(0, nsec as u32)))
             .flatten()
     }
 }
 
-impl crate::fs::MetadataExt for ImplMetadataExt {
+impl crate::filesystem::primitives::MetadataExt for ImplMetadataExt {
     #[inline]
     fn dev(&self) -> u64 {
         self.dev
@@ -355,7 +355,7 @@ impl crate::fs::MetadataExt for ImplMetadataExt {
 #[test]
 fn negative_time() {
     let system_time = system_time_from_rustix(-1, 1).unwrap();
-    let d = SystemClock::UNIX_EPOCH.duration_since(system_time).unwrap();
+    let d = SystemTime::UNIX_EPOCH.duration_since(system_time).unwrap();
     assert_eq!(d.as_secs(), 0);
     if !cfg!(emulate_second_only_system) {
         assert_eq!(d.subsec_nanos(), 999999999);

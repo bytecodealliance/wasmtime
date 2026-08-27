@@ -1,11 +1,11 @@
 //! This defines `create_dir`, the primary entrypoint to sandboxed directory
 //! creation.
 
+use crate::filesystem::primitives::{DirOptions, create_dir_impl};
 #[cfg(racy_asserts)]
-use crate::fs::{
-    canonicalize, create_dir_unchecked, map_result, stat_unchecked, FollowSymlinks, Metadata,
+use crate::filesystem::primitives::{
+    FollowSymlinks, Metadata, canonicalize, create_dir_unchecked, map_result, stat_unchecked,
 };
-use crate::fs::{create_dir_impl, DirOptions};
 use std::path::Path;
 use std::{fs, io};
 

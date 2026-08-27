@@ -1,4 +1,4 @@
-use crate::fs::{FollowSymlinks, OpenOptions, OpenOptionsExt};
+use crate::filesystem::primitives::{FollowSymlinks, OpenOptions, OpenOptionsExt};
 use std::fs;
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_WRITE_THROUGH,

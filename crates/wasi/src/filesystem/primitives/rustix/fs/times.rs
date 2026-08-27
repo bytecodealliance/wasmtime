@@ -1,9 +1,9 @@
-use crate::fs::SystemTimeSpec;
-use crate::time::SystemClock;
+use crate::filesystem::primitives::SystemTimeSpec;
 use io_lifetimes::BorrowedFd;
-use rustix::fs::{utimensat, AtFlags, Timestamps, UTIME_NOW, UTIME_OMIT};
+use rustix::fs::{AtFlags, Timestamps, UTIME_NOW, UTIME_OMIT, utimensat};
 use rustix::time::Timespec;
 use std::path::Path;
+use std::time::SystemTime;
 use std::{fs, io};
 
 #[allow(clippy::useless_conversion)]
@@ -18,7 +18,7 @@ pub(crate) fn to_timespec(ft: Option<SystemTimeSpec>) -> io::Result<Timespec> {
             tv_nsec: UTIME_NOW.into(),
         },
         Some(SystemTimeSpec::Absolute(ft)) => {
-            let duration = ft.duration_since(SystemClock::UNIX_EPOCH).unwrap();
+            let duration = ft.duration_since(SystemTime::UNIX_EPOCH).unwrap();
             let nanoseconds = duration.subsec_nanos();
             assert_ne!(i64::from(nanoseconds), i64::from(UTIME_OMIT));
             assert_ne!(i64::from(nanoseconds), i64::from(UTIME_NOW));

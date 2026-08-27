@@ -1,7 +1,7 @@
 use super::open_parent;
+use crate::filesystem::primitives::{MaybeOwnedFile, rename_unchecked, strip_dir_suffix};
 #[cfg(unix)]
-use crate::fs::{append_dir_suffix, path_has_trailing_slash};
-use crate::fs::{rename_unchecked, strip_dir_suffix, MaybeOwnedFile};
+use crate::filesystem::primitives::{append_dir_suffix, path_has_trailing_slash};
 use std::path::Path;
 use std::{fs, io};
 

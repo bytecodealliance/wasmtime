@@ -1,4 +1,4 @@
-use crate::fs::{
+use crate::filesystem::primitives::{
     is_root_dir, open_dir_unchecked, read_dir_unchecked, FollowSymlinks, MaybeOwnedFile, Metadata,
 };
 use std::fs;

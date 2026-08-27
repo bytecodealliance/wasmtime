@@ -7,7 +7,7 @@ mod set_permissions_impl;
 mod set_times_impl;
 mod stat_impl;
 
-pub(crate) use crate::fs::manually::canonicalize as canonicalize_impl;
+pub(crate) use crate::filesystem::primitives::manually::canonicalize as canonicalize_impl;
 pub(crate) use check::beneath_supported;
 pub(crate) use open_entry_impl::open_entry_impl;
 pub(crate) use open_impl::open_impl;

@@ -1,5 +1,5 @@
-use crate::fs::DirOptions;
-use rustix::fs::{mkdirat, Mode, RawMode};
+use crate::filesystem::primitives::DirOptions;
+use rustix::fs::{Mode, RawMode, mkdirat};
 use std::path::Path;
 use std::{fs, io};
 

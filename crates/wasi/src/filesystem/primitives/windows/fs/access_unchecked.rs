@@ -1,4 +1,4 @@
-use crate::fs::{open, AccessType, FollowSymlinks, OpenOptions};
+use crate::filesystem::primitives::{open, AccessType, FollowSymlinks, OpenOptions};
 use std::path::Path;
 use std::{fs, io};
 

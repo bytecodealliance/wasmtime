@@ -1,5 +1,5 @@
-use crate::fs::{
-    dir_options, DirEntryInner, FileType, FollowSymlinks, Metadata, OpenOptions, ReadDir,
+use crate::filesystem::primitives::{
+    DirEntryInner, FileType, FollowSymlinks, Metadata, OpenOptions, ReadDir, dir_options,
 };
 #[cfg(not(windows))]
 use rustix::fs::DirEntryExt;

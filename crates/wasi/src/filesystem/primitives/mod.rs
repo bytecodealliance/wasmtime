@@ -1,5 +1,7 @@
 //! Filesystem utilities.
 
+#![allow(warnings)]
+
 #[cfg(racy_asserts)]
 #[macro_use]
 pub(crate) mod assert_same_file;
@@ -52,14 +54,18 @@ pub(crate) use file_path_by_searching::file_path_by_searching;
 pub(crate) use open_unchecked_error::*;
 
 #[cfg(not(windows))]
-pub(crate) use super::rustix::fs::*;
+mod rustix;
+#[cfg(not(windows))]
+pub(crate) use self::rustix::fs::*;
 #[cfg(windows)]
-pub(crate) use super::windows::fs::*;
+mod windows;
+#[cfg(windows)]
+pub(crate) use self::windows::fs::*;
 
 #[cfg(not(windows))]
 pub(crate) use read_dir::{read_dir_nofollow, read_dir_unchecked};
 
-pub use access::{access, AccessModes, AccessType};
+pub use access::{AccessModes, AccessType, access};
 pub use canonicalize::canonicalize;
 pub use copy::copy;
 pub use create_dir::create_dir;
@@ -87,7 +93,7 @@ pub use open_options::*;
 pub use permissions::Permissions;
 #[cfg(unix)]
 pub use permissions::PermissionsExt;
-pub use read_dir::{read_base_dir, read_dir, ReadDir};
+pub use read_dir::{ReadDir, read_base_dir, read_dir};
 pub use read_link::{read_link, read_link_contents};
 pub use remove_dir::remove_dir;
 pub use remove_dir_all::remove_dir_all;

@@ -1,4 +1,4 @@
-use crate::fs::{open, OpenOptions, Permissions};
+use crate::filesystem::primitives::{open, OpenOptions, Permissions};
 use rustix::fs::{fchmod, Mode};
 use rustix::io::Errno;
 #[cfg(unix)]

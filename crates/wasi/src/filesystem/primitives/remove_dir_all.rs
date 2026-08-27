@@ -1,4 +1,4 @@
-use crate::fs::remove_dir_all_impl;
+use crate::filesystem::primitives::remove_dir_all_impl;
 use std::path::Path;
 use std::{fs, io};
 

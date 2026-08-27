@@ -1,10 +1,10 @@
 //! Manual path resolution, one component at a time, with manual symlink
 //! resolution, in order to enforce sandboxing.
 
-use super::{read_link_one, CanonicalPath, CowComponent};
-use crate::fs::{
-    dir_options, errors, open_unchecked, path_has_trailing_dot, path_has_trailing_slash,
-    stat_unchecked, FollowSymlinks, MaybeOwnedFile, Metadata, OpenOptions, OpenUncheckedError,
+use super::{CanonicalPath, CowComponent, read_link_one};
+use crate::filesystem::primitives::{
+    FollowSymlinks, MaybeOwnedFile, Metadata, OpenOptions, OpenUncheckedError, dir_options, errors,
+    open_unchecked, path_has_trailing_dot, path_has_trailing_slash, stat_unchecked,
 };
 #[cfg(any(target_os = "android", target_os = "linux", target_os = "freebsd"))]
 use rustix::fs::OFlags;
@@ -13,7 +13,9 @@ use std::path::{Component, Path, PathBuf};
 use std::{fs, io, mem};
 #[cfg(windows)]
 use {
-    crate::fs::{open_dir_unchecked, path_really_has_trailing_dot, SymlinkKind},
+    crate::filesystem::primitives::{
+        SymlinkKind, open_dir_unchecked, path_really_has_trailing_dot,
+    },
     windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_DIRECTORY,
 };
 

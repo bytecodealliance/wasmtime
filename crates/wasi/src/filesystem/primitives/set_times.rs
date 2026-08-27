@@ -3,7 +3,7 @@
 //!
 //! TODO: `check_set_times` etc.
 
-use crate::fs::{set_times_impl, set_times_nofollow_impl, SystemTimeSpec};
+use crate::filesystem::primitives::{SystemTimeSpec, set_times_impl, set_times_nofollow_impl};
 use std::path::Path;
 use std::{fs, io};
 

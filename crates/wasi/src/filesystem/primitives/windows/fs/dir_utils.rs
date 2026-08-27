@@ -1,6 +1,6 @@
-use crate::fs::OpenOptionsExt;
-use crate::fs::{errors, OpenOptions};
-use crate::AmbientAuthority;
+use crate::filesystem::primitives::OpenOptionsExt;
+use crate::filesystem::primitives::{errors, OpenOptions};
+use ambient_authority::AmbientAuthority;
 use std::ffi::OsString;
 use std::ops::Deref;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};

@@ -1,4 +1,4 @@
-use crate::time::SystemTime;
+use std::time::SystemTime;
 
 /// A value for specifying a time.
 #[derive(Debug)]
@@ -20,9 +20,7 @@ impl SystemTimeSpec {
     pub fn from_std(std: fs_set_times::SystemTimeSpec) -> Self {
         match std {
             fs_set_times::SystemTimeSpec::SymbolicNow => Self::SymbolicNow,
-            fs_set_times::SystemTimeSpec::Absolute(time) => {
-                Self::Absolute(SystemTime::from_std(time))
-            }
+            fs_set_times::SystemTimeSpec::Absolute(time) => Self::Absolute(time),
         }
     }
 
@@ -32,7 +30,7 @@ impl SystemTimeSpec {
     pub const fn into_std(self) -> fs_set_times::SystemTimeSpec {
         match self {
             Self::SymbolicNow => fs_set_times::SystemTimeSpec::SymbolicNow,
-            Self::Absolute(time) => fs_set_times::SystemTimeSpec::Absolute(time.into_std()),
+            Self::Absolute(time) => fs_set_times::SystemTimeSpec::Absolute(time),
         }
     }
 }

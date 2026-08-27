@@ -1,9 +1,9 @@
 //! This defines `read_link`, the primary entrypoint to sandboxed symbolic link
 //! dereferencing.
 
-use crate::fs::{errors, read_link_impl};
+use crate::filesystem::primitives::{errors, read_link_impl};
 #[cfg(racy_asserts)]
-use crate::fs::{map_result, read_link_unchecked, stat, FollowSymlinks};
+use crate::filesystem::primitives::{FollowSymlinks, map_result, read_link_unchecked, stat};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 

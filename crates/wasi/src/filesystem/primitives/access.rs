@@ -1,8 +1,8 @@
 //! Access test functions.
 
-use crate::fs::{FollowSymlinks, access_impl};
+use crate::filesystem::primitives::{FollowSymlinks, access_impl};
 #[cfg(racy_asserts)]
-use crate::fs::{access_unchecked, file_path};
+use crate::filesystem::primitives::{access_unchecked, file_path};
 use std::path::Path;
 use std::{fs, io};
 

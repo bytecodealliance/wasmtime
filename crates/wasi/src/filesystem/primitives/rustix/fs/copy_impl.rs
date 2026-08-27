@@ -2,7 +2,7 @@
 // library/std/src/sys/unix/fs.rs at revision
 // 108e90ca78f052c0c1c49c42a22c85620be19712.
 
-use crate::fs::{open, OpenOptions};
+use crate::filesystem::primitives::{OpenOptions, open};
 #[cfg(any(target_os = "android", target_os = "linux"))]
 use rustix::fs::copy_file_range;
 #[cfg(any(
@@ -13,8 +13,8 @@ use rustix::fs::copy_file_range;
     target_os = "visionos",
 ))]
 use rustix::fs::{
-    copyfile_state_alloc, copyfile_state_free, copyfile_state_get_copied, copyfile_state_t,
-    fclonefileat, fcopyfile, CloneFlags, CopyfileFlags,
+    CloneFlags, CopyfileFlags, copyfile_state_alloc, copyfile_state_free,
+    copyfile_state_get_copied, copyfile_state_t, fclonefileat, fcopyfile,
 };
 use std::path::Path;
 use std::{fs, io};
@@ -37,7 +37,7 @@ fn open_to_and_set_permissions(
     path: &Path,
     reader_metadata: fs::Metadata,
 ) -> io::Result<(fs::File, fs::Metadata)> {
-    use crate::fs::OpenOptionsExt;
+    use crate::filesystem::primitives::OpenOptionsExt;
     use std::os::unix::fs::PermissionsExt;
 
     let perm = reader_metadata.permissions();

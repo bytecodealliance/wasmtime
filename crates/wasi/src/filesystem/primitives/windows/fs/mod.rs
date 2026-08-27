@@ -33,7 +33,7 @@ mod symlink_unchecked;
 pub(crate) mod errors;
 
 #[rustfmt::skip]
-pub(crate) use crate::fs::{
+pub(crate) use crate::filesystem::primitives::{
     manually::canonicalize as canonicalize_impl,
     via_parent::access as access_impl,
     via_parent::hard_link as hard_link_impl,

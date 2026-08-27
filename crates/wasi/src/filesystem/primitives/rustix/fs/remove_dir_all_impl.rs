@@ -1,4 +1,4 @@
-use crate::fs::{
+use crate::filesystem::primitives::{
     read_dir_nofollow, read_dir_unchecked, remove_dir, remove_file, remove_open_dir, stat,
     FollowSymlinks, ReadDir,
 };

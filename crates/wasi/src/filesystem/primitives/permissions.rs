@@ -1,5 +1,5 @@
 #[cfg(not(windows))]
-use crate::fs::ImplPermissionsExt;
+use crate::filesystem::primitives::ImplPermissionsExt;
 #[cfg(unix)]
 use rustix::fs::RawMode;
 use std::{fs, io};
@@ -49,9 +49,9 @@ impl Permissions {
     #[allow(clippy::unnecessary_wraps)]
     fn _into_std(self, _file: &fs::File) -> io::Result<fs::Permissions> {
         use std::os::unix::fs::PermissionsExt;
-        Ok(fs::Permissions::from_mode(crate::fs::PermissionsExt::mode(
-            &self.ext,
-        )))
+        Ok(fs::Permissions::from_mode(
+            crate::filesystem::primitives::PermissionsExt::mode(&self.ext),
+        ))
     }
 
     #[cfg(target_os = "wasi")]
@@ -111,19 +111,19 @@ pub trait PermissionsExt {
 impl PermissionsExt for Permissions {
     #[inline]
     fn mode(&self) -> u32 {
-        crate::fs::PermissionsExt::mode(&self.ext)
+        crate::filesystem::primitives::PermissionsExt::mode(&self.ext)
     }
 
     #[inline]
     fn set_mode(&mut self, mode: u32) {
-        crate::fs::PermissionsExt::set_mode(&mut self.ext, mode)
+        crate::filesystem::primitives::PermissionsExt::set_mode(&mut self.ext, mode)
     }
 
     #[inline]
     fn from_mode(mode: u32) -> Self {
         Self {
             readonly: ImplPermissionsExt::readonly(mode as RawMode),
-            ext: crate::fs::PermissionsExt::from_mode(mode),
+            ext: crate::filesystem::primitives::PermissionsExt::from_mode(mode),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::fs::{FollowSymlinks, ImplOpenOptionsExt};
+use crate::filesystem::primitives::{FollowSymlinks, ImplOpenOptionsExt};
 
 /// Options and flags which can be used to configure how a file is opened.
 ///
