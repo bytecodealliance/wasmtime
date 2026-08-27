@@ -926,6 +926,25 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(start);
             collector.reg_use(end);
         }
+        Inst::DeadLoadWithContext {
+            dst,
+            load_ptr,
+            context,
+        } => {
+            // `load_ptr` is an ordinary input.
+            collector.reg_use(load_ptr);
+            // Demand `context` (the vmctx) go into x0, where the signal
+            // handler can find it and hand it straight to
+            // `task_switch_trampoline` as its first argument.
+            collector.reg_fixed_use(context, regs::xreg(0));
+            // Reserve x9 as a place for the signal handler to put the address
+            // at which to resume once the task switch is done. x9 is caller
+            // saved and has no special role.
+            //
+            // Define it, so we can use it as the destination of the dead
+            // load rather than consuming another arbitrary reg.
+            collector.reg_fixed_def(dst, regs::xreg(9));
+        }
     }
 }
 
@@ -2928,6 +2947,16 @@ impl Inst {
                 let end = pretty_print_reg(end);
                 let step = step.pretty_print(0);
                 format!("stack_probe_loop {start}, {end}, {step}")
+            }
+            &Inst::DeadLoadWithContext {
+                dst,
+                load_ptr,
+                context,
+            } => {
+                let dst = pretty_print_reg(dst.to_reg());
+                let load_ptr = pretty_print_reg(load_ptr);
+                let context = pretty_print_reg(context);
+                format!("dead_load_with_context {dst}, {load_ptr}, {context}")
             }
         }
     }

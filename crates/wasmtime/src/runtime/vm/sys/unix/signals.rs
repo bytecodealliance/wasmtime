@@ -152,7 +152,7 @@ now.
 /// `wasm_resume_pc` is the address of the instruction after the load that
 /// triggered the signal. `trampoline_fp` is a pointer to
 /// `task_switch_trampoline`'s frame, which points at the slot where it saved
-/// the Wasm caller's rbp. Providing these allows this to ape the behavior of
+/// the Wasm caller's frame pointer. Providing these allows this to ape the behavior of
 /// the wasm-to-host trampoline so backtrace capture works in the case of fiber
 /// cancellation.
 ///
@@ -162,8 +162,8 @@ now.
 /// # Safety
 ///
 /// `vmctx` must be a currently-entered `VMContext`. In current use,
-/// `task_switch_trampoline` ensures RDI still holds the Wasm caller's vmctx and
-/// sets up the other two argument registers as well.
+/// `task_switch_trampoline` ensures the first argument register still holds the
+/// Wasm caller's vmctx and sets up the other two argument registers as well.
 #[cfg(has_mmu_interruption)]
 unsafe extern "C" fn yield_current_fiber(
     vmctx: NonNull<VMContext>,
@@ -230,10 +230,12 @@ unsafe extern "C" fn yield_current_fiber(
 /// interruption.
 ///
 /// Saves register state, makes a host call to switch tasks, restores state, and
-/// jmps back to the instruction after the one that triggered the signal. The
-/// address of that instruction has been squirreled away in r10 by the signal
-/// handler. The signal handler has also placed the address of the vmctx into
-/// rdi, the first argument register.
+/// jumps back to the instruction after the one that triggered the signal. The
+/// address of that instruction has been squirreled away by the signal handler
+/// in the scratch register that `dead_load_with_context` reserves: r10 on x64,
+/// x9 on aarch64. The signal handler has also left the address of the vmctx in
+/// the first argument register (rdi on x64, x0 on aarch64), where
+/// `dead_load_with_context` pinned it.
 ///
 /// # Safety
 ///
@@ -249,18 +251,18 @@ unsafe extern "C" fn yield_current_fiber(
 /// 2MiB, of which only 512KiB is reserved for the Wasm stack, and (3) the fiber
 /// stack has a 4KiB guard page at the bottom, which causes
 /// `abort_stack_overflow()` to run if we do crash into it.
-#[cfg(has_mmu_interruption)]
+///
+/// When control reaches here, we have just returned from a signal
+/// handler after rewriting PC to point to this trampoline but updating
+/// no other register state.
+///
+/// The stack has enough space for this state-saving, ensured by the
+/// stack-limit checks in Cranelift-compiled code.
+#[cfg(all(has_mmu_interruption, target_arch = "x86_64"))]
 #[unsafe(naked)]
 unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
     naked_asm!(
         "
-        // When control reaches here, we have just returned from a signal
-        // handler after rewriting PC to point to this trampoline but updating
-        // no other register state.
-        //
-        // The stack has enough space for this state-saving, ensured by the
-        // stack-limit checks in Cranelift-compiled code.
-
         // Push a fake return address just to keep the stack 16b-aligned for the
         // call, as SysV x64 demands.
         push 0
@@ -369,6 +371,140 @@ unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
     );
 }
 
+/// The aarch64 counterpart of the x64 `task_switch_trampoline` above. See that
+/// function for the overall contract; register handling is the main difference.
+///
+/// x18 is deliberately not saved as it is not allocatable in Cranelift.
+#[cfg(all(has_mmu_interruption, target_arch = "aarch64"))]
+#[unsafe(naked)]
+unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
+    naked_asm!(
+        "
+        // Establish an ordinary AAPCS64 frame record so stack walks can see
+        // through, and set x29 as our frame pointer so it can be handed to
+        // `yield_current_fiber` as the trampoline FP.
+        stp x29, x30, [sp, #-16]!
+        mov x29, sp
+
+        // Save the registers that an AAPCS64 call may clobber. x19-x28 and the
+        // low halves of v8-v15 are callee-saved, but we save the vector
+        // registers wholesale anyway since their upper halves are not.
+        sub sp, sp, #656
+        stp x0, x1, [sp, #0]
+        stp x2, x3, [sp, #16]
+        stp x4, x5, [sp, #32]
+        stp x6, x7, [sp, #48]
+        stp x8, x9, [sp, #64]
+        stp x10, x11, [sp, #80]
+        stp x12, x13, [sp, #96]
+        stp x14, x15, [sp, #112]
+        stp x16, x17, [sp, #128]
+
+        stp q0, q1, [sp, #144]
+        stp q2, q3, [sp, #176]
+        stp q4, q5, [sp, #208]
+        stp q6, q7, [sp, #240]
+        stp q8, q9, [sp, #272]
+        stp q10, q11, [sp, #304]
+        stp q12, q13, [sp, #336]
+        stp q14, q15, [sp, #368]
+        stp q16, q17, [sp, #400]
+        stp q18, q19, [sp, #432]
+        stp q20, q21, [sp, #464]
+        stp q22, q23, [sp, #496]
+        stp q24, q25, [sp, #528]
+        stp q26, q27, [sp, #560]
+        stp q28, q29, [sp, #592]
+        stp q30, q31, [sp, #624]
+
+        // vmctx is already in x0, care of the signal handler.
+        //
+        // The following instructions prepare:
+        // `x1` the value of `x9`, which is the scratch register with the return
+        // address.
+        // `x2` the value of `x29`, which is the frame pointer.
+        mov x1, x9
+        mov x2, x29
+        // Call yield_current_fiber() to do the task switch.
+        bl {}
+
+        // Restore registers.
+        ldp q0, q1, [sp, #144]
+        ldp q2, q3, [sp, #176]
+        ldp q4, q5, [sp, #208]
+        ldp q6, q7, [sp, #240]
+        ldp q8, q9, [sp, #272]
+        ldp q10, q11, [sp, #304]
+        ldp q12, q13, [sp, #336]
+        ldp q14, q15, [sp, #368]
+        ldp q16, q17, [sp, #400]
+        ldp q18, q19, [sp, #432]
+        ldp q20, q21, [sp, #464]
+        ldp q22, q23, [sp, #496]
+        ldp q24, q25, [sp, #528]
+        ldp q26, q27, [sp, #560]
+        ldp q28, q29, [sp, #592]
+        ldp q30, q31, [sp, #624]
+
+        ldp x0, x1, [sp, #0]
+        ldp x2, x3, [sp, #16]
+        ldp x4, x5, [sp, #32]
+        ldp x6, x7, [sp, #48]
+        ldp x8, x9, [sp, #64]
+        ldp x10, x11, [sp, #80]
+        ldp x12, x13, [sp, #96]
+        ldp x14, x15, [sp, #112]
+        ldp x16, x17, [sp, #128]
+        add sp, sp, #656
+
+        ldp x29, x30, [sp], #16
+
+        // Resume right after the load instruction that triggered the signal
+        // handler. x9 was restored above, so it again holds the return address.
+        br x9
+        ",
+        sym yield_current_fiber
+    );
+}
+
+/// Returns the program counter recorded in a signal's `ucontext`.
+#[cfg(has_mmu_interruption)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "has_mmu_interruption implies a 64-bit usize"
+)]
+fn ucontext_pc(ucontext: &libc::ucontext_t) -> usize {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "x86_64")] {
+            ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] as usize
+        } else if #[cfg(target_arch = "aarch64")] {
+            ucontext.uc_mcontext.pc as usize
+        }
+    }
+}
+
+/// Arranges for the `ucontext` of an MMU-interrupt segfault to resume at
+/// `task_switch_trampoline` rather than at the original `return_address`.
+///
+/// Leaves the original `return_address` in the scratch register where the
+/// trampoline can find it.
+///
+/// The vmctx is already in the first argument register, pinned there by
+/// `dead_load_with_context`, so the trampoline needs no help finding it.
+#[cfg(has_mmu_interruption)]
+fn resume_into_task_switch_trampoline(ucontext: &mut libc::ucontext_t, return_address: *const ()) {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "x86_64")] {
+            ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] =
+                task_switch_trampoline as *const () as i64;
+            ucontext.uc_mcontext.gregs[libc::REG_R10 as usize] = return_address as i64;
+        } else if #[cfg(target_arch = "aarch64")] {
+            ucontext.uc_mcontext.pc = task_switch_trampoline as *const () as u64;
+            ucontext.uc_mcontext.regs[9] = return_address as u64;
+        }
+    }
+}
+
 unsafe extern "C" fn trap_handler(
     signum: libc::c_int,
     siginfo: *mut libc::siginfo_t,
@@ -396,28 +532,20 @@ unsafe extern "C" fn trap_handler(
             // Compare it with the offsets of MMU-interrupt-check instructions
             // as stored in the object file.
             let ucontext = unsafe { &mut *(context as *mut libc::ucontext_t) };
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "has_mmu_interruption implies x64, which has 64-bit usize"
-            )]
-            let pc = ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] as usize;
+            let pc = ucontext_pc(ucontext);
             // Now things get expensive: we call lookup_code(), which takes a global lock.
             if let Some((code_memory, offset_within_code)) = lookup_code(pc) {
-                // We're within a 'target_arch = "x86_64"', so we can just treat
-                // the stored little-endians as native u32s.
+                // Every host that `has_mmu_interruption` allows is
+                // little-endian, so we can just treat the stored
+                // little-endians as native u32s.
                 if let Some(return_address) = code_memory.return_address_for_mmu_interrupt_check(
                     offset_within_code
                         .try_into()
                         .expect("MMU-interrupt-check location should fit in 32 bits"),
                 ) {
-                    // It is an interrupt check. Arrange to resume at asm
-                    // trampoline after signal handler exits:
-                    ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] =
-                        task_switch_trampoline as *const () as i64;
-                    // Put original resumption address in R10:
-                    ucontext.uc_mcontext.gregs[libc::REG_R10 as usize] = return_address as i64;
-                    // Trampoline can expect the vmctx in RDI.
-
+                    // It is an interrupt check. Arrange to resume at the asm
+                    // trampoline after the signal handler exits.
+                    resume_into_task_switch_trampoline(ucontext, return_address);
                     return true;
                 }
             }

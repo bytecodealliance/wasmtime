@@ -46,7 +46,7 @@ fn main() {
         && cfg!(feature = "runtime");
     let has_custom_fiber = !has_builtin_stackswitch && cfg!(feature = "custom-fiber");
     let has_mmu_interruption = std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "linux"
-        && target_arch == "x86_64"
+        && (target_arch == "x86_64" || target_arch == "aarch64")
         && cfg!(feature = "async")
         && cfg!(feature = "cranelift")
         && cfg!(feature = "std");

@@ -6,34 +6,19 @@ use std::pin::Pin;
 use std::ptr::null;
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::{Config, Engine, Module, Result};
-#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    target_os = "linux"
+))]
 use wasmtime::{Instance, Store};
 use wasmtime_environ::obj::ELF_WASMTIME_MMU_INTERRUPT_CHECKS;
 use wasmtime_test_macros::wasmtime_test;
 
-// Asserts that each MMU-interrupt-check offset encoded into the binary points
-// to the byte after its corresponding dead load.
-#[wasmtime_test(strategies(only(CraneliftNative)))]
-fn mmu_interrupt_check_offsets(config: &mut Config) -> Result<()> {
-    config.mmu_interruption(true);
-    config.target("x86_64").unwrap();
-    let engine = Engine::new(config).unwrap();
-
-    // A function with an infinite loop contains two MMU-interrupt checks: one
-    // in the function prologue and another at the loop backedge.
-    let elf_bytes = engine
-        .precompile_module(
-            // If you change this wat, change it in
-            // mmu-interruption-compile-loop.wat, too.
-            r#"(module
-             (memory 0)
-             (func (loop (br 0)))
-           )"#
-            .as_bytes(),
-        )
-        .unwrap();
-
-    let elf = object::read::elf::ElfFile64::<object::Endianness>::parse(&*elf_bytes)
+// Parses the MMU-interrupt-check section out of a precompiled module,
+// returning the check offsets and the packed bits giving each check's load
+// length.
+fn mmu_interrupt_checks(elf_bytes: &[u8]) -> (Vec<u32>, Vec<u8>) {
+    let elf = object::read::elf::ElfFile64::<object::Endianness>::parse(elf_bytes)
         .expect("ELF should be parseable");
     let section = elf
         .section_by_name(ELF_WASMTIME_MMU_INTERRUPT_CHECKS)
@@ -52,6 +37,28 @@ fn mmu_interrupt_check_offsets(config: &mut Config) -> Result<()> {
     let (length_bits, _rest) = object::slice_from_bytes::<u8>(rest, count.div_ceil(8))
         .expect(".wasmtime.mmu_interrupt_checks section should be long enough to contain a length bit for each MMU-interrupt check");
 
+    (starts, length_bits.to_vec())
+}
+
+// A function with an infinite loop contains two MMU-interrupt checks, one in
+// the function prologue and another at the loop backedge. If you change this
+// wat, change it in mmu-interruption-compile-loop{,-aarch64}.wat, too.
+const LOOPING_MODULE: &str = r#"(module
+             (memory 0)
+             (func (loop (br 0)))
+           )"#;
+
+// Asserts that each MMU-interrupt-check offset encoded into the binary points
+// to the byte after its corresponding dead load.
+#[wasmtime_test(strategies(only(CraneliftNative)))]
+fn mmu_interrupt_check_offsets(config: &mut Config) -> Result<()> {
+    config.mmu_interruption(true);
+    config.target("x86_64").unwrap();
+    let engine = Engine::new(config).unwrap();
+
+    let elf_bytes = engine.precompile_module(LOOPING_MODULE.as_bytes()).unwrap();
+    let (starts, length_bits) = mmu_interrupt_checks(&elf_bytes);
+
     // The emitted machine code is nailed down by the
     // mmu-interruption-compile-loop.wat disas test. As long as that keeps
     // passing, these values remain valid.
@@ -68,11 +75,40 @@ fn mmu_interrupt_check_offsets(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
+// The aarch64 counterpart of `mmu_interrupt_check_offsets`.
+#[wasmtime_test(strategies(only(CraneliftNative)))]
+fn mmu_interrupt_check_offsets_aarch64(config: &mut Config) -> Result<()> {
+    config.mmu_interruption(true);
+    config.target("aarch64").unwrap();
+    let engine = Engine::new(config).unwrap();
+
+    let elf_bytes = engine.precompile_module(LOOPING_MODULE.as_bytes()).unwrap();
+    let (starts, length_bits) = mmu_interrupt_checks(&elf_bytes);
+
+    // The emitted machine code is nailed down by the
+    // mmu-interruption-compile-loop-aarch64.wat disas test. As long as that
+    // keeps passing, these values remain valid.
+    assert_eq!(
+        starts,
+        vec![20, 24],
+        "There should be 2 MMU-interrupt checks (function prologue & loop backedge). The offset of the prologue's dead load should be 20, and that of the loop's backedge should be 24."
+    );
+    assert_eq!(
+        length_bits,
+        vec![0b11],
+        "Every aarch64 instruction is 4 bytes wide, so both checks' length bits should be 1."
+    );
+    Ok(())
+}
+
 // Runs two Wasm functions, interleaved, with MMU interruption enabled and
 // interruptions triggered. Shows that the functions return happily after
 // interruption. Loops several times to test multiple interrupts switching
 // between Wasm modules in a single `Store`.
-#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    target_os = "linux"
+))]
 #[wasmtime_test(strategies(only(CraneliftNative)))]
 async fn mmu_interruption_signal_handler_trapping_and_switching(config: &mut Config) -> Result<()> {
     config.mmu_interruption(true);
@@ -132,7 +168,10 @@ async fn mmu_interruption_signal_handler_trapping_and_switching(config: &mut Con
 // Runs a Wasm function to an MMU-interrupt check point, lets it yield, then
 // drops the future driving it. This exercises the cancellation path of
 // `yield_current_fiber()`, which should unwind the stack cleanly.
-#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    target_os = "linux"
+))]
 #[wasmtime_test(strategies(only(CraneliftNative)))]
 fn mmu_interruption_cancellation_during_yield(config: &mut Config) -> Result<()> {
     // Returns a no-op waker that lets nothing re-poll our future after it
@@ -218,16 +257,16 @@ fn requires_signals_based_traps(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// With Cranelift only the x64 backend is supported.
+// With Cranelift only the x64 and aarch64 backends are supported.
 #[wasmtime_test(strategies(only(CraneliftNative)))]
-fn requires_x86_64_target(config: &mut Config) -> Result<()> {
+fn requires_supported_target(config: &mut Config) -> Result<()> {
     config.mmu_interruption(true);
-    config.target("aarch64").unwrap();
+    config.target("riscv64").unwrap();
     config.signals_based_traps(true);
     let err = Engine::new(config).expect_err("engine creation should fail");
     assert_eq!(
         err.to_string(),
-        "MMU interruption is supported only on x86_64, not for `aarch64-unknown-unknown-elf`",
+        "MMU interruption is supported only on x86_64 and aarch64, not for `riscv64-unknown-unknown-elf`",
     );
     Ok(())
 }
@@ -270,7 +309,10 @@ fn precompile_succeeds_for_valid_config_on_any_host(config: &mut Config) -> Resu
     Ok(())
 }
 
-#[cfg(not(all(target_arch = "x86_64", target_os = "linux")))]
+#[cfg(not(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    target_os = "linux"
+)))]
 #[wasmtime_test(strategies(only(CraneliftNative)))]
 fn compile_and_run_fails_on_unsupported_host(config: &mut Config) -> Result<()> {
     config.mmu_interruption(true);
@@ -280,8 +322,9 @@ fn compile_and_run_fails_on_unsupported_host(config: &mut Config) -> Result<()> 
         Ok(engine) => Module::new(&engine, "(module)")
             .expect_err("compile-and-run should fail on an unsupported host"),
     };
+    let err = format!("{err:?}");
     assert!(
-        err.to_string().contains("only supported on x86_64"),
+        err.contains("supported only on x86_64 and aarch64"),
         "unexpected error: {err}"
     );
     Ok(())

@@ -385,8 +385,9 @@ fn define_control_flow(
         Inst::new(
             "dead_load_with_context",
             r#"
-        Load 32 bits from memory at ``load_ptr`` while also keeping ``context``
-        in a fixed register and reserving a second as scratch space.
+        Load a pointer-sized value from memory at ``load_ptr`` while also
+        keeping ``context`` in a fixed register and reserving a second as
+        scratch space.
 
         This is intended for implementing MMU-triggered jumps as in
         `mmu-interruption`, where the load conditionally triggers a
@@ -397,7 +398,8 @@ fn define_control_flow(
         value--as needed on platforms where signal handlers cannot push stack
         frames.
 
-        On x64, RDI holds ``context``, and R10 is used as scratch space.
+        Which registers these are is ISA-specific; see each backend's
+        ``get_operands`` for the choices and the reasoning behind them.
         "#,
             &formats.binary,
         )

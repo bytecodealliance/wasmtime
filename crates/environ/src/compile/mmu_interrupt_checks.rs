@@ -101,7 +101,7 @@ pub fn return_offset_for_mmu_interrupt_check(
         return None;
     }
 
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(target_endian = "little"))]
     panic!(
         "return_offset_for_mmu_interrupt_check() must not be called against a non-empty section on a non-little-endian architecture until support for MMU interruption extends to them."
     );

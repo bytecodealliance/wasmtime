@@ -111,11 +111,13 @@ impl CompilerBuilder for Builder {
         if tunables.mmu_interruption
             && !matches!(
                 self.inner.triple().architecture,
-                target_lexicon::Architecture::X86_64 | target_lexicon::Architecture::X86_64h
+                target_lexicon::Architecture::X86_64
+                    | target_lexicon::Architecture::X86_64h
+                    | target_lexicon::Architecture::Aarch64(_)
             )
         {
             bail!(
-                "MMU interruption is supported only on x86_64, not for `{}`",
+                "MMU interruption is supported only on x86_64 and aarch64, not for `{}`",
                 self.inner.triple()
             );
         }

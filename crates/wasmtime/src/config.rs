@@ -820,8 +820,8 @@ impl Config {
     ///   with `mmu_interruption()` puts every [`Store`] derived from it into
     ///   async mode automatically.
     /// - **Cranelift.** Winch does not support it.
-    /// - **Linux on x86_64.** Cross-compilation to other targets is fine; the
-    ///   check is a no-op on hosts that cannot use it.
+    /// - **Linux on x86_64 or aarch64.** Cross-compilation to other targets is
+    ///   fine; the check is a no-op on hosts that cannot use it.
     /// - **Native signals** because we depend on a signal handler.
     /// - **Signals-based traps**, because signal-handler installation (in
     ///   [`Engine::new()`]) is currently gated on this. It should be possible

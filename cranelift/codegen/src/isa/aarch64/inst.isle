@@ -1013,7 +1013,13 @@
        ;; means that the internal codegen can't use these registers.
        (StackProbeLoop (start WritableReg)
                        (end Reg)
-                       (step Imm12))))
+                       (step Imm12))
+
+       ;; A load whose result is discarded; `context` is pinned to x0 and `dst`
+       ;; to x9.
+       (DeadLoadWithContext (dst WritableReg)
+                            (load_ptr Reg)
+                            (context Reg))))
 
 (spec (MInst.AluRRImmLogic alu_op size rd rn imml)
       (provide

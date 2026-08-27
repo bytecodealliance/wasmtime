@@ -172,7 +172,10 @@ fn run_wasmtime_mmu_interruption_requires_signals_based_traps() -> Result<()> {
 }
 
 #[test]
-#[cfg(not(all(target_arch = "x86_64", target_os = "linux")))]
+#[cfg(not(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    target_os = "linux"
+)))]
 fn run_wasmtime_mmu_interruption_unsupported_host() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/empty-module.wat")?;
     let output = run_wasmtime_for_output(
@@ -192,7 +195,7 @@ fn run_wasmtime_mmu_interruption_unsupported_host() -> Result<()> {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("only supported on x86_64"),
+        stderr.contains("supported only on x86_64 and aarch64"),
         "unexpected stderr: {stderr}"
     );
     Ok(())

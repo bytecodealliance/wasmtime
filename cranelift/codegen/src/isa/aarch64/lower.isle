@@ -2440,6 +2440,18 @@
 (rule (lower (symbol_value _ (symbol_value_data extname dist offset)))
       (load_ext_name (box_external_name extname) offset dist))
 
+;;;; Rules for `dead_load_with_context` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (dead_load_with_context load_ptr context))
+      (let ((load_ptr Reg (put_in_reg load_ptr))
+            (context Reg (put_in_reg context))
+            (dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit_side_effect (SideEffectNoResult.Inst
+                  (MInst.DeadLoadWithContext dst
+                                             load_ptr
+                                             context)))))
+       (output_none)))
+
 ;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
 
 (rule (lower (get_frame_pointer _))
