@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::io::Write;
-use target_lexicon::PointerWidth;
+use target_lexicon::{Architecture, PointerWidth};
 
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
 const READONLY_DATA_ALIGNMENT: u64 = 0x1;
@@ -66,7 +66,18 @@ impl JITBuilder {
         // which might not reach all definitions; we can't handle that here, so
         // we require long-range relocation types.
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
-        flag_builder.set("is_pic", "false").unwrap();
+        // On x86_64, enable PIC so that symbol addresses are materialized with
+        // GOT-relative loads rather than RIP-relative `lea`s, which assume the
+        // symbol is within ±2 GiB of the code. The JIT memory provider makes
+        // no such promise, so `CompiledBlob::perform_relocations` resolves the
+        // loads through per-blob GOT entries, relaxing them back to `lea` when
+        // the symbol does turn out to be in range.
+        let is_pic = if cfg!(target_arch = "x86_64") {
+            "true"
+        } else {
+            "false"
+        };
+        flag_builder.set("is_pic", is_pic).unwrap();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
             panic!("host machine is not supported: {msg}");
         });
@@ -357,8 +368,9 @@ impl JITModule {
     /// Create a new `JITModule`.
     pub fn new(builder: JITBuilder) -> Self {
         assert!(
-            !builder.isa.flags().is_pic(),
-            "cranelift-jit needs is_pic=false"
+            !builder.isa.flags().is_pic()
+                || builder.isa.triple().architecture == Architecture::X86_64,
+            "cranelift-jit only supports is_pic=true on x86_64"
         );
 
         let memory = builder
