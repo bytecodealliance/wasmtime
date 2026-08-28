@@ -145,42 +145,40 @@
 ;; @003d                               brif v8, block2, block3(v6)
 ;;
 ;;                                 block2:
-;;                                     v52 = iadd.i64 v4, v5  ; v5 = 1
-;; @003d                               store notrap aligned region2 v52, v3
+;;                                     v50 = iadd.i64 v4, v5  ; v5 = 1
+;; @003d                               store notrap aligned region2 v50, v3
 ;; @003d                               v10 = call fn0(v0)
 ;; @003d                               v12 = load.i64 notrap aligned region2 v3
 ;; @003d                               jump block3(v12)
 ;;
-;;                                 block3(v16: i64):
-;; @0045                               v17 = iconst.i64 4
-;; @0045                               v18 = iadd v16, v17  ; v17 = 4
-;;                                     v53 = iconst.i64 0
-;;                                     v54 = icmp sge v18, v53  ; v53 = 0
-;; @0045                               brif v54, block4, block5(v18)
+;;                                 block3(v29: i64):
+;; @0045                               v16 = load.i64 notrap aligned region4 v0+64
+;; @0045                               v17 = uextend.i64 v2
+;;                                     v40 = iconst.i64 4096
+;; @0045                               v21 = iadd v17, v40  ; v40 = 4096
+;; @0045                               v22 = icmp ugt v21, v16
+;; @0045                               trapnz v22, heap_oob
+;; @0045                               v23 = load.i64 notrap aligned readonly can_move region3 v0+56
+;; @0045                               v27 = iadd v23, v17
+;; @0040                               v14 = iconst.i32 0
+;; @0045                               call fn1(v0, v27, v14, v40)  ; v14 = 0, v40 = 4096
+;; @0045                               v30 = iconst.i64 4100
+;; @0045                               v31 = iadd v29, v30  ; v30 = 4100
+;;                                     v51 = iconst.i64 0
+;;                                     v52 = icmp sge v31, v51  ; v51 = 0
+;; @0045                               brif v52, block4, block5(v31)
 ;;
 ;;                                 block4:
-;;                                     v55 = iadd.i64 v16, v17  ; v17 = 4
-;; @0045                               store notrap aligned region2 v55, v3
-;; @0045                               v22 = call fn0(v0)
-;; @0045                               v24 = load.i64 notrap aligned region2 v3
-;; @0045                               jump block5(v24)
+;;                                     v53 = iadd.i64 v29, v30  ; v30 = 4100
+;; @0045                               store notrap aligned region2 v53, v3
+;; @0045                               v35 = call fn0(v0)
+;; @0045                               v37 = load.i64 notrap aligned region2 v3
+;; @0045                               jump block5(v37)
 ;;
-;;                                 block5(v38: i64):
-;; @0045                               v25 = load.i64 notrap aligned region4 v0+64
-;; @0045                               v26 = uextend.i64 v2
-;;                                     v42 = iconst.i64 4096
-;; @0045                               v30 = iadd v26, v42  ; v42 = 4096
-;; @0045                               v31 = icmp ugt v30, v25
-;; @0045                               trapnz v31, heap_oob
-;; @0045                               v32 = load.i64 notrap aligned readonly can_move region3 v0+56
-;; @0045                               v36 = iadd v32, v26
-;; @0040                               v14 = iconst.i32 0
-;; @0045                               call fn1(v0, v36, v14, v42)  ; v14 = 0, v42 = 4096
+;;                                 block5(v39: i64):
 ;; @0048                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v56 = iconst.i64 4096
-;;                                     v57 = iadd.i64 v38, v56  ; v56 = 4096
-;; @0048                               store notrap aligned region2 v57, v3
+;; @0048                               store.i64 notrap aligned region2 v39, v3
 ;; @0048                               return
 ;; }

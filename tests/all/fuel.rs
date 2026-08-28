@@ -186,7 +186,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 65536
                     memory.copy
-                    (loop)
                 )
             )
         "#,
@@ -203,7 +202,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 65536
                     memory.fill
-                    (loop)
                 )
             )
         "#,
@@ -222,7 +220,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 65536
                     memory.init $d
-                    (loop)
                 )
 
                 (data $d "{data}")
@@ -242,7 +239,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     table.copy
-                    (loop)
                 )
             )
         "#,
@@ -259,7 +255,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     ref.null func
                     i32.const 20000
                     table.fill
-                    (loop)
                 )
             )
         "#,
@@ -276,7 +271,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 20000
                     table.grow
                     drop
-                    (loop)
                 )
             )
         "#,
@@ -295,7 +289,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     table.init $e
-                    (loop)
                 )
                 (func $f)
                 (elem $e func {elems})
@@ -314,7 +307,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 2_0000
                     array.new_default $a
                     drop
-                    (loop)
                 )
             )
         "#,
@@ -335,7 +327,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     array.copy $a $a
-                    (loop)
                 )
             )
         "#,
@@ -354,7 +345,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     array.fill $a
-                    (loop)
                 )
             )
         "#,
@@ -372,7 +362,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 65536
                     array.new_data $a $d
                     drop
-                    (loop)
                 )
 
                 (data $d "{data}")
@@ -395,7 +384,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     array.init_data $a $d
-                    (loop)
                 )
 
                 (data $d "{data}")
@@ -416,7 +404,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 20000
                     array.new_elem $a $e
                     drop
-                    (loop)
                 )
                 (func $f)
                 (elem $e func {elems})
@@ -439,7 +426,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 0
                     i32.const 20000
                     array.init_elem $a $e
-                    (loop)
                 )
                 (func $f)
                 (elem $e func {elems})
@@ -459,7 +445,6 @@ fn iloop(config: &mut Config) -> Result<()> {
                     i32.const 20000
                     array.new $a
                     drop
-                    (loop)
                 )
             )
         "#,
@@ -1007,16 +992,15 @@ fn fuel_around_table_grow() -> Result<()> {
     store.set_fuel(2)?;
     let instance = Instance::new(&mut store, &module, &[])?;
     let grow = instance.get_typed_func::<(), i32>(&mut store, "grow")?;
+    // The fuel check for a large bulk operation runs after the operation
+    // completes so this call still traps with "out of fuel", but the grow
+    // itself took effect.
     let trap = grow.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
     assert_eq!(trap, Trap::OutOfFuel);
 
     store.set_fuel(u64::MAX)?;
     let call = instance.get_typed_func::<i32, ()>(&mut store, "call")?;
-    let trap = call
-        .call(&mut store, 9999999)
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert_eq!(trap, Trap::TableOutOfBounds);
+    call.call(&mut store, 9999999)?;
     Ok(())
 }
 
