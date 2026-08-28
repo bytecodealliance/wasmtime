@@ -2969,13 +2969,10 @@
 ;; The flags output of a `uadd_overflow` that is not demanded as a materialized
 ;; bool (i.e., its only use(s) were folded into consumers such as a `brif` that
 ;; consume the flags directly) does not need a `cset`; emit just the `adds`.
-(rule 3 (lower i @ (uadd_overflow _ a b @ (value_type (ty_32_or_64 ty))))
+(rule 3 (lower i @ (uadd_overflow (ty_32_or_64 ty) x y))
         (if-let (second_result flags) i)
         (if-let false (value_used flags))
-        (let ((sum ValueRegs (with_flags
-                  (alu_rrr_with_flags_paired ty a b (ALUOp.AddS))
-                  (ConsumesFlags.ConsumesFlagsNop))))
-          (output_pair sum (value_regs_invalid))))
+        (output_pair (add ty x y) (value_regs_invalid)))
 
 ;; For values smaller than a register, we do a normal `add` with both arguments
 ;; zero extended. We then check if the output is the same as itself zero extended.

@@ -181,12 +181,10 @@
 ;; The flags output of a `uadd_overflow` that is not demanded as a materialized
 ;; bool (i.e., its only use(s) were folded into consumers such as a `brif` that
 ;; consume the flags directly) does not need a `setcc`; emit just the `add`.
-(rule 3 (lower i @ (uadd_overflow _ x y @ (value_type (fits_in_64 ty))))
+(rule 3 (lower i @ (uadd_overflow (fits_in_64 ty) x y))
         (if-let (second_result flags) i)
         (if-let false (value_used flags))
-        (let ((sum ValueRegs (with_flags (x64_add_with_flags_paired ty x y)
-                                         (ConsumesFlags.ConsumesFlagsNop))))
-          (output_pair sum (value_regs_invalid))))
+        (output_pair (value_reg (x64_add ty x y)) (value_regs_invalid)))
 
 (rule 1 (lower (uadd_overflow _ x y @ (value_type (fits_in_64 ty))))
       (construct_overflow_op_alu ty (CC.B) (ProduceFlagsOp.Add) x y))
