@@ -303,6 +303,10 @@
 (rule (simplify (isub ty (bor ty y x) (band ty x y))) (bxor ty x y))
 (rule (simplify (isub ty (bor ty y x) (band ty y x))) (bxor ty x y))
 
+;; (x & y) - (x | y) --> -(x ^ y)
+(rule (simplify (isub ty (band ty x y) (bor ty x y))) (ineg ty (bxor ty x y)))
+(rule (simplify (isub ty (band ty y x) (bor ty x y))) (ineg ty (bxor ty x y)))
+
 ;; (x + y) - (x & y)  ==>  (x | y)
 (rule (simplify (isub ty (iadd ty x y) (band ty x y))) (bor ty x y))
 (rule (simplify (isub ty (iadd ty x y) (band ty y x))) (bor ty x y))
@@ -315,6 +319,16 @@
 (rule (simplify (isub ty (bor ty y x) (bxor ty x y))) (band ty x y))
 (rule (simplify (isub ty (bor ty y x) (bxor ty y x))) (band ty x y))
 
+;; (x ^ y) - (x | y) --> -(x & y)
+(rule (simplify (isub ty (bxor ty x y) (bor ty x y))) (ineg ty (band ty x y)))
+(rule (simplify (isub ty (bxor ty x y) (bor ty y x))) (ineg ty (band ty x y)))
+
+;; (x ^ y) + 2 * (x & y) --> x + y
+(rule (simplify (iadd ty (bxor ty x y) (ishl ty (band ty x y) (iconst_u ty 1)))) (iadd ty x y))
+(rule (simplify (iadd ty (bxor ty x y) (ishl ty (band ty y x) (iconst_u ty 1)))) (iadd ty x y))
+(rule (simplify (iadd ty (ishl ty (band ty x y) (iconst_u ty 1)) (bxor ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (ishl ty (band ty x y) (iconst_u ty 1)) (bxor ty y x))) (iadd ty x y))
+
 ;; (~x) + x == -1
 (rule (simplify (iadd ty (bnot ty x) x)) (iconst_s ty -1))
 (rule (simplify (iadd ty x (bnot ty x))) (iconst_s ty -1))
@@ -324,6 +338,9 @@
 (rule (simplify (isub ty (iadd ty x y) (iadd ty z x))) (isub ty y z))
 (rule (simplify (isub ty (iadd ty y x) (iadd ty x z))) (isub ty y z))
 (rule (simplify (isub ty (iadd ty y x) (iadd ty z x))) (isub ty y z))
+
+;; (x - y) + (y - x) --> 0
+(rule (simplify (iadd ty (isub ty x y) (isub ty y x))) (subsume (iconst_u ty 0)))
 
 ;; ((x - z) - (y - z)) --> (x - y)
 (rule (simplify (isub ty (isub ty x z) (isub ty y z))) (isub ty x y))
@@ -593,4 +610,3 @@
 (rule (simplify (bxor ty (ishl ty x y) (ishl ty z y))) (ishl ty (bxor ty x z) y))
 (rule (simplify (bxor ty (sshr ty x y) (sshr ty z y))) (sshr ty (bxor ty x z) y))
 (rule (simplify (bxor ty (ushr ty x y) (ushr ty z y))) (ushr ty (bxor ty x z) y))
-
