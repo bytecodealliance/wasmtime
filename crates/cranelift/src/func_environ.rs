@@ -5124,8 +5124,6 @@ impl FuncEnvironment<'_> {
         units: ir::Value,
         cost_per_unit: u8,
     ) -> WasmResult<Option<DeferredBulkOp>> {
-        let should_consume_fuel = self.tunables.consume_fuel && cost_per_unit > 0;
-
         let const_units =
             Self::value_as_const_int(builder, units).map(|c| i64::try_from(c).unwrap_or(i64::MAX));
 
@@ -5137,7 +5135,7 @@ impl FuncEnvironment<'_> {
             && let Some(cost) = units.checked_mul(i64::from(cost_per_unit))
             && cost <= SMALL_BULK_OP_COST
         {
-            if should_consume_fuel {
+            if self.tunables.consume_fuel && cost_per_unit > 0 {
                 self.fuel_consumed = self.fuel_consumed.saturating_add(cost);
             }
             return Ok(None);
