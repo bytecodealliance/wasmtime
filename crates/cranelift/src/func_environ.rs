@@ -5124,7 +5124,6 @@ impl FuncEnvironment<'_> {
         units: ir::Value,
         cost_per_unit: u8,
     ) -> Option<DeferredBulkOp> {
-        let should_consume_fuel = self.tunables.consume_fuel && cost_per_unit > 0;
         let const_units =
             Self::value_as_const_int(builder, units).map(|c| i64::try_from(c).unwrap_or(i64::MAX));
 
@@ -5136,13 +5135,13 @@ impl FuncEnvironment<'_> {
             && let Some(cost) = units.checked_mul(i64::from(cost_per_unit))
             && cost <= SMALL_BULK_OP_COST
         {
-            if should_consume_fuel {
+            if self.tunables.consume_fuel && cost_per_unit > 0 {
                 self.fuel_consumed = self.fuel_consumed.saturating_add(cost);
             }
             return None;
         }
 
-        if should_consume_fuel || self.tunables.epoch_interruption {
+        if (self.tunables.consume_fuel || self.tunables.epoch_interruption) && cost_per_unit > 0 {
             Some(DeferredBulkOp {
                 units: match const_units {
                     Some(const_units) => DeferredBulkUnits::Const(const_units),
@@ -5181,38 +5180,40 @@ impl FuncEnvironment<'_> {
             return Ok(());
         };
         debug_assert!(
-            (self.tunables.consume_fuel && cost_per_unit > 0) || self.tunables.epoch_interruption
+            (self.tunables.consume_fuel || self.tunables.epoch_interruption) && cost_per_unit > 0
         );
-        match units {
-            DeferredBulkUnits::Const(units) => {
-                self.fuel_consumed = self
-                    .fuel_consumed
-                    .saturating_add(units.saturating_mul(i64::from(cost_per_unit)))
-            }
-            DeferredBulkUnits::Runtime(units) => {
-                self.fuel_increment_var(builder);
-                let fuel_var = builder.use_var(self.fuel_var);
-                let variable = match builder.func.dfg.value_type(units) {
-                    ir::types::I32 => {
-                        let units64 = builder.ins().uextend(ir::types::I64, units);
-                        builder.ins().imul_imm_u(units64, i64::from(cost_per_unit))
-                    }
-                    ir::types::I64 => {
-                        let product = builder.ins().imul_imm_u(units, i64::from(cost_per_unit));
-                        let max = builder.ins().iconst(ir::types::I64, i64::MAX);
-                        let max_units = builder
-                            .ins()
-                            .iconst(I64, i64::MAX / i64::from(cost_per_unit));
-                        let saturate =
-                            builder
+        if self.tunables.consume_fuel {
+            match units {
+                DeferredBulkUnits::Const(units) => {
+                    self.fuel_consumed = self
+                        .fuel_consumed
+                        .saturating_add(units.saturating_mul(i64::from(cost_per_unit)))
+                }
+                DeferredBulkUnits::Runtime(units) => {
+                    self.fuel_increment_var(builder);
+                    let fuel_var = builder.use_var(self.fuel_var);
+                    let variable = match builder.func.dfg.value_type(units) {
+                        ir::types::I32 => {
+                            let units64 = builder.ins().uextend(ir::types::I64, units);
+                            builder.ins().imul_imm_u(units64, i64::from(cost_per_unit))
+                        }
+                        ir::types::I64 => {
+                            let product = builder.ins().imul_imm_u(units, i64::from(cost_per_unit));
+                            let max = builder.ins().iconst(ir::types::I64, i64::MAX);
+                            let max_units = builder
                                 .ins()
-                                .icmp(IntCC::UnsignedGreaterThan, units, max_units);
-                        builder.ins().select(saturate, max, product)
-                    }
-                    _ => unreachable!(),
-                };
-                let updated = builder.ins().iadd(fuel_var, variable);
-                builder.def_var(self.fuel_var, updated);
+                                .iconst(I64, i64::MAX / i64::from(cost_per_unit));
+                            let saturate =
+                                builder
+                                    .ins()
+                                    .icmp(IntCC::UnsignedGreaterThan, units, max_units);
+                            builder.ins().select(saturate, max, product)
+                        }
+                        _ => unreachable!(),
+                    };
+                    let updated = builder.ins().iadd(fuel_var, variable);
+                    builder.def_var(self.fuel_var, updated);
+                }
             }
         }
 
