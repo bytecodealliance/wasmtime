@@ -544,13 +544,10 @@ impl OperatorCostStrategy {
     /// Get the cost of an operator inside a constant expression.
     ///
     /// Constant expressions are stored as [`ConstOp`] rather than
-    /// `wasmparser::Operator`, so they need their own lookup, but the costs
-    /// come from the same table as [`OperatorCostStrategy::cost`].
+    /// `wasmparser::Operator`, so translate back and reuse
+    /// [`OperatorCostStrategy::cost`].
     pub fn const_op_cost(&self, op: &ConstOp) -> i64 {
-        match self {
-            OperatorCostStrategy::Table(cost) => cost.const_op_cost(op),
-            OperatorCostStrategy::Default => DEFAULT_OPERATOR_COST.const_op_cost(op),
-        }
+        self.cost(&const_op_as_operator(op))
     }
 
     /// Get the costs of work whose size is only known at runtime.
@@ -563,14 +560,6 @@ impl OperatorCostStrategy {
 }
 
 const DEFAULT_VARIABLE_OPERATOR_COST: VariableOperatorCost = VariableOperatorCost::new();
-
-/// The default cost table, used to serve [`OperatorCostStrategy::const_op_cost`]
-/// for the [`OperatorCostStrategy::Default`] strategy.
-///
-/// The `default_cost!` costs baked in here must stay in sync with
-/// `default_operator_cost`, which serves the same strategy for
-/// [`OperatorCostStrategy::cost`].
-const DEFAULT_OPERATOR_COST: OperatorCost = OperatorCost::new();
 
 /// Fuel costs for operators whose work is proportional to a runtime operand.
 ///
@@ -749,37 +738,68 @@ macro_rules! define_operator_cost {
 
 wasmparser::for_each_operator!(define_operator_cost);
 
-impl OperatorCost {
-    /// Returns the cost of an operator appearing in a constant expression.
-    ///
-    /// This mirrors [`OperatorCost::cost`] for the [`ConstOp`] representation
-    /// used by global initializers, element and data segment offsets, and
-    /// element segment expressions.
-    pub fn const_op_cost(&self, op: &ConstOp) -> i64 {
-        let cost = match op {
-            ConstOp::I32Const(_) => self.I32Const,
-            ConstOp::I64Const(_) => self.I64Const,
-            ConstOp::F32Const(_) => self.F32Const,
-            ConstOp::F64Const(_) => self.F64Const,
-            ConstOp::V128Const(_) => self.V128Const,
-            ConstOp::GlobalGet(_) => self.GlobalGet,
-            ConstOp::RefI31 => self.RefI31,
-            ConstOp::RefNull(_) => self.RefNull,
-            ConstOp::RefFunc(_) => self.RefFunc,
-            ConstOp::I32Add => self.I32Add,
-            ConstOp::I32Sub => self.I32Sub,
-            ConstOp::I32Mul => self.I32Mul,
-            ConstOp::I64Add => self.I64Add,
-            ConstOp::I64Sub => self.I64Sub,
-            ConstOp::I64Mul => self.I64Mul,
-            ConstOp::StructNew { .. } => self.StructNew,
-            ConstOp::StructNewDefault { .. } => self.StructNewDefault,
-            ConstOp::ArrayNew { .. } => self.ArrayNew,
-            ConstOp::ArrayNewDefault { .. } => self.ArrayNewDefault,
-            ConstOp::ArrayNewFixed { .. } => self.ArrayNewFixed,
-            ConstOp::ExternConvertAny => self.ExternConvertAny,
-            ConstOp::AnyConvertExtern => self.AnyConvertExtern,
-        };
-        i64::from(cost)
+/// Translate a [`ConstOp`] back into the `wasmparser::Operator` it was parsed
+/// from, so that constant expressions can share the operator cost lookup with
+/// function bodies.
+///
+/// Every immediate round-trips exactly except `ConstOp::RefNull`'s, which stores
+/// a `WasmHeapType` lowered on the way in by `TypeConvert::convert_heap_type`
+/// and has no reverse conversion, so a placeholder heap type stands in for it.
+/// That is fine here because the cost lookup matches on the operator alone and
+/// ignores its immediates.
+fn const_op_as_operator(op: &ConstOp) -> Operator<'static> {
+    use wasmparser::{AbstractHeapType, HeapType, Ieee32, Ieee64, V128};
+    match op {
+        ConstOp::I32Const(value) => Operator::I32Const { value: *value },
+        ConstOp::I64Const(value) => Operator::I64Const { value: *value },
+        ConstOp::F32Const(bits) => Operator::F32Const {
+            value: Ieee32::from(f32::from_bits(*bits)),
+        },
+        ConstOp::F64Const(bits) => Operator::F64Const {
+            value: Ieee64::from(f64::from_bits(*bits)),
+        },
+        ConstOp::V128Const(value) => Operator::V128Const {
+            value: V128::from(*value as i128),
+        },
+        ConstOp::GlobalGet(index) => Operator::GlobalGet {
+            global_index: index.as_u32(),
+        },
+        ConstOp::RefI31 => Operator::RefI31,
+        ConstOp::RefNull(_) => Operator::RefNull {
+            hty: HeapType::Abstract {
+                shared: false,
+                ty: AbstractHeapType::Any,
+            },
+        },
+        ConstOp::RefFunc(index) => Operator::RefFunc {
+            function_index: index.as_u32(),
+        },
+        ConstOp::I32Add => Operator::I32Add,
+        ConstOp::I32Sub => Operator::I32Sub,
+        ConstOp::I32Mul => Operator::I32Mul,
+        ConstOp::I64Add => Operator::I64Add,
+        ConstOp::I64Sub => Operator::I64Sub,
+        ConstOp::I64Mul => Operator::I64Mul,
+        ConstOp::StructNew { struct_type_index } => Operator::StructNew {
+            struct_type_index: struct_type_index.as_u32(),
+        },
+        ConstOp::StructNewDefault { struct_type_index } => Operator::StructNewDefault {
+            struct_type_index: struct_type_index.as_u32(),
+        },
+        ConstOp::ArrayNew { array_type_index } => Operator::ArrayNew {
+            array_type_index: array_type_index.as_u32(),
+        },
+        ConstOp::ArrayNewDefault { array_type_index } => Operator::ArrayNewDefault {
+            array_type_index: array_type_index.as_u32(),
+        },
+        ConstOp::ArrayNewFixed {
+            array_type_index,
+            array_size,
+        } => Operator::ArrayNewFixed {
+            array_type_index: array_type_index.as_u32(),
+            array_size: *array_size,
+        },
+        ConstOp::ExternConvertAny => Operator::ExternConvertAny,
+        ConstOp::AnyConvertExtern => Operator::AnyConvertExtern,
     }
 }

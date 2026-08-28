@@ -1053,26 +1053,6 @@ fn fuel_around_table_grow() -> Result<()> {
     Ok(())
 }
 
-/// A const-expr operator must be charged its configured cost, not a hardcoded 1.
-///
-/// The module's global initializer is a three-op const-expr. Wasmtime does not
-/// constant-fold `i32.add` at compile time, so the expression is translated into
-/// the synthesized module-startup function and executed at instantiation. The
-/// `(start ...)` function is what flushes the buffered charges into the fuel
-/// counter, so it must be present for the charges to be observable.
-///
-/// Expected accounting with `I32Const = 7`, `I32Add = 100`, and every other
-/// cost left at its default of 1:
-///
-/// | module-startup function entry | 1   |
-/// | `i32.const 1`                 | 7   |
-/// | `i32.const 2`                 | 7   |
-/// | `i32.add`                     | 100 |
-/// | synthesized `call $start`     | 1   |
-/// | `$start` function entry       | 1   |
-/// | total                         | 117 |
-///
-/// With the default table every op costs 1, so the same module totals 6.
 #[test]
 #[cfg_attr(miri, ignore)]
 fn const_expr_honors_operator_cost() -> Result<()> {
@@ -1115,22 +1095,6 @@ fn const_expr_honors_operator_cost() -> Result<()> {
     Ok(())
 }
 
-/// `module_start` synthesizes the call to the wasm `(start ...)` function and
-/// hand-rolls the fuel accounting that `Operator::Call` normally receives from
-/// `fuel_before_op`. That accounting must use the configured `Call` cost rather
-/// than a hardcoded 1.
-///
-/// The module has no globals and no segments, and an empty start function, so
-/// the only charges are:
-///
-/// | module-startup function entry | 1  |
-/// | synthesized `call $start`     | 50 |
-/// | `$start` function entry       | 1  |
-/// | total                         | 52 |
-///
-/// The two entry rows are the flat per-function entry charge
-/// (`FuncEnvironment::new`'s `fuel_consumed: 1`, flushed by `fuel_check` on
-/// function entry), not derived from any operator's cost.
 #[test]
 #[cfg_attr(miri, ignore)]
 fn module_start_call_honors_operator_cost() -> Result<()> {
@@ -1140,18 +1104,26 @@ fn module_start_call_honors_operator_cost() -> Result<()> {
           (start $start))
     "#;
 
-    let mut config = Config::new();
-    config.consume_fuel(true).operator_cost(OperatorCost {
+    fn instantiation_fuel(op_cost: OperatorCost) -> Result<u64> {
+        let mut config = Config::new();
+        config.consume_fuel(true).operator_cost(op_cost);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(&engine, WAT)?;
+
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(10_000)?;
+        Instance::new(&mut store, &module, &[])?;
+
+        Ok(10_000 - store.get_fuel()?)
+    }
+
+    assert_eq!(instantiation_fuel(OperatorCost::default())?, 3);
+
+    let custom = OperatorCost {
         Call: 50,
         ..Default::default()
-    });
-    let engine = Engine::new(&config)?;
-    let module = Module::new(&engine, WAT)?;
+    };
+    assert_eq!(instantiation_fuel(custom)?, 52);
 
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(10_000)?;
-    Instance::new(&mut store, &module, &[])?;
-
-    assert_eq!(10_000 - store.get_fuel()?, 52);
     Ok(())
 }
