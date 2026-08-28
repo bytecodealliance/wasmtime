@@ -653,7 +653,7 @@ impl WasiP1Ctx {
                 drop(t);
                 let f = self.table.get(&fd)?.file()?;
 
-                let do_write = move |f: &cap_std::fs::File, buf: &[u8]| match (append, write) {
+                let do_write = move |f: &std::fs::File, buf: &[u8]| match (append, write) {
                     // Note that this is implementing Linux semantics of
                     // `pwrite` where the offset is ignored if the file was
                     // opened in append mode.
@@ -662,17 +662,16 @@ impl WasiP1Ctx {
                     (false, FdWrite::AtCur) => f.write_at(&buf, pos),
                 };
 
-                let nwritten = match f.as_blocking_file() {
+                let nwritten = if let Some(f) = f.as_blocking_file() {
                     // If we can block then skip the copy out of wasm memory and
                     // write directly to `f`.
-                    Some(f) => do_write(f, &memory.as_cow(buf)?),
+                    do_write(&f, &memory.as_cow(buf)?)
+                } else {
                     // ... otherwise copy out of wasm memory and use
                     // `spawn_blocking` to do this write in a thread that can
                     // block.
-                    None => {
-                        let buf = memory.to_vec(buf)?;
-                        f.run_blocking(move |f| do_write(f, &buf)).await
-                    }
+                    let buf = memory.to_vec(buf)?;
+                    f.run_blocking(move |f| do_write(f, &buf)).await
                 };
 
                 let nwritten = nwritten.map_err(|e| StreamError::LastOperationFailed(e.into()))?;
@@ -1666,32 +1665,31 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 drop(t);
                 let pos = position.load(Ordering::Relaxed);
                 let file = self.table.get(&fd)?.file()?;
-                let bytes_read = match (file.as_blocking_file(), memory.as_slice_mut(iov)?) {
+                let bytes_read = if let (Some(file), Some(mut buf)) =
+                    (file.as_blocking_file(), memory.as_slice_mut(iov)?)
+                {
                     // Try to read directly into wasm memory where possible
                     // when the current thread can block and additionally wasm
                     // memory isn't shared.
-                    (Some(file), Some(mut buf)) => file
-                        .read_at(&mut buf, pos)
-                        .map_err(|e| StreamError::LastOperationFailed(e.into()))?,
+                    file.read_at(&mut buf, pos)
+                        .map_err(|e| StreamError::LastOperationFailed(e.into()))?
+                } else {
                     // ... otherwise fall back to performing the read on a
                     // blocking thread and which copies the data back into wasm
                     // memory.
-                    (_, buf) => {
-                        drop(buf);
-                        let mut buf = vec![0; iov.len() as usize];
-                        let buf = file
-                            .run_blocking(move |file| -> Result<_, types::Error> {
-                                let bytes_read = file
-                                    .read_at(&mut buf, pos)
-                                    .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
-                                buf.truncate(bytes_read);
-                                Ok(buf)
-                            })
-                            .await?;
-                        let iov = iov.get_range(0..u32::try_from(buf.len())?).unwrap();
-                        memory.copy_from_slice(&buf, iov)?;
-                        buf.len()
-                    }
+                    let mut buf = vec![0; iov.len() as usize];
+                    let buf = file
+                        .run_blocking(move |file| -> Result<_, types::Error> {
+                            let bytes_read = file
+                                .read_at(&mut buf, pos)
+                                .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
+                            buf.truncate(bytes_read);
+                            Ok(buf)
+                        })
+                        .await?;
+                    let iov = iov.get_range(0..u32::try_from(buf.len())?).unwrap();
+                    memory.copy_from_slice(&buf, iov)?;
+                    buf.len()
                 };
 
                 let pos = pos

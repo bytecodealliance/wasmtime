@@ -5,7 +5,7 @@ use super::helpers as h;
 use super::sys_common::io::tmpdir;
 use super::sys_common::symlink_junction;
 use crate::filesystem::primitives as p;
-use rand::Rng;
+use cap_rand::RngCore;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{ErrorKind, SeekFrom};
@@ -964,7 +964,7 @@ fn _assert_send_sync() {
 #[test]
 fn binary_file() {
     let mut bytes = [0; 1024];
-    rand::rng().fill_bytes(&mut bytes);
+    cap_rand::thread_rng(cap_std::ambient_authority()).fill_bytes(&mut bytes);
 
     let tmpdir = tmpdir();
 
@@ -979,7 +979,7 @@ fn binary_file() {
 #[test]
 fn write_then_read() {
     let mut bytes = [0; 1024];
-    rand::rng().fill_bytes(&mut bytes);
+    cap_rand::thread_rng(cap_std::ambient_authority()).fill_bytes(&mut bytes);
 
     let tmpdir = tmpdir();
 

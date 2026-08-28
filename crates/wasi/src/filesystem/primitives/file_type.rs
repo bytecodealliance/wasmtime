@@ -115,6 +115,7 @@ impl FileTypeExt for FileType {
 /// `std`. Use `cap_fs_ext::FileTypeExt` instead of calling this directly.
 #[cfg(windows)]
 #[doc(hidden)]
+#[allow(unused)]
 pub trait _WindowsFileTypeExt {
     fn is_block_device(&self) -> bool;
     fn is_char_device(&self) -> bool;

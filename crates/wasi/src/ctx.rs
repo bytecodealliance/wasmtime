@@ -6,7 +6,6 @@ use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
 use crate::{DirPerms, FilePerms, OpenMode};
 use anyhow::Result;
 use cap_rand::RngCore;
-use cap_std::ambient_authority;
 use std::future::Future;
 use std::mem;
 use std::net::SocketAddr;
