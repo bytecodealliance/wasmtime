@@ -553,3 +553,63 @@ block0(v0: i32, v1: i32, v2: i32):
     ; check: v7 = ushr v6, v2
     ; check: return v7
 }
+
+function %band_bor_isub_to_ineg_bxor(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band.i32 v0, v1
+    v3 = bor.i32 v0, v1
+    v4 = isub.i32 v2, v3
+    return v4
+    ; check: v5 = bxor v0, v1
+    ; check: v6 = ineg v5
+    ; check: return v6
+}
+
+;; (x - y) + (y - x) --> 0
+function %iadd_isub_cancel(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = isub.i32 v0, v1
+    v3 = isub.i32 v1, v0
+    v4 = iadd.i32 v2, v3
+    return v4
+    ; check: v5 = iconst.i32 0
+    ; check: return v5
+}
+
+;; (x ^ y) + 2 * (x & y) --> x + y
+function %iadd_bxor_ishl_band(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = bxor.i32 v0, v1
+    v4 = band.i32 v0, v1
+    v5 = ishl.i32 v4, v2
+    v6 = iadd.i32 v3, v5
+    return v6
+    ; check: v7 = iadd v0, v1
+    ; check: return v7
+}
+
+;; (x ^ y) + 2 * (x & y) --> x + y
+function %iadd_bxor_ishl_band_commute(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = band.i32 v0, v1
+    v4 = ishl.i32 v3, v2
+    v5 = bxor.i32 v0, v1
+    v6 = iadd.i32 v4, v5
+    return v6
+    ; check: v7 = iadd v0, v1
+    ; check: return v7
+}
+
+;; (x ^ y) - (x | y) --> -(x & y)
+function %bxor_bor_isub_to_ineg_band(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bxor.i32 v0, v1
+    v3 = bor.i32 v0, v1
+    v4 = isub.i32 v2, v3
+    return v4
+    ; check: v5 = band v0, v1
+    ; check: v6 = ineg v5
+    ; check: return v6
+}
