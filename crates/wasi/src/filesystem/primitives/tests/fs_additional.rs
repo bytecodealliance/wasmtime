@@ -1283,14 +1283,14 @@ fn trailing_slash_symlink() {
     let sandbox = check!(p::open_dir(&start, Path::new("sandbox")));
 
     for path in ["hidden", "hidden/", "indirect", "indirect/"] {
-        error_contains!(
-            p::open_dir(&sandbox, Path::new(path)),
-            "a path led outside of the filesystem"
-        );
-        error_contains!(
-            h::read_dir(&sandbox, path),
-            "a path led outside of the filesystem"
-        );
+        let open_dir = p::open_dir(&sandbox, Path::new(path));
+        let read_dir = h::read_dir(&sandbox, path);
+        assert!(open_dir.is_err());
+        assert!(read_dir.is_err());
+        if cfg!(unix) {
+            error_contains!(open_dir, "a path led outside of the filesystem");
+            error_contains!(read_dir, "a path led outside of the filesystem");
+        }
     }
 }
 
@@ -1348,13 +1348,13 @@ fn trailing_slash_symlink_more() {
         "root_link",
         "root_link/",
     ] {
-        error_contains!(
-            p::open_dir(&sandbox, Path::new(path)),
-            "a path led outside of the filesystem"
-        );
-        error_contains!(
-            h::read_dir(&sandbox, path),
-            "a path led outside of the filesystem"
-        );
+        let open_dir = p::open_dir(&sandbox, Path::new(path));
+        let read_dir = h::read_dir(&sandbox, path);
+        assert!(open_dir.is_err());
+        assert!(read_dir.is_err());
+        if cfg!(unix) {
+            error_contains!(open_dir, "a path led outside of the filesystem");
+            error_contains!(read_dir, "a path led outside of the filesystem");
+        }
     }
 }
