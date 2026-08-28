@@ -946,3 +946,9 @@ async fn p3_http_outbound_request_chunk_size() -> Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_CHUNK_SIZE_COMPONENT, &server).await
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_drop_transmit() -> Result<()> {
+    let server = Server::http1(1)?;
+    run_cli(P3_HTTP_DROP_TRANSMIT_COMPONENT, &server).await
+}
