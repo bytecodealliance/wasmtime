@@ -808,7 +808,7 @@ pub fn translate_array_new(
         .operator_cost
         .variable()
         .array_new_per_element;
-    let fuel = func_env.pre_translate_bulk_op(builder, len, cost)?;
+    let fuel = func_env.pre_translate_bulk_op(builder, len, cost);
 
     let result =
         gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
@@ -842,7 +842,7 @@ pub fn translate_array_new_default(
         .operator_cost
         .variable()
         .array_new_default_per_element;
-    let fuel = func_env.pre_translate_bulk_op(builder, len, cost)?;
+    let fuel = func_env.pre_translate_bulk_op(builder, len, cost);
 
     let interned_ty = func_env.module.types[array_type_index].unwrap_module_type_index();
     let array_ty = func_env.types.unwrap_array(interned_ty)?;
@@ -1771,7 +1771,7 @@ pub fn translate_array_new_entity(
     len: ir::Value,
     cost_per_unit: u8,
 ) -> WasmResult<ir::Value> {
-    let fuel = env.pre_translate_bulk_op(builder, len, cost_per_unit)?;
+    let fuel = env.pre_translate_bulk_op(builder, len, cost_per_unit);
 
     // Before actually allocating this array first do a bounds-check on the
     // passive entity itself.
