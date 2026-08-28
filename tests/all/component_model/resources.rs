@@ -2,7 +2,7 @@
 
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Config, Engine, Store, Trap};
+use wasmtime::{Config, Engine, Store};
 
 #[test]
 fn host_resource_types() -> Result<()> {
@@ -677,7 +677,7 @@ fn dynamic_val() -> Result<()> {
 }
 
 #[test]
-fn cannot_reenter_during_import() -> Result<()> {
+fn reenter_during_import() -> Result<()> {
     let engine = super::engine();
     let c = Component::new(
         &engine,
@@ -690,7 +690,7 @@ fn cannot_reenter_during_import() -> Result<()> {
                 (core module $m
                     (import "" "f" (func $f))
                     (func (export "call") call $f)
-                    (func (export "dtor") (param i32) unreachable)
+                    (func (export "dtor") (param i32))
                 )
 
                 (core instance $i (instantiate $m
@@ -714,12 +714,7 @@ fn cannot_reenter_during_import() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap("f", |mut cx, ()| {
         let data: &mut Option<ResourceAny> = cx.data_mut();
-        let err = data.take().unwrap().resource_drop(cx).unwrap_err();
-        assert_eq!(
-            err.downcast_ref(),
-            Some(&Trap::CannotEnterComponent),
-            "bad error: {err:?}"
-        );
+        data.take().unwrap().resource_drop(cx)?;
         Ok(())
     })?;
     let i = linker.instantiate(&mut store, &c)?;

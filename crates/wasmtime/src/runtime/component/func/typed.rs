@@ -260,9 +260,13 @@ where
                     Self::lift_heap_result,
                 )
             }
-        }?;
+        };
 
-        Ok(result)
+        if result.is_err() {
+            store.0.set_trapped();
+        }
+
+        result
     }
 
     /// Lower parameters directly onto the stack specified by the `dst`

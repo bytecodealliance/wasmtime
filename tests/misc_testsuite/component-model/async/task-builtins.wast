@@ -527,7 +527,9 @@
         (local.set $ret (call $run-reader-stream (local.get $sr) (global.get $stream-retp)))
         (global.set $stream-subtask (i32.shr_u (local.get $ret) (i32.const 4)))
         (local.set $ret (call $stream.write (global.get $sw) (i32.const 40) (i32.const 1)))
-        (if (i32.ne (i32.const 0x10 (; COMPLETED | 1<<4 ;)) (local.get $ret)) (then (unreachable)))
+        ;; This will be blocked because `run-future` has not yet exited and
+        ;; `run-stream` is waiting for the exclusive lock on the instance:
+        (if (i32.ne (i32.const -1 (; BLOCKED ;)) (local.get $ret)) (then (unreachable)))
 
         ;; Create a waitable set and join both subtasks to wait for both to complete
         (global.set $ws (call $waitable-set.new))
