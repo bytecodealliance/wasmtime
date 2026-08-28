@@ -1052,3 +1052,76 @@ fn fuel_around_table_grow() -> Result<()> {
     assert_eq!(trap, Trap::TableOutOfBounds);
     Ok(())
 }
+
+#[wasmtime_test(wasm_features(extended_const))]
+#[cfg_attr(miri, ignore)]
+fn const_expr_honors_operator_cost(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (global $g i32 (i32.add (i32.const 1) (i32.const 2)))
+          (export "g" (global $g))
+          (func $start)
+          (start $start))
+    "#;
+
+    fn instantiation_fuel(config: &mut Config, op_cost: OperatorCost) -> Result<u64> {
+        config.consume_fuel(true).operator_cost(op_cost);
+        let engine = Engine::new(config)?;
+        let module = Module::new(&engine, WAT)?;
+
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(10_000)?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        let g = instance
+            .get_global(&mut store, "g")
+            .unwrap()
+            .get(&mut store);
+        assert_eq!(g.i32(), Some(3), "global initializer did not run");
+
+        Ok(10_000 - store.get_fuel()?)
+    }
+
+    assert_eq!(instantiation_fuel(config, OperatorCost::default())?, 6);
+
+    let custom = OperatorCost {
+        I32Const: 7,
+        I32Add: 100,
+        ..Default::default()
+    };
+    assert_eq!(instantiation_fuel(config, custom)?, 117);
+
+    Ok(())
+}
+
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn module_start_call_honors_operator_cost(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (func $start)
+          (start $start))
+    "#;
+
+    fn instantiation_fuel(config: &mut Config, op_cost: OperatorCost) -> Result<u64> {
+        config.consume_fuel(true).operator_cost(op_cost);
+        let engine = Engine::new(config)?;
+        let module = Module::new(&engine, WAT)?;
+
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(10_000)?;
+        Instance::new(&mut store, &module, &[])?;
+
+        Ok(10_000 - store.get_fuel()?)
+    }
+
+    assert_eq!(instantiation_fuel(config, OperatorCost::default())?, 3);
+
+    let custom = OperatorCost {
+        Call: 50,
+        ..Default::default()
+    };
+    assert_eq!(instantiation_fuel(config, custom)?, 52);
+
+    Ok(())
+}

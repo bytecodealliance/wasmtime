@@ -651,6 +651,10 @@ impl Config {
     /// configures per-byte, per-element, and per-page costs for operators whose
     /// work depends on a runtime operand.
     ///
+    /// These costs apply both to operators in function bodies and to operators
+    /// in constant expressions evaluated at instantiation time, such as global
+    /// initializers and element or data segment offsets.
+    ///
     /// This is only relevant when [`Config::consume_fuel`] is enabled.
     pub fn operator_cost(&mut self, cost: OperatorCost) -> &mut Self {
         self.tunables.operator_cost = Some(OperatorCostStrategy::table(cost));

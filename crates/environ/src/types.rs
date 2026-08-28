@@ -2145,6 +2145,67 @@ impl ConstOp {
             }
         })
     }
+
+    /// Convert a `ConstOp` back to a `wasmparser::Operator`.
+    ///
+    /// `RefNull`'s heap type does not round-trip, so only use this where the
+    /// immediates do not matter, such as looking up an operator's fuel cost.
+    pub fn to_operator(&self) -> wasmparser::Operator<'static> {
+        use wasmparser::{AbstractHeapType, HeapType, Ieee32, Ieee64, Operator, V128};
+        match self {
+            ConstOp::I32Const(value) => Operator::I32Const { value: *value },
+            ConstOp::I64Const(value) => Operator::I64Const { value: *value },
+            ConstOp::F32Const(bits) => Operator::F32Const {
+                value: Ieee32::from(f32::from_bits(*bits)),
+            },
+            ConstOp::F64Const(bits) => Operator::F64Const {
+                value: Ieee64::from(f64::from_bits(*bits)),
+            },
+            ConstOp::V128Const(value) => Operator::V128Const {
+                value: V128::from(*value as i128),
+            },
+            ConstOp::GlobalGet(index) => Operator::GlobalGet {
+                global_index: index.as_u32(),
+            },
+            ConstOp::RefI31 => Operator::RefI31,
+            ConstOp::RefNull(_) => Operator::RefNull {
+                hty: HeapType::Abstract {
+                    shared: false,
+                    ty: AbstractHeapType::Any,
+                },
+            },
+            ConstOp::RefFunc(index) => Operator::RefFunc {
+                function_index: index.as_u32(),
+            },
+            ConstOp::I32Add => Operator::I32Add,
+            ConstOp::I32Sub => Operator::I32Sub,
+            ConstOp::I32Mul => Operator::I32Mul,
+            ConstOp::I64Add => Operator::I64Add,
+            ConstOp::I64Sub => Operator::I64Sub,
+            ConstOp::I64Mul => Operator::I64Mul,
+            ConstOp::StructNew { struct_type_index } => Operator::StructNew {
+                struct_type_index: struct_type_index.as_u32(),
+            },
+            ConstOp::StructNewDefault { struct_type_index } => Operator::StructNewDefault {
+                struct_type_index: struct_type_index.as_u32(),
+            },
+            ConstOp::ArrayNew { array_type_index } => Operator::ArrayNew {
+                array_type_index: array_type_index.as_u32(),
+            },
+            ConstOp::ArrayNewDefault { array_type_index } => Operator::ArrayNewDefault {
+                array_type_index: array_type_index.as_u32(),
+            },
+            ConstOp::ArrayNewFixed {
+                array_type_index,
+                array_size,
+            } => Operator::ArrayNewFixed {
+                array_type_index: array_type_index.as_u32(),
+                array_size: *array_size,
+            },
+            ConstOp::ExternConvertAny => Operator::ExternConvertAny,
+            ConstOp::AnyConvertExtern => Operator::AnyConvertExtern,
+        }
+    }
 }
 
 /// The type that can be used to index into [Memory] and [Table].
