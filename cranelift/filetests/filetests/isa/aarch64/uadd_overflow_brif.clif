@@ -1,0 +1,245 @@
+test compile precise-output
+set opt_level=speed
+target aarch64
+
+function %uadd_bool_unused(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2, v3 = uadd_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+
+block2:
+  v5 = iconst.i64 2
+  return v5
+}
+
+; VCode:
+; block0:
+;   adds x5, x0, x1
+;   b.hs label2 ; b label1
+; block1:
+;   movz x0, #2
+;   ret
+; block2:
+;   movz x0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x5, x0, x1
+;   b.hs #0x10
+; block1: ; offset 0x8
+;   mov x0, #2
+;   ret
+; block2: ; offset 0x10
+;   mov x0, #1
+;   ret
+
+function %uadd_bool_unused_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2, v3 = uadd_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+
+block2:
+  v5 = iconst.i32 2
+  return v5
+}
+
+; VCode:
+; block0:
+;   adds w5, w0, w1
+;   b.hs label2 ; b label1
+; block1:
+;   movz w0, #2
+;   ret
+; block2:
+;   movz w0, #1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds w5, w0, w1
+;   b.hs #0x10
+; block1: ; offset 0x8
+;   mov w0, #2
+;   ret
+; block2: ; offset 0x10
+;   mov w0, #1
+;   ret
+
+function %uadd_used_in_dominated_block(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2, v3 = uadd_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iadd v2, v0
+  return v4
+
+block2:
+  v5 = iconst.i32 2
+  return v5
+}
+
+; VCode:
+; block0:
+;   adds w5, w0, w1
+;   b.hs label2 ; b label1
+; block1:
+;   movz w0, #2
+;   ret
+; block2:
+;   add w0, w5, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds w5, w0, w1
+;   b.hs #0x10
+; block1: ; offset 0x8
+;   mov w0, #2
+;   ret
+; block2: ; offset 0x10
+;   add w0, w5, w0
+;   ret
+
+function %uadd_used_between_def_and_branch(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2, v3 = uadd_overflow v0, v1
+  store.i64 v2, v1
+  brif v3, block1, block2
+
+block1:
+  return v2
+
+block2:
+  v6 = iconst.i64 2
+  return v6
+}
+
+; VCode:
+; block0:
+;   adds x5, x0, x1
+;   mov x7, x5
+;   str x7, [x1]
+;   adds x6, x0, x1
+;   b.hs label2 ; b label1
+; block1:
+;   movz x0, #2
+;   ret
+; block2:
+;   mov x0, x7
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x5, x0, x1
+;   mov x7, x5
+;   str x7, [x1] ; trap: heap_oob
+;   adds x6, x0, x1
+;   b.hs #0x1c
+; block1: ; offset 0x14
+;   mov x0, #2
+;   ret
+; block2: ; offset 0x1c
+;   mov x0, x7
+;   ret
+
+function %uflags_materialized(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = uadd_overflow v0, v1
+  v5 = uextend.i64 v4
+  v6 = iadd v5, v2
+  brif v4, block1, block2
+
+block1:
+  v7 = iadd v3, v6
+  return v7
+
+block2:
+  v8 = iconst.i64 2
+  return v8
+}
+
+; VCode:
+; block0:
+;   adds x8, x0, x1
+;   cset x10, hs
+;   adds x9, x0, x1
+;   b.hs label2 ; b label1
+; block1:
+;   movz x0, #2
+;   ret
+; block2:
+;   add x11, x2, x10, UXTB
+;   add x0, x8, x11
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x8, x0, x1
+;   cset x10, hs
+;   adds x9, x0, x1
+;   b.hs #0x18
+; block1: ; offset 0x10
+;   mov x0, #2
+;   ret
+; block2: ; offset 0x18
+;   add x11, x2, w10, uxtb
+;   add x0, x8, x11
+;   ret
+
+function %ubranch_in_different_block(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2, v3 = uadd_overflow v0, v1
+  v4 = iadd v2, v0
+  jump block2
+
+block1:
+  return v4
+
+block2:
+  brif v3, block1, block3
+
+block3:
+  return v2
+}
+
+; VCode:
+; block0:
+;   adds w5, w0, w1
+;   mov x7, x5
+;   b label1
+; block1:
+;   adds w6, w0, w1
+;   b.hs label3 ; b label2
+; block2:
+;   mov x0, x7
+;   ret
+; block3:
+;   mov x13, x7
+;   add w0, w13, w0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds w5, w0, w1
+;   mov x7, x5
+; block1: ; offset 0x8
+;   adds w6, w0, w1
+;   b.hs #0x18
+; block2: ; offset 0x10
+;   mov x0, x7
+;   ret
+; block3: ; offset 0x18
+;   mov x13, x7
+;   add w0, w13, w0
+;   ret
+

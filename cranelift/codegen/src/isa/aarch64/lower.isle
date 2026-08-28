@@ -2966,6 +2966,17 @@
 
 ;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; The flags output of a `uadd_overflow` that is not demanded as a materialized
+;; bool (i.e., its only use(s) were folded into consumers such as a `brif` that
+;; consume the flags directly) does not need a `cset`; emit just the `adds`.
+(rule 3 (lower i @ (uadd_overflow _ a b @ (value_type (ty_32_or_64 ty))))
+        (if-let (second_result flags) i)
+        (if-let false (value_used flags))
+        (let ((sum ValueRegs (with_flags
+                  (alu_rrr_with_flags_paired ty a b (ALUOp.AddS))
+                  (ConsumesFlags.ConsumesFlagsNop))))
+          (output_pair sum (value_regs_invalid))))
+
 ;; For values smaller than a register, we do a normal `add` with both arguments
 ;; zero extended. We then check if the output is the same as itself zero extended.
 (rule 1 (lower (uadd_overflow (fits_in_16 ty) a b))
@@ -3153,6 +3164,19 @@
 ;; `brif` base case
 (rule lower_brif (lower_branch (brif val _ _) (two_targets taken not_taken))
   (emit_side_effect (br_cond_result (is_nonzero_cmp val) taken not_taken)))
+
+;; Fold the case where we use the overflow result of a `uadd_overflow`:
+;; consume the carry flag from an `adds` directly and opportunistically
+;; register the sum result so we might be able to skip a separate lowering
+;; to produce it.
+(rule 2 (lower_branch (brif
+                       (second_result
+                        uadd_inst @ (uadd_overflow (ty_32_or_64 ty) x y)) _ _) (two_targets taken not_taken))
+        (if-let (first_result v1) uadd_inst)
+        (let ((producer ProducesFlags (alu_rrr_with_flags_paired ty x y (ALUOp.AddS)))
+              (sum Reg (produces_flags_get_reg producer))
+              (_ Unit (opportunistic_def v1 sum)))
+          (emit_side_effect (br_cond_result (CondResult.Cond (produces_flags_ignore producer) (Cond.Hs)) taken not_taken))))
 
 ;; Helper to emit a branching instruction based on  a `CondResult`
 (decl br_cond_result (CondResult MachLabel MachLabel) SideEffectNoResult)

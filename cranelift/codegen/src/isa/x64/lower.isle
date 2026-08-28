@@ -178,6 +178,16 @@
 
 ;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; The flags output of a `uadd_overflow` that is not demanded as a materialized
+;; bool (i.e., its only use(s) were folded into consumers such as a `brif` that
+;; consume the flags directly) does not need a `setcc`; emit just the `add`.
+(rule 3 (lower i @ (uadd_overflow _ x y @ (value_type (fits_in_64 ty))))
+        (if-let (second_result flags) i)
+        (if-let false (value_used flags))
+        (let ((sum ValueRegs (with_flags (x64_add_with_flags_paired ty x y)
+                                         (ConsumesFlags.ConsumesFlagsNop))))
+          (output_pair sum (value_regs_invalid))))
+
 (rule 1 (lower (uadd_overflow _ x y @ (value_type (fits_in_64 ty))))
       (construct_overflow_op_alu ty (CC.B) (ProduceFlagsOp.Add) x y))
 
@@ -3588,6 +3598,19 @@
 
 (rule (lower_branch (brif val _ _) (two_targets then else))
       (emit_side_effect (jmp_cond_result (is_nonzero_cmp val) then else)))
+
+;; Fold the case where we use the overflow result of a
+;; `uadd_overflow`. Opportunistically register the sum result as well
+;; so we might be able to skip a separate lowering to produce it.
+(rule 1 (lower_branch (brif
+                       (second_result
+                        uadd_inst @ (uadd_overflow (fits_in_64 ty) x y)) _ _) (two_targets taken not_taken))
+        (if-let (first_result v1) uadd_inst)
+        (let ((producer ProducesFlags (x64_add_with_flags_paired ty x y))
+              (sum Reg (produces_flags_get_reg producer))
+              (_ Unit (opportunistic_def v1 sum)))
+          (emit_side_effect (with_flags_side_effect (produces_flags_ignore producer)
+                                                    (jmp_cond (CC.B) taken not_taken)))))
 
 ;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
