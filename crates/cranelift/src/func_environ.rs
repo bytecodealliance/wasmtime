@@ -6147,7 +6147,7 @@ impl FuncEnvironment<'_> {
         let mut stack = Vec::new();
         for op in expr.ops() {
             if self.tunables.consume_fuel {
-                self.fuel_consumed += self.tunables.operator_cost.const_op_cost(op);
+                self.fuel_consumed += self.tunables.operator_cost.cost(&op.to_operator());
             }
             match op {
                 ConstOp::I32Const(i) => {

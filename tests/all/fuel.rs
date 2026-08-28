@@ -1053,9 +1053,9 @@ fn fuel_around_table_grow() -> Result<()> {
     Ok(())
 }
 
-#[test]
+#[wasmtime_test(wasm_features(extended_const))]
 #[cfg_attr(miri, ignore)]
-fn const_expr_honors_operator_cost() -> Result<()> {
+fn const_expr_honors_operator_cost(config: &mut Config) -> Result<()> {
     const WAT: &str = r#"
         (module
           (global $g i32 (i32.add (i32.const 1) (i32.const 2)))
@@ -1064,10 +1064,9 @@ fn const_expr_honors_operator_cost() -> Result<()> {
           (start $start))
     "#;
 
-    fn instantiation_fuel(op_cost: OperatorCost) -> Result<u64> {
-        let mut config = Config::new();
+    fn instantiation_fuel(config: &mut Config, op_cost: OperatorCost) -> Result<u64> {
         config.consume_fuel(true).operator_cost(op_cost);
-        let engine = Engine::new(&config)?;
+        let engine = Engine::new(config)?;
         let module = Module::new(&engine, WAT)?;
 
         let mut store = Store::new(&engine, ());
@@ -1083,31 +1082,30 @@ fn const_expr_honors_operator_cost() -> Result<()> {
         Ok(10_000 - store.get_fuel()?)
     }
 
-    assert_eq!(instantiation_fuel(OperatorCost::default())?, 6);
+    assert_eq!(instantiation_fuel(config, OperatorCost::default())?, 6);
 
     let custom = OperatorCost {
         I32Const: 7,
         I32Add: 100,
         ..Default::default()
     };
-    assert_eq!(instantiation_fuel(custom)?, 117);
+    assert_eq!(instantiation_fuel(config, custom)?, 117);
 
     Ok(())
 }
 
-#[test]
+#[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn module_start_call_honors_operator_cost() -> Result<()> {
+fn module_start_call_honors_operator_cost(config: &mut Config) -> Result<()> {
     const WAT: &str = r#"
         (module
           (func $start)
           (start $start))
     "#;
 
-    fn instantiation_fuel(op_cost: OperatorCost) -> Result<u64> {
-        let mut config = Config::new();
+    fn instantiation_fuel(config: &mut Config, op_cost: OperatorCost) -> Result<u64> {
         config.consume_fuel(true).operator_cost(op_cost);
-        let engine = Engine::new(&config)?;
+        let engine = Engine::new(config)?;
         let module = Module::new(&engine, WAT)?;
 
         let mut store = Store::new(&engine, ());
@@ -1117,13 +1115,13 @@ fn module_start_call_honors_operator_cost() -> Result<()> {
         Ok(10_000 - store.get_fuel()?)
     }
 
-    assert_eq!(instantiation_fuel(OperatorCost::default())?, 3);
+    assert_eq!(instantiation_fuel(config, OperatorCost::default())?, 3);
 
     let custom = OperatorCost {
         Call: 50,
         ..Default::default()
     };
-    assert_eq!(instantiation_fuel(custom)?, 52);
+    assert_eq!(instantiation_fuel(config, custom)?, 52);
 
     Ok(())
 }
