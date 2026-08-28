@@ -455,11 +455,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     .vmcomponent()
                     .may_leave(instance)
                     .region(func),
-                Some(KnownGlobal::TaskMayBlock) => self
-                    .alias_regions
-                    .vmcomponent()
-                    .task_may_block()
-                    .region(func),
                 None => self.alias_regions.public_global_region(func),
             },
         }

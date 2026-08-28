@@ -11,16 +11,12 @@ use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, TypedResource, TypedResourceIndex};
 use crate::runtime::vm::{self, VMFuncRef, VMStore};
-#[cfg(feature = "component-model-async")]
-use crate::store::StoreToken;
 use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
 use core::pin::Pin;
 use core::ptr::NonNull;
-#[cfg(feature = "component-model-async")]
-use futures::channel::oneshot;
 use wasmtime_environ::{EngineOrModuleTypeIndex, component::*};
 use wasmtime_environ::{EntityIndex, EntityType, PrimaryMap};
 
@@ -838,11 +834,11 @@ impl<'a> Instantiator<'a> {
                     // already been performed. This means that the unsafety due
                     // to imports having the wrong type should not happen here.
                     //
-                    // Also note we are calling new_started_impl because we have
-                    // already checked for asyncness and are running on a fiber
-                    // if required.
+                    // Also note we are calling `new_raw` followed by
+                    // `start_raw` and will run the latter on a fiber if
+                    // required per `asyncness`.
 
-                    let mut instance = {
+                    let (mut instance, needs_startup) = {
                         let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
                         unsafe {
                             crate::Instance::new_raw(
@@ -855,7 +851,7 @@ impl<'a> Instantiator<'a> {
                         }
                     };
 
-                    if instance.id.get_mut(store.0).needs_startup() {
+                    if needs_startup {
                         if asyncness == Asyncness::No {
                             instance.start_raw(store)?;
                         } else {
@@ -869,24 +865,7 @@ impl<'a> Instantiator<'a> {
                                         // event loop in case it calls async
                                         // functions or intrinsics, creates and
                                         // resumes threads, etc.
-                                        let (tx, rx) = oneshot::channel();
-                                        let token = StoreToken::new(store.as_context_mut());
-                                        store.0.queue_task(move |store| {
-                                            _ = tx.send(
-                                                instance
-                                                    .start_raw(&mut token.as_context_mut(store))
-                                                    .map(|()| instance),
-                                            );
-                                            Ok(())
-                                        })?;
-                                        instance = store
-                                            .as_context_mut()
-                                            .run_concurrent_trap_on_idle(async |_| {
-                                                rx.await.map_err(|_| {
-                                                    format_err!("oneshot channel canceled")
-                                                })
-                                            })
-                                            .await???;
+                                        instance = store.start_instance(instance).await?;
                                     } else {
                                         store.on_fiber(|store| instance.start_raw(store)).await??;
                                     }

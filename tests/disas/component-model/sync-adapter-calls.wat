@@ -57,7 +57,7 @@
 ;;     region1 = 67108888 "VMStoreContext+0x18"
 ;;     region2 = 1207959576 "VMFunctionImport+0x18"
 ;;     region3 = 1476395008 "VMGlobalImport+0x0"
-;;     region4 = 738197584 "VMComponentContext+0x50"
+;;     region4 = 738197568 "VMComponentContext+0x40"
 ;;     region5 = 67109000 "VMStoreContext+0x88"
 ;;     region6 = 1006632960 "VMDeferredThread+0x0"
 ;;     region7 = 1006632968 "VMDeferredThread+0x8"
@@ -67,7 +67,7 @@
 ;;     region11 = 1006632980 "VMDeferredThread+0x14"
 ;;     region12 = 67108996 "VMStoreContext+0x84"
 ;;     region13 = 1006632984 "VMDeferredThread+0x18"
-;;     region14 = 738197568 "VMComponentContext+0x40"
+;;     region14 = 738197552 "VMComponentContext+0x30"
 ;;     region15 = 1207959560 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8

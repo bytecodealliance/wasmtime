@@ -51,7 +51,6 @@
 //! in host functions.
 
 use self::error_contexts::GlobalErrorContextRefCount;
-use crate::bail_bug;
 use crate::component::func::{Func, call_post_return};
 use crate::component::{
     HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
@@ -69,6 +68,7 @@ use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMLazyThread, VMMemoryDefinit
 use crate::{
     AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
 };
+use crate::{Instance as ModuleInstance, bail_bug};
 use alloc::borrow::ToOwned;
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use core::any::Any;
@@ -1406,36 +1406,12 @@ impl<T> StoreContextMut<'_, T> {
                                 // If there are any tasks belonging to
                                 // an instance which may not suspend, trap with
                                 // `CannotBlockSyncTask`:
-                                let instances = reset
-                                    .store
-                                    .0
-                                    .concurrent_state_mut()?
-                                    .table
-                                    .get_mut()
-                                    .iter_mut()
-                                    .filter_map(|entry| {
-                                        if let Some(task) = entry.downcast_ref::<GuestTask>() {
-                                            Some(task.instance)
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .collect::<Vec<_>>();
-
-                                for instance in instances {
-                                    if reset
-                                        .store
-                                        .0
-                                        .instance_state(instance)
-                                        .concurrent_state()
-                                        .do_not_suspend
-                                    {
-                                        return Poll::Ready(Err(Trap::CannotBlockSyncTask.into()));
-                                    }
-                                }
-
-                                // Otherwise, trap with `AsyncDeadlock`:
-                                Poll::Ready(Err(Trap::AsyncDeadlock.into()))
+                                Poll::Ready(Err(if reset.store.0.any_may_not_suspend()? {
+                                    Trap::CannotBlockSyncTask.into()
+                                } else {
+                                    // Otherwise, trap with `AsyncDeadlock`:
+                                    Trap::AsyncDeadlock.into()
+                                }))
                             } else {
                                 // `trap_on_idle` is false, so we assume
                                 // that future will wake up and give us
@@ -1647,6 +1623,28 @@ impl<T> StoreContextMut<'_, T> {
 
             None
         }))
+    }
+
+    pub(crate) async fn start_instance(
+        &mut self,
+        instance: ModuleInstance,
+    ) -> Result<ModuleInstance> {
+        let (tx, rx) = oneshot::channel();
+        let token = StoreToken::new(self.as_context_mut());
+        self.0.queue_task(move |store| {
+            _ = tx.send(
+                instance
+                    .start_raw(&mut token.as_context_mut(store))
+                    .map(|()| instance),
+            );
+            Ok(())
+        })?;
+        self.as_context_mut()
+            .run_concurrent_trap_on_idle(async |_| {
+                rx.await
+                    .map_err(|_| format_err!("oneshot channel canceled"))
+            })
+            .await??
     }
 }
 
@@ -2425,13 +2423,35 @@ impl StoreOpaque {
         Ok(Some((bits << 1) | u32::from(is_host)))
     }
 
-    pub(crate) fn queue_task(
+    fn queue_task(
         &mut self,
         task: impl FnOnce(&mut dyn VMStore) -> Result<()> + Send + 'static,
     ) -> Result<()> {
         self.concurrent_state_mut()?
             .push_high_priority(WorkItem::WorkerFunction(AlwaysMut::new(Box::new(task))));
         Ok(())
+    }
+
+    fn any_may_not_suspend(&mut self) -> Result<bool> {
+        Ok(self
+            .concurrent_state_mut()?
+            .table
+            .get_mut()
+            .iter_mut()
+            .filter_map(|entry| {
+                if let Some(task) = entry.downcast_ref::<GuestTask>() {
+                    Some(task.instance)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .any(|instance| {
+                self.instance_state(instance)
+                    .concurrent_state()
+                    .do_not_suspend
+            }))
     }
 }
 
@@ -3953,7 +3973,10 @@ impl Instance {
             }
             SuspensionTarget::Resume(thread) => {
                 if !self.resume_thread(store, caller, thread, ResumeThread::Resume)? {
-                    bail_bug!("resumed thread should have been ready");
+                    bail_bug!(
+                        "`resume_thread` should only ever return false \
+                         when `ResumeThread::Promote` is passed to it"
+                    );
                 }
                 false
             }
