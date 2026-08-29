@@ -613,3 +613,95 @@ block0(v0: i32, v1: i32):
     ; check: v6 = ineg v5
     ; check: return v6
 }
+
+;; (max(-x, x) * max(-x, x)) --> x * x
+function %imul_smax_ineg_x_ineg_x(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = smax v1, v0
+    v3 = imul v2, v2
+    return v3
+    ; check: v4 = imul v0, v0
+    ; check: return v4
+}
+
+;; (max(-x, x) * max(x, -x)) --> x * x
+function %imul_smax_ineg_x_x_ineg(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = smax v1, v0
+    v3 = smax v0, v1
+    v4 = imul v2, v3
+    return v4
+    ; check: v5 = imul v0, v0
+    ; check: return v5
+}
+
+;; (max(x, -x) * max(-x, x)) --> x * x
+function %imul_smax_x_ineg_ineg_x(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = smax v0, v1
+    v3 = smax v1, v0
+    v4 = imul v2, v3
+    return v4
+    ; check: v5 = imul v0, v0
+    ; check: return v5
+}
+
+;; (max(x, -x) * max(x, -x)) --> x * x
+function %imul_smax_x_ineg_x_ineg(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = smax v0, v1
+    v3 = imul v2, v2
+    return v3
+    ; check: v4 = imul v0, v0
+    ; check: return v4
+}
+
+;; (max(-x, x) * max(-x, x)) --> x * x
+function %imul_umax_ineg_x_ineg_x(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = umax v1, v0
+    v3 = imul v2, v2
+    return v3
+    ; check: v4 = imul v0, v0
+    ; check: return v4
+}
+
+;; (max(-x, x) * max(x, -x)) --> x * x
+function %imul_umax_ineg_x_x_ineg(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = umax v1, v0
+    v3 = umax v0, v1
+    v4 = imul v2, v3
+    return v4
+    ; check: v5 = imul v0, v0
+    ; check: return v5
+}
+
+;; (max(x, -x) * max(-x, x)) --> x * x
+function %imul_umax_x_ineg_ineg_x(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = umax v0, v1
+    v3 = umax v1, v0
+    v4 = imul v2, v3
+    return v4
+    ; check: v5 = imul v0, v0
+    ; check: return v5
+}
+
+;; (max(x, -x) * max(x, -x)) --> x * x
+function %imul_umax_x_ineg_x_ineg(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = umax v0, v1
+    v3 = imul v2, v2
+    return v3
+    ; check: v4 = imul v0, v0
+    ; check: return v4
+}
