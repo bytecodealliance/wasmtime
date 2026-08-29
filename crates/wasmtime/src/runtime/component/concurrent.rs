@@ -1444,6 +1444,32 @@ impl<T> StoreContextMut<'_, T> {
                     ready,
                     low_priority,
                 } => {
+                    struct Dispose<'a, T: 'static> {
+                        store: StoreContextMut<'a, T>,
+                        ready: Option<WorkItem>,
+                    }
+
+                    impl<'a, T> Drop for Dispose<'a, T> {
+                        fn drop(&mut self) {
+                            if let Some(item) = self.ready.take() {
+                                match item {
+                                    WorkItem::ResumeFiber { mut fiber, .. } => {
+                                        fiber.dispose(self.store.0)
+                                    }
+                                    WorkItem::PushFuture(future) => {
+                                        tls::set(self.store.0, move || drop(future))
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+
+                    let mut dispose = Dispose {
+                        store: self.as_context_mut(),
+                        ready,
+                    };
+
                     // If we're about to run a low-priority task, first yield to
                     // the executor.  This ensures that it won't be starved of
                     // the ability to e.g. update the readiness of sockets,
@@ -1466,11 +1492,15 @@ impl<T> StoreContextMut<'_, T> {
                     // only yield periodically (e.g. for batches of low priority
                     // items) and not for each and every idividual item.
                     if low_priority {
-                        self.0.yield_now().await
+                        dispose.store.0.yield_now().await
                     }
 
-                    if let Some(item) = ready {
-                        self.as_context_mut().handle_work_item(item).await?;
+                    if let Some(item) = dispose.ready.take() {
+                        dispose
+                            .store
+                            .as_context_mut()
+                            .handle_work_item(item)
+                            .await?;
                     }
                 }
             }
@@ -4260,7 +4290,7 @@ impl Instance {
                         // The thread is in a cancellable yield, so yield back
                         // to it.
                         if !concurrent_state.promote_thread_work_item(thread)? {
-                            bail_bug!("todo");
+                            bail_bug!("a ready thread should have been promotable");
                         }
 
                         yield_(store)?;
@@ -5677,8 +5707,11 @@ impl ConcurrentState {
         for entry in self.table.get_mut().iter_mut() {
             if let Some(set) = entry.downcast_mut::<WaitableSet>() {
                 for mode in mem::take(&mut set.waiting).into_values() {
-                    if let WaitMode::Fiber(fiber) | WaitMode::Caller { fiber, .. } = mode {
-                        fibers.push(fiber);
+                    match mode {
+                        WaitMode::Fiber(fiber) | WaitMode::Caller { fiber, .. } => {
+                            fibers.push(fiber);
+                        }
+                        WaitMode::Callback(_) => {}
                     }
                 }
             } else if let Some(thread) = entry.downcast_mut::<GuestThread>() {
@@ -5765,8 +5798,11 @@ impl ConcurrentState {
         for entry in table.get_mut().iter_mut() {
             if let Some(set) = entry.downcast_mut::<WaitableSet>() {
                 for mode in set.waiting.values_mut() {
-                    if let WaitMode::Fiber(fiber) = mode {
-                        fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+                    match mode {
+                        WaitMode::Fiber(fiber) | WaitMode::Caller { fiber, .. } => {
+                            fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+                        }
+                        WaitMode::Callback(_) => {}
                     }
                 }
             } else if let Some(thread) = entry.downcast_mut::<GuestThread>() {
