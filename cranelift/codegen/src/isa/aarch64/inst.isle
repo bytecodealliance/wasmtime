@@ -1593,8 +1593,10 @@
 (rule (scalar_size $I64) (ScalarSize.Size64))
 (rule (scalar_size $I128) (ScalarSize.Size128))
 
+(rule (scalar_size $F16) (ScalarSize.Size16))
 (rule (scalar_size $F32) (ScalarSize.Size32))
 (rule (scalar_size $F64) (ScalarSize.Size64))
+(rule (scalar_size $F128) (ScalarSize.Size128))
 
 ;; Helper for calculating the `ScalarSize` lane type from vector type
 (attr lane_size (tag vector))

@@ -1,0 +1,8 @@
+test compile
+target aarch64
+
+function %f0(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+    v3 = fma v0, v1, v2
+    return v3
+}
