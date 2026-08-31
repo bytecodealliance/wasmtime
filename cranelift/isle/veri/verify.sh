@@ -43,6 +43,7 @@ CACHE_DIR="cranelift/isle/veri/cache"
 # The default set of configurations to verify.
 CONFIGS=(
     cranelift/isle/veri/configs/aarch64.args
+    cranelift/isle/veri/configs/opt.args
     cranelift/isle/veri/configs/x64-iadd-base-case.args
 )
 # CI passes its own list (see the isle_veri_full_check job in

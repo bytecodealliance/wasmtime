@@ -1431,10 +1431,10 @@ jobs:
       env:
         # Per-SMT-query timeout, in seconds (see the `--timeout` option in
         # cranelift/isle/veri/veri/src/bin/veri.rs).
-        ISLE_VERI_TIMEOUT: "120"
+        ISLE_VERI_TIMEOUT: "90"
       run: |
         mkdir -p cranelift/isle/veri/cache
-        ./cranelift/isle/veri/verify.sh rebuild-cache aarch64-fast opt-fast x64-iadd-base-case
+        ./cranelift/isle/veri/verify.sh rebuild-cache aarch64 opt x64-iadd-base-case
     - name: Package rebuilt cache
       run: tar czf isle-veri-cache.tar.gz -C cranelift/isle/veri cache
     - name: Upload cache tarball as run artifact
