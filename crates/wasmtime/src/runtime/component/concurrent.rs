@@ -2462,7 +2462,22 @@ impl StoreOpaque {
         Ok(())
     }
 
+    /// Used in `poll_until` just prior to trapping due to a "deadlock"
+    /// condition.
+    ///
+    /// This helps us distinguish between a simple deadlock condition (where no
+    /// work is available for the event loop to do, nor is there any way for new
+    /// work to be added) and a "cannot block sync task" condition where at
+    /// least once instance has an outstanding sync-typed task running, in which
+    /// case we'll trap with a different error message.
     fn any_may_not_suspend(&mut self) -> Result<bool> {
+        // Note that this currently requires a linear search across the whole
+        // `ConcurrentState::table`.  We _could_ optimize that, but since (1)
+        // this function is only used when trapping, (2) the only thing you can
+        // really do with a store that's been poisoned by a trap is drop it, and
+        // (3) we must do a linear search through the table when dropping a
+        // store anyway to dispose of fibers, it's reasonable for us to also do
+        // a linear search here.
         Ok(self
             .concurrent_state_mut()?
             .table
