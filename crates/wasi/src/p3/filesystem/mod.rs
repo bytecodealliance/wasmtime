@@ -265,8 +265,8 @@ impl From<crate::filesystem::DescriptorType> for types::DescriptorType {
     }
 }
 
-impl From<cap_primitives::fs::FileType> for types::DescriptorType {
-    fn from(ft: cap_primitives::fs::FileType) -> Self {
+impl From<crate::filesystem::primitives::FileType> for types::DescriptorType {
+    fn from(ft: crate::filesystem::primitives::FileType) -> Self {
         crate::filesystem::DescriptorType::from(ft).into()
     }
 }
