@@ -542,13 +542,35 @@
                      ;; Not directly combinable with a ConsumesFlags;
                      ;; used in s390x and unwrapped directly by `trapif`.
                      (ProducesFlagsReturnsReg (inst MInst) (result Reg))
-                     (ProducesFlagsReturnsResultWithConsumer (inst MInst) (result Reg))))
+                     (ProducesFlagsReturnsResultWithConsumer (inst MInst) (result Reg))
+                     ;; Like `ProducesFlagsReturnsResultWithConsumer`, but the
+                     ;; result register is not exposed as a normal result: when
+                     ;; the producer is emitted (via `with_flags` or
+                     ;; `with_flags_side_effect`), an "opportunistic def" of
+                     ;; `value` is registered in `reg` instead. This allows a
+                     ;; lowering that consumes only the flags (e.g., a branch,
+                     ;; trap, or select on the overflow-flag output of a
+                     ;; `uadd_overflow`) to incidentally define the other
+                     ;; output (the sum) so that its own lowering can be
+                     ;; skipped.
+                     ;;
+                     ;; The registration is deliberately deferred until
+                     ;; emission time, because the consumer may materialize
+                     ;; uses of `value` (e.g., as its own operands) after the
+                     ;; producer is constructed, and we want these to use the
+                     ;; opportunistic def if they can, as well.
+                     (ProducesFlagsOpportunisticDef (inst MInst) (reg Reg) (value Value))))
 
 (spec (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst reg)
       (provide
             (= (:flags result) (:flags_out inst))
             (= (:result result) reg)
             (:has_result result)))
+
+(spec (ProducesFlags.ProducesFlagsOpportunisticDef inst reg value)
+      (provide
+            (= (:flags result) (:flags_out inst))
+            (not (:has_result result))))
 
 (spec (ProducesFlags.ProducesFlagsSideEffect inst)
       (provide
@@ -637,6 +659,14 @@
 (rule (produces_flags_ignore (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst _))
       (ProducesFlags.ProducesFlagsSideEffect inst))
 
+;; Wrap a result-producing producer so that, when it is emitted, an
+;; opportunistic def of `value` is registered in its result register (see
+;; the `ProducesFlagsOpportunisticDef` variant).
+(decl produces_flags_opportunistic_def (ProducesFlags Value) ProducesFlags)
+(rule (produces_flags_opportunistic_def
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst reg) value)
+      (ProducesFlags.ProducesFlagsOpportunisticDef inst reg value))
+
 ;; Helper for combining two flags-consumer instructions that return a
 ;; single Reg, giving a ConsumesFlags that returns both values in a
 ;; ValueRegs.
@@ -696,7 +726,16 @@
             )
             (=> (and (:has_result producer) (not (:has_result consumer)))
                   (= (:lo result) (:result producer)))))
-(decl with_flags (ProducesFlags ConsumesFlags) ValueRegs)
+(decl rec with_flags (ProducesFlags ConsumesFlags) ValueRegs)
+
+;; A producer that registers an opportunistic def of another value when it is
+;; emitted: delegate to the same producer with its result ignored, and record
+;; the def only after the emission has been set up, so that a failed match
+;; does not leave a dangling registration.
+(rule (with_flags (ProducesFlags.ProducesFlagsOpportunisticDef inst reg value) consumer)
+      (let ((result ValueRegs (with_flags (ProducesFlags.ProducesFlagsSideEffect inst) consumer))
+            (_ Unit (opportunistic_def value (value_reg reg))))
+          result))
 
 (rule with_flags_paired_results
       (with_flags (ProducesFlags.ProducesFlagsReturnsResultWithConsumer producer_inst producer_result)
@@ -814,7 +853,12 @@
 ;;
 ;; This function handles the following case only:
 ;; - ProducesFlagsSideEffect + ConsumesFlagsSideEffect
-(decl with_flags_side_effect (ProducesFlags ConsumesFlags) SideEffectNoResult)
+(decl rec with_flags_side_effect (ProducesFlags ConsumesFlags) SideEffectNoResult)
+
+(rule (with_flags_side_effect (ProducesFlags.ProducesFlagsOpportunisticDef inst reg value) consumer)
+      (let ((result SideEffectNoResult (with_flags_side_effect (ProducesFlags.ProducesFlagsSideEffect inst) consumer))
+            (_ Unit (opportunistic_def value (value_reg reg))))
+          result))
 
 (rule (with_flags_side_effect
         (ProducesFlags.AlreadyExistingFlags)

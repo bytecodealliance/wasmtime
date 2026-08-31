@@ -3881,11 +3881,9 @@
       (is_nonzero
        (second_result uadd @ (uadd_overflow (fits_in_64 ty) x y)))
       (if-let (first_result sum_value) uadd)
-      (let ((producer ProducesFlags (x64_add_with_flags_paired ty x y))
-            (sum Reg (produces_flags_get_reg producer))
-            (_ Unit (opportunistic_def sum_value sum)))
+      (let ((producer ProducesFlags (x64_add_with_flags_paired ty x y)))
         (CondResult.CC
-         (produces_flags_ignore producer)
+         (produces_flags_opportunistic_def producer sum_value)
          (CC.B))))
 
 ;; Like `is_nonzero` but with additional specializations for compare

@@ -4952,11 +4952,9 @@
       (is_nonzero
        (second_result uadd @ (uadd_overflow (ty_32_or_64 ty) x y)))
       (if-let (first_result sum_value) uadd)
-      (let ((producer ProducesFlags (alu_rrr_with_flags_paired ty x y (ALUOp.AddS)))
-            (sum Reg (produces_flags_get_reg producer))
-            (_ Unit (opportunistic_def sum_value sum)))
+      (let ((producer ProducesFlags (alu_rrr_with_flags_paired ty x y (ALUOp.AddS))))
         (CondResult.Cond
-         (produces_flags_ignore producer)
+         (produces_flags_opportunistic_def producer sum_value)
          (Cond.Hs))))
 
 (attr emit_icmp (veri chain))
