@@ -1091,3 +1091,31 @@ block0(v0: i32, v1: i32, v2: i32):
 ; run: %isub_ishl_ineg_rt(10, -2, 4) == -22
 ; run: %isub_ishl_ineg_rt(0x80000000, 1, 31) == 0
 ; run: %isub_ishl_ineg_rt(7, 1, 32) == 8
+
+function %imul_smax_ineg_rt(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = smax v1, v0
+    v3 = imul v2, v2
+    return v3
+}
+
+; run: %imul_smax_ineg_rt(0) == 0
+; run: %imul_smax_ineg_rt(1) == 1
+; run: %imul_smax_ineg_rt(-1) == 1
+; run: %imul_smax_ineg_rt(0x7fffffff) == 1
+; run: %imul_smax_ineg_rt(0x80000000) == 0
+
+function %imul_umax_ineg_rt(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = umax v1, v0
+    v3 = imul v2, v2
+    return v3
+}
+
+; run: %imul_umax_ineg_rt(0) == 0
+; run: %imul_umax_ineg_rt(1) == 1
+; run: %imul_umax_ineg_rt(-1) == 1
+; run: %imul_umax_ineg_rt(0x7fffffff) == 1
+; run: %imul_umax_ineg_rt(0x80000000) == 0

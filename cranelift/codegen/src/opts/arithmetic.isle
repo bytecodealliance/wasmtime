@@ -610,3 +610,13 @@
 (rule (simplify (bxor ty (ishl ty x y) (ishl ty z y))) (ishl ty (bxor ty x z) y))
 (rule (simplify (bxor ty (sshr ty x y) (sshr ty z y))) (sshr ty (bxor ty x z) y))
 (rule (simplify (bxor ty (ushr ty x y) (ushr ty z y))) (ushr ty (bxor ty x z) y))
+
+;; (max (-x) x) * (max (-x) x) = x * x
+(rule (simplify (imul ty (smax ty (ineg ty x) x) (smax ty (ineg ty x) x))) (imul ty x x))
+(rule (simplify (imul ty (smax ty (ineg ty x) x) (smax ty x (ineg ty x)))) (imul ty x x))
+(rule (simplify (imul ty (smax ty x (ineg ty x)) (smax ty (ineg ty x) x))) (imul ty x x))
+(rule (simplify (imul ty (smax ty x (ineg ty x)) (smax ty x (ineg ty x)))) (imul ty x x))
+(rule (simplify (imul ty (umax ty (ineg ty x) x) (umax ty (ineg ty x) x))) (imul ty x x))
+(rule (simplify (imul ty (umax ty (ineg ty x) x) (umax ty x (ineg ty x)))) (imul ty x x))
+(rule (simplify (imul ty (umax ty x (ineg ty x)) (umax ty (ineg ty x) x))) (imul ty x x))
+(rule (simplify (imul ty (umax ty x (ineg ty x)) (umax ty x (ineg ty x)))) (imul ty x x))
