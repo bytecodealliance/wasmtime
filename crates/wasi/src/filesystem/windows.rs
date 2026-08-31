@@ -1,7 +1,9 @@
+use crate::filesystem::primitives::{
+    FileType, FollowSymlinks, Metadata, OpenOptions, OpenOptionsExt,
+};
 use crate::filesystem::{
     Advice, DescriptorFlags, DescriptorStat, DescriptorType, MetadataHashValue,
 };
-use cap_primitives::fs::{FileType, FollowSymlinks, Metadata, OpenOptions, OpenOptionsExt};
 use std::fs::File;
 use std::io::{self, Write};
 use std::mem::{self, MaybeUninit};
@@ -122,18 +124,15 @@ fn open_metadata_handle(start: &File, path: &Path, follow: FollowSymlinks) -> io
             opts.custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
         }
     }
-    cap_primitives::fs::open(start, path, &opts)
+    crate::filesystem::primitives::open(start, path, &opts)
 }
 
 pub(crate) fn stat(f: &std::fs::File) -> io::Result<DescriptorStat> {
     let meta = Metadata::from_file(f)?;
 
-    // Note that this is intentionally scoped to a separate block to
-    // minimize the surface area that is depended on by cap-fs-ext.
-    let link_count = {
-        use cap_fs_ext_avoid_using_this::MetadataExt;
-        meta.nlink()
-    };
+    let link_count = crate::filesystem::primitives::_WindowsByHandle::number_of_links(&meta)
+        .unwrap()
+        .into();
     Ok(DescriptorStat::new(&meta, link_count))
 }
 
@@ -179,10 +178,10 @@ fn is_char_device(ft: FileType) -> bool {
 }
 
 pub(crate) fn symlink(original: &Path, start: &File, link: &Path) -> io::Result<()> {
-    if cap_primitives::fs::stat(start, original, FollowSymlinks::Yes)?.is_dir() {
-        cap_primitives::fs::symlink_dir(original, start, link)
+    if crate::filesystem::primitives::stat(start, original, FollowSymlinks::Yes)?.is_dir() {
+        crate::filesystem::primitives::symlink_dir(original, start, link)
     } else {
-        cap_primitives::fs::symlink_file(original, start, link)
+        crate::filesystem::primitives::symlink_file(original, start, link)
     }
 }
 
@@ -193,16 +192,17 @@ pub(crate) fn remove_file_or_symlink(start: &File, path: &Path) -> io::Result<()
     let mut opts = OpenOptions::new();
     opts.access_mode(DELETE);
     opts.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
-    let file = cap_primitives::fs::open(start, path, &opts)?;
+    let file = crate::filesystem::primitives::open(start, path, &opts)?;
 
     let meta = Metadata::from_file(&file)?;
     if meta.file_type().is_symlink()
-        && cap_primitives::fs::MetadataExt::file_attributes(&meta) & FILE_ATTRIBUTE_DIRECTORY
+        && crate::filesystem::primitives::MetadataExt::file_attributes(&meta)
+            & FILE_ATTRIBUTE_DIRECTORY
             == FILE_ATTRIBUTE_DIRECTORY
     {
-        cap_primitives::fs::remove_dir(start, path)?;
+        crate::filesystem::primitives::remove_dir(start, path)?;
     } else {
-        cap_primitives::fs::remove_file(start, path)?;
+        crate::filesystem::primitives::remove_file(start, path)?;
     }
 
     // Drop the file after calling `remove_file` or `remove_dir`, since
