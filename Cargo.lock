@@ -4984,6 +4984,7 @@ dependencies = [
  "io-extras",
  "io-lifetimes",
  "rustix 1.0.3",
+ "rustix-linux-procfs",
  "system-interface",
  "tempfile",
  "test-log",
@@ -4998,6 +4999,7 @@ dependencies = [
  "wasmtime-wasi-io",
  "wiggle",
  "windows-sys 0.60.2",
+ "winx",
 ]
 
 [[package]]

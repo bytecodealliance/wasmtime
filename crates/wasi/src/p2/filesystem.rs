@@ -4,6 +4,7 @@ use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use crate::{DirPerms, FilePerms, OpenMode, TrappableError};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
+use io_lifetimes::AsFilelike;
 use std::io;
 use std::mem;
 use std::sync::Arc;
@@ -113,30 +114,32 @@ impl File {
     /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
     pub(crate) async fn run_blocking<F, R>(&self, body: F) -> R
     where
-        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
+        F: FnOnce(&std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
-        match self.as_blocking_file() {
-            Some(file) => body(file),
-            None => self.spawn_blocking(body).await,
+        if let Some(file) = self.as_blocking_file() {
+            return body(&file);
         }
+        self.spawn_blocking(body).await
     }
 
     pub(crate) fn spawn_blocking<F, R>(&self, body: F) -> AbortOnDropJoinHandle<R>
     where
-        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
+        F: FnOnce(&std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
         let f = self.file.clone();
-        spawn_blocking(move || body(&f))
+        spawn_blocking(move || body(&f.as_filelike_view()))
     }
 
     /// Returns `Some` when the current thread is allowed to block in filesystem
     /// operations, and otherwise returns `None` to indicate that
     /// `spawn_blocking` must be used.
-    pub(crate) fn as_blocking_file(&self) -> Option<&cap_std::fs::File> {
+    pub(crate) fn as_blocking_file(
+        &self,
+    ) -> Option<io_lifetimes::views::FilelikeView<'_, std::fs::File>> {
         if self.allow_blocking_current_thread {
-            Some(&self.file)
+            Some(self.file.as_filelike_view())
         } else {
             None
         }
@@ -203,14 +206,14 @@ impl Dir {
     /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
     pub(crate) async fn run_blocking<F, R>(&self, body: F) -> R
     where
-        F: FnOnce(&cap_std::fs::Dir) -> R + Send + 'static,
+        F: FnOnce(&std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
         if self.allow_blocking_current_thread {
-            body(&self.dir)
+            body(&self.dir.as_filelike_view())
         } else {
             let d = self.dir.clone();
-            spawn_blocking(move || body(&d)).await
+            spawn_blocking(move || body(&d.as_filelike_view())).await
         }
     }
 }
@@ -236,7 +239,7 @@ impl FileInputStream {
         }
     }
 
-    fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> ReadState {
+    fn blocking_read(file: &std::fs::File, offset: u64, size: usize) -> ReadState {
         use system_interface::fs::FileIoExt;
 
         let mut buf = BytesMut::zeroed(size.min(crate::MAX_READ_SIZE_ALLOC));
@@ -392,7 +395,7 @@ impl FileOutputStream {
     }
 
     fn blocking_write(
-        file: &cap_std::fs::File,
+        file: &std::fs::File,
         mut buf: Bytes,
         mode: FileOutputMode,
     ) -> io::Result<usize> {

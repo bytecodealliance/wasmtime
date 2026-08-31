@@ -1,3 +1,17 @@
+## 36.0.15
+
+Unreleased
+
+### Changed
+
+* Wasmtime's internal implementation of `wasmtime-wasi` no longer depends on
+  `cap-std` crates for the underlying implementation. Instead the cap-std
+  implementation was vendored into `wasmtime-wasi`. This is intended to have no
+  visible side effects or result in any behavior changes.
+  [#14219](https://github.com/bytecodealliance/wasmtime/pull/14219)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.14
 
 Released 2026-08-20

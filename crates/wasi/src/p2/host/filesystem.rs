@@ -9,6 +9,7 @@ use crate::p2::filesystem::{
 use crate::p2::{FsError, FsResult, WasiCtxView};
 use crate::{DirPerms, FilePerms, OpenMode};
 use anyhow::Context;
+use io_lifetimes::AsFilelike;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};
 
@@ -98,8 +99,16 @@ impl HostDescriptor for WasiCtxView<'_> {
                 }
             }
             Descriptor::Dir(d) => {
-                d.run_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_data()?))
-                    .await
+                d.run_blocking(|d| {
+                    let d = crate::filesystem::primitives::open(
+                        d,
+                        std::path::Component::CurDir.as_ref(),
+                        crate::filesystem::primitives::OpenOptions::new().read(true),
+                    )?;
+                    d.sync_data()?;
+                    Ok(())
+                })
+                .await
             }
         }
     }
@@ -160,7 +169,9 @@ impl HostDescriptor for WasiCtxView<'_> {
 
         match descriptor {
             Descriptor::File(f) => {
-                let meta = f.run_blocking(|f| f.metadata()).await?;
+                let meta = f
+                    .run_blocking(|f| crate::filesystem::primitives::Metadata::from_file(f))
+                    .await?;
                 Ok(descriptortype_from(meta.file_type()))
             }
             Descriptor::Dir(_) => Ok(types::DescriptorType::Directory),
@@ -186,8 +197,6 @@ impl HostDescriptor for WasiCtxView<'_> {
         atim: types::NewTimestamp,
         mtim: types::NewTimestamp,
     ) -> FsResult<()> {
-        use fs_set_times::SetTimes;
-
         let descriptor = self.table.get(&fd)?;
         match descriptor {
             Descriptor::File(f) => {
@@ -196,7 +205,14 @@ impl HostDescriptor for WasiCtxView<'_> {
                 }
                 let atim = systemtimespec_from(atim)?;
                 let mtim = systemtimespec_from(mtim)?;
-                f.run_blocking(|f| f.set_times(atim, mtim)).await?;
+                let mut times = std::fs::FileTimes::new();
+                if let Some(atim) = atim {
+                    times = times.set_accessed(atim);
+                }
+                if let Some(mtim) = mtim {
+                    times = times.set_modified(mtim);
+                }
+                f.run_blocking(move |f| f.set_times(times)).await?;
                 Ok(())
             }
             Descriptor::Dir(d) => {
@@ -205,7 +221,14 @@ impl HostDescriptor for WasiCtxView<'_> {
                 }
                 let atim = systemtimespec_from(atim)?;
                 let mtim = systemtimespec_from(mtim)?;
-                d.run_blocking(|d| d.set_times(atim, mtim)).await?;
+                let mut times = std::fs::FileTimes::new();
+                if let Some(atim) = atim {
+                    times = times.set_accessed(atim);
+                }
+                if let Some(mtim) = mtim {
+                    times = times.set_modified(mtim);
+                }
+                d.run_blocking(move |d| d.set_times(times)).await?;
                 Ok(())
             }
         }
@@ -294,7 +317,7 @@ impl HostDescriptor for WasiCtxView<'_> {
                 // within this `block` call, rather than delay calculating the metadata
                 // for entries when they're demanded later in the iterator chain.
                 Ok::<_, std::io::Error>(
-                    d.entries()?
+                    crate::filesystem::primitives::read_base_dir(d)?
                         .map(|entry| {
                             let entry = entry?;
                             let meta = entry.metadata()?;
@@ -354,8 +377,16 @@ impl HostDescriptor for WasiCtxView<'_> {
                 }
             }
             Descriptor::Dir(d) => {
-                d.run_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_all()?))
-                    .await
+                d.run_blocking(|d| {
+                    let d = crate::filesystem::primitives::open(
+                        d,
+                        std::path::Component::CurDir.as_ref(),
+                        crate::filesystem::primitives::OpenOptions::new().read(true),
+                    )?;
+                    d.sync_all()?;
+                    Ok(())
+                })
+                .await
             }
         }
     }
@@ -369,7 +400,14 @@ impl HostDescriptor for WasiCtxView<'_> {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        d.run_blocking(move |d| d.create_dir(&path)).await?;
+        d.run_blocking(move |d| {
+            crate::filesystem::primitives::create_dir(
+                d,
+                path.as_ref(),
+                &crate::filesystem::primitives::DirOptions::new(),
+            )
+        })
+        .await?;
         Ok(())
     }
 
@@ -378,13 +416,13 @@ impl HostDescriptor for WasiCtxView<'_> {
         match descriptor {
             Descriptor::File(f) => {
                 // No permissions check on stat: if opened, allowed to stat it
-                let meta = f.run_blocking(|f| f.metadata()).await?;
-                Ok(descriptorstat_from(meta))
+                let meta = f.run_blocking(|f| sys::stat(f)).await?;
+                Ok(meta)
             }
             Descriptor::Dir(d) => {
                 // No permissions check on stat: if opened, allowed to stat it
-                let meta = d.run_blocking(|d| d.dir_metadata()).await?;
-                Ok(descriptorstat_from(meta))
+                let meta = d.run_blocking(|d| sys::stat(d)).await?;
+                Ok(meta)
             }
         }
     }
@@ -401,11 +439,25 @@ impl HostDescriptor for WasiCtxView<'_> {
         }
 
         let meta = if symlink_follow(path_flags) {
-            d.run_blocking(move |d| d.metadata(&path)).await?
+            d.run_blocking(move |d| {
+                sys::stat_at(
+                    d,
+                    path.as_ref(),
+                    crate::filesystem::primitives::FollowSymlinks::Yes,
+                )
+            })
+            .await?
         } else {
-            d.run_blocking(move |d| d.symlink_metadata(&path)).await?
+            d.run_blocking(move |d| {
+                sys::stat_at(
+                    d,
+                    path.as_ref(),
+                    crate::filesystem::primitives::FollowSymlinks::No,
+                )
+            })
+            .await?
         };
-        Ok(descriptorstat_from(meta))
+        Ok(meta)
     }
 
     async fn set_times_at(
@@ -416,8 +468,6 @@ impl HostDescriptor for WasiCtxView<'_> {
         atim: types::NewTimestamp,
         mtim: types::NewTimestamp,
     ) -> FsResult<()> {
-        use cap_fs_ext::DirExt;
-
         let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
@@ -426,20 +476,12 @@ impl HostDescriptor for WasiCtxView<'_> {
         let mtim = systemtimespec_from(mtim)?;
         if symlink_follow(path_flags) {
             d.run_blocking(move |d| {
-                d.set_times(
-                    &path,
-                    atim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                    mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                )
+                crate::filesystem::primitives::set_times(d, path.as_ref(), atim, mtim)
             })
             .await?;
         } else {
             d.run_blocking(move |d| {
-                d.set_symlink_times(
-                    &path,
-                    atim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                    mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                )
+                crate::filesystem::primitives::set_times_nofollow(d, path.as_ref(), atim, mtim)
             })
             .await?;
         }
@@ -471,7 +513,14 @@ impl HostDescriptor for WasiCtxView<'_> {
         }
         let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
         old_dir
-            .run_blocking(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
+            .run_blocking(move |d| {
+                crate::filesystem::primitives::hard_link(
+                    d,
+                    old_path.as_ref(),
+                    &new_dir_handle.as_filelike_view(),
+                    new_path.as_ref(),
+                )
+            })
             .await?;
         Ok(())
     }
@@ -484,7 +533,6 @@ impl HostDescriptor for WasiCtxView<'_> {
         oflags: types::OpenFlags,
         flags: types::DescriptorFlags,
     ) -> FsResult<Resource<types::Descriptor>> {
-        use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt, OpenOptionsMaybeDirExt};
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::{DescriptorFlags, OpenFlags};
 
@@ -508,8 +556,8 @@ impl HostDescriptor for WasiCtxView<'_> {
         // Track open mode, for permission check and recording in created descriptor:
         let mut open_mode = OpenMode::empty();
         // Construct the OpenOptions to give the OS:
-        let mut opts = cap_std::fs::OpenOptions::new();
-        opts.maybe_dir(true);
+        let mut opts = crate::filesystem::primitives::OpenOptions::new();
+        sys::maybe_dir(&mut opts);
 
         if oflags.contains(OpenFlags::CREATE) {
             if oflags.contains(OpenFlags::EXCLUSIVE) {
@@ -540,9 +588,9 @@ impl HostDescriptor for WasiCtxView<'_> {
             open_mode |= OpenMode::READ;
         }
         if symlink_follow(path_flags) {
-            opts.follow(FollowSymlinks::Yes);
+            opts.follow(crate::filesystem::primitives::FollowSymlinks::Yes);
         } else {
-            opts.follow(FollowSymlinks::No);
+            opts.follow(crate::filesystem::primitives::FollowSymlinks::No);
         }
 
         // These flags are not yet supported in cap-std:
@@ -582,11 +630,9 @@ impl HostDescriptor for WasiCtxView<'_> {
 
         let opened = d
             .run_blocking::<_, std::io::Result<OpenResult>>(move |d| {
-                let mut opened = d.open_with(&path, &opts)?;
+                let mut opened = crate::filesystem::primitives::open(d, path.as_ref(), &opts)?;
                 if opened.metadata()?.is_dir() {
-                    Ok(OpenResult::Dir(cap_std::fs::Dir::from_std_file(
-                        opened.into_std(),
-                    )))
+                    Ok(OpenResult::Dir(cap_std::fs::Dir::from_std_file(opened)))
                 } else if oflags.contains(OpenFlags::DIRECTORY) {
                     Ok(OpenResult::NotDir)
                 } else {
@@ -594,7 +640,7 @@ impl HostDescriptor for WasiCtxView<'_> {
                     // are nonblocking. Instead we set it after opening here:
                     let set_fd_flags = opened.new_set_fd_flags(FdFlags::NONBLOCK)?;
                     opened.set_fd_flags(set_fd_flags)?;
-                    Ok(OpenResult::File(opened))
+                    Ok(OpenResult::File(cap_std::fs::File::from_std(opened)))
                 }
             })
             .await?;
@@ -639,7 +685,9 @@ impl HostDescriptor for WasiCtxView<'_> {
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        let link = d.run_blocking(move |d| d.read_link(&path)).await?;
+        let link = d
+            .run_blocking(move |d| crate::filesystem::primitives::read_link(d, path.as_ref()))
+            .await?;
         Ok(link
             .into_os_string()
             .into_string()
@@ -655,7 +703,10 @@ impl HostDescriptor for WasiCtxView<'_> {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.run_blocking(move |d| d.remove_dir(&path)).await?)
+        Ok(
+            d.run_blocking(move |d| crate::filesystem::primitives::remove_dir(d, path.as_ref()))
+                .await?,
+        )
     }
 
     async fn rename_at(
@@ -678,7 +729,14 @@ impl HostDescriptor for WasiCtxView<'_> {
         }
         let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
         Ok(old_dir
-            .run_blocking(move |d| d.rename(&old_path, &new_dir_handle, &new_path))
+            .run_blocking(move |d| {
+                crate::filesystem::primitives::rename(
+                    d,
+                    old_path.as_ref(),
+                    &new_dir_handle.as_filelike_view(),
+                    new_path.as_ref(),
+                )
+            })
             .await?)
     }
 
@@ -688,16 +746,14 @@ impl HostDescriptor for WasiCtxView<'_> {
         src_path: String,
         dest_path: String,
     ) -> FsResult<()> {
-        // On windows, Dir.symlink is provided by DirExt
-        #[cfg(windows)]
-        use cap_fs_ext::DirExt;
-
         let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.run_blocking(move |d| d.symlink(&src_path, &dest_path))
-            .await?)
+        Ok(
+            d.run_blocking(move |d| sys::symlink(src_path.as_ref(), d, dest_path.as_ref()))
+                .await?,
+        )
     }
 
     async fn unlink_file_at(
@@ -705,14 +761,14 @@ impl HostDescriptor for WasiCtxView<'_> {
         fd: Resource<types::Descriptor>,
         path: String,
     ) -> FsResult<()> {
-        use cap_fs_ext::DirExt;
-
         let d = self.table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.run_blocking(move |d| d.remove_file_or_symlink(&path))
-            .await?)
+        Ok(
+            d.run_blocking(move |d| sys::remove_file_or_symlink(d, path.as_ref()))
+                .await?,
+        )
     }
 
     fn read_via_stream(
@@ -784,35 +840,40 @@ impl HostDescriptor for WasiCtxView<'_> {
         a: Resource<types::Descriptor>,
         b: Resource<types::Descriptor>,
     ) -> anyhow::Result<bool> {
-        use cap_fs_ext::MetadataExt;
-        let descriptor_a = self.table.get(&a)?;
-        let meta_a = get_descriptor_metadata(descriptor_a).await?;
-        let descriptor_b = self.table.get(&b)?;
-        let meta_b = get_descriptor_metadata(descriptor_b).await?;
-        if meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino() {
-            // MetadataHashValue does not derive eq, so use a pair of
-            // comparisons to check equality:
-            debug_assert_eq!(
-                calculate_metadata_hash(&meta_a).upper,
-                calculate_metadata_hash(&meta_b).upper
-            );
-            debug_assert_eq!(
-                calculate_metadata_hash(&meta_a).lower,
-                calculate_metadata_hash(&meta_b).lower
-            );
-            Ok(true)
-        } else {
-            // Hash collisions are possible, so don't assert the negative here
-            Ok(false)
-        }
+        let a = self.table.get(&a)?;
+        let b = self.table.get(&b)?;
+        // No permissions check on metadata: if opened, allowed to stat it
+        let other = match b {
+            Descriptor::File(f) => Descriptor::File(f.clone()),
+            Descriptor::Dir(d) => Descriptor::Dir(d.clone()),
+        };
+        Ok(match a {
+            Descriptor::File(f) => {
+                f.run_blocking(move |f| match other {
+                    Descriptor::File(other) => sys::is_same_file(f, &other.file.as_filelike_view()),
+                    Descriptor::Dir(other) => sys::is_same_file(f, &other.dir.as_filelike_view()),
+                })
+                .await?
+            }
+            Descriptor::Dir(d) => {
+                d.run_blocking(move |d| match other {
+                    Descriptor::File(other) => sys::is_same_file(d, &other.file.as_filelike_view()),
+                    Descriptor::Dir(other) => sys::is_same_file(d, &other.dir.as_filelike_view()),
+                })
+                .await?
+            }
+        })
     }
+
     async fn metadata_hash(
         &mut self,
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::MetadataHashValue> {
         let descriptor_a = self.table.get(&fd)?;
-        let meta = get_descriptor_metadata(descriptor_a).await?;
-        Ok(calculate_metadata_hash(&meta))
+        match descriptor_a {
+            Descriptor::File(f) => Ok(f.run_blocking(|f| sys::metadata_hash(f)).await?),
+            Descriptor::Dir(d) => Ok(d.run_blocking(|d| sys::metadata_hash(d)).await?),
+        }
     }
     async fn metadata_hash_at(
         &mut self,
@@ -824,14 +885,15 @@ impl HostDescriptor for WasiCtxView<'_> {
         // No permissions check on metadata: if dir opened, allowed to stat it
         let meta = d
             .run_blocking(move |d| {
-                if symlink_follow(path_flags) {
-                    d.metadata(path)
+                let follow = if symlink_follow(path_flags) {
+                    crate::filesystem::primitives::FollowSymlinks::Yes
                 } else {
-                    d.symlink_metadata(path)
-                }
+                    crate::filesystem::primitives::FollowSymlinks::No
+                };
+                sys::metadata_hash_at(d, path.as_ref(), follow)
             })
             .await?;
-        Ok(calculate_metadata_hash(&meta))
+        Ok(meta)
     }
 }
 
@@ -850,29 +912,14 @@ impl HostDirectoryEntryStream for WasiCtxView<'_> {
     }
 }
 
-async fn get_descriptor_metadata(fd: &types::Descriptor) -> FsResult<cap_std::fs::Metadata> {
-    match fd {
-        Descriptor::File(f) => {
-            // No permissions check on metadata: if opened, allowed to stat it
-            Ok(f.run_blocking(|f| f.metadata()).await?)
-        }
-        Descriptor::Dir(d) => {
-            // No permissions check on metadata: if opened, allowed to stat it
-            Ok(d.run_blocking(|d| d.dir_metadata()).await?)
-        }
-    }
-}
-
-fn calculate_metadata_hash(meta: &cap_std::fs::Metadata) -> types::MetadataHashValue {
-    use cap_fs_ext::MetadataExt;
+fn calculate_metadata_hash(identity: impl std::hash::Hash) -> types::MetadataHashValue {
     // Without incurring any deps, std provides us with a 64 bit hash
     // function:
     use std::hash::Hasher;
     // Note that this means that the metadata hash (which becomes a preview1 ino) may
     // change when a different rustc release is used to build this host implementation:
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    hasher.write_u64(meta.dev());
-    hasher.write_u64(meta.ino());
+    identity.hash(&mut hasher);
     let lower = hasher.finish();
     // MetadataHashValue has a pair of 64-bit members for representing a
     // single 128-bit number. However, we only have 64 bits of entropy. To
@@ -996,31 +1043,25 @@ impl From<std::num::TryFromIntError> for ErrorCode {
     }
 }
 
-fn descriptortype_from(ft: cap_std::fs::FileType) -> types::DescriptorType {
-    use cap_fs_ext::FileTypeExt;
+fn descriptortype_from(ft: crate::filesystem::primitives::FileType) -> types::DescriptorType {
     use types::DescriptorType;
     if ft.is_dir() {
         DescriptorType::Directory
     } else if ft.is_symlink() {
         DescriptorType::SymbolicLink
-    } else if ft.is_block_device() {
-        DescriptorType::BlockDevice
-    } else if ft.is_char_device() {
-        DescriptorType::CharacterDevice
     } else if ft.is_file() {
         DescriptorType::RegularFile
     } else {
-        DescriptorType::Unknown
+        sys::descriptor_type(ft)
     }
 }
 
-fn systemtimespec_from(t: types::NewTimestamp) -> FsResult<Option<fs_set_times::SystemTimeSpec>> {
-    use fs_set_times::SystemTimeSpec;
+fn systemtimespec_from(t: types::NewTimestamp) -> FsResult<Option<std::time::SystemTime>> {
     use types::NewTimestamp;
     match t {
         NewTimestamp::NoChange => Ok(None),
-        NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
-        NewTimestamp::Timestamp(st) => Ok(Some(SystemTimeSpec::Absolute(systemtime_from(st)?))),
+        NewTimestamp::Now => Ok(Some(std::time::SystemTime::now())),
+        NewTimestamp::Timestamp(st) => Ok(Some(systemtime_from(st)?)),
     }
 }
 
@@ -1036,20 +1077,250 @@ fn datetime_from(t: std::time::SystemTime) -> wall_clock::Datetime {
     wall_clock::Datetime::try_from(cap_std::time::SystemTime::from_std(t)).unwrap()
 }
 
-fn descriptorstat_from(meta: cap_std::fs::Metadata) -> types::DescriptorStat {
-    use cap_fs_ext::MetadataExt;
+fn descriptorstat_from(
+    meta: &crate::filesystem::primitives::Metadata,
+    link_count: u64,
+) -> types::DescriptorStat {
     types::DescriptorStat {
         type_: descriptortype_from(meta.file_type()),
-        link_count: meta.nlink(),
+        link_count,
         size: meta.len(),
-        data_access_timestamp: meta.accessed().map(|t| datetime_from(t.into_std())).ok(),
-        data_modification_timestamp: meta.modified().map(|t| datetime_from(t.into_std())).ok(),
-        status_change_timestamp: meta.created().map(|t| datetime_from(t.into_std())).ok(),
+        data_access_timestamp: meta.accessed().map(|t| datetime_from(t)).ok(),
+        data_modification_timestamp: meta.modified().map(|t| datetime_from(t)).ok(),
+        status_change_timestamp: meta.created().map(|t| datetime_from(t)).ok(),
     }
 }
 
 fn symlink_follow(path_flags: types::PathFlags) -> bool {
     path_flags.contains(types::PathFlags::SYMLINK_FOLLOW)
+}
+
+#[cfg(unix)]
+use unix as sys;
+#[cfg(unix)]
+mod unix {
+    use super::types::{DescriptorStat, DescriptorType, MetadataHashValue};
+    use crate::filesystem::primitives::{
+        FileType, FileTypeExt, FollowSymlinks, Metadata, MetadataExt, OpenOptions,
+    };
+    use std::fs::File;
+    use std::io;
+    use std::path::Path;
+
+    pub use crate::filesystem::primitives::remove_file as remove_file_or_symlink;
+    pub use crate::filesystem::primitives::symlink;
+
+    fn meta_identity(meta: &Metadata) -> (u64, u64) {
+        (meta.dev(), meta.ino())
+    }
+
+    fn file_identity(file: &File) -> io::Result<(u64, u64)> {
+        let meta = Metadata::from_file(file)?;
+        Ok(meta_identity(&meta))
+    }
+
+    pub(crate) fn metadata_hash(file: &File) -> io::Result<MetadataHashValue> {
+        Ok(super::calculate_metadata_hash(file_identity(file)?))
+    }
+
+    pub(crate) fn metadata_hash_at(
+        start: &File,
+        path: &Path,
+        follow: FollowSymlinks,
+    ) -> io::Result<MetadataHashValue> {
+        let meta = crate::filesystem::primitives::stat(start, path, follow)?;
+        Ok(super::calculate_metadata_hash(meta_identity(&meta)))
+    }
+
+    pub(crate) fn is_same_file(a: &File, b: &File) -> io::Result<bool> {
+        Ok(file_identity(a)? == file_identity(b)?)
+    }
+
+    pub(crate) fn stat(f: &std::fs::File) -> io::Result<DescriptorStat> {
+        let meta = Metadata::from_file(f)?;
+        Ok(super::descriptorstat_from(&meta, meta.nlink()))
+    }
+
+    pub(crate) fn stat_at(
+        start: &File,
+        path: &Path,
+        follow: FollowSymlinks,
+    ) -> io::Result<DescriptorStat> {
+        let meta = crate::filesystem::primitives::stat(start, path, follow)?;
+        Ok(super::descriptorstat_from(&meta, meta.nlink()))
+    }
+
+    pub(crate) fn maybe_dir(opts: &mut OpenOptions) {
+        let _ = opts;
+    }
+
+    pub(crate) fn descriptor_type(ft: FileType) -> DescriptorType {
+        if ft.is_block_device() {
+            DescriptorType::BlockDevice
+        } else if ft.is_char_device() {
+            DescriptorType::CharacterDevice
+        } else {
+            DescriptorType::Unknown
+        }
+    }
+}
+
+#[cfg(windows)]
+use windows as sys;
+#[cfg(windows)]
+mod windows {
+    use super::types::{DescriptorStat, DescriptorType, MetadataHashValue};
+    use crate::filesystem::primitives::{
+        FileType, FollowSymlinks, Metadata, OpenOptions, OpenOptionsExt,
+    };
+    use std::fs::File;
+    use std::io;
+    use std::mem;
+    use std::os::windows::io::*;
+    use std::path::Path;
+    use std::sync::OnceLock;
+    use windows_sys::Win32::Storage::FileSystem::*;
+
+    fn by_handle_info(file: &File) -> io::Result<BY_HANDLE_FILE_INFORMATION> {
+        unsafe {
+            let mut info = mem::zeroed::<BY_HANDLE_FILE_INFORMATION>();
+            if GetFileInformationByHandle(file.as_raw_handle(), &mut info) == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(info)
+        }
+    }
+
+    fn file_identity(file: &File) -> io::Result<(u64, u64)> {
+        let info = by_handle_info(file)?;
+        Ok((
+            u64::from(info.dwVolumeSerialNumber),
+            (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+        ))
+    }
+
+    pub(crate) fn metadata_hash(file: &File) -> io::Result<MetadataHashValue> {
+        Ok(super::calculate_metadata_hash(file_identity(file)?))
+    }
+
+    pub(crate) fn metadata_hash_at(
+        start: &File,
+        path: &Path,
+        follow: FollowSymlinks,
+    ) -> io::Result<MetadataHashValue> {
+        let file = open_metadata_handle(start, path, follow)?;
+        metadata_hash(&file)
+    }
+
+    pub(crate) fn is_same_file(a: &File, b: &File) -> io::Result<bool> {
+        Ok(file_identity(a)? == file_identity(b)?)
+    }
+
+    /// Opens `path` relative to `start` for metadata queries only, mirroring
+    /// what `cap-primitives`' Windows `stat` does internally: no access rights
+    /// are requested, `FILE_FLAG_BACKUP_SEMANTICS` permits opening directories,
+    /// and for `FollowSymlinks::No` the trailing symlink itself is opened via
+    /// `FILE_FLAG_OPEN_REPARSE_POINT` (which `cap-primitives` documents as
+    /// suppressing its own trailing-symlink handling).
+    fn open_metadata_handle(start: &File, path: &Path, follow: FollowSymlinks) -> io::Result<File> {
+        let mut opts = OpenOptions::new();
+        opts.access_mode(0);
+        match follow {
+            FollowSymlinks::Yes => {
+                opts.custom_flags(FILE_FLAG_BACKUP_SEMANTICS);
+            }
+            FollowSymlinks::No => {
+                opts.custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
+            }
+        }
+        crate::filesystem::primitives::open(start, path, &opts)
+    }
+
+    pub(crate) fn stat(f: &std::fs::File) -> io::Result<DescriptorStat> {
+        let meta = Metadata::from_file(f)?;
+        let link_count = crate::filesystem::primitives::_WindowsByHandle::number_of_links(&meta)
+            .unwrap()
+            .into();
+        Ok(super::descriptorstat_from(&meta, link_count))
+    }
+
+    pub(crate) fn stat_at(
+        start: &File,
+        path: &Path,
+        follow: FollowSymlinks,
+    ) -> io::Result<DescriptorStat> {
+        let file = open_metadata_handle(start, path, follow)?;
+        stat(&file)
+    }
+
+    pub(crate) fn maybe_dir(opts: &mut OpenOptions) {
+        opts.custom_flags(FILE_FLAG_BACKUP_SEMANTICS);
+        opts.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE);
+    }
+
+    pub(crate) fn descriptor_type(ft: FileType) -> DescriptorType {
+        if is_char_device(ft) {
+            DescriptorType::CharacterDevice
+        } else {
+            DescriptorType::Unknown
+        }
+    }
+
+    /// Returns whether `ft` is a character device.
+    ///
+    /// This is a bit of a hack around the lack of documented/public API in
+    /// `cap-primitives` for exposing this information. The `NUL` file is always a
+    /// character-device, so its type is cached globally once and then used to
+    /// compare.
+    fn is_char_device(ft: FileType) -> bool {
+        static CHAR_DEVICE: OnceLock<Option<FileType>> = OnceLock::new();
+        let probe = CHAR_DEVICE.get_or_init(|| {
+            let nul = File::open("NUL").ok()?;
+            let file_type = Metadata::from_file(&nul).ok()?.file_type();
+            if file_type.is_file() || file_type.is_dir() || file_type.is_symlink() {
+                return None;
+            }
+            Some(file_type)
+        });
+        *probe == Some(ft)
+    }
+
+    pub(crate) fn symlink(original: &Path, start: &File, link: &Path) -> io::Result<()> {
+        if crate::filesystem::primitives::stat(start, original, FollowSymlinks::Yes)?.is_dir() {
+            crate::filesystem::primitives::symlink_dir(original, start, link)
+        } else {
+            crate::filesystem::primitives::symlink_file(original, start, link)
+        }
+    }
+
+    pub(crate) fn remove_file_or_symlink(start: &File, path: &Path) -> io::Result<()> {
+        // Note that `FILE_FLAG_OPEN_REPARSE_POINT` here means a trailing symlink
+        // is opened as the reparse point itself rather than followed, so no
+        // nofollow option is needed.
+        let mut opts = OpenOptions::new();
+        opts.access_mode(DELETE);
+        opts.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
+        let file = crate::filesystem::primitives::open(start, path, &opts)?;
+
+        let meta = Metadata::from_file(&file)?;
+        if meta.file_type().is_symlink()
+            && crate::filesystem::primitives::MetadataExt::file_attributes(&meta)
+                & FILE_ATTRIBUTE_DIRECTORY
+                == FILE_ATTRIBUTE_DIRECTORY
+        {
+            crate::filesystem::primitives::remove_dir(start, path)?;
+        } else {
+            crate::filesystem::primitives::remove_file(start, path)?;
+        }
+
+        // Drop the file after calling `remove_file` or `remove_dir`, since
+        // Windows doesn't actually remove the file until after the last open
+        // handle is closed, and this protects us from race conditions where
+        // other processes replace the file out from underneath us.
+        drop(file);
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
