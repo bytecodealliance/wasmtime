@@ -23,41 +23,8 @@ fn main() {
         .ok()
         .map(|s| s.split(" ").map(|s| s.to_string()).collect::<Vec<_>>());
 
-    let mut add_trial = |test: &WastTest, config: WastConfig| {
-        let name = format!(
-            "{:?}/{}{}{}",
-            config.compiler,
-            if config.pooling { "pooling/" } else { "" },
-            if config.collector != Collector::Auto {
-                format!("{:?}/", config.collector)
-            } else {
-                String::new()
-            },
-            test.path.to_str().unwrap()
-        );
-
-        // Don't add this trial if we are only running GC-related tests and it
-        // doesn't look like a GC-related test.
-        if let Some(ks) = &gc_keywords {
-            if config.collector == Collector::Auto && !ks.iter().any(|kw| name.contains(kw)) {
-                return;
-            }
-        }
-
-        let trial = Trial::test(name, {
-            let test = test.clone();
-            move || run_wast(&test, config).map_err(|e| format!("{e:?}").into())
-        });
-
-        trials.push(trial);
-    };
-
     // List of supported compilers, filtered by what our current host supports.
-    let mut compilers = vec![
-        Compiler::CraneliftNative,
-        Compiler::Winch,
-        Compiler::CraneliftPulley,
-    ];
+    let mut compilers = vec![Compiler::CraneliftNative, Compiler::Winch];
     compilers.retain(|c| c.supports_host());
 
     // Only test one compiler in ASAN since we're mostly interested in testing
@@ -74,62 +41,31 @@ fn main() {
         {
             continue;
         }
-        let collector = if test.test_uses_gc_types() {
-            Collector::DeferredReferenceCounting
-        } else {
-            Collector::Auto
-        };
 
-        // Run this test in all supported compilers.
-        for compiler in compilers.iter().copied() {
-            add_trial(
-                &test,
-                WastConfig {
-                    compiler,
-                    pooling: false,
-                    collector,
-                },
-            );
+        let name = test.path.to_str().unwrap();
+
+        // Don't add this trial if we are only running GC-related tests and it
+        // doesn't look like a GC-related test.
+        if let Some(ks) = &gc_keywords {
+            if !ks.iter().any(|kw| name.contains(kw)) {
+                return;
+            }
         }
 
-        // Don't do extra tests in ASAN as it takes awhile and is unlikely to
-        // reap much benefit.
-        if cfg!(asan) {
-            continue;
-        }
+        for compiler in compilers.iter() {
+            let config = WastConfig {
+                compiler: *compiler,
+                pooling: false,
+                collector: Collector::Auto,
+            };
+            let name = format!("{compiler:?}/{name}");
 
-        let compiler = compilers[0];
+            let trial = Trial::test(name.to_string(), {
+                let test = test.clone();
+                move || run_wast(&test, config).map_err(|e| format!("{e:?}").into())
+            });
 
-        // Run this test with the pooling allocator under the default compiler.
-        add_trial(
-            &test,
-            WastConfig {
-                compiler,
-                pooling: true,
-                collector,
-            },
-        );
-
-        // If applicable, also run with the null collector in addition to the
-        // default collector.
-        if test.test_uses_gc_types() {
-            add_trial(
-                &test,
-                WastConfig {
-                    compiler,
-                    pooling: false,
-                    collector: Collector::Null,
-                },
-            );
-
-            add_trial(
-                &test,
-                WastConfig {
-                    compiler,
-                    pooling: false,
-                    collector: Collector::Copying,
-                },
-            );
+            trials.push(trial);
         }
     }
 
