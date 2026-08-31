@@ -3597,19 +3597,6 @@
 (rule (lower_branch (brif val _ _) (two_targets then else))
       (emit_side_effect (jmp_cond_result (is_nonzero_cmp val) then else)))
 
-;; Fold the case where we use the overflow result of a
-;; `uadd_overflow`. Opportunistically register the sum result as well
-;; so we might be able to skip a separate lowering to produce it.
-(rule 1 (lower_branch (brif
-                       (second_result
-                        uadd_inst @ (uadd_overflow (fits_in_64 ty) x y)) _ _) (two_targets taken not_taken))
-        (if-let (first_result v1) uadd_inst)
-        (let ((producer ProducesFlags (x64_add_with_flags_paired ty x y))
-              (sum Reg (produces_flags_get_reg producer))
-              (_ Unit (opportunistic_def v1 sum)))
-          (emit_side_effect (with_flags_side_effect (produces_flags_ignore producer)
-                                                    (jmp_cond (CC.B) taken not_taken)))))
-
 ;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (br_table idx @ (value_type ty) _) (jump_table_targets default_target jt_targets))
