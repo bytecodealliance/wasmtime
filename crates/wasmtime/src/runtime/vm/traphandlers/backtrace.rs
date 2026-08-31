@@ -169,6 +169,7 @@ impl Backtrace {
                 pc,
                 fp,
                 trampoline_fp,
+                true,
                 |activation| {
                     wasmtime_unwinder::visit_frames(
                         unwind,
@@ -279,6 +280,7 @@ impl Backtrace {
                     exit_pc,
                     exit_fp,
                     entry_trampoline_fp,
+                    false,
                     &mut f,
                 )
             };
@@ -304,6 +306,7 @@ impl Backtrace {
         exit_pc: usize,
         exit_fp: usize,
         entry_trampoline_fp: usize,
+        skip_current_continuation: bool,
         mut f: impl FnMut(Activation) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
         use crate::runtime::vm::stack_switching::VMStackLimits;
@@ -332,7 +335,12 @@ impl Backtrace {
         // Skip the first stack limits (current running stack, handled above).
         let _current: Option<*mut VMStackLimits> = stack_limits_iter.next();
 
-        let mut continuations_iter = unsafe { chain.into_continuation_iter() }.peekable();
+        let mut continuations_iter = unsafe { chain.into_continuation_iter() };
+        if skip_current_continuation {
+            // Skip the suspended continuation, which was handled above.
+            let _current = continuations_iter.next();
+        }
+        let mut continuations_iter = continuations_iter.peekable();
 
         while let Some(continuation_ptr) = continuations_iter.next() {
             let parent_limits_ptr = stack_limits_iter

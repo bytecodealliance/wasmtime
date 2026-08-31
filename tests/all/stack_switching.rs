@@ -113,6 +113,44 @@ mod test_utils {
     }
 }
 
+#[cfg_attr(any(asan, miri), ignore)]
+#[test]
+fn gc_traces_a_suspended_continuation() -> Result<()> {
+    let wat = r#"
+        (module
+            (type $ft (func))
+            (type $ct (cont $ft))
+            (type $st (struct (field i32)))
+            (tag $t)
+
+            (func $suspend
+                (suspend $t)
+            )
+            (elem declare func $suspend)
+
+            (func (export "entry")
+                (local $continuation (ref null $ct))
+                (local $i i32)
+                (block $handler (result (ref $ct))
+                    (resume $ct
+                        (on $t $handler)
+                        (cont.new $ct (ref.func $suspend)))
+                    (return)
+                )
+                (local.set $continuation)
+                (loop $allocate
+                    (drop (struct.new $st (i32.const 7)))
+                    (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                    (br_if $allocate (i32.lt_u (local.get $i) (i32.const 20000)))
+                )
+                (resume $ct (local.get $continuation))
+            )
+        )
+    "#;
+
+    test_utils::Runner::new().run_test::<()>(wat, &[])
+}
+
 mod wasi {
     use wasmtime::{Config, Engine, Linker, Module, Result, Store};
     use wasmtime_wasi::WasiCtxBuilder;
