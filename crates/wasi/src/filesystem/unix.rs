@@ -11,8 +11,8 @@ use std::io;
 use std::os::unix::fs::FileExt;
 use std::path::Path;
 
-pub use crate::filesystem::primitives::remove_file as remove_file_or_symlink;
-pub use crate::filesystem::primitives::symlink;
+pub(crate) use crate::filesystem::primitives::remove_file as remove_file_or_symlink;
+pub(crate) use crate::filesystem::primitives::symlink;
 
 pub(crate) fn get_flags(file: &File) -> io::Result<DescriptorFlags> {
     let flags = fcntl_getfl(file)?;
