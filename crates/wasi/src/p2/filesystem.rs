@@ -121,11 +121,44 @@ impl InputStream for FileInputStream {
                 }
 
                 let p = self.position;
-                self.state = ReadState::Waiting(
-                    self.file
-                        .spawn_blocking(move |f| Self::blocking_read(f, p, size)),
-                );
-                Ok(Bytes::new())
+                // Under `allow_blocking_current_thread` the read happens here, synchronously —
+                // the same policy the descriptor-level operations already follow through
+                // `File::run_blocking`. Otherwise the read is a background task and the caller
+                // is answered with an empty chunk until it lands; that is what a guest that
+                // polls `read` observes as a load-dependent number of empty reads.
+                match self.file.as_blocking_file() {
+                    Some(f) => {
+                        self.state = Self::blocking_read(f, p, size);
+                        match &mut self.state {
+                            ReadState::DataAvailable(b) => {
+                                let min_len = b.len().min(size);
+                                let chunk = b.split_to(min_len);
+                                if b.len() == 0 {
+                                    self.state = ReadState::Idle;
+                                }
+                                self.position += min_len as u64;
+                                Ok(chunk)
+                            }
+                            ReadState::Closed => Err(StreamError::Closed),
+                            ReadState::Error(_) => {
+                                match mem::replace(&mut self.state, ReadState::Closed) {
+                                    ReadState::Error(e) => {
+                                        Err(StreamError::LastOperationFailed(e.into()))
+                                    }
+                                    _ => unreachable!(),
+                                }
+                            }
+                            ReadState::Idle | ReadState::Waiting(_) => unreachable!(),
+                        }
+                    }
+                    None => {
+                        self.state = ReadState::Waiting(
+                            self.file
+                                .spawn_blocking(move |f| Self::blocking_read(f, p, size)),
+                        );
+                        Ok(Bytes::new())
+                    }
+                }
             }
             ReadState::DataAvailable(b) => {
                 let min_len = b.len().min(size);
