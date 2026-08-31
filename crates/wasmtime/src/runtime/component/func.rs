@@ -364,7 +364,7 @@ impl Func {
         //   safe in Rust, however, due to `ValRaw` being a `union`. The
         //   contents should dynamically not be read due to the type of the
         //   function used here matching the actual lift.
-        unsafe {
+        let result = unsafe {
             self.call_raw(
                 store.as_context_mut(),
                 |cx, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
@@ -383,10 +383,14 @@ impl Func {
                     }
                     Ok(())
                 },
-            )?;
+            )
+        };
+
+        if result.is_err() {
+            store.0.set_trapped();
         }
 
-        Ok(())
+        result
     }
 
     #[inline]
@@ -461,7 +465,7 @@ impl Func {
         let instance = self.instance.runtime_instance(raw_options.instance);
         let async_ = raw_options.async_;
 
-        if !store.0.may_enter(instance)? {
+        if !store.0.may_enter() {
             bail!(crate::Trap::CannotEnterComponent);
         }
 

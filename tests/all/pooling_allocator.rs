@@ -876,9 +876,9 @@ fn component_instance_size_limit() -> Result<()> {
     match wasmtime::component::Component::new(&engine, "(component)") {
         Ok(_) => panic!("should have hit limit"),
         Err(e) => {
-            e.assert_contains("instance allocation for this component requires 64 bytes");
+            e.assert_contains("instance allocation for this component requires 48 bytes");
             e.assert_contains("which exceeds the configured maximum of 1 bytes");
-            e.assert_contains("`VMComponentContext` used 64 bytes");
+            e.assert_contains("`VMComponentContext` used 48 bytes");
         }
     }
 

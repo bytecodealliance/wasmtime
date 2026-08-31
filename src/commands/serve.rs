@@ -722,8 +722,7 @@ impl ServeCommand {
             match &mut debuggee_store {
                 Some(store) => {
                     // Boxed to avoid triggering rustc's recursion limit.
-                    let client: Pin<Box<dyn Future<Output = _> + Send + '_>> =
-                        Box::pin(handle_client(stream, &handler, Some(store)));
+                    let client = handle_client(stream, &handler, Some(store));
                     client.await;
                 }
                 None => {
@@ -1102,7 +1101,17 @@ async fn handle_client(
                     None => None,
                 };
                 let debuggee_store = debuggee_store.as_mut().map(|s| &mut ***s);
-                match handle_request(handler, debuggee_store, req).await {
+                // Boxed trait object to avoid triggering rustc's recursion limit.
+                let handle_request = Box::pin(handle_request(handler, debuggee_store, req))
+                    as Pin<
+                        Box<
+                            dyn Future<
+                                    Output = Result<hyper::Response<wasmtime_wasi_http::WasiBody>>,
+                                > + Send
+                                + '_,
+                        >,
+                    >;
+                match handle_request.await {
                     Ok(r) => Ok::<_, Infallible>(r),
                     Err(e) => {
                         eprintln!("error: {e:?}");

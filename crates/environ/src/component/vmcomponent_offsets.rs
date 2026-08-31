@@ -49,7 +49,6 @@ pub struct VMComponentOffsets<P> {
     // plus this `VMComponentContext`'s total size. These are all computed by the
     // generated `compute_field_offsets` and read by the generated accessors of
     // the same names.
-    task_may_block: u32,
     may_leave: u32,
     trampoline_func_refs: u32,
     intrinsic_func_refs: u32,
@@ -165,7 +164,6 @@ impl<P: PtrSize> VMComponentOffsets<P> {
                 0
             },
             num_resources: component.num_resources,
-            task_may_block: 0,
             may_leave: 0,
             trampoline_func_refs: 0,
             intrinsic_func_refs: 0,
@@ -183,7 +181,6 @@ impl<P: PtrSize> VMComponentOffsets<P> {
 
         // The component-model flags must land where a compiler that only knows
         // the pointer size can find them.
-        debug_assert_eq!(ret.task_may_block(), ret.ptr.vmcomponent().task_may_block());
         debug_assert!(
             (0..ret.num_runtime_component_instances)
                 .map(RuntimeComponentInstanceIndex::from_u32)
@@ -247,8 +244,6 @@ mod tests {
                     ..Default::default()
                 };
                 let offsets = VMComponentOffsets::new(ptr, &component);
-
-                assert_eq!(offsets.task_may_block(), ptr.vmcomponent().task_may_block());
 
                 for i in 0..num_runtime_component_instances {
                     let index = RuntimeComponentInstanceIndex::from_u32(i);

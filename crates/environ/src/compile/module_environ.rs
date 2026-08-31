@@ -92,11 +92,6 @@ pub enum KnownGlobal {
     /// flag.
     #[cfg(feature = "component-model")]
     ComponentInstanceFlags(crate::component::RuntimeComponentInstanceIndex),
-
-    /// The runtime-managed flag recording whether the currently-executing task
-    /// may perform blocking operations.
-    #[cfg(feature = "component-model")]
-    TaskMayBlock,
 }
 
 /// The result of translating via `ModuleEnvironment`.

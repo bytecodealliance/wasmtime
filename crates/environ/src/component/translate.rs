@@ -691,9 +691,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                             CoreDef::InstanceFlags(_) => {
                                 unreachable!("instance flags are not a function")
                             }
-                            CoreDef::TaskMayBlock => {
-                                unreachable!("task_may_block is not a function")
-                            }
 
                             // We could in theory inline these trampolines, so it
                             // could potentially make sense to record that we
@@ -1976,7 +1973,6 @@ struct Ambiguous {
 fn component_flags(def: &CoreDef) -> Option<KnownGlobal> {
     match def {
         CoreDef::InstanceFlags(instance) => Some(KnownGlobal::ComponentInstanceFlags(*instance)),
-        CoreDef::TaskMayBlock => Some(KnownGlobal::TaskMayBlock),
         CoreDef::Export(_) | CoreDef::Trampoline(_) | CoreDef::UnsafeIntrinsic(_) => None,
     }
 }
@@ -2043,10 +2039,9 @@ fn resolve_core_export(
             // The chain bottoms out in something that is not an export of
             // another instance in this component, so there is no defining module
             // for us to name.
-            CoreDef::InstanceFlags(_)
-            | CoreDef::Trampoline(_)
-            | CoreDef::UnsafeIntrinsic(_)
-            | CoreDef::TaskMayBlock => return None,
+            CoreDef::InstanceFlags(_) | CoreDef::Trampoline(_) | CoreDef::UnsafeIntrinsic(_) => {
+                return None;
+            }
         }
     }
 }
@@ -2111,7 +2106,7 @@ fn ambiguous_entities(
             }
         }
 
-        CoreDef::InstanceFlags(_) | CoreDef::TaskMayBlock => {
+        CoreDef::InstanceFlags(_) => {
             ambiguous.flags.insert(component_flags(def).unwrap());
         }
 
