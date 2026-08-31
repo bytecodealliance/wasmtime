@@ -720,11 +720,7 @@ impl ServeCommand {
             // concurrent requests can't be served. Otherwise though spawn a
             // task to handle this client.
             match &mut debuggee_store {
-                Some(store) => {
-                    // Boxed to avoid triggering rustc's recursion limit.
-                    let client = handle_client(stream, &handler, Some(store));
-                    client.await;
-                }
+                Some(store) => handle_client(stream, &handler, Some(store)).await,
                 None => {
                     let handler = handler.clone();
                     tokio::task::spawn(async move {
@@ -1101,17 +1097,7 @@ async fn handle_client(
                     None => None,
                 };
                 let debuggee_store = debuggee_store.as_mut().map(|s| &mut ***s);
-                // Boxed trait object to avoid triggering rustc's recursion limit.
-                let handle_request = Box::pin(handle_request(handler, debuggee_store, req))
-                    as Pin<
-                        Box<
-                            dyn Future<
-                                    Output = Result<hyper::Response<wasmtime_wasi_http::WasiBody>>,
-                                > + Send
-                                + '_,
-                        >,
-                    >;
-                match handle_request.await {
+                match handle_request(handler, debuggee_store, req).await {
                     Ok(r) => Ok::<_, Infallible>(r),
                     Err(e) => {
                         eprintln!("error: {e:?}");

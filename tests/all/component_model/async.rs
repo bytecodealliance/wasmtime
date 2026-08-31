@@ -203,8 +203,7 @@ async fn poll_through_wasm_activation() -> Result<()> {
     let component = Component::new(&engine, component)?;
     let linker = Linker::new(&engine);
 
-    // Boxed trait object to avoid rustc overflow:
-    let invoke_component = Box::pin({
+    let invoke_component = {
         let engine = engine.clone();
         async move {
             let mut store = Store::new(&engine, ());
@@ -215,11 +214,10 @@ async fn poll_through_wasm_activation() -> Result<()> {
             func.call_async(&mut store, (vec![1, 2, 3],)).await?;
             Ok::<_, wasmtime::Error>(())
         }
-    })
-        as Pin<Box<dyn Future<Output = Result<(), wasmtime::Error>> + Send + 'static>>;
+    };
 
     execute_across_threads(async move {
-        let mut store = Store::new(&engine, Some(invoke_component));
+        let mut store = Store::new(&engine, Some(Box::pin(invoke_component)));
         let poll_once = wasmtime::Func::wrap_async(&mut store, |mut cx, _: ()| {
             let invoke_component = cx.data_mut().take().unwrap();
             Box::new(async move {
@@ -236,12 +234,7 @@ async fn poll_through_wasm_activation() -> Result<()> {
             })
         });
         let poll_once = poll_once.typed::<(), i32>(&mut store)?;
-        // Boxed trait object to avoid rustc overflow:
-        while (Box::pin(poll_once.call_async(&mut store, ()))
-            as Pin<Box<dyn Future<Output = Result<i32, wasmtime::Error>> + Send>>)
-            .await?
-            != 1
-        {
+        while poll_once.call_async(&mut store, ()).await? != 1 {
             // loop around to call again
         }
         Ok::<_, wasmtime::Error>(())
