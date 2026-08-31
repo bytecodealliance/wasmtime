@@ -1341,17 +1341,11 @@ fn thread_resume_later(
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_suspend(
-    store: &mut dyn VMStore,
-    instance: Instance,
-    caller: u32,
-    cancellable: u8,
-) -> Result<bool> {
+fn thread_suspend(store: &mut dyn VMStore, instance: Instance, caller: u32) -> Result<bool> {
     instance
         .suspension_intrinsic(
             store,
             RuntimeComponentInstanceIndex::from_u32(caller),
-            cancellable != 0,
             false,
             SuspensionTarget::None,
         )
@@ -1359,17 +1353,11 @@ fn thread_suspend(
 }
 
 #[cfg(feature = "component-model-async")]
-fn thread_yield(
-    store: &mut dyn VMStore,
-    instance: Instance,
-    caller_instance: u32,
-    cancellable: u8,
-) -> Result<bool> {
+fn thread_yield(store: &mut dyn VMStore, instance: Instance, caller_instance: u32) -> Result<bool> {
     instance
         .suspension_intrinsic(
             store,
             RuntimeComponentInstanceIndex::from_u32(caller_instance),
-            cancellable != 0,
             true,
             SuspensionTarget::None,
         )
@@ -1381,14 +1369,12 @@ fn thread_suspend_then_resume(
     store: &mut dyn VMStore,
     instance: Instance,
     caller: u32,
-    cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
     instance
         .suspension_intrinsic(
             store,
             RuntimeComponentInstanceIndex::from_u32(caller),
-            cancellable != 0,
             false,
             SuspensionTarget::Resume(thread_idx),
         )
@@ -1400,14 +1386,12 @@ fn thread_yield_then_resume(
     store: &mut dyn VMStore,
     instance: Instance,
     caller_instance: u32,
-    cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
     instance
         .suspension_intrinsic(
             store,
             RuntimeComponentInstanceIndex::from_u32(caller_instance),
-            cancellable != 0,
             true,
             SuspensionTarget::Resume(thread_idx),
         )
@@ -1419,14 +1403,12 @@ fn thread_suspend_then_promote(
     store: &mut dyn VMStore,
     instance: Instance,
     caller: u32,
-    cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
     instance
         .suspension_intrinsic(
             store,
             RuntimeComponentInstanceIndex::from_u32(caller),
-            cancellable != 0,
             false,
             SuspensionTarget::Promote(thread_idx),
         )
@@ -1438,14 +1420,12 @@ fn thread_yield_then_promote(
     store: &mut dyn VMStore,
     instance: Instance,
     caller: u32,
-    cancellable: u8,
     thread_idx: u32,
 ) -> Result<bool> {
     instance
         .suspension_intrinsic(
             store,
             RuntimeComponentInstanceIndex::from_u32(caller),
-            cancellable != 0,
             true,
             SuspensionTarget::Promote(thread_idx),
         )

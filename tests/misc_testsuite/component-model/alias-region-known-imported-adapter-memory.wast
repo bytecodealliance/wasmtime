@@ -25,8 +25,8 @@
     (core instance $m (instantiate $M))
     (func (export "f") (param "a" u32) (result (tuple u32 u32))
       (canon lift (core func $m "f")
-        (memory $m "mem")
-        (realloc (func $m "realloc"))))
+        (memory (core memory $m "mem"))
+        (realloc (core func $m "realloc"))))
   )
 
   (instance $a (instantiate $A))
@@ -44,8 +44,8 @@
     (core instance $mem (instantiate $Mem))
 
     (core func $f' (canon lower (func $f)
-      (memory $mem "mem")
-      (realloc (func $mem "realloc"))))
+      (memory (core memory $mem "mem"))
+      (realloc (core func $mem "realloc"))))
 
     (core module $N
       (import "" "mem" (memory 1))

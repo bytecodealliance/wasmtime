@@ -525,6 +525,13 @@ impl WastTest {
             return true;
         }
 
+        // Waiting for WebAssembly/component-model#716 to land
+        if self.path.ends_with("async/cancellable.wast")
+            || self.path.ends_with("binary/binary.wast")
+        {
+            return true;
+        }
+
         // Some tests are known to fail with the pooling allocator
         if config.pooling {
             // allocates too much memory for the pooling configuration here
@@ -689,19 +696,6 @@ impl WastTest {
             if happens_to_work.iter().any(|part| self.path.ends_with(part)) {
                 return false;
             }
-            return true;
-        }
-
-        // These will require a wasm-tools update:
-        let need_wasm_tools_updates = [
-            "component-model/test/validation/max-value-size.wast",
-            "component-model/test/validation/kebab.wast",
-        ];
-
-        if need_wasm_tools_updates
-            .iter()
-            .any(|part| self.path.ends_with(part))
-        {
             return true;
         }
 

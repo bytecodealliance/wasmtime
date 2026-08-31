@@ -1132,62 +1132,56 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSuspend { func, cancellable } => {
+            ThreadSuspend { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadSuspend {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYield { func, cancellable } => {
+            ThreadYield { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadYield {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSuspendThenResume { func, cancellable } => {
+            ThreadSuspendThenResume { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadSuspendThenResume {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYieldThenResume { func, cancellable } => {
+            ThreadYieldThenResume { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadYieldThenResume {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSuspendThenPromote { func, cancellable } => {
+            ThreadSuspendThenPromote { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadSuspendThenPromote {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYieldThenPromote { func, cancellable } => {
+            ThreadYieldThenPromote { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadYieldThenPromote {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
@@ -1587,7 +1581,6 @@ impl<'a> Inliner<'a> {
             callback,
             post_return,
             async_: options.async_,
-            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         }
@@ -1617,7 +1610,6 @@ impl<'a> Inliner<'a> {
             callback,
             post_return,
             async_: options.async_,
-            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         })

@@ -234,7 +234,7 @@ impl Opts {
         }
 
         let mut r = Wasmtime::default();
-        r.sizes.fill(resolve);
+        r.sizes.fill(resolve)?;
         r.opts = self.clone();
         r.populate_world_and_interface_options(resolve, world);
         r.generate(resolve, world)
