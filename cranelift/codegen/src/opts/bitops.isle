@@ -778,3 +778,9 @@
 (rule (simplify (band ty (band ty x y) (band ty y z))) (band ty (band ty y x) z))
 (rule (simplify (band ty (band ty x y) (band ty z x))) (band ty (band ty x y) z))
 (rule (simplify (band ty (band ty x y) (band ty z y))) (band ty (band ty y x) z))
+
+;; popcnt(bswap(x)) == popcnt(x)
+(rule (simplify (popcnt ty (bswap ty x))) (popcnt ty x))
+
+;; popcnt(bitrev(x)) == popcnt(x)
+(rule (simplify (popcnt ty (bitrev ty x))) (popcnt ty x))
