@@ -1,0 +1,111 @@
+test compile precise-output
+set opt_level=speed
+target aarch64
+
+function %uadd_flags_trapz(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = uadd_overflow v0, v1
+  trapz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   adds x5, x0, x1
+;   b.lo #trap=user1
+;   add x0, x5, x2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x5, x0, x1
+;   b.lo #0x10
+;   add x0, x5, x2
+;   ret
+;   udf #0xc11f ; trap: user1
+
+function %uadd_flags_trapz_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v3, v4 = uadd_overflow v0, v1
+  trapz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   adds w5, w0, w1
+;   b.lo #trap=user1
+;   add w0, w5, w2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds w5, w0, w1
+;   b.lo #0x10
+;   add w0, w5, w2
+;   ret
+;   udf #0xc11f ; trap: user1
+
+function %uadd_flags_trapnz(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = uadd_overflow v0, v1
+  trapnz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   adds x5, x0, x1
+;   b.hs #trap=user1
+;   add x0, x5, x2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x5, x0, x1
+;   b.hs #0x10
+;   add x0, x5, x2
+;   ret
+;   udf #0xc11f ; trap: user1
+
+function %uadd_flags_select(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = uadd_overflow v0, v1
+  v5 = select v4, v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   adds x4, x0, x1
+;   csel x0, x4, x2, hs
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x4, x0, x1
+;   csel x0, x4, x2, hs
+;   ret
+
+function %uadd_flags_select_spectre_guard(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = uadd_overflow v0, v1
+  v5 = select_spectre_guard v4, v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   adds x4, x0, x1
+;   csel x0, x4, x2, hs
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adds x4, x0, x1
+;   csel x0, x4, x2, hs
+;   ret
+

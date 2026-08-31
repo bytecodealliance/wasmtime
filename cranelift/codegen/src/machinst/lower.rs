@@ -204,6 +204,22 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Actual uses of each SSA value so far, incremented while lowering.
     value_lowered_uses: SecondaryMap<Value, u32>,
 
+    /// "Opportunistic defs" of values: when lowering an instruction that
+    /// incidentally computes another value (e.g., a branch that directly
+    /// consumes the flags of an `uadd_overflow` also computes the sum), we
+    /// record that value here, along with the regs it was computed into and
+    /// the use-count at the time of registration.
+    ///
+    /// When the scan reaches the actual definition of such a value, if its
+    /// use-count has not grown (i.e., no further uses were found while
+    /// scanning up), then the definition can be skipped and the value can be
+    /// aliased to the opportunistically-computed regs instead.
+    ///
+    /// The key is (block, value): the opportunistic def is only usable when
+    /// the actual definition is in the same block as the registration site,
+    /// further up in the scan.
+    opportunistic_defs: FxHashMap<(Block, Value), (ValueRegs<Reg>, u32)>,
+
     /// Effectful instructions that have been sunk; they are not codegen'd at
     /// their original locations.
     inst_sunk: FxHashSet<Inst>,
@@ -498,6 +514,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             side_effect_inst_entry_colors,
             value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
+            opportunistic_defs: FxHashMap::default(),
             inst_sunk: FxHashSet::default(),
             cur_scan_entry_color: None,
             cur_inst: None,
@@ -712,6 +729,112 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             .any(|&result| self.value_lowered_uses[result] > 0)
     }
 
+    /// Record an "opportunistic def" of `val` into `regs` at the current scan
+    /// position.
+    ///
+    /// The lowering that is currently being generated (e.g., a branch that
+    /// directly consumes the flags produced by an `uadd_overflow`) also
+    /// computes `val`'s value as a byproduct, and does so in `regs`. If, when
+    /// the scan reaches the actual definition of `val` (which must be in the
+    /// current block, further up), no further uses of `val` are found (i.e.,
+    /// the use-count matches the one recorded here), then that definition can
+    /// be skipped entirely and `val` can be aliased to `regs` instead.
+    ///
+    /// If further uses *are* found, then this opportunistic def is discarded
+    /// and the actual definition is lowered as usual (this is safe because
+    /// the value is still computed by the current lowering, just unused).
+    pub fn opportunistic_def(&mut self, val: Value, regs: ValueRegs<Reg>) {
+        trace!("opportunistic_def: val {val} regs {regs:?}");
+
+        if self.value_lowered_uses[val] == 0 {
+            trace!(" -> no uses so far; ignoring");
+            return;
+        }
+
+        // The actual definition of `val` must be in the same block as the
+        // current scan position, further up. Otherwise the regs computed here
+        // cannot possibly dominate all uses of `val` (and in particular the
+        // use-count check below is meaningless across blocks), so ignore.
+        let cur_block = match self
+            .cur_inst
+            .and_then(|inst| self.f.layout.inst_block(inst))
+        {
+            Some(block) => block,
+            None => {
+                trace!(" -> no current inst/block; ignoring");
+                return;
+            }
+        };
+        let def_block = match self.f.dfg.value_def(val) {
+            ValueDef::Result(src_inst, _) => self.f.layout.inst_block(src_inst),
+            _ => None,
+        };
+        if def_block != Some(cur_block) {
+            trace!(" -> def not in current block; ignoring");
+            return;
+        }
+
+        let uses = self.value_lowered_uses[val];
+        // Note that a later registration for the same (block, value)
+        // overwrites an earlier one: the later one is higher in the block
+        // (closer to the definition), so its defs dominate those of the
+        // earlier one, and it is strictly more useful.
+        self.opportunistic_defs
+            .insert((cur_block, val), (regs, uses));
+        trace!(" -> recorded with {uses} uses so far");
+    }
+
+    /// Attempt to commit to the opportunistic defs recorded for the results
+    /// of `inst` (whose definition is at the current scan position in
+    /// `block`).
+    ///
+    /// Returns `true` if we were able to use the opportunistic defs
+    /// and can skip this lowering.
+    fn try_use_opportunistic_defs(&mut self, block: Block, inst: Inst) -> bool {
+        let results = self.f.dfg.inst_results(inst);
+
+        // To skip the lowering and use the opportunistic defs, every
+        // result of `inst` that has uses must have a registered
+        // opportunistic def whose recorded use-count matches the
+        // current one.
+        for &result in results {
+            if self.value_lowered_uses[result] == 0 {
+                continue;
+            }
+            match self.opportunistic_defs.get(&(block, result)) {
+                Some(&(_, recorded_uses)) if recorded_uses == self.value_lowered_uses[result] => {}
+                _ => {
+                    trace!(
+                        "opportunistic defs: not committing for inst {inst}: \
+                         result {result} has {} uses but no matching opportunistic def",
+                        self.value_lowered_uses[result]
+                    );
+                    return false;
+                }
+            }
+        }
+
+        // Commit: set aliases for every result that has an opportunistic def
+        // (by the check above, this is exactly the set of results with uses),
+        // and clear the entries.
+        for &result in results {
+            if let Some(&(regs, _)) = self.opportunistic_defs.get(&(block, result)) {
+                let dsts = self.value_regs[result];
+                debug_assert_eq!(dsts.len(), regs.len());
+                for (&dst, &src) in dsts.regs().iter().zip(regs.regs().iter()) {
+                    trace!(
+                        "set vreg alias (opportunistic def): {result:?} = {dst:?}, \
+                         lowering = {src:?}"
+                    );
+                    self.vregs.set_vreg_alias(dst, src);
+                }
+                self.opportunistic_defs.remove(&(block, result));
+            }
+        }
+
+        true
+    }
+
     fn lower_clif_block<B: LowerBackend<MInst = I>>(
         &mut self,
         backend: &B,
@@ -789,6 +912,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs is used.
             if must_lower || value_needed {
+                if !has_side_effect && !must_lower && self.try_use_opportunistic_defs(block, inst) {
+                    trace!(
+                        "lowering: inst {}: {}: using opportunistic defs; skipping",
+                        inst,
+                        self.f.dfg.display_inst(inst)
+                    );
+                    continue;
+                }
+
                 trace!("lowering: inst {}: {}", inst, self.f.dfg.display_inst(inst));
                 let temp_regs = match backend.lower(self, inst) {
                     Some(regs) => regs,
@@ -806,16 +938,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     }
                 };
 
-                // The ISLE generated code emits its own registers to define the
-                // instruction's lowered values in. However, other instructions
-                // that use this SSA value will be lowered assuming that the value
-                // is generated into a pre-assigned, different, register.
+                // The ISLE generated code emits its own registers to define
+                // the instruction's lowered values in. However, other
+                // instructions that use this SSA value will be lowered
+                // assuming that the value is generated into a
+                // pre-assigned, different, register.
                 //
-                // To connect the two, we set up "aliases" in the VCodeBuilder
-                // that apply when it is building the Operand table for the
-                // regalloc to use. These aliases effectively rewrite any use of
-                // the pre-assigned register to the register that was returned by
-                // the ISLE lowering logic.
+                // To connect the two, we set up "aliases" in the
+                // VCodeBuilder that apply when it is building the Operand
+                // table for the regalloc to use. These aliases effectively
+                // rewrite any use of the pre-assigned register to the
+                // register that was returned by the ISLE lowering logic.
                 let results = self.f.dfg.inst_results(inst);
                 debug_assert_eq!(temp_regs.len(), results.len());
                 for (regs, &result) in temp_regs.iter().zip(results) {
@@ -1219,6 +1352,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             ValueUseState::Unused => true,
             _ => false,
         }
+    }
+
+    /// Does this value still have uses to serve at the current point in the
+    /// lowering scan? If not, a lowering may be elided.
+    pub(crate) fn value_lowered_used(&self, val: Value) -> bool {
+        self.value_lowered_uses[val] > 0
     }
 
     pub fn block_successor_label(&self, block: Block, succ: usize) -> MachLabel {

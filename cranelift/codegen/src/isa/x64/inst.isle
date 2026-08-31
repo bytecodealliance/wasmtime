@@ -3875,6 +3875,17 @@
 (rule 2 (is_nonzero (band _ a @ (value_type (ty_int (fits_in_64 ty))) b))
       (is_nonzero_band ty a b))
 
+;; Using the flags output of `uadd_overflow` can produce a `CC` and give an
+;; opportunistic def of the other output.
+(rule 3
+      (is_nonzero
+       (second_result uadd @ (uadd_overflow (fits_in_64 ty) x y)))
+      (if-let (first_result sum_value) uadd)
+      (let ((producer ProducesFlags (x64_add_with_flags_paired ty x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer sum_value)
+         (CC.B))))
+
 ;; Like `is_nonzero` but with additional specializations for compare
 ;; operators. We break this out from `is_nonzero` because we want to
 ;; avoid unbounded recursion.
