@@ -28,27 +28,27 @@
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     ss0 = explicit_slot 16, align = 65536
 ;;     ss1 = explicit_slot 24, align = 256
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 1073741912 "VMContRef+0x58"
-;;     region3 = 67108952 "VMStoreContext+0x58"
-;;     region4 = 1073741888 "VMContRef+0x40"
-;;     region5 = 2550136840 "VMHostArray+0x8"
-;;     region6 = 2483028024 "VMCommonStackInformation+0x38"
-;;     region7 = 2550136832 "VMHostArray+0x0"
-;;     region8 = 1140850688 "ContinuationStackMemory+0x0"
-;;     region9 = 1073741904 "VMContRef+0x50"
-;;     region10 = 2550136836 "VMHostArray+0x4"
-;;     region11 = 2483028000 "VMCommonStackInformation+0x20"
-;;     region12 = 67108936 "VMStoreContext+0x48"
-;;     region13 = 67108928 "VMStoreContext+0x40"
-;;     region14 = 67108944 "VMStoreContext+0x50"
-;;     region15 = 2415919112 "VMStackLimits+0x8"
-;;     region16 = 2415919120 "VMStackLimits+0x10"
-;;     region17 = 2415919128 "VMStackLimits+0x18"
-;;     region18 = 2415919104 "VMStackLimits+0x0"
-;;     region19 = 1073741920 "VMContRef+0x60"
-;;     region20 = 1543503873 "Stack(ss1)"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 84 "VMContRef+0x58"
+;;     region3 = 124 "VMStoreContext+0x58"
+;;     region4 = 66 "VMContRef+0x40"
+;;     region5 = 229 "VMHostArray+0x8"
+;;     region6 = 23 "VMCommonStackInformation+0x38"
+;;     region7 = 126 "VMHostArray+0x0"
+;;     region8 = 212 "ContinuationStackMemory+0x0"
+;;     region9 = 182 "VMContRef+0x50"
+;;     region10 = 20 "VMHostArray+0x4"
+;;     region11 = 176 "VMCommonStackInformation+0x20"
+;;     region12 = 108 "VMStoreContext+0x48"
+;;     region13 = 38 "VMStoreContext+0x40"
+;;     region14 = 203 "VMStoreContext+0x50"
+;;     region15 = 89 "VMStackLimits+0x8"
+;;     region16 = 150 "VMStackLimits+0x10"
+;;     region17 = 232 "VMStackLimits+0x18"
+;;     region18 = 180 "VMStackLimits+0x0"
+;;     region19 = 151 "VMContRef+0x60"
+;;     region20 = 48 "Stack(ss1)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -282,8 +282,8 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i128) tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -298,26 +298,26 @@
 ;;
 ;; function u0:2(i64 vmctx, i64) tail {
 ;;     ss0 = explicit_slot 8, align = 256
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 1073741912 "VMContRef+0x58"
-;;     region3 = 1073741904 "VMContRef+0x50"
-;;     region4 = 67108952 "VMStoreContext+0x58"
-;;     region5 = 1073741888 "VMContRef+0x40"
-;;     region6 = 2483028000 "VMCommonStackInformation+0x20"
-;;     region7 = 67108936 "VMStoreContext+0x48"
-;;     region8 = 67108928 "VMStoreContext+0x40"
-;;     region9 = 67108944 "VMStoreContext+0x50"
-;;     region10 = 2415919112 "VMStackLimits+0x8"
-;;     region11 = 2415919120 "VMStackLimits+0x10"
-;;     region12 = 2415919128 "VMStackLimits+0x18"
-;;     region13 = 2415919104 "VMStackLimits+0x0"
-;;     region14 = 2550136836 "VMHostArray+0x4"
-;;     region15 = 2550136840 "VMHostArray+0x8"
-;;     region16 = 1140850688 "ContinuationStackMemory+0x0"
-;;     region17 = 2550136832 "VMHostArray+0x0"
-;;     region18 = 2483028024 "VMCommonStackInformation+0x38"
-;;     region19 = 1073741920 "VMContRef+0x60"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 84 "VMContRef+0x58"
+;;     region3 = 182 "VMContRef+0x50"
+;;     region4 = 124 "VMStoreContext+0x58"
+;;     region5 = 66 "VMContRef+0x40"
+;;     region6 = 176 "VMCommonStackInformation+0x20"
+;;     region7 = 108 "VMStoreContext+0x48"
+;;     region8 = 38 "VMStoreContext+0x40"
+;;     region9 = 203 "VMStoreContext+0x50"
+;;     region10 = 89 "VMStackLimits+0x8"
+;;     region11 = 150 "VMStackLimits+0x10"
+;;     region12 = 232 "VMStackLimits+0x18"
+;;     region13 = 180 "VMStackLimits+0x0"
+;;     region14 = 20 "VMHostArray+0x4"
+;;     region15 = 229 "VMHostArray+0x8"
+;;     region16 = 212 "ContinuationStackMemory+0x0"
+;;     region17 = 126 "VMHostArray+0x0"
+;;     region18 = 23 "VMCommonStackInformation+0x38"
+;;     region19 = 151 "VMContRef+0x60"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

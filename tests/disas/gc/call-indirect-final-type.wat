@@ -16,16 +16,16 @@
     (return_call_indirect (type $f) (local.get 0) (local.get 1)))
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 671088640 "VMTableDefinition+0x0"
-;;     region3 = 671088648 "VMTableDefinition+0x8"
-;;     region4 = 335544320 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region5 = 40 "VMContext+0x28"
-;;     region6 = 1677721600 "TypeIdsArray+0x0"
-;;     region7 = 1610612752 "VMFuncRef+0x10"
-;;     region8 = 1610612744 "VMFuncRef+0x8"
-;;     region9 = 1610612760 "VMFuncRef+0x18"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 44 "VMTableDefinition+0x0"
+;;     region3 = 32 "VMTableDefinition+0x8"
+;;     region4 = 189 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region5 = 105 "VMContext+0x28"
+;;     region6 = 172 "TypeIdsArray+0x0"
+;;     region7 = 79 "VMFuncRef+0x10"
+;;     region8 = 170 "VMFuncRef+0x8"
+;;     region9 = 18 "VMFuncRef+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -71,16 +71,16 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 671088640 "VMTableDefinition+0x0"
-;;     region3 = 671088648 "VMTableDefinition+0x8"
-;;     region4 = 335544320 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region5 = 40 "VMContext+0x28"
-;;     region6 = 1677721600 "TypeIdsArray+0x0"
-;;     region7 = 1610612752 "VMFuncRef+0x10"
-;;     region8 = 1610612744 "VMFuncRef+0x8"
-;;     region9 = 1610612760 "VMFuncRef+0x18"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 44 "VMTableDefinition+0x0"
+;;     region3 = 32 "VMTableDefinition+0x8"
+;;     region4 = 189 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region5 = 105 "VMContext+0x28"
+;;     region6 = 172 "TypeIdsArray+0x0"
+;;     region7 = 79 "VMFuncRef+0x10"
+;;     region8 = 170 "VMFuncRef+0x8"
+;;     region9 = 18 "VMFuncRef+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

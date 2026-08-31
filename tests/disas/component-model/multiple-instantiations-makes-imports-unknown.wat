@@ -66,11 +66,11 @@
   (core instance $n2 (instantiate $N (with "" (instance $m2))))
 )
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 603979776 "VMMemoryDefinition+0x0"
-;;     region3 = 603979784 "VMMemoryDefinition+0x8"
-;;     region4 = 134217728 "PublicMemory"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 193 "VMMemoryDefinition+0x0"
+;;     region3 = 213 "VMMemoryDefinition+0x8"
+;;     region4 = 53 "PublicMemory"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -86,9 +86,9 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 402653184 "PublicGlobal"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 172 "PublicGlobal"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -103,11 +103,11 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i64 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 671088640 "VMTableDefinition+0x0"
-;;     region3 = 671088648 "VMTableDefinition+0x8"
-;;     region4 = 268435456 "PublicTable"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 44 "VMTableDefinition+0x0"
+;;     region3 = 32 "VMTableDefinition+0x8"
+;;     region4 = 156 "PublicTable"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -142,11 +142,11 @@
 ;; }
 ;;
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 603979776 "VMMemoryDefinition+0x0"
-;;     region3 = 603979784 "VMMemoryDefinition+0x8"
-;;     region4 = 134217728 "PublicMemory"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 193 "VMMemoryDefinition+0x0"
+;;     region3 = 213 "VMMemoryDefinition+0x8"
+;;     region4 = 53 "PublicMemory"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -162,9 +162,9 @@
 ;; }
 ;;
 ;; function u1:1(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 402653184 "PublicGlobal"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 172 "PublicGlobal"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -179,11 +179,11 @@
 ;; }
 ;;
 ;; function u1:2(i64 vmctx, i64) -> i64 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 671088640 "VMTableDefinition+0x0"
-;;     region3 = 671088648 "VMTableDefinition+0x8"
-;;     region4 = 268435456 "PublicTable"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 44 "VMTableDefinition+0x0"
+;;     region3 = 32 "VMTableDefinition+0x8"
+;;     region4 = 156 "PublicTable"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -218,12 +218,12 @@
 ;; }
 ;;
 ;; function u2:0(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 1275068416 "VMMemoryImport+0x0"
-;;     region3 = 603979776 "VMMemoryDefinition+0x0"
-;;     region4 = 603979784 "VMMemoryDefinition+0x8"
-;;     region5 = 134217728 "PublicMemory"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 112 "VMMemoryImport+0x0"
+;;     region3 = 193 "VMMemoryDefinition+0x0"
+;;     region4 = 213 "VMMemoryDefinition+0x8"
+;;     region5 = 53 "PublicMemory"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -240,10 +240,10 @@
 ;; }
 ;;
 ;; function u2:1(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 1476395008 "VMGlobalImport+0x0"
-;;     region3 = 402653184 "PublicGlobal"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 190 "VMGlobalImport+0x0"
+;;     region3 = 172 "PublicGlobal"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -259,12 +259,12 @@
 ;; }
 ;;
 ;; function u2:2(i64 vmctx, i64) -> i64 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 1342177280 "VMTableImport+0x0"
-;;     region3 = 671088640 "VMTableDefinition+0x0"
-;;     region4 = 671088648 "VMTableDefinition+0x8"
-;;     region5 = 268435456 "PublicTable"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 33 "VMTableImport+0x0"
+;;     region3 = 44 "VMTableDefinition+0x0"
+;;     region4 = 32 "VMTableDefinition+0x8"
+;;     region5 = 156 "PublicTable"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

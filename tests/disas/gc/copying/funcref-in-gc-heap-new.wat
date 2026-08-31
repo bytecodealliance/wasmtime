@@ -10,16 +10,15 @@
 )
 ;; function u0:0(i64 vmctx, i64, i64) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 32 "VMContext+0x20"
-;;     region3 = 872415232 "VMCopyingHeapData+0x0"
-;;     region4 = 872415236 "VMCopyingHeapData+0x4"
-;;     region5 = 40 "VMContext+0x28"
-;;     region6 = 1677721600 "TypeIdsArray+0x0"
-;;     region7 = 67108896 "VMStoreContext+0x20"
-;;     region8 = 536870912 "GcHeap"
-;;     region9 = 1543503872 "Stack(ss0)"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 198 "VMContext+0x20"
+;;     region3 = 191 "VMCopyingHeapData+0x0"
+;;     region4 = 209 "VMCopyingHeapData+0x4"
+;;     region5 = 105 "VMContext+0x28"
+;;     region6 = 172 "TypeIdsArray+0x0"
+;;     region7 = 244 "Stack(ss0) | VMStoreContext+0x20"
+;;     region8 = 5 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -71,7 +70,7 @@
 ;;
 ;;                                 block4(v33: i32, v34: i64):
 ;;                                     v41 = stack_addr.i64 ss0
-;;                                     store notrap aligned region9 v33, v41
+;;                                     store notrap aligned region7 v33, v41
 ;; @0020                               v37 = call fn1(v0, v2), stack_map=[i32 @ ss0+0]
 ;; @0020                               v38 = ireduce.i32 v37
 ;; @0020                               v35 = iconst.i64 16
@@ -80,6 +79,6 @@
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v40 = load.i32 notrap aligned region9 v41
+;;                                     v40 = load.i32 notrap aligned region7 v41
 ;; @0023                               return v40
 ;; }

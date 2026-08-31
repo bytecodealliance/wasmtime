@@ -7,11 +7,11 @@
   (start $f)
 )
 ;; function u2415919104:1(i64 vmctx, i64, i64, i64) -> i8 system_v {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108936 "VMStoreContext+0x48"
-;;     region2 = 67108928 "VMStoreContext+0x40"
-;;     region3 = 67108944 "VMStoreContext+0x50"
-;;     region4 = 67109000 "VMStoreContext+0x88"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 108 "VMStoreContext+0x48"
+;;     region2 = 38 "VMStoreContext+0x40"
+;;     region3 = 203 "VMStoreContext+0x50"
+;;     region4 = 99 "VMStoreContext+0x88"
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u2415919104:0 sig0
 ;;

@@ -14,13 +14,13 @@
     array.init_data $a $passive)
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 67108896 "VMStoreContext+0x20"
-;;     region3 = 67108904 "VMStoreContext+0x28"
-;;     region4 = 536870912 "GcHeap"
-;;     region5 = 56 "VMContext+0x38"
-;;     region6 = 48 "VMContext+0x30"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 244 "VMStoreContext+0x20"
+;;     region3 = 35 "VMStoreContext+0x28"
+;;     region4 = 5 "GcHeap"
+;;     region5 = 138 "VMContext+0x38"
+;;     region6 = 120 "VMContext+0x30"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

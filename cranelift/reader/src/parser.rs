@@ -1963,10 +1963,7 @@ impl<'a> Parser<'a> {
         };
         self.consume();
 
-        let data = ir::AliasRegionData {
-            user_id,
-            description: std::borrow::Cow::Owned(description),
-        };
+        let data = ir::AliasRegionData::new(user_id, description);
 
         // Collect any trailing comments.
         self.token();

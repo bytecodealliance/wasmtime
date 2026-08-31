@@ -53,22 +53,21 @@
 
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
 ;;     ss0 = explicit_slot 32, align = 8
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 1207959576 "VMFunctionImport+0x18"
-;;     region3 = 1476395008 "VMGlobalImport+0x0"
-;;     region4 = 738197568 "VMComponentContext+0x40"
-;;     region5 = 67109000 "VMStoreContext+0x88"
-;;     region6 = 1006632960 "VMDeferredThread+0x0"
-;;     region7 = 1006632968 "VMDeferredThread+0x8"
-;;     region8 = 1006632972 "VMDeferredThread+0xc"
-;;     region9 = 1006632976 "VMDeferredThread+0x10"
-;;     region10 = 67108992 "VMStoreContext+0x80"
-;;     region11 = 1006632980 "VMDeferredThread+0x14"
-;;     region12 = 67108996 "VMStoreContext+0x84"
-;;     region13 = 1006632984 "VMDeferredThread+0x18"
-;;     region14 = 738197552 "VMComponentContext+0x30"
-;;     region15 = 1207959560 "VMFunctionImport+0x8"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 239 "VMFunctionImport+0x18"
+;;     region3 = 190 "VMGlobalImport+0x0"
+;;     region4 = 78 "VMComponentContext+0x40"
+;;     region5 = 99 "VMStoreContext+0x88"
+;;     region6 = 219 "VMDeferredThread+0x0"
+;;     region7 = 116 "VMDeferredThread+0x8"
+;;     region8 = 93 "VMDeferredThread+0xc"
+;;     region9 = 235 "VMDeferredThread+0x10"
+;;     region10 = 98 "VMStoreContext+0x80"
+;;     region11 = 59 "VMDeferredThread+0x14 | VMFunctionImport+0x8"
+;;     region12 = 28 "VMStoreContext+0x84"
+;;     region13 = 248 "VMDeferredThread+0x18"
+;;     region14 = 249 "VMComponentContext+0x30"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

@@ -11,14 +11,14 @@
 )
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108912 "VMStoreContext+0x30"
-;;     region2 = 67108920 "VMStoreContext+0x38"
-;;     region3 = 738197536 "VMComponentContext+0x20"
-;;     region4 = 738197512 "VMComponentContext+0x8"
-;;     region5 = 1879048208 "ComponentBuiltinFunctionsArray+0x10"
-;;     region6 = 16 "VMContext+0x10"
-;;     region7 = 1811939656 "BuiltinFunctionsArray+0x148"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 36 "VMStoreContext+0x30"
+;;     region2 = 239 "VMStoreContext+0x38"
+;;     region3 = 24 "VMComponentContext+0x20"
+;;     region4 = 196 "VMComponentContext+0x8"
+;;     region5 = 125 "ComponentBuiltinFunctionsArray+0x10"
+;;     region6 = 143 "VMContext+0x10"
+;;     region7 = 223 "BuiltinFunctionsArray+0x148"
 ;;     sig0 = (i64 sext, i32 sext, i32 sext, i32 sext) -> i64 sext system_v
 ;;     sig1 = (i64 sext vmctx) system_v
 ;;

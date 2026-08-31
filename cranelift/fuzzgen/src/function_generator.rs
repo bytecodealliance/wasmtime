@@ -1093,18 +1093,9 @@ impl AACategory {
     pub fn update_memflags(&self, flags: &mut MemFlagsData, alias_regions: &mut AliasRegionSet) {
         flags.set_alias_region(match self {
             AACategory::Other => None,
-            AACategory::Heap => Some(alias_regions.insert(AliasRegionData {
-                user_id: 0,
-                description: "heap".into(),
-            })),
-            AACategory::Table => Some(alias_regions.insert(AliasRegionData {
-                user_id: 1,
-                description: "table".into(),
-            })),
-            AACategory::VmCtx => Some(alias_regions.insert(AliasRegionData {
-                user_id: 2,
-                description: "vmctx".into(),
-            })),
+            AACategory::Heap => Some(alias_regions.insert(AliasRegionData::new(0, "heap"))),
+            AACategory::Table => Some(alias_regions.insert(AliasRegionData::new(1, "table"))),
+            AACategory::VmCtx => Some(alias_regions.insert(AliasRegionData::new(2, "vmctx"))),
         })
     }
 }

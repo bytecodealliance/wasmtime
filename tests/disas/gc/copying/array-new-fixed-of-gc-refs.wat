@@ -12,19 +12,18 @@
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 32 "VMContext+0x20"
-;;     region3 = 872415232 "VMCopyingHeapData+0x0"
-;;     region4 = 872415236 "VMCopyingHeapData+0x4"
-;;     region5 = 40 "VMContext+0x28"
-;;     region6 = 1677721600 "TypeIdsArray+0x0"
-;;     region7 = 67108896 "VMStoreContext+0x20"
-;;     region8 = 536870912 "GcHeap"
-;;     region9 = 67108904 "VMStoreContext+0x28"
-;;     region10 = 1543503872 "Stack(ss0)"
-;;     region11 = 1543503873 "Stack(ss1)"
-;;     region12 = 1543503874 "Stack(ss2)"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 198 "VMContext+0x20"
+;;     region3 = 191 "VMCopyingHeapData+0x0"
+;;     region4 = 209 "VMCopyingHeapData+0x4"
+;;     region5 = 105 "VMContext+0x28"
+;;     region6 = 172 "TypeIdsArray+0x0"
+;;     region7 = 244 "Stack(ss0) | VMStoreContext+0x20"
+;;     region8 = 5 "GcHeap"
+;;     region9 = 35 "VMStoreContext+0x28"
+;;     region10 = 48 "Stack(ss1)"
+;;     region11 = 83 "Stack(ss2)"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -34,11 +33,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;;                                     v137 = stack_addr.i64 ss2
-;;                                     store notrap aligned region12 v2, v137
+;;                                     store notrap aligned region11 v2, v137
 ;;                                     v138 = stack_addr.i64 ss1
-;;                                     store notrap aligned region11 v3, v138
+;;                                     store notrap aligned region10 v3, v138
 ;;                                     v139 = stack_addr.i64 ss0
-;;                                     store notrap aligned region10 v4, v139
+;;                                     store notrap aligned region7 v4, v139
 ;; @0025                               v14 = load.i64 notrap aligned readonly can_move region2 v0+32
 ;; @0025                               v15 = load.i32 notrap aligned region3 v14
 ;; @0025                               v16 = load.i32 notrap aligned region4 v14+4
@@ -102,7 +101,7 @@
 ;; @0025                               v6 = iconst.i32 20
 ;; @0025                               v63 = uadd_overflow_trap v180, v6, user2  ; v6 = 20
 ;; @0025                               v67 = uadd_overflow_trap v43, v63, user2
-;;                                     v136 = load.i32 notrap aligned region12 v137
+;;                                     v136 = load.i32 notrap aligned region11 v137
 ;; @0025                               v68 = uextend.i64 v67
 ;; @0025                               v71 = iadd v261, v68
 ;; @0025                               v72 = isub v63, v6  ; v6 = 20
@@ -120,7 +119,7 @@
 ;;                                     v204 = ishl v82, v179  ; v179 = 2
 ;; @0025                               v91 = uadd_overflow_trap v204, v6, user2  ; v6 = 20
 ;; @0025                               v95 = uadd_overflow_trap v43, v91, user2
-;;                                     v134 = load.i32 notrap aligned region11 v138
+;;                                     v134 = load.i32 notrap aligned region10 v138
 ;; @0025                               v96 = uextend.i64 v95
 ;; @0025                               v99 = iadd v261, v96
 ;;                                     v216 = iconst.i32 24
@@ -138,7 +137,7 @@
 ;;                                     v230 = ishl v110, v179  ; v179 = 2
 ;; @0025                               v119 = uadd_overflow_trap v230, v6, user2  ; v6 = 20
 ;; @0025                               v123 = uadd_overflow_trap v43, v119, user2
-;;                                     v132 = load.i32 notrap aligned region10 v139
+;;                                     v132 = load.i32 notrap aligned region7 v139
 ;; @0025                               v124 = uextend.i64 v123
 ;; @0025                               v127 = iadd v261, v124
 ;;                                     v247 = iconst.i32 28

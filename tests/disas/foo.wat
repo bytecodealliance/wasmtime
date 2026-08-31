@@ -15,20 +15,20 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i32, i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 603979776 "VMMemoryDefinition+0x0"
-;;     region3 = 603979784 "VMMemoryDefinition+0x8"
-;;     region4 = 201326592 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
-;;     region5 = 1342177280 "VMTableImport+0x0"
-;;     region6 = 671088640 "VMTableDefinition+0x0"
-;;     region7 = 671088648 "VMTableDefinition+0x8"
-;;     region8 = 268435456 "PublicTable"
-;;     region9 = 40 "VMContext+0x28"
-;;     region10 = 1677721604 "TypeIdsArray+0x4"
-;;     region11 = 1610612752 "VMFuncRef+0x10"
-;;     region12 = 1610612744 "VMFuncRef+0x8"
-;;     region13 = 1610612760 "VMFuncRef+0x18"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 193 "VMMemoryDefinition+0x0"
+;;     region3 = 213 "VMMemoryDefinition+0x8"
+;;     region4 = 39 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region5 = 33 "VMTableImport+0x0"
+;;     region6 = 44 "VMTableDefinition+0x0"
+;;     region7 = 32 "VMTableDefinition+0x8"
+;;     region8 = 156 "PublicTable"
+;;     region9 = 105 "VMContext+0x28"
+;;     region10 = 182 "TypeIdsArray+0x4"
+;;     region11 = 79 "VMFuncRef+0x10"
+;;     region12 = 170 "VMFuncRef+0x8"
+;;     region13 = 18 "VMFuncRef+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

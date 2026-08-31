@@ -9,13 +9,13 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32) tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 24 "VMContext+0x18"
-;;     region3 = 1744830464 "EpochCounter+0x0"
-;;     region4 = 67108872 "VMStoreContext+0x8"
-;;     region5 = 603979776 "VMMemoryDefinition+0x0"
-;;     region6 = 603979784 "VMMemoryDefinition+0x8"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 210 "VMContext+0x18"
+;;     region3 = 62 "EpochCounter+0x0"
+;;     region4 = 214 "VMStoreContext+0x8"
+;;     region5 = 193 "VMMemoryDefinition+0x0"
+;;     region6 = 213 "VMMemoryDefinition+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

@@ -77,19 +77,18 @@
 
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 56 "VMContext+0x38"
-;;     region3 = 48 "VMContext+0x30"
-;;     region4 = 32 "VMContext+0x20"
-;;     region5 = 872415232 "VMCopyingHeapData+0x0"
-;;     region6 = 872415236 "VMCopyingHeapData+0x4"
-;;     region7 = 40 "VMContext+0x28"
-;;     region8 = 1677721600 "TypeIdsArray+0x0"
-;;     region9 = 67108896 "VMStoreContext+0x20"
-;;     region10 = 536870912 "GcHeap"
-;;     region11 = 67108904 "VMStoreContext+0x28"
-;;     region12 = 1543503872 "Stack(ss0)"
+;;     region0 = 15 "VMContext+0x8"
+;;     region1 = 114 "VMStoreContext+0x18"
+;;     region2 = 138 "VMContext+0x38"
+;;     region3 = 120 "VMContext+0x30"
+;;     region4 = 198 "VMContext+0x20"
+;;     region5 = 191 "VMCopyingHeapData+0x0"
+;;     region6 = 209 "VMCopyingHeapData+0x4"
+;;     region7 = 105 "VMContext+0x28"
+;;     region8 = 172 "TypeIdsArray+0x0"
+;;     region9 = 244 "Stack(ss0) | VMStoreContext+0x20"
+;;     region10 = 5 "GcHeap"
+;;     region11 = 35 "VMStoreContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -160,7 +159,7 @@
 ;;
 ;;                                 block4(v52: i32, v53: i64):
 ;;                                     v112 = stack_addr.i64 ss0
-;;                                     store notrap aligned region12 v52, v112
+;;                                     store notrap aligned region9 v52, v112
 ;; @0025                               v54 = iconst.i64 16
 ;; @0025                               v55 = iadd v53, v54  ; v54 = 16
 ;; @0025                               store.i32 user2 region10 v3, v55
@@ -191,6 +190,6 @@
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v105 = load.i32 notrap aligned region12 v112
+;;                                     v105 = load.i32 notrap aligned region9 v112
 ;; @0029                               return v105
 ;; }

@@ -24,6 +24,8 @@ use cranelift_codegen::{
     cursor::FuncCursor,
     ir::{self, InstBuilder as _},
 };
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, GetPtrSize,
     ModuleInternedTypeIndex, NUM_COMPONENT_CONTEXT_SLOTS, PtrSize as _, RuntimeDataIndex,
@@ -85,9 +87,6 @@ enum VmType {
 ///
 /// This is used to assign stable `user_id`s to `AliasRegionData` entries so
 /// that alias regions can be deduplicated during inlining.
-///
-/// The key encodes into a single `u32` with the following layout:
-/// `[ kind: 6 bits | data: 26 bits ]`
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum AliasRegionKey {
     /// An access of a field within a VM data structure of type `ty`.
@@ -161,143 +160,64 @@ enum AliasRegionKey {
 }
 
 impl AliasRegionKey {
-    const KIND_BITS: u32 = 6;
-    const KIND_OFFSET: u32 = 32 - Self::KIND_BITS;
-    const KIND_MASK: u32 = ((1 << Self::KIND_BITS) - 1) << Self::KIND_OFFSET;
-
-    const OFFSET_MASK: u32 = !Self::KIND_MASK;
-
-    const MODULE_BITS: u32 = 8;
-    const MODULE_OFFSET: u32 = Self::KIND_OFFSET - Self::MODULE_BITS;
-    const MODULE_MASK: u32 = ((1 << Self::MODULE_BITS) - 1) << Self::MODULE_OFFSET;
-
-    const INDEX_MASK: u32 = !Self::KIND_MASK & !Self::MODULE_MASK;
-
-    const fn new_kind(kind: u32) -> u32 {
-        assert!(kind < (1 << Self::KIND_BITS));
-        kind << Self::KIND_OFFSET
-    }
-
-    const VM_CONTEXT_KIND: u32 = Self::new_kind(0b000000);
-    const VM_STORE_CONTEXT_KIND: u32 = Self::new_kind(0b000001);
-    const IMPORTED_MEMORY_KIND: u32 = Self::new_kind(0b000010);
-    const DEFINED_MEMORY_KIND: u32 = Self::new_kind(0b000011);
-    const IMPORTED_TABLE_KIND: u32 = Self::new_kind(0b000100);
-    const DEFINED_TABLE_KIND: u32 = Self::new_kind(0b000101);
-    const IMPORTED_GLOBAL_KIND: u32 = Self::new_kind(0b000110);
-    const DEFINED_GLOBAL_KIND: u32 = Self::new_kind(0b000111);
-    const GC_HEAP_KIND: u32 = Self::new_kind(0b001000);
-    const VM_MEMORY_DEFINITION_KIND: u32 = Self::new_kind(0b001001);
-    const VM_TABLE_DEFINITION_KIND: u32 = Self::new_kind(0b001010);
-    const VM_COMPONENT_CONTEXT_KIND: u32 = Self::new_kind(0b001011);
-    const VM_DRC_HEAP_DATA_KIND: u32 = Self::new_kind(0b001100);
-    const VM_COPYING_HEAP_DATA_KIND: u32 = Self::new_kind(0b001101);
-    const VM_NULL_HEAP_DATA_KIND: u32 = Self::new_kind(0b001110);
-    const VM_DEFERRED_THREAD_KIND: u32 = Self::new_kind(0b001111);
-    const VM_CONTREF_KIND: u32 = Self::new_kind(0b010000);
-    const CONTINUATION_STACK_MEMORY_KIND: u32 = Self::new_kind(0b010001);
-    const VM_FUNCTION_IMPORT_KIND: u32 = Self::new_kind(0b010010);
-    const VM_MEMORY_IMPORT_KIND: u32 = Self::new_kind(0b010011);
-    const VM_TABLE_IMPORT_KIND: u32 = Self::new_kind(0b010100);
-    const VM_TAG_IMPORT_KIND: u32 = Self::new_kind(0b010101);
-    const VM_GLOBAL_IMPORT_KIND: u32 = Self::new_kind(0b010110);
-    const STACK_KIND: u32 = Self::new_kind(0b010111);
-    const VM_FUNC_REF_KIND: u32 = Self::new_kind(0b011000);
-    const TYPE_IDS_ARRAY_KIND: u32 = Self::new_kind(0b011001);
-    const EPOCH_COUNTER_KIND: u32 = Self::new_kind(0b011010);
-    const BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b011011);
-    const COMPONENT_BUILTIN_FUNCTIONS_KIND: u32 = Self::new_kind(0b011100);
-    const UNSAFE_INTRINSIC_MEMORY_KIND: u32 = Self::new_kind(0b011101);
-    const HOST_VAL_RAW_KIND: u32 = Self::new_kind(0b011110);
-    const ELEMENT_SEGMENT_KIND: u32 = Self::new_kind(0b011111);
-    const DATA_SEGMENT_KIND: u32 = Self::new_kind(0b100000);
-    const VM_GLOBAL_DEFINITION_KIND: u32 = Self::new_kind(0b100001);
-    const VM_TAG_DEFINITION_KIND: u32 = Self::new_kind(0b100010);
-    const VM_LAZY_THREAD_KIND: u32 = Self::new_kind(0b100011);
-    const VM_STACK_LIMITS_KIND: u32 = Self::new_kind(0b100100);
-    const VM_COMMON_STACK_INFORMATION_KIND: u32 = Self::new_kind(0b100101);
-    const VM_HOST_ARRAY_KIND: u32 = Self::new_kind(0b100110);
-
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
+    ///
+    /// We lossily encode the key into a `user_id` via a single-byte hash, so
+    /// there are at most 256 alias regions. This avoids compile-time blowups
+    /// associated with many alias regions.
+    ///
+    /// Note that mapping multiple alias regions onto the same `user_id` is
+    /// always okay: by collapsing two logical regions into one actual region,
+    /// we are letting Cranelift believe they *might* alias even when they
+    /// actually cannot. At worst this prevents some optimization. The opposite,
+    /// however -- if we were to place accesses that *could* alias in two
+    /// different regions -- is not sound. That would let Cranelift optimize
+    /// based on a false premise, leading to misoptimizations and symptoms like
+    /// memory writes "disappearing".
+    ///
+    /// Simultaneously, this mapping is independent of the particular set of
+    /// `AliasRegionKey`s used in a particular Wasm-to-CLIF translation, which
+    /// is necessary for inlining. If we assigned `user_id = 1` to the first
+    /// `AliasRegionKey`, `user_id = 2` to the second, etc... then inlining one
+    /// function into another would mean that the `user_id`s for the same
+    /// `AliasRegionKey` could be inconsistent with each other, which also leads
+    /// to the miscompilation scenario described above.
     pub(crate) fn into_raw(self) -> u32 {
-        match self {
-            AliasRegionKey::Vm { ty, offset } => {
-                debug_assert_eq!(offset & Self::KIND_MASK, 0);
-                let kind = match ty {
-                    VmType::VMContext => Self::VM_CONTEXT_KIND,
-                    VmType::VMStoreContext => Self::VM_STORE_CONTEXT_KIND,
-                    VmType::VMMemoryDefinition => Self::VM_MEMORY_DEFINITION_KIND,
-                    VmType::VMTableDefinition => Self::VM_TABLE_DEFINITION_KIND,
-                    VmType::VMGlobalDefinition => Self::VM_GLOBAL_DEFINITION_KIND,
-                    VmType::VMTagDefinition => Self::VM_TAG_DEFINITION_KIND,
-                    VmType::VMComponentContext => Self::VM_COMPONENT_CONTEXT_KIND,
-                    VmType::VMDrcHeapData => Self::VM_DRC_HEAP_DATA_KIND,
-                    VmType::VMCopyingHeapData => Self::VM_COPYING_HEAP_DATA_KIND,
-                    VmType::VMNullHeapData => Self::VM_NULL_HEAP_DATA_KIND,
-                    VmType::VMDeferredThread => Self::VM_DEFERRED_THREAD_KIND,
-                    VmType::VMStackLimits => Self::VM_STACK_LIMITS_KIND,
-                    VmType::VMLazyThread => Self::VM_LAZY_THREAD_KIND,
-                    VmType::VMContRef => Self::VM_CONTREF_KIND,
-                    VmType::VMCommonStackInformation => Self::VM_COMMON_STACK_INFORMATION_KIND,
-                    VmType::VMHostArray => Self::VM_HOST_ARRAY_KIND,
-                    VmType::ContinuationStackMemory => Self::CONTINUATION_STACK_MEMORY_KIND,
-                    VmType::VMFunctionImport => Self::VM_FUNCTION_IMPORT_KIND,
-                    VmType::VMMemoryImport => Self::VM_MEMORY_IMPORT_KIND,
-                    VmType::VMTableImport => Self::VM_TABLE_IMPORT_KIND,
-                    VmType::VMTagImport => Self::VM_TAG_IMPORT_KIND,
-                    VmType::VMGlobalImport => Self::VM_GLOBAL_IMPORT_KIND,
-                    VmType::VMFuncRef => Self::VM_FUNC_REF_KIND,
-                    VmType::TypeIdsArray => Self::TYPE_IDS_ARRAY_KIND,
-                    VmType::EpochCounter => Self::EPOCH_COUNTER_KIND,
-                    VmType::BuiltinFunctionsArray => Self::BUILTIN_FUNCTIONS_KIND,
-                    VmType::ComponentBuiltinFunctionsArray => {
-                        Self::COMPONENT_BUILTIN_FUNCTIONS_KIND
-                    }
-                    VmType::HostValRaw => Self::HOST_VAL_RAW_KIND,
-                };
-                kind | (offset & Self::OFFSET_MASK)
-            }
-            AliasRegionKey::PublicMemory => Self::IMPORTED_MEMORY_KIND,
-            AliasRegionKey::DefinedMemory { module, index } => {
-                debug_assert_eq!(
-                    module.as_u32() & !(Self::MODULE_MASK >> Self::MODULE_OFFSET),
-                    0
-                );
-                debug_assert_eq!(index.as_u32() & !Self::INDEX_MASK, 0);
-                Self::DEFINED_MEMORY_KIND
-                    | (module.as_u32() << Self::MODULE_OFFSET)
-                    | index.as_u32()
-            }
-            AliasRegionKey::PublicTable => Self::IMPORTED_TABLE_KIND,
-            AliasRegionKey::DefinedTable { module, index } => {
-                debug_assert_eq!(
-                    module.as_u32() & !(Self::MODULE_MASK >> Self::MODULE_OFFSET),
-                    0
-                );
-                debug_assert_eq!(index.as_u32() & !Self::INDEX_MASK, 0);
-                Self::DEFINED_TABLE_KIND | (module.as_u32() << Self::MODULE_OFFSET) | index.as_u32()
-            }
-            AliasRegionKey::PublicGlobal => Self::IMPORTED_GLOBAL_KIND,
-            AliasRegionKey::DefinedGlobal { module, index } => {
-                debug_assert_eq!(
-                    module.as_u32() & !(Self::MODULE_MASK >> Self::MODULE_OFFSET),
-                    0
-                );
-                debug_assert_eq!(index.as_u32() & !Self::INDEX_MASK, 0);
-                Self::DEFINED_GLOBAL_KIND
-                    | (module.as_u32() << Self::MODULE_OFFSET)
-                    | index.as_u32()
-            }
-            AliasRegionKey::GcHeap => Self::GC_HEAP_KIND,
-            AliasRegionKey::Stack { slot } => {
-                debug_assert_eq!(slot.as_u32() & Self::KIND_MASK, 0);
-                Self::STACK_KIND | (slot.as_u32() & Self::OFFSET_MASK)
-            }
-            AliasRegionKey::UnsafeIntrinsicMemory => Self::UNSAFE_INTRINSIC_MEMORY_KIND,
-            AliasRegionKey::ElementSegment => Self::ELEMENT_SEGMENT_KIND,
-            AliasRegionKey::DataSegment => Self::DATA_SEGMENT_KIND,
-        }
+        /// An arbitrary constant mixed into the hash to shift which keys
+        /// collide with which.
+        ///
+        /// Collisions are inevitable because we are lossily mapping our
+        /// ~"infinite" keys onto only 256 actual alias regions. However, not
+        /// all collisions are equal. The cost of a pair of globals colliding is
+        /// marginal. A collision between `VMContext::store_context` and the
+        /// first defined memory's base pointer, two of the most-frequently used
+        /// regions in essentially every function, would be expensive.
+        ///
+        /// A salt of zero (equivalent to not adding a salt at all)
+        /// unfortunately hits some fairly expensive collisions
+        /// (e.g. `VMGlobalImport+0x0` and `VMStoreContext+0x18`).
+        ///
+        /// This value was picked by brute-force search as one for which none of
+        /// the fixed, non-indexed keys appearing anywhere in `tests/disas`
+        /// collide with each other. If a new `VM*` field or `AliasRegionKey`
+        /// variant introduces such a collision later, the disas expectations
+        /// will show it as two regions merging into one, and a new salt can be
+        /// searched for in the same way.
+        const SALT: u64 = 16276;
+
+        // Hash the key and salt.
+        //
+        // NB: Use `DefaultHasher::new` because it is deterministically seeded
+        // (unlike `RandomState`) so that our `user_id`s are consistent across
+        // inlining.
+        let mut hasher = DefaultHasher::new();
+        SALT.hash(&mut hasher);
+        self.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        // And then `xor`-fold the hash down to a single byte.
+        hash.to_le_bytes().into_iter().fold(0, |a, b| a ^ b).into()
     }
 }
 
@@ -326,25 +246,25 @@ impl fmt::Debug for AliasRegionKey {
     }
 }
 
-impl From<AliasRegionKey> for ir::AliasRegionData {
-    fn from(key: AliasRegionKey) -> ir::AliasRegionData {
-        ir::AliasRegionData {
-            user_id: key.into_raw(),
-            description: format!("{key:?}").into(),
-        }
-    }
-}
-
-/// Alias region cache and load/store helper type.
+/// Alias region bookkeeping and load/store helper type.
+///
+/// This is scoped to a single function: it hands out `ir::AliasRegion`s, which
+/// are indices into one function's `ir::AliasRegionSet`, so a given
+/// `AliasRegions` must not be reused across functions.
 pub struct AliasRegions<Offsets> {
     pointer_type: ir::Type,
     offsets: Offsets,
 
-    /// Cached alias regions for alias analysis.
+    /// The set of `AliasRegionKey`s that have been folded down onto each raw id
+    /// produced by [`AliasRegionKey::into_raw`].
     ///
-    /// Avoids allocating a string for the debug formatting of `AliasRegionKey`
-    /// as the `ir::AliasRegionData::description` string repeatedly.
-    cache: std::collections::HashMap<AliasRegionKey, ir::AliasRegion>,
+    /// The `ir::AliasRegionSet` in the function under construction is the
+    /// authority on which regions exist --- it hash-conses them by id, so
+    /// `AliasRegionSet::get` already answers "does a region for this id
+    /// exist?" and there is no point caching that here. What it cannot answer
+    /// is which *keys* landed on a given id, which is what we need in order to
+    /// describe the region as all of them instead of just the first one.
+    region_keys: HashMap<u32, HashSet<AliasRegionKey>>,
 }
 
 impl<Offsets> AliasRegions<Offsets> {
@@ -361,12 +281,11 @@ impl<Offsets> AliasRegions<Offsets> {
         _offset: u32,
     ) -> Option<ir::AliasRegion> {
         let key = AliasRegionKey::Stack { slot };
-        let id = key.into_raw();
-        if let Some(region) = regions.get(id) {
-            Some(region)
-        } else {
-            Some(regions.insert(key.into()))
-        }
+        Some(Self::insert_or_update_region(
+            regions,
+            key.into_raw(),
+            [key],
+        ))
     }
 
     /// Get the alias region for a stack slot.
@@ -380,10 +299,65 @@ impl<Offsets> AliasRegions<Offsets> {
 
     /// Get the alias region for the given key.
     fn region(&mut self, func: &mut ir::Function, key: AliasRegionKey) -> ir::AliasRegion {
-        *self
-            .cache
-            .entry(key)
-            .or_insert_with(|| func.dfg.alias_regions.insert(key.into()))
+        let id = key.into_raw();
+        let keys = self.region_keys.entry(id).or_default();
+
+        if !keys.insert(key) {
+            // We have seen this exact key before, so its region already exists
+            // and its description already mentions the key.
+            debug_assert!(func.dfg.alias_regions.contains(id));
+            return func.dfg.alias_regions.get(id).unwrap();
+        }
+
+        Self::insert_or_update_region(&mut func.dfg.alias_regions, id, keys.iter().copied())
+    }
+
+    /// Get or create the alias region with the given raw `id`, ensuring that its
+    /// description covers `keys` in addition to whatever it already covered.
+    fn insert_or_update_region(
+        regions: &mut ir::AliasRegionSet,
+        id: u32,
+        keys: impl IntoIterator<Item = AliasRegionKey>,
+    ) -> ir::AliasRegion {
+        const DESCRIPTION_SEPARATOR: &str = " | ";
+
+        // NB: `BTreeSet` to keep the descriptions sorted and deterministic.
+        let mut descriptions: BTreeSet<String> = keys
+            .into_iter()
+            .map(|key| {
+                debug_assert_eq!(key.into_raw(), id);
+                format!("{key:?}")
+            })
+            .collect();
+
+        let join = |descriptions: &BTreeSet<String>| -> String {
+            descriptions
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(DESCRIPTION_SEPARATOR)
+        };
+
+        let Some(region) = regions.get(id) else {
+            return regions.insert(ir::AliasRegionData::new(id, join(&descriptions)));
+        };
+
+        // Union in whatever this region already described, rather than
+        // overwriting it, because `AliasRegions::stack_map_region` is stateless
+        // and cannot dedupe in the `AliasRegions::region_keys` map, so we have
+        // to instead do that deduping here.
+        descriptions.extend(
+            regions[region]
+                .description()
+                .split(DESCRIPTION_SEPARATOR)
+                .map(String::from),
+        );
+
+        let description = join(&descriptions);
+        if description != regions[region].description() {
+            *regions[region].description_mut() = description.into();
+        }
+        region
     }
 }
 
@@ -1177,7 +1151,7 @@ where
             pointer_type: ir::Type::int_with_byte_size(offsets.get_ptr_size().size().into())
                 .unwrap(),
             offsets,
-            cache: std::collections::HashMap::default(),
+            region_keys: HashMap::default(),
         }
     }
 
