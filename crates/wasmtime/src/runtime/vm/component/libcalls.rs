@@ -1014,6 +1014,23 @@ fn future_read(
 }
 
 #[cfg(feature = "component-model-async")]
+fn future_forward(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    _caller_instance: u32,
+    ty: u32,
+    reader: u32,
+    writer: u32,
+) -> Result<()> {
+    store.component_async_store().future_forward(
+        instance,
+        TypeFutureTableIndex::from_u32(ty),
+        reader,
+        writer,
+    )
+}
+
+#[cfg(feature = "component-model-async")]
 fn future_cancel_write(
     store: &mut dyn VMStore,
     instance: Instance,
@@ -1124,6 +1141,23 @@ fn stream_read(
         stream,
         address,
         count,
+    )
+}
+
+#[cfg(feature = "component-model-async")]
+fn stream_forward(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    _caller_instance: u32,
+    ty: u32,
+    reader: u32,
+    writer: u32,
+) -> Result<()> {
+    store.component_async_store().stream_forward(
+        instance,
+        TypeStreamTableIndex::from_u32(ty),
+        reader,
+        writer,
     )
 }
 

@@ -2224,8 +2224,7 @@ dependencies = [
 [[package]]
 name = "json-from-wast"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c74cef75a485ea9c18b6f7c1928bda2ef3a5727227fe7ebab4260626bc75f98e"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "anyhow",
  "serde",
@@ -4371,8 +4370,7 @@ dependencies = [
 [[package]]
 name = "wasm-compose"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd08e5283f98238f2f16f5f978188a33af9901b81186bb549faad306a7b5388"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "anyhow",
  "heck",
@@ -4398,8 +4396,7 @@ dependencies = [
 [[package]]
 name = "wasm-encoder"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e974fe6821a8cf64575d51ea2194e2c8f77e7b66e9afe7419ce8a97f9ee0d251"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "leb128fmt",
  "wasmparser 0.258.0",
@@ -4420,8 +4417,7 @@ dependencies = [
 [[package]]
 name = "wasm-metadata"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18a11585adb92fe9b55ad1d760e8d8fb5d87e0d2e303cb8eed57f078d54293a2"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
@@ -4432,8 +4428,7 @@ dependencies = [
 [[package]]
 name = "wasm-mutate"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ae9cac04ab7c539efa6b4288726ced0d423c95f1bb63659d74506142ff0499b"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "egg",
  "log",
@@ -4446,8 +4441,7 @@ dependencies = [
 [[package]]
 name = "wasm-smith"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a84b31d645ea084a94e1a7c410e30219c165a0960b336f535f99162caf2cfd0c"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -4469,8 +4463,7 @@ dependencies = [
 [[package]]
 name = "wasm-wave"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce1d8cbc89bc22dac012f5fd56fca419330cb88d8d2c8f6ccb313f08ec4a6836"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "anyhow",
  "logos",
@@ -4543,8 +4536,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9a61719f93a87b16d325921e251800c4833f8fab50fa21c7de73aed50086313"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "bitflags 2.11.1",
  "hashbrown 0.17.0",
@@ -4556,8 +4548,7 @@ dependencies = [
 [[package]]
 name = "wasmprinter"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a65e30fb2cd3cc5cb7761a6064787b2abf017e6566d8d0dedf2bb7f55ad5383"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "anyhow",
  "termcolor",
@@ -5311,8 +5302,7 @@ dependencies = [
 [[package]]
 name = "wast"
 version = "258.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97f7defc7ecca8b19ac7f824598eadd0c53985ee00c74060d65051e9da5b58a1"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "bumpalo",
  "gimli 0.32.3",
@@ -5325,8 +5315,7 @@ dependencies = [
 [[package]]
 name = "wat"
 version = "1.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7555c008cca87f2ac58d9f83ccda7e7b44611093ce28eb28f052e7c78024b9bf"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "wast 258.0.0",
 ]
@@ -5762,8 +5751,7 @@ dependencies = [
 [[package]]
 name = "wit-component"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "481b5c47b2ecce0389b5e08a05557d6a190c9cd761773b8880a8017ee04dc7ef"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "anyhow",
  "bitflags 2.11.1",
@@ -5799,8 +5787,7 @@ dependencies = [
 [[package]]
 name = "wit-parser"
 version = "0.258.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff4daaa3cd97ae49ecd0a99dc009d453f93e0f083dd3be38c0f24a83a93e37ac"
+source = "git+https://github.com/bytecodealliance/wasm-tools?rev=a7a7254c359e82c7a55b9827ddca30a42eecb1e9#a7a7254c359e82c7a55b9827ddca30a42eecb1e9"
 dependencies = [
  "anyhow",
  "hashbrown 0.17.0",
