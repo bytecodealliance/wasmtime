@@ -191,7 +191,7 @@ impl TcpSocket {
             unreachable!();
         };
 
-        self.tcp_state = TcpState::Connecting(MaybeReady::new(async move {
+        self.tcp_state = TcpState::Connecting(MaybeReady::new(Box::pin(async move {
             // Perform all checks before doing any syscalls.
             {
                 if !already_bound {
@@ -213,7 +213,7 @@ impl TcpSocket {
 
             let stream = sock.connect(addr).await?;
             Ok(stream)
-        }));
+        })));
 
         Ok(())
     }
@@ -569,7 +569,7 @@ impl TcpListenStream {
             let listener = self.inner.clone();
             let permissions = self.permissions.clone();
 
-            self.pending_accept = Some(MaybeReady::new(async move {
+            self.pending_accept = Some(MaybeReady::new(Box::pin(async move {
                 loop {
                     match accept(&listener).await {
                         Ok((client, addr)) => {
@@ -589,7 +589,7 @@ impl TcpListenStream {
                         }
                     }
                 }
-            }));
+            })));
         }
 
         with_ambient_tokio_runtime(|| {

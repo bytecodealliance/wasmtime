@@ -3,7 +3,7 @@ use futures::TryFutureExt;
 use crate::{
     p2::bindings::sockets::network::ErrorCode,
     runtime::poll_now,
-    sockets::{MaybeReady, UdpSocket as P3Socket},
+    sockets::{MaybeSpawned, UdpSocket as P3Socket},
 };
 use std::{
     net::SocketAddr,
@@ -38,7 +38,7 @@ pub(crate) enum AsyncOperation {
 pub struct IncomingDatagramStream {
     pub(crate) inner: Arc<Mutex<P3Socket>>,
     pub(crate) connected_addr: Option<SocketAddr>,
-    pub(crate) current_recv: Option<MaybeReady<Result<(Vec<u8>, SocketAddr), ErrorCode>>>,
+    pub(crate) current_recv: Option<MaybeSpawned<Result<(Vec<u8>, SocketAddr), ErrorCode>>>,
 }
 impl IncomingDatagramStream {
     pub(crate) fn new(inner: Arc<Mutex<P3Socket>>) -> Self {
@@ -56,7 +56,7 @@ impl IncomingDatagramStream {
         if self.current_recv.is_none() {
             let connected_addr = self.connected_addr;
             let inner = self.inner.clone();
-            let recv = MaybeReady::poll_or_spawn(async move {
+            let recv = MaybeSpawned::poll_or_spawn(async move {
                 loop {
                     let fut = inner.lock().unwrap().recv();
                     let (data, addr) = fut.await?;
@@ -96,13 +96,20 @@ impl IncomingDatagramStream {
 
         self.current_recv.take().unwrap().unwrap_ready()
     }
+
+    pub(crate) async fn finish(mut self) {
+        let Some(MaybeSpawned::Pending(recv)) = self.current_recv.take() else {
+            return;
+        };
+        recv.cancel().await;
+    }
 }
 
 pub struct OutgoingDatagramStream {
     pub(crate) inner: Arc<Mutex<P3Socket>>,
     /// Number of datagrams permitted by most recent `check-send` call.
     pub(crate) check_send_permit_count: usize,
-    pub(crate) prev_send: Option<MaybeReady<Result<(), ErrorCode>>>,
+    pub(crate) prev_send: Option<MaybeSpawned<Result<(), ErrorCode>>>,
 }
 impl OutgoingDatagramStream {
     pub(crate) fn new(inner: Arc<Mutex<P3Socket>>) -> Self {
@@ -140,7 +147,7 @@ impl OutgoingDatagramStream {
 
         debug_assert!(self.prev_send.is_none());
 
-        let mut send = MaybeReady::poll_or_spawn(
+        let mut send = MaybeSpawned::poll_or_spawn(
             self.inner
                 .lock()
                 .unwrap()

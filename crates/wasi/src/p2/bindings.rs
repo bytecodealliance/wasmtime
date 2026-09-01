@@ -172,6 +172,7 @@ pub mod sync {
                 "wasi:sockets/udp.incoming-datagram-stream": super::super::sockets::udp::IncomingDatagramStream,
                 "wasi:sockets/udp.outgoing-datagram-stream": super::super::sockets::udp::OutgoingDatagramStream,
                 "wasi:sockets/udp.udp-socket": crate::p2::UdpSocket,
+                "wasi:sockets/ip-name-lookup.resolve-address-stream": crate::p2::ip_name_lookup::ResolveAddressStream,
 
                 // Error host trait from wasmtime-wasi-io is synchronous, so we can alias it
                 "wasi:io/error": wasmtime_wasi_io::bindings::wasi::io::error,
@@ -371,6 +372,8 @@ mod async_io {
             "wasi:sockets/udp.[method]udp-socket.start-bind": async | tracing | trappable,
             "wasi:sockets/udp.[method]udp-socket.stream": async | tracing | trappable,
             "wasi:sockets/udp.[drop]outgoing-datagram-stream": async | tracing | trappable,
+            "wasi:sockets/udp.[drop]incoming-datagram-stream": async | tracing | trappable,
+            "wasi:sockets/ip-name-lookup.[drop]resolve-address-stream": async | tracing | trappable,
             default: tracing | trappable,
         },
         exports: { default: async },
