@@ -1,0 +1,273 @@
+test compile precise-output
+set opt_level=speed
+target x86_64
+
+function %umul_flags_trapz(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = umul_overflow v0, v1
+  trapz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rax
+;   movq %rdx, %rdi
+;   mulq %rsi ;; implicit: %rax, %rdx
+;   jno #trap=user1
+;   movq %rdi, %rdx
+;   leaq (%rax, %rdx), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   movq %rdx, %rdi
+;   mulq %rsi
+;   jno 0x1e
+;   movq %rdi, %rdx
+;   addq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %umul_flags_trapz_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v3, v4 = umul_overflow v0, v1
+  trapz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rax
+;   movq %rdx, %rdi
+;   mull %esi ;; implicit: %eax, %edx
+;   jno #trap=user1
+;   movq %rdi, %rdx
+;   leal (%rax, %rdx), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   movq %rdx, %rdi
+;   mull %esi
+;   jno 0x1c
+;   movq %rdi, %rdx
+;   addl %edx, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %smul_flags_trapnz(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = smul_overflow v0, v1
+  trapnz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rax
+;   movq %rdx, %rdi
+;   imulq %rsi ;; implicit: %rax, %rdx
+;   jo #trap=user1
+;   movq %rdi, %rdx
+;   leaq (%rax, %rdx), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   movq %rdx, %rdi
+;   imulq %rsi
+;   jo 0x1e
+;   movq %rdi, %rdx
+;   addq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %smul_flags_select(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = smul_overflow v0, v1
+  v5 = select v4, v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rax
+;   movq %rdx, %r8
+;   imulq %rsi ;; implicit: %rax, %rdx
+;   movq %r8, %rdx
+;   movq %rax, %r8
+;   movq %rdx, %rax
+;   cmovoq %r8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   movq %rdx, %r8
+;   imulq %rsi
+;   movq %r8, %rdx
+;   movq %rax, %r8
+;   movq %rdx, %rax
+;   cmovoq %r8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %umul_flags_select_spectre_guard(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = umul_overflow v0, v1
+  v5 = select_spectre_guard v4, v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rax
+;   movq %rdx, %r8
+;   mulq %rsi ;; implicit: %rax, %rdx
+;   movq %r8, %rdx
+;   movq %rax, %r8
+;   movq %rdx, %rax
+;   cmovoq %r8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   movq %rdx, %r8
+;   mulq %rsi
+;   movq %r8, %rdx
+;   movq %rax, %r8
+;   movq %rdx, %rax
+;   cmovoq %r8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %umul_flags_brif(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v4, v5 = umul_overflow v0, v1
+  brif v5, block1, block2
+
+block1:
+  v6 = iadd v4, v4
+  return v6
+
+block2:
+  return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rax
+;   movq %rdx, %r8
+;   mull %esi ;; implicit: %eax, %edx
+;   jo      label2; j label1
+; block1:
+;   movq %r8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block2:
+;   leal (%rax, %rax), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   movq %rdx, %r8
+;   mull %esi
+;   jo 0x1a
+; block2: ; offset 0x12
+;   movq %r8, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x1a
+;   addl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %smul_flags_unused_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2, v3 = smul_overflow v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rax
+;   imulw %si ;; implicit: %ax, %dx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   imulw %si
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

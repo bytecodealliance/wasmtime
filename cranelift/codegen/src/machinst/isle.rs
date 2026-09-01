@@ -214,6 +214,12 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn second_result_used(&mut self, inst: Inst) -> bool {
+            let second_result = self.lower_ctx.dfg().inst_results(inst).get(1).copied();
+            second_result.is_some_and(|value| self.lower_ctx.value_lowered_used(value))
+        }
+
+        #[inline]
         fn inst_data_value(&mut self, inst: Inst) -> (Type, InstructionData) {
             let ty = match self.first_result(inst) {
                 Some(v) => self.value_type(v),

@@ -219,6 +219,20 @@
 
 ;;;; Rules for `umul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; The flags output of a `umul_overflow` that is not demanded as a
+;; materialized bool (i.e., its only use(s) were folded into consumers such
+;; as a `brif` that consume the flags directly) does not need a `seto`;
+;; emit just the `mul`.
+(rule 4 (lower i @ (umul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty))))
+        (if-let (second_result flags) i)
+        (if-let false (value_used flags))
+        (output_pair (x64_mul ty false x y) (value_regs_invalid)))
+
+(rule 5 (lower i @ (umul_overflow _ x y @ (value_type $I8)))
+        (if-let (second_result flags) i)
+        (if-let false (value_used flags))
+        (output_pair (value_reg (x64_mul8 false x y)) (value_regs_invalid)))
+
 (rule 2 (lower (umul_overflow _ x y @ (value_type $I8)))
       (construct_overflow_op (CC.O) (x64_mul8_with_flags_paired false x y)))
 
@@ -226,6 +240,18 @@
       (construct_overflow_op (CC.O) (x64_mul_lo_with_flags_paired ty false x y)))
 
 ;;;; Rules for `smul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; As for `umul_overflow` above: when the flags output is only consumed
+;; folded (e.g., by a `brif`), emit just the `imul`.
+(rule 4 (lower i @ (smul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty))))
+        (if-let (second_result flags) i)
+        (if-let false (value_used flags))
+        (output_pair (x64_mul ty true x y) (value_regs_invalid)))
+
+(rule 5 (lower i @ (smul_overflow _ x y @ (value_type $I8)))
+        (if-let (second_result flags) i)
+        (if-let false (value_used flags))
+        (output_pair (value_reg (x64_mul8 true x y)) (value_regs_invalid)))
 
 (rule 2 (lower (smul_overflow _ x y @ (value_type $I8)))
       (construct_overflow_op (CC.O) (x64_mul8_with_flags_paired true x y)))
