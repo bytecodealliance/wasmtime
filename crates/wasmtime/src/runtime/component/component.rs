@@ -61,6 +61,19 @@ pub struct Component {
     inner: Arc<ComponentInner>,
 }
 
+// SAFETY: restating what rustc already infers to reduce work on rustc.
+//
+// See comments on the similar impls for `Engine` for more details.
+unsafe impl Send for Component {}
+unsafe impl Sync for Component {}
+
+fn _assert_send_sync(e: &Component) {
+    fn _assert<T: Send + Sync>(_: &T) {}
+    let Component { inner } = e;
+    _assert(e);
+    _assert(inner);
+}
+
 struct ComponentInner {
     /// Unique id for this component within this process.
     ///
