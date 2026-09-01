@@ -90,6 +90,19 @@
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
     ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
 
+;; Binary operations whose first result has the operands' width and whose
+;; second result is a one-bit flag.
+(form
+    bv_binary_8_to_64_with_flag
+    ((args (named Type) (bv  8) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv  8) (bv  8)) (ret (bv  1)))
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv  1)))
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv  1)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv  1))))
+
 ;; Shifts and rotates take their amount from a second operand whose integer type
 ;; is independent of the type being shifted, so every combination of operand and
 ;; amount width is a valid instantiation. Enumerating the full cross product is
@@ -161,6 +174,36 @@
     (provide (= result (bvmul x y))
              (= (:bits ty) (widthof result))))
 (instantiate imul bv_binary_8_to_64)
+
+(spec (umul_overflow ty x y)
+    (provide
+        (= (:bits ty) (widthof x))
+        (= (widthof x) (widthof y))
+        (let
+            ((double (concat x x))
+             (wide_width (widthof double))
+             (product (bvmul (zero_ext wide_width x) (zero_ext wide_width y)))
+             (low (conv_to (widthof x) product))
+             (overflow (not (= product (zero_ext wide_width low)))))
+            (if (= (widthof result) 1)
+                (= result (zero_ext (widthof result) (if overflow #b1 #b0)))
+                (= result (conv_to (widthof result) low))))))
+(instantiate umul_overflow bv_binary_8_to_64_with_flag)
+
+(spec (smul_overflow ty x y)
+    (provide
+        (= (:bits ty) (widthof x))
+        (= (widthof x) (widthof y))
+        (let
+            ((double (concat x x))
+             (wide_width (widthof double))
+             (product (bvmul (sign_ext wide_width x) (sign_ext wide_width y)))
+             (low (conv_to (widthof x) product))
+             (overflow (not (= product (sign_ext wide_width low)))))
+            (if (= (widthof result) 1)
+                (= result (zero_ext (widthof result) (if overflow #b1 #b0)))
+                (= result (conv_to (widthof result) low))))))
+(instantiate smul_overflow bv_binary_8_to_64_with_flag)
 
 (spec (smulhi ty x y)
     (provide

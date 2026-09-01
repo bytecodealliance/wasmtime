@@ -64,6 +64,7 @@
 (extern constructor writable_value_regs writable_value_regs)
 
 ;; Construct an empty `ValueRegs` containing only invalid register sentinels.
+(spec (value_regs_invalid) (provide true))
 (decl value_regs_invalid () ValueRegs)
 (extern constructor value_regs_invalid value_regs_invalid)
 
@@ -86,6 +87,14 @@
 (extern constructor output output)
 
 ;; Construct a two-element `InstOutput`.
+(spec (output_pair first second)
+      (provide
+            ; `lower` is specified in terms of the instruction's first result.
+            ; The second result is returned for code generation but is not the
+            ; semantic result of the lowering rule.
+            (= (widthof (:lo first)) (widthof (:hi first)))
+            (let ((cat (concat (:hi first) (:lo first))))
+                  (= cat (conv_to (widthof cat) result)))))
 (decl output_pair (ValueRegs ValueRegs) InstOutput)
 (extern constructor output_pair output_pair)
 
@@ -281,6 +290,7 @@
 ;; Returns whether the given value still has uses to serve in the
 ;; lowering scan. If false, production of the given value may be
 ;; skipped by the lowered instruction(s).
+(spec (value_used value) (provide true))
 (decl pure value_used (Value) bool)
 (extern constructor value_used value_used)
 
@@ -289,6 +299,7 @@
 (extern extractor first_result first_result)
 
 ;; Extract the second result value of the given instruction.
+(spec (second_result value) (provide (= result value)))
 (decl second_result (Value) Inst)
 (extern extractor second_result second_result)
 
