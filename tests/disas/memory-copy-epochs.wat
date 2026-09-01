@@ -37,35 +37,35 @@
 ;; @001e                               v10 = call fn0(v0)
 ;; @001e                               jump block2(v10)
 ;;
-;;                                 block2(v16: i64):
-;; @0025                               v15 = load.i64 notrap aligned region3 v5
-;; @0025                               v17 = icmp uge v15, v16
-;; @0025                               brif v17, block5, block4
+;;                                 block2(v41: i64):
+;; @0025                               v14 = load.i64 notrap aligned region6 v0+64
+;; @0025                               v15 = uextend.i64 v2
+;; @0025                               v16 = uextend.i64 v4
+;; @0025                               v19 = iadd v15, v16
+;; @0025                               v20 = icmp ugt v19, v14
+;; @0025                               trapnz v20, heap_oob
+;; @0025                               v27 = uextend.i64 v3
+;; @0025                               v31 = iadd v27, v16
+;; @0025                               v32 = icmp ugt v31, v14
+;; @0025                               trapnz v32, heap_oob
+;; @0025                               v21 = load.i64 notrap aligned readonly can_move region5 v0+56
+;; @0025                               v25 = iadd v21, v15
+;; @0025                               v37 = iadd v21, v27
+;; @0025                               call fn1(v0, v25, v37, v16)
+;; @0025                               v40 = load.i64 notrap aligned region3 v5
+;; @0025                               v42 = icmp uge v40, v41
+;; @0025                               brif v42, block5, block4
 ;;
 ;;                                 block5 cold:
-;; @0025                               v19 = load.i64 notrap aligned region4 v7+8
-;; @0025                               v20 = icmp.i64 uge v15, v19
-;; @0025                               brif v20, block6, block4
+;; @0025                               v44 = load.i64 notrap aligned region4 v7+8
+;; @0025                               v45 = icmp.i64 uge v40, v44
+;; @0025                               brif v45, block6, block4
 ;;
 ;;                                 block6 cold:
-;; @0025                               v21 = call fn0(v0)
+;; @0025                               v46 = call fn0(v0)
 ;; @0025                               jump block4
 ;;
 ;;                                 block4:
-;; @0025                               v22 = load.i64 notrap aligned region6 v0+64
-;; @0025                               v23 = uextend.i64 v2
-;; @0025                               v24 = uextend.i64 v4
-;; @0025                               v27 = iadd v23, v24
-;; @0025                               v28 = icmp ugt v27, v22
-;; @0025                               trapnz v28, heap_oob
-;; @0025                               v35 = uextend.i64 v3
-;; @0025                               v39 = iadd v35, v24
-;; @0025                               v40 = icmp ugt v39, v22
-;; @0025                               trapnz v40, heap_oob
-;; @0025                               v29 = load.i64 notrap aligned readonly can_move region5 v0+56
-;; @0025                               v33 = iadd v29, v23
-;; @0025                               v45 = iadd v29, v35
-;; @0025                               call fn1(v0, v33, v45, v24)
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:

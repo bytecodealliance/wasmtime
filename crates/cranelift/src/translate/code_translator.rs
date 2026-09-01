@@ -285,7 +285,7 @@ pub fn translate_operator(
             environ.stacks.popn(params.len());
             builder.switch_to_block(loop_body);
             push_block_params(environ, builder, loop_body);
-            environ.translate_loop_header(builder)?;
+            environ.translate_loop_header(builder);
         }
         Operator::If { blockty } => {
             // Read the hint before `environ` is borrowed mutably below.

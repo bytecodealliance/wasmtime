@@ -2607,7 +2607,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_grow_per_element;
-        self.pre_translate_bulk_op(builder, delta, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, delta, cost);
 
         let mut pos = builder.cursor();
         let table = self.table(table_index);
@@ -2638,12 +2638,10 @@ impl FuncEnvironment<'_> {
         // Conditionally call that on growth success, and otherwise fall through
         // to continue to yield -1 for this growth operation.
         let current_block = builder.current_block().unwrap();
-        let failed_block = builder.create_block();
         let fill_block = builder.create_block();
         let done_block = builder.create_block();
 
-        builder.insert_block_after(failed_block, current_block);
-        builder.insert_block_after(fill_block, failed_block);
+        builder.insert_block_after(fill_block, current_block);
         builder.insert_block_after(done_block, fill_block);
 
         // Commit the operator's flat cost before branching so translating the
@@ -2653,14 +2651,7 @@ impl FuncEnvironment<'_> {
         }
         let failure = builder.ins().iconst(index_type_to_ir_type(index_type), -1);
         let failed = builder.ins().icmp(IntCC::Equal, result_idx, failure);
-        builder
-            .ins()
-            .brif(failed, failed_block, &[], fill_block, &[]);
-
-        // A failed attempt performs no initialization loop, but still charge
-        // for the requested growth so repeated failures are not free.
-        builder.switch_to_block(failed_block);
-        builder.ins().jump(done_block, &[]);
+        builder.ins().brif(failed, done_block, &[], fill_block, &[]);
 
         builder.switch_to_block(fill_block);
         self.translate_entity_fill(
@@ -2673,11 +2664,12 @@ impl FuncEnvironment<'_> {
             init_value,
             delta,
         )?;
+        self.post_translate_bulk_op(builder, fuel)?;
+
         builder.ins().jump(done_block, &[]);
 
         builder.switch_to_block(done_block);
 
-        builder.seal_block(failed_block);
         builder.seal_block(fill_block);
         builder.seal_block(done_block);
 
@@ -2825,7 +2817,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_fill_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_fill(
             builder,
             CheckedEntity::Table {
@@ -2835,7 +2827,8 @@ impl FuncEnvironment<'_> {
             dst,
             val,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_ref_i31(
@@ -3063,7 +3056,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .array_copy_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Array {
@@ -3079,7 +3072,8 @@ impl FuncEnvironment<'_> {
             dst_index,
             src_index,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_array_fill(
@@ -3097,7 +3091,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .array_fill_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_fill(
             builder,
             CheckedEntity::Array {
@@ -3108,7 +3102,8 @@ impl FuncEnvironment<'_> {
             index,
             value,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_array_init_data(
@@ -3128,7 +3123,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .array_init_data_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Array {
@@ -3143,7 +3138,8 @@ impl FuncEnvironment<'_> {
             dst_index,
             data_offset,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_array_init_elem(
@@ -3162,7 +3158,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .array_init_elem_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Array {
@@ -3174,7 +3170,8 @@ impl FuncEnvironment<'_> {
             dst_index,
             elem_offset,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_array_len(
@@ -3563,7 +3560,7 @@ impl FuncEnvironment<'_> {
 
         let index_type = self.memory(index).idx_type;
         let cost = self.tunables.operator_cost.variable().memory_grow_per_page;
-        self.pre_translate_bulk_op(builder, val, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, val, cost);
         let mut pos = builder.cursor();
         let val = self.cast_index_to_i64(&mut pos, val, index_type);
         let call_inst = pos
@@ -3575,12 +3572,42 @@ impl FuncEnvironment<'_> {
             0 => true,
             _ => unreachable!("only page sizes 2**0 and 2**16 are currently valid"),
         };
-        Ok(self.convert_pointer_to_index_type(
+        let grow_result = self.convert_pointer_to_index_type(
             builder.cursor(),
             result,
             index_type,
             single_byte_pages,
-        ))
+        );
+
+        // Consume fuel and do a fuel/epoch check only when the grow actually
+        // succeeded.
+        if fuel.is_some() {
+            let current_block = builder.current_block().unwrap();
+            let success_block = builder.create_block();
+            let done_block = builder.create_block();
+            builder.insert_block_after(success_block, current_block);
+            builder.insert_block_after(done_block, success_block);
+
+            // Flush outstanding fuel before branching.
+            if self.tunables.consume_fuel {
+                self.fuel_increment_var(builder);
+            }
+            let failure = builder.ins().iconst(index_type_to_ir_type(index_type), -1);
+            let failed = builder.ins().icmp(IntCC::Equal, grow_result, failure);
+            builder
+                .ins()
+                .brif(failed, done_block, &[], success_block, &[]);
+
+            builder.switch_to_block(success_block);
+            self.post_translate_bulk_op(builder, fuel)?;
+            builder.ins().jump(done_block, &[]);
+
+            builder.switch_to_block(done_block);
+            builder.seal_block(success_block);
+            builder.seal_block(done_block);
+        }
+
+        Ok(grow_result)
     }
 
     /// Loads the size, in bytes, of the memory `index` specified.
@@ -3668,8 +3695,9 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) -> WasmResult<()> {
         let cost = self.tunables.operator_cost.variable().memory_copy_per_byte;
-        self.pre_translate_bulk_op(builder, len, cost)?;
-        self.translate_entity_copy(builder, dst_index, src_index, dst, src, len)
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
+        self.translate_entity_copy(builder, dst_index, src_index, dst, src, len)?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     /// Perform a raw bulk-memory-like libcall.
@@ -3996,8 +4024,9 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) -> WasmResult<()> {
         let cost = self.tunables.operator_cost.variable().memory_fill_per_byte;
-        self.pre_translate_bulk_op(builder, len, cost)?;
-        self.translate_entity_fill(builder, memory_index, dst, val, len)
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
+        self.translate_entity_fill(builder, memory_index, dst, val, len)?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_memory_init(
@@ -4011,7 +4040,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let seg_index = DataIndex::from_u32(seg_index);
         let cost = self.tunables.operator_cost.variable().memory_init_per_byte;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             memory_index,
@@ -4022,7 +4051,8 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_data_drop(&mut self, mut pos: FuncCursor, seg_index: u32) -> WasmResult<()> {
@@ -4369,7 +4399,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_copy_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Table {
@@ -4383,7 +4413,8 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     /// Emits a copy between two WebAssembly table or array entities.
@@ -4940,7 +4971,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_init_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Table {
@@ -4951,7 +4982,8 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_elem_drop(&mut self, mut pos: FuncCursor, elem_index: u32) -> WasmResult<()> {
@@ -5016,41 +5048,102 @@ impl FuncEnvironment<'_> {
 
     /// Translation prefix before bulk operations such as `memory.copy`.
     ///
-    /// Takes a dynamic value `units` for the size of the operation as well as
-    /// a `cost_per_unit` configured for this operation. If fuel is enabled
-    /// this fuel will be consumed, and if epochs are enabled then an epoch
-    /// check happens. If neither epochs nor fuel are enabled this is a noop.
+    /// Takes a dynamic value `units` for the size of the operation as well as a
+    /// `cost_per_unit` configured for this operation.
+    ///
+    /// If fuel or epochs are enabled, a return value of `Some` indicates that a
+    /// fuel/epoch check should be performed if the operation succeeded.  If
+    /// fuel is enabled, the return value also indicates how much fuel should be
+    /// consumed if the operation succeeds. The return value should be used by
+    /// `post_translate_bulk_op` to consume the fuel _after_ the operation has
+    /// succeeded to prevent turning OOB traps or grow failures into out-of-fuel
+    /// traps.
+    ///
+    /// For constant small operations the fuel is consumed here (if needed), and
+    /// the returned value is `None`.
+    ///
+    /// If neither fuel nor epochs are enabled this is a noop.
     fn pre_translate_bulk_op(
         &mut self,
         builder: &mut FunctionBuilder,
         units: ir::Value,
         cost_per_unit: u8,
-    ) -> WasmResult<()> {
+    ) -> Option<DeferredBulkOp> {
         let const_units =
             Self::value_as_const_int(builder, units).map(|c| i64::try_from(c).unwrap_or(i64::MAX));
 
-        if self.tunables.consume_fuel && cost_per_unit > 0 {
-            match const_units {
-                // Fold constant costs directly into internal state.
-                Some(units) => {
+        // Skip explicit fuel/epoch checks for operations which are
+        // subjectively, and statically, considered cheap and consume the fuel
+        // now instead of waiting to see if the operation succeeds.
+        const SMALL_BULK_OP_COST: i64 = 128;
+        if let Some(units) = const_units
+            && let Some(cost) = units.checked_mul(i64::from(cost_per_unit))
+            && cost <= SMALL_BULK_OP_COST
+        {
+            if self.tunables.consume_fuel && cost_per_unit > 0 {
+                self.fuel_consumed = self.fuel_consumed.saturating_add(cost);
+            }
+            return None;
+        }
+
+        if (self.tunables.consume_fuel || self.tunables.epoch_interruption) && cost_per_unit > 0 {
+            Some(DeferredBulkOp {
+                units: match const_units {
+                    Some(const_units) => DeferredBulkUnits::Const(const_units),
+                    None => DeferredBulkUnits::Runtime(units),
+                },
+                cost_per_unit,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Emitted after a bulk operation has completed successfully.
+    ///
+    /// First consumes the size-proportional fuel deferred by
+    /// [`Self::pre_translate_bulk_op`] and then performs the fuel/epoch check
+    /// that was likewise deferred from before the operation, retroactively
+    /// discovering whether the operation exhausted the fuel budget.
+    ///
+    /// Note: the fuel charge is emitted as runtime code if the units are
+    /// dynamic, but for constant units only `self.fuel_consumed` is updated.
+    /// The trailing fuel/epoch check flushes `self.fuel_consumed` before it
+    /// runs, so on return `self.fuel_consumed` is zero.
+    fn post_translate_bulk_op(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        deferred: Option<DeferredBulkOp>,
+    ) -> WasmResult<()> {
+        // Charge the deferred size-proportional fuel now that the operation is
+        // known to have succeeded.
+        let Some(DeferredBulkOp {
+            units,
+            cost_per_unit,
+        }) = deferred
+        else {
+            return Ok(());
+        };
+        debug_assert!(
+            (self.tunables.consume_fuel || self.tunables.epoch_interruption) && cost_per_unit > 0
+        );
+        if self.tunables.consume_fuel {
+            match units {
+                DeferredBulkUnits::Const(units) => {
                     self.fuel_consumed = self
                         .fuel_consumed
                         .saturating_add(units.saturating_mul(i64::from(cost_per_unit)))
                 }
-
-                None => {
-                    // Note that fuel is always a 64-bit counter.
-                    //
-                    // Also note that the cost is clamped to `i64::MAX` to
-                    // prevent fuel counter overflows since `cost` is otherwise
-                    // an untrusted value.
-                    let units_clamped64 = match builder.func.dfg.value_type(units) {
+                DeferredBulkUnits::Runtime(units) => {
+                    self.fuel_increment_var(builder);
+                    let fuel_var = builder.use_var(self.fuel_var);
+                    let variable = match builder.func.dfg.value_type(units) {
                         ir::types::I32 => {
                             let units64 = builder.ins().uextend(ir::types::I64, units);
                             builder.ins().imul_imm_u(units64, i64::from(cost_per_unit))
                         }
                         ir::types::I64 => {
-                            let fuel = builder.ins().imul_imm_u(units, i64::from(cost_per_unit));
+                            let product = builder.ins().imul_imm_u(units, i64::from(cost_per_unit));
                             let max = builder.ins().iconst(ir::types::I64, i64::MAX);
                             let max_units = builder
                                 .ins()
@@ -5059,34 +5152,25 @@ impl FuncEnvironment<'_> {
                                 builder
                                     .ins()
                                     .icmp(IntCC::UnsignedGreaterThan, units, max_units);
-                            builder.ins().select(saturate, max, fuel)
+                            builder.ins().select(saturate, max, product)
                         }
                         _ => unreachable!(),
                     };
-                    self.fuel_increment_var(builder);
-                    let fuel = builder.use_var(self.fuel_var);
-                    let fuel = builder.ins().iadd(fuel, units_clamped64);
-                    builder.def_var(self.fuel_var, fuel);
+                    let updated = builder.ins().iadd(fuel_var, variable);
+                    builder.def_var(self.fuel_var, updated);
                 }
             }
         }
 
-        // Skip explicit fuel/epoch checks for operations which are
-        // subjectively, and statically, considered cheap.
-        const SMALL_BULK_OP_COST: i64 = 128;
-        if let Some(units) = const_units
-            && let Some(cost) = units.checked_mul(i64::from(cost_per_unit))
-            && cost <= SMALL_BULK_OP_COST
-        {
-            return Ok(());
-        }
+        // Perform the fuel/epoch check that was deferred from before the
+        // operation. This isn't a loop header but for fuel/epoch purposes it's
+        // the same thing.
+        self.translate_loop_header(builder);
 
-        // This isn't a loop header but for fuel/epoch purposes it's the same
-        // thing.
-        self.translate_loop_header(builder)
+        Ok(())
     }
 
-    pub fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
+    pub fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) {
         // Additionally if enabled check how much fuel we have remaining to see
         // if we've run out by this point.
         if self.tunables.consume_fuel {
@@ -5098,8 +5182,6 @@ impl FuncEnvironment<'_> {
         if self.tunables.epoch_interruption {
             self.epoch_check(builder);
         }
-
-        Ok(())
     }
 
     pub fn before_translate_operator(
@@ -5973,7 +6055,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_fill_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_fill(
             builder,
             CheckedEntity::Table {
@@ -5983,7 +6065,8 @@ impl FuncEnvironment<'_> {
             dst,
             val,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     /// Executes initialization for an active element segment in a module.
@@ -6018,7 +6101,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_init_per_element;
-        self.pre_translate_bulk_op(builder, segment_len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, segment_len, cost);
 
         // Re-use the `table.set` translation for making this a simple function
         // to define. That re-executes the bounds check which is a bit
@@ -6039,7 +6122,7 @@ impl FuncEnvironment<'_> {
                 }
             }
         }
-        Ok(())
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     /// Peform initialization of an active data segment in a module.
@@ -6091,8 +6174,9 @@ impl FuncEnvironment<'_> {
         let len = self.load_runtime_data_length(builder, data);
         let start = builder.ins().iconst(I32, 0);
         let cost = self.tunables.operator_cost.variable().memory_init_per_byte;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(builder, memory, data, offset, start, len)?;
+        self.post_translate_bulk_op(builder, fuel)?;
 
         // Finalize control-flow for the `MemorySegmentOffset::Static` case
         // above.
@@ -6242,6 +6326,32 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
         IndexType::I32 => I32,
         IndexType::I64 => I64,
     }
+}
+
+/// Deferred bookkeeping for a "large" bulk operation, produced by
+/// [`FuncEnvironment::pre_translate_bulk_op`] and consumed by
+/// [`FuncEnvironment::post_translate_bulk_op`] once the operation has completed
+/// successfully.
+///
+/// Its presence means a fuel/epoch check must be emitted _after_ the operation
+/// rather than before it. Deferring the check means a bulk op that traps or
+/// fails is not retroactively billed as running out of fuel; instead a
+/// successful op that exhausts the budget is discovered by the check that
+/// immediately follows it. The [`DeferredBulkOpCheck::Fuel`] variant
+/// additionally carries the size-proportional fuel to charge on success.
+#[must_use = "DeferredBulkOpCheck must be passed to post_translate_bulk_op"]
+struct DeferredBulkOp {
+    /// The number of units (bytes/elements/pages) operated on.
+    units: DeferredBulkUnits,
+    /// The per-unit fuel cost.
+    cost_per_unit: u8,
+}
+
+enum DeferredBulkUnits {
+    /// A statically-known unit count, already clamped to `i64`.
+    Const(i64),
+    /// A runtime unit count held in an `ir::Value`.
+    Runtime(ir::Value),
 }
 
 /// Operations to [`FuncEnvironment::raw_bulk_memory_operation`].
