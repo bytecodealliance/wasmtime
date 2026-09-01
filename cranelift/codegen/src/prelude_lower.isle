@@ -93,8 +93,10 @@
             ; The second result is returned for code generation but is not the
             ; semantic result of the lowering rule.
             (= (widthof (:lo first)) (widthof (:hi first)))
-            (let ((cat (concat (:hi first) (:lo first))))
-                  (= cat (conv_to (widthof cat) result)))))
+            (if (<= (widthof result) 64)
+                (= result (conv_to (widthof result) (:lo first)))
+                (let ((cat (concat (:hi first) (:lo first))))
+                     (= result (conv_to (widthof result) cat))))))
 (decl output_pair (ValueRegs ValueRegs) InstOutput)
 (extern constructor output_pair output_pair)
 
@@ -302,6 +304,14 @@
 (spec (second_result value) (provide (= result value)))
 (decl second_result (Value) Inst)
 (extern extractor second_result second_result)
+
+;; Returns whether an instruction's second result still has uses to serve in
+;; the lowering scan. Overflow operations use this while lowering their first
+;; (non-boolean) result.
+(spec (second_result_used inst)
+      (provide (> (widthof inst) 1)))
+(decl pure second_result_used (Inst) bool)
+(extern constructor second_result_used second_result_used)
 
 ;; Extract the `InstructionData` for an `Inst`.
 (decl inst_data_value (Type InstructionData) Inst)
