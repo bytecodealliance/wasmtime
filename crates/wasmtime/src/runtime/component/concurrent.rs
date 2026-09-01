@@ -3914,6 +3914,12 @@ impl Instance {
             GuestThread::from_instance(self.id().get_mut(store), runtime_instance, thread_idx)?;
         let state = store.concurrent_state_mut()?;
         let guest_thread = QualifiedThreadId::qualify(state, thread_id)?;
+
+        if store.current_guest_thread()? == guest_thread {
+            bail!(Trap::CannotResumeThread);
+        }
+
+        let state = store.concurrent_state_mut()?;
         let thread = state.get_mut(guest_thread.thread)?;
         let priority = match how {
             ResumeThread::Promote | ResumeThread::Resume => Priority::Switch,
@@ -4172,9 +4178,7 @@ impl Instance {
 
         log::trace!("subtask_cancel {waitable:?} (handle {task_id}; async {async_})");
 
-        if !async_ {
-            waitable.trap_if_in_waitable_set(concurrent_state)?;
-        }
+        waitable.trap_if_in_waitable_set(concurrent_state)?;
 
         let needs_block;
         if let Waitable::Host(host_task) = waitable {
@@ -4976,6 +4980,22 @@ enum GuestThreadState {
         cancellable: bool,
     },
     Completed,
+}
+
+impl fmt::Debug for GuestThreadState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotStartedImplicit => f.debug_tuple("NotStartedImplicit").finish(),
+            Self::NotStartedExplicit(_) => f.debug_tuple("NotStartedExplicit").finish(),
+            Self::Running => f.debug_tuple("Running").finish(),
+            Self::Suspended(_) => f.debug_tuple("Suspended").finish(),
+            Self::Ready { cancellable, .. } => f
+                .debug_struct("Ready")
+                .field("cancellable", cancellable)
+                .finish(),
+            Self::Completed => f.debug_tuple("Completed").finish(),
+        }
+    }
 }
 
 pub struct GuestThread {

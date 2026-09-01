@@ -284,13 +284,14 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
                 assert_eq!(event1, *waitable);
                 assert_eq!(event2, STATUS_RETURNED);
 
+                waitable_join(*waitable, 0);
+
                 if *mode == MODE_TRAP_CANCEL_GUEST_AFTER_RETURN {
                     // This should trap, since `waitable` has already returned:
                     subtask_cancel_async(*waitable);
                     unreachable!()
                 }
 
-                waitable_join(*waitable, 0);
                 subtask_drop(*waitable);
 
                 // Next, call and cancel `yield_with_options::yield_times` with
