@@ -40,23 +40,23 @@ size_t wasmtime_component_type_import_count(const wasmtime_component_type_t *ty,
 
 /// \brief Retrieves the import with the specified name.
 ///
-/// The returned `wasmtime_component_item_t` must be deallocated with
-/// `wasmtime_component_item_delete`.
+/// The returned `wasmtime_component_extern_t` must be deallocated with
+/// `wasmtime_component_extern_delete`.
 WASM_API_EXTERN
-bool wasmtime_component_type_import_get(const wasmtime_component_type_t *ty,
-                                        const wasm_engine_t *engine,
-                                        const char *name, size_t name_len,
-                                        struct wasmtime_component_item_t *ret);
+bool wasmtime_component_type_import_get(
+    const wasmtime_component_type_t *ty, const wasm_engine_t *engine,
+    const char *name, size_t name_len,
+    struct wasmtime_component_extern_t **ret);
 
 /// \brief Retrieves the nth import.
 ///
-/// The returned `wasmtime_component_item_t` must be deallocated with
-/// `wasmtime_component_item_delete`.
+/// The returned `wasmtime_component_extern_t` must be deallocated with
+/// `wasmtime_component_extern_delete`.
 WASM_API_EXTERN
 bool wasmtime_component_type_import_nth(
     const wasmtime_component_type_t *ty, const wasm_engine_t *engine,
     size_t nth, const char **name_ret, size_t *name_len_ret,
-    struct wasmtime_component_item_t *type_ret);
+    struct wasmtime_component_extern_t **ret);
 
 /// \brief Returns the number of exports of a component type.
 WASM_API_EXTERN
@@ -65,23 +65,23 @@ size_t wasmtime_component_type_export_count(const wasmtime_component_type_t *ty,
 
 /// \brief Retrieves the export with the specified name.
 ///
-/// The returned `wasmtime_component_item_t` must be deallocated with
-/// `wasmtime_component_item_delete`.
+/// The returned `wasmtime_component_extern_t` must be deallocated with
+/// `wasmtime_component_extern_delete`.
 WASM_API_EXTERN
-bool wasmtime_component_type_export_get(const wasmtime_component_type_t *ty,
-                                        const wasm_engine_t *engine,
-                                        const char *name, size_t name_len,
-                                        struct wasmtime_component_item_t *ret);
+bool wasmtime_component_type_export_get(
+    const wasmtime_component_type_t *ty, const wasm_engine_t *engine,
+    const char *name, size_t name_len,
+    struct wasmtime_component_extern_t **ret);
 
 /// \brief Retrieves the nth export.
 ///
-/// The returned `wasmtime_component_item_t` must be deallocated with
-/// `wasmtime_component_item_delete`.
+/// The returned `wasmtime_component_extern_t` must be deallocated with
+/// `wasmtime_component_extern_delete`.
 WASM_API_EXTERN
 bool wasmtime_component_type_export_nth(
     const wasmtime_component_type_t *ty, const wasm_engine_t *engine,
     size_t nth, const char **name_ret, size_t *name_len_ret,
-    struct wasmtime_component_item_t *type_ret);
+    struct wasmtime_component_extern_t **ret);
 
 /// \brief Value of #wasmtime_component_item_kind_t meaning that
 /// #wasmtime_component_item_t is a component.
@@ -152,6 +152,71 @@ void wasmtime_component_item_clone(const wasmtime_component_item_t *item,
 /// \brief Deallocates a component item.
 WASM_API_EXTERN
 void wasmtime_component_item_delete(wasmtime_component_item_t *ptr);
+
+/// \brief Full description of a single component or component instance export
+/// or import.
+///
+/// This carries the type of the item being imported or exported along with
+/// any metadata attached to it such as `(implements "...")` or
+/// `(external-id "...")` annotations.
+///
+/// Note that this structure contains pointers to the original component or
+/// instance type that it's acquired from. This must always be
+/// destroyed/accessed before those original types are destroyed.
+typedef struct wasmtime_component_extern_t wasmtime_component_extern_t;
+
+/// \brief Clones a component extern.
+///
+/// The returned pointer must be deallocated with
+/// `wasmtime_component_extern_delete`.
+///
+/// Note that this does not clone the internal pointers that the
+/// `wasmtime_component_extern_t` struct refers to, so the returned structure
+/// still cannot outlive the original source that this comes from.
+WASM_API_EXTERN
+wasmtime_component_extern_t *
+wasmtime_component_extern_clone(const wasmtime_component_extern_t *e);
+
+/// \brief Returns the type of the item that this import/export refers to.
+///
+/// The returned `wasmtime_component_item_t` must be deallocated with
+/// `wasmtime_component_item_delete`.
+WASM_API_EXTERN
+void wasmtime_component_extern_type(const wasmtime_component_extern_t *e,
+                                    wasmtime_component_item_t *ret);
+
+/// \brief Returns the `implements` attribute of this import/export.
+///
+/// Returns `NULL` if this isn't present. Writes the length of the return value
+/// to `len`. The returned pointer cannot be used outside the lifetime of `e`.
+WASM_API_EXTERN
+const char *
+wasmtime_component_extern_implements(const wasmtime_component_extern_t *e,
+                                     size_t *len);
+
+/// \brief Returns whether this import/export `e` has an `implements` attribute
+/// which matches the `name` provided (which is `len` bytes long).
+///
+/// This returns `false` if `e` has no `implements` attribute. Otherwise this
+/// returns `true` if the attribute is exactly equal to `name` or if it's a
+/// semver-compatible version of `name`. For example `(implements
+/// "a:b/c@1.1.0")` matches both `a:b/c@1.0.0` and `a:b/c@1.2.0`.
+WASM_API_EXTERN
+bool wasmtime_component_extern_is_implements(
+    const wasmtime_component_extern_t *e, const char *name, size_t len);
+
+/// \brief Returns the `external-id` attribute of this import/export.
+///
+/// Returns `NULL` if this isn't present. Writes the length of the return value
+/// to `len`. The returned pointer cannot be used outside the lifetime of `e`.
+WASM_API_EXTERN
+const char *
+wasmtime_component_extern_external_id(const wasmtime_component_extern_t *e,
+                                      size_t *len);
+
+/// \brief Deallocates a component extern.
+WASM_API_EXTERN
+void wasmtime_component_extern_delete(wasmtime_component_extern_t *ptr);
 
 #ifdef __cplusplus
 } // extern "C"

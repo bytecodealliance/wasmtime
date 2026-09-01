@@ -907,6 +907,16 @@ WASMTIME_CONFIG_PROP(void, concurrency_support, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_component_model_map, bool)
 
+/**
+ * \brief Configures whether the WebAssembly component-model `(implements
+ * "...")` and `(external-id "...")` annotations will be enabled for
+ * compilation.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_implements.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_implements, bool)
+
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
