@@ -15,7 +15,12 @@ pub fn wasmtime(args: &[&str]) -> Result<Command> {
 
 /// Get the Wasmtime CLI as a [Command].
 pub fn get_wasmtime_command() -> Result<Command> {
-    let cmd = wasmtime_test_util::command(get_wasmtime_path());
+    let mut cmd = wasmtime_test_util::command(get_wasmtime_path());
+
+    // Disable the on-by-default CLI cache since most of these small tests don't
+    // really benefit, the cache has historically been a bit buggy with
+    // non-release builds, and we'd otherwise just be polluting it.
+    cmd.env("WASMTIME_CODEGEN_CACHE", "n");
 
     Ok(cmd)
 }
@@ -58,7 +63,6 @@ fn run_wasmtime_simple() -> Result<()> {
         "run",
         "--invoke",
         "simple",
-        "-Ccache=n",
         "tests/all/cli_tests/simple.wat",
         "4",
     ])?;
@@ -71,7 +75,6 @@ fn run_wasmtime_simple_fail_no_args() -> Result<()> {
     assert!(
         run_wasmtime(&[
             "run",
-            "-Ccache=n",
             "--invoke",
             "simple",
             "tests/all/cli_tests/simple.wat"
@@ -90,7 +93,6 @@ fn run_coredump_smoketest() -> Result<()> {
         "run",
         "--invoke",
         "a",
-        "-Ccache=n",
         &coredump_arg,
         "tests/all/cli_tests/coredump_smoketest.wat",
     ])
@@ -109,7 +111,6 @@ fn run_wasmtime_simple_wat() -> Result<()> {
         "run",
         "--invoke",
         "simple",
-        "-Ccache=n",
         "tests/all/cli_tests/simple.wat",
         "4",
     ])?;
@@ -118,7 +119,6 @@ fn run_wasmtime_simple_wat() -> Result<()> {
             "run",
             "--invoke",
             "get_f32",
-            "-Ccache=n",
             "tests/all/cli_tests/simple.wat",
         ])?,
         "100\n"
@@ -128,7 +128,6 @@ fn run_wasmtime_simple_wat() -> Result<()> {
             "run",
             "--invoke",
             "get_f64",
-            "-Ccache=n",
             "tests/all/cli_tests/simple.wat",
         ])?,
         "100\n"
@@ -139,7 +138,7 @@ fn run_wasmtime_simple_wat() -> Result<()> {
 // Running a wat that traps.
 #[test]
 fn run_wasmtime_unreachable_wat() -> Result<()> {
-    let output = wasmtime(&["-Ccache=n", "tests/all/cli_tests/unreachable.wat"])?.output()?;
+    let output = wasmtime(&["tests/all/cli_tests/unreachable.wat"])?.output()?;
 
     assert_ne!(output.stderr, b"");
     assert_eq!(output.stdout, b"");
@@ -163,7 +162,7 @@ fn assert_trap_code(status: &ExitStatus) {
 // Run a simple WASI hello world, snapshot0 edition.
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
-    let stdout = run_wasmtime(&["-Ccache=n", "tests/all/cli_tests/hello_wasi_snapshot0.wat"])?;
+    let stdout = run_wasmtime(&["tests/all/cli_tests/hello_wasi_snapshot0.wat"])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -171,7 +170,7 @@ fn hello_wasi_snapshot0() -> Result<()> {
 // Run a simple WASI hello world, snapshot1 edition.
 #[test]
 fn hello_wasi_snapshot1() -> Result<()> {
-    let stdout = run_wasmtime(&["-Ccache=n", "tests/all/cli_tests/hello_wasi_snapshot1.wat"])?;
+    let stdout = run_wasmtime(&["tests/all/cli_tests/hello_wasi_snapshot1.wat"])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -181,7 +180,6 @@ fn timeout_in_start() -> Result<()> {
     let output = wasmtime(&[
         "run",
         "-Wtimeout=1ms",
-        "-Ccache=n",
         "tests/all/cli_tests/iloop-start.wat",
     ])?
     .output()?;
@@ -199,7 +197,6 @@ fn timeout_in_invoke() -> Result<()> {
     let output = wasmtime(&[
         "run",
         "-Wtimeout=1ms",
-        "-Ccache=n",
         "tests/all/cli_tests/iloop-invoke.wat",
     ])?
     .output()?;
@@ -216,8 +213,7 @@ fn timeout_in_invoke() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit2_wasi_snapshot0() -> Result<()> {
-    let output =
-        wasmtime(&["-Ccache=n", "tests/all/cli_tests/exit2_wasi_snapshot0.wat"])?.output()?;
+    let output = wasmtime(&["tests/all/cli_tests/exit2_wasi_snapshot0.wat"])?.output()?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -225,8 +221,7 @@ fn exit2_wasi_snapshot0() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot1 edition.
 #[test]
 fn exit2_wasi_snapshot1() -> Result<()> {
-    let output =
-        wasmtime(&["-Ccache=n", "tests/all/cli_tests/exit2_wasi_snapshot1.wat"])?.output()?;
+    let output = wasmtime(&["tests/all/cli_tests/exit2_wasi_snapshot1.wat"])?.output()?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -234,11 +229,7 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
-    let output = wasmtime(&[
-        "-Ccache=n",
-        "tests/all/cli_tests/exit125_wasi_snapshot0.wat",
-    ])?
-    .output()?;
+    let output = wasmtime(&["tests/all/cli_tests/exit125_wasi_snapshot0.wat"])?.output()?;
     dbg!(&output);
     assert_eq!(output.status.code().unwrap(), 125);
     Ok(())
@@ -247,11 +238,7 @@ fn exit125_wasi_snapshot0() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot1 edition.
 #[test]
 fn exit125_wasi_snapshot1() -> Result<()> {
-    let output = wasmtime(&[
-        "-Ccache=n",
-        "tests/all/cli_tests/exit125_wasi_snapshot1.wat",
-    ])?
-    .output()?;
+    let output = wasmtime(&["tests/all/cli_tests/exit125_wasi_snapshot1.wat"])?.output()?;
     assert_eq!(output.status.code().unwrap(), 125);
     Ok(())
 }
@@ -259,11 +246,7 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 // Exit with an invalid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit126_wasi_snapshot0() -> Result<()> {
-    let output = wasmtime(&[
-        "-Ccache=n",
-        "tests/all/cli_tests/exit126_wasi_snapshot0.wat",
-    ])?
-    .output()?;
+    let output = wasmtime(&["tests/all/cli_tests/exit126_wasi_snapshot0.wat"])?.output()?;
     assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
@@ -273,11 +256,7 @@ fn exit126_wasi_snapshot0() -> Result<()> {
 // Exit with an invalid non-zero exit code, snapshot1 edition.
 #[test]
 fn exit126_wasi_snapshot1() -> Result<()> {
-    let output = wasmtime(&[
-        "-Ccache=n",
-        "tests/all/cli_tests/exit126_wasi_snapshot1.wat",
-    ])?
-    .output()?;
+    let output = wasmtime(&["tests/all/cli_tests/exit126_wasi_snapshot1.wat"])?.output()?;
     assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
@@ -287,7 +266,7 @@ fn exit126_wasi_snapshot1() -> Result<()> {
 // Run a minimal command program.
 #[test]
 fn minimal_command() -> Result<()> {
-    let stdout = run_wasmtime(&["-Ccache=n", "tests/all/cli_tests/minimal-command.wat"])?;
+    let stdout = run_wasmtime(&["tests/all/cli_tests/minimal-command.wat"])?;
     assert_eq!(stdout, "");
     Ok(())
 }
@@ -295,7 +274,7 @@ fn minimal_command() -> Result<()> {
 // Run a minimal reactor program.
 #[test]
 fn minimal_reactor() -> Result<()> {
-    let stdout = run_wasmtime(&["-Ccache=n", "tests/all/cli_tests/minimal-reactor.wat"])?;
+    let stdout = run_wasmtime(&["tests/all/cli_tests/minimal-reactor.wat"])?;
     assert_eq!(stdout, "");
     Ok(())
 }
@@ -307,7 +286,6 @@ fn command_invoke() -> Result<()> {
         "run",
         "--invoke",
         "_start",
-        "-Ccache=n",
         "tests/all/cli_tests/minimal-command.wat",
     ])?;
     Ok(())
@@ -320,7 +298,6 @@ fn reactor_invoke() -> Result<()> {
         "run",
         "--invoke",
         "_initialize",
-        "-Ccache=n",
         "tests/all/cli_tests/minimal-reactor.wat",
     ])?;
     Ok(())
@@ -331,7 +308,6 @@ fn reactor_invoke() -> Result<()> {
 fn greeter() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
-        "-Ccache=n",
         "--preload",
         "reactor=tests/all/cli_tests/greeter_reactor.wat",
         "tests/all/cli_tests/greeter_command.wat",
@@ -348,7 +324,6 @@ fn greeter() -> Result<()> {
 fn greeter_preload_command() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
-        "-Ccache=n",
         "--preload",
         "reactor=tests/all/cli_tests/hello_wasi_snapshot1.wat",
         "tests/all/cli_tests/greeter_reactor.wat",
@@ -362,7 +337,6 @@ fn greeter_preload_command() -> Result<()> {
 fn greeter_preload_callable_command() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
-        "-Ccache=n",
         "--preload",
         "reactor=tests/all/cli_tests/greeter_callable_command.wat",
         "tests/all/cli_tests/greeter_command.wat",
@@ -375,7 +349,7 @@ fn greeter_preload_callable_command() -> Result<()> {
 // See https://github.com/bytecodealliance/wasmtime/issues/1967
 #[test]
 fn exit_with_saved_fprs() -> Result<()> {
-    let stdout = run_wasmtime(&["-Ccache=n", "tests/all/cli_tests/exit_with_saved_fprs.wat"])?;
+    let stdout = run_wasmtime(&["tests/all/cli_tests/exit_with_saved_fprs.wat"])?;
     assert!(stdout.is_empty());
     Ok(())
 }
@@ -400,8 +374,7 @@ fn run_cwasm() -> Result<()> {
 #[test]
 fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     let stdout = run_cmd(
-        wasmtime(&["-Ccache=n", "-"])?
-            .stdin(File::open("tests/all/cli_tests/hello_wasi_snapshot0.wat")?),
+        wasmtime(&["-"])?.stdin(File::open("tests/all/cli_tests/hello_wasi_snapshot0.wat")?),
     )?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
@@ -560,7 +533,7 @@ fn name_same_as_builtin_command() -> Result<()> {
 
     // Passing options before the subcommand should work and doesn't require
     // `--` to disambiguate
-    run_cmd(wasmtime(&["-Ccache=n", "run"])?.current_dir("tests/all/cli_tests"))?;
+    run_cmd(wasmtime(&["-Wcomponent-model", "run"])?.current_dir("tests/all/cli_tests"))?;
     Ok(())
 }
 
@@ -604,11 +577,7 @@ fn wasi_misaligned_pointer() -> Result<()> {
 #[test]
 #[cfg_attr(not(feature = "component-model"), ignore)]
 fn hello_with_preview2() -> Result<()> {
-    let stdout = run_wasmtime(&[
-        "-Ccache=n",
-        "-Spreview2",
-        "tests/all/cli_tests/hello_wasi_snapshot1.wat",
-    ])?;
+    let stdout = run_wasmtime(&["-Spreview2", "tests/all/cli_tests/hello_wasi_snapshot1.wat"])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -619,7 +588,6 @@ fn component_missing_feature() -> Result<()> {
     let path = "tests/all/cli_tests/empty-component.wat";
     let wasm = build_wasm(path)?;
     let output = get_wasmtime_command()?
-        .arg("-Ccache=n")
         .arg("-Wcomponent-model=n")
         .arg(wasm.path())
         .output()?;
@@ -632,7 +600,6 @@ fn component_missing_feature() -> Result<()> {
 
     // also tests with raw *.wat input
     let output = get_wasmtime_command()?
-        .arg("-Ccache=n")
         .arg("-Wcomponent-model=n")
         .arg(path)
         .output()?;
@@ -651,10 +618,10 @@ fn component_missing_feature() -> Result<()> {
 fn component_enabled_by_default() -> Result<()> {
     let path = "tests/all/cli_tests/component-basic.wat";
     let wasm = build_wasm(path)?;
-    run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
+    run_wasmtime(&[wasm.path().to_str().unwrap()])?;
 
     // also tests with raw *.wat input
-    run_wasmtime(&["-Ccache=n", path])?;
+    run_wasmtime(&[path])?;
 
     Ok(())
 }
@@ -668,7 +635,6 @@ fn component_invoke_multiple_run_exports() -> Result<()> {
     let output = get_wasmtime_command()?
         .arg("run")
         .arg("-Wcomponent-model")
-        .arg("-Ccache=n")
         .arg("--invoke")
         .arg("run()")
         .arg(path)
@@ -684,7 +650,6 @@ fn component_invoke_multiple_run_exports() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
         "-Wcomponent-model",
-        "-Ccache=n",
         "--invoke",
         "wasi:cli/run.run@0.2.0()",
         path,
@@ -695,7 +660,6 @@ fn component_invoke_multiple_run_exports() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
         "-Wcomponent-model",
-        "-Ccache=n",
         "--invoke",
         "some:other/one.run()",
         path,
@@ -710,7 +674,6 @@ fn component_invoke_multiple_run_exports() -> Result<()> {
 #[test]
 fn bad_text_syntax() -> Result<()> {
     let output = get_wasmtime_command()?
-        .arg("-Ccache=n")
         .arg("tests/all/cli_tests/bad-syntax.wat")
         .output()?;
     assert!(!output.status.success());
@@ -729,12 +692,8 @@ fn run_basic_component() -> Result<()> {
     let wasm = build_wasm(path)?;
 
     // Run both the `*.wasm` binary and the text format
-    run_wasmtime(&[
-        "-Ccache=n",
-        "-Wcomponent-model",
-        wasm.path().to_str().unwrap(),
-    ])?;
-    run_wasmtime(&["-Ccache=n", "-Wcomponent-model", path])?;
+    run_wasmtime(&["-Wcomponent-model", wasm.path().to_str().unwrap()])?;
+    run_wasmtime(&["-Wcomponent-model", path])?;
 
     Ok(())
 }
@@ -997,7 +956,6 @@ fn increase_stack_size() -> Result<()> {
         "--invoke",
         "simple",
         &format!("-Wmax-wasm-stack={}", 5 << 20),
-        "-Ccache=n",
         "tests/all/cli_tests/simple.wat",
         "4",
     ])?;
@@ -1353,7 +1311,6 @@ mod test_programs {
     #[test]
     fn run_wasi_http_component() -> Result<()> {
         let stdout = super::run_wasmtime(&[
-            "-Ccache=no",
             "-Wcomponent-model",
             "-Scli,http,preview2",
             P2_HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
@@ -3042,12 +2999,7 @@ fn profile_guest() -> Result<()> {
 
 #[test]
 fn unreachable_without_wasi() -> Result<()> {
-    let output = wasmtime(&[
-        "-Scli=n",
-        "-Ccache=n",
-        "tests/all/cli_tests/unreachable.wat",
-    ])?
-    .output()?;
+    let output = wasmtime(&["-Scli=n", "tests/all/cli_tests/unreachable.wat"])?.output()?;
 
     assert_ne!(output.stderr, b"");
     assert_eq!(output.stdout, b"");
@@ -3381,7 +3333,6 @@ fn wizer_components_wave() -> Result<()> {
     let output = run_wasmtime(&[
         "wizer",
         "-Scli",
-        "-Ccache=n",
         "--keep-init-func=true",
         "--init-func",
         "local:local/init.add-string@0.1.0(\"hello, world\")",
@@ -3396,7 +3347,6 @@ fn wizer_components_wave() -> Result<()> {
         "run",
         "--invoke",
         "local:local/run.get-inits@0.1.0()",
-        "-Ccache=n",
         dir.path().join("stage1.wasm").to_str().unwrap(),
     ])?;
 
@@ -3405,7 +3355,6 @@ fn wizer_components_wave() -> Result<()> {
     let output = run_wasmtime(&[
         "wizer",
         "-Scli",
-        "-Ccache=n",
         "--keep-init-func=true",
         "--init-func",
         "local:local/init.add-int@0.1.0(12345)",
@@ -3418,7 +3367,6 @@ fn wizer_components_wave() -> Result<()> {
     let output = run_wasmtime(&[
         "wizer",
         "-Scli",
-        "-Ccache=n",
         "--keep-init-func=true",
         "--init-func",
         "local:local/init.add-string@0.1.0(\"wave is pretty cool\")",
@@ -3435,7 +3383,6 @@ fn wizer_components_wave() -> Result<()> {
         "run",
         "--invoke",
         "local:local/run.get-inits@0.1.0()",
-        "-Ccache=n",
         dir.path().join("stage3.wasm").to_str().unwrap(),
     ])?;
 
@@ -3459,7 +3406,6 @@ fn hot_blocks_fib() -> Result<()> {
 
     let output = wasmtime(&[
         "hot-blocks",
-        "-Ccache=n",
         "--event",
         "instructions",
         "--percent",
