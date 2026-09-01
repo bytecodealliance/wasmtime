@@ -1,4 +1,5 @@
-test run
+test compile precise-output
+set unwind_info=false
 target aarch64
 
 function %f0(i128, i128, i128) -> i128 {
@@ -7,4 +8,22 @@ block0(v0: i128, v1: i128, v2: i128):
     return v3
 }
 
-; run: %f0(0x0000000000000000_ffffffffffffffff, 0x1111111111111111_2222222222222222, 0x3333333333333333_4444444444444444) == 0x3333333333333333_2222222222222222
+; VCode:
+; block0:
+;   and x7, x2, x0
+;   and x9, x3, x1
+;   bic x11, x4, x0
+;   bic x13, x5, x1
+;   orr x0, x7, x11
+;   orr x1, x9, x13
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and x7, x2, x0
+;   and x9, x3, x1
+;   bic x11, x4, x0
+;   bic x13, x5, x1
+;   orr x0, x7, x11
+;   orr x1, x9, x13
+;   ret
