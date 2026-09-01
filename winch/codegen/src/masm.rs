@@ -6,7 +6,7 @@ use crate::isa::{
     reg::{Reg, RegClass, WritableReg, writable},
 };
 use cranelift_codegen::{
-    Final, MachBufferFinalized, MachLabel,
+    Final, MachBufferFinalized, MachExceptionHandler, MachLabel,
     binemit::CodeOffset,
     ir::{Endianness, MemFlagsData, RelSourceLoc, SourceLoc, UserExternalNameRef},
 };
@@ -1432,6 +1432,10 @@ pub(crate) trait MacroAssembler {
     /// when dealing with unreachable code.
     fn reset_stack_pointer(&mut self, offset: SPOffset) -> Result<()>;
 
+    /// Prepare to enter an exception handler at the given stack offset and
+    /// return the register containing the exception reference.
+    fn prepare_for_exception_handler(&mut self, target_offset: SPOffset) -> Result<Reg>;
+
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Result<Self::Address>;
 
@@ -1471,6 +1475,15 @@ pub(crate) trait MacroAssembler {
     /// a live GC reference.
     fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[SPOffset]) -> Result<()>;
 
+    /// Record the active exception handlers for the call emitted immediately
+    /// before this point.
+    fn emit_try_call_site(
+        &mut self,
+        sp_offset: SPOffset,
+        vmctx_slot_offset: u32,
+        handlers: impl Iterator<Item = MachExceptionHandler>,
+    ) -> Result<()>;
+
     /// Acquire a scratch register and execute the given callback.
     fn with_scratch<T: ScratchType, R>(&mut self, f: impl FnOnce(&mut Self, Scratch) -> R) -> R;
 
@@ -1485,7 +1498,12 @@ pub(crate) trait MacroAssembler {
             WasmValType::I32
             | WasmValType::I64
             | WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Func | WasmHeapType::Extern,
+                heap_type:
+                    WasmHeapType::Func
+                    | WasmHeapType::Extern
+                    | WasmHeapType::Exn
+                    | WasmHeapType::ConcreteExn(_)
+                    | WasmHeapType::NoExn,
                 ..
             }) => self.with_scratch::<IntScratch, _>(f),
             WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => {

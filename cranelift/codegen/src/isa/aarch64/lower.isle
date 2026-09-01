@@ -2346,6 +2346,11 @@
                   (atomic_cas (valid_atomic_transaction ty) (little_or_native_endian flags) addr src1 src2)))
       (lse_atomic_cas addr src1 src2 ty flags))
 
+(attr rule lse_atomic_cas_i128 (tag atomics))
+(rule lse_atomic_cas_i128 2 (lower (and (use_lse)
+                  (atomic_cas $I128 (little_or_native_endian flags) addr expect replace)))
+      (lse_atomic_cas_128 addr expect replace flags))
+
 (rule (lower (and (atomic_cas (valid_atomic_transaction ty) (little_or_native_endian flags) addr src1 src2)))
       (atomic_cas_loop addr src1 src2 ty flags))
 
@@ -2961,6 +2966,13 @@
 
 ;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; The flags output of a `uadd_overflow` that is not demanded as a materialized
+;; bool (i.e., its only use(s) were folded into consumers such as a `brif` that
+;; consume the flags directly) does not need a `cset`; emit just the `adds`.
+(rule 3 (lower i @ (uadd_overflow (ty_32_or_64 ty) x y))
+        (if-let false (second_result_used i))
+        (output_pair (add ty x y) (value_regs_invalid)))
+
 ;; For values smaller than a register, we do a normal `add` with both arguments
 ;; zero extended. We then check if the output is the same as itself zero extended.
 (rule 1 (lower (uadd_overflow (fits_in_16 ty) a b))
@@ -3036,6 +3048,24 @@
 
 ;;;; Rules for `umul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; The flags output of a `umul_overflow` that is not demanded as a
+;; materialized bool (i.e., its only use(s) were folded into consumers such
+;; as a `brif` that consume the flags directly) does not need the
+;; `cmp`/`cset`; emit just the multiply.
+(rule 5 (lower i @ (umul_overflow (fits_in_16 ty) a b))
+        (if-let false (second_result_used i))
+        (let ((a_uext Reg (put_in_reg_zext32 a))
+              (b_uext Reg (put_in_reg_zext32 b)))
+          (output_pair (madd ty a_uext b_uext (zero_reg)) (value_regs_invalid))))
+
+(rule 4 (lower i @ (umul_overflow $I32 a b))
+        (if-let false (second_result_used i))
+        (output_pair (umaddl a b (zero_reg)) (value_regs_invalid)))
+
+(rule 3 (lower i @ (umul_overflow $I64 a b))
+        (if-let false (second_result_used i))
+        (output_pair (madd $I64 a b (zero_reg)) (value_regs_invalid)))
+
 ;; uxt{b,h} a_ext, a
 ;; uxt{b,h} b_ext, b
 ;; mul out, a_ext, b_ext
@@ -3083,6 +3113,22 @@
              (value_reg out_of))))
 
 ;;;; Rules for `smul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; As for `umul_overflow` above: when the flags output is only consumed
+;; folded (e.g., by a `brif`), emit just the multiply.
+(rule 5 (lower i @ (smul_overflow (fits_in_16 ty) a b))
+        (if-let false (second_result_used i))
+        (let ((a_sext Reg (put_in_reg_sext32 a))
+              (b_sext Reg (put_in_reg_sext32 b)))
+          (output_pair (madd ty a_sext b_sext (zero_reg)) (value_regs_invalid))))
+
+(rule 4 (lower i @ (smul_overflow $I32 a b))
+        (if-let false (second_result_used i))
+        (output_pair (smaddl a b (zero_reg)) (value_regs_invalid)))
+
+(rule 3 (lower i @ (smul_overflow $I64 a b))
+        (if-let false (second_result_used i))
+        (output_pair (madd $I64 a b (zero_reg)) (value_regs_invalid)))
 
 ;; sxt{b,h} a_ext, a
 ;; sxt{b,h} b_ext, b

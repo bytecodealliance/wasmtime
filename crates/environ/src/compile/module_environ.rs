@@ -92,11 +92,6 @@ pub enum KnownGlobal {
     /// flag.
     #[cfg(feature = "component-model")]
     ComponentInstanceFlags(crate::component::RuntimeComponentInstanceIndex),
-
-    /// The runtime-managed flag recording whether the currently-executing task
-    /// may perform blocking operations.
-    #[cfg(feature = "component-model")]
-    TaskMayBlock,
 }
 
 /// The result of translating via `ModuleEnvironment`.
@@ -820,7 +815,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.code_section_start(&range)?;
                 let cnt = usize::try_from(count).unwrap();
                 self.result.function_body_inputs.reserve_exact(cnt);
-                self.result.debuginfo.wasm_file.code_section_offset = range.start as u64;
+                self.result.debuginfo.wasm_file.code_section_offset = range.start;
             }
 
             Payload::CodeSectionEntry(body) => {

@@ -1,8 +1,8 @@
+use crate::filesystem::primitives::{
+    FileType, FileTypeExt, FollowSymlinks, Metadata, MetadataExt, OpenOptions,
+};
 use crate::filesystem::{
     Advice, DescriptorFlags, DescriptorStat, DescriptorType, MetadataHashValue,
-};
-use cap_primitives::fs::{
-    FileType, FileTypeExt, FollowSymlinks, Metadata, MetadataExt, OpenOptions,
 };
 use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
 use rustix::io::write;
@@ -11,8 +11,8 @@ use std::io;
 use std::os::unix::fs::FileExt;
 use std::path::Path;
 
-pub use cap_primitives::fs::remove_file as remove_file_or_symlink;
-pub use cap_primitives::fs::symlink;
+pub(crate) use crate::filesystem::primitives::remove_file as remove_file_or_symlink;
+pub(crate) use crate::filesystem::primitives::symlink;
 
 pub(crate) fn get_flags(file: &File) -> io::Result<DescriptorFlags> {
     let flags = fcntl_getfl(file)?;
@@ -122,7 +122,7 @@ pub(crate) fn metadata_hash_at(
     path: &Path,
     follow: FollowSymlinks,
 ) -> io::Result<MetadataHashValue> {
-    let meta = cap_primitives::fs::stat(start, path, follow)?;
+    let meta = crate::filesystem::primitives::stat(start, path, follow)?;
     Ok(MetadataHashValue::new(meta_identity(&meta)))
 }
 
@@ -140,7 +140,7 @@ pub(crate) fn stat_at(
     path: &Path,
     follow: FollowSymlinks,
 ) -> io::Result<DescriptorStat> {
-    let meta = cap_primitives::fs::stat(start, path, follow)?;
+    let meta = crate::filesystem::primitives::stat(start, path, follow)?;
     Ok(DescriptorStat::new(&meta, meta.nlink()))
 }
 

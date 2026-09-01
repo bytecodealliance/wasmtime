@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use wasmtime::component::{
     Accessor, AccessorTask, HasData, HasSelf, Instance, Linker, ResourceTable, Val,
 };
-use wasmtime::{Engine, Result, Store, Trap, format_err};
+use wasmtime::{Engine, Result, Store, format_err};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 #[tokio::test]
@@ -202,7 +202,7 @@ pub async fn async_round_trip_stackless_sync_import() -> Result<()> {
 }
 
 #[tokio::test]
-pub async fn async_round_trip_stackless_recurse() -> Result<()> {
+pub async fn async_round_trip_stackless_recurse_different_instance() -> Result<()> {
     test_round_trip_recurse(
         test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
         false,
@@ -211,40 +211,21 @@ pub async fn async_round_trip_stackless_recurse() -> Result<()> {
 }
 
 #[tokio::test]
-pub async fn async_round_trip_stackless_recurse_trap() -> Result<()> {
-    let error = test_round_trip_recurse(
+pub async fn async_round_trip_stackless_recurse_same_instance() -> Result<()> {
+    test_round_trip_recurse(
         test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
         true,
     )
     .await
-    .unwrap_err();
-
-    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
-
-    Ok(())
 }
 
 #[tokio::test]
-pub async fn async_round_trip_synchronous_recurse() -> Result<()> {
+pub async fn async_round_trip_synchronous_recurse_different_instance() -> Result<()> {
     test_round_trip_recurse(
         test_programs_artifacts::ASYNC_ROUND_TRIP_SYNCHRONOUS_COMPONENT,
         false,
     )
     .await
-}
-
-#[tokio::test]
-pub async fn async_round_trip_synchronous_recurse_trap() -> Result<()> {
-    let error = test_round_trip_recurse(
-        test_programs_artifacts::ASYNC_ROUND_TRIP_SYNCHRONOUS_COMPONENT,
-        true,
-    )
-    .await
-    .unwrap_err();
-
-    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
-
-    Ok(())
 }
 
 async fn test_round_trip_recurse(component: &str, same_instance: bool) -> Result<()> {

@@ -42,6 +42,7 @@ pub use builtin::*;
 pub(crate) mod bounds;
 mod drc;
 mod exceptions;
+pub(crate) use exceptions::{CatchInfo, TryTableInfo};
 mod gc;
 use gc::GcCodegenConfig;
 
@@ -251,7 +252,10 @@ where
                             WasmHeapType::Func => {
                                 self.masm.store_ptr(*reg, addr)?;
                             }
-                            WasmHeapType::Extern => {
+                            WasmHeapType::Extern
+                            | WasmHeapType::Exn
+                            | WasmHeapType::ConcreteExn(_)
+                            | WasmHeapType::NoExn => {
                                 self.masm.store((*reg).into(), addr, (*ty).try_into()?)?;
                             }
                             _ => bail!(CodeGenError::unsupported_wasm_type()),
@@ -318,9 +322,17 @@ where
 
     /// Pops a control frame from the control frame stack.
     pub fn pop_control_frame(&mut self) -> Result<ControlStackFrame> {
-        self.control_frames
+        let frame = self
+            .control_frames
             .pop()
-            .ok_or_else(|| format_err!(CodeGenError::control_frame_expected()))
+            .ok_or_else(|| format_err!(CodeGenError::control_frame_expected()))?;
+        if let Some(info) = frame.try_table_info() {
+            self.context
+                .exception_handlers
+                .restore_checkpoint(info.checkpoint);
+        }
+
+        Ok(frame)
     }
 
     /// Derives a [RelSourceLoc] from a [SourceLoc].
@@ -358,6 +370,9 @@ where
 
     pub fn handle_unreachable_end(&mut self) -> Result<()> {
         let mut frame = self.pop_control_frame()?;
+        if let Some(info) = frame.take_try_table_info() {
+            return self.emit_try_table_end(frame, info);
+        }
         // We just popped the outermost block.
         let is_outermost = self.control_frames.len() == 0;
 
@@ -415,7 +430,7 @@ where
         ops.finish()?;
         return Ok(());
 
-        struct ValidateThenVisit<'a, T, U>(T, &'a mut U, usize);
+        struct ValidateThenVisit<'a, T, U>(T, &'a mut U, u64);
 
         macro_rules! validate_then_visit {
             ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident $ann:tt)*) => {
@@ -439,7 +454,7 @@ where
         fn visit_op_when_unreachable(op: &Operator) -> bool {
             use Operator::*;
             match op {
-                If { .. } | Block { .. } | Loop { .. } | Else | End => true,
+                If { .. } | Block { .. } | TryTable { .. } | Loop { .. } | Else | End => true,
                 _ => false,
             }
         }
@@ -448,7 +463,7 @@ where
         /// operator.
         trait VisitorHooks {
             /// Hook prior to visiting an operator.
-            fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()>;
+            fn before_visit_op(&mut self, operator: &Operator, offset: u64) -> Result<()>;
             /// Hook after visiting an operator.
             fn after_visit_op(&mut self) -> Result<()>;
 
@@ -470,7 +485,7 @@ where
                 self.context.reachable || visit_op_when_unreachable(op)
             }
 
-            fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()> {
+            fn before_visit_op(&mut self, operator: &Operator, offset: u64) -> Result<()> {
                 // Handle source location mapping.
                 self.source_location_before_visit_op(offset)?;
 
@@ -2375,7 +2390,7 @@ where
     }
 
     // Hook to handle source location mapping before visiting an operator.
-    fn source_location_before_visit_op(&mut self, offset: usize) -> Result<()> {
+    fn source_location_before_visit_op(&mut self, offset: u64) -> Result<()> {
         let loc = SourceLoc::new(offset as u32);
         let rel = self.source_loc_from(loc);
         self.source_location.current = self.masm.start_source_loc(rel)?;

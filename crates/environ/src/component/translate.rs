@@ -691,9 +691,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                             CoreDef::InstanceFlags(_) => {
                                 unreachable!("instance flags are not a function")
                             }
-                            CoreDef::TaskMayBlock => {
-                                unreachable!("task_may_block is not a function")
-                            }
 
                             // We could in theory inline these trampolines, so it
                             // could potentially make sense to record that we
@@ -1367,7 +1364,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 .translate(
                     parser,
                     component
-                        .get(unchecked_range.start..unchecked_range.end)
+                        .get(unchecked_range.start as usize..unchecked_range.end as usize)
                         .ok_or_else(|| {
                             format_err!(
                                 "section range {}..{} is out of bounds (bound = {})",
@@ -1379,7 +1376,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                         })?,
                 )?;
 
-                translation.wasm_module_offset = u64::try_from(unchecked_range.start).unwrap();
+                translation.wasm_module_offset = unchecked_range.start;
                 let static_module_index2 = self.static_modules.push(translation);
                 assert_eq!(static_module_index, static_module_index2);
                 let types = self.validator.types(0).unwrap();
@@ -1387,7 +1384,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                 self.result
                     .initializers
                     .push(LocalInitializer::ModuleStatic(static_module_index, ty));
-                return Ok(Action::Skip(unchecked_range.end - unchecked_range.start));
+                return Ok(Action::Skip(
+                    (unchecked_range.end - unchecked_range.start) as usize,
+                ));
             }
 
             // When a sub-component is found then the current translation state
@@ -1974,7 +1973,6 @@ struct Ambiguous {
 fn component_flags(def: &CoreDef) -> Option<KnownGlobal> {
     match def {
         CoreDef::InstanceFlags(instance) => Some(KnownGlobal::ComponentInstanceFlags(*instance)),
-        CoreDef::TaskMayBlock => Some(KnownGlobal::TaskMayBlock),
         CoreDef::Export(_) | CoreDef::Trampoline(_) | CoreDef::UnsafeIntrinsic(_) => None,
     }
 }
@@ -2041,10 +2039,9 @@ fn resolve_core_export(
             // The chain bottoms out in something that is not an export of
             // another instance in this component, so there is no defining module
             // for us to name.
-            CoreDef::InstanceFlags(_)
-            | CoreDef::Trampoline(_)
-            | CoreDef::UnsafeIntrinsic(_)
-            | CoreDef::TaskMayBlock => return None,
+            CoreDef::InstanceFlags(_) | CoreDef::Trampoline(_) | CoreDef::UnsafeIntrinsic(_) => {
+                return None;
+            }
         }
     }
 }
@@ -2109,7 +2106,7 @@ fn ambiguous_entities(
             }
         }
 
-        CoreDef::InstanceFlags(_) | CoreDef::TaskMayBlock => {
+        CoreDef::InstanceFlags(_) => {
             ambiguous.flags.insert(component_flags(def).unwrap());
         }
 

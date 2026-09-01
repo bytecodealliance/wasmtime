@@ -829,48 +829,6 @@ fn custom_variable_operator_cost(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-fn variable_operator_cost_failed_growth(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let mut op_cost = OperatorCost {
-        I32Const: 0,
-        RefNull: 0,
-        MemoryGrow: 0,
-        TableGrow: 0,
-        ..Default::default()
-    };
-    op_cost.variable.memory_grow_per_page = 7;
-    op_cost.variable.table_grow_per_element = 19;
-    config.operator_cost(op_cost.clone());
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (memory 1 1)
-            (table 0 0 funcref)
-            (func (export "main")
-                ;; these exceed the max limits so they fail
-                i32.const 5 memory.grow drop
-                ref.null func i32.const 5 table.grow drop)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(1_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
-
-    let initial_fuel = store.get_fuel()?;
-    main.call(&mut store, ())?;
-    let cost_of_execution = 5 * u64::from(op_cost.variable.memory_grow_per_page)
-        + 5 * u64::from(op_cost.variable.table_grow_per_element)
-        + 1;
-    assert_eq!(store.get_fuel()?, initial_fuel - cost_of_execution);
-
-    Ok(())
-}
-
 #[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
 #[cfg_attr(miri, ignore)]
 fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()> {
@@ -908,64 +866,6 @@ fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()
     // variable charge or the pending function-entry unit is flushed.
     assert_eq!(store.get_fuel()?, initial_fuel);
 
-    Ok(())
-}
-
-#[wasmtime_test(wasm_features(memory64), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-fn memory64_variable_operator_cost_saturates(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let mut operator_cost = OperatorCost::default();
-    operator_cost.variable.memory_grow_per_page = 2;
-    config.operator_cost(operator_cost);
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (memory i64 0 0)
-            (func (export "grow") (param i64) (result i64)
-                local.get 0 memory.grow)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(10_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let grow = instance.get_typed_func::<i64, i64>(&mut store, "grow")?;
-
-    // i64::MAX * 2 must saturate at i64::MAX rather than wrap to -2.
-    let error = grow.call(&mut store, i64::MAX).unwrap_err();
-    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
-
-    Ok(())
-}
-
-#[wasmtime_test(wasm_features(memory64, reference_types), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-#[cfg(target_pointer_width = "64")]
-fn table64_variable_operator_cost_saturates(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let mut operator_cost = OperatorCost::default();
-    operator_cost.variable.table_grow_per_element = 2;
-    config.operator_cost(operator_cost);
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (table i64 0 0 funcref)
-            (func (export "grow") (param i64) (result i64)
-                ref.null func local.get 0 table.grow)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(10_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let grow = instance.get_typed_func::<i64, i64>(&mut store, "grow")?;
-
-    // i64::MAX * 2 must saturate at i64::MAX rather than wrap to -2.
-    let error = grow.call(&mut store, i64::MAX).unwrap_err();
-    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
     Ok(())
 }
 
@@ -1040,15 +940,87 @@ fn fuel_around_table_grow() -> Result<()> {
     store.set_fuel(2)?;
     let instance = Instance::new(&mut store, &module, &[])?;
     let grow = instance.get_typed_func::<(), i32>(&mut store, "grow")?;
+    // The fuel check for a large bulk operation runs after the operation
+    // completes so this call still traps with "out of fuel", but the grow
+    // itself took effect.
     let trap = grow.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
     assert_eq!(trap, Trap::OutOfFuel);
 
     store.set_fuel(u64::MAX)?;
     let call = instance.get_typed_func::<i32, ()>(&mut store, "call")?;
-    let trap = call
-        .call(&mut store, 9999999)
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert_eq!(trap, Trap::TableOutOfBounds);
+    call.call(&mut store, 9999999)?;
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(extended_const))]
+#[cfg_attr(miri, ignore)]
+fn const_expr_honors_operator_cost(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (global $g i32 (i32.add (i32.const 1) (i32.const 2)))
+          (export "g" (global $g))
+          (func $start)
+          (start $start))
+    "#;
+
+    fn instantiation_fuel(config: &mut Config, op_cost: OperatorCost) -> Result<u64> {
+        config.consume_fuel(true).operator_cost(op_cost);
+        let engine = Engine::new(config)?;
+        let module = Module::new(&engine, WAT)?;
+
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(10_000)?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        let g = instance
+            .get_global(&mut store, "g")
+            .unwrap()
+            .get(&mut store);
+        assert_eq!(g.i32(), Some(3), "global initializer did not run");
+
+        Ok(10_000 - store.get_fuel()?)
+    }
+
+    assert_eq!(instantiation_fuel(config, OperatorCost::default())?, 6);
+
+    let custom = OperatorCost {
+        I32Const: 7,
+        I32Add: 100,
+        ..Default::default()
+    };
+    assert_eq!(instantiation_fuel(config, custom)?, 117);
+
+    Ok(())
+}
+
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn module_start_call_honors_operator_cost(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (func $start)
+          (start $start))
+    "#;
+
+    fn instantiation_fuel(config: &mut Config, op_cost: OperatorCost) -> Result<u64> {
+        config.consume_fuel(true).operator_cost(op_cost);
+        let engine = Engine::new(config)?;
+        let module = Module::new(&engine, WAT)?;
+
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(10_000)?;
+        Instance::new(&mut store, &module, &[])?;
+
+        Ok(10_000 - store.get_fuel()?)
+    }
+
+    assert_eq!(instantiation_fuel(config, OperatorCost::default())?, 3);
+
+    let custom = OperatorCost {
+        Call: 50,
+        ..Default::default()
+    };
+    assert_eq!(instantiation_fuel(config, custom)?, 52);
+
     Ok(())
 }

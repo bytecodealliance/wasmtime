@@ -33,6 +33,9 @@ typedef struct wasmtime_component_func {
 
   /// Private internal wasmtime information.
   uint32_t __private2;
+
+  /// Private internal wasmtime information.
+  void *__private3;
 } wasmtime_component_func_t;
 
 /// \brief Returns the type of this function.

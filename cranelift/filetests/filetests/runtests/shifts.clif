@@ -1121,3 +1121,52 @@ block0(v0: i64):
 ; run: %sshr_zero_left_operand(1) == 0
 ; run: %sshr_zero_left_operand(63) == 0
 ; run: %sshr_zero_left_operand(64) == 0
+
+function %ushr_band_ishl_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = ishl v1, v2
+    v4 = band v0, v3
+    v5 = ushr v4, v2
+    return v5
+}
+
+; run: %ushr_band_ishl_rt(0, 0, 0) == 0
+; run: %ushr_band_ishl_rt(0xf0, 0xcc, 4) == 12
+; run: %ushr_band_ishl_rt(0x80000000, -1, 31) == 1
+; run: %ushr_band_ishl_rt(0x12345678, 0xaa, 32) == 0x28
+
+function %bxor_ishl_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = ishl v0, v2
+    v4 = ishl v1, v2
+    v5 = bxor v3, v4
+    return v5
+}
+
+; run: %bxor_ishl_rt(0, 0, 0) == 0
+; run: %bxor_ishl_rt(0x12345678, 0x9abcdef0, 4) == 0x88888880
+; run: %bxor_ishl_rt(0x12345678, 0x9abcdef0, 32) == 0x88888888
+
+function %bxor_sshr_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = sshr v0, v2
+    v4 = sshr v1, v2
+    v5 = bxor v3, v4
+    return v5
+}
+
+; run: %bxor_sshr_rt(0, 0, 0) == 0
+; run: %bxor_sshr_rt(0x87654321, 0x12345678, 4) == 0xf9551155
+; run: %bxor_sshr_rt(0x87654321, 0x12345678, 32) == 0x95511559
+
+function %bxor_ushr_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = ushr v0, v2
+    v4 = ushr v1, v2
+    v5 = bxor v3, v4
+    return v5
+}
+
+; run: %bxor_ushr_rt(0, 0, 0) == 0
+; run: %bxor_ushr_rt(0x12345678, 0x9abcdef0, 4) == 0x08888888
+; run: %bxor_ushr_rt(0x12345678, 0x9abcdef0, 32) == 0x88888888

@@ -620,6 +620,12 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 
     let test = &test.test;
 
+    // FIXME(#14222) stack-switching and asan aren't integrated yet, so skip
+    // stack-switching tests when asan is enabled.
+    if cfg!(asan) && test.config.stack_switching == Some(true) {
+        return Err(arbitrary::Error::IncorrectFormat);
+    }
+
     if test.config.component_model_async() || u.arbitrary()? {
         fuzz_config.enable_async(u)?;
     }

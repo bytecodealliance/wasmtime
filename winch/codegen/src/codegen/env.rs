@@ -219,6 +219,11 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         })
     }
 
+    /// Converts a parser heap type into its canonicalized Wasmtime type.
+    pub(crate) fn convert_heap_type(&self, ty: wasmparser::HeapType) -> Result<WasmHeapType> {
+        Ok(TypeConverter::new(self.translation, self.types).convert_heap_type(ty)?)
+    }
+
     /// Resolves `GlobalData` of a global at the given index.
     pub fn resolve_global(&mut self, index: GlobalIndex) -> GlobalData {
         let ty = self.translation.module.globals[index].wasm_ty;

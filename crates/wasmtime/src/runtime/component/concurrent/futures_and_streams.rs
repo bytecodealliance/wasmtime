@@ -1,6 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{ConcurrentState, QualifiedThreadId, WorkItem, tls};
+use crate::component::concurrent::{ConcurrentState, QualifiedThreadId, WaitReason, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::types;
@@ -3502,13 +3502,6 @@ impl Instance {
     ) -> Result<ReturnCode> {
         let count = ItemCount::new(count)?;
 
-        if !self.options(store.0, options).async_ {
-            // The caller may only sync call `{stream,future}.write` from an
-            // async task (i.e. a task created via a call to an async export).
-            // Otherwise, we'll trap.
-            store.0.check_blocking()?;
-        }
-
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
@@ -3723,7 +3716,7 @@ impl Instance {
         };
 
         if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
-            result = self.wait_for_write(store.0, transmit_handle)?;
+            result = self.wait_for_write(store.0, caller, transmit_handle)?;
         }
 
         if result != ReturnCode::Blocked {
@@ -3753,13 +3746,6 @@ impl Instance {
         count: u32,
     ) -> Result<ReturnCode> {
         let count = ItemCount::new(count)?;
-
-        if !self.options(store.0, options).async_ {
-            // The caller may only sync call `{stream,future}.read` from an
-            // async task (i.e. a task created via a call to an async export).
-            // Otherwise, we'll trap.
-            store.0.check_blocking()?;
-        }
 
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
@@ -3955,7 +3941,7 @@ impl Instance {
         };
 
         if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
-            result = self.wait_for_read(store.0, transmit_handle)?;
+            result = self.wait_for_read(store.0, caller_instance, transmit_handle)?;
         }
 
         if result != ReturnCode::Blocked {
@@ -3978,10 +3964,11 @@ impl Instance {
     fn wait_for_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         handle: TableId<TransmitHandle>,
     ) -> Result<ReturnCode> {
         let waitable = Waitable::Transmit(handle);
-        store.wait_for_event(waitable)?;
+        store.wait_for_event(self.runtime_instance(caller), waitable, WaitReason::Other)?;
         let event = waitable.take_event(store.concurrent_state_mut()?)?;
         if let Some(event @ (Event::StreamWrite { code, .. } | Event::FutureWrite { code, .. })) =
             event
@@ -3997,6 +3984,7 @@ impl Instance {
     fn cancel_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         transmit_id: TableId<TransmitState>,
         async_: bool,
     ) -> Result<ReturnCode> {
@@ -4043,7 +4031,7 @@ impl Instance {
                     .concurrent_state_mut()?
                     .get_mut(transmit_id)?
                     .write_handle;
-                self.wait_for_write(store, handle)?
+                self.wait_for_write(store, caller, handle)?
             }
         } else {
             ReturnCode::Cancelled(ItemCount::ZERO)
@@ -4069,10 +4057,11 @@ impl Instance {
     fn wait_for_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         handle: TableId<TransmitHandle>,
     ) -> Result<ReturnCode> {
         let waitable = Waitable::Transmit(handle);
-        store.wait_for_event(waitable)?;
+        store.wait_for_event(self.runtime_instance(caller), waitable, WaitReason::Other)?;
         let event = waitable.take_event(store.concurrent_state_mut()?)?;
         if let Some(event @ (Event::StreamRead { code, .. } | Event::FutureRead { code, .. })) =
             event
@@ -4088,6 +4077,7 @@ impl Instance {
     fn cancel_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         transmit_id: TableId<TransmitState>,
         async_: bool,
     ) -> Result<ReturnCode> {
@@ -4135,7 +4125,7 @@ impl Instance {
                     .concurrent_state_mut()?
                     .get_mut(transmit_id)?
                     .read_handle;
-                self.wait_for_read(store, handle)?
+                self.wait_for_read(store, caller, handle)?
             }
         } else {
             ReturnCode::Cancelled(ItemCount::ZERO)
@@ -4164,17 +4154,11 @@ impl Instance {
     fn guest_cancel_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TransmitIndex,
         async_: bool,
         writer: u32,
     ) -> Result<ReturnCode> {
-        if !async_ {
-            // The caller may only sync call `{stream,future}.cancel-write` from
-            // an async task (i.e. a task created via a call to an async
-            // export).  Otherwise, we'll trap.
-            store.check_blocking()?;
-        }
-
         let (rep, state) =
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?;
         let id = TableId::<TransmitHandle>::new(rep);
@@ -4189,7 +4173,7 @@ impl Instance {
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
-        let code = self.cancel_write(store, transmit_id, async_)?;
+        let code = self.cancel_write(store, caller, transmit_id, async_)?;
         if !matches!(code, ReturnCode::Blocked) {
             let state =
                 get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?
@@ -4205,17 +4189,11 @@ impl Instance {
     fn guest_cancel_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TransmitIndex,
         async_: bool,
         reader: u32,
     ) -> Result<ReturnCode> {
-        if !async_ {
-            // The caller may only sync call `{stream,future}.cancel-read` from
-            // an async task (i.e. a task created via a call to an async
-            // export).  Otherwise, we'll trap.
-            store.check_blocking()?;
-        }
-
         let (rep, state) =
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?;
         let id = TableId::<TransmitHandle>::new(rep);
@@ -4230,7 +4208,7 @@ impl Instance {
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
-        let code = self.cancel_read(store, transmit_id, async_)?;
+        let code = self.cancel_read(store, caller, transmit_id, async_)?;
         if !matches!(code, ReturnCode::Blocked) {
             let state =
                 get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?
@@ -4352,11 +4330,12 @@ impl Instance {
     pub(crate) fn future_cancel_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
         reader: u32,
     ) -> Result<u32> {
-        self.guest_cancel_read(store, TransmitIndex::Future(ty), async_, reader)
+        self.guest_cancel_read(store, caller, TransmitIndex::Future(ty), async_, reader)
             .map(|v| v.encode())
     }
 
@@ -4364,11 +4343,12 @@ impl Instance {
     pub(crate) fn future_cancel_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
         writer: u32,
     ) -> Result<u32> {
-        self.guest_cancel_write(store, TransmitIndex::Future(ty), async_, writer)
+        self.guest_cancel_write(store, caller, TransmitIndex::Future(ty), async_, writer)
             .map(|v| v.encode())
     }
 
@@ -4376,11 +4356,12 @@ impl Instance {
     pub(crate) fn stream_cancel_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
         reader: u32,
     ) -> Result<u32> {
-        self.guest_cancel_read(store, TransmitIndex::Stream(ty), async_, reader)
+        self.guest_cancel_read(store, caller, TransmitIndex::Stream(ty), async_, reader)
             .map(|v| v.encode())
     }
 
@@ -4388,11 +4369,12 @@ impl Instance {
     pub(crate) fn stream_cancel_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
         writer: u32,
     ) -> Result<u32> {
-        self.guest_cancel_write(store, TransmitIndex::Stream(ty), async_, writer)
+        self.guest_cancel_write(store, caller, TransmitIndex::Stream(ty), async_, writer)
             .map(|v| v.encode())
     }
 

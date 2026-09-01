@@ -232,7 +232,7 @@ here is:
 | [`gc`]                                  | ✅        | ❌     |
 | [`wide-arithmetic`]                     | ✅        | ✅     |
 | [`custom-page-sizes`]                   | ✅        | ✅     |
-| [`exception-handling`]                  | ✅        | ❌     |
+| [`exception-handling`]                  | ✅        | ✅     |
 | [`stack-switching`]                     | 🚧        | ❌     |
 
 ##### aarch64
@@ -257,7 +257,7 @@ here is:
 | [`gc`]                                  | ✅        | ❌        |
 | [`wide-arithmetic`]                     | ✅        | ❌        |
 | [`custom-page-sizes`]                   | ✅        | ✅        |
-| [`exception-handling`]                  | ✅        | ❌        |
+| [`exception-handling`]                  | ✅        | ✅        |
 | [`stack-switching`]                     | ❌        | ❌        |
 
 ##### s390x

@@ -125,9 +125,19 @@ macro_rules! for_each_vm_type {
                 /// it means that the Wasm cannot actually call this function. But it does
                 /// mean that this field needs to be an `Option` even though it is non-null
                 /// the vast vast vast majority of the time.
+                ///
+                /// Once a `VMFuncRef` is exposed to compiled code this field
+                /// never changes again, so accesses of it are `readonly`. It is
+                /// not `can_move`, however: the load may be the one that traps
+                /// on a null funcref, and moving it would move that trap.
+                #[readonly]
                 pub wasm_call: Option<VmPtr<VMWasmCallFunction>>,
 
                 /// Function signature's type id.
+                ///
+                /// See the note about `readonly` and not `can_move` on
+                /// `wasm_call`.
+                #[readonly]
                 pub type_index: VMSharedTypeIndex,
 
                 /// The VM state associated with this function.
@@ -136,6 +146,10 @@ macro_rules! for_each_vm_type {
                 /// function being referenced: for core Wasm functions, this is a `*mut
                 /// VMContext`, for host functions it is a `*mut VMHostFuncContext`, and for
                 /// component functions it is a `*mut VMComponentContext`.
+                ///
+                /// See the note about `readonly` and not `can_move` on
+                /// `wasm_call`.
+                #[readonly]
                 pub vmctx: VmPtr<VMOpaqueContext>,
             }
 
@@ -413,6 +427,11 @@ macro_rules! for_each_vm_type {
 
                 /// A pointer to the embedder's `T` inside a `Store<T>`, for use with the
                 /// `store-data-address` unsafe intrinsic.
+                ///
+                /// This pointer is fixed for the lifetime of the store, so loads
+                /// of it are `readonly` and `can_move`.
+                #[readonly]
+                #[can_move]
                 pub store_data: VmPtr<()>,
 
                 /// The range, in addresses, of the guard page that is currently in use.

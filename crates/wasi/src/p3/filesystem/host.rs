@@ -243,7 +243,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
 }
 
 fn map_dir_entry(
-    entry: std::io::Result<cap_primitives::fs::DirEntry>,
+    entry: std::io::Result<crate::filesystem::primitives::DirEntry>,
 ) -> Result<Option<DirectoryEntry>, ErrorCode> {
     match entry {
         Ok(entry) => {
@@ -289,7 +289,7 @@ impl ReadDirStream {
         let (tx, rx) = mpsc::channel(1);
         ReadDirStream {
             task: spawn_blocking(move || {
-                let entries = cap_primitives::fs::read_base_dir(&dir)?;
+                let entries = crate::filesystem::primitives::read_base_dir(&dir)?;
                 for entry in entries {
                     if let Some(entry) = map_dir_entry(entry)? {
                         if let Err(_) = tx.blocking_send(entry) {
@@ -676,7 +676,7 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
                 let allow_blocking_current_thread = dir.allow_blocking_current_thread;
                 let dir = Arc::clone(dir.as_dir());
                 if allow_blocking_current_thread {
-                    match cap_primitives::fs::read_base_dir(&dir) {
+                    match crate::filesystem::primitives::read_base_dir(&dir) {
                         Ok(readdir) => StreamReader::new(
                             &mut store,
                             FallibleIteratorProducer::new(

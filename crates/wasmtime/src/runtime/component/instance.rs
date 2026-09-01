@@ -10,7 +10,7 @@ use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, TypedResource, TypedResourceIndex};
-use crate::runtime::vm::{self, VMFuncRef};
+use crate::runtime::vm::{self, VMFuncRef, VMStore};
 use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
@@ -167,7 +167,7 @@ impl Instance {
         }
 
         // And package up the indices!
-        Some(Func::from_lifted_func(*self, index))
+        Some(Func::from_lifted_func(store, *self, index))
     }
 
     /// Looks up an exported [`Func`] value by name and with its type.
@@ -611,9 +611,6 @@ pub(crate) fn lookup_vmdef(
             // within that store, so it's safe to create a `Func`.
             vm::Export::Function(unsafe { crate::Func::from_vm_func_ref(store.id(), funcref) })
         }
-        CoreDef::TaskMayBlock => vm::Export::Global(crate::Global::from_task_may_block(
-            StoreComponentInstanceId::new(store.id(), id),
-        )),
     }
 }
 
@@ -837,20 +834,61 @@ impl<'a> Instantiator<'a> {
                     // already been performed. This means that the unsafety due
                     // to imports having the wrong type should not happen here.
                     //
-                    // Also note we are calling new_started_impl because we have
-                    // already checked for asyncness and are running on a fiber
-                    // if required.
+                    // Also note we are calling `new_raw` followed by
+                    // `start_raw` and will run the latter on a fiber if
+                    // required per `asyncness`.
 
-                    let i = unsafe {
-                        crate::Instance::new_started(store, module, imports.as_ref(), asyncness)
+                    let (mut instance, needs_startup) = {
+                        let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
+                        unsafe {
+                            crate::Instance::new_raw(
+                                store,
+                                limiter.as_mut(),
+                                module,
+                                imports.as_ref(),
+                            )
                             .await?
+                        }
                     };
+
+                    if needs_startup {
+                        if asyncness == Asyncness::No {
+                            instance.start_raw(store)?;
+                        } else {
+                            #[cfg(feature = "async")]
+                            {
+                                #[cfg(feature = "component-model-async")]
+                                {
+                                    if store.0.concurrency_support() {
+                                        // With concurrency support enabled, we must
+                                        // run the start function inside the store's
+                                        // event loop in case it calls async
+                                        // functions or intrinsics, creates and
+                                        // resumes threads, etc.
+                                        instance = store.start_instance(instance).await?;
+                                    } else {
+                                        store.on_fiber(|store| instance.start_raw(store)).await??;
+                                    }
+                                }
+                                #[cfg(not(feature = "component-model-async"))]
+                                {
+                                    _ = &mut instance;
+                                    store.on_fiber(|store| instance.start_raw(store)).await??;
+                                }
+                            }
+                            #[cfg(not(feature = "async"))]
+                            {
+                                _ = &mut instance;
+                                unreachable!();
+                            }
+                        }
+                    }
 
                     if exit {
                         store.0.exit_guest_sync_call()?;
                     }
 
-                    self.instance_mut(store.0).push_instance_id(i.id())?;
+                    self.instance_mut(store.0).push_instance_id(instance.id())?;
                 }
 
                 GlobalInitializer::LowerImport { import, index } => {

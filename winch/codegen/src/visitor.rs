@@ -6,8 +6,8 @@
 
 use crate::abi::RetArea;
 use crate::codegen::{
-    Callee, CodeGen, CodeGenError, ConditionalBranch, ControlStackFrame, Emission, FnCall,
-    UnconditionalBranch, control_index,
+    Callee, CatchInfo, CodeGen, CodeGenError, ConditionalBranch, ControlStackFrame, Emission,
+    FnCall, TryTableInfo, UnconditionalBranch, control_index,
 };
 use crate::masm::{
     AtomicWaitKind, DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind,
@@ -20,6 +20,7 @@ use crate::masm::{
 use crate::reg::{Reg, writable};
 use crate::stack::{TypedReg, Val};
 use crate::{Result, bail, format_err};
+use cranelift_codegen::ir::ExceptionTag;
 use regalloc2::RegClass;
 use smallvec::{SmallVec, smallvec};
 use wasmparser::{
@@ -1511,7 +1512,11 @@ where
             self.handle_unreachable_end()
         } else {
             let mut control = self.pop_control_frame()?;
-            control.emit_end(self.masm, &mut self.context)
+            if let Some(info) = control.take_try_table_info() {
+                self.emit_try_table_end(control, info)
+            } else {
+                control.emit_end(self.masm, &mut self.context)
+            }
         }
     }
 
@@ -1666,9 +1671,11 @@ where
         match slot.ty {
             I32 | I64 | F32 | F64 | V128 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func | WasmHeapType::Extern => {
-                    context.stack.push(Val::local(index, slot.ty))
-                }
+                WasmHeapType::Func
+                | WasmHeapType::Extern
+                | WasmHeapType::Exn
+                | WasmHeapType::ConcreteExn(_)
+                | WasmHeapType::NoExn => context.stack.push(Val::local(index, slot.ty)),
                 _ => bail!(CodeGenError::unsupported_wasm_type()),
             },
         }
@@ -1848,12 +1855,48 @@ where
         Ok(())
     }
 
-    // Winch does not implement exception handlers yet, so a `try_table`
-    // compiles like a `block`. Thrown exceptions escape to the host, and no
-    // handler metadata is emitted.
+    // Record the handlers that apply to calls within this `try_table`. Their
+    // landing pads are emitted when the control frame ends.
     fn visit_try_table(&mut self, try_table: TryTable) -> Self::Output {
-        self.control_frames.push(ControlStackFrame::block(
+        let checkpoint = self.context.exception_handlers.take_checkpoint();
+        let mut catches = Vec::with_capacity(try_table.catches.len());
+
+        for catch in try_table.catches.iter().rev() {
+            let (is_ref, tag, target_depth) = match catch {
+                wasmparser::Catch::One { tag, label } => {
+                    (false, Some(TagIndex::from_u32(*tag)), *label)
+                }
+                wasmparser::Catch::OneRef { tag, label } => {
+                    (true, Some(TagIndex::from_u32(*tag)), *label)
+                }
+                wasmparser::Catch::All { label } => (false, None, *label),
+                wasmparser::Catch::AllRef { label } => (true, None, *label),
+            };
+
+            let landing_pad = self.masm.get_label()?;
+
+            let target = control_index(target_depth, self.control_frames.len())?;
+            self.control_frames[target].set_as_target();
+
+            let exception_tag = tag.map(|tag| ExceptionTag::from_u32(tag.as_u32()));
+            self.context
+                .exception_handlers
+                .add_handler(exception_tag, landing_pad);
+
+            catches.push(CatchInfo {
+                is_ref,
+                tag,
+                target_depth,
+                landing_pad,
+            });
+        }
+        let info = TryTableInfo {
+            checkpoint,
+            catches,
+        };
+        self.control_frames.push(ControlStackFrame::try_table(
             self.env.resolve_block_sig(try_table.ty)?,
+            info,
             self.masm,
             &mut self.context,
         )?);
@@ -1879,7 +1922,8 @@ where
 
         let (gc_ref, object_addr) =
             self.emit_exception_alloc(tag_index, interned, &layout, layouts)?;
-        let gc_ref = self.emit_exception_payload_fields(exn_ty, &layout, gc_ref, object_addr)?;
+        let gc_ref =
+            self.emit_store_exception_payload_fields(exn_ty, &layout, gc_ref, object_addr)?;
         self.context.stack.push(gc_ref.into());
         self.visit_throw_ref()
     }
@@ -2122,14 +2166,14 @@ where
         let index = GlobalIndex::from_u32(global_index);
         let (ty, base, offset) = self.emit_get_global_addr(index)?;
         let addr = self.masm.address_at_reg(base, offset)?;
-        if self.gc_barrier_needed(&ty) {
-            self.emit_drc_read_barrier(ty, base, addr)?;
-        } else {
-            let gc_ref = self.context.reg_for_type(ty, self.masm)?;
-            self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
-            self.context.stack.push(Val::reg(gc_ref, ty));
+        let gc_ref = self.context.reg_for_type(ty, self.masm)?;
+        self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
+        self.context.free_reg(base);
 
-            self.context.free_reg(base);
+        if self.gc_barrier_needed(&ty) {
+            self.emit_drc_read_barrier(ty, gc_ref)?;
+        } else {
+            self.context.stack.push(Val::reg(gc_ref, ty));
         }
 
         Ok(())
@@ -2186,8 +2230,8 @@ where
     }
 
     fn visit_ref_null(&mut self, hty: HeapType) -> Self::Output {
-        match hty {
-            HeapType::FUNC => {
+        match self.env.convert_heap_type(hty)? {
+            WasmHeapType::Func => {
                 let ptr_type = self.env.ptr_type();
                 match ptr_type {
                     WasmValType::I64 => self.context.stack.push(Val::i64(0)),
@@ -2196,7 +2240,10 @@ where
                 }
                 Ok(())
             }
-            HeapType::EXTERN => {
+            WasmHeapType::Extern
+            | WasmHeapType::Exn
+            | WasmHeapType::ConcreteExn(_)
+            | WasmHeapType::NoExn => {
                 self.context.stack.push(Val::i32(0));
                 Ok(())
             }
@@ -4690,7 +4737,10 @@ impl TryFrom<WasmValType> for OperandSize {
                     // to be updated in such a way that the calculation of the
                     // OperandSize will depend on the target's  pointer size.
                     WasmHeapType::Func => OperandSize::S64,
-                    WasmHeapType::Extern => OperandSize::S32,
+                    WasmHeapType::Extern
+                    | WasmHeapType::Exn
+                    | WasmHeapType::ConcreteExn(_)
+                    | WasmHeapType::NoExn => OperandSize::S32,
                     _ => bail!(CodeGenError::unsupported_wasm_type()),
                 }
             }

@@ -285,11 +285,11 @@ pub fn translate_operator(
             environ.stacks.popn(params.len());
             builder.switch_to_block(loop_body);
             push_block_params(environ, builder, loop_body);
-            environ.translate_loop_header(builder)?;
+            environ.translate_loop_header(builder);
         }
         Operator::If { blockty } => {
             // Read the hint before `environ` is borrowed mutably below.
-            let branch_hint = environ.take_branch_hint(builder.srcloc().bits() as usize);
+            let branch_hint = environ.take_branch_hint(builder.srcloc().bits().into());
 
             let val = environ.stacks.pop1();
 
@@ -4108,7 +4108,7 @@ fn translate_br_if(
     env: &mut FuncEnvironment<'_>,
 ) {
     // Read the hint before `env` is borrowed mutably below.
-    let branch_hint = env.take_branch_hint(builder.srcloc().bits() as usize);
+    let branch_hint = env.take_branch_hint(builder.srcloc().bits().into());
 
     let val = env.stacks.pop1();
     let (br_destination, inputs) = translate_br_if_args(relative_depth, env);

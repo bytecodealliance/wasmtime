@@ -197,6 +197,11 @@ fn spec_test_config(test: &Path) -> TestConfig {
             {
                 ret.gc = Some(true);
             }
+            if test_name == "throw_ref.wast" {
+                // This test only uses exception references, which do not
+                // require enabling the GC proposal.
+                ret.gc = Some(false);
+            }
             if test_name.contains("return_") || test_name.contains("try_table") {
                 ret.tail_call = Some(true);
             }
@@ -567,9 +572,6 @@ impl WastTest {
                 "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
                 "misc_testsuite/no-panic.wast",
-                // Winch does not implement exception handlers yet.
-                "misc_testsuite/traps-skip-catch-all.wast",
-                "spec_testsuite/throw.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
@@ -687,6 +689,19 @@ impl WastTest {
             if happens_to_work.iter().any(|part| self.path.ends_with(part)) {
                 return false;
             }
+            return true;
+        }
+
+        // These will require a wasm-tools update:
+        let need_wasm_tools_updates = [
+            "component-model/test/validation/max-value-size.wast",
+            "component-model/test/validation/kebab.wast",
+        ];
+
+        if need_wasm_tools_updates
+            .iter()
+            .any(|part| self.path.ends_with(part))
+        {
             return true;
         }
 

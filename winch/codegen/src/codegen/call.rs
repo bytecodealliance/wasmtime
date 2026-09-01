@@ -83,7 +83,9 @@ impl FnCall {
     /// 3. Spills the value stack.
     /// 4. Creates the stack space needed for the return area.
     /// 5. Emits the call.
-    /// 6. Cleans up the stack space.
+    /// 6. Records any GC stack map and active exception handlers at the call's
+    ///    return address.
+    /// 7. Cleans up the stack space.
     pub fn emit<M: MacroAssembler>(
         env: &mut FuncEnv<M::Ptr>,
         masm: &mut M,
@@ -108,6 +110,13 @@ impl FnCall {
                 let offsets = context.calculate_stack_map_offsets(sp)?;
                 if !offsets.is_empty() {
                     masm.emit_stack_map(sp, &offsets)?;
+                }
+                if !context.exception_handlers.is_empty() {
+                    masm.emit_try_call_site(
+                        sp,
+                        context.frame.vmctx_slot().offset,
+                        context.exception_handlers.handlers(),
+                    )?;
                 }
                 Ok(())
             },

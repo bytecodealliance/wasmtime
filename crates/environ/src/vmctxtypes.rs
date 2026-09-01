@@ -241,7 +241,6 @@ macro_rules! for_each_vmctx_type {
                     // have the enclosing `VMComponentContext`'s offsets on hand,
                     // but must still be able to compute these flags' offsets to
                     // build the alias regions for accessing them.
-                    field { #[ptr_size_offset] #[access_as = u32] task_may_block: VMGlobalDefinition }
 
                     array {
                         #[ptr_size_offset]

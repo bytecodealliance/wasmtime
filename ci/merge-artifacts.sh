@@ -52,3 +52,8 @@ done
 
 # Copy over remaining source tarball into the dist folder
 mv -t dist bins-*/*.tar.*
+
+# Also move the ISLE verifier's SMT query cache, if present, into `dist/`.
+if [ -f isle-veri-cache/isle-veri-cache.tar.gz ]; then
+  mv isle-veri-cache/isle-veri-cache.tar.gz dist/
+fi

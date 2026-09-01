@@ -601,8 +601,7 @@ impl VariableOperatorCost {
             memory_copy_per_byte: 1,
             memory_fill_per_byte: 1,
             memory_init_per_byte: 1,
-            // `memory.grow` did not previously have a dynamic fuel charge.
-            memory_grow_per_page: 0,
+            memory_grow_per_page: 1,
             table_copy_per_element: 1,
             table_fill_per_element: 1,
             table_init_per_element: 1,

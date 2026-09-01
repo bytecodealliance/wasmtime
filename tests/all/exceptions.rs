@@ -3,8 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
-// Winch does not implement catches yet. Re-enable after catch is implemented.
-#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
+#[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn basic_throw(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -40,8 +39,147 @@ fn basic_throw(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// Winch does not implement catches yet. Re-enable after catch is implemented.
-#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn try_table_fallthrough_with_multi_value_results(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32))
+          (func $callee (result i32) (i32.const 9))
+          (func (export "f") (result i32)
+            (block $h (result i32)
+              (try_table (result i32 i32 i32 i32 i32 i32) (catch $e $h)
+                (i32.const 1)
+                (i32.const 2)
+                (i32.const 3)
+                (i32.const 4)
+                (i32.const 5)
+                (call $callee))
+              drop drop drop drop drop)))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, ())?, 1);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn try_table_exception_with_multi_value_payload(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32 i32 i32 i32 i32 i32))
+
+          (func $throw (result i32 i32 i32 i32 i32 i32)
+            (throw $e
+              (i32.const 1)
+              (i32.const 2)
+              (i32.const 3)
+              (i32.const 4)
+              (i32.const 5)
+              (i32.const 6)))
+
+          (func (export "f") (result i32)
+            (block $handler (result i32 i32 i32 i32 i32 i32)
+              (try_table
+                (result i32 i32 i32 i32 i32 i32)
+                (catch $e $handler)
+                (call $throw)))
+            drop drop drop drop drop))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, ())?, 1);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn try_table_branch_and_fallthrough_with_multi_value_results(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32))
+
+          (func (export "f") (param $branch i32) (result i32)
+            (block $handler (result i32)
+              (try_table
+                (result i32 i32 i32 i32 i32 i32)
+                (catch $e $handler)
+                (i32.const 1)
+                (i32.const 2)
+                (i32.const 3)
+                (i32.const 4)
+                (i32.const 5)
+                (i32.const 6)
+                (local.get $branch)
+                br_if 0)
+              drop drop drop drop drop)))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<i32, i32>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, 0)?, 1);
+    assert_eq!(f.call(&mut store, 1)?, 1);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn try_table_unreachable_fallthrough_with_multi_value_results(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32))
+          (func $callee)
+
+          (func (export "f") (result i32)
+            (block $handler (result i32)
+              (try_table
+                (result i32 i32 i32 i32 i32 i32)
+                (catch $e $handler)
+                (call $callee)
+                (i32.const 1)
+                (i32.const 2)
+                (i32.const 3)
+                (i32.const 4)
+                (i32.const 5)
+                (i32.const 6)
+                br 0)
+              drop drop drop drop drop)))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, ())?, 1);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn dynamic_tags(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -97,6 +235,58 @@ fn dynamic_tags(config: &mut Config) -> Result<()> {
     assert!(matches!(results[0], Val::I32(1)));
     assert!(matches!(results[1], Val::I64(2)));
     assert!(matches!(results[2], Val::I32(0)));
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn nested_handler_scopes(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $outer)
+          (tag $inner)
+
+          (func $throw_outer
+            (throw $outer))
+
+          (func $throw_inner
+            (throw $inner))
+
+          ;; While both handlers are active, the inner tag does not match and
+          ;; lookup continues to the outer handler.
+          (func (export "nested") (result i32)
+            (block $outer_handler
+              (try_table (catch $outer $outer_handler)
+                (block $inner_handler
+                  (try_table (catch $inner $inner_handler)
+                    (call $throw_outer)))))
+            (i32.const 1))
+
+          ;; After the inner try_table ends, its handler is no longer active.
+          ;; The outer catch_all handles the throw instead.
+          (func (export "after") (result i32)
+            (block $stale_inner_handler
+              (block $outer_handler
+                (try_table (catch_all $outer_handler)
+                  (try_table (catch $inner $stale_inner_handler)
+                    (nop))
+                  (call $throw_inner)))
+              (return (i32.const 1)))
+            (i32.const 2)))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let nested = instance.get_typed_func::<(), i32>(&mut store, "nested")?;
+    let after = instance.get_typed_func::<(), i32>(&mut store, "after")?;
+    assert_eq!(nested.call(&mut store, ())?, 1);
+    assert_eq!(after.call(&mut store, ())?, 1);
 
     Ok(())
 }
@@ -193,10 +383,50 @@ fn funcref_exception_payload_escape_to_host(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[wasmtime_test(collectors(All), wasm_features(exceptions, reference_types))]
+#[cfg_attr(miri, ignore)]
+fn caught_funcref_payload(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param funcref i32))
+
+          (func $throw (param funcref)
+            (throw $e (local.get 0) (i32.const 42)))
+
+          (func (export "catch") (param funcref) (result funcref i32)
+            (block $handler (result funcref i32)
+              (try_table (result funcref i32) (catch $e $handler)
+                (call $throw (local.get 0))
+                (ref.null func)
+                (i32.const 0)))))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let catch = instance.get_func(&mut store, "catch").unwrap();
+    let expected = Func::wrap(&mut store, || 126_i32);
+    let mut results = [Val::null_func_ref(), Val::I32(0)];
+    catch.call(&mut store, &[Val::FuncRef(Some(expected))], &mut results)?;
+
+    let actual = results[0].unwrap_funcref().unwrap();
+    let actual = actual.typed::<(), i32>(&store)?;
+    assert_eq!(actual.call(&mut store, ())?, 126);
+    assert_eq!(results[1].unwrap_i32(), 42);
+
+    Ok(())
+}
+
+#[wasmtime_test(
+    collectors(Copying, DeferredReferenceCounting),
+    wasm_features(exceptions, reference_types)
+)]
 #[cfg_attr(miri, ignore)]
 fn thrown_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -234,10 +464,55 @@ fn thrown_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+#[wasmtime_test(collectors(All), wasm_features(exceptions, reference_types))]
+#[cfg_attr(miri, ignore)]
+fn caught_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param externref i32))
+
+          (func $throw (param externref)
+            (throw $e (local.get 0) (i32.const 42)))
+
+          (func (export "catch") (param externref) (result externref i32)
+            (block $handler (result externref i32)
+              (try_table (result externref i32) (catch $e $handler)
+                (call $throw (local.get 0))
+                (ref.null extern)
+                (i32.const 0)))))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let catch = instance
+        .get_typed_func::<Option<Rooted<ExternRef>>, (Option<Rooted<ExternRef>>, i32)>(
+            &mut store, "catch",
+        )?;
+    let dropped = Arc::new(AtomicBool::new(false));
+
+    let caught = {
+        let mut scope = RootScope::new(&mut store);
+        let payload = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
+        let (caught, value) = catch.call(&mut scope, Some(payload))?;
+        assert_eq!(value, 42);
+        caught.unwrap().to_owned_rooted(&mut scope)?
+    };
+
+    store.gc(None)?;
+    assert!(!dropped.load(Relaxed));
+    assert!(caught.data(&store)?.is_some());
+
+    Ok(())
+}
+
+#[wasmtime_test(collectors(Null), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn throw_with_null_collector(config: &mut Config) -> Result<()> {
-    config.collector(Collector::Null);
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
@@ -261,8 +536,7 @@ fn throw_with_null_collector(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// Winch does not implement catches yet. Re-enable after catch is implemented.
-#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
+#[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn exception_from_host(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -402,8 +676,7 @@ fn thrown_exception_without_throwing(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// Winch does not implement catches yet. Re-enable after catch is implemented.
-#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
+#[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
@@ -429,11 +702,9 @@ fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-// Winch does not implement catches yet. Re-enable after catch is implemented.
-#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions))]
+#[wasmtime_test(collectors(DeferredReferenceCounting), wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -485,12 +756,10 @@ fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
     Ok(())
 }
 
-// Winch does not implement catches yet. Re-enable after catch is implemented.
-#[wasmtime_test(strategies(not(Winch)), wasm_features(exceptions, reference_types))]
+#[wasmtime_test(collectors(All), wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());
 
     let module = Module::new(
@@ -504,6 +773,17 @@ fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> 
           (func (export "run") (result i32 (ref exn))
             (block $h (result i32 (ref exn))
               (try_table (result i32) (catch_ref $t1 $h)
+                call $throw_t1
+                unreachable
+              )
+              unreachable
+            )
+            call $gc
+          )
+
+          (func (export "run_all") (result (ref exn))
+            (block $h (result (ref exn))
+              (try_table (catch_all_ref $h)
                 call $throw_t1
                 unreachable
               )
@@ -553,6 +833,76 @@ fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> 
     store.gc(None)?;
 
     assert_eq!(exnref.field(&mut store, 0)?.unwrap_i32(), 0x1111_1111);
+
+    let run_all = instance.get_typed_func::<(), Rooted<ExnRef>>(&mut store, "run_all")?;
+    let exnref = run_all.call(&mut store, ())?;
+
+    store.gc(None)?;
+
+    assert_eq!(exnref.field(&mut store, 0)?.unwrap_i32(), 0x1111_1111);
+    Ok(())
+}
+
+#[wasmtime_test(
+    collectors(DeferredReferenceCounting),
+    wasm_features(exceptions, reference_types)
+)]
+#[cfg_attr(miri, ignore)]
+fn catch_ref_preserves_externref_payload(config: &mut Config) -> wasmtime::Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (import "" "gc" (func $gc))
+          (tag $e (param externref i32))
+
+          (func $throw (param externref)
+            (throw $e (local.get 0) (i32.const 42)))
+
+          (func (export "catch") (param externref) (result externref i32 (ref exn))
+            (block $handler (result externref i32 (ref exn))
+              (try_table (catch_ref $e $handler)
+                (call $throw (local.get 0)))
+              unreachable)
+            call $gc)
+        )
+        "#,
+    )?;
+
+    let gc = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| -> Result<()> {
+        caller.gc(None)?;
+        Ok(())
+    });
+    let instance = Instance::new(&mut store, &module, &[gc.into()])?;
+    let catch = instance
+        .get_typed_func::<
+            Option<Rooted<ExternRef>>,
+            (Option<Rooted<ExternRef>>, i32, Rooted<ExnRef>),
+        >(
+            &mut store, "catch",
+        )?;
+
+    let payload = ExternRef::new(&mut store, 0xDECAFu32)?;
+    let (caught, value, exnref) = catch.call(&mut store, Some(payload))?;
+    assert_eq!(value, 42);
+    let caught = caught.expect("catch_ref should return the payload");
+    let caught_data = caught
+        .data(&store)?
+        .and_then(|data| data.downcast_ref::<u32>().copied());
+    assert_eq!(caught_data, Some(0xDECAF));
+
+    let field = exnref.field(&mut store, 0)?;
+    let field = field
+        .unwrap_externref()
+        .expect("the exception payload should not be null");
+    let field_data = field
+        .data(&store)?
+        .and_then(|data| data.downcast_ref::<u32>().copied());
+    assert_eq!(field_data, Some(0xDECAF));
+    assert_eq!(exnref.field(&mut store, 1)?.unwrap_i32(), 42);
     Ok(())
 }
 
@@ -564,9 +914,8 @@ impl Drop for SetFlagOnDrop {
     }
 }
 
-#[wasmtime_test(wasm_features(exceptions))]
+#[wasmtime_test(collectors(DeferredReferenceCounting), wasm_features(exceptions))]
 fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Result<()> {
-    config.collector(Collector::DeferredReferenceCounting);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -606,23 +955,23 @@ fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Resu
     Ok(())
 }
 
-// Winch does not support exnref values yet. Modules that place an exnref
-// in a value position should fail with a compile error instead of
-// panicking.
-#[wasmtime_test(strategies(only(Winch)), wasm_features(exceptions, reference_types))]
+#[wasmtime_test(wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
-fn exnref_local_is_unsupported(config: &mut Config) -> Result<()> {
+fn exnref_local_defaults_to_null(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
-    let wat = r#"
+    let module = Module::new(
+        &engine,
+        r#"
         (module
-          (func (result i32)
+          (func (export "run") (result i32)
             (local exnref)
-            (i32.const 0)))
-    "#;
-    let err = Module::new(&engine, wat).unwrap_err();
-    assert!(
-        format!("{err:?}").contains("Unsupported Wasm type"),
-        "unexpected error: {err:?}"
-    );
+            local.get 0
+            ref.is_null))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    assert_eq!(run.call(&mut store, ())?, 1);
     Ok(())
 }

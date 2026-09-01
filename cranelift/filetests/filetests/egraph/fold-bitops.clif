@@ -521,9 +521,8 @@ block0(v0: i32, v1: i32):
 
 ; function %test_uge_x_band(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v2 = band v0, v1
-;     v3 = icmp uge v0, v2
-;     return v3
+;     v4 = iconst.i8 1
+;     return v4  ; v4 = 1
 ; }
 
 ;; (x & y) <=_u x --> true
@@ -536,9 +535,8 @@ block0(v0: i32, v1: i32):
 
 ; function %test_ule_band_x(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v2 = band v0, v1
-;     v3 = icmp ule v2, v0
-;     return v3
+;     v4 = iconst.i8 1
+;     return v4  ; v4 = 1
 ; }
 
 ;; (x | y) >=_u x --> true
@@ -551,9 +549,8 @@ block0(v0: i32, v1: i32):
 
 ; function %test_uge_bor_x(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v2 = bor v0, v1
-;     v3 = icmp uge v2, v0
-;     return v3
+;     v4 = iconst.i8 1
+;     return v4  ; v4 = 1
 ; }
 
 ;; x <=_u (x | y) --> true
@@ -566,8 +563,166 @@ block0(v0: i32, v1: i32):
 
 ; function %test_ule_x_bor(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v2 = bor v0, v1
-;     v3 = icmp ule v0, v2
-;     return v3
+;     v4 = iconst.i8 1
+;     return v4  ; v4 = 1
 ; }
 
+;; (x & y) >_u x and x <_u (x & y) --> false
+function %test_band_strict_ranges(i32, i32) -> i8, i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = icmp ugt v2, v0
+    v4 = icmp ult v0, v2
+    return v3, v4
+}
+
+; function %test_band_strict_ranges(i32, i32) -> i8, i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 0
+;     return v5, v5  ; v5 = 0, v5 = 0
+; }
+
+;; Unsigned range comparisons for y & x.
+function %test_band_ranges_commuted(i32, i32) -> i8, i8, i8, i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = band v1, v0
+    v3 = icmp uge v0, v2
+    v4 = icmp ule v2, v0
+    v5 = icmp ugt v2, v0
+    v6 = icmp ult v0, v2
+    return v3, v4, v5, v6
+}
+
+; function %test_band_ranges_commuted(i32, i32) -> i8, i8, i8, i8 fast {
+; block0(v0: i32, v1: i32):
+;     v7 = iconst.i8 1
+;     v10 = iconst.i8 0
+;     return v7, v7, v10, v10  ; v7 = 1, v7 = 1, v10 = 0, v10 = 0
+; }
+
+;; (x | y) <_u x and x >_u (x | y) --> false
+function %test_bor_strict_ranges(i32, i32) -> i8, i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = icmp ult v2, v0
+    v4 = icmp ugt v0, v2
+    return v3, v4
+}
+
+; function %test_bor_strict_ranges(i32, i32) -> i8, i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 0
+;     return v5, v5  ; v5 = 0, v5 = 0
+; }
+
+;; Unsigned range comparisons for y | x.
+function %test_bor_ranges_commuted(i32, i32) -> i8, i8, i8, i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v1, v0
+    v3 = icmp uge v2, v0
+    v4 = icmp ule v0, v2
+    v5 = icmp ult v2, v0
+    v6 = icmp ugt v0, v2
+    return v3, v4, v5, v6
+}
+
+; function %test_bor_ranges_commuted(i32, i32) -> i8, i8, i8, i8 fast {
+; block0(v0: i32, v1: i32):
+;     v7 = iconst.i8 1
+;     v10 = iconst.i8 0
+;     return v7, v7, v10, v10  ; v7 = 1, v7 = 1, v10 = 0, v10 = 0
+; }
+
+function %test_band_strict_range_i32x2(i32x2, i32x2) -> i32x2 fast {
+block0(v0: i32x2, v1: i32x2):
+    v2 = band v0, v1
+    v3 = icmp ugt v2, v0
+    return v3
+}
+
+; function %test_band_strict_range_i32x2(i32x2, i32x2) -> i32x2 fast {
+;     const0 = 0x0000000000000000
+;
+; block0(v0: i32x2, v1: i32x2):
+;     v4 = vconst.i32x2 const0
+;     return v4  ; v4 = const0
+; }
+
+function %test_bor_strict_range_i32x4(i32x4, i32x4) -> i32x4 fast {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bor v0, v1
+    v3 = icmp ult v2, v0
+    return v3
+}
+
+; function %test_bor_strict_range_i32x4(i32x4, i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4, v1: i32x4):
+;     v4 = vconst.i32x4 const0
+;     return v4  ; v4 = const0
+; }
+
+;; (x & y) & (x & z) --> (x & y) & z
+function %band_band_common_first(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_band_common_first(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v3 = band v0, v1
+;     v6 = band v3, v2
+;     return v6
+; }
+
+;; (x & y) & (y & z) --> (y & x) & z
+function %band_band_common_second(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_band_common_second(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = band v1, v0
+;     v7 = band v6, v2
+;     return v7
+; }
+
+;; (x & y) & (z & x) --> (x & y) & z
+function %band_band_common_third(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v2, v0
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_band_common_third(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v3 = band v0, v1
+;     v6 = band v3, v2
+;     return v6
+; }
+
+;; (x & y) & (z & y) --> (y & x) & z
+function %band_band_common_fourth(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = band v2, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_band_common_fourth(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = band v1, v0
+;     v7 = band v6, v2
+;     return v7
+; }

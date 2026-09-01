@@ -145,4 +145,4 @@
   (func (export "run") (alias export $lowerer "run"))
 )
 
-(assert_trap (invoke "run") "wasm trap: cannot block a synchronous task before returning")
+(assert_return (invoke "run"))

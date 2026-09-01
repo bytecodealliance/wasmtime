@@ -46,6 +46,24 @@ pub struct Engine {
     inner: Arc<EngineInner>,
 }
 
+// These impls are strictly not necessary but they're currently serving the
+// purpose of the reducing the recursion limit necessary to prove
+// types/futures/etc are `Send` in Wasmtime. This is related to
+// rust-lang/rust#159228.
+//
+// SAFETY: we're re-stating what rustc itself is already going to infer. The
+// `_assert_send_sync` function beneath this is intended to serve as a
+// double-assertion that this actually holds.
+unsafe impl Send for Engine {}
+unsafe impl Sync for Engine {}
+
+fn _assert_send_sync(e: &Engine) {
+    fn _assert<T: Send + Sync>(_: &T) {}
+    let Engine { inner } = e;
+    _assert(e);
+    _assert(inner);
+}
+
 struct EngineInner {
     config: Config,
     features: WasmFeatures,

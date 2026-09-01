@@ -720,9 +720,7 @@ impl ServeCommand {
             // concurrent requests can't be served. Otherwise though spawn a
             // task to handle this client.
             match &mut debuggee_store {
-                Some(store) => {
-                    handle_client(stream, &handler, Some(store)).await;
-                }
+                Some(store) => handle_client(stream, &handler, Some(store)).await,
                 None => {
                     let handler = handler.clone();
                     tokio::task::spawn(async move {

@@ -1583,12 +1583,6 @@ impl<'a> Inliner<'a> {
         let post_return = options.post_return.map(|i| frame.funcs[i].1.clone());
         AdapterOptions {
             instance: frame.instance,
-            ancestors: frames
-                .iter()
-                .rev()
-                .skip(1)
-                .map(|(frame, _)| frame.instance)
-                .collect(),
             string_encoding: options.string_encoding,
             callback,
             post_return,

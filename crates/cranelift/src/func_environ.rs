@@ -39,10 +39,10 @@ use wasmtime_environ::{
     FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
     IndexType, KnownFunc, KnownGlobal, Memory, MemoryIndex, MemoryInit, MemorySegmentOffset,
     MemoryTunables, Module, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder,
-    NUM_COMPONENT_CONTEXT_SLOTS, PassiveElemIndex, PtrSize, RuntimeDataIndex, Table, TableIndex,
-    TableInitialValue, TableSegment, TableSegmentElements, TagIndex, Tunables, TypeConvert,
-    TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType,
-    WasmRefType, WasmResult, WasmStorageType, WasmValType,
+    PassiveElemIndex, RuntimeDataIndex, Table, TableIndex, TableInitialValue, TableSegment,
+    TableSegmentElements, TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets,
+    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -236,7 +236,7 @@ pub struct FuncEnvironment<'module_environment> {
     /// carries no hints.
     branch_hints: Option<Peekable<SectionLimitedIntoIter<'module_environment, BranchHint>>>,
     /// Module-relative byte offset of the current function body's start.
-    func_body_offset: usize,
+    func_body_offset: u64,
 
     /// Cached alias regions for alias analysis.
     pub(crate) alias_regions: AliasRegions<VMOffsets<u8>>,
@@ -250,7 +250,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         wasm_func_ty: &'module_environment WasmFuncType,
         key: FuncKey,
         func_index: Option<FuncIndex>,
-        func_body_offset: usize,
+        func_body_offset: u64,
     ) -> Self {
         let tunables = compiler.tunables();
         let builtin_functions = BuiltinFunctions::new(compiler);
@@ -316,7 +316,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Consume the branch hint for the instruction at module-relative `offset`
     /// (i.e. `builder.srcloc().bits()`), if any. The lazy decoder only moves
     /// forward, making this O(n) over a function body.
-    pub(crate) fn take_branch_hint(&mut self, offset: usize) -> Option<BranchHint> {
+    pub(crate) fn take_branch_hint(&mut self, offset: u64) -> Option<BranchHint> {
         // Fast path: no hints (always so when the proposal is off), and this
         // runs for every `if`/`br_if`.
         let hints = self.branch_hints.as_mut()?;
@@ -454,11 +454,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     .alias_regions
                     .vmcomponent()
                     .may_leave(instance)
-                    .region(func),
-                Some(KnownGlobal::TaskMayBlock) => self
-                    .alias_regions
-                    .vmcomponent()
-                    .task_may_block()
                     .region(func),
                 None => self.alias_regions.public_global_region(func),
             },
@@ -667,7 +662,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmstore_ctx = self.get_vmstore_context_ptr(builder);
         let fuel = self
             .alias_regions
-            .vmstore_context_fuel_consumed(&mut builder.cursor(), vmstore_ctx);
+            .vm_store_context()
+            .fuel_consumed()
+            .load(&mut builder.cursor(), vmstore_ctx);
         builder.def_var(self.fuel_var, fuel);
     }
 
@@ -676,7 +673,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let vmstore_ctx = self.get_vmstore_context_ptr(builder);
         let fuel_consumed = builder.use_var(self.fuel_var);
-        self.alias_regions.store_vmstore_context_fuel_consumed(
+        self.alias_regions.vm_store_context().fuel_consumed().store(
             &mut builder.cursor(),
             vmstore_ctx,
             fuel_consumed,
@@ -859,7 +856,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmstore_ctx = self.get_vmstore_context_ptr(builder);
         let deadline = self
             .alias_regions
-            .vmstore_context_epoch_deadline(&mut builder.cursor(), vmstore_ctx);
+            .vm_store_context()
+            .epoch_deadline()
+            .load(&mut builder.cursor(), vmstore_ctx);
         builder.def_var(self.epoch_deadline_var, deadline);
         self.epoch_check_cached(builder, cur_epoch_value, continuation_block);
 
@@ -1617,12 +1616,13 @@ impl FuncEnvironment<'_> {
                     .vmctx()
                     .memories(def_index)
                     .to_deferred_load(func);
-                let mut base = self.alias_regions.vm_memory_definition().base();
-                base.can_move();
-                if base_readonly {
-                    base.readonly();
-                }
-                let base = base.to_deferred_load(func);
+                let base = self
+                    .alias_regions
+                    .vm_memory_definition()
+                    .base()
+                    .can_move()
+                    .readonly_if(base_readonly)
+                    .to_deferred_load(func);
                 let len = self
                     .alias_regions
                     .vm_memory_definition()
@@ -1639,12 +1639,14 @@ impl FuncEnvironment<'_> {
                 // field's offset.
                 let owned_index = self.module.owned_memory_index(def_index);
                 let vmctx_off = self.offsets.owned_memories().at(owned_index);
-                let mut base = self.alias_regions.vm_memory_definition().base();
-                base.can_move();
-                if base_readonly {
-                    base.readonly();
-                }
-                let base = base.relative_to(vmctx_off).to_deferred_load(func);
+                let base = self
+                    .alias_regions
+                    .vm_memory_definition()
+                    .base()
+                    .can_move()
+                    .readonly_if(base_readonly)
+                    .relative_to(vmctx_off)
+                    .to_deferred_load(func);
                 let len = self
                     .alias_regions
                     .vm_memory_definition()
@@ -1664,12 +1666,13 @@ impl FuncEnvironment<'_> {
                 .from()
                 .relative_to(import_off)
                 .to_deferred_load(func);
-            let mut base = self.alias_regions.vm_memory_definition().base();
-            base.can_move();
-            if base_readonly {
-                base.readonly();
-            }
-            let base = base.to_deferred_load(func);
+            let base = self
+                .alias_regions
+                .vm_memory_definition()
+                .base()
+                .can_move()
+                .readonly_if(base_readonly)
+                .to_deferred_load(func);
             let len = self
                 .alias_regions
                 .vm_memory_definition()
@@ -1717,24 +1720,26 @@ impl FuncEnvironment<'_> {
             // A defined table's `VMTableDefinition` is inlined into the vmctx,
             // reached at an absolute `vmctx` offset.
             let vmctx_off = self.offsets.tables().at(def_index);
-            let mut base = self.alias_regions.vm_table_definition().base();
-            if is_static {
-                base.readonly().can_move();
-            }
             let base = VmctxLoadChain::new(smallvec![
-                base.relative_to(vmctx_off).to_deferred_load(func)
+                self.alias_regions
+                    .vm_table_definition()
+                    .base()
+                    .readonly_if(is_static)
+                    .can_move_if(is_static)
+                    .relative_to(vmctx_off)
+                    .to_deferred_load(func)
             ]);
             let bound = if is_static {
                 TableSize::Static {
                     bound: table.limits.min,
                 }
             } else {
-                let mut current_elements =
-                    self.alias_regions.vm_table_definition().current_elements();
-                current_elements.cast(bound_ty);
                 TableSize::Dynamic {
                     bound: VmctxLoadChain::new(smallvec![
-                        current_elements
+                        self.alias_regions
+                            .vm_table_definition()
+                            .current_elements()
+                            .cast(bound_ty)
                             .relative_to(vmctx_off)
                             .to_deferred_load(func)
                     ]),
@@ -1751,11 +1756,15 @@ impl FuncEnvironment<'_> {
                 .from()
                 .relative_to(import_off)
                 .to_deferred_load(func);
-            let mut base = self.alias_regions.vm_table_definition().base();
-            if is_static {
-                base.readonly().can_move();
-            }
-            let base = VmctxLoadChain::new(smallvec![from, base.to_deferred_load(func)]);
+            let base = VmctxLoadChain::new(smallvec![
+                from,
+                self.alias_regions
+                    .vm_table_definition()
+                    .base()
+                    .readonly_if(is_static)
+                    .can_move_if(is_static)
+                    .to_deferred_load(func),
+            ]);
             let bound = if is_static {
                 TableSize::Static {
                     bound: table.limits.min,
@@ -2063,100 +2072,23 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         abi == wasmtime_environ::Abi::Wasm && !self.tail && !self.env.tunables.debug_guest
     }
 
-    /// Inline lowering of a FACT adapter's `enter-sync-call` intrinsic: push a
-    /// `VMDeferredThread` onto an explicit stack slot and publish it as the
-    /// store's current thread, deferring the heavyweight task bookkeeping the
-    /// `enter_sync_call` libcall would otherwise do eagerly.
+    /// Inline lowering of a FACT adapter's `enter-sync-call` intrinsic, which
+    /// defers the heavyweight task bookkeeping the `enter_sync_call` libcall
+    /// would otherwise do eagerly.
     ///
     /// `real_call_args` is `[callee_vmctx, caller_vmctx, caller_instance,
     /// callee_async, callee_instance]`.
     fn lower_fact_enter_sync_call(&mut self, real_call_args: &[ir::Value]) -> CallRets {
-        let ptr_ty = self.env.pointer_type();
-        let ptr = self.env.offsets.ptr;
-
-        // Allocate the on-stack `VMDeferredThread`.
-        let size = u32::from(ptr.vm_deferred_thread().size());
-        let align_shift = u8::try_from(ptr.size().trailing_zeros()).unwrap();
-        let slot = self
-            .builder
-            .func
-            .create_sized_stack_slot(ir::StackSlotData::new(
-                ir::StackSlotKind::ExplicitSlot,
-                size,
-                align_shift,
-            ));
-        let slot_addr = self.builder.ins().stack_addr(ptr_ty, slot, 0);
-
-        let vmstore = self.env.get_vmstore_context_ptr(self.builder);
-
-        // Link the previous current thread in as this frame's parent.
-        let parent = self
-            .env
-            .alias_regions
-            .vmstore_context_current_thread(&mut self.builder.cursor(), vmstore);
-        self.env.alias_regions.store_vmdeferred_thread_parent(
-            &mut self.builder.cursor(),
-            slot_addr,
-            parent,
-        );
-
-        // Record the deferred `enter_sync_call` arguments.
-        self.env
-            .alias_regions
-            .store_vmdeferred_thread_caller_instance(
-                &mut self.builder.cursor(),
-                slot_addr,
-                real_call_args[2],
-            );
-        self.env.alias_regions.store_vmdeferred_thread_callee_async(
-            &mut self.builder.cursor(),
-            slot_addr,
-            real_call_args[3],
-        );
-        self.env
-            .alias_regions
-            .store_vmdeferred_thread_callee_instance(
-                &mut self.builder.cursor(),
-                slot_addr,
-                real_call_args[4],
-            );
-
-        // Save the caller's context slots into the frame and reset the live
-        // values to 0 for the freshly-entered (deferred) thread.
-        for i in 0..u8::try_from(NUM_COMPONENT_CONTEXT_SLOTS).unwrap() {
-            let saved = self
-                .env
-                .alias_regions
-                .vmstore_context_component_context_slot(
-                    &mut self.builder.cursor(),
-                    ir::types::I32,
-                    vmstore,
-                    i,
-                );
-            self.env
-                .alias_regions
-                .store_vmdeferred_thread_saved_context(
-                    &mut self.builder.cursor(),
-                    slot_addr,
-                    i,
-                    saved,
-                );
-            let zero = self.builder.ins().iconst(ir::types::I32, 0);
-            self.env
-                .alias_regions
-                .store_vmstore_context_component_context_slot(
-                    &mut self.builder.cursor(),
-                    vmstore,
-                    i,
-                    zero,
-                );
-        }
-
-        // Publish the deferred thread as the store's current thread.
-        self.env.alias_regions.store_vmstore_context_current_thread(
-            &mut self.builder.cursor(),
-            vmstore,
-            slot_addr,
+        let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
+        let slot = crate::component_sync_call::enter(
+            self.builder,
+            &mut self.env.alias_regions,
+            vmctx,
+            crate::component_sync_call::EnterArgs {
+                caller_instance: real_call_args[2],
+                callee_async: real_call_args[3],
+                callee_instance: real_call_args[4],
+            },
         );
 
         debug_assert!(self.env.fact_sync_call_slot.is_none());
@@ -2165,72 +2097,26 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     }
 
     /// Inline lowering of a FACT adapter's `exit-sync-call` intrinsic, the
-    /// counterpart to `lower_fact_enter_sync_call`. If our deferred thread is
-    /// still current (nothing forced it) we pop it and restore the caller's
-    /// context inline; otherwise we fall back to the out-of-line
-    /// `exit_sync_call` libcall.
+    /// counterpart to `lower_fact_enter_sync_call`.
     fn lower_fact_exit_sync_call(
         &mut self,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         real_call_args: &[ir::Value],
     ) -> CallRets {
-        let ptr_ty = self.env.pointer_type();
-
         let slot = self
             .env
             .fact_sync_call_slot
             .take()
             .expect("inline exit-sync-call without a matching enter-sync-call");
-        let slot_addr = self.builder.ins().stack_addr(ptr_ty, slot, 0);
-        let vmstore = self.env.get_vmstore_context_ptr(self.builder);
-        let cur = self
-            .env
-            .alias_regions
-            .vmstore_context_current_thread(&mut self.builder.cursor(), vmstore);
-        let is_fast = self.builder.ins().icmp(IntCC::Equal, cur, slot_addr);
-
-        let fast_block = self.builder.create_block();
-        let slow_block = self.builder.create_block();
-        let cont_block = self.builder.create_block();
-        self.builder
-            .ins()
-            .brif(is_fast, fast_block, &[], slow_block, &[]);
-        self.builder.seal_block(fast_block);
-        self.builder.seal_block(slow_block);
-
-        // Fast path: pop the deferred thread and restore the caller's context.
-        self.builder.switch_to_block(fast_block);
-        let parent = self
-            .env
-            .alias_regions
-            .vmdeferred_thread_parent(&mut self.builder.cursor(), slot_addr);
-        self.env.alias_regions.store_vmstore_context_current_thread(
-            &mut self.builder.cursor(),
-            vmstore,
-            parent,
-        );
-        for i in 0..u8::try_from(NUM_COMPONENT_CONTEXT_SLOTS).unwrap() {
-            let saved = self.env.alias_regions.vmdeferred_thread_saved_context(
-                &mut self.builder.cursor(),
-                slot_addr,
-                i,
-            );
-            self.env
-                .alias_regions
-                .store_vmstore_context_component_context_slot(
-                    &mut self.builder.cursor(),
-                    vmstore,
-                    i,
-                    saved,
-                );
-        }
-        self.builder.ins().jump(cont_block, &[]);
-
-        // Slow path: the thread was promoted to a real one, so do the
-        // equivalent out-of-line teardown via the `exit_sync_call` libcall.
-        self.builder.switch_to_block(slow_block);
         let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
+        let slow = crate::component_sync_call::exit(
+            self.builder,
+            &mut self.env.alias_regions,
+            vmctx,
+            slot,
+        );
+
         let import_off = self.env.offsets.imported_functions().at(callee_index);
         let func_addr = self
             .env
@@ -2240,10 +2126,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             .relative_to(import_off)
             .load(&mut self.builder.cursor(), vmctx);
         self.indirect_call_inst(sig_ref, func_addr, real_call_args);
-        self.builder.ins().jump(cont_block, &[]);
 
-        self.builder.seal_block(cont_block);
-        self.builder.switch_to_block(cont_block);
+        slow.finish(self.builder);
         CallRets::new()
     }
 
@@ -2391,18 +2275,20 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         //
         // Note that the callee may be null in which case this load may
         // trap. If so use the `TRAP_INDIRECT_CALL_TO_NULL` trap code.
-        let mut mem_flags = ir::MemFlagsData::trusted().with_readonly();
-        if self.env.clif_memory_traps_enabled() {
-            mem_flags = mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL));
+        let trap_code = if self.env.clif_memory_traps_enabled() {
+            Some(crate::TRAP_INDIRECT_CALL_TO_NULL)
         } else {
             self.env
                 .trapz(self.builder, funcref_ptr, crate::TRAP_INDIRECT_CALL_TO_NULL);
-        }
-        let callee_sig_id = self.env.alias_regions.vmfuncref_type_index(
-            &mut self.builder.cursor(),
-            mem_flags,
-            funcref_ptr,
-        );
+            None
+        };
+        let callee_sig_id = self
+            .env
+            .alias_regions
+            .vm_func_ref()
+            .type_index()
+            .trap_code(trap_code)
+            .load(&mut self.builder.cursor(), funcref_ptr);
 
         // Check that they match: in the case of Wasm GC, this means doing a
         // full subtype check. Otherwise, we do a simple equality check.
@@ -2460,24 +2346,27 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // optional trap code provided by the caller of `unchecked_call` which
         // will handle the case where this is either already known to be
         // non-null or may trap.
-        let mem_flags = ir::MemFlagsData::trusted().with_readonly();
-        let mut callee_flags = mem_flags;
-        if self.env.clif_memory_traps_enabled() {
-            callee_flags = callee_flags.with_trap_code(callee_load_trap_code);
+        let callee_load_trap_code = if self.env.clif_memory_traps_enabled() {
+            callee_load_trap_code
         } else {
             if let Some(trap) = callee_load_trap_code {
                 self.env.trapz(self.builder, callee, trap);
             }
-        }
-        let func_addr = self.env.alias_regions.vmfuncref_wasm_call(
-            &mut self.builder.cursor(),
-            callee_flags,
-            callee,
-        );
-        let callee_vmctx =
-            self.env
-                .alias_regions
-                .vmfuncref_vmctx(&mut self.builder.cursor(), mem_flags, callee);
+            None
+        };
+        let func_addr = self
+            .env
+            .alias_regions
+            .vm_func_ref()
+            .wasm_call()
+            .trap_code(callee_load_trap_code)
+            .load(&mut self.builder.cursor(), callee);
+        let callee_vmctx = self
+            .env
+            .alias_regions
+            .vm_func_ref()
+            .vmctx()
+            .load(&mut self.builder.cursor(), callee);
 
         (func_addr, callee_vmctx)
     }
@@ -2718,7 +2607,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_grow_per_element;
-        self.pre_translate_bulk_op(builder, delta, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, delta, cost);
 
         let mut pos = builder.cursor();
         let table = self.table(table_index);
@@ -2749,12 +2638,10 @@ impl FuncEnvironment<'_> {
         // Conditionally call that on growth success, and otherwise fall through
         // to continue to yield -1 for this growth operation.
         let current_block = builder.current_block().unwrap();
-        let failed_block = builder.create_block();
         let fill_block = builder.create_block();
         let done_block = builder.create_block();
 
-        builder.insert_block_after(failed_block, current_block);
-        builder.insert_block_after(fill_block, failed_block);
+        builder.insert_block_after(fill_block, current_block);
         builder.insert_block_after(done_block, fill_block);
 
         // Commit the operator's flat cost before branching so translating the
@@ -2764,14 +2651,7 @@ impl FuncEnvironment<'_> {
         }
         let failure = builder.ins().iconst(index_type_to_ir_type(index_type), -1);
         let failed = builder.ins().icmp(IntCC::Equal, result_idx, failure);
-        builder
-            .ins()
-            .brif(failed, failed_block, &[], fill_block, &[]);
-
-        // A failed attempt performs no initialization loop, but still charge
-        // for the requested growth so repeated failures are not free.
-        builder.switch_to_block(failed_block);
-        builder.ins().jump(done_block, &[]);
+        builder.ins().brif(failed, done_block, &[], fill_block, &[]);
 
         builder.switch_to_block(fill_block);
         self.translate_entity_fill(
@@ -2784,11 +2664,12 @@ impl FuncEnvironment<'_> {
             init_value,
             delta,
         )?;
+        self.post_translate_bulk_op(builder, fuel)?;
+
         builder.ins().jump(done_block, &[]);
 
         builder.switch_to_block(done_block);
 
-        builder.seal_block(failed_block);
         builder.seal_block(fill_block);
         builder.seal_block(done_block);
 
@@ -2936,7 +2817,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_fill_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_fill(
             builder,
             CheckedEntity::Table {
@@ -2946,7 +2827,8 @@ impl FuncEnvironment<'_> {
             dst,
             val,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_ref_i31(
@@ -3174,7 +3056,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .array_copy_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Array {
@@ -3190,7 +3072,8 @@ impl FuncEnvironment<'_> {
             dst_index,
             src_index,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_array_fill(
@@ -3208,7 +3091,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .array_fill_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_fill(
             builder,
             CheckedEntity::Array {
@@ -3219,7 +3102,8 @@ impl FuncEnvironment<'_> {
             index,
             value,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_array_init_data(
@@ -3239,7 +3123,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .array_init_data_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Array {
@@ -3254,7 +3138,8 @@ impl FuncEnvironment<'_> {
             dst_index,
             data_offset,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_array_init_elem(
@@ -3273,7 +3158,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .array_init_elem_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Array {
@@ -3285,7 +3170,8 @@ impl FuncEnvironment<'_> {
             dst_index,
             elem_offset,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_array_len(
@@ -3674,7 +3560,7 @@ impl FuncEnvironment<'_> {
 
         let index_type = self.memory(index).idx_type;
         let cost = self.tunables.operator_cost.variable().memory_grow_per_page;
-        self.pre_translate_bulk_op(builder, val, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, val, cost);
         let mut pos = builder.cursor();
         let val = self.cast_index_to_i64(&mut pos, val, index_type);
         let call_inst = pos
@@ -3686,12 +3572,42 @@ impl FuncEnvironment<'_> {
             0 => true,
             _ => unreachable!("only page sizes 2**0 and 2**16 are currently valid"),
         };
-        Ok(self.convert_pointer_to_index_type(
+        let grow_result = self.convert_pointer_to_index_type(
             builder.cursor(),
             result,
             index_type,
             single_byte_pages,
-        ))
+        );
+
+        // Consume fuel and do a fuel/epoch check only when the grow actually
+        // succeeded.
+        if fuel.is_some() {
+            let current_block = builder.current_block().unwrap();
+            let success_block = builder.create_block();
+            let done_block = builder.create_block();
+            builder.insert_block_after(success_block, current_block);
+            builder.insert_block_after(done_block, success_block);
+
+            // Flush outstanding fuel before branching.
+            if self.tunables.consume_fuel {
+                self.fuel_increment_var(builder);
+            }
+            let failure = builder.ins().iconst(index_type_to_ir_type(index_type), -1);
+            let failed = builder.ins().icmp(IntCC::Equal, grow_result, failure);
+            builder
+                .ins()
+                .brif(failed, done_block, &[], success_block, &[]);
+
+            builder.switch_to_block(success_block);
+            self.post_translate_bulk_op(builder, fuel)?;
+            builder.ins().jump(done_block, &[]);
+
+            builder.switch_to_block(done_block);
+            builder.seal_block(success_block);
+            builder.seal_block(done_block);
+        }
+
+        Ok(grow_result)
     }
 
     /// Loads the size, in bytes, of the memory `index` specified.
@@ -3779,8 +3695,9 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) -> WasmResult<()> {
         let cost = self.tunables.operator_cost.variable().memory_copy_per_byte;
-        self.pre_translate_bulk_op(builder, len, cost)?;
-        self.translate_entity_copy(builder, dst_index, src_index, dst, src, len)
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
+        self.translate_entity_copy(builder, dst_index, src_index, dst, src, len)?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     /// Perform a raw bulk-memory-like libcall.
@@ -4107,8 +4024,9 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) -> WasmResult<()> {
         let cost = self.tunables.operator_cost.variable().memory_fill_per_byte;
-        self.pre_translate_bulk_op(builder, len, cost)?;
-        self.translate_entity_fill(builder, memory_index, dst, val, len)
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
+        self.translate_entity_fill(builder, memory_index, dst, val, len)?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_memory_init(
@@ -4122,7 +4040,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let seg_index = DataIndex::from_u32(seg_index);
         let cost = self.tunables.operator_cost.variable().memory_init_per_byte;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             memory_index,
@@ -4133,7 +4051,8 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_data_drop(&mut self, mut pos: FuncCursor, seg_index: u32) -> WasmResult<()> {
@@ -4480,7 +4399,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_copy_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Table {
@@ -4494,7 +4413,8 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     /// Emits a copy between two WebAssembly table or array entities.
@@ -5051,7 +4971,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_init_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(
             builder,
             CheckedEntity::Table {
@@ -5062,7 +4982,8 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     pub fn translate_elem_drop(&mut self, mut pos: FuncCursor, elem_index: u32) -> WasmResult<()> {
@@ -5127,41 +5048,102 @@ impl FuncEnvironment<'_> {
 
     /// Translation prefix before bulk operations such as `memory.copy`.
     ///
-    /// Takes a dynamic value `units` for the size of the operation as well as
-    /// a `cost_per_unit` configured for this operation. If fuel is enabled
-    /// this fuel will be consumed, and if epochs are enabled then an epoch
-    /// check happens. If neither epochs nor fuel are enabled this is a noop.
+    /// Takes a dynamic value `units` for the size of the operation as well as a
+    /// `cost_per_unit` configured for this operation.
+    ///
+    /// If fuel or epochs are enabled, a return value of `Some` indicates that a
+    /// fuel/epoch check should be performed if the operation succeeded.  If
+    /// fuel is enabled, the return value also indicates how much fuel should be
+    /// consumed if the operation succeeds. The return value should be used by
+    /// `post_translate_bulk_op` to consume the fuel _after_ the operation has
+    /// succeeded to prevent turning OOB traps or grow failures into out-of-fuel
+    /// traps.
+    ///
+    /// For constant small operations the fuel is consumed here (if needed), and
+    /// the returned value is `None`.
+    ///
+    /// If neither fuel nor epochs are enabled this is a noop.
     fn pre_translate_bulk_op(
         &mut self,
         builder: &mut FunctionBuilder,
         units: ir::Value,
         cost_per_unit: u8,
-    ) -> WasmResult<()> {
+    ) -> Option<DeferredBulkOp> {
         let const_units =
             Self::value_as_const_int(builder, units).map(|c| i64::try_from(c).unwrap_or(i64::MAX));
 
-        if self.tunables.consume_fuel && cost_per_unit > 0 {
-            match const_units {
-                // Fold constant costs directly into internal state.
-                Some(units) => {
+        // Skip explicit fuel/epoch checks for operations which are
+        // subjectively, and statically, considered cheap and consume the fuel
+        // now instead of waiting to see if the operation succeeds.
+        const SMALL_BULK_OP_COST: i64 = 128;
+        if let Some(units) = const_units
+            && let Some(cost) = units.checked_mul(i64::from(cost_per_unit))
+            && cost <= SMALL_BULK_OP_COST
+        {
+            if self.tunables.consume_fuel && cost_per_unit > 0 {
+                self.fuel_consumed = self.fuel_consumed.saturating_add(cost);
+            }
+            return None;
+        }
+
+        if (self.tunables.consume_fuel || self.tunables.epoch_interruption) && cost_per_unit > 0 {
+            Some(DeferredBulkOp {
+                units: match const_units {
+                    Some(const_units) => DeferredBulkUnits::Const(const_units),
+                    None => DeferredBulkUnits::Runtime(units),
+                },
+                cost_per_unit,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Emitted after a bulk operation has completed successfully.
+    ///
+    /// First consumes the size-proportional fuel deferred by
+    /// [`Self::pre_translate_bulk_op`] and then performs the fuel/epoch check
+    /// that was likewise deferred from before the operation, retroactively
+    /// discovering whether the operation exhausted the fuel budget.
+    ///
+    /// Note: the fuel charge is emitted as runtime code if the units are
+    /// dynamic, but for constant units only `self.fuel_consumed` is updated.
+    /// The trailing fuel/epoch check flushes `self.fuel_consumed` before it
+    /// runs, so on return `self.fuel_consumed` is zero.
+    fn post_translate_bulk_op(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        deferred: Option<DeferredBulkOp>,
+    ) -> WasmResult<()> {
+        // Charge the deferred size-proportional fuel now that the operation is
+        // known to have succeeded.
+        let Some(DeferredBulkOp {
+            units,
+            cost_per_unit,
+        }) = deferred
+        else {
+            return Ok(());
+        };
+        debug_assert!(
+            (self.tunables.consume_fuel || self.tunables.epoch_interruption) && cost_per_unit > 0
+        );
+        if self.tunables.consume_fuel {
+            match units {
+                DeferredBulkUnits::Const(units) => {
                     self.fuel_consumed = self
                         .fuel_consumed
                         .saturating_add(units.saturating_mul(i64::from(cost_per_unit)))
                 }
-
-                None => {
-                    // Note that fuel is always a 64-bit counter.
-                    //
-                    // Also note that the cost is clamped to `i64::MAX` to
-                    // prevent fuel counter overflows since `cost` is otherwise
-                    // an untrusted value.
-                    let units_clamped64 = match builder.func.dfg.value_type(units) {
+                DeferredBulkUnits::Runtime(units) => {
+                    self.fuel_increment_var(builder);
+                    let fuel_var = builder.use_var(self.fuel_var);
+                    let variable = match builder.func.dfg.value_type(units) {
                         ir::types::I32 => {
                             let units64 = builder.ins().uextend(ir::types::I64, units);
                             builder.ins().imul_imm_u(units64, i64::from(cost_per_unit))
                         }
                         ir::types::I64 => {
-                            let fuel = builder.ins().imul_imm_u(units, i64::from(cost_per_unit));
+                            let product = builder.ins().imul_imm_u(units, i64::from(cost_per_unit));
                             let max = builder.ins().iconst(ir::types::I64, i64::MAX);
                             let max_units = builder
                                 .ins()
@@ -5170,34 +5152,25 @@ impl FuncEnvironment<'_> {
                                 builder
                                     .ins()
                                     .icmp(IntCC::UnsignedGreaterThan, units, max_units);
-                            builder.ins().select(saturate, max, fuel)
+                            builder.ins().select(saturate, max, product)
                         }
                         _ => unreachable!(),
                     };
-                    self.fuel_increment_var(builder);
-                    let fuel = builder.use_var(self.fuel_var);
-                    let fuel = builder.ins().iadd(fuel, units_clamped64);
-                    builder.def_var(self.fuel_var, fuel);
+                    let updated = builder.ins().iadd(fuel_var, variable);
+                    builder.def_var(self.fuel_var, updated);
                 }
             }
         }
 
-        // Skip explicit fuel/epoch checks for operations which are
-        // subjectively, and statically, considered cheap.
-        const SMALL_BULK_OP_COST: i64 = 128;
-        if let Some(units) = const_units
-            && let Some(cost) = units.checked_mul(i64::from(cost_per_unit))
-            && cost <= SMALL_BULK_OP_COST
-        {
-            return Ok(());
-        }
+        // Perform the fuel/epoch check that was deferred from before the
+        // operation. This isn't a loop header but for fuel/epoch purposes it's
+        // the same thing.
+        self.translate_loop_header(builder);
 
-        // This isn't a loop header but for fuel/epoch purposes it's the same
-        // thing.
-        self.translate_loop_header(builder)
+        Ok(())
     }
 
-    pub fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
+    pub fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) {
         // Additionally if enabled check how much fuel we have remaining to see
         // if we've run out by this point.
         if self.tunables.consume_fuel {
@@ -5209,8 +5182,6 @@ impl FuncEnvironment<'_> {
         if self.tunables.epoch_interruption {
             self.epoch_check(builder);
         }
-
-        Ok(())
     }
 
     pub fn before_translate_operator(
@@ -6084,7 +6055,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_fill_per_element;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_fill(
             builder,
             CheckedEntity::Table {
@@ -6094,7 +6065,8 @@ impl FuncEnvironment<'_> {
             dst,
             val,
             len,
-        )
+        )?;
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     /// Executes initialization for an active element segment in a module.
@@ -6129,7 +6101,7 @@ impl FuncEnvironment<'_> {
             .operator_cost
             .variable()
             .table_init_per_element;
-        self.pre_translate_bulk_op(builder, segment_len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, segment_len, cost);
 
         // Re-use the `table.set` translation for making this a simple function
         // to define. That re-executes the bounds check which is a bit
@@ -6150,7 +6122,7 @@ impl FuncEnvironment<'_> {
                 }
             }
         }
-        Ok(())
+        self.post_translate_bulk_op(builder, fuel)
     }
 
     /// Peform initialization of an active data segment in a module.
@@ -6202,8 +6174,9 @@ impl FuncEnvironment<'_> {
         let len = self.load_runtime_data_length(builder, data);
         let start = builder.ins().iconst(I32, 0);
         let cost = self.tunables.operator_cost.variable().memory_init_per_byte;
-        self.pre_translate_bulk_op(builder, len, cost)?;
+        let fuel = self.pre_translate_bulk_op(builder, len, cost);
         self.translate_entity_copy(builder, memory, data, offset, start, len)?;
+        self.post_translate_bulk_op(builder, fuel)?;
 
         // Finalize control-flow for the `MemorySegmentOffset::Static` case
         // above.
@@ -6221,7 +6194,9 @@ impl FuncEnvironment<'_> {
         // Manuall manage fuel around the call as the `Call` opcode does for
         // normal wasm to ensure that it's correctly accounted for.
         if self.tunables.consume_fuel {
-            self.fuel_consumed += 1;
+            self.fuel_consumed += self.tunables.operator_cost.cost(&Operator::Call {
+                function_index: func.as_u32(),
+            });
             self.fuel_increment_var(builder);
             self.fuel_save_from_var(builder);
         }
@@ -6251,7 +6226,7 @@ impl FuncEnvironment<'_> {
         let mut stack = Vec::new();
         for op in expr.ops() {
             if self.tunables.consume_fuel {
-                self.fuel_consumed += 1;
+                self.fuel_consumed += self.tunables.operator_cost.cost(&op.to_operator());
             }
             match op {
                 ConstOp::I32Const(i) => {
@@ -6351,6 +6326,32 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
         IndexType::I32 => I32,
         IndexType::I64 => I64,
     }
+}
+
+/// Deferred bookkeeping for a "large" bulk operation, produced by
+/// [`FuncEnvironment::pre_translate_bulk_op`] and consumed by
+/// [`FuncEnvironment::post_translate_bulk_op`] once the operation has completed
+/// successfully.
+///
+/// Its presence means a fuel/epoch check must be emitted _after_ the operation
+/// rather than before it. Deferring the check means a bulk op that traps or
+/// fails is not retroactively billed as running out of fuel; instead a
+/// successful op that exhausts the budget is discovered by the check that
+/// immediately follows it. The [`DeferredBulkOpCheck::Fuel`] variant
+/// additionally carries the size-proportional fuel to charge on success.
+#[must_use = "DeferredBulkOpCheck must be passed to post_translate_bulk_op"]
+struct DeferredBulkOp {
+    /// The number of units (bytes/elements/pages) operated on.
+    units: DeferredBulkUnits,
+    /// The per-unit fuel cost.
+    cost_per_unit: u8,
+}
+
+enum DeferredBulkUnits {
+    /// A statically-known unit count, already clamped to `i64`.
+    Const(i64),
+    /// A runtime unit count held in an `ir::Value`.
+    Runtime(ir::Value),
 }
 
 /// Operations to [`FuncEnvironment::raw_bulk_memory_operation`].

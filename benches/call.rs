@@ -45,11 +45,14 @@ impl IsAsync {
     }
 }
 
-fn engines() -> Vec<(Engine, IsAsync)> {
+fn engines(concurrency_support: bool) -> Vec<(Engine, IsAsync)> {
     let mut config = Config::new();
 
     #[cfg(feature = "component-model")]
     config.wasm_component_model(true);
+
+    #[cfg(feature = "component-model-async")]
+    config.concurrency_support(concurrency_support);
 
     let mut pool = PoolingAllocationConfig::default();
     if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
@@ -79,7 +82,7 @@ fn engines() -> Vec<(Engine, IsAsync)> {
 /// Benchmarks the overhead of calling WebAssembly from the host in various
 /// configurations.
 fn host_to_wasm(c: &mut Criterion) {
-    for (engine, is_async) in engines() {
+    for (engine, is_async) in engines(false) {
         let mut store = Store::new(&engine, ());
         let module = Module::new(
             &engine,
@@ -249,7 +252,7 @@ fn wasm_to_host(c: &mut Criterion) {
 
     )"#;
 
-    for (engine, is_async) in engines() {
+    for (engine, is_async) in engines(false) {
         let mut store = Store::new(&engine, ());
         let module = Module::new(&engine, module).unwrap();
 
@@ -548,8 +551,22 @@ mod component {
     tuples!(A B);
     tuples!(A B C);
 
+    fn engines() -> Vec<(String, Engine, IsAsync)> {
+        let mut result: Vec<_> = super::engines(false)
+            .into_iter()
+            .map(|(e, a)| ("no-concurrent".to_string(), e, a))
+            .collect();
+        #[cfg(feature = "component-model-async")]
+        result.extend(
+            super::engines(true)
+                .into_iter()
+                .map(|(e, a)| ("concurrent".to_string(), e, a)),
+        );
+        result
+    }
+
     fn host_to_wasm(c: &mut Criterion) {
-        for (engine, is_async) in engines() {
+        for (concurrent, engine, is_async) in engines() {
             let mut store = Store::new(&engine, ());
 
             let component = Component::new(
@@ -599,12 +616,12 @@ mod component {
             };
 
             // Bench once without any call hooks configured
-            let name = format!("{}/no-hook", is_async.desc());
+            let name = format!("{}/{}/no-hook", concurrent, is_async.desc());
             bench_calls(&mut c.benchmark_group(&name), &mut store);
 
             // Bench again with a "call hook" enabled
             store.call_hook(|_, _| Ok(()));
-            let name = format!("{}/hook-sync", is_async.desc());
+            let name = format!("{}/{}/hook-sync", concurrent, is_async.desc());
             bench_calls(&mut c.benchmark_group(&name), &mut store);
         }
     }
@@ -738,19 +755,19 @@ mod component {
             )
         "#;
 
-        for (engine, is_async) in engines() {
+        for (concurrent, engine, is_async) in engines() {
             let mut store = Store::new(&engine, ());
             let component = component::Component::new(&engine, module).unwrap();
 
             bench_calls(
-                &mut c.benchmark_group(&format!("{}/no-hook", is_async.desc())),
+                &mut c.benchmark_group(&format!("{}/{}/no-hook", concurrent, is_async.desc())),
                 &mut store,
                 &component,
                 is_async,
             );
             store.call_hook(|_, _| Ok(()));
             bench_calls(
-                &mut c.benchmark_group(&format!("{}/hook-sync", is_async.desc())),
+                &mut c.benchmark_group(&format!("{}/{}/hook-sync", concurrent, is_async.desc())),
                 &mut store,
                 &component,
                 is_async,

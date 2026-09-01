@@ -2,10 +2,10 @@
 
 //! # Wasmtime's WASI Implementation
 //!
-//! This crate provides a Wasmtime host implementations of different versions of WASI.
-//! WASI is implemented with the Rust crates [`tokio`] and
-//! [`cap-primitives`](cap_primitives) primarily, meaning that operations are
-//! implemented in terms of their native platform equivalents by default.
+//! This crate provides a Wasmtime host implementations of different versions of
+//! WASI. WASI is implemented with the Rust crate [`tokio`] combined with custom
+//! implementations in this crate, and operations are implemented in terms of
+//! their native platform equivalents by default.
 //!
 //! For components and WASIp2, see [`p2`].
 //! For WASIp1 and core modules, see the [`p1`] module documentation.
@@ -59,7 +59,7 @@ pub use self::view::{WasiCtxView, WasiView};
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 #[doc(no_inline)]
-pub use cap_primitives::fs::SystemTimeSpec;
+pub use public_cap_primitives::fs::SystemTimeSpec;
 #[doc(no_inline)]
 pub use rand::Rng;
 #[doc(no_inline)]

@@ -53,15 +53,15 @@
 ;;     trapnz v51, user6
 ;;     v18 = load.i64 notrap aligned region0 v0+48
 ;;     v3 = iconst.i32 1
-;;     v81 = iconst.i64 36
-;;     v83 = iadd v18, v81  ; v81 = 36
+;;     v74 = iconst.i64 36
+;;     v83 = iadd v18, v74  ; v74 = 36
 ;;     v20 = iconst.i64 4
 ;;     jump block1(v18)
 ;;
 ;; block1(v29: i64):
 ;;     v86 = iconst.i32 1
 ;;     store notrap aligned region2 v86, v29  ; v86 = 1
-;;     v87 = iadd.i64 v18, v81  ; v81 = 36
+;;     v87 = iadd.i64 v18, v74  ; v74 = 36
 ;;     v88 = icmp eq v29, v87
 ;;     v89 = iconst.i64 4
 ;;     v90 = iadd v29, v89  ; v89 = 4

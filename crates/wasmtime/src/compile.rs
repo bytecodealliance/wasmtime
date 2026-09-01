@@ -26,7 +26,7 @@ use crate::Engine;
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::prelude::*;
-use std::{any::Any, borrow::Cow, collections::BTreeMap, mem, ops::Range};
+use std::{any::Any, borrow::Cow, mem, ops::Range};
 use wasmtime_environ::{
     Abi, CompiledFunctionBody, CompiledFunctionsTable, CompiledFunctionsTableBuilder,
     CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos, FinishedObject, FuncKey,
@@ -655,11 +655,10 @@ the use case.
         // compiled.
         compile_required_builtins(engine, types, &mut raw_outputs)?;
 
-        // Bucket the outputs by kind.
-        let mut outputs: BTreeMap<FuncKey, CompileOutput> = BTreeMap::new();
-        for output in raw_outputs {
-            outputs.insert(output.key, output);
-        }
+        // Sort the outputs by their `FuncKey` which enables deterministically
+        // linking this output by function kind.
+        let mut outputs = raw_outputs;
+        outputs.sort_unstable_by_key(|output| output.key);
 
         Ok(UnlinkedCompileOutputs { outputs })
     }
@@ -1045,8 +1044,8 @@ fn compile_required_builtins<'a>(
 
 #[derive(Default)]
 struct UnlinkedCompileOutputs<'a> {
-    // A map from kind to `CompileOutput`.
-    outputs: BTreeMap<FuncKey, CompileOutput<'a>>,
+    // The compile outputs, sorted by `FuncKey`.
+    outputs: Vec<CompileOutput<'a>>,
 }
 
 impl UnlinkedCompileOutputs<'_> {
@@ -1065,14 +1064,16 @@ impl UnlinkedCompileOutputs<'_> {
         // trampolines, are not interspersed between hot Wasm functions, and (b)
         // Wasm functions that are likely to call each other (i.e. are in the
         // same module together) are grouped together.
-        let mut compiled_funcs = vec![];
+        let num_funcs = self.outputs.len();
+        let mut compiled_funcs = Vec::with_capacity(num_funcs);
 
-        let mut indices = FunctionIndices::default();
+        let mut indices = FunctionIndices {
+            start_srclocs: HashMap::with_capacity(num_funcs),
+            indices: HashMap::with_capacity(num_funcs),
+        };
         let mut needs_gc_heap = false;
 
-        // NB: Iteration over this `BTreeMap` ensures that we uphold
-        // `compiled_func`'s sorted property.
-        for output in self.outputs.into_values() {
+        for output in self.outputs {
             needs_gc_heap |= output.function.needs_gc_heap;
 
             let index = compiled_funcs.len();
@@ -1114,7 +1115,7 @@ struct FunctionIndices {
     start_srclocs: HashMap<FuncKey, FilePos>,
 
     // The index of each compiled function in `compiled_funcs`.
-    indices: BTreeMap<FuncKey, usize>,
+    indices: HashMap<FuncKey, usize>,
 }
 
 impl FunctionIndices {
@@ -1162,14 +1163,13 @@ impl FunctionIndices {
         }
 
         let mut table_builder = CompiledFunctionsTableBuilder::new();
-        for (key, compiled_func_index) in &self.indices {
-            let (_, func_loc) = symbol_ids_and_locs[*compiled_func_index];
+        for ((_, key, _), (_, func_loc)) in compiled_funcs.iter().zip(&symbol_ids_and_locs) {
             let src_loc = self
                 .start_srclocs
                 .get(key)
                 .copied()
                 .unwrap_or_else(FilePos::none);
-            table_builder.push_func(*key, func_loc, src_loc);
+            table_builder.push_func(*key, *func_loc, src_loc);
         }
 
         let mut obj = wasmtime_environ::ObjectBuilder::new(obj, tunables);

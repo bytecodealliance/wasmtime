@@ -189,6 +189,7 @@ jobs:
       run-dwarf: ${{ steps.calculate.outputs.run-dwarf }}
       platform-checks: ${{ steps.calculate.outputs.platform-checks }}
       test-gc-zeal: ${{ steps.calculate.outputs.test-gc-zeal }}
+      run-isle-veri: ${{ steps.calculate.outputs.run-isle-veri }}
     steps:
     - uses: actions/checkout@v6
     - id: calculate
@@ -245,6 +246,15 @@ jobs:
           if grep -q gc names.log; then
             echo test-gc-zeal=true >> $GITHUB_OUTPUT
           fi
+          # Run the ISLE verifier for PRs that touch the ISLE toolchain
+          # (cranelift/isle) or any ISLE source file (*.isle); `prtest:full`
+          # is handled by run_full below.
+          if grep -q cranelift/isle names.log; then
+            echo run-isle-veri=true >> $GITHUB_OUTPUT
+          fi
+          if grep -qE '\.isle$' names.log; then
+            echo run-isle-veri=true >> $GITHUB_OUTPUT
+          fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
         echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
@@ -263,6 +273,7 @@ jobs:
             echo preview1-adapter=true >> $GITHUB_OUTPUT
             echo run-dwarf=true >> $GITHUB_OUTPUT
             echo platform-checks=true >> $GITHUB_OUTPUT
+            echo run-isle-veri=true >> $GITHUB_OUTPUT
         fi
 
   # Build all documentation of Wasmtime, including the C API documentation,
@@ -1363,20 +1374,74 @@ jobs:
     - run: ${{ matrix.script }}
       if: ${{ matrix.script }}
 
-  # Check the ISLE verifier builds/runs (without invoking the SMT solver, for now).
-  isle_veri_basic_check:
+  # Run the full ISLE verifier (see cranelift/isle/veri/) incrementally on top
+  # of a shared SMT query cache. Cache misses are solved with cvc5/z3, so this
+  # is fast when the cache is warm and can take a long time when it is cold.
+  #
+  # The cache is a named entry in the actions cache, keyed by a hash of the
+  # ISLE sources and the ISLE toolchain (see `hashFiles` in the cache key).
+  # Caches saved by merge-queue runs are stored in the default branch's
+  # cache scope and are visible to every PR and future merge-queue run, so
+  # each distinct ISLE state gets exactly one immutable entry on `main`, and
+  # no branch ever needs to "update" an existing entry: a new ISLE state is
+  # a new key. PR runs read those entries and, when their ISLE state is new,
+  # save an entry scoped to their own merge ref, so repeated runs of the
+  # same PR verify incrementally on top of their previous run's cache.
+  #
+  # The rebuilt cache is also uploaded as the `isle-veri-cache` run
+  # artifact; the `publish-artifacts.yml` workflow publishes it as the
+  # `isle-veri-cache.tar.gz` asset on the rolling `dev` release so local
+  # users can download it with `cranelift/isle/veri/setup/download-cache.sh`.
+  # That asset is a convenience snapshot for humans; CI itself only uses the
+  # named cache above.
+  isle_veri_full_check:
     needs: determine
-    if: needs.determine.outputs.run-full
-    name: ISLE verifier basic check
+    if: needs.determine.outputs.run-isle-veri
+    name: ISLE verifier full check
     runs-on: ubuntu-latest
+    # Runs can be cold and take a long time; most will not take this long.
+    timeout-minutes: 360
     steps:
     - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-fast.args --skip-solver
-    - run: cargo run -p cranelift-isle-veri --bin veri -- --name x64 --rule iadd_base_case_32_or_64_lea --skip-solver
-    - run: cargo run -p cranelift-isle-veri --bin veri -- --name opt --only-root simplify --default-excludes --skip-solver
+    - uses: ./.github/actions/apt-get-install
+      with:
+        packages: wget unzip
+    - name: Install SMT solvers (cvc5, z3)
+      run: |
+        solver_dir="$HOME/.cache/smt-solvers"
+        mkdir -p "${solver_dir}/bin"
+        ./cranelift/isle/veri/setup/install-cvc5.sh -i "${solver_dir}"
+        ./cranelift/isle/veri/setup/install-z3.sh -b "${solver_dir}/bin"
+    - name: Add solvers to PATH
+      run: echo "$HOME/.cache/smt-solvers/bin" >> "${GITHUB_PATH}"
+    - name: Restore and save verifier cache
+      uses: actions/cache@v5
+      with:
+        path: cranelift/isle/veri/cache
+        # Bump `v1` if the cache format changes. `hashFiles` covers the ISLE
+        # sources and the ISLE toolchain itself by hashing the paths and
+        # contents of all matching files.
+        key: isle-veri-cache-v1-${{ hashFiles('cranelift/isle/**/*.rs', 'cranelift/codegen/**/*.isle') }}
+        restore-keys: |
+          isle-veri-cache-v1-
+    - name: Verify and rebuild cache
+      env:
+        # Per-SMT-query timeout, in seconds (see the `--timeout` option in
+        # cranelift/isle/veri/veri/src/bin/veri.rs).
+        ISLE_VERI_TIMEOUT: "90"
+      run: |
+        mkdir -p cranelift/isle/veri/cache
+        ./cranelift/isle/veri/verify.sh rebuild-cache aarch64 opt x64-iadd-base-case
+    - name: Package rebuilt cache
+      run: tar czf isle-veri-cache.tar.gz -C cranelift/isle/veri cache
+    - name: Upload cache tarball as run artifact
+      uses: actions/upload-artifact@v6
+      with:
+        name: isle-veri-cache
+        path: isle-veri-cache.tar.gz
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
@@ -1467,7 +1532,7 @@ jobs:
       - test_capi
       - test_debug_dwarf
       - test_fuzzing
-      # - test_wasi_nn
+      - test_wasi_nn
       - test_nightly
       - build
       - rustfmt
@@ -1487,7 +1552,7 @@ jobs:
       - verify-publish
       - determine
       - miri
-      - isle_veri_basic_check
+      - isle_veri_full_check
       - build-preview1-component-adapter
       - build-preview1-component-adapter-provider
       - test-min-platform-example

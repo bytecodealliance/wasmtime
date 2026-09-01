@@ -646,6 +646,16 @@ fn enc_cas(size: u32, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
         | machreg_to_gpr(rt)
 }
 
+fn enc_casp(rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
+    debug_assert_eq!(machreg_to_gpr(rs.to_reg()) & 1, 0);
+    debug_assert_eq!(machreg_to_gpr(rt) & 1, 0);
+
+    0b0_1_0010000_1_1_00000_1_11111_00000_00000
+        | machreg_to_gpr(rs.to_reg()) << 16
+        | machreg_to_gpr(rn) << 5
+        | machreg_to_gpr(rt)
+}
+
 fn enc_asimd_mod_imm(rd: Writable<Reg>, q_op: u32, cmode: u32, imm: u8) -> u32 {
     let abc = (imm >> 5) as u32;
     let defgh = (imm & 0b11111) as u32;
@@ -1665,6 +1675,30 @@ impl MachInstEmit for Inst {
                 }
 
                 sink.put4(enc_cas(size, rd, rt, rn));
+            }
+            Inst::AtomicCAS128 { args } => {
+                let &AtomicCAS128Args {
+                    rd_lo,
+                    rd_hi,
+                    rs_lo,
+                    rs_hi,
+                    rt_lo,
+                    rt_hi,
+                    rn,
+                    flags,
+                } = &**args;
+                debug_assert_eq!(rd_lo.to_reg(), rs_lo);
+                debug_assert_eq!(rd_hi.to_reg(), rs_hi);
+
+                // These should be pinned to pairs that `casp` requires.
+                debug_assert_eq!(rs_hi, xreg(machreg_to_gpr(rs_lo) as u8 + 1));
+                debug_assert_eq!(rt_hi, xreg(machreg_to_gpr(rt_lo) as u8 + 1));
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                sink.put4(enc_casp(rd_lo, rt_lo, rn));
             }
             &Inst::AtomicCASLoop { ty, flags, .. } => {
                 /* Emit this:

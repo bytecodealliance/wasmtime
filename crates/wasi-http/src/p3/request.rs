@@ -89,7 +89,7 @@ impl Request {
         req: http::Request<T>,
     ) -> (
         Self,
-        impl Future<Output = Result<(), Error>> + Send + 'static,
+        impl Future<Output = Result<(), Error>> + Send + 'static + use<T>,
     )
     where
         T: http_body::Body<Data = Bytes> + Send + 'static,

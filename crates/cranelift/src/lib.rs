@@ -41,6 +41,7 @@ mod alias_region;
 mod bounds_checks;
 mod builder;
 mod compiler;
+mod component_sync_call;
 mod debug;
 mod func_environ;
 mod translate;
