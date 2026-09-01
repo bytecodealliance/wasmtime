@@ -1,0 +1,186 @@
+test compile precise-output
+set opt_level=speed
+target aarch64
+
+function %umul_flags_trapz(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = umul_overflow v0, v1
+  trapz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   madd x5, x0, x1, xzr
+;   umulh x7, x0, x1
+;   subs xzr, x7, #0
+;   b.eq #trap=user1
+;   add x0, x5, x2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mul x5, x0, x1
+;   umulh x7, x0, x1
+;   cmp x7, #0
+;   b.eq #0x18
+;   add x0, x5, x2
+;   ret
+;   udf #0xc11f ; trap: user1
+
+function %umul_flags_trapz_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v3, v4 = umul_overflow v0, v1
+  trapz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   umaddl x5, w0, w1, xzr
+;   subs xzr, x5, x5, UXTW
+;   b.eq #trap=user1
+;   add w0, w5, w2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umull x5, w0, w1
+;   cmp x5, w5, uxtw
+;   b.eq #0x14
+;   add w0, w5, w2
+;   ret
+;   udf #0xc11f ; trap: user1
+
+function %smul_flags_trapnz(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = smul_overflow v0, v1
+  trapnz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   madd x5, x0, x1, xzr
+;   smulh x7, x0, x1
+;   subs xzr, x7, x5, ASR 63
+;   b.ne #trap=user1
+;   add x0, x5, x2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mul x5, x0, x1
+;   smulh x7, x0, x1
+;   cmp x7, x5, asr #63
+;   b.ne #0x18
+;   add x0, x5, x2
+;   ret
+;   udf #0xc11f ; trap: user1
+
+function %smul_flags_select(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = smul_overflow v0, v1
+  v5 = select v4, v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   madd x4, x0, x1, xzr
+;   smulh x6, x0, x1
+;   subs xzr, x6, x4, ASR 63
+;   csel x0, x4, x2, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mul x4, x0, x1
+;   smulh x6, x0, x1
+;   cmp x6, x4, asr #63
+;   csel x0, x4, x2, ne
+;   ret
+
+function %umul_flags_select_spectre_guard(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = umul_overflow v0, v1
+  v5 = select_spectre_guard v4, v3, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   madd x4, x0, x1, xzr
+;   umulh x6, x0, x1
+;   subs xzr, x6, #0
+;   csel x0, x4, x2, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mul x4, x0, x1
+;   umulh x6, x0, x1
+;   cmp x6, #0
+;   csel x0, x4, x2, ne
+;   ret
+
+function %umul_flags_brif(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v4, v5 = umul_overflow v0, v1
+  brif v5, block1, block2
+
+block1:
+  v6 = iadd v4, v4
+  return v6
+
+block2:
+  return v2
+}
+
+; VCode:
+; block0:
+;   umaddl x5, w0, w1, xzr
+;   subs xzr, x5, x5, UXTW
+;   b.ne label2 ; b label1
+; block1:
+;   mov x0, x2
+;   ret
+; block2:
+;   add w0, w5, w5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   umull x5, w0, w1
+;   cmp x5, w5, uxtw
+;   b.ne #0x14
+; block1: ; offset 0xc
+;   mov x0, x2
+;   ret
+; block2: ; offset 0x14
+;   add w0, w5, w5
+;   ret
+
+function %smul_flags_unused_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2, v3 = smul_overflow v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   sxth w3, w0
+;   sxth w5, w1
+;   madd w0, w3, w5, wzr
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sxth w3, w0
+;   sxth w5, w1
+;   mul w0, w3, w5
+;   ret
+

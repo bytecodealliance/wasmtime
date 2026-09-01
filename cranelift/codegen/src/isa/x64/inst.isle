@@ -3886,6 +3886,46 @@
          (produces_flags_opportunistic_def producer sum_value)
          (CC.B))))
 
+;; Using the flags output of `umul_overflow`/`smul_overflow` can produce a
+;; `CC` and give an opportunistic def of the other output. The multiply
+;; itself sets the overflow flag (OF for `imul`; OF==CF for the unsigned
+;; `mul` of narrow types), so no extra compare is needed.
+(rule 4
+      (is_nonzero
+       (second_result umul @ (umul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty)))))
+      (if-let (first_result prod_value) umul)
+      (let ((producer ProducesFlags (x64_mul_lo_with_flags_paired ty false x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer prod_value)
+         (CC.O))))
+
+(rule 5
+      (is_nonzero
+       (second_result umul @ (umul_overflow _ x y @ (value_type $I8))))
+      (if-let (first_result prod_value) umul)
+      (let ((producer ProducesFlags (x64_mul8_with_flags_paired false x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer prod_value)
+         (CC.O))))
+
+(rule 6
+      (is_nonzero
+       (second_result smul @ (smul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty)))))
+      (if-let (first_result prod_value) smul)
+      (let ((producer ProducesFlags (x64_mul_lo_with_flags_paired ty true x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer prod_value)
+         (CC.O))))
+
+(rule 7
+      (is_nonzero
+       (second_result smul @ (smul_overflow _ x y @ (value_type $I8))))
+      (if-let (first_result prod_value) smul)
+      (let ((producer ProducesFlags (x64_mul8_with_flags_paired true x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer prod_value)
+         (CC.O))))
+
 ;; Like `is_nonzero` but with additional specializations for compare
 ;; operators. We break this out from `is_nonzero` because we want to
 ;; avoid unbounded recursion.

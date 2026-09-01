@@ -1,0 +1,215 @@
+test run
+test interpret
+target x86_64
+target aarch64
+
+;; These tests execute the folded lowerings of `umul_overflow`/`smul_overflow`
+;; where the flags output is consumed by a `select` or `brif` instead of being
+;; materialized as a bool.
+
+function %umulof_flags_select_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = umul_overflow v0, v1
+  v4 = iconst.i8 1
+  v5 = iconst.i8 0
+  v6 = select v3, v4, v5
+  return v6
+}
+
+; run: %umulof_flags_select_i64(0, 1) == 0
+; run: %umulof_flags_select_i64(1, 1) == 0
+; run: %umulof_flags_select_i64(-1, -1) == 1
+; run: %umulof_flags_select_i64(-1, 2) == 1
+; run: %umulof_flags_select_i64(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == 1
+; run: %umulof_flags_select_i64(0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == 1
+
+function %umulof_flags_select_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2, v3 = umul_overflow v0, v1
+  v4 = iconst.i8 1
+  v5 = iconst.i8 0
+  v6 = select v3, v4, v5
+  return v6
+}
+
+; run: %umulof_flags_select_i32(0, 1) == 0
+; run: %umulof_flags_select_i32(1, 1) == 0
+; run: %umulof_flags_select_i32(-1, -1) == 1
+; run: %umulof_flags_select_i32(-1, 2) == 1
+; run: %umulof_flags_select_i32(0x7FFFFFFF, 0x7FFFFFFF) == 1
+; run: %umulof_flags_select_i32(0x80000000, 0x7FFFFFFF) == 1
+
+function %umulof_flags_select_i16(i16, i16) -> i8 {
+block0(v0: i16, v1: i16):
+  v2, v3 = umul_overflow v0, v1
+  v4 = iconst.i8 1
+  v5 = iconst.i8 0
+  v6 = select v3, v4, v5
+  return v6
+}
+
+; run: %umulof_flags_select_i16(0, 1) == 0
+; run: %umulof_flags_select_i16(1, 1) == 0
+; run: %umulof_flags_select_i16(-1, -1) == 1
+; run: %umulof_flags_select_i16(-1, 2) == 1
+; run: %umulof_flags_select_i16(0x7FFF, 0x7FFF) == 1
+; run: %umulof_flags_select_i16(0x8000, 0x7FFF) == 1
+
+function %umulof_flags_select_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2, v3 = umul_overflow v0, v1
+  v4 = iconst.i8 1
+  v5 = iconst.i8 0
+  v6 = select v3, v4, v5
+  return v6
+}
+
+; run: %umulof_flags_select_i8(0, 1) == 0
+; run: %umulof_flags_select_i8(1, 1) == 0
+; run: %umulof_flags_select_i8(-1, -1) == 1
+; run: %umulof_flags_select_i8(-1, 2) == 1
+; run: %umulof_flags_select_i8(0x7F, 0x7F) == 1
+; run: %umulof_flags_select_i8(0x80, 0x7F) == 1
+
+function %smulof_flags_select_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = smul_overflow v0, v1
+  v4 = iconst.i8 1
+  v5 = iconst.i8 0
+  v6 = select v3, v4, v5
+  return v6
+}
+
+; run: %smulof_flags_select_i64(0, 1) == 0
+; run: %smulof_flags_select_i64(1, 1) == 0
+; run: %smulof_flags_select_i64(-1, -1) == 0
+; run: %smulof_flags_select_i64(-2, -2) == 0
+; run: %smulof_flags_select_i64(0x7FFFFFFF_FFFFFFFF, 2) == 1
+; run: %smulof_flags_select_i64(0x80000000_00000000, -1) == 1
+; run: %smulof_flags_select_i64(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == 1
+
+function %smulof_flags_select_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2, v3 = smul_overflow v0, v1
+  v4 = iconst.i8 1
+  v5 = iconst.i8 0
+  v6 = select v3, v4, v5
+  return v6
+}
+
+; run: %smulof_flags_select_i32(0, 1) == 0
+; run: %smulof_flags_select_i32(1, 1) == 0
+; run: %smulof_flags_select_i32(-1, -1) == 0
+; run: %smulof_flags_select_i32(-2, -2) == 0
+; run: %smulof_flags_select_i32(0x7FFFFFFF, 2) == 1
+; run: %smulof_flags_select_i32(0x80000000, -1) == 1
+; run: %smulof_flags_select_i32(0x7FFFFFFF, 0x7FFFFFFF) == 1
+
+function %smulof_flags_select_i16(i16, i16) -> i8 {
+block0(v0: i16, v1: i16):
+  v2, v3 = smul_overflow v0, v1
+  v4 = iconst.i8 1
+  v5 = iconst.i8 0
+  v6 = select v3, v4, v5
+  return v6
+}
+
+; run: %smulof_flags_select_i16(0, 1) == 0
+; run: %smulof_flags_select_i16(1, 1) == 0
+; run: %smulof_flags_select_i16(-1, -1) == 0
+; run: %smulof_flags_select_i16(-2, -2) == 0
+; run: %smulof_flags_select_i16(0x7FFF, 2) == 1
+; run: %smulof_flags_select_i16(0x8000, -1) == 1
+; run: %smulof_flags_select_i16(0x7FFF, 0x7FFF) == 1
+
+function %smulof_flags_select_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2, v3 = smul_overflow v0, v1
+  v4 = iconst.i8 1
+  v5 = iconst.i8 0
+  v6 = select v3, v4, v5
+  return v6
+}
+
+; run: %smulof_flags_select_i8(0, 1) == 0
+; run: %smulof_flags_select_i8(1, 1) == 0
+; run: %smulof_flags_select_i8(-1, -1) == 0
+; run: %smulof_flags_select_i8(-2, -2) == 0
+; run: %smulof_flags_select_i8(0x7F, 2) == 1
+; run: %smulof_flags_select_i8(0x80, -1) == 1
+; run: %smulof_flags_select_i8(0x7F, 0x7F) == 1
+
+;; `brif` on the flags output. The `(0x7FFFFFFF..., -1)` cases do not overflow
+;; (result is -0x7FFFFFFF...), but the high half of the 128-bit product is
+;; nonzero, i.e., CF is set while OF is clear; these discriminate the overflow
+;; flag from the carry flag.
+
+function %umulof_flags_brif_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = umul_overflow v0, v1
+  brif v3, block1, block2
+block1:
+  v4 = iconst.i8 1
+  return v4
+block2:
+  v5 = iconst.i8 0
+  return v5
+}
+
+; run: %umulof_flags_brif_i64(0, 1) == 0
+; run: %umulof_flags_brif_i64(-1, -1) == 1
+; run: %umulof_flags_brif_i64(-1, 2) == 1
+; run: %umulof_flags_brif_i64(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == 1
+
+function %umulof_flags_brif_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2, v3 = umul_overflow v0, v1
+  brif v3, block1, block2
+block1:
+  v4 = iconst.i8 1
+  return v4
+block2:
+  v5 = iconst.i8 0
+  return v5
+}
+
+; run: %umulof_flags_brif_i32(0, 1) == 0
+; run: %umulof_flags_brif_i32(-1, -1) == 1
+; run: %umulof_flags_brif_i32(-1, 2) == 1
+; run: %umulof_flags_brif_i32(0x7FFFFFFF, 0x7FFFFFFF) == 1
+
+function %smulof_flags_brif_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = smul_overflow v0, v1
+  brif v3, block1, block2
+block1:
+  v4 = iconst.i8 1
+  return v4
+block2:
+  v5 = iconst.i8 0
+  return v5
+}
+
+; run: %smulof_flags_brif_i64(0, 1) == 0
+; run: %smulof_flags_brif_i64(-1, -1) == 0
+; run: %smulof_flags_brif_i64(0x7FFFFFFF_FFFFFFFF, 2) == 1
+; run: %smulof_flags_brif_i64(0x80000000_00000000, -1) == 1
+; run: %smulof_flags_brif_i64(0x7FFFFFFF_FFFFFFFF, -1) == 0
+
+function %smulof_flags_brif_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2, v3 = smul_overflow v0, v1
+  brif v3, block1, block2
+block1:
+  v4 = iconst.i8 1
+  return v4
+block2:
+  v5 = iconst.i8 0
+  return v5
+}
+
+; run: %smulof_flags_brif_i32(0, 1) == 0
+; run: %smulof_flags_brif_i32(-1, -1) == 0
+; run: %smulof_flags_brif_i32(0x7FFFFFFF, 2) == 1
+; run: %smulof_flags_brif_i32(0x80000000, -1) == 1
+; run: %smulof_flags_brif_i32(0x7FFFFFFF, -1) == 0

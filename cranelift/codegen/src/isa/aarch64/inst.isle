@@ -4957,6 +4957,124 @@
          (produces_flags_opportunistic_def producer sum_value)
          (Cond.Hs))))
 
+;; Use of the flags output of `umul_overflow`/`smul_overflow` can produce a
+;; `Cond` and give an opportunistic def of the other output. The multiply does
+;; not set the condition flags; the overflow is detected by comparing the
+;; product against itself extended from the original type (or, for 64-bit
+;; values, by comparing the high half of the product against zero). Hence the
+;; `ProducesFlagsOpportunisticDef2`/`Def3` chains.
+
+;; madd out, a_uxt, b_uxt
+;; cmp out, out, uxt{b,h}
+(rule 5
+      (is_nonzero
+       (second_result umul @ (umul_overflow (fits_in_16 ty) a b)))
+      (if-let (first_result prod_value) umul)
+      (let ((a_uext Reg (put_in_reg_zext32 a))
+            (b_uext Reg (put_in_reg_zext32 b))
+            (dst WritableReg (temp_writable_reg $I64))
+            (producer ProducesFlags
+                      (produces_flags_opportunistic_def2
+                       (MInst.AluRRRR (ALUOp3.MAdd) (operand_size ty) dst a_uext b_uext (zero_reg))
+                       dst
+                       prod_value
+                       (MInst.AluRRRExtend (ALUOp.SubS) (OperandSize.Size32)
+                                           (writable_zero_reg) dst dst
+                                           (lower_extend_op ty (ArgumentExtension.Uext))))))
+        (CondResult.Cond producer (Cond.Ne))))
+
+;; umaddl out, a, b
+;; cmp out, out, uxtw
+(rule 6
+      (is_nonzero
+       (second_result umul @ (umul_overflow $I32 a b)))
+      (if-let (first_result prod_value) umul)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (producer ProducesFlags
+                      (produces_flags_opportunistic_def2
+                       (MInst.AluRRRR (ALUOp3.UMAddL) (operand_size $I32) dst a b (zero_reg))
+                       dst
+                       prod_value
+                       (MInst.AluRRRExtend (ALUOp.SubS) (OperandSize.Size64)
+                                           (writable_zero_reg) dst dst
+                                           (ExtendOp.UXTW)))))
+        (CondResult.Cond producer (Cond.Ne))))
+
+;; madd out, a, b
+;; umulh tmp, a, b
+;; cmp tmp, #0
+(rule 7
+      (is_nonzero
+       (second_result umul @ (umul_overflow $I64 a b)))
+      (if-let (first_result prod_value) umul)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (tmp WritableReg (temp_writable_reg $I64))
+            (producer ProducesFlags
+                      (produces_flags_opportunistic_def3
+                       (MInst.AluRRRR (ALUOp3.MAdd) (operand_size $I64) dst a b (zero_reg))
+                       dst
+                       prod_value
+                       (MInst.AluRRR (ALUOp.UMulH) (operand_size $I64) tmp a b)
+                       (MInst.AluRRImm12 (ALUOp.SubS) (OperandSize.Size64)
+                                         (writable_zero_reg) tmp (u8_into_imm12 0)))))
+        (CondResult.Cond producer (Cond.Ne))))
+
+;; madd out, a_sxt, b_sxt
+;; cmp out, out, sxt{b,h}
+(rule 8
+      (is_nonzero
+       (second_result smul @ (smul_overflow (fits_in_16 ty) a b)))
+      (if-let (first_result prod_value) smul)
+      (let ((a_sext Reg (put_in_reg_sext32 a))
+            (b_sext Reg (put_in_reg_sext32 b))
+            (dst WritableReg (temp_writable_reg $I64))
+            (producer ProducesFlags
+                      (produces_flags_opportunistic_def2
+                       (MInst.AluRRRR (ALUOp3.MAdd) (operand_size ty) dst a_sext b_sext (zero_reg))
+                       dst
+                       prod_value
+                       (MInst.AluRRRExtend (ALUOp.SubS) (OperandSize.Size32)
+                                           (writable_zero_reg) dst dst
+                                           (lower_extend_op ty (ArgumentExtension.Sext))))))
+        (CondResult.Cond producer (Cond.Ne))))
+
+;; smaddl out, a, b
+;; cmp out, out, sxtw
+(rule 9
+      (is_nonzero
+       (second_result smul @ (smul_overflow $I32 a b)))
+      (if-let (first_result prod_value) smul)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (producer ProducesFlags
+                      (produces_flags_opportunistic_def2
+                       (MInst.AluRRRR (ALUOp3.SMAddL) (operand_size $I32) dst a b (zero_reg))
+                       dst
+                       prod_value
+                       (MInst.AluRRRExtend (ALUOp.SubS) (OperandSize.Size64)
+                                           (writable_zero_reg) dst dst
+                                           (ExtendOp.SXTW)))))
+        (CondResult.Cond producer (Cond.Ne))))
+
+;; madd out, a, b
+;; smulh tmp, a, b
+;; cmp tmp, out, asr #63
+(rule 10
+      (is_nonzero
+       (second_result smul @ (smul_overflow $I64 a b)))
+      (if-let (first_result prod_value) smul)
+      (if-let shift (ashr_from_u64 $I64 63))
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (tmp WritableReg (temp_writable_reg $I64))
+            (producer ProducesFlags
+                      (produces_flags_opportunistic_def3
+                       (MInst.AluRRRR (ALUOp3.MAdd) (operand_size $I64) dst a b (zero_reg))
+                       dst
+                       prod_value
+                       (MInst.AluRRR (ALUOp.SMulH) (operand_size $I64) tmp a b)
+                       (MInst.AluRRRShift (ALUOp.SubS) (OperandSize.Size64)
+                                          (writable_zero_reg) tmp dst shift))))
+        (CondResult.Cond producer (Cond.Ne))))
+
 (attr emit_icmp (veri chain))
 (decl emit_icmp (IntCC Value Value) CondResult)
 
