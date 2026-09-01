@@ -905,6 +905,22 @@ impl Component {
         &self.inner.engine
     }
 
+    /// Is this `Component` the same as another?
+    ///
+    /// Ordinarily, component identity does not matter: a Wasmtime user
+    /// will create or obtain a component from some source and
+    /// instantiate it, and any two `Component` objects created from the
+    /// same source component are interchangeable. However, introspecting
+    /// component identity may be useful when examining Wasm VM state,
+    /// e.g. via debug APIs. It is guaranteed that `Component::same`
+    /// returns true for `Component` objects that reference the same
+    /// underlying component (e.g., one created via a `clone` of the
+    /// other).
+    #[inline]
+    pub fn same(a: &Component, b: &Component) -> bool {
+        Arc::ptr_eq(&a.inner, &b.inner)
+    }
+
     pub(crate) fn realloc_func_ty(&self) -> &Arc<FuncType> {
         &self.inner.realloc_func_type
     }
