@@ -1,10 +1,10 @@
 use crate::p2::SocketError;
 use crate::p2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
+use crate::runtime::poll_now;
 use crate::sockets::ip_name_lookup::resolve_addresses;
-use crate::sockets::{MaybeReady, WasiSocketsCtxView, noop_cx};
+use crate::sockets::{MaybeReady, WasiSocketsCtxView};
 use std::net::IpAddr;
-use std::task::Poll;
 use std::vec;
 use wasmtime::Result;
 use wasmtime::component::Resource;
@@ -42,7 +42,7 @@ impl HostResolveAddressStream for WasiSocketsCtxView<'_> {
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Option<IpAddress>, SocketError> {
         let stream: &mut ResolveAddressStream = self.table.get_mut(&resource)?;
-        let Poll::Ready(result) = stream.0.poll_ready(&mut noop_cx()) else {
+        let Some(result) = poll_now(|cx| stream.0.poll_ready(cx)) else {
             return Err(ErrorCode::WouldBlock.into());
         };
 
