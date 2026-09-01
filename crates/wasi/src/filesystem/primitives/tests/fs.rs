@@ -837,12 +837,9 @@ fn read_link_contents() {
     };
     check!(h::symlink_file(&start, &"foo", &link));
     assert_eq!(
-        check!(super::super::read_link::read_link_contents(
-            &start,
-            Path::new(link)
-        ))
-        .to_str()
-        .unwrap(),
+        check!(super::super::read_link_contents(&start, Path::new(link)))
+            .to_str()
+            .unwrap(),
         "foo"
     );
 }
@@ -858,12 +855,9 @@ fn read_link_contents_absolute() {
     };
     check!(std::os::unix::fs::symlink("/foo", tmpdir.path().join(link)));
     assert_eq!(
-        check!(super::super::read_link::read_link_contents(
-            &start,
-            Path::new(link)
-        ))
-        .to_str()
-        .unwrap(),
+        check!(super::super::read_link_contents(&start, Path::new(link)))
+            .to_str()
+            .unwrap(),
         "/foo"
     );
 }
