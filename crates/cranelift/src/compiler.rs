@@ -81,7 +81,9 @@ impl Default for CompilerContext {
 /// the Wasm to Compiler IR, optimizing it and then translating to assembly.
 pub struct Compiler {
     tunables: Tunables,
-    contexts: Mutex<Vec<CompilerContext>>,
+    // Note that `CompilerContext` is quite large so the `Box` here is intended
+    // to ensure that this can be efficiently removed/added from this list.
+    contexts: Mutex<Vec<Box<CompilerContext>>>,
     isa: OwnedTargetIsa,
     emit_debug_checks: bool,
     linkopts: LinkOptions,
@@ -461,9 +463,9 @@ fn box_dyn_any_compiled_function(f: CompiledFunction) -> Box<dyn Any + Send + Sy
     b
 }
 
-fn box_dyn_any_compiler_context(ctx: Option<CompilerContext>) -> Box<dyn Any + Send + Sync> {
+fn box_dyn_any_compiler_context(ctx: Option<Box<CompilerContext>>) -> Box<dyn Any + Send + Sync> {
     let b = box_dyn_any(ctx);
-    debug_assert!(b.is::<Option<CompilerContext>>());
+    debug_assert!(b.is::<Option<Box<CompilerContext>>>());
     b
 }
 
@@ -712,7 +714,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let funcs = funcs
             .iter()
             .map(|(sym, key, func)| {
-                debug_assert!(!func.is::<Option<CompilerContext>>());
+                debug_assert!(!func.is::<Option<Box<CompilerContext>>>());
                 debug_assert!(func.is::<CompiledFunction>());
                 let func = func.downcast_ref::<CompiledFunction>().unwrap();
                 (sym, *key, func)
@@ -885,7 +887,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let get_func = move |m, f| {
             let (sym, any) = get_func(m, f);
             log::trace!("get_func({m:?}, {f:?}) -> ({sym:?}, {any:#p})");
-            debug_assert!(!any.is::<Option<CompilerContext>>());
+            debug_assert!(!any.is::<Option<Box<CompilerContext>>>());
             debug_assert!(any.is::<CompiledFunction>());
             (
                 sym,
@@ -952,7 +954,7 @@ impl wasmtime_environ::Compiler for Compiler {
         &'a self,
         func: &'a dyn Any,
     ) -> Box<dyn Iterator<Item = FuncKey> + 'a> {
-        debug_assert!(!func.is::<Option<CompilerContext>>());
+        debug_assert!(!func.is::<Option<Box<CompilerContext>>>());
         debug_assert!(func.is::<CompiledFunction>());
         let func = func.downcast_ref::<CompiledFunction>().unwrap();
         Box::new(func.relocations().map(|r| r.reloc_target))
@@ -962,10 +964,10 @@ impl wasmtime_environ::Compiler for Compiler {
 impl InliningCompiler for Compiler {
     fn calls(&self, func_body: &CompiledFunctionBody, calls: &mut IndexSet<FuncKey>) -> Result<()> {
         debug_assert!(!func_body.code.is::<CompiledFunction>());
-        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
+        debug_assert!(func_body.code.is::<Option<Box<CompilerContext>>>());
         let cx = func_body
             .code
-            .downcast_ref::<Option<CompilerContext>>()
+            .downcast_ref::<Option<Box<CompilerContext>>>()
             .unwrap()
             .as_ref()
             .unwrap();
@@ -986,10 +988,10 @@ impl InliningCompiler for Compiler {
 
     fn size(&self, func_body: &CompiledFunctionBody) -> u32 {
         debug_assert!(!func_body.code.is::<CompiledFunction>());
-        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
+        debug_assert!(func_body.code.is::<Option<Box<CompilerContext>>>());
         let cx = func_body
             .code
-            .downcast_ref::<Option<CompilerContext>>()
+            .downcast_ref::<Option<Box<CompilerContext>>>()
             .unwrap()
             .as_ref()
             .unwrap();
@@ -1004,10 +1006,10 @@ impl InliningCompiler for Compiler {
         get_callee: &'a mut dyn FnMut(FuncKey) -> Option<&'a CompiledFunctionBody>,
     ) -> Result<()> {
         debug_assert!(!func_body.code.is::<CompiledFunction>());
-        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
+        debug_assert!(func_body.code.is::<Option<Box<CompilerContext>>>());
         let code = func_body
             .code
-            .downcast_mut::<Option<CompilerContext>>()
+            .downcast_mut::<Option<Box<CompilerContext>>>()
             .unwrap();
         let cx = code.as_mut().unwrap();
 
@@ -1043,10 +1045,10 @@ impl InliningCompiler for Compiler {
                     None => InlineCommand::KeepCall,
                     Some(func_body) => {
                         debug_assert!(!func_body.code.is::<CompiledFunction>());
-                        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
+                        debug_assert!(func_body.code.is::<Option<Box<CompilerContext>>>());
                         let cx = func_body
                             .code
-                            .downcast_ref::<Option<CompilerContext>>()
+                            .downcast_ref::<Option<Box<CompilerContext>>>()
                             .unwrap();
                         InlineCommand::Inline {
                             callee: Cow::Borrowed(&cx.as_ref().unwrap().codegen_context.func),
@@ -1069,10 +1071,10 @@ impl InliningCompiler for Compiler {
     ) -> Result<()> {
         log::trace!("finish compiling {symbol:?}");
         debug_assert!(!func_body.code.is::<CompiledFunction>());
-        debug_assert!(func_body.code.is::<Option<CompilerContext>>());
+        debug_assert!(func_body.code.is::<Option<Box<CompilerContext>>>());
         let cx = func_body
             .code
-            .downcast_mut::<Option<CompilerContext>>()
+            .downcast_mut::<Option<Box<CompilerContext>>>()
             .unwrap()
             .take()
             .unwrap();
@@ -1301,15 +1303,17 @@ impl Compiler {
                     ctx.codegen_context.clear();
                     ctx
                 })
-                .unwrap_or_else(|| CompilerContext {
-                    incremental_cache_ctx: self.cache_store.as_ref().map(|cache_store| {
-                        IncrementalCacheContext {
-                            cache_store: cache_store.clone(),
-                            num_hits: 0,
-                            num_cached: 0,
-                        }
-                    }),
-                    ..Default::default()
+                .unwrap_or_else(|| {
+                    Box::new(CompilerContext {
+                        incremental_cache_ctx: self.cache_store.as_ref().map(|cache_store| {
+                            IncrementalCacheContext {
+                                cache_store: cache_store.clone(),
+                                num_hits: 0,
+                                num_cached: 0,
+                            }
+                        }),
+                        ..Default::default()
+                    })
                 }),
         }
     }
@@ -1622,7 +1626,7 @@ impl Compiler {
 
 struct FunctionCompiler<'a> {
     compiler: &'a Compiler,
-    cx: CompilerContext,
+    cx: Box<CompilerContext>,
 }
 
 impl FunctionCompiler<'_> {
