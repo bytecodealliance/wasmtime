@@ -126,17 +126,17 @@ impl ModuleConfig {
             config.limit_arrays_in_const_exprs = true;
         }
 
-        let mut module = wasm_smith::Module::new(config, input)?;
+        let mut module = wasm_smith::Module::new(config.clone(), input)?;
 
         if let Some(before) = input_before {
             static GEN_CNT: AtomicUsize = AtomicUsize::new(0);
             let used = before.len() - input.len();
             let i = GEN_CNT.fetch_add(1, Relaxed);
             let dna = format!("testcase{i}.dna");
-            let config = format!("testcase{i}.json");
-            log::debug!("writing `{dna}` and `{config}`");
+            let config_file = format!("testcase{i}.json");
+            log::debug!("writing `{dna}` and `{config_file}`");
             std::fs::write(&dna, &before[..used]).unwrap();
-            std::fs::write(&config, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+            std::fs::write(&config_file, serde_json::to_string_pretty(&config).unwrap()).unwrap();
         }
 
         if let Some(default_fuel) = default_fuel {
