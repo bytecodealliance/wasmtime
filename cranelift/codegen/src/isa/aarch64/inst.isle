@@ -4962,7 +4962,9 @@
 ;; not set the condition flags; the overflow is detected by comparing the
 ;; product against itself extended from the original type (or, for 64-bit
 ;; values, by comparing the high half of the product against zero). Hence the
-;; `ProducesFlagsOpportunisticDef2`/`Def3` chains.
+;; `ProducesFlagsOpportunisticDef2` chains for the narrow cases. For 64-bit
+;; multiplies, the low product and overflow flag are lowered independently,
+;; since the lowerings have no overlap/shared computation.
 
 ;; madd out, a_uxt, b_uxt
 ;; cmp out, out, uxt{b,h}
@@ -5000,23 +5002,13 @@
                                            (ExtendOp.UXTW)))))
         (CondResult.Cond producer (Cond.Ne))))
 
-;; madd out, a, b
 ;; umulh tmp, a, b
 ;; cmp tmp, #0
 (rule 7
       (is_nonzero
        (second_result umul @ (umul_overflow $I64 a b)))
-      (if-let (first_result prod_value) umul)
-      (let ((dst WritableReg (temp_writable_reg $I64))
-            (tmp WritableReg (temp_writable_reg $I64))
-            (producer ProducesFlags
-                      (produces_flags_opportunistic_def3
-                       (MInst.AluRRRR (ALUOp3.MAdd) (operand_size $I64) dst a b (zero_reg))
-                       dst
-                       prod_value
-                       (MInst.AluRRR (ALUOp.UMulH) (operand_size $I64) tmp a b)
-                       (MInst.AluRRImm12 (ALUOp.SubS) (OperandSize.Size64)
-                                         (writable_zero_reg) tmp (u8_into_imm12 0)))))
+      (let ((tmp Reg (umulh $I64 a b))
+            (producer ProducesFlags (cmp64_imm tmp (u8_into_imm12 0))))
         (CondResult.Cond producer (Cond.Ne))))
 
 ;; madd out, a_sxt, b_sxt
@@ -5055,24 +5047,16 @@
                                            (ExtendOp.SXTW)))))
         (CondResult.Cond producer (Cond.Ne))))
 
-;; madd out, a, b
 ;; smulh tmp, a, b
 ;; cmp tmp, out, asr #63
 (rule 10
       (is_nonzero
        (second_result smul @ (smul_overflow $I64 a b)))
       (if-let (first_result prod_value) smul)
-      (if-let shift (ashr_from_u64 $I64 63))
-      (let ((dst WritableReg (temp_writable_reg $I64))
-            (tmp WritableReg (temp_writable_reg $I64))
+      (let ((prod Reg (put_in_reg prod_value))
+            (tmp Reg (smulh $I64 a b))
             (producer ProducesFlags
-                      (produces_flags_opportunistic_def3
-                       (MInst.AluRRRR (ALUOp3.MAdd) (operand_size $I64) dst a b (zero_reg))
-                       dst
-                       prod_value
-                       (MInst.AluRRR (ALUOp.SMulH) (operand_size $I64) tmp a b)
-                       (MInst.AluRRRShift (ALUOp.SubS) (OperandSize.Size64)
-                                          (writable_zero_reg) tmp dst shift))))
+                      (cmp_rr_shift_asr (OperandSize.Size64) tmp prod 63)))
         (CondResult.Cond producer (Cond.Ne))))
 
 (attr emit_icmp (veri chain))

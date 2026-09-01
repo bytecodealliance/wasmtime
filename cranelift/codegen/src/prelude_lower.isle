@@ -562,14 +562,7 @@
                      (ProducesFlagsOpportunisticDef (inst MInst) (reg Reg) (value Value))
                      ;; Like `ProducesFlagsOpportunisticDef`, with an
                      ;; additional instruction.
-                     (ProducesFlagsOpportunisticDef2 (inst1 MInst) (reg Reg) (value Value) (inst2 MInst))
-                     ;; Like `ProducesFlagsOpportunisticDef`, with two
-                     ;; additional instructions.
-                     (ProducesFlagsOpportunisticDef3 (inst1 MInst)
-                                                     (reg Reg)
-                                                     (value Value)
-                                                     (inst2 MInst)
-                                                     (inst3 MInst))))
+                     (ProducesFlagsOpportunisticDef2 (inst1 MInst) (reg Reg) (value Value) (inst2 MInst))))
 
 (spec (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst reg)
       (provide
@@ -590,19 +583,6 @@
             ; Result flags of the ProducesFlags wrapper are from the second
             ; instruction's output.
             (= (:flags result) (:flags_out inst2))
-
-            ; No value is produced.
-            (not (:has_result result))))
-
-(spec (ProducesFlags.ProducesFlagsOpportunisticDef3 inst1 reg value inst2 inst3)
-      (provide
-            ; Flags output from each instruction passes to the next's input.
-            (= (:flags_out inst1) (:flags_in inst2))
-            (= (:flags_out inst2) (:flags_in inst3))
-
-            ; Result flags of the ProducesFlags wrapper are from the last
-            ; instruction's output.
-            (= (:flags result) (:flags_out inst3))
 
             ; No value is produced.
             (not (:has_result result))))
@@ -710,12 +690,6 @@
 (decl produces_flags_opportunistic_def2 (MInst Reg Value MInst) ProducesFlags)
 (rule (produces_flags_opportunistic_def2 inst1 reg value inst2)
       (ProducesFlags.ProducesFlagsOpportunisticDef2 inst1 reg value inst2))
-
-;; Like `produces_flags_opportunistic_def2`, but with an additional
-;; instruction (`inst2`) between the value producer and the flags producer.
-(decl produces_flags_opportunistic_def3 (MInst Reg Value MInst MInst) ProducesFlags)
-(rule (produces_flags_opportunistic_def3 inst1 reg value inst2 inst3)
-      (ProducesFlags.ProducesFlagsOpportunisticDef3 inst1 reg value inst2 inst3))
 
 ;; Helper for combining two flags-consumer instructions that return a
 ;; single Reg, giving a ConsumesFlags that returns both values in a
@@ -891,23 +865,13 @@
 ;; A pair of flag-producing side-effect instructions, where the first one also
 ;; computes `producer_value` in `producer_result` and registers an
 ;; opportunistic def of it, paired with a consumer that returns a single
-;; register. (See `ProducesFlagsOpportunisticDef2`/`Def3`.)
+;; register. (See `ProducesFlagsOpportunisticDef2`.)
 (rule with_flags_opportunistic_def2_consumer_reg
       (with_flags (ProducesFlags.ProducesFlagsOpportunisticDef2 producer_inst1 producer_result producer_value producer_inst2)
                   (ConsumesFlags.ConsumesFlagsReturnsReg consumer_inst consumer_result))
       (let ((_x Unit (emit producer_inst1))
             (_y Unit (emit producer_inst2))
             (_z Unit (emit consumer_inst))
-            (_ Unit (opportunistic_def producer_value (value_reg producer_result))))
-        (value_reg consumer_result)))
-
-(rule with_flags_opportunistic_def3_consumer_reg
-      (with_flags (ProducesFlags.ProducesFlagsOpportunisticDef3 producer_inst1 producer_result producer_value producer_inst2 producer_inst3)
-                  (ConsumesFlags.ConsumesFlagsReturnsReg consumer_inst consumer_result))
-      (let ((_x Unit (emit producer_inst1))
-            (_y Unit (emit producer_inst2))
-            (_z Unit (emit producer_inst3))
-            (_w Unit (emit consumer_inst))
             (_ Unit (opportunistic_def producer_value (value_reg producer_result))))
         (value_reg consumer_result)))
 
@@ -926,19 +890,6 @@
             (_ Unit (opportunistic_def producer_value (value_reg producer_result))))
         consumer_result))
 
-(rule with_flags_opportunistic_def3_consumer_twice
-      (with_flags (ProducesFlags.ProducesFlagsOpportunisticDef3 producer_inst1 producer_result producer_value producer_inst2 producer_inst3)
-                  (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs consumer_inst_1
-                                                                    consumer_inst_2
-                                                                    consumer_result))
-      (let ((_x Unit (emit producer_inst1))
-            (_y Unit (emit producer_inst2))
-            (_z Unit (emit producer_inst3))
-            (_w Unit (emit consumer_inst_1))
-            (_v Unit (emit consumer_inst_2))
-            (_ Unit (opportunistic_def producer_value (value_reg producer_result))))
-        consumer_result))
-
 (rule with_flags_opportunistic_def2_consumer_four
       (with_flags (ProducesFlags.ProducesFlagsOpportunisticDef2 producer_inst1 producer_result producer_value producer_inst2)
                   (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs consumer_inst_1
@@ -952,23 +903,6 @@
             (_w Unit (emit consumer_inst_2))
             (_v Unit (emit consumer_inst_3))
             (_u Unit (emit consumer_inst_4))
-            (_ Unit (opportunistic_def producer_value (value_reg producer_result))))
-        consumer_result))
-
-(rule with_flags_opportunistic_def3_consumer_four
-      (with_flags (ProducesFlags.ProducesFlagsOpportunisticDef3 producer_inst1 producer_result producer_value producer_inst2 producer_inst3)
-                  (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs consumer_inst_1
-                                                                        consumer_inst_2
-                                                                        consumer_inst_3
-                                                                        consumer_inst_4
-                                                                        consumer_result))
-      (let ((_x Unit (emit producer_inst1))
-            (_y Unit (emit producer_inst2))
-            (_z Unit (emit producer_inst3))
-            (_w Unit (emit consumer_inst_1))
-            (_v Unit (emit consumer_inst_2))
-            (_u Unit (emit consumer_inst_3))
-            (_t Unit (emit consumer_inst_4))
             (_ Unit (opportunistic_def producer_value (value_reg producer_result))))
         consumer_result))
 
@@ -1041,10 +975,10 @@
       (let ((_ Unit (opportunistic_def producer_value (value_reg producer_result))))
         (SideEffectNoResult.Inst3 producer_inst consumer_inst_1 consumer_inst_2)))
 
-;; The first instruction (or instructions, in the 3-instruction case) does not
-;; produce the flags of interest, so it can be emitted eagerly; the flags
-;; producer and the consumer must stay adjacent, so they are returned as a
-;; side-effect pair/triple to be emitted together.
+;; The first instruction does not produce the flags of interest, so it
+;; can be emitted eagerly; the flags producer and the consumer must
+;; stay adjacent, so they are returned as a side-effect pair/triple to
+;; be emitted together.
 (rule (with_flags_side_effect
         (ProducesFlags.ProducesFlagsOpportunisticDef2 producer_inst1 producer_result producer_value producer_inst2)
         (ConsumesFlags.ConsumesFlagsSideEffect consumer_inst))
@@ -1053,27 +987,11 @@
         (SideEffectNoResult.Inst2 producer_inst2 consumer_inst)))
 
 (rule (with_flags_side_effect
-        (ProducesFlags.ProducesFlagsOpportunisticDef3 producer_inst1 producer_result producer_value producer_inst2 producer_inst3)
-        (ConsumesFlags.ConsumesFlagsSideEffect consumer_inst))
-      (let ((_ Unit (emit producer_inst1))
-            (_ Unit (emit producer_inst2))
-            (_ Unit (opportunistic_def producer_value (value_reg producer_result))))
-        (SideEffectNoResult.Inst2 producer_inst3 consumer_inst)))
-
-(rule (with_flags_side_effect
         (ProducesFlags.ProducesFlagsOpportunisticDef2 producer_inst1 producer_result producer_value producer_inst2)
         (ConsumesFlags.ConsumesFlagsSideEffect2 consumer_inst_1 consumer_inst_2))
       (let ((_ Unit (emit producer_inst1))
             (_ Unit (opportunistic_def producer_value (value_reg producer_result))))
         (SideEffectNoResult.Inst3 producer_inst2 consumer_inst_1 consumer_inst_2)))
-
-(rule (with_flags_side_effect
-        (ProducesFlags.ProducesFlagsOpportunisticDef3 producer_inst1 producer_result producer_value producer_inst2 producer_inst3)
-        (ConsumesFlags.ConsumesFlagsSideEffect2 consumer_inst_1 consumer_inst_2))
-      (let ((_ Unit (emit producer_inst1))
-            (_ Unit (emit producer_inst2))
-            (_ Unit (opportunistic_def producer_value (value_reg producer_result))))
-        (SideEffectNoResult.Inst3 producer_inst3 consumer_inst_1 consumer_inst_2)))
 
 (rule (with_flags_side_effect
         (ProducesFlags.AlreadyExistingFlags)
