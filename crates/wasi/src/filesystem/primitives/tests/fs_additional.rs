@@ -99,15 +99,9 @@ fn optionally_nonrecursive_mkdir() {
     let start = h::dir_of(&tmpdir);
     let dir = "d1/d2";
     #[cfg(not(windows))]
-    error!(
-        p::create_dir(&start, Path::new(dir), &p::DirOptions::new()),
-        "No such file"
-    );
+    error!(p::create_dir(&start, Path::new(dir)), "No such file");
     #[cfg(windows)]
-    error!(
-        p::create_dir(&start, Path::new(dir), &p::DirOptions::new()),
-        2
-    );
+    error!(p::create_dir(&start, Path::new(dir)), 2);
 
     assert!(!h::exists(&start, dir));
 }

@@ -1,14 +1,14 @@
-use crate::filesystem::primitives::{OpenOptions, manually};
+use crate::filesystem::primitives::OpenOptions;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::{fs, io};
 use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
 
-pub(crate) fn open_impl(
-    start: &fs::File,
+pub(crate) fn open_fast(
+    _start: &fs::File,
     path: &Path,
-    options: &OpenOptions,
-) -> io::Result<fs::File> {
+    _options: &OpenOptions,
+) -> io::Result<Option<fs::File>> {
     // Windows reserves several special device paths. Disallow opening any
     // of them.
     // See: https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
@@ -26,7 +26,7 @@ pub(crate) fn open_impl(
         }
     }
 
-    manually::open(start, path, options)
+    Ok(None)
 }
 
 // TODO: Replace this with `Path::file_prefix` once that's stable. For now,

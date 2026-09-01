@@ -66,16 +66,14 @@ pub fn cvt(i: windows_sys::core::BOOL) -> io::Result<windows_sys::core::BOOL> {
 #[cfg(windows)]
 #[allow(dead_code)]
 fn symlink_junction_inner(original: &Path, dir: &fs::File, junction: &Path) -> io::Result<()> {
-    use crate::filesystem::primitives::{
-        DirOptions, OpenOptions, OpenOptionsExt, create_dir, open,
-    };
+    use crate::filesystem::primitives::{OpenOptions, OpenOptionsExt, create_dir, open};
     use std::mem::MaybeUninit;
     use std::os::windows::ffi::OsStrExt;
     use std::os::windows::io::AsRawHandle;
     use std::{mem, ptr};
     use windows_sys::Win32::Storage::FileSystem::MAXIMUM_REPARSE_DATA_BUFFER_SIZE;
 
-    create_dir(dir, junction, &DirOptions::new())?;
+    create_dir(dir, junction)?;
 
     let mut opts = OpenOptions::new();
     opts.write(true);

@@ -83,7 +83,7 @@ pub(crate) fn readdir_options() -> OpenOptions {
 ///
 /// This function is not sandboxed and may trivially access any path that the
 /// host process has access to.
-pub(crate) fn open_ambient_dir_impl(path: &Path) -> io::Result<fs::File> {
+pub(crate) fn open_ambient_dir(path: &Path) -> io::Result<fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
 
     // Set `FILE_FLAG_BACKUP_SEMANTICS` so that we can open directories. Unset
