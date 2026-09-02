@@ -106,10 +106,32 @@ mod generated {
             "wasi:filesystem/types.error-code" => crate::p3::filesystem::FilesystemError,
             "wasi:sockets/types.error-code" => crate::p3::sockets::SocketError,
         },
+        named_imports: {
+            "wasi:clocks/monotonic-clock": crate::NamedId,
+            "wasi:clocks/system-clock": crate::NamedId,
+            "wasi:random/random": crate::NamedId,
+            "wasi:random/insecure": crate::NamedId,
+            "wasi:random/insecure-seed": crate::NamedId,
+            "wasi:cli/exit": crate::NamedId,
+            "wasi:cli/environment": crate::NamedId,
+            "wasi:cli/stdin": crate::NamedId,
+            "wasi:cli/stdout": crate::NamedId,
+            "wasi:cli/stderr": crate::NamedId,
+            "wasi:cli/terminal-input": crate::NamedId,
+            "wasi:cli/terminal-output": crate::NamedId,
+            "wasi:cli/terminal-stdin": crate::NamedId,
+            "wasi:cli/terminal-stdout": crate::NamedId,
+            "wasi:cli/terminal-stderr": crate::NamedId,
+            "wasi:filesystem/types": crate::NamedId,
+            "wasi:filesystem/preopens": crate::NamedId,
+            "wasi:sockets/types": crate::NamedId,
+            "wasi:sockets/ip-name-lookup": crate::NamedId,
+        },
     });
 }
 pub use self::generated::LinkOptions;
 pub use self::generated::exports;
+pub use self::generated::named_imports;
 pub use self::generated::wasi::*;
 
 /// Bindings to execute and run a `wasi:cli/command`.

@@ -51,11 +51,11 @@ pub mod sockets;
 mod view;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
-pub use self::ctx::{WasiCtx, WasiCtxBuilder};
+pub use self::ctx::*;
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{FsPerms, OpenMode};
 pub use self::random::{Deterministic, thread_rng};
-pub use self::view::{WasiCtxView, WasiView};
+pub use self::view::*;
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 #[doc(no_inline)]

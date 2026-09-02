@@ -540,3 +540,280 @@ pub mod sync {
         }
     }
 }
+
+mod named {
+    use crate::p2::SocketError;
+    use crate::p2::SocketResult;
+    use crate::p2::bindings::named_imports::wasi::sockets::tcp;
+    use crate::p2::bindings::sockets::network::ErrorCode;
+    use crate::p2::bindings::sockets::network::{IpAddressFamily, IpSocketAddress, Network};
+    use crate::p2::bindings::sockets::tcp::ShutdownType;
+    use crate::p2::tcp::TcpSocket;
+    use crate::sockets::WasiSocketsNamedView;
+    use crate::{NamedId, WasiCtxNamedView};
+    use wasmtime::component::Resource;
+    use wasmtime_wasi_io::poll::DynPollable;
+    use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};
+
+    impl<T> tcp::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        fn convert_error_code(&mut self, err: SocketError) -> wasmtime::Result<ErrorCode> {
+            err.downcast()
+        }
+    }
+
+    impl<T> tcp::HostTcpSocket for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        async fn start_bind(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            network: Resource<Network>,
+            local_address: IpSocketAddress,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::start_bind(
+                &mut self.0.sockets(id),
+                this,
+                network,
+                local_address,
+            )
+            .await
+        }
+
+        fn finish_bind(&mut self, id: NamedId, this: Resource<TcpSocket>) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::finish_bind(&mut self.0.sockets(id), this)
+        }
+
+        fn start_connect(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            network: Resource<Network>,
+            remote_address: IpSocketAddress,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::start_connect(
+                &mut self.0.sockets(id),
+                this,
+                network,
+                remote_address,
+            )
+        }
+
+        fn finish_connect(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<(Resource<DynInputStream>, Resource<DynOutputStream>)> {
+            super::tcp::HostTcpSocket::finish_connect(&mut self.0.sockets(id), this)
+        }
+
+        async fn start_listen(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::start_listen(&mut self.0.sockets(id), this).await
+        }
+
+        fn finish_listen(&mut self, id: NamedId, this: Resource<TcpSocket>) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::finish_listen(&mut self.0.sockets(id), this)
+        }
+
+        fn accept(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<(
+            Resource<TcpSocket>,
+            Resource<DynInputStream>,
+            Resource<DynOutputStream>,
+        )> {
+            super::tcp::HostTcpSocket::accept(&mut self.0.sockets(id), this)
+        }
+
+        fn local_address(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<IpSocketAddress> {
+            super::tcp::HostTcpSocket::local_address(&mut self.0.sockets(id), this)
+        }
+
+        fn remote_address(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<IpSocketAddress> {
+            super::tcp::HostTcpSocket::remote_address(&mut self.0.sockets(id), this)
+        }
+
+        fn is_listening(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> Result<bool, wasmtime::Error> {
+            super::tcp::HostTcpSocket::is_listening(&mut self.0.sockets(id), this)
+        }
+
+        fn address_family(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> Result<IpAddressFamily, wasmtime::Error> {
+            super::tcp::HostTcpSocket::address_family(&mut self.0.sockets(id), this)
+        }
+
+        fn set_listen_backlog_size(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            value: u64,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::set_listen_backlog_size(&mut self.0.sockets(id), this, value)
+        }
+
+        fn keep_alive_enabled(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<bool> {
+            super::tcp::HostTcpSocket::keep_alive_enabled(&mut self.0.sockets(id), this)
+        }
+
+        fn set_keep_alive_enabled(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            value: bool,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::set_keep_alive_enabled(&mut self.0.sockets(id), this, value)
+        }
+
+        fn keep_alive_idle_time(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<u64> {
+            super::tcp::HostTcpSocket::keep_alive_idle_time(&mut self.0.sockets(id), this)
+        }
+
+        fn set_keep_alive_idle_time(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            value: u64,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::set_keep_alive_idle_time(
+                &mut self.0.sockets(id),
+                this,
+                value,
+            )
+        }
+
+        fn keep_alive_interval(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<u64> {
+            super::tcp::HostTcpSocket::keep_alive_interval(&mut self.0.sockets(id), this)
+        }
+
+        fn set_keep_alive_interval(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            value: u64,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::set_keep_alive_interval(&mut self.0.sockets(id), this, value)
+        }
+
+        fn keep_alive_count(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<u32> {
+            super::tcp::HostTcpSocket::keep_alive_count(&mut self.0.sockets(id), this)
+        }
+
+        fn set_keep_alive_count(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            value: u32,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::set_keep_alive_count(&mut self.0.sockets(id), this, value)
+        }
+
+        fn hop_limit(&mut self, id: NamedId, this: Resource<TcpSocket>) -> SocketResult<u8> {
+            super::tcp::HostTcpSocket::hop_limit(&mut self.0.sockets(id), this)
+        }
+
+        fn set_hop_limit(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            value: u8,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::set_hop_limit(&mut self.0.sockets(id), this, value)
+        }
+
+        fn receive_buffer_size(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<u64> {
+            super::tcp::HostTcpSocket::receive_buffer_size(&mut self.0.sockets(id), this)
+        }
+
+        fn set_receive_buffer_size(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            value: u64,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::set_receive_buffer_size(&mut self.0.sockets(id), this, value)
+        }
+
+        fn send_buffer_size(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> SocketResult<u64> {
+            super::tcp::HostTcpSocket::send_buffer_size(&mut self.0.sockets(id), this)
+        }
+
+        fn set_send_buffer_size(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            value: u64,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::set_send_buffer_size(&mut self.0.sockets(id), this, value)
+        }
+
+        fn subscribe(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+        ) -> wasmtime::Result<Resource<DynPollable>> {
+            super::tcp::HostTcpSocket::subscribe(&mut self.0.sockets(id), this)
+        }
+
+        fn shutdown(
+            &mut self,
+            id: NamedId,
+            this: Resource<TcpSocket>,
+            shutdown_type: ShutdownType,
+        ) -> SocketResult<()> {
+            super::tcp::HostTcpSocket::shutdown(&mut self.0.sockets(id), this, shutdown_type)
+        }
+
+        fn drop(&mut self, id: NamedId, this: Resource<TcpSocket>) -> Result<(), wasmtime::Error> {
+            super::tcp::HostTcpSocket::drop(&mut self.0.sockets(id), this)
+        }
+    }
+}

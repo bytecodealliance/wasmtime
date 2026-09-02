@@ -36,25 +36,42 @@ impl<T> HostUdpSocketWithStore<T> for WasiSockets {
         remote_address: Option<IpSocketAddress>,
     ) -> SocketResult<()> {
         store
-            .with(|mut view| -> SocketResult<_> {
-                let socket = get_socket_mut(view.get().table, &socket)?;
-                Ok(socket.send(data, remote_address.map(SocketAddr::from)))
-            })?
-            .await?;
-        Ok(())
+            .with(|mut view| view.get().send(&socket, data, remote_address))
+            .await
     }
 
     async fn receive(
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
     ) -> SocketResult<(Vec<u8>, IpSocketAddress)> {
-        let (data, addr) = store
-            .with(|mut view| -> SocketResult<_> {
-                let socket = get_socket_mut(view.get().table, &socket)?;
-                Ok(socket.recv())
-            })?
-            .await?;
-        Ok((data, addr.into()))
+        store.with(|mut view| view.get().receive(&socket)).await
+    }
+}
+
+impl WasiSocketsCtxView<'_> {
+    fn send(
+        &mut self,
+        socket: &Resource<UdpSocket>,
+        data: Vec<u8>,
+        remote_address: Option<IpSocketAddress>,
+    ) -> impl Future<Output = SocketResult<()>> + use<> {
+        let socket = get_socket_mut(self.table, socket);
+        let fut = socket.map(|s| s.send(data, remote_address.map(SocketAddr::from)));
+        async move {
+            fut?.await?;
+            Ok(())
+        }
+    }
+
+    fn receive(
+        &mut self,
+        socket: &Resource<UdpSocket>,
+    ) -> impl Future<Output = SocketResult<(Vec<u8>, IpSocketAddress)>> + use<> {
+        let fut = get_socket_mut(self.table, socket).map(|s| s.recv());
+        async move {
+            let (data, addr) = fut?.await?;
+            Ok((data, addr.into()))
+        }
     }
 }
 
@@ -166,5 +183,157 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
             .delete(sock)
             .context("failed to delete socket resource from table")?;
         Ok(())
+    }
+}
+
+mod named {
+    use crate::p3::bindings::named_imports::wasi::sockets::types::{
+        HostUdpSocket, HostUdpSocketWithStore,
+    };
+    use crate::p3::bindings::sockets::types::{IpAddressFamily, IpSocketAddress};
+    use crate::p3::sockets::SocketResult;
+    use crate::sockets::{UdpSocket, WasiSocketsNamed, WasiSocketsNamedView};
+    use crate::{NamedId, WasiCtxNamedView};
+    use wasmtime::component::{Accessor, Resource};
+
+    impl<T, U> HostUdpSocketWithStore<U> for WasiSocketsNamed<T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        async fn send(
+            store: &Accessor<U, Self>,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+            data: Vec<u8>,
+            remote_address: Option<IpSocketAddress>,
+        ) -> SocketResult<()> {
+            store
+                .with(|mut view| view.get().0.sockets(id).send(&socket, data, remote_address))
+                .await
+        }
+
+        async fn receive(
+            store: &Accessor<U, Self>,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+        ) -> SocketResult<(Vec<u8>, IpSocketAddress)> {
+            store
+                .with(|mut view| view.get().0.sockets(id).receive(&socket))
+                .await
+        }
+    }
+
+    impl<T> HostUdpSocket for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        async fn bind(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+            local_address: IpSocketAddress,
+        ) -> SocketResult<()> {
+            super::HostUdpSocket::bind(&mut self.0.sockets(id), socket, local_address).await
+        }
+
+        async fn connect(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+            remote_address: IpSocketAddress,
+        ) -> SocketResult<()> {
+            super::HostUdpSocket::connect(&mut self.0.sockets(id), socket, remote_address).await
+        }
+
+        async fn create(
+            &mut self,
+            id: NamedId,
+            address_family: IpAddressFamily,
+        ) -> SocketResult<Resource<UdpSocket>> {
+            super::HostUdpSocket::create(&mut self.0.sockets(id), address_family).await
+        }
+
+        fn disconnect(&mut self, id: NamedId, socket: Resource<UdpSocket>) -> SocketResult<()> {
+            super::HostUdpSocket::disconnect(&mut self.0.sockets(id), socket)
+        }
+
+        fn get_local_address(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+        ) -> SocketResult<IpSocketAddress> {
+            super::HostUdpSocket::get_local_address(&mut self.0.sockets(id), socket)
+        }
+
+        fn get_remote_address(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+        ) -> SocketResult<IpSocketAddress> {
+            super::HostUdpSocket::get_remote_address(&mut self.0.sockets(id), socket)
+        }
+
+        fn get_address_family(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+        ) -> wasmtime::Result<IpAddressFamily> {
+            super::HostUdpSocket::get_address_family(&mut self.0.sockets(id), socket)
+        }
+
+        fn get_unicast_hop_limit(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+        ) -> SocketResult<u8> {
+            super::HostUdpSocket::get_unicast_hop_limit(&mut self.0.sockets(id), socket)
+        }
+
+        fn set_unicast_hop_limit(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+            value: u8,
+        ) -> SocketResult<()> {
+            super::HostUdpSocket::set_unicast_hop_limit(&mut self.0.sockets(id), socket, value)
+        }
+
+        fn get_receive_buffer_size(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+        ) -> SocketResult<u64> {
+            super::HostUdpSocket::get_receive_buffer_size(&mut self.0.sockets(id), socket)
+        }
+
+        fn set_receive_buffer_size(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+            value: u64,
+        ) -> SocketResult<()> {
+            super::HostUdpSocket::set_receive_buffer_size(&mut self.0.sockets(id), socket, value)
+        }
+
+        fn get_send_buffer_size(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+        ) -> SocketResult<u64> {
+            super::HostUdpSocket::get_send_buffer_size(&mut self.0.sockets(id), socket)
+        }
+
+        fn set_send_buffer_size(
+            &mut self,
+            id: NamedId,
+            socket: Resource<UdpSocket>,
+            value: u64,
+        ) -> SocketResult<()> {
+            super::HostUdpSocket::set_send_buffer_size(&mut self.0.sockets(id), socket, value)
+        }
+
+        fn drop(&mut self, id: NamedId, sock: Resource<UdpSocket>) -> wasmtime::Result<()> {
+            super::HostUdpSocket::drop(&mut self.0.sockets(id), sock)
+        }
     }
 }

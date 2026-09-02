@@ -1,9 +1,13 @@
 mod host;
 
 use crate::TrappableError;
-use crate::filesystem::{WasiFilesystem, WasiFilesystemView};
+use crate::filesystem::{
+    WasiFilesystem, WasiFilesystemNamed, WasiFilesystemNamedView, WasiFilesystemView,
+};
+use crate::p3::Interface;
 use crate::p3::bindings::filesystem::{preopens, types};
-use wasmtime::component::Linker;
+use crate::{NamedId, WasiCtxNamedView};
+use wasmtime::component::{Component, Linker};
 
 pub type FilesystemResult<T> = Result<T, FilesystemError>;
 pub type FilesystemError = TrappableError<types::ErrorCode>;
@@ -65,6 +69,113 @@ where
 {
     types::add_to_linker::<_, WasiFilesystem>(linker, T::filesystem)?;
     preopens::add_to_linker::<_, WasiFilesystem>(linker, T::filesystem)?;
+    Ok(())
+}
+
+/// Convenience function to add `wasi:filesystem` interfaces into `linker` for any
+/// named imports of `wasi:filesystem` interfaces.
+///
+/// This function is similar to [`add_to_linker`] except that it's specifically
+/// designed to work with named imports of `wasi:filesystem` interfaces that
+/// components may have. This requires a [`Component`] parameter to be passed in
+/// when populating the [`Linker`] provided to see what the [`Component`]
+/// actually imports.
+///
+/// Like [`add_to_linker`] this is a bit low level and you may want to possibly
+/// invoke [`wasmtime_wasi::p3::add_named_to_linker`] instead. Alternatively if
+/// this isn't low level enough you can additionally invoke bindgen-generated
+/// `add_to_linker` functions directly from within the
+/// [`named_imports::wasi::filesystem`] module.
+///
+/// [`wasmtime_wasi::p3::add_named_to_linker`]: crate::p3::add_named_to_linker
+/// [`named_imports::wasi::filesystem`]: crate::p3::bindings::named_imports::wasi::filesystem
+///
+/// The `lookup` function provided here is invoked for every named import found
+/// for a particular interface. The [`Interface`] given is what's being bound,
+/// and the `&str` argument is the name that the component imports it as. The
+/// embedder can then decide how it would like to allocate a [`NamedId`] for
+/// this import. If `Ok` is returned then the linker is populated with this
+/// name, and imported functions will pass the [`NamedId`] later to the
+/// implementation of [`WasiFilesystemNamedView`] on `T` when invoked. If `Err` is
+/// returned then the error will cause this entire function to fail and this
+/// function call will return the same error.
+///
+/// # Example
+///
+/// ```
+/// use std::collections::HashMap;
+/// use wasmtime::component::{Component, Linker, ResourceTable};
+/// use wasmtime::{Engine, Result, Store, Config};
+/// use wasmtime_wasi::NamedId;
+/// use wasmtime_wasi::filesystem::{WasiFilesystemCtx, WasiFilesystemCtxView, WasiFilesystemNamedView};
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///     let component = Component::new(&engine, "(component)")?;
+///
+///     let mut linker = Linker::<MyState>::new(&engine);
+///
+///     // ... add default functionality to `linker` as needed ...
+///
+///     // and then additionally fill in any specific named imports `component`
+///     // might have for `wasi:filesystem` interfaces.
+///     let mut name_map = HashMap::new();
+///     wasmtime_wasi::p3::filesystem::add_named_to_linker(&mut linker, &component, |_i, name| {
+///         let len = name_map.len();
+///         Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///     })?;
+///
+///     // Here a `WasiFilesystemCtx` is allocated per-named-import and will then be
+///     // referred to internally by the [`NamedId`] allocated above. You could
+///     // also use `name_map` to configure each context differently.
+///     let mut my_state = MyState::default();
+///     for _ in 0..name_map.len() {
+///         my_state.contexts.push(WasiFilesystemCtx::default());
+///     }
+///     let mut store = Store::new(&engine, my_state);
+///     let instance = linker.instantiate(&mut store, &component)?;
+///
+///     // ... work with `instance` ...
+///
+///     Ok(())
+/// }
+///
+/// #[derive(Default)]
+/// struct MyState {
+///     table: ResourceTable,
+///     contexts: Vec<WasiFilesystemCtx>,
+/// }
+///
+/// impl WasiFilesystemNamedView for MyState {
+///     fn filesystem(&mut self, id: NamedId) -> WasiFilesystemCtxView<'_> {
+///         WasiFilesystemCtxView {
+///             ctx: &mut self.contexts[id.0],
+///             table: &mut self.table,
+///         }
+///     }
+/// }
+/// ```
+pub fn add_named_to_linker<T>(
+    linker: &mut Linker<T>,
+    component: &Component,
+    mut lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiFilesystemNamedView + 'static,
+{
+    use crate::p3::bindings::named_imports::wasi::filesystem::{preopens, types};
+    types::add_to_linker::<_, WasiFilesystemNamed<T>>(
+        linker,
+        component,
+        |name| lookup(Interface::FilesystemTypes, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    preopens::add_to_linker::<_, WasiFilesystemNamed<T>>(
+        linker,
+        component,
+        |name| lookup(Interface::FilesystemPreopens, name),
+        |x| WasiCtxNamedView(x),
+    )?;
     Ok(())
 }
 

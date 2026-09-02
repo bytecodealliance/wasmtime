@@ -1028,6 +1028,64 @@ mod named_imports {
             imports: { default: async | store },
         });
     }
+
+    mod trappable_errors {
+        use wasmtime::component::Resource;
+
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface store {
+                    variant error {
+                        not-found,
+                    }
+
+                    resource cache {
+                        get: func(key: u32) -> result<u32, error>;
+                    }
+                }
+
+                world the-world {
+                    import store;
+                }
+            ",
+            imports: { default: trappable },
+            named_imports: {
+                "foo:foo/store": String,
+            },
+            trappable_error_type: {
+                "foo:foo/store.error" => MyError,
+            },
+        });
+
+        pub struct MyError;
+
+        struct MyHost;
+
+        impl named_imports::foo::foo::store::HostCache for MyHost {
+            fn get(
+                &mut self,
+                _id: String,
+                _self_: Resource<foo::foo::store::Cache>,
+                key: u32,
+            ) -> Result<u32, MyError> {
+                Ok(key)
+            }
+            fn drop(
+                &mut self,
+                _id: String,
+                _rep: Resource<foo::foo::store::Cache>,
+            ) -> wasmtime::Result<()> {
+                Ok(())
+            }
+        }
+        impl named_imports::foo::foo::store::Host for MyHost {
+            fn convert_error(&mut self, _err: MyError) -> wasmtime::Result<foo::foo::store::Error> {
+                Ok(foo::foo::store::Error::NotFound)
+            }
+        }
+    }
 }
 
 mod include_component_type {
