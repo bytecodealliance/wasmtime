@@ -449,6 +449,14 @@ class Config {
   void wasm_component_model_map(bool enable) {
     wasmtime_config_wasm_component_model_map_set(ptr.get(), enable);
   }
+
+  /// \brief Configures whether the WebAssembly component model `(implements
+  /// "...")` and `(external-id "...")` annotations will be enabled
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_implements
+  void wasm_component_model_implements(bool enable) {
+    wasmtime_config_wasm_component_model_implements_set(ptr.get(), enable);
+  }
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
 #ifdef WASMTIME_FEATURE_PARALLEL_COMPILATION

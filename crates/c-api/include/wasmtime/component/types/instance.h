@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-struct wasmtime_component_item_t;
+struct wasmtime_component_extern_t;
 
 /// \brief Represents the type of a component instance.
 typedef struct wasmtime_component_instance_type
@@ -39,22 +39,23 @@ size_t wasmtime_component_instance_type_export_count(
 
 /// \brief Retrieves the export with the specified name.
 ///
-/// The returned `wasmtime_component_item_t` must be deallocated with
-/// `wasmtime_component_item_delete`.
+/// The returned `wasmtime_component_extern_t` must be deallocated with
+/// `wasmtime_component_extern_delete`.
 WASM_API_EXTERN
 bool wasmtime_component_instance_type_export_get(
     const wasmtime_component_instance_type_t *ty, const wasm_engine_t *engine,
-    const char *name, size_t name_len, struct wasmtime_component_item_t *ret);
+    const char *name, size_t name_len,
+    struct wasmtime_component_extern_t **ret);
 
 /// \brief Retrieves the nth export.
 ///
-/// The returned `wasmtime_component_item_t` must be deallocated with
-/// `wasmtime_component_item_delete`.
+/// The returned `wasmtime_component_extern_t` must be deallocated with
+/// `wasmtime_component_extern_delete`.
 WASM_API_EXTERN
 bool wasmtime_component_instance_type_export_nth(
     const wasmtime_component_instance_type_t *ty, const wasm_engine_t *engine,
     size_t nth, const char **name_ret, size_t *name_len_ret,
-    struct wasmtime_component_item_t *type_ret);
+    struct wasmtime_component_extern_t **ret);
 
 #ifdef __cplusplus
 } // extern "C"
