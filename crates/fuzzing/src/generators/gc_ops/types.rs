@@ -1222,7 +1222,7 @@ impl StackType {
                             );
                             let t = Self::clamp(t, num_types);
                             Self::emit(
-                                GcOp::ArrayNew { type_index: t },
+                                GcOp::ArrayNewDefault { type_index: t },
                                 stack,
                                 out,
                                 num_types,
