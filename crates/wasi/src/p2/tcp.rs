@@ -3,8 +3,9 @@ use crate::p2::bindings::sockets::network::ErrorCode;
 use crate::p2::{
     DynInputStream, DynOutputStream, InputStream, OutputStream, Pollable, SocketResult, StreamError,
 };
+use crate::runtime::poll_now;
 use crate::sockets::{
-    MaybeReady, TcpListenStream, TcpReceiveStream, TcpSendStream, TcpSocket as P3Socket, noop_cx,
+    MaybeReady, TcpListenStream, TcpReceiveStream, TcpSendStream, TcpSocket as P3Socket,
 };
 use std::future::poll_fn;
 use std::mem;
@@ -79,14 +80,14 @@ impl ReadState {
             return Ok(bytes::Bytes::new());
         }
         let mut buf = bytes::BytesMut::zeroed(size.min(crate::MAX_READ_SIZE_ALLOC));
-        let n = match stream.poll_read(&mut noop_cx(), &mut buf) {
-            Poll::Pending => 0,
-            Poll::Ready(Ok(0)) => {
+        let n = match poll_now(|cx| stream.poll_read(cx, &mut buf)) {
+            None => 0,
+            Some(Ok(0)) => {
                 *self = ReadState::Closed;
                 return Err(StreamError::Closed);
             }
-            Poll::Ready(Ok(n)) => n,
-            Poll::Ready(Err(e)) => {
+            Some(Ok(n)) => n,
+            Some(Err(e)) => {
                 *self = ReadState::Closed;
                 return Err(StreamError::LastOperationFailed(e.into()));
             }
@@ -158,13 +159,13 @@ impl WriteState {
     }
 
     fn check_write(&mut self) -> StreamResult<usize> {
-        match self.poll_ready(&mut noop_cx()) {
-            Poll::Pending => Ok(0),
-            Poll::Ready(Ok((_, permit))) => {
+        match poll_now(|cx| self.poll_ready(cx)) {
+            None => Ok(0),
+            Some(Ok((_, permit))) => {
                 *permit = MAX_READ_SIZE_ALLOC;
                 Ok(*permit)
             }
-            Poll::Ready(Err(e)) => Err(e),
+            Some(Err(e)) => Err(e),
         }
     }
 
@@ -210,9 +211,9 @@ impl WriteState {
         }));
 
         // Attempt to finish the write, surfacing potential errors immediately:
-        match self.poll_ready(&mut noop_cx()) {
-            Poll::Pending | Poll::Ready(Ok(_)) => Ok(()),
-            Poll::Ready(Err(e)) => Err(e),
+        match poll_now(|cx| self.poll_ready(cx)) {
+            None | Some(Ok(_)) => Ok(()),
+            Some(Err(e)) => Err(e),
         }
     }
 

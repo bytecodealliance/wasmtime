@@ -6,9 +6,9 @@ use crate::p2::{
     },
     tcp::AsyncOperation,
 };
-use crate::sockets::{WasiSocketsCtxView, noop_cx};
+use crate::runtime::poll_now;
+use crate::sockets::WasiSocketsCtxView;
 use std::net::SocketAddr;
-use std::task::Poll;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::{
     poll::DynPollable,
@@ -80,7 +80,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
             return Err(ErrorCode::NotInProgress.into());
         };
 
-        let Poll::Ready(result) = socket.inner.poll_finish_connect(&mut noop_cx()) else {
+        let Some(result) = poll_now(|cx| socket.inner.poll_finish_connect(cx)) else {
             return Err(ErrorCode::WouldBlock.into());
         };
         socket.in_progress_operation = None;
@@ -134,9 +134,9 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
             return Err(ErrorCode::InvalidState.into());
         };
 
-        let accepted = match listener.poll_accept(&mut noop_cx()) {
-            Poll::Pending => return Err(ErrorCode::WouldBlock.into()),
-            Poll::Ready(accepted) => accepted,
+        let accepted = match poll_now(|cx| listener.poll_accept(cx)) {
+            Some(accepted) => accepted,
+            None => return Err(ErrorCode::WouldBlock.into()),
         };
         let mut tcp_socket = TcpSocket::new(accepted);
         let (input, output) = tcp_socket.take_streams()?;

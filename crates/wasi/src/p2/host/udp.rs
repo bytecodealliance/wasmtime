@@ -2,11 +2,11 @@ use crate::p2::bindings::sockets::network::{ErrorCode, IpAddressFamily, IpSocket
 use crate::p2::bindings::sockets::udp;
 use crate::p2::udp::{AsyncOperation, IncomingDatagramStream, OutgoingDatagramStream};
 use crate::p2::{Pollable, SocketError, SocketResult, UdpSocket};
+use crate::runtime::poll_now;
 use crate::sockets::{SocketAddressFamily, WasiSocketsCtxView};
 use async_trait::async_trait;
 use std::future::poll_fn;
 use std::net::SocketAddr;
-use std::task::{Context, Poll, Waker};
 use wasmtime::component::Resource;
 use wasmtime::format_err;
 use wasmtime_wasi_io::poll::DynPollable;
@@ -238,9 +238,7 @@ impl udp::HostOutgoingDatagramStream for WasiSocketsCtxView<'_> {
     fn check_send(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> SocketResult<u64> {
         let stream = self.table.get_mut(&this)?;
 
-        let count = if let Poll::Ready(()) =
-            stream.poll_send_ready(&mut Context::from_waker(Waker::noop()))
-        {
+        let count = if let Some(()) = poll_now(|cx| stream.poll_send_ready(cx)) {
             // We don't know how many Tokio will accept, so we make up a
             // reasonable number here.  If we're wrong and `send` returns
             // `Ok(0)`, the guest will just have to deal with that, e.g. by

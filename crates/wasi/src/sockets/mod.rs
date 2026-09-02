@@ -1,3 +1,4 @@
+use crate::runtime::poll_noop;
 use core::fmt;
 use core::future::Future;
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -247,9 +248,9 @@ impl<T> MaybeReady<T> {
         T: Send + 'static,
     {
         let mut fut = Box::pin(fut);
-        match crate::runtime::with_ambient_tokio_runtime(|| fut.as_mut().poll(&mut noop_cx())) {
-            Poll::Ready(val) => Self::Ready(val),
-            Poll::Pending => Self::new(crate::runtime::spawn(fut)),
+        match crate::runtime::with_ambient_tokio_runtime(|| poll_noop(fut.as_mut())) {
+            Some(val) => Self::Ready(val),
+            None => Self::new(crate::runtime::spawn(fut)),
         }
     }
     pub(crate) fn unwrap_ready(self) -> T {
@@ -279,10 +280,6 @@ impl<T> MaybeReady<T> {
             Self::Pending(fut) => fut.await,
         }
     }
-}
-
-pub(crate) fn noop_cx() -> std::task::Context<'static> {
-    std::task::Context::from_waker(futures::task::noop_waker_ref())
 }
 
 #[derive(Clone, Copy, Debug)]

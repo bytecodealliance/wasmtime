@@ -2,7 +2,8 @@ use futures::TryFutureExt;
 
 use crate::{
     p2::bindings::sockets::network::ErrorCode,
-    sockets::{MaybeReady, UdpSocket as P3Socket, noop_cx},
+    runtime::poll_now,
+    sockets::{MaybeReady, UdpSocket as P3Socket},
 };
 use std::{
     net::SocketAddr,
@@ -89,8 +90,7 @@ impl IncomingDatagramStream {
     }
 
     pub(crate) fn try_recv(&mut self) -> Result<(Vec<u8>, SocketAddr), ErrorCode> {
-        let noop_cx = &mut noop_cx();
-        if self.poll_recv_ready(noop_cx).is_pending() {
+        if poll_now(|cx| self.poll_recv_ready(cx)).is_none() {
             return Err(ErrorCode::WouldBlock);
         }
 
@@ -128,7 +128,7 @@ impl OutgoingDatagramStream {
         addr: Option<std::net::SocketAddr>,
     ) -> Result<(), ErrorCode> {
         if let Some(send) = &mut self.prev_send {
-            if !send.poll_ready(&mut noop_cx()).is_ready() {
+            if poll_now(|cx| send.poll_ready(cx)).is_none() {
                 return Err(ErrorCode::WouldBlock);
             }
 
@@ -147,7 +147,7 @@ impl OutgoingDatagramStream {
                 .send(data, addr)
                 .map_err(|e| e.into()),
         );
-        if send.poll_ready(&mut noop_cx()).is_ready() {
+        if poll_now(|cx| send.poll_ready(cx)).is_some() {
             send.unwrap_ready()
         } else {
             self.prev_send = Some(send);
