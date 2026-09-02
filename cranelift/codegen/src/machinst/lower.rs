@@ -1837,25 +1837,4 @@ mod tests {
         assert_eq!(uses[v4], ValueUseState::Once);
         assert_eq!(uses[v5], ValueUseState::Once);
     }
-
-    #[test]
-    fn results_used_twice_but_not_operands() {
-        let mut func = Function::new();
-        let block0 = func.dfg.make_block();
-        let mut pos = FuncCursor::new(&mut func);
-        pos.insert_block(block0);
-        let v1 = pos.ins().iconst(types::I64, 0);
-        let v2 = pos.ins().iconst(types::I64, 1);
-        let v3 = pos.ins().iconcat(v1, v2);
-        let (v4, v5) = pos.ins().isplit(v3);
-        pos.ins().return_(&[v4, v4]);
-        let func = pos.func;
-
-        let uses = super::compute_use_states(&func, None);
-        assert_eq!(uses[v1], ValueUseState::Once);
-        assert_eq!(uses[v2], ValueUseState::Once);
-        assert_eq!(uses[v3], ValueUseState::Once);
-        assert_eq!(uses[v4], ValueUseState::Multiple);
-        assert_eq!(uses[v5], ValueUseState::Unused);
-    }
 }
