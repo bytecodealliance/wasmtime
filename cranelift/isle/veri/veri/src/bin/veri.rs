@@ -90,7 +90,11 @@ struct Opts {
 
     /// Print the counterexample for each verification failure.
     /// At most 25 counterexamples are printed.
-    #[arg(long, env = "ISLE_VERI_PRINT_COUNTEREXAMPLE")]
+    #[arg(
+        long,
+        env = "ISLE_VERI_PRINT_COUNTEREXAMPLE",
+        value_parser = clap::builder::FalseyValueParser::new(),
+    )]
     print_counterexample: bool,
 
     /// Skip solver.
