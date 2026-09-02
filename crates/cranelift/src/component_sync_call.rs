@@ -102,15 +102,17 @@ where
             .vm_store_context()
             .component_context(i)
             .load(&mut builder.cursor(), vmstore);
-        alias_regions
-            .vm_deferred_thread()
-            .saved_context(i)
-            .store(&mut builder.cursor(), slot_addr, saved);
+        alias_regions.vm_deferred_thread().saved_context(i).store(
+            &mut builder.cursor(),
+            slot_addr,
+            saved,
+        );
         let zero = builder.ins().iconst(ir::types::I32, 0);
-        alias_regions
-            .vm_store_context()
-            .component_context(i)
-            .store(&mut builder.cursor(), vmstore, zero);
+        alias_regions.vm_store_context().component_context(i).store(
+            &mut builder.cursor(),
+            vmstore,
+            zero,
+        );
     }
 
     // Publish the deferred thread as the store's current thread.
@@ -193,10 +195,11 @@ where
             .vm_deferred_thread()
             .saved_context(i)
             .load(&mut builder.cursor(), slot_addr);
-        alias_regions
-            .vm_store_context()
-            .component_context(i)
-            .store(&mut builder.cursor(), vmstore, saved);
+        alias_regions.vm_store_context().component_context(i).store(
+            &mut builder.cursor(),
+            vmstore,
+            saved,
+        );
     }
     builder.ins().jump(cont_block, &[]);
 
