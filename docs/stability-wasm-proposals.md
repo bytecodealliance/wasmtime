@@ -111,7 +111,7 @@ The emoji legend is:
 [`custom-page-sizes`]: https://github.com/WebAssembly/custom-page-sizes
 [`compact-import-section`]: https://github.com/WebAssembly/compact-import-section
 
-## Component-model Proposals
+## Component-Model Proposals
 
 Changes to the component model aren't currently of the same shape as changes to
 core WebAssembly itself. There are not proposal repositories at this time but
@@ -131,7 +131,7 @@ implementations within Wasmtime.
 |  Proposal                 | Emoji | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
 |---------------------------|-------|---------|-------|----------|--------|-----|--------|
 | map                       | 🗺️     | ✅      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| implements                | 🏷️     | ✅      | ✅    | ✅       | ❌     | ✅  | ❌     |
+| implements                | 🏷️     | ✅      | ✅    | ✅       | ❌     | ✅  | ✅     |
 | more async options [^c2]  | 🚝    | ❌      | ✅    | ❌       | ❌     | ✅  | ✅     |
 | stackful async [^c2]      | 🚟    | ❌      | ✅    | ❌       | ❌     | ✅  | ✅     |
 | threading                 | 🧵    | ❌      | ✅    | ❌       | ❌     | ✅  | ❌     |
