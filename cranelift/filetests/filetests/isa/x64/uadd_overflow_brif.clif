@@ -322,3 +322,59 @@ block3:
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+
+function %no_load_sinking(i64) -> i8 {
+block0(v0: i64):
+  v1 = load.i64 v0
+  v2, v3 = uadd_overflow v0, v1
+  brif v3, block1(v3), block2
+
+block1(v4: i8):
+  return v4
+
+block2:
+  v5 = iconst.i8 42
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq (%rdi), %rsi
+;   movq %rdi, %r8
+;   addq %rsi, %r8
+;   setb %al
+;   addq %rsi, %rdi
+;   jb      label2; j label1
+; block1:
+;   movl $0x2a, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block2:
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi), %rsi ; trap: heap_oob
+;   movq %rdi, %r8
+;   addq %rsi, %r8
+;   setb %al
+;   addq %rsi, %rdi
+;   jb 0x23
+; block2: ; offset 0x19
+;   movl $0x2a, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x23
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
