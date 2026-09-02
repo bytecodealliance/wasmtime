@@ -1,3 +1,4 @@
+use crate::runtime::{AbortOnDropJoinHandle, poll_noop};
 use core::fmt;
 use core::future::Future;
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -231,15 +232,14 @@ pub(crate) enum SocketAddressFamily {
 /// (1) polling a future for completion and
 /// (2) obtaining the output of a future
 /// into separate operations. This is a common pattern in WASI 0.2.
-pub(crate) enum MaybeReady<T> {
-    Pending(Pin<Box<dyn Future<Output = T> + Send>>),
+pub(crate) enum MaybeReady<T, F = Pin<Box<dyn Future<Output = T> + Send>>> {
+    Pending(F),
     Ready(T),
 }
-impl<T> MaybeReady<T> {
-    pub(crate) fn new(fut: impl Future<Output = T> + Send + 'static) -> Self {
-        Self::Pending(Box::pin(fut))
-    }
 
+pub(crate) type MaybeSpawned<T> = MaybeReady<T, AbortOnDropJoinHandle<T>>;
+
+impl<T> MaybeSpawned<T> {
     /// Poll the future and attempt to resolve it immediately. If the future is
     /// not ready yet, it will be moved to a background task.
     pub(crate) fn poll_or_spawn(fut: impl Future<Output = T> + Send + 'static) -> Self
@@ -247,11 +247,21 @@ impl<T> MaybeReady<T> {
         T: Send + 'static,
     {
         let mut fut = Box::pin(fut);
-        match crate::runtime::with_ambient_tokio_runtime(|| fut.as_mut().poll(&mut noop_cx())) {
-            Poll::Ready(val) => Self::Ready(val),
-            Poll::Pending => Self::new(crate::runtime::spawn(fut)),
+        match crate::runtime::with_ambient_tokio_runtime(|| poll_noop(fut.as_mut())) {
+            Some(val) => Self::Ready(val),
+            None => Self::new(crate::runtime::spawn(fut)),
         }
     }
+}
+
+impl<T, F> MaybeReady<T, F>
+where
+    F: Future<Output = T> + Unpin,
+{
+    pub(crate) fn new(fut: F) -> Self {
+        Self::Pending(fut)
+    }
+
     pub(crate) fn unwrap_ready(self) -> T {
         match self {
             Self::Ready(val) => val,
@@ -260,7 +270,7 @@ impl<T> MaybeReady<T> {
     }
     pub(crate) fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<&mut T> {
         match self {
-            Self::Pending(fut) => match fut.as_mut().poll(cx) {
+            Self::Pending(fut) => match Pin::new(fut).as_mut().poll(cx) {
                 Poll::Ready(val) => {
                     *self = Self::Ready(val);
                     Poll::Ready(match self {
@@ -279,10 +289,6 @@ impl<T> MaybeReady<T> {
             Self::Pending(fut) => fut.await,
         }
     }
-}
-
-pub(crate) fn noop_cx() -> std::task::Context<'static> {
-    std::task::Context::from_waker(futures::task::noop_waker_ref())
 }
 
 #[derive(Clone, Copy, Debug)]
