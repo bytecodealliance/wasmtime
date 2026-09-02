@@ -70,7 +70,7 @@ pub trait FutureReaderExt<T> {
     fn new_cb<U, S, E>(
         store: S,
         future: impl Future<Output = Result<U, E>> + Send + 'static,
-        cb: impl FnOnce(&mut S::Data, U) -> T + Send + 'static,
+        cb: impl FnOnce(&mut S::Data, U) -> wasmtime::Result<T> + Send + 'static,
     ) -> wasmtime::Result<FutureReader<T>>
     where
         S: AsContextMut,
@@ -89,7 +89,7 @@ pub trait FutureReaderExt<T> {
         impl<F, C, D, T, U, E> FutureProducer<D> for Producer<F, C, D, T>
         where
             F: Future<Output = Result<U, E>> + Send + 'static,
-            C: FnOnce(&mut D, U) -> T + Send + 'static,
+            C: FnOnce(&mut D, U) -> wasmtime::Result<T> + Send + 'static,
             D: 'static,
             T: 'static,
             E: Into<wasmtime::Error>,
@@ -115,7 +115,7 @@ pub trait FutureReaderExt<T> {
                     }
                 };
                 let cb = this.cb.take().context("polled after returning `Ready`")?;
-                let res = cb(store.data_mut(), res);
+                let res = cb(store.data_mut(), res)?;
                 Poll::Ready(Ok(Some(res)))
             }
         }

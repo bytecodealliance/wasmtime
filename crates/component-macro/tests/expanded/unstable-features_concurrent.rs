@@ -1,15 +1,15 @@
 /// Link-time configurations.
 #[derive(Clone, Debug, Default)]
 pub struct LinkOptions {
-    experimental_interface: bool,
-    experimental_interface_function: bool,
-    experimental_interface_resource: bool,
-    experimental_interface_resource_method: bool,
-    experimental_world: bool,
-    experimental_world_function_import: bool,
-    experimental_world_interface_import: bool,
-    experimental_world_resource: bool,
-    experimental_world_resource_method: bool,
+    pub(crate) experimental_interface: bool,
+    pub(crate) experimental_interface_function: bool,
+    pub(crate) experimental_interface_resource: bool,
+    pub(crate) experimental_interface_resource_method: bool,
+    pub(crate) experimental_world: bool,
+    pub(crate) experimental_world_function_import: bool,
+    pub(crate) experimental_world_interface_import: bool,
+    pub(crate) experimental_world_resource: bool,
+    pub(crate) experimental_world_resource_method: bool,
 }
 impl LinkOptions {
     /// Enable members marked as `@unstable(feature = experimental-interface)`
@@ -374,10 +374,10 @@ pub mod foo {
             /// Link-time configurations.
             #[derive(Clone, Debug, Default)]
             pub struct LinkOptions {
-                experimental_interface: bool,
-                experimental_interface_function: bool,
-                experimental_interface_resource: bool,
-                experimental_interface_resource_method: bool,
+                pub(crate) experimental_interface: bool,
+                pub(crate) experimental_interface_function: bool,
+                pub(crate) experimental_interface_resource: bool,
+                pub(crate) experimental_interface_resource_method: bool,
             }
             impl LinkOptions {
                 /// Enable members marked as `@unstable(feature = experimental-interface)`

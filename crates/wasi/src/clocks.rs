@@ -1,5 +1,7 @@
+use crate::{NamedId, WasiCtxNamedView};
 use std::error::Error;
 use std::fmt;
+use std::marker;
 use std::time::{Duration, Instant, SystemTime};
 use wasmtime::component::{HasData, ResourceTable};
 
@@ -228,4 +230,161 @@ impl From<std::num::TryFromIntError> for DatetimeError {
     fn from(_: std::num::TryFromIntError) -> Self {
         DatetimeError
     }
+}
+
+/// A helper struct which implements [`HasData`] for the `wasi:clocks` APIs
+/// when used in combination with named imports.
+///
+/// This structure is similar in purpose to [`WasiClocks`] and is used
+/// when using the [`named_imports`] module for `wasi:clocks`. This structure
+/// serves as the `D` type parameter for `add_to_linker` functions.
+///
+/// [`named_imports`]: crate::p3::bindings::named_imports::wasi::clocks
+///
+/// # Meaning of the `T` parameter
+///
+/// Here the `T` must be something that implements [`WasiClocksNamedView`]. The
+/// corresponding `Data` for this type is [`WasiCtxNamedView`] which internally
+/// will contain `&mut T`.
+///
+/// Effectively you're going to implement [`WasiClocksNamedView`] for something in
+/// your embedding, and that's the `T` you'll fill in here.
+///
+/// # Examples
+///
+/// ```
+/// use wasmtime::component::{Linker, Component, ResourceTable};
+/// use wasmtime::{Engine, Result};
+/// use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+/// use wasmtime_wasi::clocks::*;
+/// use wasmtime_wasi::p2::bindings::named_imports;
+/// use std::collections::HashMap;
+///
+/// struct MyStoreState {
+///     table: ResourceTable,
+///     states: HashMap<NamedId, WasiClocksCtx>,
+/// }
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///     let mut linker = Linker::new(&engine);
+///     let component = Component::new(&engine, "(component)")?;
+///     let mut name_map = HashMap::new();
+///
+///     named_imports::wasi::clocks::wall_clock::add_to_linker::<MyStoreState, WasiClocksNamed<MyStoreState>>(
+///         &mut linker,
+///         &component,
+///         |name| {
+///             let len = name_map.len();
+///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///         },
+///         |state| WasiCtxNamedView(state),
+///     )?;
+///     Ok(())
+/// }
+///
+/// impl WasiClocksNamedView for MyStoreState {
+///     fn clocks(&mut self, id: NamedId) -> WasiClocksCtxView<'_> {
+///         let ctx = self.states.get_mut(&id).expect("state for id");
+///         WasiClocksCtxView {
+///             table: &mut self.table,
+///             ctx,
+///         }
+///     }
+/// }
+/// ```
+pub struct WasiClocksNamed<T>(marker::PhantomData<fn() -> T>);
+
+impl<T> HasData for WasiClocksNamed<T>
+where
+    T: WasiClocksNamedView,
+{
+    type Data<'a> = WasiCtxNamedView<'a, T>;
+}
+
+/// A trait used to look up a specific `wasi:clocks` context for a named
+/// import.
+///
+/// This trait is used in conjunction with the [`named_imports`] bindings
+/// generated for all WASI interfaces. The purpose of this trait is for
+/// embedders to define how a [`NamedId`] maps to a particular `wasi:clocks`
+/// context, here returned as [`WasiClocksCtxView`]. Embedders are responsible
+/// for assigning meaning to [`NamedId`] values themselves. These IDs are
+/// assigned when [`add_named_to_linker`] is called, for example, as the
+/// `lookup` argument to that function.
+///
+/// When using [`add_named_to_linker`] it's sufficient to implement this trait
+/// for the `T` in `Store<T>`. You can also instead implement the
+/// [`WasiNamedView`] trait for `T` which implies an implementation of this
+/// trait.
+///
+/// When using `add_to_linker` in the generated `bindings::named_imports`
+/// module then values implementing this live within the `T` of `Store<T>`, and
+/// be temporarily referenced in [`WasiCtxNamedView`] where internally that'll
+/// hold `WasiCtxNamedView(&mut your_type)`.
+///
+/// [`named_imports`]: crate::p3::bindings::named_imports
+/// [`add_named_to_linker`]: crate::p3::clocks::add_named_to_linker
+/// [`WasiNamedView`]: crate::WasiNamedView
+///
+/// # Examples
+///
+/// ```
+/// use wasmtime::component::{Linker, Component, ResourceTable};
+/// use wasmtime::{Engine, Result};
+/// use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+/// use wasmtime_wasi::clocks::*;
+/// use std::collections::HashMap;
+///
+/// struct MyStoreState {
+///     table: ResourceTable,
+///     states: HashMap<NamedId, WasiClocksCtx>,
+/// }
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///     let mut linker = Linker::new(&engine);
+///     let component = Component::new(&engine, "(component)")?;
+///     let mut name_map = HashMap::new();
+///
+///     wasmtime_wasi::p3::clocks::add_named_to_linker::<MyStoreState>(
+///         &mut linker,
+///         &component,
+///         |_, name| {
+///             let len = name_map.len();
+///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///         },
+///     )?;
+///     Ok(())
+/// }
+///
+/// impl WasiClocksNamedView for MyStoreState {
+///     fn clocks(&mut self, id: NamedId) -> WasiClocksCtxView<'_> {
+///         let ctx = self.states.get_mut(&id).expect("state for id");
+///         WasiClocksCtxView {
+///             table: &mut self.table,
+///             ctx,
+///         }
+///     }
+/// }
+/// ```
+pub trait WasiClocksNamedView: Send + 'static {
+    /// Looks up the [`WasiClocksCtxView`] for the given [`NamedId`].
+    ///
+    /// This method will resolve the `id` specified to a specific clocks
+    /// context that is available to be used. Note that this method is
+    /// specifically infallible meaning that a clocks context must be returned
+    /// and this cannot generate a trap or panic or similar.
+    ///
+    /// Embedders are responsible for allocating [`NamedId`] and assigning
+    /// meaning to ids. When a `Linker` is populated embedders will have the
+    /// ability to generate a `NamedId` for all imports found, and then that
+    /// embedder-allocated id is then passed back here when the corresponding
+    /// imported function is invoked.
+    ///
+    /// Note that the [`ResourceTable`] referenced in the returned
+    /// [`WasiClocksCtxView`] need not be unique. It's ok to use the same
+    /// [`ResourceTable`] for all imports. This is not a guest-visible
+    /// abstraction and just helps the host allocate and manage state.
+    fn clocks(&mut self, id: NamedId) -> WasiClocksCtxView<'_>;
 }

@@ -1,11 +1,12 @@
 use crate::p3::bindings::http::types::{ErrorCode, Trailers};
 use crate::p3::helpers::FutureReaderExt;
-use crate::{Error, FieldMap, WasiHttp, WasiHttpCtxView};
+use crate::{Error, FieldMap, WasiHttpCtxView};
 use bytes::Bytes;
 use core::iter;
 use core::num::NonZeroUsize;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
+use http::HeaderMap;
 use http_body::Body as _;
 use http_body_util::combinators::UnsyncBoxBody;
 use std::any::{Any, TypeId};
@@ -14,8 +15,8 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
 use wasmtime::component::{
-    Access, Destination, FutureReader, Resource, Source, StreamConsumer, StreamProducer,
-    StreamReader, StreamResult,
+    Destination, FutureReader, Resource, Source, StreamConsumer, StreamProducer, StreamReader,
+    StreamResult,
 };
 use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, StoreContextMut};
@@ -51,19 +52,22 @@ async fn guest_body_result<E>(
 }
 
 impl Body {
-    pub(crate) fn new_guest<T>(
-        store: &mut Access<'_, T, WasiHttp>,
+    pub(crate) fn new_guest<S>(
+        mut store: S,
+        mut getter: impl FnMut(&mut S::Data) -> WasiHttpCtxView<'_> + Send + 'static,
         contents: Option<StreamReader<u8>>,
         mut trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-    ) -> wasmtime::Result<(Self, FutureReader<Result<(), ErrorCode>>)> {
-        let getter = store.getter();
+    ) -> wasmtime::Result<(Self, FutureReader<Result<(), ErrorCode>>)>
+    where
+        S: AsContextMut,
+    {
         // Attempt to unwrap this guest-specified body stream as a host-owned
         // stream. That helps bypass a layer of indirection where possible.
         let contents = match contents
-            .map(|rx| rx.try_into::<HostBodyStreamProducer<T>>(&mut *store))
+            .map(|rx| rx.try_into::<HostBodyStreamProducer>(store.as_context_mut()))
         {
             Some(Ok(mut producer)) => {
-                trailers.close(&mut *store)?;
+                trailers.close(store.as_context_mut())?;
                 let (result_tx, result_rx) = oneshot::channel();
                 let body = Body::Host {
                     body: mem::take(&mut producer.body),
@@ -72,9 +76,11 @@ impl Body {
                 return Ok((
                     body,
                     FutureReader::new_cb(
-                        &mut *store,
+                        store.as_context_mut(),
                         guest_body_result(result_rx),
-                        move |d, res: Result<_, Error>| res.map_err(|e| getter(d).error_to_p3(&e)),
+                        move |d, res: Result<_, Error>| {
+                            Ok(res.map_err(|e| getter(d).error_to_p3(&e)))
+                        },
                     )?,
                 ));
             }
@@ -90,23 +96,26 @@ impl Body {
         Ok((
             body,
             FutureReader::new_cb(
-                &mut *store,
+                store.as_context_mut(),
                 guest_body_result(result_rx),
-                move |d, res: Result<_, Error>| res.map_err(|e| getter(d).error_to_p3(&e)),
+                move |d, res: Result<_, Error>| Ok(res.map_err(|e| getter(d).error_to_p3(&e))),
             )?,
         ))
     }
 
     /// Implementation of `consume-body` shared between requests and responses
-    pub(crate) fn consume<T>(
+    pub(crate) fn consume<S>(
         self,
-        mut store: Access<'_, T, WasiHttp>,
+        mut store: S,
         fut: FutureReader<Result<(), ErrorCode>>,
-        getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+        mut getter: impl FnMut(&mut S::Data) -> WasiHttpCtxView<'_> + Send + 'static,
     ) -> wasmtime::Result<(
         StreamReader<u8>,
         FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-    )> {
+    )>
+    where
+        S: AsContextMut,
+    {
         let (contents_rx, trailers_rx) = match self {
             Body::Guest {
                 contents_rx,
@@ -115,34 +124,42 @@ impl Body {
             } => {
                 let body = match contents_rx {
                     Some(stream) => stream,
-                    None => StreamReader::new(&mut store, iter::empty())?,
+                    None => StreamReader::new(store.as_context_mut(), iter::empty())?,
                 };
-                fut.pipe_cb(&mut store, |_, res| {
+                fut.pipe_cb(store.as_context_mut(), |_, res| {
                     _ = result_tx.send(Box::new(async { res.map_err(|e| e.into()) }));
                     Ok(())
                 })?;
                 (body, trailers_rx)
             }
             Body::Host { body, result_tx } => {
-                fut.pipe_cb(&mut store, |_, res| {
+                fut.pipe_cb(store.as_context_mut(), |_, res| {
                     _ = result_tx.send(Box::new(async { res.map_err(|e| e.into()) }));
                     Ok(())
                 })?;
                 let (trailers_tx, trailers_rx) = oneshot::channel();
                 (
                     StreamReader::new(
-                        &mut store,
+                        store.as_context_mut(),
                         HostBodyStreamProducer {
                             body,
                             trailers: Some(trailers_tx),
-                            getter,
                         },
                     )?,
-                    FutureReader::new_cb(
-                        &mut store,
-                        trailers_rx,
-                        move |d, res: Result<_, Error>| res.map_err(|e| getter(d).error_to_p3(&e)),
-                    )?,
+                    FutureReader::new_cb(store.as_context_mut(), trailers_rx, move |d, res| {
+                        let mut view = getter(d);
+                        let trailers = match res {
+                            Ok(Some(trailers)) => trailers,
+                            Ok(None) => return Ok(Ok(None)),
+                            Err(e) => return Ok(Err(view.error_to_p3(&e))),
+                        };
+                        let trailers = FieldMap::new_immutable(view.hooks, trailers);
+                        let trailers = view
+                            .table
+                            .push(trailers)
+                            .context("failed to push trailers to table")?;
+                        Ok(Ok(Some(trailers)))
+                    })?,
                 )
             }
         };
@@ -315,8 +332,13 @@ impl GuestBody {
         result_fut: impl Future<Output = Result<(), Error>> + Send + 'static,
         content_length: Option<u64>,
         make_error: fn(Option<u64>) -> ErrorCode,
-        getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+        mut getter: impl FnMut(&mut T) -> WasiHttpCtxView<'_> + Unpin + Send + 'static,
     ) -> wasmtime::Result<Self> {
+        let max_chunk_size = getter(store.as_context_mut().data_mut())
+            .hooks
+            .p3_outgoing_body_chunk_size()
+            .max(1);
+
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
         trailers_rx.pipe_cb(&mut store, move |data, res| {
             let res = match res {
@@ -333,11 +355,6 @@ impl GuestBody {
             _ = trailers_http_tx.send(res);
             Ok(())
         })?;
-
-        let max_chunk_size = getter(store.as_context_mut().data_mut())
-            .hooks
-            .p3_outgoing_body_chunk_size()
-            .max(1);
 
         let contents_rx = if let Some(rx) = contents_rx {
             let (http_tx, http_rx) = mpsc::channel(1);
@@ -465,27 +482,26 @@ impl http_body::Body for GuestBody {
 }
 
 /// [StreamProducer] implementation for bodies originating in the host.
-pub(crate) struct HostBodyStreamProducer<T> {
+pub(crate) struct HostBodyStreamProducer {
     pub(crate) body: UnsyncBoxBody<Bytes, Error>,
-    trailers: Option<oneshot::Sender<Result<Option<Resource<Trailers>>, Error>>>,
-    getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+    trailers: Option<oneshot::Sender<Result<Option<HeaderMap>, Error>>>,
 }
 
-impl<T> Drop for HostBodyStreamProducer<T> {
+impl Drop for HostBodyStreamProducer {
     fn drop(&mut self) {
         self.close(Ok(None))
     }
 }
 
-impl<T> HostBodyStreamProducer<T> {
-    fn close(&mut self, res: Result<Option<Resource<Trailers>>, Error>) {
+impl HostBodyStreamProducer {
+    fn close(&mut self, res: Result<Option<HeaderMap>, Error>) {
         if let Some(tx) = self.trailers.take() {
             _ = tx.send(res);
         }
     }
 }
 
-impl<D> StreamProducer<D> for HostBodyStreamProducer<D>
+impl<D> StreamProducer<D> for HostBodyStreamProducer
 where
     D: 'static,
 {
@@ -552,15 +568,7 @@ where
                                 }
                                 return Poll::Ready(Ok(StreamResult::Completed));
                             }
-                            Err(Ok(trailers)) => {
-                                let view = (self.getter)(store.data_mut());
-                                let trailers = FieldMap::new_immutable(view.hooks, trailers);
-                                let trailers = view
-                                    .table
-                                    .push(trailers)
-                                    .context("failed to push trailers to table")?;
-                                break 'result Ok(Some(trailers));
-                            }
+                            Err(Ok(trailers)) => break 'result Ok(Some(trailers)),
                             Err(Err(..)) => break 'result Err(Error::HttpProtocolError),
                         }
                     }

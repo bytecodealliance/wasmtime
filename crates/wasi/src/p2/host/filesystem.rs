@@ -261,7 +261,6 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
     async fn link_at(
         &mut self,
         fd: Resource<types::Descriptor>,
-        // TODO delete the path flags from this function
         old_path_flags: types::PathFlags,
         old_path: String,
         new_descriptor: Resource<types::Descriptor>,
@@ -753,5 +752,366 @@ mod test {
             .unwrap();
         let _ = table.get(&ix).unwrap();
         table.delete(ix).unwrap();
+    }
+}
+
+mod named {
+    use crate::filesystem::WasiFilesystemNamedView;
+    use crate::p2::bindings::filesystem::types::{
+        Advice, Descriptor, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry,
+        DirectoryEntryStream, ErrorCode, Filesize, MetadataHashValue, NewTimestamp, OpenFlags,
+        PathFlags,
+    };
+    use crate::p2::bindings::named_imports::wasi::filesystem::{preopens, types};
+    use crate::p2::{FsError, FsResult};
+    use crate::{NamedId, WasiCtxNamedView};
+    use wasmtime::component::Resource;
+    use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};
+
+    impl<T> preopens::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiFilesystemNamedView,
+    {
+        fn get_directories(
+            &mut self,
+            id: NamedId,
+        ) -> wasmtime::Result<Vec<(Resource<Descriptor>, String)>> {
+            super::preopens::Host::get_directories(&mut self.0.filesystem(id))
+        }
+    }
+
+    impl<T> types::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiFilesystemNamedView,
+    {
+        fn convert_error_code(&mut self, err: FsError) -> wasmtime::Result<ErrorCode> {
+            err.downcast()
+        }
+
+        fn filesystem_error_code(
+            &mut self,
+            id: NamedId,
+            err: Resource<wasmtime::Error>,
+        ) -> wasmtime::Result<Option<ErrorCode>> {
+            super::types::Host::filesystem_error_code(&mut self.0.filesystem(id), err)
+        }
+    }
+
+    impl<T> types::HostDescriptor for WasiCtxNamedView<'_, T>
+    where
+        T: WasiFilesystemNamedView,
+    {
+        async fn advise(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            offset: Filesize,
+            len: Filesize,
+            advice: Advice,
+        ) -> FsResult<()> {
+            super::HostDescriptor::advise(&mut self.0.filesystem(id), fd, offset, len, advice).await
+        }
+
+        async fn sync_data(&mut self, id: NamedId, fd: Resource<Descriptor>) -> FsResult<()> {
+            super::HostDescriptor::sync_data(&mut self.0.filesystem(id), fd).await
+        }
+
+        async fn get_flags(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+        ) -> FsResult<DescriptorFlags> {
+            super::HostDescriptor::get_flags(&mut self.0.filesystem(id), fd).await
+        }
+
+        async fn get_type(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+        ) -> FsResult<DescriptorType> {
+            super::HostDescriptor::get_type(&mut self.0.filesystem(id), fd).await
+        }
+
+        async fn set_size(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            size: Filesize,
+        ) -> FsResult<()> {
+            super::HostDescriptor::set_size(&mut self.0.filesystem(id), fd, size).await
+        }
+
+        async fn set_times(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            atim: NewTimestamp,
+            mtim: NewTimestamp,
+        ) -> FsResult<()> {
+            super::HostDescriptor::set_times(&mut self.0.filesystem(id), fd, atim, mtim).await
+        }
+
+        async fn read(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            len: Filesize,
+            offset: Filesize,
+        ) -> FsResult<(Vec<u8>, bool)> {
+            super::HostDescriptor::read(&mut self.0.filesystem(id), fd, len, offset).await
+        }
+
+        async fn write(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            buf: Vec<u8>,
+            offset: Filesize,
+        ) -> FsResult<Filesize> {
+            super::HostDescriptor::write(&mut self.0.filesystem(id), fd, buf, offset).await
+        }
+
+        async fn read_directory(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+        ) -> FsResult<Resource<DirectoryEntryStream>> {
+            super::HostDescriptor::read_directory(&mut self.0.filesystem(id), fd).await
+        }
+
+        async fn sync(&mut self, id: NamedId, fd: Resource<Descriptor>) -> FsResult<()> {
+            super::HostDescriptor::sync(&mut self.0.filesystem(id), fd).await
+        }
+
+        async fn create_directory_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            path: String,
+        ) -> FsResult<()> {
+            super::HostDescriptor::create_directory_at(&mut self.0.filesystem(id), fd, path).await
+        }
+
+        async fn stat(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+        ) -> FsResult<DescriptorStat> {
+            super::HostDescriptor::stat(&mut self.0.filesystem(id), fd).await
+        }
+
+        async fn stat_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            path_flags: PathFlags,
+            path: String,
+        ) -> FsResult<DescriptorStat> {
+            super::HostDescriptor::stat_at(&mut self.0.filesystem(id), fd, path_flags, path).await
+        }
+
+        async fn set_times_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            path_flags: PathFlags,
+            path: String,
+            atim: NewTimestamp,
+            mtim: NewTimestamp,
+        ) -> FsResult<()> {
+            super::HostDescriptor::set_times_at(
+                &mut self.0.filesystem(id),
+                fd,
+                path_flags,
+                path,
+                atim,
+                mtim,
+            )
+            .await
+        }
+
+        async fn link_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            old_path_flags: PathFlags,
+            old_path: String,
+            new_descriptor: Resource<Descriptor>,
+            new_path: String,
+        ) -> FsResult<()> {
+            super::HostDescriptor::link_at(
+                &mut self.0.filesystem(id),
+                fd,
+                old_path_flags,
+                old_path,
+                new_descriptor,
+                new_path,
+            )
+            .await
+        }
+
+        async fn open_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            path_flags: PathFlags,
+            path: String,
+            oflags: OpenFlags,
+            flags: DescriptorFlags,
+        ) -> FsResult<Resource<Descriptor>> {
+            super::HostDescriptor::open_at(
+                &mut self.0.filesystem(id),
+                fd,
+                path_flags,
+                path,
+                oflags,
+                flags,
+            )
+            .await
+        }
+
+        fn drop(&mut self, id: NamedId, fd: Resource<Descriptor>) -> wasmtime::Result<()> {
+            super::HostDescriptor::drop(&mut self.0.filesystem(id), fd)
+        }
+
+        async fn readlink_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            path: String,
+        ) -> FsResult<String> {
+            super::HostDescriptor::readlink_at(&mut self.0.filesystem(id), fd, path).await
+        }
+
+        async fn remove_directory_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            path: String,
+        ) -> FsResult<()> {
+            super::HostDescriptor::remove_directory_at(&mut self.0.filesystem(id), fd, path).await
+        }
+
+        async fn rename_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            old_path: String,
+            new_fd: Resource<Descriptor>,
+            new_path: String,
+        ) -> FsResult<()> {
+            super::HostDescriptor::rename_at(
+                &mut self.0.filesystem(id),
+                fd,
+                old_path,
+                new_fd,
+                new_path,
+            )
+            .await
+        }
+
+        async fn symlink_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            src_path: String,
+            dest_path: String,
+        ) -> FsResult<()> {
+            super::HostDescriptor::symlink_at(&mut self.0.filesystem(id), fd, src_path, dest_path)
+                .await
+        }
+
+        async fn unlink_file_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            path: String,
+        ) -> FsResult<()> {
+            super::HostDescriptor::unlink_file_at(&mut self.0.filesystem(id), fd, path).await
+        }
+
+        fn read_via_stream(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            offset: Filesize,
+        ) -> FsResult<Resource<DynInputStream>> {
+            super::HostDescriptor::read_via_stream(&mut self.0.filesystem(id), fd, offset)
+        }
+
+        fn write_via_stream(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            offset: Filesize,
+        ) -> FsResult<Resource<DynOutputStream>> {
+            super::HostDescriptor::write_via_stream(&mut self.0.filesystem(id), fd, offset)
+        }
+
+        fn append_via_stream(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+        ) -> FsResult<Resource<DynOutputStream>> {
+            super::HostDescriptor::append_via_stream(&mut self.0.filesystem(id), fd)
+        }
+
+        async fn is_same_object(
+            &mut self,
+            id: NamedId,
+            a: Resource<Descriptor>,
+            b: Resource<Descriptor>,
+        ) -> wasmtime::Result<bool> {
+            super::HostDescriptor::is_same_object(&mut self.0.filesystem(id), a, b).await
+        }
+
+        async fn metadata_hash(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+        ) -> FsResult<MetadataHashValue> {
+            super::HostDescriptor::metadata_hash(&mut self.0.filesystem(id), fd).await
+        }
+
+        async fn metadata_hash_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<Descriptor>,
+            path_flags: PathFlags,
+            path: String,
+        ) -> FsResult<MetadataHashValue> {
+            super::HostDescriptor::metadata_hash_at(
+                &mut self.0.filesystem(id),
+                fd,
+                path_flags,
+                path,
+            )
+            .await
+        }
+    }
+
+    impl<T> types::HostDirectoryEntryStream for WasiCtxNamedView<'_, T>
+    where
+        T: WasiFilesystemNamedView,
+    {
+        async fn read_directory_entry(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DirectoryEntryStream>,
+        ) -> FsResult<Option<DirectoryEntry>> {
+            super::HostDirectoryEntryStream::read_directory_entry(
+                &mut self.0.filesystem(id),
+                stream,
+            )
+            .await
+        }
+
+        fn drop(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DirectoryEntryStream>,
+        ) -> wasmtime::Result<()> {
+            super::HostDirectoryEntryStream::drop(&mut self.0.filesystem(id), stream)
+        }
     }
 }

@@ -946,3 +946,22 @@ async fn p3_http_outbound_request_chunk_size() -> Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_CHUNK_SIZE_COMPONENT, &server).await
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_named_imports() -> Result<()> {
+    crate::shared::run_named_imports_test(
+        P3_HTTP_NAMED_IMPORTS_COMPONENT,
+        wasmtime_wasi_http::p3::add_to_linker,
+        wasmtime_wasi_http::p3::add_named_to_linker,
+        async |store, component, linker| {
+            let command = Command::instantiate_async(&mut *store, component, linker).await?;
+            store
+                .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
+                .await
+                .context("failed to call `wasi:cli/run#run`")?
+                .context("guest trapped")?
+                .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
+        },
+    )
+    .await
+}
