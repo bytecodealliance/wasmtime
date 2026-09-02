@@ -88,6 +88,11 @@ struct Opts {
     #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     results_to_log_dir: bool,
 
+    /// Print the counterexample for each verification failure.
+    /// At most 25 counterexamples are printed.
+    #[arg(long, env = "ISLE_VERI_PRINT_COUNTEREXAMPLE")]
+    print_counterexample: bool,
+
     /// Skip solver.
     #[arg(long, env = "ISLE_VERI_SKIP_SOLVER")]
     skip_solver: bool,
@@ -285,6 +290,7 @@ fn main() -> Result<()> {
         runner.set_log_dir(log_dir);
     }
     runner.set_results_to_log_dir(opts.results_to_log_dir);
+    runner.set_print_counterexample(opts.print_counterexample);
     runner.skip_solver(opts.skip_solver);
     runner.debug(opts.debug);
 
