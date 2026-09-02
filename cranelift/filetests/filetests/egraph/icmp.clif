@@ -548,3 +548,123 @@ block0(v0: i32, v1: i32):
 ;     v6 = icmp ult v0, v1
 ;     return v6
 ; }
+
+function %smin_sgt_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin.i32 v0, v1
+    v3 = smax.i32 v0, v1
+    v4 = icmp sgt v2, v3
+    return v4
+}
+
+; function %smin_sgt_smax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 0
+;     return v5  ; v5 = 0
+; }
+
+function %umin_ugt_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin.i32 v0, v1
+    v3 = umax.i32 v0, v1
+    v4 = icmp ugt v2, v3
+    return v4
+}
+
+; function %umin_ugt_umax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 0
+;     return v5  ; v5 = 0
+; }
+
+function %smin_sle_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin.i32 v0, v1
+    v3 = smax.i32 v0, v1
+    v4 = icmp sle v2, v3
+    return v4
+}
+
+; function %smin_sle_smax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 1
+;     return v5  ; v5 = 1
+; }
+
+function %umin_ule_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin.i32 v0, v1
+    v3 = umax.i32 v0, v1
+    v4 = icmp ule v2, v3
+    return v4
+}
+
+; function %umin_ule_umax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 1
+;     return v5  ; v5 = 1
+; }
+
+function %smin_eq_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin.i32 v0, v1
+    v3 = smax.i32 v0, v1
+    v4 = icmp.i8 eq v2, v3
+    return v4
+}
+
+; function %smin_eq_smax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %smin_ne_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin.i32 v0, v1
+    v3 = smax.i32 v0, v1
+    v4 = icmp.i8 ne v2, v3
+    return v4
+}
+
+; function %smin_ne_smax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+;; select(c, ~x, ~y) --> ~select(c, x, y)
+function %select_bnot_bnot(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = icmp.i8 eq v0, v1
+    v5 = bnot.i32 v2
+    v6 = bnot.i32 v3
+    v7 = select.i32 v4, v5, v6
+    return v7
+}
+
+; function %select_bnot_bnot(i32, i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32, v3: i32):
+;     v4 = icmp eq v0, v1
+;     v8 = select v4, v2, v3
+;     v9 = bnot v8
+;     return v9
+; }
+
+;; select(c, -x, -y) --> -select(c, x, y)
+function %select_ineg_ineg(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = icmp eq v0, v1
+    v5 = ineg v2
+    v6 = ineg v3
+    v7 = select v4, v5, v6
+    return v7
+}
+
+; function %select_ineg_ineg(i32, i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32, v3: i32):
+;     v4 = icmp eq v0, v1
+;     v8 = select v4, v2, v3
+;     v9 = ineg v8
+;     return v9
+; }

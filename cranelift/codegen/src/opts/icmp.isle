@@ -490,3 +490,25 @@
 (rule (simplify (ule rty (ushr ty x y) x)) (cmp_true rty))
 (rule (simplify (ugt rty (ushr ty x y) x)) (subsume (all_zero rty)))
 (rule (simplify (ult rty x (ushr ty x y))) (subsume (all_zero rty)))
+
+;; smin(x, y) > smax(x, y) --> false
+(rule (simplify (sgt ty (smin cty x y) (smax cty x y))) (iconst_u ty 0))
+
+;; umin(x, y) > umax(x, y) --> false
+(rule (simplify (ugt ty (umin cty x y) (umax cty x y))) (iconst_u ty 0))
+
+;; smin(x, y) <= smax(x, y) --> true
+(rule (simplify (sle ty (smin cty x y) (smax cty x y))) (cmp_true ty))
+(rule (simplify (sle ty (smin cty x y) (smax cty y x))) (cmp_true ty))
+
+;; umin(x, y) <= umax(x, y) --> true
+(rule (simplify (ule ty (umin cty x y) (umax cty x y))) (cmp_true ty))
+(rule (simplify (ule ty (umin cty x y) (umax cty y x))) (cmp_true ty))
+
+;; smin(x, y) == smax(x, y) --> x == y
+(rule (simplify (eq ty (smin cty x y) (smax cty x y))) (eq ty x y))
+(rule (simplify (eq ty (smin cty x y) (smax cty y x))) (eq ty x y))
+
+;; smin(x, y) != smax(x, y) --> x != y
+(rule (simplify (ne ty (smin cty x y) (smax cty x y))) (ne ty x y))
+(rule (simplify (ne ty (smin cty x y) (smax cty y x))) (ne ty x y))
