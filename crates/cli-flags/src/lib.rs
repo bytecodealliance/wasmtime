@@ -517,6 +517,8 @@ wasmtime_option_group! {
         pub wide_arithmetic: Option<bool>,
         /// Configure support for the branch-hinting proposal.
         pub branch_hinting: Option<bool>,
+        /// Configure support for compact imports.
+        pub compact_imports: Option<bool>,
         /// Configure support for the extended-const proposal.
         pub extended_const: Option<bool>,
         /// Configure support for the exceptions proposal.
@@ -1321,6 +1323,10 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.branch_hinting {
             config.wasm_branch_hinting(enable);
         }
+        // Not included in `all_proposals`: off by default until fuzzed.
+        if let Some(enable) = self.wasm.compact_imports {
+            config.wasm_compact_imports(enable);
+        }
         if let Some(enable) = self.wasm.extended_const.or(all) {
             config.wasm_extended_const(enable);
         }
@@ -1508,6 +1514,7 @@ impl CommonOptions {
                 async_stack_size: Some(engine.get_async_stack_size()),
                 async_stack_zeroing: Some(engine.get_async_stack_zeroing()),
                 branch_hinting: Some(engine.get_wasm_branch_hinting()),
+                compact_imports: Some(features.contains(WasmFeatures::COMPACT_IMPORTS)),
                 bulk_memory: Some(features.contains(WasmFeatures::BULK_MEMORY)),
                 component_model: Some(features.contains(WasmFeatures::COMPONENT_MODEL)),
                 component_model_async: Some(features.contains(WasmFeatures::CM_ASYNC)),

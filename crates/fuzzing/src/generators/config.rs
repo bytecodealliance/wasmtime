@@ -139,6 +139,7 @@ impl Config {
             extended_const,
             wide_arithmetic,
             branch_hinting,
+            compact_imports,
             component_model_async,
             component_model_more_async_builtins,
             component_model_async_stackful,
@@ -188,6 +189,7 @@ impl Config {
         config.bulk_memory_enabled = bulk_memory.unwrap_or(false);
         config.multi_value_enabled = true;
         config.wide_arithmetic_enabled = wide_arithmetic.unwrap_or(false);
+        config.compact_imports_enabled = compact_imports.unwrap_or(false);
         config.memory64_enabled = memory64.unwrap_or(false);
         config.relaxed_simd_enabled = relaxed_simd.unwrap_or(false);
         config.simd_enabled = config.relaxed_simd_enabled || simd.unwrap_or(false);
@@ -338,6 +340,7 @@ impl Config {
             Some(self.module_config.component_model_fixed_length_lists);
         cfg.wasm.component_model_implements = Some(self.module_config.component_model_implements);
         cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
+        cfg.wasm.compact_imports = Some(self.module_config.config.compact_imports_enabled);
         cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
         cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);
         cfg.wasm.fuel = self.wasmtime.consume_fuel.then(|| u64::MAX);
