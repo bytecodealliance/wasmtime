@@ -217,12 +217,12 @@ impl udp::HostIncomingDatagramStream for WasiSocketsCtxView<'_> {
         wasmtime_wasi_io::poll::subscribe(self.table, this)
     }
 
-    fn drop(&mut self, this: Resource<udp::IncomingDatagramStream>) -> Result<(), wasmtime::Error> {
-        // As in the filesystem implementation, we assume closing a socket
-        // doesn't block.
+    async fn drop(
+        &mut self,
+        this: Resource<udp::IncomingDatagramStream>,
+    ) -> Result<(), wasmtime::Error> {
         let dropped = self.table.delete(this)?;
-        drop(dropped);
-
+        dropped.finish().await;
         Ok(())
     }
 }
@@ -479,7 +479,7 @@ pub mod sync {
         }
 
         fn drop(&mut self, rep: Resource<IncomingDatagramStream>) -> wasmtime::Result<()> {
-            AsyncHostIncomingDatagramStream::drop(self, rep)
+            in_tokio(async { AsyncHostIncomingDatagramStream::drop(self, rep).await })
         }
     }
 

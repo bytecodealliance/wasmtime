@@ -5,7 +5,7 @@ use crate::p2::{
 };
 use crate::runtime::poll_now;
 use crate::sockets::{
-    MaybeReady, TcpListenStream, TcpReceiveStream, TcpSendStream, TcpSocket as P3Socket,
+    MaybeSpawned, TcpListenStream, TcpReceiveStream, TcpSendStream, TcpSocket as P3Socket,
 };
 use std::future::poll_fn;
 use std::mem;
@@ -148,8 +148,8 @@ impl From<WriteError> for StreamError {
 
 enum WriteState {
     Ready(TcpSendStream, usize),
-    Writing(MaybeReady<Result<TcpSendStream, WriteError>>),
-    Closing(MaybeReady<Result<(), WriteError>>),
+    Writing(MaybeSpawned<Result<TcpSendStream, WriteError>>),
+    Closing(MaybeSpawned<Result<(), WriteError>>),
     Closed(WriteError),
 }
 
@@ -192,7 +192,7 @@ impl WriteState {
             }
         };
 
-        *self = WriteState::Writing(MaybeReady::poll_or_spawn(async move {
+        *self = WriteState::Writing(MaybeSpawned::poll_or_spawn(async move {
             while !bytes.is_empty() {
                 match stream.write(&bytes).await {
                     Ok(n) => {
@@ -234,7 +234,7 @@ impl WriteState {
 
             // Schedule the shutdown after the current write has finished:
             WriteState::Writing(write) => {
-                WriteState::Closing(MaybeReady::poll_or_spawn(async move {
+                WriteState::Closing(MaybeSpawned::poll_or_spawn(async move {
                     _ = write.into_future().await?;
                     Ok(())
                 }))

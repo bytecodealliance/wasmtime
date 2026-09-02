@@ -329,6 +329,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
     bindings::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 
@@ -362,7 +363,6 @@ where
     sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     sockets::instance_network::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     sockets::network::add_to_linker::<T, WasiSockets>(l, &options.into(), T::sockets)?;
-    sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 
@@ -469,6 +469,7 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
     bindings::sync::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sync::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sync::sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sync::sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
 
