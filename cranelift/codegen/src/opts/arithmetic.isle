@@ -22,7 +22,7 @@
 
 ;; x + -y == -y + x == -(y - x) == x - y
 (rule (simplify (iadd ty x (ineg ty y)))
-      (isub ty y x))
+      (isub ty x y))
 (rule (simplify (iadd ty (ineg ty y) x))
       (isub ty x y))
 (rule (simplify (ineg ty (isub ty y x)))
