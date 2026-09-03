@@ -1,0 +1,29 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+function %f0(i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128):
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   and x7, x2, x0
+;   and x9, x3, x1
+;   bic x11, x4, x0
+;   bic x13, x5, x1
+;   orr x0, x7, x11
+;   orr x1, x9, x13
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and x7, x2, x0
+;   and x9, x3, x1
+;   bic x11, x4, x0
+;   bic x13, x5, x1
+;   orr x0, x7, x11
+;   orr x1, x9, x13
+;   ret
