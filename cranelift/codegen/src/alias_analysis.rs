@@ -87,7 +87,8 @@ use crate::{
     trace,
 };
 use core::cmp::Ordering;
-use cranelift_entity::{EntityRef, SecondaryMap, packed_option::PackedOption};
+use cranelift_entity::{EntityRef, SecondaryMap};
+use smallvec::SmallVec;
 
 /// Determine whether this opcode behaves as a memory fence, i.e.,
 /// prohibits any moving of memory accesses across it.
@@ -187,8 +188,85 @@ impl Observer {
     }
 }
 
-/// For a given program point, the last-store instruction for each disjoint
-/// category of abstract state.
+/// Mark the store, if any, named by the given slot value as observed.
+fn observe(
+    func: &Function,
+    observed_stores: &mut FxHashMap<Inst, Observer>,
+    slot: LastStore,
+    observer: Inst,
+) {
+    let Some(last_store) = slot.inst() else {
+        return;
+    };
+
+    // NB: the instruction is not necessarily a store: slots also hold calls,
+    // fences, and atomics. Only actual stores can be DSE candidates, so don't
+    // bother recording anything else as observed.
+    if func.dfg.insts[last_store].opcode().can_store() {
+        let entry = observed_stores
+            .entry(last_store)
+            .or_insert(Observer::One(observer));
+        *entry = Observer::meet(*entry, Observer::One(observer));
+        trace!("    observed_stores[{last_store:?}] = {entry:?}");
+    }
+}
+
+/// Which instruction, if any, most recently wrote to a region.
+///
+/// This is a simple meet semi-lattice:
+///
+/// ```ignore
+///      NoStore   Inst(i)
+///          \       /
+///           \     /
+///           Unknown
+/// ```
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+enum LastStore {
+    /// Nothing has written to this region since the last fence (if any).
+    ///
+    /// This is _not_ the same as `Unknown`! This is *positive* information that
+    /// nothing has been written since the last fence; in contrast, `Unknown` is
+    /// the *absence* of information. It is sound to fall back to the last fence
+    /// from `NoStore`; it is unsound to do that from `Unknown`.
+    #[default]
+    NoStore,
+
+    /// `Inst` was the last store (or fence-like) instruction to write to this
+    /// region.
+    Inst(Inst),
+
+    /// We know nothing about the contents of this memory region: the paths
+    /// flowing into this program point disagreed.
+    ///
+    /// This is the semi-lattice's bottom.
+    Unknown,
+}
+
+impl From<Inst> for LastStore {
+    #[inline]
+    fn from(inst: Inst) -> Self {
+        Self::Inst(inst)
+    }
+}
+
+impl LastStore {
+    /// Meet two last-store values.
+    fn meet(a: Self, b: Self) -> Self {
+        if a == b { a } else { LastStore::Unknown }
+    }
+
+    /// The last instruction to write to this slot's associated region, if
+    /// known.
+    fn inst(self) -> Option<Inst> {
+        match self {
+            LastStore::Inst(i) => Some(i),
+            LastStore::NoStore | LastStore::Unknown => None,
+        }
+    }
+}
+
+/// For a given program point, the last store to each disjoint memory region.
 ///
 /// ### Instructions In `LastStores` Might Not Be In The Function's `Layout`
 ///
@@ -205,151 +283,194 @@ impl Observer {
 /// code than simply checking whether an instruction is in the layout at a
 /// couple sites.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct LastStores {
-    /// Last store to each named alias region.
-    regions: SecondaryMap<AliasRegion, PackedOption<Inst>>,
+struct LastStores {
+    /// The last store to each named alias region.
+    regions: SecondaryMap<AliasRegion, LastStore>,
 
-    /// Last instruction with fence semantics. This applies to ALL regions,
-    /// including ones not yet in the `regions` map.
+    /// The store created by the last instruction with fence semantics.
+    ///
+    /// This applies to ALL regions, including ones not yet in the `regions`
+    /// map.
     ///
     /// This is also the last store for memory accesses that have no alias
-    /// region: such a store may alias any region, and so is treated as a
-    /// fence, which means the two are always the same instruction.
-    last_fence: PackedOption<Inst>,
+    /// region: such a store may alias any region, and so is treated as a fence.
+    last_fence: LastStore,
 }
 
-/// Mark the store, if any, in the given last-store slot as observed.
-fn observe(
-    func: &Function,
-    observed_stores: &mut FxHashMap<Inst, Observer>,
-    last_store: PackedOption<Inst>,
-    observer: Inst,
-) {
-    if let Some(last_store) = last_store.expand() {
-        // NB: last-store slots do not always hold stores; they can also hold
-        // calls, fences, and the markers that `LastStores::meet_from` inserts
-        // where two control-flow paths disagree. Only actual stores can be DSE
-        // candidates, so don't bother recording other instructions as observed.
-        if func.dfg.insts[last_store].opcode().can_store() {
-            let entry = observed_stores
-                .entry(last_store)
-                .or_insert(Observer::One(observer));
-            *entry = Observer::meet(*entry, Observer::One(observer));
-            trace!("    observed_stores[{last_store:?}] = {entry:?}");
-        }
+/// What effect does an instruction have on the last-store state?
+///
+/// This factors out the shared logic between `LastStores::update` and
+/// `LastStores::observe_inst` so they can't drift apart from each other.
+enum InstEffect {
+    /// A memory fence: it observes every region and then clobbers all of them.
+    Fence,
+
+    /// An explicitly-trapping instruction: it observes every region, but
+    /// clobbers none of them.
+    Trap,
+
+    /// A store to a particular alias region.
+    Store {
+        /// The alias region this store writes.
+        region: AliasRegion,
+        /// Whether this store can trap.
+        can_trap: bool,
+    },
+
+    /// An instruction that clobbers nothing and observes the given regions.
+    Observes(AliasRegionsObserved),
+}
+
+/// Determine what effect the given instruction has on the last-store state.
+fn classify(func: &Function, inst: Inst) -> InstEffect {
+    let opcode = func.dfg.insts[inst].opcode();
+
+    if has_memory_fence_semantics(opcode) {
+        return InstEffect::Fence;
     }
+
+    // Explicitly trapping instructions (`trap`, `trapz`, `udiv`,
+    // `uadd_overflow_trap`, etc... but not loads/stores that can implicitly
+    // trap): allow store-to-load forwarding across these instructions, but do
+    // not eliminate dead stores across them, as that would change the state of
+    // memory on trap. We do this by marking every last-store as observed, but
+    // not clearing our last-store information.
+    if opcode.can_trap() {
+        return InstEffect::Trap;
+    }
+
+    // Store instructions: update the last-store information for this
+    // instruction's alias region, or, if it has no alias region, treat it as a
+    // fence.
+    if opcode.can_store() {
+        // A store with no memflags, and therefore no alias region, may alias
+        // any region, so treat it like a fence. Ditto for a store whose
+        // memflags name no alias region.
+        let Some(memflags) = func.dfg.insts[inst].memflags() else {
+            return InstEffect::Fence;
+        };
+        let Some(region) = func.dfg.mem_flags[memflags].alias_region() else {
+            return InstEffect::Fence;
+        };
+
+        return InstEffect::Store {
+            region,
+            can_trap: func.dfg.mem_flags[memflags].trap_code().is_some(),
+        };
+    }
+
+    // Everything else: determine which, if any, alias regions this instruction
+    // observes.
+    InstEffect::Observes(alias_regions_observed(func, inst, opcode))
 }
 
 impl LastStores {
-    pub(crate) fn update(
-        &mut self,
-        func: &Function,
-        inst: Inst,
-        observed_stores: &mut FxHashMap<Inst, Observer>,
-    ) {
-        let opcode = func.dfg.insts[inst].opcode();
+    /// Advance this state across the given instruction.
+    fn update(&mut self, func: &Function, inst: Inst) {
+        match classify(func, inst) {
+            InstEffect::Fence => {
+                self.regions.clear();
 
-        if has_memory_fence_semantics(opcode) {
-            self.fence(func, inst, observed_stores);
-        }
-        // Explicitly trapping instructions (`trap`, `trapz`, `udiv`,
-        // `uadd_overflow_trap`, etc... but not loads/stores that can implicitly
-        // trap): allow store-to-load forwarding across these instructions, but
-        // do not eliminate dead stores across them, as that would change the
-        // state of memory on trap. We do this by marking every last-store as
-        // observed, but not clearing our last-store information.
-        else if opcode.can_trap() {
-            self.observe_others(func, observed_stores, None, inst);
-        }
-        // Store instructions: update the last-store information for this
-        // instruction's alias region, or, if it has no alias region, treat it
-        // as a fence.
-        else if opcode.can_store() {
-            if let Some(memflags) = func.dfg.insts[inst].memflags() {
-                match func.dfg.mem_flags[memflags].alias_region() {
-                    Some(region) => {
-                        observe(func, observed_stores, self.regions[region], inst);
-                        self.regions[region] = inst.into();
+                // NB: unlike every region slot, `self.last_fence` is *not*
+                // observed by a fence; see `observe_inst`.
+                self.last_fence = inst.into();
+            }
 
-                        // If this store can trap, then we need to observe
-                        // all other alias regions, to ensure that their state
-                        // is preserved in the case that this store traps
-                        // (similar to the `can_trap()` handling above).
-                        //
-                        // This prevents removing the first store in the
-                        // following snippet, for example:
-                        //
-                        //     store notrap region0 v0, v3+8
-                        //     store user42 region1 v1, v4+16
-                        //     store notrap region0 v2, v3+8
-                        //
-                        //     ==/==>
-                        //
-                        //     store user42 region1 v1, v4+16
-                        //     store notrap region0 v2, v3+8
-                        //
-                        // Removing it would be invalid because it drops a
-                        // memory store to `v3+8` that would otherwise have been
-                        // performed when writing to `v4+16` traps.
-                        //
-                        // On the other hand, if it cannot trap, then we need to
-                        // observe all the regions whose last-store *can* trap
-                        // so that we don't allow a non-trapping store to
-                        // effectively be moved ahead of a trapping store:
-                        //
-                        //     store user42 region0 v0, v3+8
-                        //     store notrap region1 v1, v4+16
-                        //     store user42 region0 v2, v3+8
-                        //
-                        //     ==/==>
-                        //
-                        //     store notrap region1 v1, v4+16
-                        //     store user42 region0 v2, v3+8
-                        //
-                        // In this case, removing the first store would mean
-                        // that when writing to `v3+8` traps, we would
-                        // incorrectly store to `v4+16`, when we otherwise
-                        // wouldn't have.
-                        if func.dfg.mem_flags[memflags].trap_code().is_some() {
-                            self.observe_others(func, observed_stores, Some(region), inst);
-                        } else {
-                            self.observe_trapping_others(func, observed_stores, region, inst);
-                        }
-                    }
-                    None => {
-                        // A store with no alias region may alias any region, so
-                        // treat it like a fence.
-                        self.fence(func, inst, observed_stores);
-                    }
-                }
-            } else {
-                // Store with no memflags (and therefore no region):
-                // treat it like a fence.
-                self.fence(func, inst, observed_stores);
+            // Trapping instructions and pure observers leave every slot alone.
+            InstEffect::Trap | InstEffect::Observes(_) => {}
+
+            InstEffect::Store {
+                region,
+                can_trap: _,
+            } => {
+                self.regions[region] = inst.into();
             }
         }
-        // Everything else: determine which, if any, alias regions this
-        // instruction observes.
-        else {
-            match alias_regions_observed(func, inst, opcode) {
-                AliasRegionsObserved::All => self.observe_others(func, observed_stores, None, inst),
-                AliasRegionsObserved::Just(region) => {
-                    observe(
-                        func,
-                        observed_stores,
-                        self.last_store_for_region(region),
-                        inst,
-                    );
-                    // NB: Because stores without regions may alias any other
-                    // region, we have also observed the last such store, which
-                    // `self.last_fence` tracks.
-                    observe(func, observed_stores, self.last_fence, inst);
+    }
+
+    /// Record every store that the given instruction can observe into
+    /// `observed`.
+    ///
+    /// This reads the state as of just before the instruction, so it must be
+    /// called before `update` for the given instruction.
+    fn observe_inst(&self, func: &Function, inst: Inst, observed: &mut FxHashMap<Inst, Observer>) {
+        match classify(func, inst) {
+            InstEffect::Fence => {
+                // A fence can observe every region, so every store we are
+                // currently tracking for a region becomes observed.
+                for (_region, slot) in self.regions.iter() {
+                    observe(func, observed, *slot, inst);
                 }
-                AliasRegionsObserved::Other => {
-                    observe(func, observed_stores, self.last_fence, inst)
-                }
-                AliasRegionsObserved::None => {}
+
+                // NB: `self.last_fence` is *not* observed here. Marking it
+                // observed would, for example, prevent eliminating the first of
+                // two adjacent stores that have no alias region.
             }
+
+            InstEffect::Trap => self.observe_others(func, observed, None, inst),
+
+            InstEffect::Store { region, can_trap } => {
+                observe(func, observed, self.regions[region], inst);
+
+                // If this store can trap, then we need to observe all other
+                // alias regions, to ensure that their state is preserved in the
+                // case that this store traps (similar to the `InstEffect::Trap`
+                // handling above).
+                //
+                // This prevents removing the first store in the following
+                // snippet, for example:
+                //
+                //     store notrap region0 v0, v3+8
+                //     store user42 region1 v1, v4+16
+                //     store notrap region0 v2, v3+8
+                //
+                //     ==/==>
+                //
+                //     store user42 region1 v1, v4+16
+                //     store notrap region0 v2, v3+8
+                //
+                // Removing it would be invalid because it drops a memory store
+                // to `v3+8` that would otherwise have been performed when
+                // writing to `v4+16` traps.
+                //
+                // On the other hand, if it cannot trap, then we need to observe
+                // all the regions whose last-store *can* trap so that we don't
+                // allow a non-trapping store to effectively be moved ahead of a
+                // trapping store:
+                //
+                //     store user42 region0 v0, v3+8
+                //     store notrap region1 v1, v4+16
+                //     store user42 region0 v2, v3+8
+                //
+                //     ==/==>
+                //
+                //     store notrap region1 v1, v4+16
+                //     store user42 region0 v2, v3+8
+                //
+                // In this case, removing the first store would mean that when
+                // writing to `v3+8` traps, we would incorrectly store to
+                // `v4+16`, when we otherwise wouldn't have.
+                if can_trap {
+                    self.observe_others(func, observed, Some(region), inst);
+                } else {
+                    self.observe_trapping_others(func, observed, region, inst);
+                }
+            }
+
+            InstEffect::Observes(AliasRegionsObserved::All) => {
+                self.observe_others(func, observed, None, inst)
+            }
+            InstEffect::Observes(AliasRegionsObserved::Just(region)) => {
+                observe(func, observed, self.last_store_for_region(region), inst);
+                // NB: Because stores without regions may alias any other
+                // region, we have also observed the last such store, which
+                // `self.last_fence` tracks.
+                observe(func, observed, self.last_fence, inst);
+            }
+            InstEffect::Observes(AliasRegionsObserved::Other) => {
+                observe(func, observed, self.last_fence, inst)
+            }
+            InstEffect::Observes(AliasRegionsObserved::None) => {}
         }
     }
 
@@ -362,9 +483,9 @@ impl LastStores {
         excluding: Option<AliasRegion>,
         observer: Inst,
     ) {
-        for (region, last_store) in self.regions.iter() {
+        for (region, slot) in self.regions.iter() {
             if excluding.is_none_or(|r| r != region) {
-                observe(func, observed_stores, *last_store, observer);
+                observe(func, observed_stores, *slot, observer);
             }
         }
         observe(func, observed_stores, self.last_fence, observer);
@@ -379,15 +500,14 @@ impl LastStores {
         excluding: AliasRegion,
         observer: Inst,
     ) {
-        let can_trap = |last_store: PackedOption<Inst>| {
-            last_store
-                .expand()
+        let can_trap = |slot: LastStore| {
+            slot.inst()
                 .is_some_and(|s| func.dfg.insts[s].memflags_trap_code(&func.dfg).is_some())
         };
 
-        for (region, last_store) in self.regions.iter() {
-            if region != excluding && can_trap(*last_store) {
-                observe(func, observed_stores, *last_store, observer);
+        for (region, slot) in self.regions.iter() {
+            if region != excluding && can_trap(*slot) {
+                observe(func, observed_stores, *slot, observer);
             }
         }
 
@@ -396,33 +516,13 @@ impl LastStores {
         }
     }
 
-    /// Handle memory fence-like instructions by clearing all analysis data.
-    fn fence(
-        &mut self,
-        func: &Function,
-        inst: Inst,
-        observed_stores: &mut FxHashMap<Inst, Observer>,
-    ) {
-        // A fence can observe every region, so every store we are currently
-        // tracking for a region becomes observed.
-        for (_region, last_store) in self.regions.iter() {
-            observe(func, observed_stores, *last_store, inst);
-        }
-        self.regions.clear();
-
-        // NB: `self.last_fence` is *not* observed here. See the comment in
-        // `LastStores::update`. Marking it observed would, for example, prevent
-        // eliminating the first of two adjacent stores that have no alias
-        // region.
-        self.last_fence = inst.into();
-    }
-
-    /// Get the last store affecting the given alias region.
-    fn last_store_for_region(&self, region: AliasRegion) -> PackedOption<Inst> {
-        if self.regions[region].is_some() {
-            self.regions[region]
-        } else {
-            self.last_fence
+    /// Get the last store to the given alias region.
+    fn last_store_for_region(&self, region: AliasRegion) -> LastStore {
+        match self.regions[region] {
+            // Nothing has written this region since the last fence, so the
+            // fence is what last (may have) written it.
+            LastStore::NoStore => self.last_fence,
+            slot => slot,
         }
     }
 
@@ -430,26 +530,26 @@ impl LastStores {
     /// back to the last fence.
     ///
     /// Returns `None` when `inst` has no alias region.
-    fn raw_region_slot(&self, func: &Function, inst: Inst) -> Option<PackedOption<Inst>> {
+    fn raw_region_slot(&self, func: &Function, inst: Inst) -> Option<LastStore> {
         let region = func.dfg.insts[inst].alias_region(&func.dfg)?;
         Some(self.regions[region])
     }
 
-    /// Roll this state back to the memory version from just before `dead`,
-    /// which is a store being removed from the function by dead-store
+    /// Roll this state back to the last-store information from just before
+    /// `dead`, which is a store being removed from the function by dead-store
     /// elimination.
     ///
     /// `prev_region_slot` must be what `dead`'s own alias-region slot held
-    /// immediately before `dead` overwrote it, as recorded by `region_slot`
-    /// when `dead` itself was processed (that is, it must not be the last-fence
-    /// fallback).
+    /// immediately before `dead` overwrote it, as recorded by
+    /// `raw_region_slot` when `dead` itself was processed (that is, it must not
+    /// be the last-fence fallback).
     ///
     /// Only `dead`'s own alias-region slot is restored. A store with no alias
     /// region is treated as a fence by `update`, which clears *every* region
     /// slot, and we do not undo that; in that case, we leave this state
     /// alone. Similarly, stores marked observed while processing `dead` stay
     /// observed.
-    fn undo_store(&mut self, func: &Function, dead: Inst, prev_region_slot: PackedOption<Inst>) {
+    fn undo_store(&mut self, func: &Function, dead: Inst, prev_region_slot: LastStore) {
         debug_assert!(func.dfg.insts[dead].opcode().can_store());
 
         let Some(region) = func.dfg.insts[dead].alias_region(&func.dfg) else {
@@ -458,14 +558,13 @@ impl LastStores {
 
         // Only roll back if `dead` really is the current last store to its
         // region.
-        if self.regions[region].expand() == Some(dead) {
+        if self.regions[region] == dead.into() {
             self.regions[region] = prev_region_slot;
         }
     }
 
-    /// Get the last-store instruction for the given `inst`'s alias region, if
-    /// any.
-    fn get_last_store(&self, func: &Function, inst: Inst) -> PackedOption<Inst> {
+    /// Get the last store to the given `inst`'s alias region.
+    fn get_last_store(&self, func: &Function, inst: Inst) -> LastStore {
         if let Some(memflags) = func.dfg.insts[inst].memflags() {
             return match func.dfg.mem_flags[memflags].alias_region() {
                 None => self.last_fence,
@@ -477,20 +576,14 @@ impl LastStores {
         if opcode.can_load() || opcode.can_store() {
             inst.into()
         } else {
-            None.into()
+            LastStore::NoStore
         }
     }
 
     /// Meet `self` with `rhs`, placing the result in `self`.
     ///
     /// Returns `true` if `self` changed, `false` otherwise.
-    fn meet_from(
-        &mut self,
-        func: &Function,
-        rhs: &LastStores,
-        loc: Inst,
-        observed_stores: &mut FxHashMap<Inst, Observer>,
-    ) -> bool {
+    fn meet_from(&mut self, rhs: &LastStores) -> bool {
         // NB: Destructure to make sure we don't accidentally forget a
         // field.
         let LastStores {
@@ -498,61 +591,102 @@ impl LastStores {
             last_fence,
         } = self;
 
-        let meet = |observed_stores: &mut FxHashMap<Inst, Observer>,
-                    a: &mut PackedOption<Inst>,
-                    b: PackedOption<Inst>|
-         -> bool {
-            let old = a.expand();
-            let new = match (old, b.expand()) {
-                (None, None) => None,
-                (Some(a), Some(b)) if a == b => Some(a),
-                (x, y) => {
-                    // The incoming paths disagree on the last store. Anything
-                    // after the merge that observes this slot observes `loc`,
-                    // not `x` or `y`, and, therefore, we must conservatively
-                    // mark them both observed here. This keeps the
-                    // observed-stores set sound in the presence of loops and
-                    // control-flow join points.
-                    observe(func, observed_stores, x.filter(|x| *x != loc).into(), loc);
-                    observe(func, observed_stores, y.filter(|y| *y != loc).into(), loc);
-                    Some(loc)
-                }
-            };
-            *a = new.into();
-            old != new
-        };
-
         let mut changed = false;
+
+        let mut meet = |a: &mut LastStore, b: LastStore| {
+            let new = LastStore::meet(*a, b);
+            changed |= new != *a;
+            *a = new;
+        };
 
         let max_len = core::cmp::max(regions.keys().len(), rhs.regions.keys().len());
         for i in 0..max_len {
             let region = AliasRegion::new(i);
-            changed |= meet(observed_stores, &mut regions[region], rhs.regions[region]);
+            meet(&mut regions[region], rhs.regions[region]);
         }
 
-        changed |= meet(observed_stores, last_fence, rhs.last_fence);
+        meet(last_fence, rhs.last_fence);
 
         changed
     }
 }
 
+/// The alias-analysis state as a walk over a single block advances it.
+#[derive(Clone, Debug)]
+pub struct MemoryState {
+    /// The last store to each slot, as of the current program point.
+    stores: LastStores,
+
+    /// The token identifying this program point's extent.
+    ///
+    /// See `MemoryLoc::extent` for details.
+    extent: u32,
+
+    /// The current block we are walking.
+    #[cfg(debug_assertions)]
+    current_block: Block,
+}
+
+const NULL_EXTENT: u32 = 0;
+
+impl MemoryState {
+    /// Get the extent token to key a `MemoryLoc` on, given the last store to
+    /// that location's alias region.
+    fn extent_for(&self, last_store: LastStore) -> u32 {
+        match last_store {
+            // Each of these already names a version of memory all on its own,
+            // function wide, and so doesn't need an additional extent token.
+            LastStore::NoStore | LastStore::Inst(_) => NULL_EXTENT,
+
+            // This one, on the other hand, only names a version of memory
+            // relative to the control-flow join that lost track of it.
+            LastStore::Unknown => {
+                debug_assert_ne!(self.extent, NULL_EXTENT);
+                self.extent
+            }
+        }
+    }
+}
+
 /// A key identifying a unique memory location.
 ///
-/// For the result of a load to be equivalent to the result of another
-/// load, or the store data from a store, we need for (i) the
-/// "version" of memory (here ensured by having the same last store
-/// instruction to touch the disjoint category of abstract state we're
-/// accessing); (ii) the address must be the same (here ensured by
-/// having the same SSA value, which doesn't change after computed);
-/// (iii) the offset must be the same; (iv) the accessed type and
-/// extension mode (e.g., 8-to-32, signed) must be the same; and (v)
-/// the byte order of the two accesses must be the same.
+/// For the result of a load to be equivalent to the result of another load, or
+/// the store data from a store, we need all of these fields to match.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct MemoryLoc {
-    last_store: PackedOption<Inst>,
+    /// The last store to this location's alias region.
+    last_store: LastStore,
+
+    /// A token identifying the extent of our `LastStore`, since
+    /// `LastStore::Unknown` is only valid relative to its last control-flow
+    /// join point.
+    ///
+    /// An extent is a control-flow join point and everything reachable from it
+    /// through single-predecessor edges. For `LastStore::Unknown`, this
+    /// identifies the area where the bytes in the associated alias region are
+    /// identical to when control entered the join point, and therefore exactly
+    /// the area within which two `LastStore::Unknown`-keyed memory locations
+    /// name the same value.
+    ///
+    /// This is necessary because on one hand, we need `LastStore::Unknown` to
+    /// be a single bottom value so that `LastStore` and `LastStores` are proper
+    /// lattices, but on the other hand we need identity to differentiate
+    /// between instances of `LastStore::Unknown` to prevent, e.g., unsoundly
+    /// store-to-load forwarding from a store in one control-flow join point to
+    /// a load at a different control-flow join point.
+    ///
+    /// Extent is computed incrementally in `AliasAnalysis::push_scope`.
+    extent: u32,
+
+    /// The dynamic part of this memory location's address.
     address: Value,
+
+    /// The static part of this memory location's address.
     offset: Offset32,
+
+    /// The type being accessed at this memory location.
     ty: Type,
+
     /// We keep the *opcode* of the instruction that produced the
     /// value we record at this key if the opcode is anything other
     /// than an ordinary load or store. This is needed when we
@@ -565,6 +699,7 @@ struct MemoryLoc {
     /// in place of extending loads when we know the memory value, but
     /// we haven't yet done this.
     extending_opcode: Option<Opcode>,
+
     /// The byte order of this access, as explicitly specified in its memory
     /// flags, or `None` when the access uses the target's native byte order.
     ///
@@ -596,15 +731,14 @@ struct KnownValue {
 
     /// When this entry was created by a store to a particular alias region,
     /// whatever that region's last-store slot held just *before* `def_inst`
-    /// overwrote it, as given by `LastStores::region_slot`.
+    /// overwrote it, as given by `LastStores::raw_region_slot`.
     ///
     /// `None` means either the entry was created by a load or by a store with
     /// no alias region. Neither will ever undo `LastStores` state.
     ///
-    /// `Some(maybe_inst)` contains the alias region slot's previous value, so
-    /// that it can be restored if `def_inst` is a dead store that gets
-    /// eliminated.
-    prev_region_slot: Option<PackedOption<Inst>>,
+    /// `Some(slot)` contains the alias region slot's previous value, so that it
+    /// can be restored if `def_inst` is a dead store that gets eliminated.
+    prev_region_slot: Option<LastStore>,
 }
 
 /// The result of processing an instruction through alias analysis.
@@ -653,9 +787,26 @@ pub struct AliasAnalysis<'a> {
     /// Input state to a basic block.
     block_input: FxHashMap<Block, LastStores>,
 
-    /// Known memory-value equivalences. This is the result of the
-    /// analysis. This is a mapping from a memory location to its known value.
+    /// Known memory-value equivalences.
+    ///
+    /// This is the result of the analysis: a mapping from a memory location to
+    /// its known value.
     mem_values: FxHashMap<MemoryLoc, KnownValue>,
+
+    /// The extent token for each scope currently on the dominator-tree path
+    /// we are walking.
+    ///
+    /// See `MemoryLoc::extent` for details.
+    extents: SmallVec<[u32; 8]>,
+
+    /// Counter for minting fresh extent tokens.
+    next_extent: u32,
+
+    /// The blocks whose scopes are currently on the stack, so that we can
+    /// assert that `push_scope` and `pop_scope` really are called in
+    /// dominator-tree pre-order.
+    #[cfg(debug_assertions)]
+    scope_blocks: SmallVec<[Block; 8]>,
 }
 
 impl<'a> AliasAnalysis<'a> {
@@ -663,15 +814,23 @@ impl<'a> AliasAnalysis<'a> {
     pub fn new(func: &Function, domtree: &'a DominatorTree) -> AliasAnalysis<'a> {
         trace!("alias analysis input is:\n{func:?}");
         assert!(domtree.is_valid());
+
         let mut analysis = AliasAnalysis {
             domtree,
             post_dom_tree: None,
             observed_stores: FxHashMap::default(),
             block_input: FxHashMap::default(),
             mem_values: FxHashMap::default(),
+            extents: SmallVec::new(),
+            next_extent: 0,
+            #[cfg(debug_assertions)]
+            scope_blocks: SmallVec::new(),
         };
 
         analysis.compute_block_input_states(func);
+        analysis.verify_fixpoint(func);
+        analysis.compute_observed_stores(func);
+
         analysis
     }
 
@@ -710,6 +869,7 @@ impl<'a> AliasAnalysis<'a> {
     fn compute_block_input_states(&mut self, func: &Function) {
         let mut queue = vec![];
         let mut queue_set = FxHashSet::default();
+
         let entry = func.layout.entry_block().unwrap();
         queue.push(entry);
         queue_set.insert(entry);
@@ -727,19 +887,13 @@ impl<'a> AliasAnalysis<'a> {
 
             for inst in func.layout.block_insts(block) {
                 trace!("    analyzing {inst:?}: {}", func.dfg.display_inst(inst));
-                state.update(func, inst, &mut self.observed_stores);
+                state.update(func, inst);
                 trace!("    updated state = {state:?}");
             }
 
             visit_block_succs(func, block, |_inst, succ, _from_table| {
-                let succ_first_inst = func.layout.block_insts(succ).next().unwrap();
                 let updated = match self.block_input.get_mut(&succ) {
-                    Some(succ_state) => succ_state.meet_from(
-                        func,
-                        &state,
-                        succ_first_inst,
-                        &mut self.observed_stores,
-                    ),
+                    Some(succ_state) => succ_state.meet_from(&state),
                     None => {
                         self.block_input.insert(succ, state.clone());
                         true
@@ -751,33 +905,211 @@ impl<'a> AliasAnalysis<'a> {
                 }
             });
         }
-
-        trace!("final observed_stores = {:#?}", self.observed_stores);
     }
 
-    /// Get the starting state for a block.
-    pub fn block_starting_state(&self, block: Block) -> LastStores {
-        self.block_input
-            .get(&block)
-            .cloned()
-            .unwrap_or_else(|| LastStores::default())
+    /// Assert that `self.block_input` really is a fixed point.
+    ///
+    /// This should help catch regressions that don't result in miscompiles,
+    /// only worse codegen and/or order-dependent results, both of which are
+    /// otherwise hard to test against in filetests.
+    fn verify_fixpoint(&self, func: &Function) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
+
+        let entry = func.layout.entry_block().unwrap();
+
+        let mut expected = FxHashMap::default();
+        expected.insert(entry, LastStores::default());
+
+        // Note that iterating through this hash map gives us ~nondeterministic
+        // block ordering -- but that shouldn't matter if we _actually_ computed
+        // an order-independent result! This is a convenient little foil to our
+        // worklist's deterministic ordering.
+        for (&block, input) in &self.block_input {
+            // Compute the output state for this block.
+            let mut state = input.clone();
+            for inst in func.layout.block_insts(block) {
+                state.update(func, inst);
+            }
+
+            // Meet that output state with the input state of each of this
+            // block's successors.
+            visit_block_succs(func, block, |_inst, succ, _from_table| {
+                match expected.get_mut(&succ) {
+                    Some(succ_state) => {
+                        succ_state.meet_from(&state);
+                    }
+                    None => {
+                        expected.insert(succ, state.clone());
+                    }
+                }
+            });
+        }
+
+        // Our expected results should match our actual results.
+        for (&block, input) in &self.block_input {
+            assert_eq!(
+                expected.get(&block),
+                Some(input),
+                "last-store analysis did not reach a fixpoint at {block}",
+            );
+        }
+        assert_eq!(
+            expected.len(),
+            self.block_input.len(),
+            "last-store analysis and its verifier disagree on which blocks are reachable",
+        );
     }
 
-    /// Process one instruction. Meant to be invoked in program order
-    /// within a block, and ideally in RPO or at least some domtree
-    /// preorder for maximal reuse.
+    /// The single reachable predecessor of `block`, if it has exactly one.
+    ///
+    /// Returns `None` both when `block` has two or more distinct reachable
+    /// predecessors and when it has none at all.
+    fn single_reachable_pred(&self, cfg: &ControlFlowGraph, block: Block) -> Option<Block> {
+        let mut preds = cfg
+            .pred_iter(block)
+            .map(|pred| pred.block)
+            // Skip unreachable predecessors. Our fixpoint never propagates
+            // state out of them.
+            .filter(|pred| self.block_input.contains_key(pred));
+        let first = preds.next()?;
+        preds.all(|pred| pred == first).then_some(first)
+    }
+
+    /// Compute the set of stores that some instruction in this function can
+    /// observe.
+    ///
+    /// This is deliberately not folded into the last-store fixpoint. While that
+    /// fixpoint iterates, a slot can transiently name a store that the final
+    /// solution does not, and observing it would make the resulting
+    /// observed-stores set depend on the order in which the worklist visited
+    /// blocks. Instead we walk the function once, in layout order, over the
+    /// solved fixpoint.
+    fn compute_observed_stores(&mut self, func: &Function) {
+        let mut observed_stores = FxHashMap::default();
+
+        for block in func.layout.blocks() {
+            // Ignore unreachable blocks.
+            if !self.block_input.contains_key(&block) {
+                continue;
+            }
+
+            // Compute this block's final state.
+            let mut state = self.block_input_stores(block);
+            for inst in func.layout.block_insts(block) {
+                state.observe_inst(func, inst, &mut observed_stores);
+                state.update(func, inst);
+            }
+
+            // When a predecessor and successor disagree on the last store to a
+            // region, we need to mark the predecessor's last store as observed,
+            // so that dead-store elimination cannot remove it.
+            visit_block_succs(func, block, |_inst, succ, _from_table| {
+                let succ_input = self
+                    .block_input
+                    .get(&succ)
+                    .expect("successors of a reachable block are reachable");
+
+                let observer = func.layout.block_insts(succ).next().unwrap();
+
+                let max_len =
+                    core::cmp::max(state.regions.keys().len(), succ_input.regions.keys().len());
+                for i in 0..max_len {
+                    let region = AliasRegion::new(i);
+                    if succ_input.regions[region] == LastStore::Unknown {
+                        observe(func, &mut observed_stores, state.regions[region], observer);
+                    }
+                }
+
+                if succ_input.last_fence == LastStore::Unknown {
+                    observe(func, &mut observed_stores, state.last_fence, observer);
+                }
+            });
+        }
+
+        trace!("final observed_stores = {observed_stores:#?}");
+        self.observed_stores = observed_stores;
+    }
+
+    /// Get the solved last-store state on entry to the given block.
+    fn block_input_stores(&self, block: Block) -> LastStores {
+        match self.block_input.get(&block) {
+            Some(input) => input.clone(),
+            None => LastStores::default(),
+        }
+    }
+
+    /// Enter the given block's scope, getting its initial memory state.
+    ///
+    /// Callers must walk the dominator tree in pre-order, entering each block's
+    /// scope on the way down and calling `pop_scope` before moving on to any
+    /// block that this one does not dominate.
+    pub fn push_scope(&mut self, cfg: &ControlFlowGraph, block: Block) -> MemoryState {
+        debug_assert!(cfg.is_valid());
+
+        #[cfg(debug_assertions)]
+        {
+            debug_assert_eq!(
+                self.domtree.idom(block),
+                self.scope_blocks.last().copied(),
+                "`push_scope` must be called in dominator-tree pre-order",
+            );
+            self.scope_blocks.push(block);
+        }
+
+        let extent = match self.extents.last() {
+            // A block with exactly one reachable predecessor sees exactly the
+            // memory that its predecessor left behind, and so it continues its
+            // predecessor's extent.
+            Some(parent) if self.single_reachable_pred(cfg, block).is_some() => *parent,
+
+            // Anything else (e.g. a control-flow join or the entry block)
+            // begins a new extent.
+            _ => {
+                self.next_extent += 1;
+                self.next_extent
+            }
+        };
+        self.extents.push(extent);
+
+        MemoryState {
+            stores: self.block_input_stores(block),
+            extent,
+            #[cfg(debug_assertions)]
+            current_block: block,
+        }
+    }
+
+    /// Leave the scope of the block most recently passed to `push_scope`.
+    pub fn pop_scope(&mut self) {
+        #[cfg(debug_assertions)]
+        self.scope_blocks
+            .pop()
+            .expect("`pop_scope` without a matching `push_scope`");
+
+        self.extents
+            .pop()
+            .expect("`pop_scope` without a matching `push_scope`");
+    }
+
+    /// Process one instruction.
+    ///
+    /// Must be invoked in program order within a block.
     pub fn process_inst(
         &mut self,
         func: &mut Function,
         cfg: &ControlFlowGraph,
-        state: &mut LastStores,
+        state: &mut MemoryState,
         inst: Inst,
     ) -> OptResult {
         trace!(
-            "process_inst: {inst}: {}\n\twith last stores: {state:?}\n\twith mem values = {:?}",
+            "process_inst: {inst}: {}\n\twith last stores: {state:?}",
             func.dfg.display_inst(inst),
-            self.mem_values,
         );
+
+        #[cfg(debug_assertions)]
+        debug_assert_eq!(func.layout.inst_block(inst), Some(state.current_block));
 
         let result = if let Some((address, offset, ty)) = inst_addr_offset_type(func, inst) {
             let address = func.dfg.resolve_aliases(address);
@@ -787,10 +1119,10 @@ impl<'a> AliasAnalysis<'a> {
                 let store_data = inst_store_data(func, inst).unwrap();
                 let store_data = func.dfg.resolve_aliases(store_data);
 
-                let last_store = state.get_last_store(func, inst);
+                let last_store = state.stores.get_last_store(func, inst);
 
                 // Check whether this store makes the last store dead.
-                if let Some(last_store) = last_store.expand() {
+                if let LastStore::Inst(last_store) = last_store {
                     // A store can only be dead when unobserved or only observed
                     // by its overwriter.
                     if self.observed_stores.get(&last_store).is_none_or(|o| *o == Observer::One(inst))
@@ -830,8 +1162,10 @@ impl<'a> AliasAnalysis<'a> {
                         // does not require to match this store's byte order.
                         // Everything else in the key does have to match, so we
                         // can take it from this store.
+                        let dead_slot = LastStore::Inst(last_store);
                         let dead_loc = MemoryLoc {
-                            last_store: last_store.into(),
+                            last_store: dead_slot,
+                            extent: state.extent_for(dead_slot),
                             address,
                             offset,
                             ty,
@@ -840,9 +1174,9 @@ impl<'a> AliasAnalysis<'a> {
                         };
                         let dead_entry = self.mem_values.remove(&dead_loc);
 
-                        // Roll our last-store state back to the memory version
-                        // just before the dead store, so that `state` describes
-                        // memory as if the dead store had never happened.
+                        // Roll our last-store state back to just before the
+                        // dead store, so that `state` describes memory as if
+                        // the dead store had never happened.
                         //
                         // Our callers remove the dead store from the layout and
                         // then reprocess this overwriting store. Without the
@@ -865,8 +1199,11 @@ impl<'a> AliasAnalysis<'a> {
                         // can come from a precomputed `block_input` snapshot,
                         // for a predecessor block we have not walked yet) or it
                         // has no alias region and therefore no slot of its own.
-                        if let Some(prev) = dead_entry.and_then(|e| e.prev_region_slot) {
-                            state.undo_store(func, last_store, prev);
+                        if let Some(prev) = dead_entry
+                            .filter(|e| self.domtree.dominates(e.def_inst, inst, &func.layout))
+                            .and_then(|e| e.prev_region_slot)
+                        {
+                            state.stores.undo_store(func, last_store, prev);
                         }
 
                         return OptResult::DeadStore {
@@ -878,6 +1215,7 @@ impl<'a> AliasAnalysis<'a> {
 
                 let check_loc = MemoryLoc {
                     last_store,
+                    extent: state.extent_for(last_store),
                     address,
                     offset,
                     ty,
@@ -904,7 +1242,7 @@ impl<'a> AliasAnalysis<'a> {
                         // We are removing this idempotent store in favor of the
                         // original, so if this idempotent store was observed,
                         // then the original must now be observed as well.
-                        if let Some(last_store) = last_store.expand() {
+                        if let LastStore::Inst(last_store) = last_store {
                             if let Some(observer) = self.observed_stores.get(&inst).copied() {
                                 let entry =
                                     self.observed_stores.entry(last_store).or_insert(observer);
@@ -918,8 +1256,10 @@ impl<'a> AliasAnalysis<'a> {
                 }
 
                 // Otherwise, update our state to reflect this store.
+                let this_store = LastStore::Inst(inst);
                 let mem_loc = MemoryLoc {
-                    last_store: inst.into(),
+                    last_store: this_store,
+                    extent: state.extent_for(this_store),
                     address,
                     offset,
                     ty,
@@ -936,16 +1276,17 @@ impl<'a> AliasAnalysis<'a> {
                         // last-fence fallback, because we don't want to move an
                         // instruction without a region into a region slot on
                         // DSE rollback.
-                        prev_region_slot: state.raw_region_slot(func, inst),
+                        prev_region_slot: state.stores.raw_region_slot(func, inst),
                     },
                 );
 
                 OptResult::None
             } else if opcode.can_load() {
-                let last_store = state.get_last_store(func, inst);
+                let last_store = state.stores.get_last_store(func, inst);
                 let load_result = func.dfg.inst_results(inst)[0];
                 let mem_loc = MemoryLoc {
                     last_store,
+                    extent: state.extent_for(last_store),
                     address,
                     offset,
                     ty,
@@ -991,7 +1332,7 @@ impl<'a> AliasAnalysis<'a> {
                             def_inst: inst,
                             value: load_result,
                             // A load does not advance the memory version, so
-                            // there is no previous version to roll back to.
+                            // there is no previous slot value to roll back to.
                             prev_region_slot: None,
                         },
                     );
@@ -1014,14 +1355,23 @@ impl<'a> AliasAnalysis<'a> {
             OptResult::None
         };
 
-        let observed_stores_len = self.observed_stores.len();
-        state.update(func, inst, &mut self.observed_stores);
-        debug_assert_eq!(
-            observed_stores_len,
-            self.observed_stores.len(),
-            "`compute_block_input_states` should have already found all observed stores, \
-             but processing {inst} found a new one",
-        );
+        // `compute_observed_stores` walks the whole function up front, so
+        // processing an instruction here must never turn up a store that it did
+        // not already find.
+        #[cfg(debug_assertions)]
+        {
+            let mut new_observations = FxHashMap::default();
+            state.stores.observe_inst(func, inst, &mut new_observations);
+            for observed in new_observations.keys() {
+                debug_assert!(
+                    self.observed_stores.contains_key(observed),
+                    "`compute_observed_stores` should have already found all observed \
+                     stores, but processing {inst} found that {observed} is observed",
+                );
+            }
+        }
+
+        state.stores.update(func, inst);
 
         result
     }
@@ -1032,10 +1382,36 @@ impl<'a> AliasAnalysis<'a> {
     /// (e.g. in cases of double-indirection with two separate chains
     /// of loads).
     pub fn compute_and_update_aliases(&mut self, func: &mut Function, cfg: &ControlFlowGraph) {
+        let domtree = self.domtree;
         let mut pos = FuncCursor::new(func);
 
-        while let Some(block) = pos.next_block() {
-            let mut state = self.block_starting_state(block);
+        let Some(entry) = pos.func.layout.entry_block() else {
+            return;
+        };
+
+        // Marks a block we have not walked yet, or the point at which we are
+        // done with everything a block dominates and must leave its scope.
+        enum BlockStackEntry {
+            Visit(Block),
+            Pop,
+        }
+
+        // Walk the dominator tree in pre-order. Unreachable blocks are not in
+        // the dominator tree, and are simply skipped.
+        let mut stack = vec![BlockStackEntry::Visit(entry)];
+        while let Some(top) = stack.pop() {
+            let block = match top {
+                BlockStackEntry::Pop => {
+                    self.pop_scope();
+                    continue;
+                }
+                BlockStackEntry::Visit(block) => block,
+            };
+
+            stack.push(BlockStackEntry::Pop);
+            let mut state = self.push_scope(cfg, block);
+
+            pos.goto_top(block);
             while let Some(inst) = pos.next_inst() {
                 match self.process_inst(pos.func, cfg, &mut state, inst) {
                     OptResult::None => {}
@@ -1063,6 +1439,9 @@ impl<'a> AliasAnalysis<'a> {
                     }
                 }
             }
+
+            let children = SmallVec::<[Block; 8]>::from_iter(domtree.children(block));
+            stack.extend(children.into_iter().rev().map(BlockStackEntry::Visit));
         }
     }
 }
