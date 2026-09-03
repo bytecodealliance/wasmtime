@@ -34,10 +34,10 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::aarch64::lower::isle::generated_code::{
-    ALUOp, ALUOp3, AMode, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, BranchTargetType, FPUOp1,
-    FPUOp2, FPUOp3, FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp,
-    VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp,
-    VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmModOp, VecShiftImmOp,
+    ALUOp, ALUOp3, AMode, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BfmOp, BitOp, BranchTargetType,
+    FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp,
+    VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp,
+    VecRRNarrowOp, VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmModOp, VecShiftImmOp,
 };
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -58,6 +58,16 @@ pub enum FPUOpRIMod {
     Sli32(FPULeftShiftImm),
     /// Shift left and insert. Rd |= Rn << #imm
     Sli64(FPULeftShiftImm),
+}
+
+impl BfmOp {
+    /// Get the assembly mnemonic for this opcode.
+    pub fn op_str(&self) -> &'static str {
+        match self {
+            BfmOp::UBfm => "ubfm",
+            BfmOp::SBfm => "sbfm",
+        }
+    }
 }
 
 impl BitOp {
@@ -810,6 +820,17 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::Extend { rd, rn, .. } => {
             collector.reg_def(rd);
+            collector.reg_use(rn);
+        }
+        Inst::BitfieldMove { rd, rn, .. } => {
+            // The UBFM and SBFM instructions overwrite all bits in `rd`,
+            // unlike BFM which is represented as `BitfieldMoveMod` instead.
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+        }
+        Inst::BitfieldMoveMod { rd, ri, rn, .. } => {
+            collector.reg_reuse_def(rd, 1); // `rd` == `ri`.
+            collector.reg_use(ri);
             collector.reg_use(rn);
         }
         Inst::Args { args } => {
@@ -2636,6 +2657,36 @@ impl Inst {
                     let rn = pretty_print_ireg(rn, OperandSize::from_bits(from_bits));
                     format!("{op} {rd}, {rn}")
                 }
+            }
+            &Inst::BitfieldMove {
+                size,
+                bfm_op,
+                rd,
+                rn,
+                immr,
+                imms,
+            } => {
+                let op = bfm_op.op_str();
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let rn = pretty_print_ireg(rn, size);
+                let immr = immr.pretty_print(0);
+                let imms = imms.pretty_print(0);
+                format!("{op} {rd}, {rn}, {immr}, {imms}")
+            }
+            &Inst::BitfieldMoveMod {
+                size,
+                rd,
+                ri,
+                rn,
+                immr,
+                imms,
+            } => {
+                let rd = pretty_print_ireg(rd.to_reg(), size);
+                let ri = pretty_print_ireg(ri, size);
+                let rn = pretty_print_ireg(rn, size);
+                let immr = immr.pretty_print(0);
+                let imms = imms.pretty_print(0);
+                format!("bfm {rd}, {ri}, {rn}, {immr}, {imms}")
             }
             &Inst::Call { ref info } => {
                 let try_call = info

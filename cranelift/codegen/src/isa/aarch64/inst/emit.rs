@@ -417,6 +417,15 @@ fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) 
         | nzcv.bits()
 }
 
+impl BfmOp {
+    fn opc(self) -> u8 {
+        match self {
+            BfmOp::UBfm => 0b10,
+            BfmOp::SBfm => 0b00,
+        }
+    }
+}
+
 fn enc_bfm(opc: u8, size: OperandSize, rd: Writable<Reg>, rn: Reg, immr: u8, imms: u8) -> u32 {
     match size {
         OperandSize::Size64 => {
@@ -2954,12 +2963,35 @@ impl MachInstEmit for Inst {
                 from_bits,
                 to_bits,
             } => {
-                let (opc, size) = if signed {
-                    (0b00, OperandSize::from_bits(to_bits))
+                let (bfm_op, size) = if signed {
+                    (BfmOp::SBfm, OperandSize::from_bits(to_bits))
                 } else {
-                    (0b10, OperandSize::Size32)
+                    (BfmOp::UBfm, OperandSize::Size32)
                 };
+                let opc = bfm_op.opc();
                 sink.put4(enc_bfm(opc, size, rd, rn, 0, from_bits - 1));
+            }
+            &Inst::BitfieldMove {
+                size,
+                bfm_op,
+                rd,
+                rn,
+                immr,
+                imms,
+            } => {
+                let opc = bfm_op.opc();
+                sink.put4(enc_bfm(opc, size, rd, rn, immr.value(), imms.value()));
+            }
+            &Inst::BitfieldMoveMod {
+                size,
+                rd,
+                ri,
+                rn,
+                immr,
+                imms,
+            } => {
+                debug_assert_eq!(rd.to_reg(), ri);
+                sink.put4(enc_bfm(0b01, size, rd, rn, immr.value(), imms.value()));
             }
             &Inst::Jump { ref dest } => {
                 let off = sink.cur_offset();

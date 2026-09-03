@@ -209,6 +209,27 @@
         (from_bits u8)
         (to_bits u8))
 
+        ;; A bitfield move instruction, either UBFM or SBFM.
+        ;; The BFM instruction is instead encoded as BitfieldMoveMod.
+        (BitfieldMove
+         (size OperandSize)
+         (bfm_op BfmOp)
+         (rd WritableReg)
+         (rn Reg)
+         (immr UImm6)
+         (imms UImm6))
+
+        ;; The bitfield move instruction that modifies its `rd`, i.e. BFM.
+        ;; The input state of `rd` is represented as `ri` (for "input"),
+        ;; and is constrained with `rd` so they use the same register.
+        (BitfieldMoveMod
+         (size OperandSize)
+         (rd WritableReg)
+         (ri Reg)
+         (rn Reg)
+         (immr UImm6)
+         (imms UImm6))
+
        ;; A conditional-select operation.
        (CSel
         (rd WritableReg)
@@ -1208,6 +1229,7 @@
 
 ;; Leaves currently without specs: excluded from verification via todo.
 (attr MInst.Udf (tag TODO))
+(attr MInst.BitfieldMove (tag TODO))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -1267,6 +1289,14 @@
     (MovN)
 ))
 
+;; A bitfield move operation.
+;; Note that BFM is excluded as it modifies rather than overwrites `rd`.
+(type BfmOp
+  (enum
+    (UBfm)
+    (SBfm)
+))
+
 (model UImm5 (type (bv 5)))
 (type UImm5 (primitive UImm5))
 
@@ -1285,6 +1315,9 @@
 
 (model ImmShift (type (bv 6)))
 (type ImmShift (primitive ImmShift))
+
+(model UImm6 (type (bv 6)))
+(type UImm6 (primitive UImm6))
 
 (model ShiftOpAndAmt
       (type
@@ -2957,6 +2990,14 @@
 (rule (extend rn signed from_bits to_bits)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.Extend dst rn signed from_bits to_bits))))
+        dst))
+
+;; Helper for emitting `MInst.BitfieldMove` instructions.
+(attr bitfield_move (veri chain))
+(decl bitfield_move (Type BfmOp Reg UImm6 UImm6) Reg)
+(rule (bitfield_move ty bfm_op rn immr imms)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.BitfieldMove (operand_size ty) bfm_op dst rn immr imms))))
         dst))
 
 ;; Helper for emitting `MInst.FpuExtend` instructions.
