@@ -553,7 +553,7 @@ async fn p2_environment_named_imports() -> Result<()> {
         Ok(match name {
             "a" => NamedId(0),
             "b" => NamedId(1),
-            _ => panic!("unexpected name: {}", name),
+            _ => panic!("unexpected name: {name}"),
         })
     })?;
 
