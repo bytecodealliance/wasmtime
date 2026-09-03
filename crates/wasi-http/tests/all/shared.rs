@@ -89,7 +89,7 @@ pub async fn run_named_imports_test<T>(
         Ok(match name {
             "a" => NamedId(0),
             "b" => NamedId(1),
-            _ => panic!("unexpected name: {}", name),
+            _ => panic!("unexpected name: {name}"),
         })
     })?;
     run(&mut store, &component, &linker).await

@@ -574,7 +574,7 @@ impl WasiFilesystemCtxView<'_> {
         length: Filesize,
         advice: Advice,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let file = get_file(self.table, fd).map(|f| f.clone());
+        let file = get_file(self.table, fd).cloned();
         async move {
             file?.advise(offset, length, advice.into()).await?;
             Ok(())
@@ -585,7 +585,7 @@ impl WasiFilesystemCtxView<'_> {
         &self,
         fd: &Resource<Descriptor>,
     ) -> impl Future<Output = FilesystemResult<DescriptorFlags>> + use<> {
-        let fd = get_descriptor(self.table, fd).map(|d| d.clone());
+        let fd = get_descriptor(self.table, fd).cloned();
         async move {
             let flags = fd?.get_flags().await?;
             Ok(flags.into())
@@ -596,7 +596,7 @@ impl WasiFilesystemCtxView<'_> {
         &self,
         fd: &Resource<Descriptor>,
     ) -> impl Future<Output = FilesystemResult<DescriptorType>> + use<> {
-        let fd = get_descriptor(self.table, fd).map(|d| d.clone());
+        let fd = get_descriptor(self.table, fd).cloned();
         async move {
             let ty = fd?.get_type().await?;
             Ok(ty.into())
@@ -608,7 +608,7 @@ impl WasiFilesystemCtxView<'_> {
         fd: &Resource<Descriptor>,
         size: Filesize,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let file = get_file(self.table, fd).map(|f| f.clone());
+        let file = get_file(self.table, fd).cloned();
         async move {
             file?.set_size(size).await?;
             Ok(())
@@ -621,7 +621,7 @@ impl WasiFilesystemCtxView<'_> {
         data_access_timestamp: NewTimestamp,
         data_modification_timestamp: NewTimestamp,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let fd = get_descriptor(self.table, &fd).map(|d| d.clone());
+        let fd = get_descriptor(self.table, &fd).cloned();
         async move {
             let atim = systemtimespec_from(data_access_timestamp)?;
             let mtim = systemtimespec_from(data_modification_timestamp)?;
@@ -634,7 +634,7 @@ impl WasiFilesystemCtxView<'_> {
         &self,
         fd: &Resource<Descriptor>,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let fd = get_descriptor(self.table, &fd).map(|d| d.clone());
+        let fd = get_descriptor(self.table, &fd).cloned();
         async move {
             fd?.sync().await?;
             Ok(())
@@ -645,7 +645,7 @@ impl WasiFilesystemCtxView<'_> {
         &self,
         fd: &Resource<Descriptor>,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let fd = get_descriptor(self.table, &fd).map(|d| d.clone());
+        let fd = get_descriptor(self.table, &fd).cloned();
         async move {
             fd?.sync_data().await?;
             Ok(())
@@ -657,7 +657,7 @@ impl WasiFilesystemCtxView<'_> {
         fd: &Resource<Descriptor>,
         path: String,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let dir = get_dir(self.table, &fd).map(|d| d.clone());
+        let dir = get_dir(self.table, &fd).cloned();
         async move {
             dir?.create_directory_at(path).await?;
             Ok(())
@@ -668,7 +668,7 @@ impl WasiFilesystemCtxView<'_> {
         &self,
         fd: &Resource<Descriptor>,
     ) -> impl Future<Output = FilesystemResult<DescriptorStat>> + use<> {
-        let fd = get_descriptor(self.table, &fd).map(|d| d.clone());
+        let fd = get_descriptor(self.table, &fd).cloned();
         async move {
             let stat = fd?.stat().await?;
             Ok(stat.into())
@@ -681,7 +681,7 @@ impl WasiFilesystemCtxView<'_> {
         path_flags: PathFlags,
         path: String,
     ) -> impl Future<Output = FilesystemResult<DescriptorStat>> + use<> {
-        let dir = get_dir(self.table, &fd).map(|d| d.clone());
+        let dir = get_dir(self.table, &fd).cloned();
         async move {
             let stat = dir?.stat_at(path_flags.into(), path).await?;
             Ok(stat.into())
@@ -696,7 +696,7 @@ impl WasiFilesystemCtxView<'_> {
         data_access_timestamp: NewTimestamp,
         data_modification_timestamp: NewTimestamp,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let dir = get_dir(self.table, &fd).map(|d| d.clone());
+        let dir = get_dir(self.table, &fd).cloned();
         async move {
             let atim = systemtimespec_from(data_access_timestamp)?;
             let mtim = systemtimespec_from(data_modification_timestamp)?;
@@ -714,8 +714,8 @@ impl WasiFilesystemCtxView<'_> {
         new_fd: &Resource<Descriptor>,
         new_path: String,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let old_dir = get_dir(self.table, old_fd).map(|f| f.clone());
-        let new_dir = get_dir(self.table, new_fd).map(|f| f.clone());
+        let old_dir = get_dir(self.table, old_fd).cloned();
+        let new_dir = get_dir(self.table, new_fd).cloned();
 
         async move {
             old_dir?
@@ -733,7 +733,7 @@ impl WasiFilesystemCtxView<'_> {
         open_flags: OpenFlags,
         flags: DescriptorFlags,
     ) -> impl Future<Output = FilesystemResult<Descriptor>> + use<> {
-        let dir = get_dir(self.table, fd).map(|f| f.clone());
+        let dir = get_dir(self.table, fd).cloned();
         let allow_blocking_current_thread = self.ctx.allow_blocking_current_thread;
         async move {
             let fd = dir?
@@ -754,7 +754,7 @@ impl WasiFilesystemCtxView<'_> {
         fd: &Resource<Descriptor>,
         path: String,
     ) -> impl Future<Output = FilesystemResult<String>> + use<> {
-        let dir = get_dir(self.table, fd).map(|f| f.clone());
+        let dir = get_dir(self.table, fd).cloned();
         async move { Ok(dir?.readlink_at(path).await?) }
     }
 
@@ -763,7 +763,7 @@ impl WasiFilesystemCtxView<'_> {
         fd: &Resource<Descriptor>,
         path: String,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let dir = get_dir(self.table, fd).map(|f| f.clone());
+        let dir = get_dir(self.table, fd).cloned();
         async move {
             dir?.remove_directory_at(path).await?;
             Ok(())
@@ -777,8 +777,8 @@ impl WasiFilesystemCtxView<'_> {
         new_fd: &Resource<Descriptor>,
         new_path: String,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let old_dir = get_dir(self.table, fd).map(|f| f.clone());
-        let new_dir = get_dir(self.table, new_fd).map(|f| f.clone());
+        let old_dir = get_dir(self.table, fd).cloned();
+        let new_dir = get_dir(self.table, new_fd).cloned();
         async move {
             old_dir?.rename_at(old_path, &new_dir?, new_path).await?;
             Ok(())
@@ -791,7 +791,7 @@ impl WasiFilesystemCtxView<'_> {
         old_path: String,
         new_path: String,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let dir = get_dir(self.table, fd).map(|f| f.clone());
+        let dir = get_dir(self.table, fd).cloned();
         async move {
             dir?.symlink_at(old_path, new_path).await?;
             Ok(())
@@ -803,7 +803,7 @@ impl WasiFilesystemCtxView<'_> {
         fd: &Resource<Descriptor>,
         path: String,
     ) -> impl Future<Output = FilesystemResult<()>> + use<> {
-        let dir = get_dir(self.table, fd).map(|f| f.clone());
+        let dir = get_dir(self.table, fd).cloned();
         async move {
             dir?.unlink_file_at(path).await?;
             Ok(())
@@ -815,8 +815,8 @@ impl WasiFilesystemCtxView<'_> {
         fd: &Resource<Descriptor>,
         other: &Resource<Descriptor>,
     ) -> impl Future<Output = wasmtime::Result<bool>> + use<> {
-        let fd = get_descriptor(self.table, fd).map(|f| f.clone());
-        let other = get_descriptor(self.table, other).map(|f| f.clone());
+        let fd = get_descriptor(self.table, fd).cloned();
+        let other = get_descriptor(self.table, other).cloned();
         async move { fd?.is_same_object(&other?).await }
     }
 
@@ -824,7 +824,7 @@ impl WasiFilesystemCtxView<'_> {
         &self,
         fd: &Resource<Descriptor>,
     ) -> impl Future<Output = FilesystemResult<MetadataHashValue>> + use<> {
-        let fd = get_descriptor(self.table, fd).map(|f| f.clone());
+        let fd = get_descriptor(self.table, fd).cloned();
         async move {
             let meta = fd?.metadata_hash().await?;
             Ok(meta.into())
@@ -837,7 +837,7 @@ impl WasiFilesystemCtxView<'_> {
         path_flags: PathFlags,
         path: String,
     ) -> impl Future<Output = FilesystemResult<MetadataHashValue>> + use<> {
-        let dir = get_dir(self.table, fd).map(|d| d.clone());
+        let dir = get_dir(self.table, fd).cloned();
         async move {
             let meta = dir?.metadata_hash_at(path_flags.into(), path).await?;
             Ok(meta.into())
@@ -1182,7 +1182,7 @@ mod named {
         ) -> FilesystemResult<()> {
             let result = store.with(|mut s| {
                 let ctx = s.get().0.filesystem(id);
-                ctx.advise(&fd, offset, length, advice.into())
+                ctx.advise(&fd, offset, length, advice)
             });
             result.await
         }
