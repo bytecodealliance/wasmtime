@@ -1,0 +1,77 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+function %fence_fallback_survives_join(i64, i32) -> i32, i32 {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32):
+    v3 = load.i32 notrap aligned region0 v0
+    brif v1, block1, block2
+
+block1:
+    jump block3
+
+block2:
+    jump block3
+
+block3:
+    v4 = load.i32 notrap aligned region0 v0
+    return v3, v4
+}
+
+; function %fence_fallback_survives_join(i64, i32) -> i32, i32 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32):
+;     v3 = load.i32 notrap aligned region0 v0
+;     brif v1, block1, block2
+;
+; block1:
+;     jump block3
+;
+; block2:
+;     jump block3
+;
+; block3:
+;     return v3, v3
+; }
+
+function %unknown_does_not_take_the_fence_fallback(i64, i32, i32) -> i32, i32 {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = load.i32 notrap aligned region0 v0
+    brif v1, block1, block2
+
+block1:
+    ;; This store prevents `block3` from reusing `v3`.
+    store notrap aligned region0 v2, v0
+    jump block3
+
+block2:
+    jump block3
+
+block3:
+    v4 = load.i32 notrap aligned region0 v0
+    return v3, v4
+}
+
+; function %unknown_does_not_take_the_fence_fallback(i64, i32, i32) -> i32, i32 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     v3 = load.i32 notrap aligned region0 v0
+;     brif v1, block1, block2
+;
+; block1:
+;     store.i32 notrap aligned region0 v2, v0
+;     jump block3
+;
+; block2:
+;     jump block3
+;
+; block3:
+;     v4 = load.i32 notrap aligned region0 v0
+;     return v3, v4
+; }

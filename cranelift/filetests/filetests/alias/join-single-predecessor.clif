@@ -1,0 +1,57 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+function %single_pred_inherits(i64, i32, i32, i32) -> i32, i32 {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store notrap aligned region0 v1, v0
+    jump block1
+
+block1:
+    brif v2, block2, block3
+
+block3:
+    jump block2
+
+block2:
+    v10 = load.i32 notrap aligned region0 v0
+    jump block4
+
+block4:
+    ;; `block4` has exactly one predecessor, `block2`, so at the fixpoint its
+    ;; region0 slot must equal `block2`'s outgoing value, and `v11` must
+    ;; therefore be forwarded to `v10`.
+    v11 = load.i32 notrap aligned region0 v0
+    store notrap aligned region0 v3, v0
+    brif v1, block1, block5
+
+block5:
+    return v10, v11
+}
+
+; function %single_pred_inherits(i64, i32, i32, i32) -> i32, i32 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store notrap aligned region0 v1, v0
+;     jump block1
+;
+; block1:
+;     brif.i32 v2, block2, block3
+;
+; block3:
+;     jump block2
+;
+; block2:
+;     v10 = load.i32 notrap aligned region0 v0
+;     jump block4
+;
+; block4:
+;     store.i32 notrap aligned region0 v3, v0
+;     brif.i32 v1, block1, block5
+;
+; block5:
+;     return v10, v10
+; }

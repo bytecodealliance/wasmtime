@@ -1,7 +1,7 @@
 //! Support for egraphs represented in the DataFlowGraph.
 
 use crate::FxHashSet;
-use crate::alias_analysis::{AliasAnalysis, LastStores, OptResult};
+use crate::alias_analysis::{AliasAnalysis, MemoryState, OptResult};
 use crate::branch_to_trap::BranchToTrapAnalysis;
 use crate::ctxhash::{CtxEq, CtxHash, NullCtx};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
@@ -155,7 +155,7 @@ where
     /// build a post-dominator tree for dead-store elimination.
     cfg: &'opt ControlFlowGraph,
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
-    pub(crate) alias_analysis_state: &'opt mut LastStores,
+    pub(crate) alias_analysis_state: &'opt mut MemoryState,
     pub(crate) branch_to_trap_analysis: &'opt mut BranchToTrapAnalysis,
     ctrl_plane: &'opt mut ControlPlane,
     // Held locally during optimization of one node (recursively):
@@ -923,10 +923,13 @@ impl<'a> EgraphPass<'a> {
             {
                 gvn_map_blocks.pop();
                 gvn_map.decrement_depth();
+                self.alias_analysis.pop_scope();
             }
 
             gvn_map.increment_depth();
             gvn_map_blocks.push(block);
+
+            let mut alias_analysis_state = self.alias_analysis.push_scope(&*self.cfg, block);
 
             // Check that `gvn_map_blocks` is the path from this block up to the
             // root in the dominator tree.
@@ -944,8 +947,6 @@ impl<'a> EgraphPass<'a> {
 
             trace!("Processing block {}", block);
             cursor.set_position(CursorPosition::Before(block));
-
-            let mut alias_analysis_state = self.alias_analysis.block_starting_state(block);
 
             for &param in cursor.func.dfg.block_params(block) {
                 trace!("creating initial singleton eclass for blockparam {}", param);
