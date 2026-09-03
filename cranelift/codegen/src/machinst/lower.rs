@@ -1422,11 +1422,7 @@ fn compute_use_states(
     let uses = |value| {
         trace!(" -> pushing args for {} onto stack", value);
         if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
-            if is_value_use_root(f, src_inst) {
-                None
-            } else {
-                Some(f.dfg.inst_values(src_inst))
-            }
+            Some(f.dfg.inst_values(src_inst))
         } else {
             None
         }
@@ -1484,26 +1480,6 @@ fn compute_use_states(
     }
 
     value_ir_uses
-}
-
-/// Definition of a "root" instruction for the calculation of `ValueUseState`.
-///
-/// This function calculates whether `inst` is considered a "root" for value-use
-/// information. This concept is used to forcibly prevent looking-through the
-/// instruction during `get_value_as_source_or_const` as it additionally
-/// prevents propagating `Multiple`-used results of the `inst` here to the
-/// operands of the instruction.
-///
-/// Currently this is defined as multi-result instructions. That means that
-/// lowerings are never allowed to look through a multi-result instruction to
-/// generate patterns. Note that this isn't possible in ISLE today anyway so
-/// this isn't currently much of a loss.
-///
-/// The main purpose of this function is to prevent the operands of a
-/// multi-result instruction from being forcibly considered `Multiple`-used
-/// regardless of circumstances.
-fn is_value_use_root(f: &Function, inst: Inst) -> bool {
-    f.dfg.inst_results(inst).len() > 1
 }
 
 /// Function-level queries.
@@ -1710,16 +1686,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let src_side_effect = src_entry_color.get() != 0;
                 trace!(" -> src inst {}", self.f.dfg.display_inst(src_inst));
                 trace!(" -> has lowering side effect: {}", src_side_effect);
-                if is_value_use_root(self.f, src_inst) {
-                    // If this instruction is a "root instruction" then it's
-                    // required that we can't look through it to see the
-                    // definition. This means that the `ValueUseState` for the
-                    // operands of this result assume that this instruction is
-                    // generated exactly once which might get violated were we
-                    // to allow looking through it.
-                    trace!(" -> is a root instruction");
-                    InputSourceInst::None
-                } else if !src_side_effect {
+                if !src_side_effect {
                     // Otherwise if this instruction has no side effects and the
                     // value is used only once then we can look through it with
                     // a "unique" tag. A non-unique `Use` can be shown for other
@@ -1869,26 +1836,5 @@ mod tests {
         assert_eq!(uses[v3], ValueUseState::Once);
         assert_eq!(uses[v4], ValueUseState::Once);
         assert_eq!(uses[v5], ValueUseState::Once);
-    }
-
-    #[test]
-    fn results_used_twice_but_not_operands() {
-        let mut func = Function::new();
-        let block0 = func.dfg.make_block();
-        let mut pos = FuncCursor::new(&mut func);
-        pos.insert_block(block0);
-        let v1 = pos.ins().iconst(types::I64, 0);
-        let v2 = pos.ins().iconst(types::I64, 1);
-        let v3 = pos.ins().iconcat(v1, v2);
-        let (v4, v5) = pos.ins().isplit(v3);
-        pos.ins().return_(&[v4, v4]);
-        let func = pos.func;
-
-        let uses = super::compute_use_states(&func, None);
-        assert_eq!(uses[v1], ValueUseState::Once);
-        assert_eq!(uses[v2], ValueUseState::Once);
-        assert_eq!(uses[v3], ValueUseState::Once);
-        assert_eq!(uses[v4], ValueUseState::Multiple);
-        assert_eq!(uses[v5], ValueUseState::Unused);
     }
 }
