@@ -53,21 +53,21 @@
 
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
 ;;     ss0 = explicit_slot 32, align = 8
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
-;;     region2 = 239 "VMFunctionImport+0x18"
-;;     region3 = 190 "VMGlobalImport+0x0"
-;;     region4 = 78 "VMComponentContext+0x40"
-;;     region5 = 99 "VMStoreContext+0x88"
-;;     region6 = 219 "VMDeferredThread+0x0"
-;;     region7 = 116 "VMDeferredThread+0x8"
-;;     region8 = 93 "VMDeferredThread+0xc"
-;;     region9 = 235 "VMDeferredThread+0x10"
-;;     region10 = 98 "VMStoreContext+0x80"
-;;     region11 = 59 "VMDeferredThread+0x14 | VMFunctionImport+0x8"
-;;     region12 = 28 "VMStoreContext+0x84"
-;;     region13 = 248 "VMDeferredThread+0x18"
-;;     region14 = 249 "VMComponentContext+0x30"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 25 ""
+;;     region3 = 44 ""
+;;     region4 = 78 ""
+;;     region5 = 68 ""
+;;     region6 = 198 ""
+;;     region7 = 100 ""
+;;     region8 = 254 ""
+;;     region9 = 176 ""
+;;     region10 = 112 ""
+;;     region11 = 224 ""
+;;     region12 = 149 ""
+;;     region13 = 62 ""
+;;     region14 = 227 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

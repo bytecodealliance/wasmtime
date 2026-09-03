@@ -55,12 +55,12 @@
 )
 
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
-;;     region2 = 239 "VMFunctionImport+0x18"
-;;     region3 = 190 "VMGlobalImport+0x0"
-;;     region4 = 78 "VMComponentContext+0x40"
-;;     region5 = 249 "VMComponentContext+0x30"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 25 ""
+;;     region3 = 44 ""
+;;     region4 = 78 ""
+;;     region5 = 227 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

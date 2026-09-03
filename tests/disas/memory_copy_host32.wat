@@ -50,8 +50,8 @@
   )
 )
 ;; function u0:0(i32 vmctx, i32, i32, i32, i32) tail {
-;;     region0 = 193 "VMMemoryDefinition+0x0"
-;;     region1 = 83 "VMMemoryDefinition+0x4"
+;;     region0 = 215 ""
+;;     region1 = 153 ""
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:1 sig0
 ;;
@@ -78,8 +78,8 @@
 ;; }
 ;;
 ;; function u0:1(i32 vmctx, i32, i32, i32, i32) tail {
-;;     region0 = 193 "VMMemoryDefinition+0x0"
-;;     region1 = 83 "VMMemoryDefinition+0x4"
+;;     region0 = 215 ""
+;;     region1 = 153 ""
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:1 sig0
 ;;
@@ -109,8 +109,8 @@
 ;; }
 ;;
 ;; function u0:2(i32 vmctx, i32, i64, i32, i32) tail {
-;;     region0 = 193 "VMMemoryDefinition+0x0"
-;;     region1 = 83 "VMMemoryDefinition+0x4"
+;;     region0 = 215 ""
+;;     region1 = 153 ""
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:1 sig0
 ;;
@@ -140,8 +140,8 @@
 ;; }
 ;;
 ;; function u0:3(i32 vmctx, i32, i64, i64, i64) tail {
-;;     region0 = 193 "VMMemoryDefinition+0x0"
-;;     region1 = 83 "VMMemoryDefinition+0x4"
+;;     region0 = 215 ""
+;;     region1 = 153 ""
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:1 sig0
 ;;
@@ -168,8 +168,8 @@
 ;; }
 ;;
 ;; function u0:4(i32 vmctx, i32, i64, i64, i64) tail {
-;;     region0 = 193 "VMMemoryDefinition+0x0"
-;;     region1 = 83 "VMMemoryDefinition+0x4"
+;;     region0 = 215 ""
+;;     region1 = 153 ""
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:1 sig0
 ;;
@@ -199,8 +199,8 @@
 ;; }
 ;;
 ;; function u0:5(i32 vmctx, i32, i32, i64, i32) tail {
-;;     region0 = 193 "VMMemoryDefinition+0x0"
-;;     region1 = 83 "VMMemoryDefinition+0x4"
+;;     region0 = 215 ""
+;;     region1 = 153 ""
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:1 sig0
 ;;

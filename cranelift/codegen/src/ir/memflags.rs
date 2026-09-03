@@ -7,7 +7,7 @@ pub use crate::machinst::MachMemFlags;
 use alloc::borrow::Cow;
 use core::fmt;
 use core::hash::{Hash, Hasher};
-use core::ops::{Index, IndexMut};
+use core::ops::Index;
 use core::str::FromStr;
 use cranelift_entity::{entity_impl, packed_option::PackedOption};
 
@@ -38,51 +38,20 @@ entity_impl!(AliasRegion, "region");
 pub struct AliasRegionData {
     /// A unique, user-defined identifier for this alias region.
     ///
-    /// This must not change once the `AliasRegionData` is created, as
-    /// `AliasRegionSet` hash-conses based on this identifier.
-    user_id: u32,
+    /// Alias regions are deduplicated based on this identifier.
+    ///
+    /// This deduplication happens during inlining, for example, when a
+    /// callee's alias regions are merged with the caller's. Therefore, when
+    /// inlining is enabled this identifier should be globally unique across
+    /// the whole compilation. When inlining is disabled, it is sufficient
+    /// to be unique within the context of a single function.
+    pub user_id: u32,
 
     /// Description of this alias region, e.g. "vmctx", "funcref table",
     /// "global 42", or "gc struct `LinkedList` field `tail`".
     ///
     /// This only exists for printing in the CLIF text format.
-    description: Cow<'static, str>,
-}
-
-impl AliasRegionData {
-    /// Create the data for an alias region with the given unique identifier
-    /// and human-readable description.
-    ///
-    /// Alias regions are deduplicated based on the `user_id`.
-    ///
-    /// This deduplication happens during inlining, for example, when a callee's
-    /// alias regions are merged with the caller's. Therefore, when inlining is
-    /// enabled this identifier should be globally unique across the whole
-    /// compilation. When inlining is disabled, it is sufficient to be unique
-    /// within the context of a single function.
-    ///
-    /// The `description` only exists for printing in the CLIF text format.
-    pub fn new(user_id: u32, description: impl Into<Cow<'static, str>>) -> Self {
-        Self {
-            user_id,
-            description: description.into(),
-        }
-    }
-
-    /// Get this region's unique identifier.
-    pub fn user_id(&self) -> u32 {
-        self.user_id
-    }
-
-    /// This region's human-readable description.
-    pub fn description(&self) -> &str {
-        &self.description
-    }
-
-    /// Get a mutable reference to this region's human-readable description.
-    pub fn description_mut(&mut self) -> &mut Cow<'static, str> {
-        &mut self.description
-    }
+    pub description: Cow<'static, str>,
 }
 
 /// An opaque reference to memory operation flags stored in a
@@ -552,10 +521,10 @@ impl AliasRegionSet {
     /// Returns an existing `AliasRegion` if one with the same `user_id`
     /// already exists.
     pub fn insert(&mut self, data: AliasRegionData) -> AliasRegion {
-        if let Some(&existing) = self.dedupe_map.get(&data.user_id()) {
+        if let Some(&existing) = self.dedupe_map.get(&data.user_id) {
             return existing;
         }
-        let user_id = data.user_id();
+        let user_id = data.user_id;
         let key = self.alias_regions.push(data);
         self.dedupe_map.insert(user_id, key);
         key
@@ -566,7 +535,7 @@ impl AliasRegionSet {
     /// This is used by the CLIF text parser to faithfully represent the
     /// source text. The verifier will then check for duplicate `user_id`s.
     pub fn push(&mut self, data: AliasRegionData) -> AliasRegion {
-        let user_id = data.user_id();
+        let user_id = data.user_id;
         let key = self.alias_regions.push(data);
         self.dedupe_map.insert(user_id, key);
         key
@@ -605,17 +574,13 @@ impl AliasRegionSet {
     }
 }
 
+// NB: Do not implement `IndexMut` because alias region data is deduped and
+// shared by many mem flags.
 impl Index<AliasRegion> for AliasRegionSet {
     type Output = AliasRegionData;
 
     fn index(&self, ar: AliasRegion) -> &AliasRegionData {
         &self.alias_regions[ar]
-    }
-}
-
-impl IndexMut<AliasRegion> for AliasRegionSet {
-    fn index_mut(&mut self, ar: AliasRegion) -> &mut AliasRegionData {
-        &mut self.alias_regions[ar]
     }
 }
 

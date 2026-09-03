@@ -24,18 +24,18 @@
 
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     ss0 = explicit_slot 16, align = 65536
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
-;;     region2 = 124 "VMStoreContext+0x58"
-;;     region3 = 66 "VMContRef+0x40"
-;;     region4 = 229 "VMHostArray+0x8"
-;;     region5 = 23 "VMCommonStackInformation+0x38"
-;;     region6 = 212 "ContinuationStackMemory+0x0"
-;;     region7 = 182 "VMContRef+0x50"
-;;     region8 = 20 "VMHostArray+0x4"
-;;     region9 = 176 "VMCommonStackInformation+0x20"
-;;     region10 = 151 "VMContRef+0x60"
-;;     region11 = 126 "VMHostArray+0x0"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 106 ""
+;;     region3 = 225 ""
+;;     region4 = 214 ""
+;;     region5 = 13 ""
+;;     region6 = 55 ""
+;;     region7 = 153 ""
+;;     region8 = 118 ""
+;;     region9 = 255 ""
+;;     region10 = 211 ""
+;;     region11 = 82 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -146,26 +146,25 @@
 ;;
 ;; function u0:1(i64 vmctx, i64) tail {
 ;;     ss0 = explicit_slot 8, align = 256
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
-;;     region2 = 84 "VMContRef+0x58"
-;;     region3 = 182 "VMContRef+0x50"
-;;     region4 = 124 "VMStoreContext+0x58"
-;;     region5 = 66 "VMContRef+0x40"
-;;     region6 = 176 "VMCommonStackInformation+0x20"
-;;     region7 = 108 "VMStoreContext+0x48"
-;;     region8 = 38 "VMStoreContext+0x40"
-;;     region9 = 203 "VMStoreContext+0x50"
-;;     region10 = 89 "VMStackLimits+0x8"
-;;     region11 = 150 "VMStackLimits+0x10"
-;;     region12 = 232 "VMStackLimits+0x18"
-;;     region13 = 180 "VMStackLimits+0x0"
-;;     region14 = 20 "VMHostArray+0x4"
-;;     region15 = 229 "VMHostArray+0x8"
-;;     region16 = 212 "ContinuationStackMemory+0x0"
-;;     region17 = 126 "VMHostArray+0x0"
-;;     region18 = 23 "VMCommonStackInformation+0x38"
-;;     region19 = 151 "VMContRef+0x60"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 206 ""
+;;     region3 = 153 ""
+;;     region4 = 106 ""
+;;     region5 = 225 ""
+;;     region6 = 255 ""
+;;     region7 = 231 ""
+;;     region8 = 243 ""
+;;     region9 = 209 ""
+;;     region10 = 23 ""
+;;     region11 = 224 ""
+;;     region12 = 13 ""
+;;     region13 = 179 ""
+;;     region14 = 118 ""
+;;     region15 = 214 ""
+;;     region16 = 55 ""
+;;     region17 = 82 ""
+;;     region18 = 211 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -242,10 +241,10 @@
 ;; @004e                               v59 = iadd.i64 v0, v58  ; v58 = 48
 ;; @004e                               store notrap aligned region16 v59, v57
 ;; @004e                               store notrap aligned region17 v39, v55  ; v39 = 1
-;; @004e                               store notrap aligned region18 v39, v33+56  ; v39 = 1
+;; @004e                               store notrap aligned region12 v39, v33+56  ; v39 = 1
 ;; @004e                               v66 = iconst.i64 96
 ;; @004e                               v67 = iadd v30, v66  ; v66 = 96
-;; @004e                               v68 = load.i64 notrap aligned region19 v67
+;; @004e                               v68 = load.i64 notrap aligned region18 v67
 ;; @004e                               v69 = iconst.i64 -24
 ;; @004e                               v70 = iadd v68, v69  ; v69 = -24
 ;;                                     v161 = iconst.i64 0x0001_0000_0000
@@ -259,7 +258,7 @@
 ;; @004e                               store notrap aligned region17 v164, v55  ; v164 = 0
 ;; @004e                               store notrap aligned region14 v164, v55+4  ; v164 = 0
 ;; @004e                               store notrap aligned region15 v2, v55+8  ; v2 = 0
-;; @004e                               store notrap aligned region18 v2, v33+56  ; v2 = 0
+;; @004e                               store notrap aligned region12 v2, v33+56  ; v2 = 0
 ;; @004e                               brif v71, block7, block4
 ;;
 ;;                                 block7:

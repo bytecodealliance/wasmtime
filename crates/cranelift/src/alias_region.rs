@@ -24,8 +24,7 @@ use cranelift_codegen::{
     cursor::FuncCursor,
     ir::{self, InstBuilder as _},
 };
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::hash::{DefaultHasher, Hash as _, Hasher as _};
+use std::hash::{Hash as _, Hasher};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, GetPtrSize,
     ModuleInternedTypeIndex, NUM_COMPONENT_CONTEXT_SLOTS, PtrSize as _, RuntimeDataIndex,
@@ -184,8 +183,62 @@ impl AliasRegionKey {
     /// `AliasRegionKey` could be inconsistent with each other, which also leads
     /// to the miscompilation scenario described above.
     pub(crate) fn into_raw(self) -> u32 {
-        /// An arbitrary constant mixed into the hash to shift which keys
-        /// collide with which.
+        /// A version of `rustc_hash::FxHasher` that is guaranteed to provide
+        /// deterministic hashing across Wasmtime builds and processes.
+        struct AliasRegionHasher {
+            hash: u64,
+        }
+
+        impl AliasRegionHasher {
+            fn new(seed: u64) -> Self {
+                AliasRegionHasher { hash: seed }
+            }
+
+            fn add(&mut self, i: u64) {
+                const K: u64 = 0x517c_c1b7_2722_0a95;
+                self.hash = (self.hash.rotate_left(5) ^ i).wrapping_mul(K);
+            }
+        }
+
+        impl Hasher for AliasRegionHasher {
+            fn finish(&self) -> u64 {
+                self.hash
+            }
+
+            fn write(&mut self, bytes: &[u8]) {
+                for b in bytes {
+                    self.add((*b).into());
+                }
+            }
+
+            fn write_u8(&mut self, i: u8) {
+                self.add(i.into());
+            }
+
+            fn write_u16(&mut self, i: u16) {
+                self.add(i.into());
+            }
+
+            fn write_u32(&mut self, i: u32) {
+                self.add(i.into());
+            }
+
+            fn write_u64(&mut self, i: u64) {
+                self.add(i);
+            }
+
+            fn write_u128(&mut self, i: u128) {
+                self.add(i as u64);
+                self.add((i >> 64) as u64);
+            }
+
+            fn write_usize(&mut self, i: usize) {
+                self.add(u64::try_from(i).unwrap());
+            }
+        }
+
+        /// The `AliasRegionHasher` seed, chosen to shift which keys collide
+        /// with which.
         ///
         /// Collisions are inevitable because we are lossily mapping our
         /// ~"infinite" keys onto only 256 actual alias regions. However, not
@@ -194,29 +247,20 @@ impl AliasRegionKey {
         /// first defined memory's base pointer, two of the most-frequently used
         /// regions in essentially every function, would be expensive.
         ///
-        /// A salt of zero (equivalent to not adding a salt at all)
-        /// unfortunately hits some fairly expensive collisions
-        /// (e.g. `VMGlobalImport+0x0` and `VMStoreContext+0x18`).
-        ///
-        /// This value was picked by brute-force search as one for which none of
-        /// the fixed, non-indexed keys appearing anywhere in `tests/disas`
-        /// collide with each other. If a new `VM*` field or `AliasRegionKey`
-        /// variant introduces such a collision later, the disas expectations
-        /// will show it as two regions merging into one, and a new salt can be
-        /// searched for in the same way.
-        const SALT: u64 = 16276;
+        /// This value was picked by brute-force search as one for which none
+        /// of the following collide with each other: the fixed, non-indexed
+        /// keys appearing anywhere in `tests/disas`, and the first five defined
+        /// memories, tables, and globals of the first module. If a new `VM*`
+        /// field or `AliasRegionKey` variant introduces such a collision later,
+        /// the `tests/disas` expectations will show it as two regions merging
+        /// into one, and a new seed can be searched for in the same way.
+        const SEED: u64 = 15912981;
 
-        // Hash the key and salt.
-        //
-        // NB: Use `DefaultHasher::new` because it is deterministically seeded
-        // (unlike `RandomState`) so that our `user_id`s are consistent across
-        // inlining.
-        let mut hasher = DefaultHasher::new();
-        SALT.hash(&mut hasher);
+        let mut hasher = AliasRegionHasher::new(SEED);
         self.hash(&mut hasher);
         let hash = hasher.finish();
 
-        // And then `xor`-fold the hash down to a single byte.
+        // `xor`-fold the hash down to a single byte.
         hash.to_le_bytes().into_iter().fold(0, |a, b| a ^ b).into()
     }
 }
@@ -254,17 +298,6 @@ impl fmt::Debug for AliasRegionKey {
 pub struct AliasRegions<Offsets> {
     pointer_type: ir::Type,
     offsets: Offsets,
-
-    /// The set of `AliasRegionKey`s that have been folded down onto each raw id
-    /// produced by [`AliasRegionKey::into_raw`].
-    ///
-    /// The `ir::AliasRegionSet` in the function under construction is the
-    /// authority on which regions exist --- it hash-conses them by id, so
-    /// `AliasRegionSet::get` already answers "does a region for this id
-    /// exist?" and there is no point caching that here. What it cannot answer
-    /// is which *keys* landed on a given id, which is what we need in order to
-    /// describe the region as all of them instead of just the first one.
-    region_keys: HashMap<u32, HashSet<AliasRegionKey>>,
 }
 
 impl<Offsets> AliasRegions<Offsets> {
@@ -280,12 +313,7 @@ impl<Offsets> AliasRegions<Offsets> {
         slot: ir::StackSlot,
         _offset: u32,
     ) -> Option<ir::AliasRegion> {
-        let key = AliasRegionKey::Stack { slot };
-        Some(Self::insert_or_update_region(
-            regions,
-            key.into_raw(),
-            [key],
-        ))
+        Some(Self::insert_region(regions, AliasRegionKey::Stack { slot }))
     }
 
     /// Get the alias region for a stack slot.
@@ -299,64 +327,17 @@ impl<Offsets> AliasRegions<Offsets> {
 
     /// Get the alias region for the given key.
     fn region(&mut self, func: &mut ir::Function, key: AliasRegionKey) -> ir::AliasRegion {
-        let id = key.into_raw();
-        let keys = self.region_keys.entry(id).or_default();
-
-        if !keys.insert(key) {
-            // We have seen this exact key before, so its region already exists
-            // and its description already mentions the key.
-            debug_assert!(func.dfg.alias_regions.contains(id));
-            return func.dfg.alias_regions.get(id).unwrap();
-        }
-
-        Self::insert_or_update_region(&mut func.dfg.alias_regions, id, keys.iter().copied())
+        Self::insert_region(&mut func.dfg.alias_regions, key)
     }
 
-    /// Get or create the alias region with the given raw `id`, ensuring that its
-    /// description covers `keys` in addition to whatever it already covered.
-    fn insert_or_update_region(
-        regions: &mut ir::AliasRegionSet,
-        id: u32,
-        keys: impl IntoIterator<Item = AliasRegionKey>,
-    ) -> ir::AliasRegion {
-        const DESCRIPTION_SEPARATOR: &str = " | ";
-
-        // NB: `BTreeSet` to keep the descriptions sorted and deterministic.
-        let mut descriptions: BTreeSet<String> = keys
-            .into_iter()
-            .map(|key| {
-                debug_assert_eq!(key.into_raw(), id);
-                format!("{key:?}")
-            })
-            .collect();
-
-        let join = |descriptions: &BTreeSet<String>| -> String {
-            descriptions
-                .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>()
-                .join(DESCRIPTION_SEPARATOR)
-        };
-
-        let Some(region) = regions.get(id) else {
-            return regions.insert(ir::AliasRegionData::new(id, join(&descriptions)));
-        };
-
-        // Union in whatever this region already described, rather than
-        // overwriting it, because `AliasRegions::stack_map_region` is stateless
-        // and cannot dedupe in the `AliasRegions::region_keys` map, so we have
-        // to instead do that deduping here.
-        descriptions.extend(
-            regions[region]
-                .description()
-                .split(DESCRIPTION_SEPARATOR)
-                .map(String::from),
-        );
-
-        let description = join(&descriptions);
-        if description != regions[region].description() {
-            *regions[region].description_mut() = description.into();
-        }
+    /// Get or create the alias region for the given key.
+    fn insert_region(regions: &mut ir::AliasRegionSet, key: AliasRegionKey) -> ir::AliasRegion {
+        let user_id = key.into_raw();
+        let region = regions.insert(ir::AliasRegionData {
+            user_id,
+            description: "".into(),
+        });
+        log::trace!("alias region: {key:?} => {region} (user_id = {user_id})");
         region
     }
 }
@@ -1151,7 +1132,6 @@ where
             pointer_type: ir::Type::int_with_byte_size(offsets.get_ptr_size().size().into())
                 .unwrap(),
             offsets,
-            region_keys: HashMap::default(),
         }
     }
 

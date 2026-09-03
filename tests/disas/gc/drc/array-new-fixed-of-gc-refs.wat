@@ -13,15 +13,16 @@
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
-;;     region2 = 105 "VMContext+0x28"
-;;     region3 = 172 "TypeIdsArray+0x0"
-;;     region4 = 244 "Stack(ss0) | VMStoreContext+0x20"
-;;     region5 = 5 "GcHeap"
-;;     region6 = 35 "VMStoreContext+0x28"
-;;     region7 = 48 "Stack(ss1)"
-;;     region8 = 83 "Stack(ss2)"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 130 ""
+;;     region3 = 6 ""
+;;     region4 = 196 ""
+;;     region5 = 108 ""
+;;     region6 = 206 ""
+;;     region7 = 232 ""
+;;     region8 = 240 ""
+;;     region9 = 208 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -31,11 +32,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;;                                     v202 = stack_addr.i64 ss2
-;;                                     store notrap aligned region8 v2, v202
+;;                                     store notrap aligned region9 v2, v202
 ;;                                     v203 = stack_addr.i64 ss1
-;;                                     store notrap aligned region7 v3, v203
+;;                                     store notrap aligned region8 v3, v203
 ;;                                     v204 = stack_addr.i64 ss0
-;;                                     store notrap aligned region4 v4, v204
+;;                                     store notrap aligned region7 v4, v204
 ;; @0025                               v14 = iconst.i32 -1476395008
 ;; @0025                               v15 = load.i64 notrap aligned readonly can_move region2 v0+40
 ;; @0025                               v16 = load.i32 notrap aligned readonly can_move region3 v15
@@ -52,7 +53,7 @@
 ;; @0025                               store user2 region5 v5, v24  ; v5 = 3
 ;; @0025                               trapz v18, user16
 ;; @0025                               v45 = uadd_overflow_trap v18, v216, user2  ; v216 = 40
-;;                                     v201 = load.i32 notrap aligned region8 v202
+;;                                     v201 = load.i32 notrap aligned region9 v202
 ;; @0025                               v53 = iconst.i32 1
 ;; @0025                               v54 = band v201, v53  ; v53 = 1
 ;; @0025                               v25 = iconst.i32 0
@@ -94,7 +95,7 @@
 ;; @0025                               v6 = iconst.i32 28
 ;; @0025                               v90 = uadd_overflow_trap v257, v6, user2  ; v6 = 28
 ;; @0025                               v94 = uadd_overflow_trap.i32 v18, v90, user2
-;;                                     v191 = load.i32 notrap aligned region7 v203
+;;                                     v191 = load.i32 notrap aligned region8 v203
 ;;                                     v308 = band v191, v306  ; v306 = 1
 ;;                                     v309 = iconst.i32 0
 ;;                                     v310 = icmp eq v191, v309  ; v309 = 0
@@ -136,7 +137,7 @@
 ;;                                     v321 = iconst.i32 28
 ;; @0025                               v139 = uadd_overflow_trap v320, v321, user2  ; v321 = 28
 ;; @0025                               v143 = uadd_overflow_trap.i32 v18, v139, user2
-;;                                     v181 = load.i32 notrap aligned region4 v204
+;;                                     v181 = load.i32 notrap aligned region7 v204
 ;;                                     v322 = iconst.i32 1
 ;;                                     v323 = band v181, v322  ; v322 = 1
 ;;                                     v324 = iconst.i32 0

@@ -3411,7 +3411,10 @@ block2:
         // Place every safepoint spill and reload into a single deduplicated
         // alias region.
         builder.make_stack_map_alias_region(Box::new(|regions, _ty, _slot, _offset| {
-            Some(regions.insert(ir::AliasRegionData::new(0, "stack map")))
+            Some(regions.insert(ir::AliasRegionData {
+                user_id: 0,
+                description: "stack map".into(),
+            }))
         }));
 
         let name = builder

@@ -10,12 +10,12 @@
 )
 
 ;; function u0:0(i64 vmctx, i64) tail {
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
-;;     region2 = 112 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
-;;     region3 = 193 "VMMemoryDefinition+0x0"
-;;     region4 = 213 "VMMemoryDefinition+0x8"
-;;     region5 = 39 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 250 ""
+;;     region3 = 215 ""
+;;     region4 = 105 ""
+;;     region5 = 171 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

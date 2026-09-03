@@ -420,16 +420,16 @@ impl<'a> Verifier<'a> {
     fn verify_alias_regions(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         let mut seen_user_ids = crate::HashMap::new();
         for (ar, ar_data) in self.func.dfg.alias_regions.iter() {
-            if let Some(&prev) = seen_user_ids.get(&ar_data.user_id()) {
+            if let Some(&prev) = seen_user_ids.get(&ar_data.user_id) {
                 errors.report((
                     ar,
                     format!(
                         "duplicate alias region user_id {}: {} and {}",
-                        ar_data.user_id(), prev, ar
+                        ar_data.user_id, prev, ar
                     ),
                 ));
             } else {
-                seen_user_ids.insert(ar_data.user_id(), ar);
+                seen_user_ids.insert(ar_data.user_id, ar);
             }
         }
         Ok(())

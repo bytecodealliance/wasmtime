@@ -58,7 +58,7 @@ pub trait FuncWriter {
                 w,
                 func,
                 ar.into(),
-                &format_args!("{} \"{}\"", ar_data.user_id(), ar_data.description()),
+                &format_args!("{} \"{}\"", ar_data.user_id, ar_data.description),
             )?;
         }
 

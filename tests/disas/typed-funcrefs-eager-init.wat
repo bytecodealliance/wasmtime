@@ -114,8 +114,8 @@
 )
 
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -129,12 +129,12 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
-;;     region2 = 44 "VMTableDefinition+0x0"
-;;     region3 = 189 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region4 = 170 "VMFuncRef+0x8"
-;;     region5 = 18 "VMFuncRef+0x18"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 93 ""
+;;     region3 = 117 ""
+;;     region4 = 116 ""
+;;     region5 = 60 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -163,12 +163,12 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
-;;     region2 = 44 "VMTableDefinition+0x0"
-;;     region3 = 189 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region4 = 170 "VMFuncRef+0x8"
-;;     region5 = 18 "VMFuncRef+0x18"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 93 ""
+;;     region3 = 117 ""
+;;     region4 = 116 ""
+;;     region5 = 60 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -197,12 +197,12 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 15 "VMContext+0x8"
-;;     region1 = 114 "VMStoreContext+0x18"
-;;     region2 = 112 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
-;;     region3 = 170 "VMFuncRef+0x8"
-;;     region4 = 18 "VMFuncRef+0x18"
-;;     region5 = 20 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(1))"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 250 ""
+;;     region3 = 116 ""
+;;     region4 = 60 ""
+;;     region5 = 135 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
