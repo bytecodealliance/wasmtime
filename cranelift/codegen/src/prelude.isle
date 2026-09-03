@@ -764,6 +764,7 @@
 (model I32 (const (struct (bits 32))))
 (model I64 (const (struct (bits 64))))
 (model I128 (const (struct (bits 128))))
+(model F16 (const (struct (bits 16))))
 (model F32 (const (struct (bits 32))))
 (model F64 (const (struct (bits 64))))
 (model I8X16 (const (struct (bits 128))))
