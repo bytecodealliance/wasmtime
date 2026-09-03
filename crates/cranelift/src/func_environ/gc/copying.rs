@@ -50,10 +50,14 @@ impl CopyingCompiler {
     ) -> (ir::Value, ir::Value) {
         let bump_ptr = func_env
             .alias_regions
-            .vmcopying_heap_data_bump_ptr(&mut builder.cursor(), ptr_to_heap_data);
+            .vm_copying_heap_data()
+            .bump_ptr()
+            .load(&mut builder.cursor(), ptr_to_heap_data);
         let active_space_end = func_env
             .alias_regions
-            .vmcopying_heap_data_active_space_end(&mut builder.cursor(), ptr_to_heap_data);
+            .vm_copying_heap_data()
+            .active_space_end()
+            .load(&mut builder.cursor(), ptr_to_heap_data);
         (bump_ptr, active_space_end)
     }
 
@@ -64,11 +68,11 @@ impl CopyingCompiler {
         heap_data_ptr: ir::Value,
         end_of_object: ir::Value,
     ) {
-        func_env.alias_regions.store_vmcopying_heap_data_bump_ptr(
-            &mut builder.cursor(),
-            heap_data_ptr,
-            end_of_object,
-        );
+        func_env
+            .alias_regions
+            .vm_copying_heap_data()
+            .bump_ptr()
+            .store(&mut builder.cursor(), heap_data_ptr, end_of_object);
     }
 
     /// Round `size` (an `i32`) up to `ALIGN`, returning the result as an `i64`.

@@ -14,8 +14,8 @@ use super::VMArrayRef;
 use super::trace_infos::TraceInfos;
 use crate::runtime::vm::{
     ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
-    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMExternRef,
-    VMGcHeader, VMGcRef, VMMemoryDefinition,
+    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMCopyingHeapData,
+    VMExternRef, VMGcHeader, VMGcRef, VMMemoryDefinition,
 };
 use crate::{Engine, bail_bug, prelude::*};
 use core::{
@@ -176,26 +176,20 @@ unsafe impl GcHeapObject for VMCopyingExternRef {
     }
 }
 
-/// JIT-accessible bump-allocation state for the copying collector.
+/// A [`VMCopyingHeapData`] as this heap owns it.
 ///
-/// NB: Layout is defined by constants in `wasmtime_environ::copying`. Keep in
-/// sync!
-#[derive(Default)]
-#[repr(C)]
-struct VMCopyingHeapDataInner {
-    /// Current bump pointer (index into the GC heap).
-    bump_ptr: u32,
-    /// End of the active semi-space.
-    active_space_end: u32,
-}
-
+/// Compiled Wasm holds a pointer to the inner `VMCopyingHeapData` and bumps its
+/// allocation pointer, so all of the runtime's own accesses go through an
+/// `UnsafeCell`. Both this wrapper and `SendSyncUnsafeCell` are
+/// `repr(transparent)`, so the layout that compiled code sees is exactly the
+/// generated one.
 #[derive(Default)]
 #[repr(transparent)]
-struct VMCopyingHeapData {
-    inner: SendSyncUnsafeCell<VMCopyingHeapDataInner>,
+struct VMCopyingHeapDataCell {
+    inner: SendSyncUnsafeCell<VMCopyingHeapData>,
 }
 
-impl VMCopyingHeapData {
+impl VMCopyingHeapDataCell {
     fn bump_ptr(&self) -> u32 {
         // Safety: `inner` is valid to read from.
         unsafe { (*self.inner.get()).bump_ptr }
@@ -266,7 +260,7 @@ struct CopyingHeap {
     ///
     /// NB: The bump pointer is written to by compiled Wasm code via the pointer
     /// returned by `vmctx_gc_heap_data`.
-    vmctx_data: VMCopyingHeapData,
+    vmctx_data: VMCopyingHeapDataCell,
 
     /// The start of the active semi-space.
     active_space_start: u32,
@@ -307,7 +301,7 @@ impl CopyingHeap {
             no_gc_count: 0,
             memory: None,
             vmmemory: None,
-            vmctx_data: VMCopyingHeapData::default(),
+            vmctx_data: VMCopyingHeapDataCell::default(),
             active_space_start: 0,
             idle_space_start: 0,
             idle_space_end: 0,
@@ -1220,7 +1214,6 @@ impl Drop for CopyingCollection<'_, '_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wasmtime_environ::{HostPtr, PtrSize};
 
     #[test]
     fn vm_copying_header_size_align() {
@@ -1269,46 +1262,6 @@ mod tests {
             wasmtime_environ::copying::FORWARDING_REF_OFFSET as usize
                 + core::mem::size_of::<Option<VMGcRef>>()
                 <= wasmtime_environ::copying::MIN_OBJECT_SIZE as usize,
-        );
-    }
-
-    #[test]
-    fn vm_copying_heap_data_bump_ptr_offset() {
-        assert_eq!(
-            HostPtr.vmcopying_heap_data_bump_ptr() as usize,
-            core::mem::offset_of!(VMCopyingHeapDataInner, bump_ptr),
-        );
-    }
-
-    #[test]
-    fn vm_copying_heap_data_active_space_end_offset() {
-        assert_eq!(
-            HostPtr.vmcopying_heap_data_active_space_end() as usize,
-            core::mem::offset_of!(VMCopyingHeapDataInner, active_space_end),
-        );
-    }
-
-    #[test]
-    fn vm_copying_heap_data_size() {
-        assert_eq!(
-            HostPtr.size_of_vmcopying_heap_data() as usize,
-            core::mem::size_of::<VMCopyingHeapData>(),
-        );
-        assert_eq!(
-            HostPtr.size_of_vmcopying_heap_data() as usize,
-            core::mem::size_of::<VMCopyingHeapDataInner>(),
-        );
-    }
-
-    #[test]
-    fn vm_copying_heap_data_align() {
-        assert_eq!(
-            HostPtr.align_of_vmcopying_heap_data() as usize,
-            core::mem::align_of::<VMCopyingHeapData>(),
-        );
-        assert_eq!(
-            HostPtr.align_of_vmcopying_heap_data() as usize,
-            core::mem::align_of::<VMCopyingHeapDataInner>(),
         );
     }
 

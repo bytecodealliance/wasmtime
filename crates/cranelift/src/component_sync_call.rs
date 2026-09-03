@@ -98,23 +98,19 @@ where
     // Save the caller's context slots into the frame and reset the live values
     // to 0 for the freshly-entered (deferred) thread.
     for i in 0..u8::try_from(NUM_COMPONENT_CONTEXT_SLOTS).unwrap() {
-        let saved = alias_regions.vmstore_context_component_context_slot(
-            &mut builder.cursor(),
-            ir::types::I32,
-            vmstore,
-            i,
-        );
-        alias_regions.store_vmdeferred_thread_saved_context(
+        let saved = alias_regions
+            .vm_store_context()
+            .component_context(i)
+            .load(&mut builder.cursor(), vmstore);
+        alias_regions.vm_deferred_thread().saved_context(i).store(
             &mut builder.cursor(),
             slot_addr,
-            i,
             saved,
         );
         let zero = builder.ins().iconst(ir::types::I32, 0);
-        alias_regions.store_vmstore_context_component_context_slot(
+        alias_regions.vm_store_context().component_context(i).store(
             &mut builder.cursor(),
             vmstore,
-            i,
             zero,
         );
     }
@@ -195,12 +191,13 @@ where
         .current_thread()
         .store(&mut builder.cursor(), vmstore, parent);
     for i in 0..u8::try_from(NUM_COMPONENT_CONTEXT_SLOTS).unwrap() {
-        let saved =
-            alias_regions.vmdeferred_thread_saved_context(&mut builder.cursor(), slot_addr, i);
-        alias_regions.store_vmstore_context_component_context_slot(
+        let saved = alias_regions
+            .vm_deferred_thread()
+            .saved_context(i)
+            .load(&mut builder.cursor(), slot_addr);
+        alias_regions.vm_store_context().component_context(i).store(
             &mut builder.cursor(),
             vmstore,
-            i,
             saved,
         );
     }

@@ -1388,11 +1388,10 @@ impl Compiler {
             .load(&mut builder.cursor(), vmctx);
         // ... and then load the entry in the array that corresponds to this
         // builtin.
-        let func_addr = alias_regions.builtin_functions_array_element(
-            &mut builder.cursor(),
-            array_addr,
-            builtin,
-        );
+        let func_addr = alias_regions
+            .vmctx()
+            .builtin_functions_array(builtin)
+            .load(&mut builder.cursor(), array_addr);
 
         let sig = builder.func.import_signature(sig);
         self.call_indirect_host(builder, builtin, sig, func_addr, args)

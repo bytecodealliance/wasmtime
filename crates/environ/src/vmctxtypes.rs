@@ -91,6 +91,17 @@
 ///   on the vmctx's shape. These fields get generated accessors that do not
 ///   need to be parameterized over `VMOffsets`, only `GetPtrSize`.
 ///
+/// * `#[pointee(<attrs> <Region> as <name> $([<IndexType>])? : <ty>)]`: this
+///   field is a pointer to memory that lives *outside* the vmctx and so is not
+///   part of its layout at all, but that compiled code reaches only by loading
+///   this field first. `<Region>` names the alias region that memory belongs
+///   to, `<name>` is the accessor generated for it, and `<ty>` is the type it is
+///   accessed as. With an `[<IndexType>]`, the pointee is an array of `<ty>`
+///   indexed by `<IndexType>` and each element gets its own alias region;
+///   without one, it is a single `<ty>`. The pointee's `<attrs>` are its own:
+///   how compiled code may treat a load of the pointee is independent of how it
+///   may treat a load of the pointer.
+///
 /// Doc comments are deliberately *not* accepted on fields; use `//` comments for
 /// prose about the layout. Accessor documentation is synthesized from the field
 /// names instead, so that there is only one place a field can be described.
@@ -121,15 +132,41 @@ macro_rules! for_each_vmctx_type {
 
                     field { #[readonly] #[can_move] store_context: VmPtr<VMStoreContext> }
 
-                    field { #[readonly] #[can_move] builtin_functions: VmPtr<VMBuiltinFunctionsArray> }
+                    // NB: `VMBuiltinFunctionsArray` is a `repr(C)` struct of
+                    // `unsafe extern "C" fn` fields rather than a true array,
+                    // so its elements are pointer-width and pointer-aligned.
+                    field {
+                        #[readonly]
+                        #[can_move]
+                        #[pointee(
+                            #[readonly]
+                            #[can_move]
+                            BuiltinFunctionsArray as builtin_functions_array[BuiltinFunctionIndex]:
+                                unsafe extern "C" fn
+                        )]
+                        builtin_functions: VmPtr<VMBuiltinFunctionsArray>
+                    }
 
-                    field { epoch_ptr: VmPtr<AtomicU64> }
+                    field {
+                        #[pointee(EpochCounter as epoch_counter: AtomicU64)]
+                        epoch_ptr: VmPtr<AtomicU64>
+                    }
 
                     // A pointer that different collectors use however they see
                     // fit.
                     field { #[readonly] #[can_move] gc_heap_data: VmPtr<u8> }
 
-                    field { #[readonly] #[can_move] type_ids: VmPtr<VMSharedTypeIndex> }
+                    field {
+                        #[readonly]
+                        #[can_move]
+                        #[pointee(
+                            #[readonly]
+                            #[can_move]
+                            TypeIdsArray as type_ids_array[ModuleInternedTypeIndex]:
+                                VMSharedTypeIndex
+                        )]
+                        type_ids: VmPtr<VMSharedTypeIndex>
+                    }
                 }
 
                 // Variable-width fields come after the fixed-width fields
@@ -222,7 +259,16 @@ macro_rules! for_each_vmctx_type {
 
                     align { ptr }
 
-                    field { #[readonly] builtins: VmPtr<VMComponentBuiltins> }
+                    field {
+                        #[readonly]
+                        #[pointee(
+                            #[readonly]
+                            #[can_move]
+                            ComponentBuiltinFunctionsArray as builtins_array[ComponentBuiltinFunctionIndex]:
+                                unsafe extern "C" fn
+                        )]
+                        builtins: VmPtr<VMComponentBuiltins>
+                    }
 
                     field { #[readonly] #[can_move] store_context: VmPtr<VMStoreContext> }
                 }

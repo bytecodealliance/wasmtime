@@ -53,7 +53,7 @@ use crate::runtime::vm::{
     GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMExternRef,
     VMGcHeader, VMGcObjectData, VMGcRef,
 };
-use crate::vm::VMMemoryDefinition;
+use crate::vm::{VMDrcHeapData, VMMemoryDefinition};
 use crate::{Engine, Trap, bail_bug, prelude::*};
 use core::sync::atomic::AtomicUsize;
 use core::{
@@ -97,28 +97,17 @@ unsafe impl GcRuntime for DrcCollector {
     }
 }
 
-/// JIT-accessible DRC heap data.
-#[derive(Default)]
-#[repr(C)]
-struct VMDrcHeapDataInner {
-    /// The head of the over-approximated-stack-roots list.
-    over_approximated_stack_roots: Option<VMGcRef>,
-
-    /// The current size of the over-approximated-stack-roots list.
-    current_over_approximated_stack_roots_len: u32,
-
-    /// The size of the over-approximated-stack-roots list immediately after the
-    /// last GC.
-    over_approximated_stack_roots_len_after_last_gc: u32,
-}
-
+/// A `VMDrcHeapData` inside a `SendSyncUnsafeCell`.
+///
+/// Compiled Wasm holds a pointer to the inner `VMDrcHeapData` and writes to it,
+/// so all of the runtime's own accesses go through an `UnsafeCell`.
 #[derive(Default)]
 #[repr(transparent)]
-struct VMDrcHeapData {
-    inner: SendSyncUnsafeCell<VMDrcHeapDataInner>,
+struct VMDrcHeapDataCell {
+    inner: SendSyncUnsafeCell<VMDrcHeapData>,
 }
 
-impl VMDrcHeapData {
+impl VMDrcHeapDataCell {
     fn over_approximated_stack_roots(&self) -> Option<VMGcRef> {
         // Safety: `inner` is valid to read from.
         unsafe {
@@ -177,7 +166,7 @@ struct DrcHeap {
     ///
     /// Note that this is exposed directly to compiled Wasm code through the
     /// vmctx, so must not move.
-    vmctx_data: Box<VMDrcHeapData>,
+    vmctx_data: Box<VMDrcHeapDataCell>,
 
     /// The storage for the GC heap itself.
     memory: Option<crate::vm::Memory>,
@@ -928,7 +917,7 @@ unsafe impl GcHeap for DrcHeap {
         } = self;
 
         *no_gc_count = 0;
-        **vmctx_data = VMDrcHeapData::default();
+        **vmctx_data = VMDrcHeapDataCell::default();
         *free_list = None;
         *vmmemory = None;
         *allocated_bytes = 0;
@@ -1194,7 +1183,7 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        let ptr: NonNull<VMDrcHeapData> = NonNull::from(&*self.vmctx_data);
+        let ptr: NonNull<VMDrcHeapDataCell> = NonNull::from(&*self.vmctx_data);
         ptr.cast()
     }
 
@@ -1335,7 +1324,7 @@ impl<T> DerefMut for DebugOnly<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wasmtime_environ::{HostPtr, PtrSize};
+    use wasmtime_environ::HostPtr;
 
     #[test]
     fn vm_drc_header_size_align() {
@@ -1391,60 +1380,6 @@ mod tests {
         assert_eq!(
             offsets.vm_drc_header_ref_count(),
             u32::try_from(actual_offset).unwrap(),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_over_approximated_stack_roots_offset() {
-        assert_eq!(
-            HostPtr.vmdrc_heap_data_over_approximated_stack_roots() as usize,
-            core::mem::offset_of!(VMDrcHeapDataInner, over_approximated_stack_roots),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_current_over_approximated_stack_roots_len_offset() {
-        assert_eq!(
-            HostPtr.vmdrc_heap_data_current_over_approximated_stack_roots_len() as usize,
-            core::mem::offset_of!(
-                VMDrcHeapDataInner,
-                current_over_approximated_stack_roots_len
-            ),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_over_approximated_stack_roots_len_after_last_gc_offset() {
-        assert_eq!(
-            HostPtr.vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc() as usize,
-            core::mem::offset_of!(
-                VMDrcHeapDataInner,
-                over_approximated_stack_roots_len_after_last_gc
-            ),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_size() {
-        assert_eq!(
-            HostPtr.size_of_vmdrc_heap_data() as usize,
-            core::mem::size_of::<VMDrcHeapData>(),
-        );
-        assert_eq!(
-            HostPtr.size_of_vmdrc_heap_data() as usize,
-            core::mem::size_of::<VMDrcHeapDataInner>(),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_align() {
-        assert_eq!(
-            HostPtr.align_of_vmdrc_heap_data() as usize,
-            core::mem::align_of::<VMDrcHeapData>(),
-        );
-        assert_eq!(
-            HostPtr.align_of_vmdrc_heap_data() as usize,
-            core::mem::align_of::<VMDrcHeapDataInner>(),
         );
     }
 }

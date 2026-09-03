@@ -212,6 +212,15 @@ macro_rules! declare_builtin_index {
             $for_each_builtin!(declare_builtin_index_constructors);
         }
 
+        // Builtins are reached by indexing the array of function pointers that
+        // a vmctx points at.
+        impl $crate::VmctxArrayIndex for $index_name {
+            #[inline]
+            fn vmctx_array_index(self) -> u32 {
+                self.index()
+            }
+        }
+
         #[cfg(test)]
         impl arbitrary::Arbitrary<'_> for $index_name {
             fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {

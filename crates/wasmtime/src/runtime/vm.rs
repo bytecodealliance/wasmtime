@@ -126,8 +126,14 @@ pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
 #[cfg(feature = "component-model")]
 pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
+#[cfg(feature = "gc-copying")]
+pub use crate::runtime::vm::vmcontext::VMCopyingHeapData;
+#[cfg(feature = "gc-drc")]
+pub use crate::runtime::vm::vmcontext::VMDrcHeapData;
 #[cfg(feature = "component-model-async")]
 pub use crate::runtime::vm::vmcontext::VMLazyThread;
+#[cfg(feature = "gc-null")]
+pub use crate::runtime::vm::vmcontext::VMNullHeapData;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,

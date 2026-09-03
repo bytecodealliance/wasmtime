@@ -1398,11 +1398,9 @@ impl<'a> TrampolineCompiler<'a> {
             .load(&mut self.builder.cursor(), vmctx);
         // Next load the function pointer at `offset` and return that.
         self.alias_regions
-            .component_builtin_functions_array_element(
-                &mut self.builder.cursor(),
-                builtins_array,
-                index,
-            )
+            .vmcomponent()
+            .builtins_array(index)
+            .load(&mut self.builder.cursor(), builtins_array)
     }
 
     /// Get a function's parameters regardless of the ABI in use.
@@ -2356,16 +2354,6 @@ where
         intrinsic: UnsafeIntrinsic,
         params: &[ir::Value],
     ) -> Option<ir::Value> {
-        // This is the width of the type being loaded from Wasmtime's
-        // `VMStoreContext` slot and it depends on the intrinsic.
-        let ty = match intrinsic {
-            UnsafeIntrinsic::ContextGetI32_0
-            | UnsafeIntrinsic::ContextSetI32_0
-            | UnsafeIntrinsic::ContextGetI32_1
-            | UnsafeIntrinsic::ContextSetI32_1 => ir::types::I32,
-            _ => unreachable!(),
-        };
-
         let slot = match intrinsic {
             UnsafeIntrinsic::ContextGetI32_0 | UnsafeIntrinsic::ContextSetI32_0 => 0,
             UnsafeIntrinsic::ContextGetI32_1 | UnsafeIntrinsic::ContextSetI32_1 => 1,
@@ -2377,24 +2365,18 @@ where
                 let context = self
                     .traps
                     .alias_regions()
-                    .vmstore_context_component_context_slot(
-                        &mut self.builder.cursor(),
-                        ty,
-                        vmstore_context,
-                        slot,
-                    );
+                    .vm_store_context()
+                    .component_context(slot)
+                    .load(&mut self.builder.cursor(), vmstore_context);
                 Some(context)
             }
             UnsafeIntrinsic::ContextSetI32_0 | UnsafeIntrinsic::ContextSetI32_1 => {
                 let new_context = params[2];
                 self.traps
                     .alias_regions()
-                    .store_vmstore_context_component_context_slot(
-                        &mut self.builder.cursor(),
-                        vmstore_context,
-                        slot,
-                        new_context,
-                    );
+                    .vm_store_context()
+                    .component_context(slot)
+                    .store(&mut self.builder.cursor(), vmstore_context, new_context);
                 None
             }
             _ => unreachable!(),

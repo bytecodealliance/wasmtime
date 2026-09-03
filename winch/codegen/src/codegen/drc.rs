@@ -243,13 +243,15 @@ where
             self.env
                 .vmoffsets
                 .ptr
-                .vmdrc_heap_data_over_approximated_stack_roots(),
+                .vm_drc_heap_data()
+                .over_approximated_stack_roots(),
         );
         let roots_len_offset = u32::from(
             self.env
                 .vmoffsets
                 .ptr
-                .vmdrc_heap_data_current_over_approximated_stack_roots_len(),
+                .vm_drc_heap_data()
+                .current_over_approximated_stack_roots_len(),
         );
         let next_offset = self
             .env
@@ -341,7 +343,8 @@ where
             self.env
                 .vmoffsets
                 .ptr
-                .vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc(),
+                .vm_drc_heap_data()
+                .over_approximated_stack_roots_len_after_last_gc(),
         );
         let skip_gc = self.masm.get_label()?;
         self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {

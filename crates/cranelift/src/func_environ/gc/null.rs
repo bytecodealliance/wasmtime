@@ -77,7 +77,9 @@ impl NullCompiler {
             .load(&mut builder.cursor(), vmctx);
         let next = func_env
             .alias_regions
-            .vmnull_heap_data_bump_finger(&mut builder.cursor(), ptr_to_next);
+            .vm_null_heap_data()
+            .next()
+            .load(&mut builder.cursor(), ptr_to_next);
 
         // Increment the bump "pointer" to the requested alignment:
         //
@@ -168,7 +170,7 @@ impl NullCompiler {
             ptr_to_object,
             i32::try_from(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET).unwrap(),
         );
-        func_env.alias_regions.store_vmnull_heap_data_bump_finger(
+        func_env.alias_regions.vm_null_heap_data().next().store(
             &mut builder.cursor(),
             ptr_to_next,
             end_of_object,
