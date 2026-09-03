@@ -31,8 +31,7 @@ block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i128, v5: i128, v6: i128, v7: f32, v8
 ;   strb w0, [x8, #38]
 ;   strb w0, [x8, #39]
 ;   strb w0, [x8, #40]
-;   uxtb w1, w0
-;   str x0, [x8, #48]
+;   strb w0, [x8, #48]
 ;   mov x6, x4
 ;   mov x7, x5
 ;   mov x0, x6
@@ -60,8 +59,7 @@ block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i128, v5: i128, v6: i128, v7: f32, v8
 ;   sturb w0, [x8, #0x26]
 ;   sturb w0, [x8, #0x27]
 ;   sturb w0, [x8, #0x28]
-;   uxtb w1, w0
-;   stur x0, [x8, #0x30]
+;   sturb w0, [x8, #0x30]
 ;   mov x6, x4
 ;   mov x7, x5
 ;   mov x0, x6

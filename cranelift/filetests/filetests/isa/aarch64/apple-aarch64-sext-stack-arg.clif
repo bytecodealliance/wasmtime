@@ -1,0 +1,75 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+; Callee: 9th i16 sext arg is passed on the stack on apple_aarch64.
+; It must be loaded with a narrow ldrh, not a word-width ldr.
+function %callee(i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext) -> i16 apple_aarch64 {
+block0(v0: i16, v1: i16, v2: i16, v3: i16, v4: i16, v5: i16, v6: i16, v7: i16, v8: i16):
+    return v8
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldrh w0, [sp, #16]
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldurh w0, [sp, #0x10]
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %caller(i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext) -> i16 apple_aarch64 {
+    fn0 = colocated %callee(i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext, i16 sext) -> i16 apple_aarch64
+block0(v0: i16, v1: i16, v2: i16, v3: i16, v4: i16, v5: i16, v6: i16, v7: i16, v8: i16):
+    v9 = call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8)
+    return v9
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   ldrh w9, [sp, #32]
+;   sxth x0, w0
+;   sxth x1, w1
+;   sxth x2, w2
+;   sxth x3, w3
+;   sxth x4, w4
+;   sxth x5, w5
+;   sxth x6, w6
+;   sxth x7, w7
+;   strh w9, [sp]
+;   bl 0
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   ldurh w9, [sp, #0x20]
+;   sxth x0, w0
+;   sxth x1, w1
+;   sxth x2, w2
+;   sxth x3, w3
+;   sxth x4, w4
+;   sxth x5, w5
+;   sxth x6, w6
+;   sxth x7, w7
+;   sturh w9, [sp]
+;   bl #0x34 ; reloc_external Call %callee 0
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret

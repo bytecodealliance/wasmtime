@@ -1210,8 +1210,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn get_ext_mode(
         call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
+        location: ABIArgLocation,
     ) -> ir::ArgumentExtension {
-        if call_conv == isa::CallConv::AppleAarch64 {
+        // Apple's AArch64 ABI only requires the caller to sign/zero-extend
+        // arguments in registers; stack-passed arguments use their natural
+        // (possibly sub-word) size and are not extended. See "Pass arguments
+        // to functions correctly" in:
+        // https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms
+        if call_conv == isa::CallConv::AppleAarch64 && location == ABIArgLocation::Reg {
             specified
         } else {
             ir::ArgumentExtension::None

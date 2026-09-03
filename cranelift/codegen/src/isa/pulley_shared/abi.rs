@@ -211,6 +211,7 @@ where
     fn get_ext_mode(
         _call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
+        _location: ABIArgLocation,
     ) -> ir::ArgumentExtension {
         specified
     }
