@@ -37,11 +37,6 @@ Alliance RFC that originally proposed Pulley][rfc].
 
 [rfc]: https://github.com/bytecodealliance/rfcs/blob/main/accepted/pulley.md
 
-## Status
-
-Pulley is very much still a work in progress! Expect the details of the bytecode
-to change, instructions to appear and disappear, and APIs to be overhauled.
-
 ## Example
 
 Here is the disassembly of `f(a, b) = a + b` in Pulley today:
