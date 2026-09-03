@@ -604,6 +604,59 @@ fn get_interned_func_ref(
     Ok(func_ref.map_or(core::ptr::null_mut(), |f| f.as_ptr().cast()))
 }
 
+// Intern a continuation reference into the GC heap's side table.
+//
+// This libcall may not GC.
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
+unsafe fn intern_contref_for_gc_heap(
+    store: &mut dyn VMStore,
+    _instance: InstanceId,
+    contref: *mut u8,
+    revision: *mut u8,
+) -> Result<u32> {
+    use crate::store::AutoAssertNoGc;
+
+    let mut store = AutoAssertNoGc::new(store.store_opaque_mut());
+    let contobj = unsafe { crate::vm::VMContObj::from_raw_parts(contref, revision.addr()) };
+    let id = unsafe { store.require_gc_store_mut()?.cont_ref_table.intern(contobj) };
+    Ok(id)
+}
+
+// Resolve a continuation reference ID loaded from the GC heap and
+// write its 16 bytes value into caller provided storage `out_result`.
+//
+// This libcall may not GC.
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
+unsafe fn get_interned_contref(
+    store: &mut dyn VMStore,
+    _instance: InstanceId,
+    contref_id: u32,
+    out_result: *mut u8,
+) -> Result<()> {
+    use crate::store::AutoAssertNoGc;
+
+    #[repr(C)]
+    struct RawContObj {
+        contref: *mut u8,
+        revision: usize,
+    }
+
+    let store = AutoAssertNoGc::new(store.store_opaque_mut());
+    let contobj = store.unwrap_gc_store().cont_ref_table.get(contref_id)?;
+    let raw = match contobj {
+        Some(contobj) => RawContObj {
+            contref: contobj.contref.as_ptr().cast(),
+            revision: contobj.revision,
+        },
+        None => RawContObj {
+            contref: core::ptr::null_mut(),
+            revision: 0,
+        },
+    };
+    unsafe { out_result.cast::<RawContObj>().write(raw) };
+    Ok(())
+}
+
 #[cfg(feature = "gc")]
 fn is_subtype(
     store: &mut dyn VMStore,
@@ -1119,9 +1172,25 @@ fn cont_new(
     func: *mut u8,
     param_count: u32,
     result_count: u32,
+    gc_refs: u32,
 ) -> Result<Option<AllocationSize>> {
-    let ans =
-        crate::vm::stack_switching::cont_new(store, instance, func, param_count, result_count)?;
+    let ans = if gc_refs != 0 {
+        crate::vm::stack_switching::cont_new::<true>(
+            store,
+            instance,
+            func,
+            param_count,
+            result_count,
+        )?
+    } else {
+        crate::vm::stack_switching::cont_new::<false>(
+            store,
+            instance,
+            func,
+            param_count,
+            result_count,
+        )?
+    };
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
 }
 

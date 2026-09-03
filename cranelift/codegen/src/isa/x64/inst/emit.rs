@@ -550,6 +550,8 @@ pub(crate) fn emit(
             in_payload0,
             out_payload0,
         } => {
+            let stack_map = state.take_stack_map();
+
             // Note that we do not emit anything for preserving and restoring
             // ordinary registers here: That's taken care of by regalloc for us,
             // since we marked this instruction as clobbering all registers.
@@ -643,6 +645,9 @@ pub(crate) fn emit(
             asm::inst::jmpq_m::new(tmp1.to_reg()).emit(sink, info, state);
 
             sink.bind_label(resume, state.ctrl_plane_mut());
+            if let Some(s) = stack_map {
+                sink.push_user_stack_map(state, sink.cur_offset(), s);
+            }
         }
 
         Inst::JmpKnown { dst } => uncond_jmp(sink, *dst),

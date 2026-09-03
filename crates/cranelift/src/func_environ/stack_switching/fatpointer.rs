@@ -34,7 +34,7 @@ pub(crate) fn deconstruct<'a>(
 /// Constructs a continuation object from a given contref and revision pointer.
 /// The contref_addr may be 0, to indicate that we want to build a wasm null reference.
 pub(crate) fn construct<'a>(
-    env: &mut crate::func_environ::FuncEnvironment<'a>,
+    env: &crate::func_environ::FuncEnvironment<'a>,
     pos: &mut cranelift_codegen::cursor::FuncCursor,
     revision_counter: ir::Value,
     contref_addr: ir::Value,

@@ -8,7 +8,10 @@ use cranelift_codegen::ir::{self, MemFlagsData};
 use cranelift_codegen::ir::{Block, BlockCall, InstBuilder, JumpTableData};
 use cranelift_frontend::FunctionBuilder;
 use itertools::{Either, Itertools};
-use wasmtime_environ::{PtrSize, TagIndex, TypeIndex, WasmResult, WasmValType, wasm_unsupported};
+use wasmtime_environ::{
+    PtrSize, TagIndex, TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    wasm_unsupported,
+};
 
 fn control_context_size(triple: &target_lexicon::Triple) -> WasmResult<u8> {
     match (triple.architecture, triple.operating_system) {
@@ -31,7 +34,7 @@ pub(crate) mod stack_switching_helpers {
     use cranelift_codegen::ir::types::*;
     use cranelift_codegen::ir::{StackSlot, StackSlotKind::*};
     use cranelift_frontend::FunctionBuilder;
-    use wasmtime_environ::PtrSize;
+    use wasmtime_environ::{PtrSize, WasmValType};
 
     /// Provides information about the layout of a type when it is used as an
     /// element in a host array. This is used for `VMHostArrayRef`.
@@ -69,7 +72,17 @@ pub(crate) mod stack_switching_helpers {
         phantom: PhantomData<T>,
     }
 
-    pub type VMPayloads = VMHostArrayRef<u128>;
+    /// Compile-time reference to a runtime `VMPayloads` descriptor.
+    ///
+    /// This wrapper keeps the payload buffer and its GC-reference markers
+    /// paired. Its core invariant is that `gc_ref_data`, when non-null, points
+    /// to one marker byte for every slot in `buffer`; callers must update a
+    /// slot's value and marker together.
+    #[derive(Copy, Clone)]
+    pub struct VMPayloads {
+        address: ir::Value,
+        buffer: VMHostArrayRef<u128>,
+    }
 
     // Actually a vector of *mut VMTagDefinition
     pub type VMHandlerList = VMHostArrayRef<*mut u8>;
@@ -105,7 +118,7 @@ pub(crate) mod stack_switching_helpers {
         ) -> VMPayloads {
             let offset: i64 = env.offsets.ptr.vmcontref_args().into();
             let address = builder.ins().iadd_imm_s(self.address, offset);
-            VMPayloads::new(address)
+            VMPayloads::new(env, address)
         }
 
         pub fn values<'a>(
@@ -115,7 +128,7 @@ pub(crate) mod stack_switching_helpers {
         ) -> VMPayloads {
             let offset: i64 = env.offsets.ptr.vmcontref_values().into();
             let address = builder.ins().iadd_imm_s(self.address, offset);
-            VMPayloads::new(address)
+            VMPayloads::new(env, address)
         }
 
         pub fn common_stack_information<'a>(
@@ -234,6 +247,148 @@ pub(crate) mod stack_switching_helpers {
         }
     }
 
+    impl VMPayloads {
+        pub fn new(env: &mut crate::func_environ::FuncEnvironment<'_>, address: ir::Value) -> Self {
+            debug_assert_eq!(env.offsets.ptr.vmpayloads_buffer(), 0);
+            Self {
+                address,
+                buffer: VMHostArrayRef::new(address),
+            }
+        }
+
+        pub fn get_gc_ref_data(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'_>,
+            builder: &mut FunctionBuilder,
+        ) -> ir::Value {
+            let offset: i32 = env.offsets.ptr.vmpayloads_gc_ref_data().into();
+            let region = env.alias_regions.vmcontref_region(builder.func);
+            let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
+            builder
+                .ins()
+                .load(env.pointer_type(), flags, self.address, offset)
+        }
+
+        pub fn set_gc_ref_data(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'_>,
+            builder: &mut FunctionBuilder,
+            data: ir::Value,
+        ) {
+            let offset: i32 = env.offsets.ptr.vmpayloads_gc_ref_data().into();
+            let region = env.alias_regions.vmcontref_region(builder.func);
+            let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
+            builder.ins().store(flags, data, self.address, offset);
+        }
+
+        /// Prepares stack storage for this payload buffer.
+        ///
+        /// Payload values and their GC-reference markers use distinct stack
+        /// slots so that they have distinct alias regions. The descriptor's
+        /// capacity and pointers always describe the storage selected at this
+        /// particular instruction site. Both slots retain their identities and
+        /// grow in place as later sites require more capacity.
+        pub fn prepare_stack_storage(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'_>,
+            builder: &mut FunctionBuilder,
+            capacity: u32,
+            initial_types: &[WasmValType],
+            needs_gc_ref_markers: bool,
+            existing_slots: Option<crate::func_environ::VMPayloadStackSlots>,
+        ) -> crate::func_environ::VMPayloadStackSlots {
+            debug_assert!(capacity > 0);
+            debug_assert!(initial_types.len() <= usize::try_from(capacity).unwrap());
+
+            let (align, entry_size) =
+                <u128 as VMHostArrayEntry>::vmhostarray_entry_layout(&env.offsets.ptr);
+            let values_size = capacity
+                .checked_mul(entry_size)
+                .expect("stack switching values buffer size should fit in u32");
+
+            let values_slot = match existing_slots.map(|slots| slots.values) {
+                Some(slot) => {
+                    // Keep the slot identity stable: `stack_addr` instructions
+                    // emitted at earlier sites continue to refer to this slot
+                    // when a later site requires more storage.
+                    let slot_data = &mut builder.func.sized_stack_slots[slot];
+                    debug_assert!(align <= slot_data.align_shift);
+                    debug_assert_eq!(slot_data.kind, ExplicitSlot);
+                    slot_data.size = slot_data.size.max(values_size);
+                    slot
+                }
+                None => builder.create_sized_stack_slot(ir::StackSlotData::new(
+                    ir::StackSlotKind::ExplicitSlot,
+                    values_size,
+                    align,
+                )),
+            };
+
+            let capacity_value = builder.ins().iconst(I32, i64::from(capacity));
+            let values_data = builder.ins().stack_addr(env.pointer_type(), values_slot, 0);
+            self.set_capacity(env, builder, capacity_value);
+            self.set_data(env, builder, values_data);
+
+            let mut gc_ref_markers = existing_slots.and_then(|slots| slots.gc_ref_markers);
+            if needs_gc_ref_markers {
+                let marker_slot = match gc_ref_markers {
+                    Some(slot) => {
+                        let slot_data = &mut builder.func.sized_stack_slots[slot];
+                        debug_assert_eq!(slot_data.kind, ExplicitSlot);
+                        slot_data.size = slot_data.size.max(capacity);
+                        slot
+                    }
+                    None => builder.create_sized_stack_slot(ir::StackSlotData::new(
+                        ir::StackSlotKind::ExplicitSlot,
+                        capacity,
+                        0,
+                    )),
+                };
+                gc_ref_markers = Some(marker_slot);
+
+                let marker_data = builder.ins().stack_addr(env.pointer_type(), marker_slot, 0);
+                self.set_gc_ref_data(env, builder, marker_data);
+
+                let region = env
+                    .alias_regions
+                    .stack_slot_region(builder.func, marker_slot);
+                let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
+                let zero = builder.ins().iconst(I8, 0);
+                for offset in 0..capacity {
+                    builder
+                        .ins()
+                        .store(flags, zero, marker_data, i32::try_from(offset).unwrap());
+                }
+                for (offset, ty) in initial_types.iter().enumerate() {
+                    if ty.is_vmgcref_type_and_not_i31() {
+                        let marker = builder
+                            .ins()
+                            .iconst(I8, i64::from(wasmtime_environ::CONTINUATION_PAYLOAD_GC_REF));
+                        builder.ins().store(
+                            flags,
+                            marker,
+                            marker_data,
+                            i32::try_from(offset).unwrap(),
+                        );
+                    }
+                }
+            }
+
+            crate::func_environ::VMPayloadStackSlots {
+                values: values_slot,
+                gc_ref_markers,
+            }
+        }
+    }
+
+    impl core::ops::Deref for VMPayloads {
+        type Target = VMHostArrayRef<u128>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.buffer
+        }
+    }
+
     impl<T: VMHostArrayEntry> VMHostArrayRef<T> {
         pub(crate) fn new(address: ir::Value) -> Self {
             Self {
@@ -333,7 +488,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             arg_count: i32,
-        ) -> ir::Value {
+        ) -> (ir::Value, ir::Value) {
             let data = self.get_data(env, builder);
             let original_length = self.get_length(env, builder);
             let new_length = builder
@@ -346,7 +501,7 @@ pub(crate) mod stack_switching_helpers {
             let byte_offset = builder
                 .ins()
                 .imul_imm_s(original_length, i64::from(entry_size));
-            builder.ins().iadd(data, byte_offset)
+            (builder.ins().iadd(data, byte_offset), original_length)
         }
 
         pub fn allocate_or_reuse_stack_slot<'a>(
@@ -393,13 +548,13 @@ pub(crate) mod stack_switching_helpers {
         }
 
         /// Loads n entries from this Vector object, where n is the length of
-        /// `load_types`, which also gives the types of the values to load.
+        /// `load_types`, which also gives the Wasm types of the values to load.
         /// Loading starts at index 0 of the Vector object.
         pub fn load_data_entries<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-            load_types: &[ir::Type],
+            load_types: &[WasmValType],
         ) -> Vec<ir::Value> {
             let region = env
                 .alias_regions
@@ -410,10 +565,14 @@ pub(crate) mod stack_switching_helpers {
             let mut values = vec![];
             let mut offset = 0;
             let (_align, entry_size) = T::vmhostarray_entry_layout(&env.offsets.ptr);
-            for valtype in load_types {
+            for wasm_ty in load_types {
+                let valtype = crate::value_type(env.isa(), *wasm_ty);
                 let val = builder
                     .ins()
-                    .load(*valtype, memflags, data_start_pointer, offset);
+                    .load(valtype, memflags, data_start_pointer, offset);
+                if env.val_ty_needs_stack_map(*wasm_ty) {
+                    builder.declare_value_needs_stack_map(val);
+                }
                 values.push(val);
                 offset += i32::try_from(entry_size).unwrap();
             }
@@ -947,6 +1106,10 @@ pub(crate) mod stack_switching_helpers {
 use helpers::VMStackChain;
 use stack_switching_helpers as helpers;
 
+fn types_need_gc_ref_markers(types: &[WasmValType]) -> bool {
+    types.iter().any(|ty| ty.is_vmgcref_type_and_not_i31())
+}
+
 /// Stores the given arguments in the appropriate `VMPayloads` object in the
 /// continuation. If the continuation was never invoked, use the `args` object.
 /// Otherwise, use the `values` object.
@@ -954,8 +1117,11 @@ pub(crate) fn vmcontref_store_payloads<'a>(
     env: &mut crate::func_environ::FuncEnvironment<'a>,
     builder: &mut FunctionBuilder,
     values: &[ir::Value],
+    types: &[WasmValType],
     contref: ir::Value,
 ) {
+    debug_assert_eq!(values.len(), types.len());
+    let needs_gc_ref_markers = types_need_gc_ref_markers(types);
     let count =
         i32::try_from(values.len()).expect("Number of stack switching payloads should fit in i32");
     if values.len() > 0 {
@@ -963,6 +1129,9 @@ pub(crate) fn vmcontref_store_payloads<'a>(
         let use_payloads_block = builder.create_block();
         let store_data_block = builder.create_block();
         builder.append_block_param(store_data_block, env.pointer_type());
+        if needs_gc_ref_markers {
+            builder.append_block_param(store_data_block, env.pointer_type());
+        }
 
         let co = helpers::VMContRef::new(contref);
         let csi = co.common_stack_information(env, builder);
@@ -976,11 +1145,15 @@ pub(crate) fn vmcontref_store_payloads<'a>(
             builder.seal_block(use_args_block);
 
             let args = co.args(env, builder);
-            let ptr = args.occupy_next_slots(env, builder, count);
+            let (ptr, original_length) = args.occupy_next_slots(env, builder, count);
+            let mut block_args = vec![BlockArg::Value(ptr)];
+            if needs_gc_ref_markers {
+                let gc_refs_ptr = args.get_gc_ref_data(env, builder);
+                let gc_refs_ptr = builder.ins().iadd(gc_refs_ptr, original_length);
+                block_args.push(BlockArg::Value(gc_refs_ptr));
+            }
 
-            builder
-                .ins()
-                .jump(store_data_block, &[BlockArg::Value(ptr)]);
+            builder.ins().jump(store_data_block, &block_args);
         }
 
         {
@@ -991,10 +1164,14 @@ pub(crate) fn vmcontref_store_payloads<'a>(
 
             // This also checks that the buffer is large enough to hold
             // `values.len()` more elements.
-            let ptr = payloads.occupy_next_slots(env, builder, count);
-            builder
-                .ins()
-                .jump(store_data_block, &[BlockArg::Value(ptr)]);
+            let (ptr, original_length) = payloads.occupy_next_slots(env, builder, count);
+            let mut block_args = vec![BlockArg::Value(ptr)];
+            if needs_gc_ref_markers {
+                let gc_refs_ptr = payloads.get_gc_ref_data(env, builder);
+                let gc_refs_ptr = builder.ins().iadd(gc_refs_ptr, original_length);
+                block_args.push(BlockArg::Value(gc_refs_ptr));
+            }
+            builder.ins().jump(store_data_block, &block_args);
         }
 
         {
@@ -1002,6 +1179,8 @@ pub(crate) fn vmcontref_store_payloads<'a>(
             builder.seal_block(store_data_block);
 
             let ptr = builder.block_params(store_data_block)[0];
+            let gc_refs_ptr =
+                needs_gc_ref_markers.then(|| builder.block_params(store_data_block)[1]);
 
             // Store the values.
             let region = env
@@ -1009,8 +1188,22 @@ pub(crate) fn vmcontref_store_payloads<'a>(
                 .continuation_stack_memory_region(builder.func);
             let memflags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
             let mut offset = 0;
-            for value in values {
+            for (index, (value, ty)) in values.iter().zip(types).enumerate() {
                 builder.ins().store(memflags, *value, ptr, offset);
+                if let Some(gc_refs_ptr) = gc_refs_ptr {
+                    let marker = if ty.is_vmgcref_type_and_not_i31() {
+                        i64::from(wasmtime_environ::CONTINUATION_PAYLOAD_GC_REF)
+                    } else {
+                        0
+                    };
+                    let marker = builder.ins().iconst(I8, marker);
+                    builder.ins().store(
+                        memflags,
+                        marker,
+                        gc_refs_ptr,
+                        i32::try_from(index).unwrap(),
+                    );
+                }
                 offset += i32::from(env.offsets.ptr.maximum_value_size());
             }
         }
@@ -1289,6 +1482,7 @@ pub(crate) fn translate_cont_bind<'a>(
     builder: &mut FunctionBuilder,
     contobj: ir::Value,
     args: &[ir::Value],
+    arg_types: &[WasmValType],
 ) -> ir::Value {
     let (witness, contref) = fatpointer::deconstruct(env, &mut builder.cursor(), contobj);
 
@@ -1300,7 +1494,7 @@ pub(crate) fn translate_cont_bind<'a>(
     let evidence = builder.ins().icmp(IntCC::Equal, witness, revision);
     env.trapz(builder, evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
 
-    vmcontref_store_payloads(env, builder, args, contref);
+    vmcontref_store_payloads(env, builder, args, arg_types, contref);
 
     let revision = vmcontref.incr_revision(env, builder, revision);
     let contobj = fatpointer::construct(env, &mut builder.cursor(), revision, contref);
@@ -1323,12 +1517,16 @@ pub(crate) fn translate_cont_new<'a>(
     let nreturns = builder
         .ins()
         .iconst(I32, i64::try_from(return_types.len()).unwrap());
+    let gc_refs = builder.ins().iconst(
+        I32,
+        i64::from(u8::from(types_need_gc_ref_markers(arg_types))),
+    );
 
     let cont_new_func = env.builtin_functions.cont_new(&mut builder.func);
     let vmctx = env.vmctx_val(&mut builder.cursor());
     let call_inst = builder
         .ins()
-        .call(cont_new_func, &[vmctx, func, nargs, nreturns]);
+        .call(cont_new_func, &[vmctx, func, nargs, nreturns, gc_refs]);
     let contref = *builder.func.dfg.inst_results(call_inst).first().unwrap();
 
     let tag = helpers::VMContRef::new(contref).get_revision(env, builder);
@@ -1412,6 +1610,10 @@ fn translate_resume_impl<'a>(
     resume_payload: ResumePayload<'_>,
     resumetable: &[(u32, Option<ir::Block>)],
 ) -> WasmResult<Vec<ir::Value>> {
+    let resume_arg_types = env
+        .continuation_arguments(TypeIndex::from_u32(type_index))
+        .to_vec();
+
     // The resume instruction is the most involved instruction to
     // compile as it is responsible for both continuation application
     // and control tag dispatch.
@@ -1493,10 +1695,17 @@ fn translate_resume_impl<'a>(
 
         match resume_payload {
             ResumePayload::Values(resume_args) => {
+                debug_assert_eq!(resume_args.len(), resume_arg_types.len());
                 let _next_revision = vmcontref.incr_revision(env, builder, revision);
                 if resume_args.len() > 0 {
                     // We store the arguments in the `VMContRef` to be resumed.
-                    vmcontref_store_payloads(env, builder, resume_args, resume_contref);
+                    vmcontref_store_payloads(
+                        env,
+                        builder,
+                        resume_args,
+                        &resume_arg_types,
+                        resume_contref,
+                    );
                 }
             }
             ResumePayload::Throw { .. } | ResumePayload::ThrowRef(_) => {
@@ -1784,11 +1993,7 @@ fn translate_resume_impl<'a>(
             preamble_blocks.push(preamble_block);
             builder.switch_to_block(preamble_block);
 
-            let param_types = env.tag_params(TagIndex::from_u32(handle_tag));
-            let param_types: Vec<ir::Type> = param_types
-                .iter()
-                .map(|wty| crate::value_type(env.isa(), *wty))
-                .collect();
+            let param_types = env.tag_params(TagIndex::from_u32(handle_tag)).to_vec();
 
             let values = suspended_contref.values(env, builder);
             let mut suspend_args: Vec<ir::Value> =
@@ -1853,11 +2058,9 @@ fn translate_resume_impl<'a>(
         returned_csi.set_state_returned(env, builder);
 
         // Load the values returned by the continuation.
-        let return_types: Vec<_> = env
+        let return_types = env
             .continuation_returns(TypeIndex::from_u32(type_index))
-            .iter()
-            .map(|ty| crate::value_type(env.isa(), *ty))
-            .collect();
+            .to_vec();
         let payloads = returned_contref.args(env, builder);
         let return_values = payloads.load_data_entries(env, builder, &return_types);
         payloads.clear(env, builder, true);
@@ -1871,7 +2074,7 @@ fn load_resume_values_or_throw<'a>(
     builder: &mut FunctionBuilder,
     result: ControlEffect,
     continuation: helpers::VMContRef,
-    return_types: &[ir::Type],
+    return_types: &[WasmValType],
 ) -> WasmResult<Vec<ir::Value>> {
     let throw_block = builder.create_block();
     let values_block = builder.create_block();
@@ -1886,7 +2089,11 @@ fn load_resume_values_or_throw<'a>(
     let values = continuation.values(env, builder);
     // Exception references use Wasmtime's compressed, 32-bit GC-reference
     // representation.
-    let exnref = values.load_data_entries(env, builder, &[I32])[0];
+    let exnref_ty = WasmValType::Ref(WasmRefType {
+        nullable: false,
+        heap_type: WasmHeapType::Exn,
+    });
+    let exnref = values.load_data_entries(env, builder, &[exnref_ty])[0];
     values.clear(env, builder, true);
     gc::translate_exn_throw_ref(env, builder, exnref)?;
 
@@ -1903,8 +2110,10 @@ pub(crate) fn translate_suspend<'a>(
     builder: &mut FunctionBuilder,
     tag_index: u32,
     suspend_args: &[ir::Value],
-    tag_return_types: &[ir::Type],
+    suspend_arg_types: &[WasmValType],
+    tag_return_types: &[WasmValType],
 ) -> WasmResult<Vec<ir::Value>> {
+    debug_assert_eq!(suspend_args.len(), suspend_arg_types.len());
     let tag_addr = tag_address(env, builder, tag_index);
 
     let vmctx = env.vmctx_val(&mut builder.cursor());
@@ -1926,16 +2135,21 @@ pub(crate) fn translate_suspend<'a>(
     // return values including the possible exception reference.
     let values = active_contref.values(env, builder);
     let required_capacity = u32::try_from(std::cmp::max(
-        1, // This account for the possible exception reference.
+        1, // This accounts for the possible exception reference.
         std::cmp::max(suspend_args.len(), tag_return_types.len()),
     ))
     .expect("Number of stack switching payloads should fit in u32");
 
-    env.stack_switching_values_buffer = Some(values.allocate_or_reuse_stack_slot(
+    let needs_gc_ref_markers =
+        types_need_gc_ref_markers(suspend_arg_types) || types_need_gc_ref_markers(tag_return_types);
+    let existing_storage = env.stack_switching_values_storage;
+    env.stack_switching_values_storage = Some(values.prepare_stack_storage(
         env,
         builder,
         required_capacity,
-        env.stack_switching_values_buffer,
+        suspend_arg_types,
+        needs_gc_ref_markers,
+        existing_storage,
     ));
 
     if suspend_args.len() > 0 {
@@ -1965,13 +2179,20 @@ pub(crate) fn translate_suspend<'a>(
 
     // A normal resume supplies the tag's return values. `resume_throw_ref`
     // supplies an exception reference and throws it at this suspension point.
-    load_resume_values_or_throw(
+    let return_values = load_resume_values_or_throw(
         env,
         builder,
         ControlEffect::from_u64(result),
         active_contref,
         tag_return_types,
-    )
+    );
+
+    if needs_gc_ref_markers {
+        let zero = builder.ins().iconst(env.pointer_type(), 0);
+        values.set_gc_ref_data(env, builder, zero);
+    }
+
+    return_values
 }
 
 pub(crate) fn translate_switch<'a>(
@@ -1980,7 +2201,8 @@ pub(crate) fn translate_switch<'a>(
     tag_index: u32,
     switchee_contobj: ir::Value,
     switch_args: &[ir::Value],
-    return_types: &[ir::Type],
+    switch_arg_types: &[WasmValType],
+    return_types: &[WasmValType],
 ) -> WasmResult<Vec<ir::Value>> {
     let vmctx = env.vmctx_val(&mut builder.cursor());
 
@@ -2010,6 +2232,7 @@ pub(crate) fn translate_switch<'a>(
     // `switcher_contref`) to the immediate child (called
     // `switcher_contref_last_ancestor`) of the stack with the corresponding
     // handler (saved in `handler_stack_chain`).
+    let return_values_need_gc_ref_markers = types_need_gc_ref_markers(return_types);
     let (
         switcher_contref,
         switcher_contobj,
@@ -2036,11 +2259,17 @@ pub(crate) fn translate_switch<'a>(
         // reference.
         let values = switcher_contref.values(env, builder);
         let required_capacity = u32::try_from(std::cmp::max(1, return_types.len())).unwrap();
-        env.stack_switching_values_buffer = Some(values.allocate_or_reuse_stack_slot(
+        let existing_storage = env.stack_switching_values_storage;
+        env.stack_switching_values_storage = Some(values.prepare_stack_storage(
             env,
             builder,
             required_capacity,
-            env.stack_switching_values_buffer,
+            // No GC ref marking is required at this point. Upon
+            // return to this site `vmcontref_store_payloads` will
+            // store the markers, if needed.
+            &[],
+            return_values_need_gc_ref_markers,
+            existing_storage,
         ));
 
         let switcher_contref_csi = switcher_contref.common_stack_information(env, builder);
@@ -2086,7 +2315,13 @@ pub(crate) fn translate_switch<'a>(
     let (switchee_contref_csi, switchee_contref_last_ancestor) = {
         let mut combined_payloads = switch_args.to_vec();
         combined_payloads.push(switcher_contobj);
-        vmcontref_store_payloads(env, builder, &combined_payloads, switchee_contref.address);
+        vmcontref_store_payloads(
+            env,
+            builder,
+            &combined_payloads,
+            switch_arg_types,
+            switchee_contref.address,
+        );
 
         let switchee_contref_csi = switchee_contref.common_stack_information(env, builder);
         switchee_contref_csi.set_state_running(env, builder);
@@ -2215,11 +2450,20 @@ pub(crate) fn translate_switch<'a>(
 
     // After switching back to the original stack, either load the values
     // supplied by an ordinary resume or throw the injected exception.
-    load_resume_values_or_throw(
+    let return_values = load_resume_values_or_throw(
         env,
         builder,
         ControlEffect::from_u64(result),
         switcher_contref,
         return_types,
-    )
+    );
+
+    if return_values_need_gc_ref_markers {
+        let zero = builder.ins().iconst(env.pointer_type(), 0);
+        switcher_contref
+            .values(env, builder)
+            .set_gc_ref_data(env, builder, zero);
+    }
+
+    return_values
 }

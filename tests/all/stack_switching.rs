@@ -339,6 +339,71 @@ fn inter_instance_suspend() -> Result<()> {
     Ok(())
 }
 
+/// Regression test for https://github.com/bytecodealliance/wasmtime/issues/13750.
+///
+/// A GC reference returned through a continuation payload must retain
+/// its stack-map metadata while it is live on the operand stack
+/// across subsequent GC safepoints.
+#[cfg_attr(any(asan, miri), ignore)]
+#[test]
+fn continuation_result_gc_ref_on_operand_stack() -> Result<()> {
+    let mut config = Config::new();
+    config
+        .wasm_stack_switching(true)
+        .wasm_exceptions(true)
+        .wasm_function_references(true)
+        .wasm_gc(true)
+        .collector(Collector::Copying);
+
+    #[cfg(gc_zeal)]
+    {
+        let _ = config.gc_zeal_alloc_counter(std::num::NonZeroU32::new(1));
+    }
+
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (type $S (struct (field $x i32)))
+              (type $A (array i64))
+              (type $ft (func (result (ref $S))))
+              (type $ct (cont $ft))
+
+              (func $target (result (ref $S))
+                (struct.new $S (i32.const 0x12345678)))
+              (elem declare func $target)
+
+              (func (export "run") (result i32)
+                (local $k (ref null $ct))
+                (local $i i32)
+                (local.set $k (cont.new $ct (ref.func $target)))
+
+                ;; Keep the continuation's GC-reference result on the operand
+                ;; stack, rather than storing it in a GC-typed local.
+                (resume $ct (local.get $k))
+
+                ;; Force collections while that operand-stack value is the
+                ;; only live reference to the struct.
+                (local.set $i (i32.const 0))
+                (loop $again
+                  (drop (array.new_default $A (i32.const 256)))
+                  (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                  (br_if $again
+                    (i32.lt_u (local.get $i) (i32.const 2000))))
+
+                (struct.get $S $x))
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    assert_eq!(run.call(&mut store, ())?, 0x12345678);
+    Ok(())
+}
+
 /// Tests interaction with host functions. Note that the interaction with host
 /// functions and traps is covered by the module `traps` further down.
 mod host {

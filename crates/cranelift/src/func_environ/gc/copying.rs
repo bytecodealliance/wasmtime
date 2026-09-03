@@ -444,7 +444,9 @@ impl GcCompiler for CopyingCompiler {
                     // store the reference directly.
                     unbarriered_store_gc_ref(builder, r.heap_type, field_addr, val, flags)?;
                 }
-                WasmHeapTopType::Cont => return super::stack_switching_unsupported(),
+                WasmHeapTopType::Cont => {
+                    write_field_at_addr(func_env, builder, ty, field_addr, val)?
+                }
             },
             WasmStorageType::I8 => {
                 assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
