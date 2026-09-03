@@ -1,30 +1,33 @@
 ;; Rewrites for `band`, `bnot`, `bor`, `bxor`
 
+;; Match or create an all-zero bit pattern for all bitwise types.
+(decl all_zero_etor (Type) TypeAndInstructionData)
+(extern extractor all_zero_etor all_zero_etor)
+(decl f16_zero () Ieee16)
+(extern constructor f16_zero f16_zero)
+(decl ty_vector (Type) Type)
+(extern extractor ty_vector ty_vector)
+
+(decl rec all_zero (Type) Value)
+(extractor (all_zero ty) (inst_data_value_tupled (all_zero_etor ty)))
+(rule 0 (all_zero (ty_int ty)) (iconst_u ty 0))
+(rule 1 (all_zero $F16) (f16const $F16 (f16_zero)))
+(rule 2 (all_zero $F32) (f32const $F32 (f32_from_uint 0)))
+(rule 3 (all_zero $F64) (f64const $F64 (f64_from_uint 0)))
+(rule 4 (all_zero $F128) (f128const $F128 (zero_constant $F128)))
+(rule 5 (all_zero (ty_vector ty)) (vconst ty (zero_constant ty)))
+
 ;; x | 0 == x | x == x.
-(rule (simplify (bor ty
-                     x
-                     (iconst_u ty 0)))
-      (subsume x))
-(rule (simplify (bor ty x x))
-      (subsume x))
+(rule bor_x_zero (simplify (bor ty x (all_zero ty))) (subsume x))
+(rule bor_zero_x (simplify (bor ty (all_zero ty) x)) (subsume x))
+(rule (simplify (bor ty x x)) (subsume x))
 
 ;; x ^ 0 == x.
-(rule (simplify (bxor ty
-                     x
-                     (iconst_u ty 0)))
-      (subsume x))
-
-;; Create an all-zero bit pattern for integer, float, and vector types.
-(decl rec all_zero (Type) Value)
-(rule 0 (all_zero (ty_int ty)) (iconst_u ty 0))
-(rule 1 (all_zero $F32) (f32const $F32 (f32_from_uint 0)))
-(rule 2 (all_zero $F64) (f64const $F64 (f64_from_uint 0)))
-(rule 3 (all_zero (ty_vec64 ty)) (vconst ty (zero_constant ty)))
-(rule 4 (all_zero (ty_vec128 ty)) (vconst ty (zero_constant ty)))
+(rule bxor_x_zero (simplify (bxor ty x (all_zero ty))) (subsume x))
+(rule bxor_zero_x (simplify (bxor ty (all_zero ty) x)) (subsume x))
 
 ;; x ^ x == 0.
-(rule (simplify (bxor ty x x))
-      (subsume (all_zero ty)))
+(rule (simplify (bxor ty x x)) (subsume (all_zero ty)))
 
 ;; x ^ not(x) == not(x) ^ x == x | not(x) == not(x) | x == -1.
 ;; This identity also holds for non-integer types, vectors, and wider types.
