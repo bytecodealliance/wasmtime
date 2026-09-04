@@ -228,8 +228,8 @@ impl AliasRegionKey {
             }
 
             fn write_u128(&mut self, i: u128) {
-                self.add(i as u64);
-                self.add((i >> 64) as u64);
+                self.add(u64::try_from(i & u128::from(u64::MAX)).unwrap());
+                self.add(u64::try_from(i >> 64).unwrap());
             }
 
             fn write_usize(&mut self, i: usize) {
