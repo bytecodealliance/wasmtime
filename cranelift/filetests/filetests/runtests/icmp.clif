@@ -192,3 +192,71 @@ block0(v0: i32, v1: i32):
 }
 ; run: %test_ult_ne_minus_one(3, 5) == 1
 ; run: %test_ult_ne_minus_one(-1, 1) == 0
+
+function %eq_isub_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %eq_isub_zero(7, 7) == 1
+; run: %eq_isub_zero(7, 3) == 0
+
+function %ne_isub_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+; run: %ne_isub_zero(7, 7) == 0
+; run: %ne_isub_zero(7, 3) == 1
+
+function %eq_bxor_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %eq_bxor_zero(7, 7) == 1
+; run: %eq_bxor_zero(7, 3) == 0
+
+function %ne_bxor_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+; run: %ne_bxor_zero(7, 7) == 0
+; run: %ne_bxor_zero(7, 3) == 1
+
+function %eq_bxor_x(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+; run: %eq_bxor_x(7, 0) == 1
+; run: %eq_bxor_x(7, 3) == 0
+
+function %ne_iadd_x(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = icmp ne v2, v0
+    return v3
+}
+; run: %ne_iadd_x(7, 0) == 0
+; run: %ne_iadd_x(7, 3) == 1
+
+function %ne_ineg(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = ineg v0
+    v3 = ineg v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+; run: %ne_ineg(7, 7) == 0
+; run: %ne_ineg(7, 3) == 1

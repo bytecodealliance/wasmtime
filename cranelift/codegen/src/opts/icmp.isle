@@ -512,3 +512,24 @@
 ;; smin(x, y) != smax(x, y) --> x != y
 (rule (simplify (ne ty (smin cty x y) (smax cty x y))) (ne ty x y))
 (rule (simplify (ne ty (smin cty x y) (smax cty y x))) (ne ty x y))
+
+;; (x - y) == 0 ==> x == y
+(rule (simplify (eq ty (isub cty x y) (all_zero cty))) (eq ty x y))
+
+;; (x - y) != 0 ==> x != y
+(rule (simplify (ne ty (isub cty x y) (all_zero cty))) (ne ty x y))
+
+;; (x ^ y) == 0 ==> x == y
+(rule (simplify (eq ty (bxor cty x y) (all_zero cty))) (eq ty x y))
+
+;; (x ^ y) != 0 ==> x != y
+(rule (simplify (ne ty (bxor cty x y) (all_zero cty))) (ne ty x y))
+
+;; (x ^ y) == x ==> y == 0
+(rule (simplify (eq ty (bxor cty x y) x)) (eq ty y (all_zero cty)))
+
+;; (x + y) != x ==> y != 0
+(rule (simplify (ne ty (iadd cty x y) x)) (ne ty y (all_zero cty)))
+
+;; -x != -y ==> x != y
+(rule (simplify (ne ty (ineg cty x) (ineg cty y))) (ne ty x y))

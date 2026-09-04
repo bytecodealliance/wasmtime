@@ -228,3 +228,49 @@ block0(v0: i8, v1: i32, v2: i32):
 ;     return v10
 ; }
 
+;; (x == y) ? 0 : (x - y) --> x - y
+function %select_eq_zero_isub(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = iconst.i32 0
+    v4 = isub v0, v1
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; function %select_eq_zero_isub(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = isub v0, v1
+;     return v4
+; }
+
+;; (c ? y : z) + (c ? z : y) --> z + y
+function %add_swapped_selects(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = select v0, v1, v2
+    v4 = select v0, v2, v1
+    v5 = iadd v3, v4
+    return v5
+}
+
+; function %add_swapped_selects(i8, i32, i32) -> i32 fast {
+; block0(v0: i8, v1: i32, v2: i32):
+;     v6 = iadd v2, v1
+;     return v6
+; }
+
+;; (x != y) ? (x - y) : 0 --> x - y
+function %select_ne_isub_zero(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ne v0, v1
+    v3 = isub v0, v1
+    v4 = iconst.i32 0
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; function %select_ne_isub_zero(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v3 = isub v0, v1
+;     return v3
+; }
