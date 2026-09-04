@@ -161,7 +161,11 @@ macro_rules! define_field_type_enum {
             /// Nullable references use `ref.null`, which is always available.
             /// A non-nullable reference has no null to fall back on, so we must
             /// construct a real object; see `emit_new`.
-            pub fn emit_default_const(self, func: &mut wasm_encoder::Function, ctx: EmitCtx<'_>) {
+            pub(crate) fn emit_default_const(
+                self,
+                func: &mut wasm_encoder::Function,
+                ctx: EmitCtx<'_>,
+            ) {
                 match self {
                     $( FieldType::$variant => { func.instruction(&$default_val); } )*
                     FieldType::StructRef { nullable: true } => {
@@ -200,7 +204,7 @@ for_each_field_type!(define_field_type_enum);
 pub(crate) struct EmitCtx<'a> {
     /// The type graph being encoded.
     pub(crate) types: &'a Types,
-    /// The struct to build for a non-nullable `(ref struct)` field. 
+    /// The struct to build for a non-nullable `(ref struct)` field.
     pub(crate) struct_ref_target: Option<TypeId>,
     /// Types with a shared prototype, mapped to the local holding it.
     pub(crate) protos: &'a BTreeMap<TypeId, u32>,
