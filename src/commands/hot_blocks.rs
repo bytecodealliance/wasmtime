@@ -208,6 +208,7 @@ impl HotBlocksCommand {
 
         let mut code = CodeBuilder::new(&engine);
         code.wasm_binary_or_text(wasm_bytes, Some(&self.module))?;
+        crate::common::configure_code_builder(&self.common, &mut code)?;
 
         let serialized = match code.hint() {
             #[cfg(feature = "component-model")]

@@ -3598,3 +3598,220 @@ fn environment_configuration() -> Result<()> {
     )?;
     Ok(())
 }
+
+#[test]
+fn unsafe_intrinsics_bare_flag() -> Result<()> {
+    // The bare flag defaults the import name to `unsafe-intrinsics`, which is
+    // what the component imports.
+    run_wasmtime(&[
+        "-Wcomponent-model",
+        "-C",
+        "unsafe-intrinsics",
+        "tests/all/cli_tests/unsafe-intrinsics.wat",
+    ])?;
+    Ok(())
+}
+
+#[test]
+fn unsafe_intrinsics_named() -> Result<()> {
+    run_wasmtime(&[
+        "-Wcomponent-model",
+        "-C",
+        "unsafe-intrinsics=unsafe-intrinsics",
+        "tests/all/cli_tests/unsafe-intrinsics.wat",
+    ])?;
+
+    // Exposing the intrinsics under a different name leaves the component's
+    // import unsatisfied.
+    let output = get_wasmtime_command()?
+        .args(&[
+            "-Wcomponent-model",
+            "-C",
+            "unsafe-intrinsics=some-other-name",
+            "tests/all/cli_tests/unsafe-intrinsics.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("component imports instance `unsafe-intrinsics`"),
+        "bad stderr: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn unsafe_intrinsics_rejects_core_module() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&["-C", "unsafe-intrinsics", "tests/all/cli_tests/simple.wat"])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("can only be used with components"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn compile_time_builtins() -> Result<()> {
+    // The main component traps unless both builtins are actually linked in and
+    // return their expected values.
+    run_wasmtime(&[
+        "-Wcomponent-model",
+        "-C",
+        "unsafe-intrinsics",
+        "-C",
+        "inlining=y",
+        "-C",
+        "compile-time-builtin=host-api-a=tests/all/cli_tests/host-api-a.wat",
+        "-C",
+        "compile-time-builtin=host-api-b=tests/all/cli_tests/host-api-b.wat",
+        "tests/all/cli_tests/compile-time-builtin-main.wat",
+    ])?;
+    Ok(())
+}
+
+#[test]
+fn compile_time_builtin_name_defaults_to_file_stem() -> Result<()> {
+    // Both fixtures' file stems are exactly the import names they satisfy, so
+    // the `<name>=` prefix can be omitted.
+    run_wasmtime(&[
+        "-Wcomponent-model",
+        "-C",
+        "unsafe-intrinsics",
+        "-C",
+        "compile-time-builtin=tests/all/cli_tests/host-api-a.wat",
+        "-C",
+        "compile-time-builtin=tests/all/cli_tests/host-api-b.wat",
+        "tests/all/cli_tests/compile-time-builtin-main.wat",
+    ])?;
+
+    // A file whose stem is *not* the import name leaves `host-api-b`
+    // unsatisfied.
+    let td = TempDir::new()?;
+    let other = td.path().join("some-other-name.wat");
+    std::fs::copy("tests/all/cli_tests/host-api-b.wat", &other)?;
+    let output = get_wasmtime_command()?
+        .args(&[
+            "-Wcomponent-model",
+            "-C",
+            "unsafe-intrinsics",
+            "-C",
+            "compile-time-builtin=tests/all/cli_tests/host-api-a.wat",
+            "-C",
+            &format!("compile-time-builtin={}", other.display()),
+            "tests/all/cli_tests/compile-time-builtin-main.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("host-api-b"), "bad stderr: {stderr}");
+
+    Ok(())
+}
+
+#[test]
+fn compile_time_builtins_require_intrinsics() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "-Wcomponent-model",
+            "-C",
+            "compile-time-builtin=tests/all/cli_tests/host-api-a.wat",
+            "-C",
+            "compile-time-builtin=tests/all/cli_tests/host-api-b.wat",
+            "tests/all/cli_tests/compile-time-builtin-main.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("must configure the unsafe-intrinsics import"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn compile_time_builtin_bad_syntax() -> Result<()> {
+    // Empty value: there is no file stem to derive a name from.
+    let output = get_wasmtime_command()?
+        .args(&[
+            "-C",
+            "compile-time-builtin=",
+            "tests/all/cli_tests/simple.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot derive a compile-time builtin name"),
+        "bad stderr: {stderr}"
+    );
+
+    // Empty name in the explicit `<name>=<path>` form.
+    let output = get_wasmtime_command()?
+        .args(&[
+            "-C",
+            "compile-time-builtin==host-api-a.wat",
+            "tests/all/cli_tests/simple.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("name cannot be empty"),
+        "bad stderr: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn compile_time_builtin_missing_file() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "-Wcomponent-model",
+            "-C",
+            "unsafe-intrinsics",
+            "-C",
+            "compile-time-builtin=host-api-a=tests/all/cli_tests/does-not-exist.wat",
+            "tests/all/cli_tests/compile-time-builtin-main.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("tests/all/cli_tests/does-not-exist.wat"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn compile_time_builtins_compile_subcommand() -> Result<()> {
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("compile-time-builtin-main.cwasm");
+    run_wasmtime(&[
+        "compile",
+        "-C",
+        "unsafe-intrinsics",
+        "-C",
+        "compile-time-builtin=tests/all/cli_tests/host-api-a.wat",
+        "-C",
+        "compile-time-builtin=tests/all/cli_tests/host-api-b.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+        "tests/all/cli_tests/compile-time-builtin-main.wat",
+    ])?;
+
+    run_wasmtime(&[
+        "-Wcomponent-model",
+        "--allow-precompiled",
+        cwasm.to_str().unwrap(),
+    ])?;
+
+    Ok(())
+}

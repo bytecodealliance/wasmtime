@@ -165,7 +165,7 @@ features = [
   'memory-protection-keys',
   'component-model-async',
   'component-model-bytes',
-  'gc-copying'
+  'gc-copying',
 ]
 
 [target.'cfg(windows)'.dev-dependencies]
@@ -523,6 +523,7 @@ default = [
   "debug-builtins",
   "component-model",
   "component-model-async",
+  "compile-time-builtins",
   "threads",
   "gc",
   "gc-copying",
@@ -589,6 +590,7 @@ component-model = [
   "wasmtime-cli-flags/component-model",
   "wasmtime-wizer?/component-model",
 ]
+compile-time-builtins = ["component-model", "wasmtime/compile-time-builtins"]
 wat = ["dep:wat", "wasmtime/wat"]
 cache = ["dep:wasmtime-cache", "wasmtime-cli-flags/cache"]
 parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
