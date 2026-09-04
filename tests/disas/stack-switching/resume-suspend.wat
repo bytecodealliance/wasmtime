@@ -24,18 +24,18 @@
 
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     ss0 = explicit_slot 16, align = 65536
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 67108952 "VMStoreContext+0x58"
-;;     region3 = 1073741888 "VMContRef+0x40"
-;;     region4 = 2550136840 "VMHostArray+0x8"
-;;     region5 = 2483028024 "VMCommonStackInformation+0x38"
-;;     region6 = 1140850688 "ContinuationStackMemory+0x0"
-;;     region7 = 1073741904 "VMContRef+0x50"
-;;     region8 = 2550136836 "VMHostArray+0x4"
-;;     region9 = 2483028000 "VMCommonStackInformation+0x20"
-;;     region10 = 1073741920 "VMContRef+0x60"
-;;     region11 = 2550136832 "VMHostArray+0x0"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 106 ""
+;;     region3 = 225 ""
+;;     region4 = 214 ""
+;;     region5 = 13 ""
+;;     region6 = 55 ""
+;;     region7 = 153 ""
+;;     region8 = 118 ""
+;;     region9 = 255 ""
+;;     region10 = 211 ""
+;;     region11 = 82 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -146,26 +146,25 @@
 ;;
 ;; function u0:1(i64 vmctx, i64) tail {
 ;;     ss0 = explicit_slot 8, align = 256
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108888 "VMStoreContext+0x18"
-;;     region2 = 1073741912 "VMContRef+0x58"
-;;     region3 = 1073741904 "VMContRef+0x50"
-;;     region4 = 67108952 "VMStoreContext+0x58"
-;;     region5 = 1073741888 "VMContRef+0x40"
-;;     region6 = 2483028000 "VMCommonStackInformation+0x20"
-;;     region7 = 67108936 "VMStoreContext+0x48"
-;;     region8 = 67108928 "VMStoreContext+0x40"
-;;     region9 = 67108944 "VMStoreContext+0x50"
-;;     region10 = 2415919112 "VMStackLimits+0x8"
-;;     region11 = 2415919120 "VMStackLimits+0x10"
-;;     region12 = 2415919128 "VMStackLimits+0x18"
-;;     region13 = 2415919104 "VMStackLimits+0x0"
-;;     region14 = 2550136836 "VMHostArray+0x4"
-;;     region15 = 2550136840 "VMHostArray+0x8"
-;;     region16 = 1140850688 "ContinuationStackMemory+0x0"
-;;     region17 = 2550136832 "VMHostArray+0x0"
-;;     region18 = 2483028024 "VMCommonStackInformation+0x38"
-;;     region19 = 1073741920 "VMContRef+0x60"
+;;     region0 = 123 ""
+;;     region1 = 160 ""
+;;     region2 = 206 ""
+;;     region3 = 153 ""
+;;     region4 = 106 ""
+;;     region5 = 225 ""
+;;     region6 = 255 ""
+;;     region7 = 231 ""
+;;     region8 = 243 ""
+;;     region9 = 209 ""
+;;     region10 = 23 ""
+;;     region11 = 224 ""
+;;     region12 = 13 ""
+;;     region13 = 179 ""
+;;     region14 = 118 ""
+;;     region15 = 214 ""
+;;     region16 = 55 ""
+;;     region17 = 82 ""
+;;     region18 = 211 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -242,10 +241,10 @@
 ;; @004e                               v59 = iadd.i64 v0, v58  ; v58 = 48
 ;; @004e                               store notrap aligned region16 v59, v57
 ;; @004e                               store notrap aligned region17 v39, v55  ; v39 = 1
-;; @004e                               store notrap aligned region18 v39, v33+56  ; v39 = 1
+;; @004e                               store notrap aligned region12 v39, v33+56  ; v39 = 1
 ;; @004e                               v66 = iconst.i64 96
 ;; @004e                               v67 = iadd v30, v66  ; v66 = 96
-;; @004e                               v68 = load.i64 notrap aligned region19 v67
+;; @004e                               v68 = load.i64 notrap aligned region18 v67
 ;; @004e                               v69 = iconst.i64 -24
 ;; @004e                               v70 = iadd v68, v69  ; v69 = -24
 ;;                                     v161 = iconst.i64 0x0001_0000_0000
@@ -259,7 +258,7 @@
 ;; @004e                               store notrap aligned region17 v164, v55  ; v164 = 0
 ;; @004e                               store notrap aligned region14 v164, v55+4  ; v164 = 0
 ;; @004e                               store notrap aligned region15 v2, v55+8  ; v2 = 0
-;; @004e                               store notrap aligned region18 v2, v33+56  ; v2 = 0
+;; @004e                               store notrap aligned region12 v2, v33+56  ; v2 = 0
 ;; @004e                               brif v71, block7, block4
 ;;
 ;;                                 block7:
