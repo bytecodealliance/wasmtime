@@ -817,7 +817,6 @@ impl<'a> Instantiator<'a> {
 
                     let exit = if let Some(component_instance) = *component_instance {
                         store.0.enter_guest_sync_call(
-                            None,
                             false,
                             RuntimeInstance {
                                 instance,

@@ -1063,6 +1063,103 @@ async fn async_call_stack() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn async_call_stack_omits_transparent_adapters() -> Result<()> {
+    async fn call_stack(taint: bool) -> Result<(Vec<GuestTaskId>, GuestTaskId)> {
+        let mut config = Config::new();
+        config.wasm_component_model_async(true);
+        let engine = Engine::new(&config)?;
+
+        let taint = if taint {
+            "(core func $unused (canon context.get i32 0))"
+        } else {
+            ""
+        };
+
+        let component = Component::new(
+            &engine,
+            &format!(
+                r#"
+        (component
+            (import "a" (func $a))
+
+            ;; Lowers the host import, so this is never thread-transparent.
+            (component $Deep
+                (import "a" (func $a))
+                (core func $a (canon lower (func $a)))
+                (core module $m
+                    (import "" "a" (func $a))
+                    (func (export "a") call $a))
+                (core instance $m (instantiate $m
+                    (with "" (instance (export "a" (func $a))))))
+                (func (export "a") (canon lift (core func $m "a")))
+            )
+
+            ;; Declares nothing but a `canon lower` of an imported *lifted*,
+            ;; non-`async` function, so an instance of this component is
+            ;; thread-transparent -- unless the taint below is present.
+            (component $Mid
+                (import "a" (func $a))
+                {taint}
+                (core func $a (canon lower (func $a)))
+                (core module $m
+                    (import "" "a" (func $a))
+                    (func (export "a") call $a))
+                (core instance $m (instantiate $m
+                    (with "" (instance (export "a" (func $a))))))
+                (func (export "a") (canon lift (core func $m "a")))
+            )
+
+            (instance $deep (instantiate $Deep (with "a" (func $a))))
+            (instance $mid (instantiate $Mid (with "a" (func $deep "a"))))
+            (instance $top (instantiate $Mid (with "a" (func $mid "a"))))
+            (export "a" (func $top "a"))
+        )
+        "#
+            ),
+        )?;
+
+        let mut linker = Linker::new(&engine);
+        linker.root().func_wrap(
+            "a",
+            |mut store: StoreContextMut<Option<Vec<GuestTaskId>>>, (): ()| {
+                let stack = store.async_call_stack()?.collect::<Vec<_>>();
+                *store.data_mut() = Some(stack);
+                Ok(())
+            },
+        )?;
+
+        let mut store = Store::new(&engine, None);
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+
+        let call = func.start_call_concurrent(&mut store, ())?;
+        let root = call.task();
+        store
+            .run_concurrent(async |store| func.finish_call_concurrent(store, call).await)
+            .await??;
+
+        Ok((store.data_mut().take().unwrap(), root))
+    }
+
+    // With the intermediate instances tainted into opacity, all three
+    // guest-to-guest calls materialize a task and all three show up.
+    let (stack, root) = call_stack(true).await?;
+    assert_eq!(stack.len(), 3);
+    assert_eq!(stack.last(), Some(&root));
+
+    // Without the taint, `$top -> $mid` is a thread-transparent call, its task
+    // is never materialized, and so it is omitted from the stack. The root
+    // host-to-guest call is always materialized, so it is still reported, and
+    // `$mid -> $deep` still is too since `$deep` is opaque.
+    let (stack, root) = call_stack(false).await?;
+    assert_eq!(stack.len(), 2);
+    assert_eq!(stack.last(), Some(&root));
+
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn inter_component_stream_is_not_intra_component() -> Result<()> {

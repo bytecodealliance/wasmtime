@@ -1640,6 +1640,18 @@ impl<T> StoreContextMut<'_, T> {
     /// Tasks are yielded "youngest first" where the first item in the iterator
     /// is the current task, and the last item in the iterator is the original
     /// call.
+    ///
+    /// # Omitted Tasks
+    ///
+    /// This stack might not contain an entry for every guest-to-guest component
+    /// call that is currently executing: if those guest-to-guest calls are not
+    /// asynchronous and provably cannot access async task state, then Wasmtime
+    /// can avoid materializing the guest task state for that call, and such
+    /// tasks will not have a `GuestTaskId` and will not appear in this stack
+    /// trace.
+    ///
+    /// The `GuestTaskId`s for host-to-guest and guest-to-host calls, however,
+    /// will always appear in this stack trace.
     pub fn async_call_stack(&mut self) -> Result<impl Iterator<Item = GuestTaskId>> {
         let mut cur = Some(self.0.current_thread()?);
         let state = self.0.concurrent_state_mut()?;
@@ -1767,7 +1779,7 @@ impl StoreOpaque {
                 instance: id,
                 index: RuntimeComponentInstanceIndex::from_u32(callee_instance),
             };
-            self.enter_guest_sync_call(None, callee_async, callee)?;
+            self.enter_guest_sync_call(callee_async, callee)?;
         }
 
         // Replaying done; restore the current context.
@@ -1846,7 +1858,6 @@ impl StoreOpaque {
     /// sync!
     pub(crate) fn enter_guest_sync_call(
         &mut self,
-        guest_caller: Option<RuntimeInstance>,
         callee_async_typed: bool,
         callee: RuntimeInstance,
     ) -> Result<()> {
@@ -1857,14 +1868,6 @@ impl StoreOpaque {
 
         let thread = self.current_thread()?;
         let state = self.concurrent_state_mut()?;
-        let instance = if let Some(task) = thread.guest_task() {
-            Some(state.get_mut(task)?.instance)
-        } else {
-            None
-        };
-        if guest_caller.is_some() {
-            debug_assert_eq!(instance, guest_caller);
-        }
         let guest_thread = GuestTask::new(
             state,
             Box::new(move |_, _| bail_bug!("cannot lower params in sync call")),
