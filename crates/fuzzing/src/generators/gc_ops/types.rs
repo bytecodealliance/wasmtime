@@ -960,12 +960,6 @@ impl Types {
     }
 
     /// Whether `field` can be given a value using only the types in `ok`.
-    ///
-    /// A concrete non-nullable reference is checked against its target
-    /// directly, not against the target's subtypes: `emit_new` builds the
-    /// target itself, and fixup step 10 makes a supertype's fields an exact
-    /// prefix of its subtype's, so a buildable subtype implies a buildable
-    /// supertype anyway.
     fn field_satisfiable(&self, field: FieldType, ok: &BTreeMap<TypeId, u32>) -> bool {
         match field {
             FieldType::Ref {
@@ -979,16 +973,7 @@ impl Types {
         }
     }
 
-    /// Compute the types that can be constructed, each mapped to the fixpoint
-    /// round that admitted it — its rank.
-    ///
-    /// A type is absent exactly when it can never be instantiated: a cycle of
-    /// non-nullable references has no base case.
-    ///
-    /// Admissions are buffered and applied at the end of each round, so rank is
-    /// a true depth: a type with a non-nullable `(ref $u)` field always has a
-    /// strictly greater rank than `$u`. `prototype_types` relies on that to
-    /// emit prototypes in an order where every referent is already built.
+    /// Compute the types that can be constructed
     pub(crate) fn inhabitable(&self, out: &mut BTreeMap<TypeId, u32>) {
         out.clear();
         let mut round = 0;
