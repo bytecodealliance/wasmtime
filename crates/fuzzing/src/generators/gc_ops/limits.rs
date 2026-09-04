@@ -17,6 +17,8 @@ pub const MAX_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
 pub const MAX_FIELDS_RANGE: RangeInclusive<u32> = 0..=8;
 /// Range for the length of created arrays.
 pub const ARRAY_LENGTH_RANGE: RangeInclusive<u32> = 1..=16;
+/// Maximum number of fields that can be inlined in a struct type.
+pub const MAX_INLINE_CONSTRUCTION: u32 = 8;
 
 /// Limits controlling the structure of a generated Wasm module.
 #[derive(Clone, Debug, Serialize, Deserialize, mutatis::Mutate)]
