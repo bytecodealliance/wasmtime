@@ -135,9 +135,10 @@ pub use crate::runtime::vm::vmcontext::VMLazyThread;
 #[cfg(feature = "gc-null")]
 pub use crate::runtime::vm::vmcontext::VMNullHeapData;
 pub use crate::runtime::vm::vmcontext::{
-    VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
-    VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
+    VMArrayCallHostFuncContext, VMCommonStackInformation, VMContRef, VMContext, VMFuncRef,
+    VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMHostArray,
+    VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStackLimits, VMStoreContext,
+    VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;

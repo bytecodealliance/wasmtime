@@ -29,7 +29,7 @@ use crate::runtime::vm::{
     traphandlers::{CallThreadState, tls},
 };
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
-use crate::vm::stack_switching::{VMContRef, VMStackState};
+use crate::vm::{VMContRef, stack_switching::VMStackState};
 use core::ops::ControlFlow;
 use wasmtime_unwinder::Frame;
 #[cfg(feature = "debug")]
@@ -306,7 +306,7 @@ impl Backtrace {
         entry_trampoline_fp: usize,
         mut f: impl FnMut(Activation) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
-        use crate::runtime::vm::stack_switching::VMStackLimits;
+        use crate::runtime::vm::VMStackLimits;
 
         // Handle the stack that is currently running (which may be a
         // continuation or the initial stack).

@@ -48,6 +48,7 @@ macro_rules! define_vm_type_offsets {
     (@size ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@size ($p:expr) AtomicUsize) => { u32::from($p) };
     (@size ($p:expr) usize) => { u32::from($p) };
+    (@size ($p:expr) * mut $g:ty) => { u32::from($p) };
     (@size ($p:expr) i64) => { 8u32 };
     (@size ($p:expr) u64) => { 8u32 };
     (@size ($p:expr) u32) => { 4u32 };
@@ -68,9 +69,20 @@ macro_rules! define_vm_type_offsets {
     // this macro the single source of truth for their layout too.
     (@size ($p:expr) VMMemoryDefinition) => { u32::from(($p).vm_memory_definition().size()) };
     (@size ($p:expr) VMLazyThread) => { u32::from(($p).vm_lazy_thread().size()) };
+    (@size ($p:expr) VMStackLimits) => { u32::from(($p).vm_stack_limits().size()) };
+    (@size ($p:expr) VMHostArray) => { u32::from(($p).vm_host_array().size()) };
+    (@size ($p:expr) VMCommonStackInformation) => {
+        u32::from(($p).vm_common_stack_information().size())
+    };
     // `VMStackChain` is a `repr(usize, C)` enum, and is not itself defined by
     // `for_each_vm_type!`.
     (@size ($p:expr) VMStackChain) => { u32::from(($p).size_of_vmstack_chain()) };
+    (@size ($p:expr) VMStackState) => { 4u32 };
+    // `VMContinuationStack` is a platform-specific `repr(C)` struct private to
+    // the runtime, but every implementation of it is a pointer, a `usize`, and a
+    // byte-sized tag.
+    (@size ($p:expr) VMContinuationStack) => { 3u32 * u32::from($p) };
+    (@size ($p:expr) PhantomPinned) => { 0u32 };
 
     // As with `@size` above, `UnsafeCell<T>` has exactly `T`'s alignment.
     (@align ($p:expr) UnsafeCell < $inner:tt >) => { define_vm_type_offsets!(@align ($p) $inner) };
@@ -86,6 +98,7 @@ macro_rules! define_vm_type_offsets {
     (@align ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@align ($p:expr) AtomicUsize) => { u32::from($p) };
     (@align ($p:expr) usize) => { u32::from($p) };
+    (@align ($p:expr) * mut $g:ty) => { u32::from($p) };
     (@align ($p:expr) i64) => { 8u32 };
     (@align ($p:expr) u64) => { 8u32 };
     (@align ($p:expr) u32) => { 4u32 };
@@ -101,7 +114,15 @@ macro_rules! define_vm_type_offsets {
     (@align ($p:expr) Range < *mut u8 >) => { u32::from($p) };
     (@align ($p:expr) VMMemoryDefinition) => { u32::from(($p).vm_memory_definition().align()) };
     (@align ($p:expr) VMLazyThread) => { u32::from(($p).vm_lazy_thread().align()) };
+    (@align ($p:expr) VMStackLimits) => { u32::from(($p).vm_stack_limits().align()) };
+    (@align ($p:expr) VMHostArray) => { u32::from(($p).vm_host_array().align()) };
+    (@align ($p:expr) VMCommonStackInformation) => {
+        u32::from(($p).vm_common_stack_information().align())
+    };
     (@align ($p:expr) VMStackChain) => { u32::from($p) };
+    (@align ($p:expr) VMStackState) => { 4u32 };
+    (@align ($p:expr) VMContinuationStack) => { u32::from($p) };
+    (@align ($p:expr) PhantomPinned) => { 1u32 };
 
     // Classify a `#[repr(...)]` to the minimum alignment it forces, as a `u32`.
     (@repr_align C) => { 1u32 };
@@ -533,85 +554,6 @@ pub trait PtrSize {
         2 * self.size()
     }
 
-    // Offsets within `VMStackLimits`
-
-    /// Return the offset of `VMStackLimits::stack_limit`.
-    fn vmstack_limits_stack_limit(&self) -> u8 {
-        0
-    }
-
-    /// Return the offset of `VMStackLimits::last_wasm_entry_fp`.
-    fn vmstack_limits_last_wasm_entry_fp(&self) -> u8 {
-        self.size()
-    }
-
-    /// Return the offset of `VMStackLimits::last_wasm_entry_sp`.
-    fn vmstack_limits_last_wasm_entry_sp(&self) -> u8 {
-        self.vmstack_limits_last_wasm_entry_fp() + self.size()
-    }
-
-    /// Return the offset of `VMStackLimits::last_wasm_entry_trap_handler`.
-    fn vmstack_limits_last_wasm_entry_trap_handler(&self) -> u8 {
-        self.vmstack_limits_last_wasm_entry_sp() + self.size()
-    }
-
-    // Offsets within `VMHostArray`
-
-    /// Return the offset of `VMHostArray::length`.
-    fn vmhostarray_length(&self) -> u8 {
-        0
-    }
-
-    /// Return the offset of `VMHostArray::capacity`.
-    fn vmhostarray_capacity(&self) -> u8 {
-        4
-    }
-
-    /// Return the offset of `VMHostArray::data`.
-    fn vmhostarray_data(&self) -> u8 {
-        8
-    }
-
-    /// Return the size of `VMHostArray`.
-    fn size_of_vmhostarray(&self) -> u8 {
-        8 + self.size()
-    }
-
-    // Offsets within `VMCommonStackInformation`
-
-    /// Return the offset of `VMCommonStackInformation::limits`.
-    fn vmcommon_stack_information_limits(&self) -> u8 {
-        0 * self.size()
-    }
-
-    /// Return the offset of `VMCommonStackInformation::state`.
-    fn vmcommon_stack_information_state(&self) -> u8 {
-        4 * self.size()
-    }
-
-    /// Return the offset of `VMCommonStackInformation::handlers`.
-    fn vmcommon_stack_information_handlers(&self) -> u8 {
-        u8::try_from(align(
-            self.vmcommon_stack_information_state() as u32 + 4,
-            u32::from(self.size()),
-        ))
-        .unwrap()
-    }
-
-    /// Return the offset of `VMCommonStackInformation::first_switch_handler_index`.
-    fn vmcommon_stack_information_first_switch_handler_index(&self) -> u8 {
-        self.vmcommon_stack_information_handlers() + self.size_of_vmhostarray()
-    }
-
-    /// Return the size of `VMCommonStackInformation`.
-    fn size_of_vmcommon_stack_information(&self) -> u8 {
-        u8::try_from(align(
-            self.vmcommon_stack_information_first_switch_handler_index() as u32 + 4,
-            u32::from(self.size()),
-        ))
-        .unwrap()
-    }
-
     // Offsets within `VMContObj`
 
     /// Return the offset of `VMContObj::contref`
@@ -632,48 +574,6 @@ pub trait PtrSize {
             u32::from(self.size()),
         ))
         .unwrap()
-    }
-
-    // Offsets within `VMContRef`
-
-    /// Return the offset of `VMContRef::common_stack_information`.
-    fn vmcontref_common_stack_information(&self) -> u8 {
-        0 * self.size()
-    }
-
-    /// Return the offset of `VMContRef::parent_chain`.
-    fn vmcontref_parent_chain(&self) -> u8 {
-        u8::try_from(align(
-            (self.vmcontref_common_stack_information() + self.size_of_vmcommon_stack_information())
-                as u32,
-            u32::from(self.size()),
-        ))
-        .unwrap()
-    }
-
-    /// Return the offset of `VMContRef::last_ancestor`.
-    fn vmcontref_last_ancestor(&self) -> u8 {
-        self.vmcontref_parent_chain() + 2 * self.size()
-    }
-
-    /// Return the offset of `VMContRef::revision`.
-    fn vmcontref_revision(&self) -> u8 {
-        self.vmcontref_last_ancestor() + self.size()
-    }
-
-    /// Return the offset of `VMContRef::stack`.
-    fn vmcontref_stack(&self) -> u8 {
-        self.vmcontref_revision() + self.size()
-    }
-
-    /// Return the offset of `VMContRef::args`.
-    fn vmcontref_args(&self) -> u8 {
-        self.vmcontref_stack() + 3 * self.size()
-    }
-
-    /// Return the offset of `VMContRef::values`.
-    fn vmcontref_values(&self) -> u8 {
-        self.vmcontref_args() + self.size_of_vmhostarray()
     }
 }
 

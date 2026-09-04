@@ -1,3 +1,23 @@
+//! Alias regions for the memory that compiled Wasm code accesses.
+//!
+//! Every load and store Wasmtime emits carries a
+//! `cranelift_codegen::ir::AliasRegion` naming the memory it touches, so that
+//! Cranelift's alias analysis can better eliminate redundant loads, dead
+//! stores, etc. This module, and primarily its `AliasRegions` type, parcels
+//! those regions out.
+//!
+//! `AliasRegions` accessors come from two places:
+//!
+//! 1. Fields of the `VM*` types and of the vmctx types get one region per
+//!    field, and an accessor per field is generated from our
+//!    `for_each_vm[ctx]_type!` macros.
+//!
+//! 2. There are a handful of hand-written methods for memory regions that are
+//!    not part of the vmctx or a `VM*` type at all (linear memories, the GC
+//!    heap, stack slots, etc...).
+//!
+//! We strive to avoid adding new hand-written methods as much as possible.
+
 use crate::translate::Load;
 use core::fmt;
 use cranelift_codegen::{
@@ -38,12 +58,15 @@ enum VmType {
     VMCopyingHeapData,
     VMNullHeapData,
     VMDeferredThread,
+    VMStackLimits,
     #[allow(
         dead_code,
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
     )]
     VMLazyThread,
     VMContRef,
+    VMCommonStackInformation,
+    VMHostArray,
     ContinuationStackMemory,
     VMFunctionImport,
     VMMemoryImport,
@@ -191,6 +214,9 @@ impl AliasRegionKey {
     const VM_GLOBAL_DEFINITION_KIND: u32 = Self::new_kind(0b100001);
     const VM_TAG_DEFINITION_KIND: u32 = Self::new_kind(0b100010);
     const VM_LAZY_THREAD_KIND: u32 = Self::new_kind(0b100011);
+    const VM_STACK_LIMITS_KIND: u32 = Self::new_kind(0b100100);
+    const VM_COMMON_STACK_INFORMATION_KIND: u32 = Self::new_kind(0b100101);
+    const VM_HOST_ARRAY_KIND: u32 = Self::new_kind(0b100110);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -210,8 +236,11 @@ impl AliasRegionKey {
                     VmType::VMCopyingHeapData => Self::VM_COPYING_HEAP_DATA_KIND,
                     VmType::VMNullHeapData => Self::VM_NULL_HEAP_DATA_KIND,
                     VmType::VMDeferredThread => Self::VM_DEFERRED_THREAD_KIND,
+                    VmType::VMStackLimits => Self::VM_STACK_LIMITS_KIND,
                     VmType::VMLazyThread => Self::VM_LAZY_THREAD_KIND,
                     VmType::VMContRef => Self::VM_CONTREF_KIND,
+                    VmType::VMCommonStackInformation => Self::VM_COMMON_STACK_INFORMATION_KIND,
+                    VmType::VMHostArray => Self::VM_HOST_ARRAY_KIND,
                     VmType::ContinuationStackMemory => Self::CONTINUATION_STACK_MEMORY_KIND,
                     VmType::VMFunctionImport => Self::VM_FUNCTION_IMPORT_KIND,
                     VmType::VMMemoryImport => Self::VM_MEMORY_IMPORT_KIND,
@@ -600,6 +629,7 @@ macro_rules! define_vm_type_alias_region_helpers {
     (@field_ty $pt:expr, Option < VmPtr < $g:ty >>) => { $pt };
     (@field_ty $pt:expr, AtomicUsize) => { $pt };
     (@field_ty $pt:expr, usize) => { $pt };
+    (@field_ty $pt:expr, * mut $g:ty) => { $pt };
     (@field_ty $pt:expr, i64) => { ir::types::I64 };
     (@field_ty $pt:expr, u64) => { ir::types::I64 };
     (@field_ty $pt:expr, u32) => { ir::types::I32 };
@@ -614,6 +644,7 @@ macro_rules! define_vm_type_alias_region_helpers {
     (@field_ty $pt:expr, DefinedMemoryIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, DefinedTagIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, VMGlobalKind) => { ir::types::I64 };
+    (@field_ty $pt:expr, VMStackState) => { ir::types::I32 };
 
     // Classify an `#[indexed]` field's array type to
     // `(element ir::Type, element size in bytes, element count)`.
@@ -1427,95 +1458,37 @@ impl<Offsets> AliasRegions<Offsets>
 where
     Offsets: GetPtrSize,
 {
-    /// Load `VMStackLimits::stack_limit`.
-    pub fn stack_limit(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        stack_limits: ir::Value,
-    ) -> ir::Value {
-        let offset = self.offsets.get_ptr_size().vmstack_limits_stack_limit();
-        let region = self.vmcontref_region(cursor.func);
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            stack_limits,
-            i32::from(offset),
-        )
-    }
-
-    /// Load `VMStackLimits::last_wasm_entry_fp`.
-    pub fn last_wasm_entry_fp(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        stack_limits: ir::Value,
-    ) -> ir::Value {
-        let offset = self
-            .offsets
-            .get_ptr_size()
-            .vmstack_limits_last_wasm_entry_fp();
-        let region = self.vmcontref_region(cursor.func);
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            stack_limits,
-            i32::from(offset),
-        )
-    }
-
-    /// Load `VMStackLimits::last_wasm_entry_sp`.
-    pub fn last_wasm_entry_sp(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        stack_limits: ir::Value,
-    ) -> ir::Value {
-        let offset = self
-            .offsets
-            .get_ptr_size()
-            .vmstack_limits_last_wasm_entry_sp();
-        let region = self.vmcontref_region(cursor.func);
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            stack_limits,
-            i32::from(offset),
-        )
-    }
-
-    /// Load `VMStackLimits::last_wasm_entry_trap_handler`.
-    pub fn last_wasm_entry_trap_handler(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        stack_limits: ir::Value,
-    ) -> ir::Value {
-        let offset = self
-            .offsets
-            .get_ptr_size()
-            .vmstack_limits_last_wasm_entry_trap_handler();
-        let region = self.vmcontref_region(cursor.func);
-        cursor.ins().load(
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
-            stack_limits,
-            i32::from(offset),
-        )
-    }
-
-    /// Region for a continuation-reference object and its inline
-    /// sub-structures.
+    /// Get the alias region for the `VMContRef::parent_chain` field.
     ///
-    /// A `VMContRef` (and its inline `VMCommonStackInformation` /
-    /// `VMStackLimits` / `VMHostArray` headers) is reached through a `*mut
-    /// VMContRef`.
-    ///
-    /// A single region covers the whole object: this is coarse but sound, and
-    /// keeps every field of the object disjoint from linear memory, the vmctx,
-    /// the store context, etc...
-    pub fn vmcontref_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+    /// Like `VMStoreContext::stack_chain`, this field is a two-pointer-wide
+    /// `VMStackChain`, which is not yet defined by `for_each_vm_type!` and so
+    /// has no alias region of its own. Its bytes are therefore mapped to the
+    /// containing `VMContRef`'s regions, keyed by the field's offset within it.
+    pub fn vm_cont_ref_parent_chain_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        let offset = self.offsets.get_ptr_size().vm_cont_ref().parent_chain();
         self.region(
             func,
             AliasRegionKey::Vm {
                 ty: VmType::VMContRef,
-                offset: 0,
+                offset: offset.into(),
+            },
+        )
+    }
+
+    /// Get the alias region for the top-of-stack pointer at the start of the
+    /// `VMContRef::stack` field.
+    ///
+    /// `VMContinuationStack` is a platform-specific struct private to the
+    /// runtime, is not one of the types defined by `for_each_vm_type!`, and so
+    /// has no alias region of its own; as with `parent_chain` above, its bytes
+    /// are mapped to the containing `VMContRef`'s regions.
+    pub fn vm_cont_ref_top_of_stack_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        let offset = self.offsets.get_ptr_size().vm_cont_ref().stack();
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMContRef,
+                offset: offset.into(),
             },
         )
     }
