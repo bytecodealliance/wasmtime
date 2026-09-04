@@ -401,8 +401,8 @@ block0(v0: i32x4):
 }
 
 ; check: const0 = 0x00000000000000000000000000000000
-; check: v5 = vconst.i32x4 const0
-; check: return v5
+; check: v3 = vconst.i32x4 const0
+; check: return v3
 
 function %vector_band_bnot_x_x(i32x4) -> i32x4 {
 block0(v0: i32x4):
@@ -412,8 +412,8 @@ block0(v0: i32x4):
 }
 
 ; check: const0 = 0x00000000000000000000000000000000
-; check: v5 = vconst.i32x4 const0
-; check: return v5
+; check: v3 = vconst.i32x4 const0
+; check: return v3
 
 function %issue_13229_band_not_f64(f64) {
 block0(v0: f64):
@@ -1462,5 +1462,39 @@ block0(v0: i32):
     v2 = popcnt v1
     return v2
     ; check: v3 = popcnt v0
+    ; check: return v3
+}
+
+function %band_x_zero_f32(f32) -> f32 {
+block0(v0: f32):
+    v1 = f32const 0.0
+    v2 = band v0, v1
+    return v2
+    ; check: return v1
+}
+
+function %band_zero_x_f32(f32) -> f32 {
+block0(v0: f32):
+    v1 = f32const 0.0
+    v2 = band v1, v0
+    return v2
+    ; check: return v1
+}
+
+function %band_x_bnot_x_f32(f32) -> f32 {
+block0(v0: f32):
+    v1 = bnot v0
+    v2 = band v0, v1
+    return v2
+    ; check: v3 = f32const 0.0
+    ; check: return v3
+}
+
+function %band_bnot_x_x_f32(f32) -> f32 {
+block0(v0: f32):
+    v1 = bnot v0
+    v2 = band v1, v0
+    return v2
+    ; check: v3 = f32const 0.0
     ; check: return v3
 }

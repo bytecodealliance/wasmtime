@@ -668,3 +668,108 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32):
 ;     v9 = ineg v8
 ;     return v9
 ; }
+
+;; (x - y) == 0 --> x == y
+function %eq_isub_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %eq_isub_zero(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+;; (x - y) != 0 --> x != y
+function %ne_isub_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %ne_isub_zero(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+;; (x ^ y) == 0 --> x == y
+function %eq_bxor_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %eq_bxor_zero(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+;; (x ^ y) != 0 --> x != y
+function %ne_bxor_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %ne_bxor_zero(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+;; (x ^ y) == x --> y == 0
+function %eq_bxor_x(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %eq_bxor_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp eq v1, v4  ; v4 = 0
+;     return v5
+; }
+
+;; (x + y) != x --> y != 0
+function %ne_iadd_x(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = icmp ne v2, v0
+    return v3
+}
+
+; function %ne_iadd_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp ne v1, v4  ; v4 = 0
+;     return v5
+; }
+
+;; -x != -y --> x != y
+function %ne_ineg(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = ineg v0
+    v3 = ineg v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %ne_ineg(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }

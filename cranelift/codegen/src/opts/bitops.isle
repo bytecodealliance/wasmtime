@@ -41,10 +41,13 @@
 (rule (simplify (band ty x (iconst_s ty -1)))
       (subsume x))
 
-;; x & 0 == x & not(x) == not(x) & x == 0.
-(rule (simplify (band (ty_int_vec128 ty) _ zero @ (iconst_u ty 0))) (subsume zero))
-(rule (simplify (band (ty_int_vec128 ty) x (bnot ty x))) (subsume (iconst_u ty 0)))
-(rule (simplify (band (ty_int_vec128 ty) (bnot ty x) x)) (subsume (iconst_u ty 0)))
+;; x & 0 == 0; 0 & x == 0.
+(rule (simplify (band ty x zero @ (all_zero ty))) (subsume zero))
+(rule (simplify (band ty zero @ (all_zero ty) x)) (subsume zero))
+
+;; x & not(x) == 0; not(x) & x == 0.
+(rule (simplify (band ty x (bnot ty x))) (subsume (all_zero ty)))
+(rule (simplify (band ty (bnot ty x) x)) (subsume (all_zero ty)))
 
 ;; (x & y) ^ (x ^ y) == x | y
 (rule (simplify (bxor ty (band ty X Y) (bxor ty X Y))) (bor ty X Y))

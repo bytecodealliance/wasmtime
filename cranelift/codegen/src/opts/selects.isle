@@ -200,3 +200,15 @@
 (rule (simplify (select ty x (eq ty z y) (eq ty y (iconst_u cty p)))) (eq ty y (select cty x z (iconst_u cty p))))
 (rule (simplify (select ty x (eq ty y z) (eq ty (iconst_u cty p) y))) (eq ty y (select cty x z (iconst_u cty p))))
 (rule (simplify (select ty x (eq ty y z) (eq ty y (iconst_u cty p)))) (eq ty y (select cty x z (iconst_u cty p))))
+
+;; (x == y) ? 0 : (x - y) ==> x - y
+(rule (simplify (select ty (eq cty x y) (all_zero ty) (isub ty x y)))
+      (isub ty x y))
+
+;; (c ? y : z) + (c ? z : y) ==> z + y
+(rule (simplify (iadd ty (select ty c y z) (select ty c z y)))
+      (iadd ty z y))
+
+;; (x != y) ? (x - y) : 0 ==> x - y
+(rule (simplify (select ty (ne cty x y) (isub ty x y) (all_zero ty)))
+      (isub ty x y))
