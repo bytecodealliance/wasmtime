@@ -1415,8 +1415,8 @@ fn initialize_struct_fields(
 
     assert!(!func_env.types[struct_ty].composite_type.shared);
     let fields = match &func_env.types[struct_ty].composite_type.inner {
-        WasmCompositeInnerType::Struct(s) => &s.fields,
-        WasmCompositeInnerType::Exn(e) => &e.fields,
+        WasmCompositeInnerType::Struct(s) => s.fields.as_slice(),
+        WasmCompositeInnerType::Exn(e) => &e.fields[..],
         _ => panic!("Not a struct or exception type"),
     };
 
