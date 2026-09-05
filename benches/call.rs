@@ -17,6 +17,9 @@ fn measure_execution_time(c: &mut Criterion) {
     #[cfg(feature = "component-model")]
     component::measure_execution_time(c);
 
+    #[cfg(feature = "component-model-async")]
+    component_async::measure_execution_time(c);
+
     indirect::measure_execution_time(c);
 }
 
@@ -895,6 +898,140 @@ mod component {
                 },
             );
         }
+    }
+}
+
+#[cfg(feature = "component-model-async")]
+mod component_async {
+    use super::*;
+    use wasmtime::component::{Component, Linker};
+
+    pub fn measure_execution_time(c: &mut Criterion) {
+        let mut group = c.benchmark_group("component-async");
+        host_to_guest(&mut group);
+        guest_to_host(&mut group);
+    }
+
+    fn engine() -> Engine {
+        let mut config = Config::new();
+        config.wasm_component_model_async(true);
+        Engine::new(&config).unwrap()
+    }
+
+    fn host_to_guest(group: &mut BenchmarkGroup<'_, WallTime>) {
+        let engine = engine();
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (core module $m
+                        (import "" "task.return" (func $task-return))
+                        (func (export "nop") (result i32)
+                            call $task-return
+                            i32.const 0
+                        )
+                        (func (export "callback") (param i32 i32 i32) (result i32)
+                            unreachable
+                        )
+                    )
+                    (core func $task-return (canon task.return))
+                    (core instance $i (instantiate $m
+                        (with "" (instance
+                            (export "task.return" (func $task-return))
+                        ))
+                    ))
+                    (func (export "nop") async
+                        (canon lift (core func $i "nop")
+                            async
+                            (callback (core func $i "callback"))
+                        )
+                    )
+                )
+            "#,
+        )
+        .unwrap();
+        let mut store = Store::new(&engine, ());
+        let instance =
+            run_await(Linker::new(&engine).instantiate_async(&mut store, &component)).unwrap();
+        let nop = instance
+            .get_typed_func::<(), ()>(&mut store, "nop")
+            .unwrap();
+
+        group.bench_function("host-to-guest", |b| {
+            b.iter(|| {
+                run_await(store.run_concurrent(async |accessor| {
+                    nop.call_concurrent(accessor, ()).await.unwrap()
+                }))
+                .unwrap();
+            });
+        });
+    }
+
+    fn guest_to_host(group: &mut BenchmarkGroup<'_, WallTime>) {
+        let engine = engine();
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "nop" (func $nop async))
+                    (core func $nop (canon lower (func $nop) async))
+                    (core module $m
+                        (import "" "nop" (func $nop (result i32)))
+                        (import "" "task.return" (func $task-return))
+                        (func (export "run") (param $iters i64) (result i32)
+                            loop $l
+                                (drop (call $nop))
+                                (local.tee $iters (i64.add (local.get $iters) (i64.const -1))) 
+                                i64.const 0
+                                i64.ne
+                                br_if $l
+                            end
+
+                            call $task-return
+                            i32.const 0
+                        )
+                        (func (export "callback") (param i32 i32 i32) (result i32)
+                            unreachable
+                        )
+                    )
+                    (core func $task-return (canon task.return))
+                    (core instance $i (instantiate $m
+                        (with "" (instance
+                            (export "nop" (func $nop))
+                            (export "task.return" (func $task-return))
+                        ))
+                    ))
+                    (func (export "run") async (param "iterations" u64)
+                        (canon lift (core func $i "run")
+                            async
+                            (callback (core func $i "callback"))
+                        )
+                    )
+                )
+            "#,
+        )
+        .unwrap();
+        let mut store = Store::new(&engine, ());
+        let mut linker = Linker::new(&engine);
+        linker
+            .root()
+            .func_wrap_concurrent("nop", |_, ()| Box::pin(async { Ok(()) }))
+            .unwrap();
+        let instance = run_await(linker.instantiate_async(&mut store, &component)).unwrap();
+        let run = instance
+            .get_typed_func::<(u64,), ()>(&mut store, "run")
+            .unwrap();
+
+        group.bench_function("guest-to-host", |b| {
+            b.iter_custom(|iterations| {
+                let start = Instant::now();
+                run_await(store.run_concurrent(async |accessor| {
+                    run.call_concurrent(accessor, (iterations,)).await.unwrap()
+                }))
+                .unwrap();
+                start.elapsed()
+            });
+        });
     }
 }
 
