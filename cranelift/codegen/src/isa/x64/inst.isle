@@ -4282,6 +4282,11 @@
 ;; This rule zeroes out the upper bits of the XMM register; we need this to
 ;; avoid undefined bits in scaler_to_vector.
 (decl bitcast_gpr_to_xmm (u8 Gpr) Xmm)
+(rule 1 (bitcast_gpr_to_xmm 8 src)
+      (if-let true (has_sse41))
+      (x64_pinsrb (xmm_zero $I8X16) src 0))
+(rule 0 (bitcast_gpr_to_xmm 8 src)
+      (x64_pinsrw (xmm_zero $I16X8) (x64_movzbl_rm src) 0))
 (rule (bitcast_gpr_to_xmm 16 src)
       (x64_pinsrw (xmm_zero $I16X8) src 0))
 (rule (bitcast_gpr_to_xmm 32 src)

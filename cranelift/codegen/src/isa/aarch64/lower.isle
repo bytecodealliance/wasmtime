@@ -1444,6 +1444,11 @@
 (rule 8 (lower (band (ty_vec128 ty) (bnot _ y) x))
       (bic_vec x y (vector_size ty)))
 
+(rule 9 (lower (band (fits_in_64 (ty_scalar_float ty)) x (bnot _ y)))
+      (bic_vec x y (float_vector_size_in_64 ty)))
+(rule 10 (lower (band (fits_in_64 (ty_scalar_float ty)) (bnot _ y) x))
+      (bic_vec x y (float_vector_size_in_64 ty)))
+
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule bor_fits_in_64 -4 (lower (bor (fits_in_64 (ty_int ty)) x y))
@@ -2860,7 +2865,7 @@
 ;; in https://github.com/bytecodealliance/wasmtime/issues/2296,
 ;; although they are not used here.
 
-(rule (lower (vhigh_bits _ vec @ (value_type $I8X16)))
+(rule (lower (vhigh_bits _ vec @ (value_type (multi_lane 8 16))))
       (let (
             ;; Replicate the MSB of each of the 16 byte lanes across
             ;; the whole lane (sshr is an arithmetic right shift).
@@ -2884,7 +2889,7 @@
             (result Reg (addv zipped (VectorSize.Size16x8))))
         (mov_from_vec result 0 (ScalarSize.Size16))))
 
-(rule (lower (vhigh_bits _ vec @ (value_type $I16X8)))
+(rule (lower (vhigh_bits _ vec @ (value_type (multi_lane 16 8))))
       (let (
             ;; Replicate the MSB of each of the 8 16-bit lanes across
             ;; the whole lane (sshr is an arithmetic right shift).
@@ -2897,7 +2902,7 @@
             (result Reg (addv anded (VectorSize.Size16x8))))
         (mov_from_vec result 0 (ScalarSize.Size16))))
 
-(rule (lower (vhigh_bits _ vec @ (value_type $I32X4)))
+(rule (lower (vhigh_bits _ vec @ (value_type (multi_lane 32 4))))
       (let (
             ;; Replicate the MSB of each of the 4 32-bit lanes across
             ;; the whole lane (sshr is an arithmetic right shift).
@@ -2910,7 +2915,7 @@
             (result Reg (addv anded (VectorSize.Size32x4))))
         (mov_from_vec result 0 (ScalarSize.Size32))))
 
-(rule (lower (vhigh_bits _ vec @ (value_type $I64X2)))
+(rule (lower (vhigh_bits _ vec @ (value_type (multi_lane 64 2))))
       (let (
             ;; Grab the MSB out of each of the lanes, right-shift to
             ;; LSB, and add with a left-shift of upper lane's MSB back
