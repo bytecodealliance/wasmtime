@@ -113,7 +113,7 @@
   (core module $m
     (import "" "waitable-set.wait" (func $waitable-set-wait (param i32 i32) (result i32)))
   )
-  (core func $waitable-set-wait (canon waitable-set.wait cancellable (memory (core memory $libc "memory"))))
+  (core func $waitable-set-wait (canon waitable-set.wait (memory (core memory $libc "memory"))))
   (core instance $i (instantiate $m (with "" (instance (export "waitable-set.wait" (func $waitable-set-wait))))))
 )
 
@@ -124,7 +124,7 @@
   (core module $m
     (import "" "waitable-set.poll" (func $waitable-set-poll (param i32 i32) (result i32)))
   )
-  (core func $waitable-set-poll (canon waitable-set.poll cancellable (memory (core memory $libc "memory"))))
+  (core func $waitable-set-poll (canon waitable-set.poll (memory (core memory $libc "memory"))))
   (core instance $i (instantiate $m (with "" (instance (export "waitable-set.poll" (func $waitable-set-poll))))))
 )
 
@@ -133,6 +133,6 @@
   (core module $m
     (import "" "yield" (func $yield (result i32)))
   )
-  (core func $yield (canon thread.yield cancellable))
+  (core func $yield (canon thread.yield))
   (core instance $i (instantiate $m (with "" (instance (export "yield" (func $yield))))))
 )

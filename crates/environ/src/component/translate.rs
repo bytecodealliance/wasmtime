@@ -320,27 +320,21 @@ enum LocalInitializer<'data> {
     },
     ThreadSuspend {
         func: ModuleInternedTypeIndex,
-        cancellable: bool,
     },
     ThreadYield {
         func: ModuleInternedTypeIndex,
-        cancellable: bool,
     },
     ThreadSuspendThenResume {
         func: ModuleInternedTypeIndex,
-        cancellable: bool,
     },
     ThreadYieldThenResume {
         func: ModuleInternedTypeIndex,
-        cancellable: bool,
     },
     ThreadSuspendThenPromote {
         func: ModuleInternedTypeIndex,
-        cancellable: bool,
     },
     ThreadYieldThenPromote {
         func: ModuleInternedTypeIndex,
-        cancellable: bool,
     },
 
     // core wasm modules
@@ -428,7 +422,6 @@ struct LocalCanonicalOptions {
     string_encoding: StringEncoding,
     post_return: Option<FuncIndex>,
     async_: bool,
-    cancellable: bool,
     callback: Option<FuncIndex>,
     /// The type index of the core GC types signature.
     core_type: ModuleInternedTypeIndex,
@@ -1050,16 +1043,12 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::WaitableSetNew { func }
                         }
-                        wasmparser::CanonicalFunction::WaitableSetWait {
-                            cancellable,
-                            memory,
-                        } => {
+                        wasmparser::CanonicalFunction::WaitableSetWait { memory } => {
                             let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::WaitableSetWait {
                                 options: LocalCanonicalOptions {
                                     core_type,
-                                    cancellable,
                                     async_: false,
                                     data_model: LocalDataModel::LinearMemory {
                                         memory: Some(MemoryIndex::from_u32(memory)),
@@ -1071,17 +1060,13 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 },
                             }
                         }
-                        wasmparser::CanonicalFunction::WaitableSetPoll {
-                            cancellable,
-                            memory,
-                        } => {
+                        wasmparser::CanonicalFunction::WaitableSetPoll { memory } => {
                             let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::WaitableSetPoll {
                                 options: LocalCanonicalOptions {
                                     core_type,
                                     async_: false,
-                                    cancellable,
                                     data_model: LocalDataModel::LinearMemory {
                                         memory: Some(MemoryIndex::from_u32(memory)),
                                         realloc: None,
@@ -1305,35 +1290,35 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ThreadResumeLater { func }
                         }
-                        wasmparser::CanonicalFunction::ThreadSuspend { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadSuspend => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadSuspend { func, cancellable }
+                            LocalInitializer::ThreadSuspend { func }
                         }
-                        wasmparser::CanonicalFunction::ThreadYield { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadYield => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadYield { func, cancellable }
+                            LocalInitializer::ThreadYield { func }
                         }
-                        wasmparser::CanonicalFunction::ThreadSuspendThenResume { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadSuspendThenResume => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadSuspendThenResume { func, cancellable }
+                            LocalInitializer::ThreadSuspendThenResume { func }
                         }
-                        wasmparser::CanonicalFunction::ThreadYieldThenResume { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadYieldThenResume => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadYieldThenResume { func, cancellable }
+                            LocalInitializer::ThreadYieldThenResume { func }
                         }
-                        wasmparser::CanonicalFunction::ThreadSuspendThenPromote { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadSuspendThenPromote => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadSuspendThenPromote { func, cancellable }
+                            LocalInitializer::ThreadSuspendThenPromote { func }
                         }
-                        wasmparser::CanonicalFunction::ThreadYieldThenPromote { cancellable } => {
+                        wasmparser::CanonicalFunction::ThreadYieldThenPromote => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ThreadYieldThenPromote { func, cancellable }
+                            LocalInitializer::ThreadYieldThenPromote { func }
                         }
                     };
                     self.result.initializers.push(init);
@@ -1773,7 +1758,6 @@ impl<'a, 'data> Translator<'a, 'data> {
         Ok(LocalCanonicalOptions {
             string_encoding,
             post_return,
-            cancellable: false,
             async_,
             callback,
             core_type,
