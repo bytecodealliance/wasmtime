@@ -478,3 +478,9 @@ fn file_stream_not_permitted(component_path: &str) {
 fn p2_clocks_zero_wait() {
     run(P2_CLOCKS_ZERO_WAIT_COMPONENT, |_| {}).unwrap()
 }
+
+#[test]
+fn p2_environment_named_imports() {
+    // intentionally omitted as named imports are just for async bindings right
+    // now.
+}

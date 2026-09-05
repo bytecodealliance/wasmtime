@@ -107,3 +107,8 @@ fn p2_http_outbound_request_missing_path_and_query() -> Result<()> {
         &server,
     )
 }
+
+#[test_log::test]
+fn p2_http_named_imports() {
+    // named imports are intentionally not implemented for sync at this time
+}

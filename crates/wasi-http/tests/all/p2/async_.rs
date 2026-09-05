@@ -109,3 +109,18 @@ async fn p2_http_outbound_request_missing_path_and_query() -> Result<()> {
     )
     .await
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_http_named_imports() -> Result<()> {
+    crate::shared::run_named_imports_test(
+        P2_HTTP_NAMED_IMPORTS_COMPONENT,
+        wasmtime_wasi_http::p2::add_only_http_to_linker_async,
+        wasmtime_wasi_http::p2::add_named_to_linker_async,
+        async |store, component, linker| {
+            let command = Command::instantiate_async(&mut *store, component, linker).await?;
+            let result = command.wasi_cli_run().call_run(&mut *store).await?;
+            result.map_err(|()| wasmtime::format_err!("run returned an error"))
+        },
+    )
+    .await
+}

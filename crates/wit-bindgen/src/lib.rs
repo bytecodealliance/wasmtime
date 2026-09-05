@@ -2493,6 +2493,18 @@ impl<'a> InterfaceGenerator<'a> {
         Some((result, error_typeid, path))
     }
 
+    /// Returns the path to the `Host` trait which supplies the `convert_*`
+    /// method for a trappable error owned by `interface`, or `None` if that's
+    /// the trait currently being generated.
+    fn path_to_error_convert_host(&self, interface: InterfaceId) -> Option<String> {
+        // For named interfaces we'll want to use the conversion method on the
+        // named trait itself, so make sure that `None` is returned here.
+        if self.named_import_id.is_some() {
+            return None;
+        }
+        self.path_to_interface(interface)
+    }
+
     fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) {
         let iface = &self.resolve.interfaces[id];
         let owner = TypeOwner::Interface(id);
@@ -2522,15 +2534,20 @@ impl<'a> InterfaceGenerator<'a> {
                     TypeOwner::Interface(i) => i,
                     _ => unimplemented!(),
                 };
-                match self.path_to_interface(owner) {
+                match self.path_to_error_convert_host(owner) {
                     Some(path) => {
                         required_conversion_traits.insert(format!("{path}::Host"));
                     }
                     None => {
                         if errors_converted.insert(err_name, err_id).is_none() {
+                            let ty_path_prefix = match self.path_to_interface(owner) {
+                                Some(path) => format!("{path}::"),
+                                None => String::new(),
+                            };
                             functions.push(ExtraTraitMethod::ErrorConvert {
                                 name: err_name,
                                 id: err_id,
+                                ty_path_prefix,
                             })
                         }
                     }
@@ -2602,9 +2619,18 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         let options_param = if self.generator.interface_link_options[&id].has_any() {
-            "options: &LinkOptions,"
+            let path = match self.named_import_id {
+                Some(_) => {
+                    let path = self
+                        .path_to_interface(id)
+                        .expect("named import always has a sibling interface-import module");
+                    format!("{path}::")
+                }
+                None => String::new(),
+            };
+            format!("options: &{path}LinkOptions,")
         } else {
-            ""
+            String::new()
         };
         let options_param_forward = if self.generator.interface_link_options[&id].has_any() {
             "options,"
@@ -2936,7 +2962,7 @@ pub fn add_to_linker<T, D>(
                 TypeOwner::Interface(i) => i,
                 _ => unimplemented!(),
             };
-            let convert_trait = match self.path_to_interface(owner) {
+            let convert_trait = match self.path_to_error_convert_host(owner) {
                 Some(path) => format!("{path}::Host"),
                 None => format!("Host"),
             };
@@ -3404,7 +3430,11 @@ fn drop(accessor: {wt}::component::Access<T, Self>, {id_param}rep: {wt}::compone
                     }
                     uwrite!(self.src, ";");
                 }
-                ExtraTraitMethod::ErrorConvert { name, id } => {
+                ExtraTraitMethod::ErrorConvert {
+                    name,
+                    id,
+                    ty_path_prefix,
+                } => {
                     let root = self.path_to_root();
                     let custom_name = &self.generator.trappable_errors[id];
                     let snake = name.to_snake_case();
@@ -3416,7 +3446,7 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                         "
                     );
                     self.push_wasmtime_or_anyhow_result();
-                    uwrite!(self.src, "<{camel}>;");
+                    uwrite!(self.src, "<{ty_path_prefix}{camel}>;");
                 }
             }
         }
@@ -3486,7 +3516,11 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                         ",
                     );
                 }
-                ExtraTraitMethod::ErrorConvert { name, id } => {
+                ExtraTraitMethod::ErrorConvert {
+                    name,
+                    id,
+                    ty_path_prefix,
+                } => {
                     let root = self.path_to_root();
                     let custom_name = &self.generator.trappable_errors[id];
                     let snake = name.to_snake_case();
@@ -3498,7 +3532,7 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                     self.push_wasmtime_or_anyhow_result();
                     uwriteln!(
                         self.src,
-                        "<{camel}> {{
+                        "<{ty_path_prefix}{camel}> {{
     {trait_name}::convert_{snake}(*self, err)
 }}
                         ",
@@ -3513,8 +3547,14 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
 }
 
 enum ExtraTraitMethod<'a> {
-    ResourceDrop { name: &'a str },
-    ErrorConvert { name: &'a str, id: TypeId },
+    ResourceDrop {
+        name: &'a str,
+    },
+    ErrorConvert {
+        name: &'a str,
+        id: TypeId,
+        ty_path_prefix: String,
+    },
 }
 
 struct FunctionPartitioning<'a> {
@@ -3656,7 +3696,7 @@ impl LinkOptionsBuilder {
 
         for feature in unstable_features.iter() {
             let feature_rust_name = feature.to_snake_case();
-            uwriteln!(src, "{feature_rust_name}: bool,");
+            uwriteln!(src, "pub(crate) {feature_rust_name}: bool,");
         }
 
         uwriteln!(src, "}}");

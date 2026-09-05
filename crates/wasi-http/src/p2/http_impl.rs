@@ -118,3 +118,31 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
             .push(HostFutureIncomingResponse::Pending(future))?)
     }
 }
+
+mod named {
+    use crate::WasiHttpNamedView;
+    use crate::p2::bindings::http::types;
+    use crate::p2::bindings::named_imports::wasi::http::outgoing_handler;
+    use crate::p2::types::{HostFutureIncomingResponse, HostOutgoingRequest};
+    use crate::p2::{HttpError, HttpResult};
+    use wasmtime::component::Resource;
+    use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+
+    impl<T> outgoing_handler::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiHttpNamedView,
+    {
+        fn handle(
+            &mut self,
+            id: NamedId,
+            request_id: Resource<HostOutgoingRequest>,
+            options: Option<Resource<types::RequestOptions>>,
+        ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
+            super::outgoing_handler::Host::handle(&mut self.0.http(id), request_id, options)
+        }
+
+        fn convert_error_code(&mut self, err: HttpError) -> wasmtime::Result<types::ErrorCode> {
+            err.downcast()
+        }
+    }
+}

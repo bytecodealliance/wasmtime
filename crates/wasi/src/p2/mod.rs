@@ -225,13 +225,13 @@
 //! [`StdinStream`]: crate::cli::StdinStream
 //! [`StdoutStream`]: crate::cli::StdoutStream
 
-use crate::WasiView;
-use crate::cli::{WasiCli, WasiCliView as _};
-use crate::clocks::{WasiClocks, WasiClocksView as _};
-use crate::filesystem::{WasiFilesystem, WasiFilesystemView as _};
-use crate::random::WasiRandom;
-use crate::sockets::{WasiSockets, WasiSocketsView as _};
-use wasmtime::component::{HasData, Linker, ResourceTable};
+use crate::cli::{WasiCli, WasiCliNamed, WasiCliView as _};
+use crate::clocks::{WasiClocks, WasiClocksNamed, WasiClocksView as _};
+use crate::filesystem::{WasiFilesystem, WasiFilesystemNamed, WasiFilesystemView as _};
+use crate::random::{WasiRandom, WasiRandomNamed};
+use crate::sockets::{WasiSockets, WasiSocketsNamed, WasiSocketsView as _};
+use crate::{NamedId, WasiCtxNamedView, WasiNamedView, WasiView};
+use wasmtime::component::{Component, HasData, Linker, ResourceTable};
 
 pub mod bindings;
 pub(crate) mod filesystem;
@@ -501,5 +501,311 @@ fn add_async_io_to_linker<T: WasiView>(l: &mut Linker<T>) -> wasmtime::Result<()
     wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
     wasmtime_wasi_io::bindings::wasi::io::poll::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
     wasmtime_wasi_io::bindings::wasi::io::streams::add_to_linker::<T, HasIo>(l, |t| t.ctx().table)?;
+    Ok(())
+}
+
+/// Interfaces that are added via [`add_named_to_linker_async`].
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Interface {
+    /// `wasi:clocks/monotonic-clock`
+    ClocksMonotonicClock,
+    /// `wasi:clocks/wall-clock`
+    ClocksWallClock,
+    /// `wasi:random/random`
+    RandomRandom,
+    /// `wasi:random/insecure`
+    RandomInsecure,
+    /// `wasi:random/insecure-seed`
+    RandomInsecureSeed,
+    /// `wasi:cli/exit`
+    CliExit,
+    /// `wasi:cli/environment`
+    CliEnvironment,
+    /// `wasi:cli/stdin`
+    CliStdin,
+    /// `wasi:cli/stdout`
+    CliStdout,
+    /// `wasi:cli/stderr`
+    CliStderr,
+    /// `wasi:cli/terminal-input`
+    CliTerminalInput,
+    /// `wasi:cli/terminal-output`
+    CliTerminalOutput,
+    /// `wasi:cli/terminal-stdin`
+    CliTerminalStdin,
+    /// `wasi:cli/terminal-stdout`
+    CliTerminalStdout,
+    /// `wasi:cli/terminal-stderr`
+    CliTerminalStderr,
+    /// `wasi:filesystem/types`
+    FilesystemTypes,
+    /// `wasi:filesystem/preopens`
+    FilesystemPreopens,
+    /// `wasi:sockets/instance-network`
+    SocketsInstanceNetwork,
+    /// `wasi:sockets/network`
+    SocketsNetwork,
+    /// `wasi:sockets/ip-name-lookup`
+    SocketsIpNameLookup,
+    /// `wasi:sockets/tcp-create-socket`
+    SocketsTcpCreateSocket,
+    /// `wasi:sockets/tcp`
+    SocketsTcp,
+    /// `wasi:sockets/udp-create-socket`
+    SocketsUdpCreateSocket,
+    /// `wasi:sockets/udp`
+    SocketsUdp,
+}
+
+/// Add all WASI interfaces from this crate into the `linker` provided for any
+/// named imports that a component has.
+///
+/// This function is similar to [`add_to_linker_async`] except that it's specifically
+/// designed to work with named imports of WASI interfaces that components may
+/// have. This requires a [`Component`] parameter to be passed in when
+/// populating the [`Linker`] provided to see what the [`Component`] actually
+/// imports.
+///
+/// Like [`add_to_linker_async`] this adds the `async` variant of all
+/// interfaces. If this isn't low level enough you can invoke the
+/// bindgen-generated `add_to_linker` functions within the [`named_imports`]
+/// module directly instead.
+///
+/// [`named_imports`]: crate::p2::bindings::named_imports
+///
+/// The `lookup` function provided here is invoked for every named import found
+/// for a particular interface. The [`Interface`] given is what's being bound,
+/// and the `&str` argument is the name that the component imports it as. The
+/// embedder can then decide how it would like to allocate a [`NamedId`] for
+/// this import. If `Ok` is returned then the linker is populated with this
+/// name, and imported functions will pass the [`NamedId`] later to the
+/// implementation of [`WasiNamedView`] on `T` when invoked. If `Err` is
+/// returned then the error will cause this entire function to fail and this
+/// function call will return the same error.
+///
+/// # Example
+///
+/// ```
+/// use std::collections::HashMap;
+/// use wasmtime::component::{Component, Linker, ResourceTable};
+/// use wasmtime::{Engine, Result, Store, Config};
+/// use wasmtime_wasi::{NamedId, WasiCtx, WasiCtxView, WasiNamedView};
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///     let component = Component::new(&engine, "(component)")?;
+///
+///     let mut linker = Linker::<MyState>::new(&engine);
+///
+///     // ... add default functionality to `linker` as needed ...
+///
+///     // and then additionally fill in any specific named imports `component`
+///     // might have for WASI interfaces.
+///     let mut name_map = HashMap::new();
+///     wasmtime_wasi::p2::add_named_to_linker_async(&mut linker, &component, |_i, name| {
+///         let len = name_map.len();
+///         Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///     })?;
+///
+///     // Here a `WasiCtx` is allocated per-named-import and will then be
+///     // referred to internally by the [`NamedId`] allocated above. You could
+///     // also use `name_map` to configure each context differently.
+///     let mut my_state = MyState::default();
+///     for _ in 0..name_map.len() {
+///         my_state.contexts.push(WasiCtx::default());
+///     }
+///     let mut store = Store::new(&engine, my_state);
+///
+///     // ... use `linker` to instantiate within `store` ...
+///
+///     Ok(())
+/// }
+///
+/// #[derive(Default)]
+/// struct MyState {
+///     table: ResourceTable,
+///     contexts: Vec<WasiCtx>,
+/// }
+///
+/// impl WasiNamedView for MyState {
+///     fn ctx(&mut self, id: NamedId) -> WasiCtxView<'_> {
+///         WasiCtxView {
+///             ctx: &mut self.contexts[id.0],
+///             table: &mut self.table,
+///         }
+///     }
+/// }
+/// ```
+pub fn add_named_to_linker_async<T>(
+    linker: &mut Linker<T>,
+    component: &Component,
+    lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiNamedView,
+{
+    let options = bindings::LinkOptions::default();
+    add_named_to_linker_with_options_async(linker, &options, component, lookup)
+}
+
+/// Same as [`add_named_to_linker_async`] except [`bindings::LinkOptions`]
+/// can be specified to configure interfaces that are added.
+pub fn add_named_to_linker_with_options_async<T>(
+    linker: &mut Linker<T>,
+    options: &bindings::LinkOptions,
+    component: &Component,
+    mut lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiNamedView,
+{
+    use crate::p2::bindings::named_imports::wasi::{cli, clocks, filesystem, random, sockets};
+
+    let l = linker;
+    clocks::wall_clock::add_to_linker::<T, WasiClocksNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::ClocksWallClock, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    clocks::monotonic_clock::add_to_linker::<T, WasiClocksNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::ClocksMonotonicClock, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    filesystem::types::add_to_linker::<T, WasiFilesystemNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::FilesystemTypes, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    filesystem::preopens::add_to_linker::<T, WasiFilesystemNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::FilesystemPreopens, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    random::random::add_to_linker::<T, WasiRandomNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::RandomRandom, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    random::insecure::add_to_linker::<T, WasiRandomNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::RandomInsecure, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    random::insecure_seed::add_to_linker::<T, WasiRandomNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::RandomInsecureSeed, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::exit::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliExit, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::environment::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliEnvironment, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::stdin::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliStdin, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::stdout::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliStdout, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::stderr::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliStderr, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::terminal_input::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliTerminalInput, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::terminal_output::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliTerminalOutput, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::terminal_stdin::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliTerminalStdin, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::terminal_stdout::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliTerminalStdout, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    cli::terminal_stderr::add_to_linker::<T, WasiCliNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::CliTerminalStderr, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::instance_network::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsInstanceNetwork, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::network::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsNetwork, name),
+        &options.into(),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::ip_name_lookup::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsIpNameLookup, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::tcp_create_socket::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsTcpCreateSocket, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::tcp::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsTcp, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::udp_create_socket::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsUdpCreateSocket, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::udp::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsUdp, name),
+        |x| WasiCtxNamedView(x),
+    )?;
     Ok(())
 }

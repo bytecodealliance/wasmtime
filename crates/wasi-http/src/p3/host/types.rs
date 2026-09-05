@@ -9,6 +9,7 @@ use crate::p3::body::Body;
 use crate::p3::{HeaderResult, HttpError, RequestOptionsResult};
 use crate::{WasiHttp, WasiHttpCtxView};
 use std::sync::Arc;
+use wasmtime::AsContextMut;
 use wasmtime::component::{Access, FutureReader, Resource, ResourceTable, StreamReader};
 use wasmtime::error::Context as _;
 
@@ -212,31 +213,50 @@ impl HostFields for WasiHttpCtxView<'_> {
     }
 }
 
+fn new_request<S>(
+    mut store: S,
+    mut getter: impl FnMut(&mut S::Data) -> WasiHttpCtxView<'_> + Copy + Send + 'static,
+    headers: Resource<Headers>,
+    contents: Option<StreamReader<u8>>,
+    trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+    options: Option<Resource<RequestOptions>>,
+) -> wasmtime::Result<(Resource<Request>, FutureReader<Result<(), ErrorCode>>)>
+where
+    S: AsContextMut,
+{
+    let mut store = store.as_context_mut();
+    let (body, body_result) = Body::new_guest(&mut store, getter, contents, trailers)?;
+    let cx = getter(store.data_mut());
+    let headers = delete_fields(cx.table, headers)?;
+    let options = options
+        .map(|options| delete_request_options(cx.table, options))
+        .transpose()?;
+    let req = Request {
+        method: http::Method::GET,
+        scheme: None,
+        authority: None,
+        path_with_query: None,
+        headers,
+        options: options.map(Into::into),
+        body,
+    };
+    let req = cx
+        .table
+        .push(req)
+        .context("failed to push request to table")?;
+    Ok((req, body_result))
+}
+
 impl<T> HostRequestWithStore<T> for WasiHttp {
     fn new(
-        mut store: Access<T, Self>,
+        store: Access<T, Self>,
         headers: Resource<Headers>,
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
         options: Option<Resource<RequestOptions>>,
     ) -> wasmtime::Result<(Resource<Request>, FutureReader<Result<(), ErrorCode>>)> {
-        let (body, body_result) = Body::new_guest(&mut store, contents, trailers)?;
-        let WasiHttpCtxView { table, .. } = store.get();
-        let headers = delete_fields(table, headers)?;
-        let options = options
-            .map(|options| delete_request_options(table, options))
-            .transpose()?;
-        let req = Request {
-            method: http::Method::GET,
-            scheme: None,
-            authority: None,
-            path_with_query: None,
-            headers,
-            options: options.map(Into::into),
-            body,
-        };
-        let req = table.push(req).context("failed to push request to table")?;
-        Ok((req, body_result))
+        let getter = store.getter();
+        new_request(store, getter, headers, contents, trailers, options)
     }
 
     fn consume_body(
@@ -248,20 +268,12 @@ impl<T> HostRequestWithStore<T> for WasiHttp {
         FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     )> {
         let getter = store.getter();
-        let Request { body, .. } = store
-            .get()
-            .table
-            .delete(req)
-            .context("failed to delete request from table")?;
+        let Request { body, .. } = store.get().table.delete(req)?;
         body.consume(store, fut, getter)
     }
 
     fn drop(mut store: Access<'_, T, Self>, req: Resource<Request>) -> wasmtime::Result<()> {
-        let Request { body, .. } = store
-            .get()
-            .table
-            .delete(req)
-            .context("failed to delete request from table")?;
+        let Request { body, .. } = store.get().table.delete(req)?;
         body.drop(store)?;
         Ok(())
     }
@@ -470,25 +482,41 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
     }
 }
 
+fn new_response<S>(
+    mut store: S,
+    mut getter: impl FnMut(&mut S::Data) -> WasiHttpCtxView<'_> + Copy + Send + 'static,
+    headers: Resource<Headers>,
+    contents: Option<StreamReader<u8>>,
+    trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+) -> wasmtime::Result<(Resource<Response>, FutureReader<Result<(), ErrorCode>>)>
+where
+    S: AsContextMut,
+{
+    let mut store = store.as_context_mut();
+    let (body, body_result) = Body::new_guest(&mut store, getter, contents, trailers)?;
+    let cx = getter(store.data_mut());
+    let headers = delete_fields(cx.table, headers)?;
+    let res = Response {
+        status: http::StatusCode::OK,
+        headers,
+        body,
+    };
+    let res = cx
+        .table
+        .push(res)
+        .context("failed to push response to table")?;
+    Ok((res, body_result))
+}
+
 impl<T> HostResponseWithStore<T> for WasiHttp {
     fn new(
-        mut store: Access<T, Self>,
+        store: Access<T, Self>,
         headers: Resource<Headers>,
         contents: Option<StreamReader<u8>>,
         trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     ) -> wasmtime::Result<(Resource<Response>, FutureReader<Result<(), ErrorCode>>)> {
-        let (body, body_result) = Body::new_guest(&mut store, contents, trailers)?;
-        let WasiHttpCtxView { table, .. } = store.get();
-        let headers = delete_fields(table, headers)?;
-        let res = Response {
-            status: http::StatusCode::OK,
-            headers,
-            body,
-        };
-        let res = table
-            .push(res)
-            .context("failed to push response to table")?;
-        Ok((res, body_result))
+        let getter = store.getter();
+        new_response(store, getter, headers, contents, trailers)
     }
 
     fn consume_body(
@@ -500,20 +528,12 @@ impl<T> HostResponseWithStore<T> for WasiHttp {
         FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
     )> {
         let getter = store.getter();
-        let Response { body, .. } = store
-            .get()
-            .table
-            .delete(res)
-            .context("failed to delete response from table")?;
+        let Response { body, .. } = store.get().table.delete(res)?;
         body.consume(store, fut, getter)
     }
 
     fn drop(mut store: Access<'_, T, Self>, res: Resource<Response>) -> wasmtime::Result<()> {
-        let Response { body, .. } = store
-            .get()
-            .table
-            .delete(res)
-            .context("failed to delete response from table")?;
+        let Response { body, .. } = store.get().table.delete(res)?;
         body.drop(store)?;
         Ok(())
     }
@@ -563,5 +583,421 @@ impl Host for WasiHttpCtxView<'_> {
         error: crate::p3::RequestOptionsError,
     ) -> wasmtime::Result<RequestOptionsError> {
         error.downcast()
+    }
+}
+
+mod named {
+    use crate::p3::bindings::clocks::monotonic_clock::Duration;
+    use crate::p3::bindings::http::types::{
+        ErrorCode, FieldName, FieldValue, Fields, HeaderError, Headers, Method, Request,
+        RequestOptions, RequestOptionsError, Response, Scheme, StatusCode, Trailers,
+    };
+    use crate::p3::bindings::named_imports::wasi::http::types;
+    use crate::p3::{HeaderResult, HttpError, RequestOptionsResult};
+    use crate::{WasiHttpNamed, WasiHttpNamedView};
+    use wasmtime::component::{Access, FutureReader, Resource, StreamReader};
+    use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+
+    impl<T> types::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiHttpNamedView,
+    {
+        fn convert_error_code(&mut self, error: HttpError) -> wasmtime::Result<ErrorCode> {
+            error.downcast()
+        }
+
+        fn convert_header_error(
+            &mut self,
+            error: crate::p3::HeaderError,
+        ) -> wasmtime::Result<HeaderError> {
+            error.downcast()
+        }
+
+        fn convert_request_options_error(
+            &mut self,
+            error: crate::p3::RequestOptionsError,
+        ) -> wasmtime::Result<RequestOptionsError> {
+            error.downcast()
+        }
+    }
+
+    impl<T> types::HostFields for WasiCtxNamedView<'_, T>
+    where
+        T: WasiHttpNamedView,
+    {
+        fn new(&mut self, id: NamedId) -> wasmtime::Result<Resource<Fields>> {
+            super::HostFields::new(&mut self.0.http(id))
+        }
+
+        fn from_list(
+            &mut self,
+            id: NamedId,
+            entries: Vec<(FieldName, FieldValue)>,
+        ) -> HeaderResult<Resource<Fields>> {
+            super::HostFields::from_list(&mut self.0.http(id), entries)
+        }
+
+        fn get(
+            &mut self,
+            id: NamedId,
+            fields: Resource<Fields>,
+            name: FieldName,
+        ) -> wasmtime::Result<Vec<FieldValue>> {
+            super::HostFields::get(&mut self.0.http(id), fields, name)
+        }
+
+        fn has(
+            &mut self,
+            id: NamedId,
+            fields: Resource<Fields>,
+            name: FieldName,
+        ) -> wasmtime::Result<bool> {
+            super::HostFields::has(&mut self.0.http(id), fields, name)
+        }
+
+        fn set(
+            &mut self,
+            id: NamedId,
+            fields: Resource<Fields>,
+            name: FieldName,
+            values: Vec<FieldValue>,
+        ) -> HeaderResult<()> {
+            super::HostFields::set(&mut self.0.http(id), fields, name, values)
+        }
+
+        fn delete(
+            &mut self,
+            id: NamedId,
+            fields: Resource<Fields>,
+            name: FieldName,
+        ) -> HeaderResult<()> {
+            super::HostFields::delete(&mut self.0.http(id), fields, name)
+        }
+
+        fn get_and_delete(
+            &mut self,
+            id: NamedId,
+            fields: Resource<Fields>,
+            name: FieldName,
+        ) -> HeaderResult<Vec<FieldValue>> {
+            super::HostFields::get_and_delete(&mut self.0.http(id), fields, name)
+        }
+
+        fn append(
+            &mut self,
+            id: NamedId,
+            fields: Resource<Fields>,
+            name: FieldName,
+            value: FieldValue,
+        ) -> HeaderResult<()> {
+            super::HostFields::append(&mut self.0.http(id), fields, name, value)
+        }
+
+        fn copy_all(
+            &mut self,
+            id: NamedId,
+            fields: Resource<Fields>,
+        ) -> wasmtime::Result<Vec<(FieldName, FieldValue)>> {
+            super::HostFields::copy_all(&mut self.0.http(id), fields)
+        }
+
+        fn clone(
+            &mut self,
+            id: NamedId,
+            fields: Resource<Fields>,
+        ) -> wasmtime::Result<Resource<Fields>> {
+            super::HostFields::clone(&mut self.0.http(id), fields)
+        }
+
+        fn drop(&mut self, id: NamedId, fields: Resource<Fields>) -> wasmtime::Result<()> {
+            super::HostFields::drop(&mut self.0.http(id), fields)
+        }
+    }
+
+    impl<T> types::HostRequest for WasiCtxNamedView<'_, T>
+    where
+        T: WasiHttpNamedView,
+    {
+        fn get_method(&mut self, id: NamedId, req: Resource<Request>) -> wasmtime::Result<Method> {
+            super::HostRequest::get_method(&mut self.0.http(id), req)
+        }
+
+        fn set_method(
+            &mut self,
+            id: NamedId,
+            req: Resource<Request>,
+            method: Method,
+        ) -> wasmtime::Result<Result<(), ()>> {
+            super::HostRequest::set_method(&mut self.0.http(id), req, method)
+        }
+
+        fn get_path_with_query(
+            &mut self,
+            id: NamedId,
+            req: Resource<Request>,
+        ) -> wasmtime::Result<Option<String>> {
+            super::HostRequest::get_path_with_query(&mut self.0.http(id), req)
+        }
+
+        fn set_path_with_query(
+            &mut self,
+            id: NamedId,
+            req: Resource<Request>,
+            path_with_query: Option<String>,
+        ) -> wasmtime::Result<Result<(), ()>> {
+            super::HostRequest::set_path_with_query(&mut self.0.http(id), req, path_with_query)
+        }
+
+        fn get_scheme(
+            &mut self,
+            id: NamedId,
+            req: Resource<Request>,
+        ) -> wasmtime::Result<Option<Scheme>> {
+            super::HostRequest::get_scheme(&mut self.0.http(id), req)
+        }
+
+        fn set_scheme(
+            &mut self,
+            id: NamedId,
+            req: Resource<Request>,
+            scheme: Option<Scheme>,
+        ) -> wasmtime::Result<Result<(), ()>> {
+            super::HostRequest::set_scheme(&mut self.0.http(id), req, scheme)
+        }
+
+        fn get_authority(
+            &mut self,
+            id: NamedId,
+            req: Resource<Request>,
+        ) -> wasmtime::Result<Option<String>> {
+            super::HostRequest::get_authority(&mut self.0.http(id), req)
+        }
+
+        fn set_authority(
+            &mut self,
+            id: NamedId,
+            req: Resource<Request>,
+            authority: Option<String>,
+        ) -> wasmtime::Result<Result<(), ()>> {
+            super::HostRequest::set_authority(&mut self.0.http(id), req, authority)
+        }
+
+        fn get_options(
+            &mut self,
+            id: NamedId,
+            req: Resource<Request>,
+        ) -> wasmtime::Result<Option<Resource<RequestOptions>>> {
+            super::HostRequest::get_options(&mut self.0.http(id), req)
+        }
+
+        fn get_headers(
+            &mut self,
+            id: NamedId,
+            req: Resource<Request>,
+        ) -> wasmtime::Result<Resource<Headers>> {
+            super::HostRequest::get_headers(&mut self.0.http(id), req)
+        }
+    }
+
+    impl<T> types::HostRequestOptions for WasiCtxNamedView<'_, T>
+    where
+        T: WasiHttpNamedView,
+    {
+        fn new(&mut self, id: NamedId) -> wasmtime::Result<Resource<RequestOptions>> {
+            super::HostRequestOptions::new(&mut self.0.http(id))
+        }
+
+        fn get_connect_timeout(
+            &mut self,
+            id: NamedId,
+            opts: Resource<RequestOptions>,
+        ) -> wasmtime::Result<Option<Duration>> {
+            super::HostRequestOptions::get_connect_timeout(&mut self.0.http(id), opts)
+        }
+
+        fn set_connect_timeout(
+            &mut self,
+            id: NamedId,
+            opts: Resource<RequestOptions>,
+            duration: Option<Duration>,
+        ) -> RequestOptionsResult<()> {
+            super::HostRequestOptions::set_connect_timeout(&mut self.0.http(id), opts, duration)
+        }
+
+        fn get_first_byte_timeout(
+            &mut self,
+            id: NamedId,
+            opts: Resource<RequestOptions>,
+        ) -> wasmtime::Result<Option<Duration>> {
+            super::HostRequestOptions::get_first_byte_timeout(&mut self.0.http(id), opts)
+        }
+
+        fn set_first_byte_timeout(
+            &mut self,
+            id: NamedId,
+            opts: Resource<RequestOptions>,
+            duration: Option<Duration>,
+        ) -> RequestOptionsResult<()> {
+            super::HostRequestOptions::set_first_byte_timeout(&mut self.0.http(id), opts, duration)
+        }
+
+        fn get_between_bytes_timeout(
+            &mut self,
+            id: NamedId,
+            opts: Resource<RequestOptions>,
+        ) -> wasmtime::Result<Option<Duration>> {
+            super::HostRequestOptions::get_between_bytes_timeout(&mut self.0.http(id), opts)
+        }
+
+        fn set_between_bytes_timeout(
+            &mut self,
+            id: NamedId,
+            opts: Resource<RequestOptions>,
+            duration: Option<Duration>,
+        ) -> RequestOptionsResult<()> {
+            super::HostRequestOptions::set_between_bytes_timeout(
+                &mut self.0.http(id),
+                opts,
+                duration,
+            )
+        }
+
+        fn clone(
+            &mut self,
+            id: NamedId,
+            opts: Resource<RequestOptions>,
+        ) -> wasmtime::Result<Resource<RequestOptions>> {
+            super::HostRequestOptions::clone(&mut self.0.http(id), opts)
+        }
+
+        fn drop(&mut self, id: NamedId, opts: Resource<RequestOptions>) -> wasmtime::Result<()> {
+            super::HostRequestOptions::drop(&mut self.0.http(id), opts)
+        }
+    }
+
+    impl<T> types::HostResponse for WasiCtxNamedView<'_, T>
+    where
+        T: WasiHttpNamedView,
+    {
+        fn get_status_code(
+            &mut self,
+            id: NamedId,
+            res: Resource<Response>,
+        ) -> wasmtime::Result<StatusCode> {
+            super::HostResponse::get_status_code(&mut self.0.http(id), res)
+        }
+
+        fn set_status_code(
+            &mut self,
+            id: NamedId,
+            res: Resource<Response>,
+            status_code: StatusCode,
+        ) -> wasmtime::Result<Result<(), ()>> {
+            super::HostResponse::set_status_code(&mut self.0.http(id), res, status_code)
+        }
+
+        fn get_headers(
+            &mut self,
+            id: NamedId,
+            res: Resource<Response>,
+        ) -> wasmtime::Result<Resource<Headers>> {
+            super::HostResponse::get_headers(&mut self.0.http(id), res)
+        }
+    }
+
+    impl<T, U> types::HostRequestWithStore<U> for WasiHttpNamed<T>
+    where
+        T: WasiHttpNamedView,
+        U: 'static,
+    {
+        fn new(
+            store: Access<U, Self>,
+            id: NamedId,
+            headers: Resource<Headers>,
+            contents: Option<StreamReader<u8>>,
+            trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+            options: Option<Resource<RequestOptions>>,
+        ) -> wasmtime::Result<(Resource<Request>, FutureReader<Result<(), ErrorCode>>)> {
+            let getter = store.getter();
+            super::new_request(
+                store,
+                move |data| getter(data).0.http(id),
+                headers,
+                contents,
+                trailers,
+                options,
+            )
+        }
+
+        fn consume_body(
+            mut store: Access<U, Self>,
+            id: NamedId,
+            req: Resource<Request>,
+            fut: FutureReader<Result<(), ErrorCode>>,
+        ) -> wasmtime::Result<(
+            StreamReader<u8>,
+            FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+        )> {
+            let getter = store.getter();
+            let Request { body, .. } = store.get().0.http(id).table.delete(req)?;
+            body.consume(store, fut, move |data: &mut U| getter(data).0.http(id))
+        }
+
+        fn drop(
+            mut store: Access<'_, U, Self>,
+            id: NamedId,
+            req: Resource<Request>,
+        ) -> wasmtime::Result<()> {
+            let Request { body, .. } = store.get().0.http(id).table.delete(req)?;
+            body.drop(store)?;
+            Ok(())
+        }
+    }
+
+    impl<T, U> types::HostResponseWithStore<U> for WasiHttpNamed<T>
+    where
+        T: WasiHttpNamedView,
+        U: 'static,
+    {
+        fn new(
+            store: Access<U, Self>,
+            id: NamedId,
+            headers: Resource<Headers>,
+            contents: Option<StreamReader<u8>>,
+            trailers: FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+        ) -> wasmtime::Result<(Resource<Response>, FutureReader<Result<(), ErrorCode>>)> {
+            let getter = store.getter();
+            super::new_response(
+                store,
+                move |data| getter(data).0.http(id),
+                headers,
+                contents,
+                trailers,
+            )
+        }
+
+        fn consume_body(
+            mut store: Access<U, Self>,
+            id: NamedId,
+            res: Resource<Response>,
+            fut: FutureReader<Result<(), ErrorCode>>,
+        ) -> wasmtime::Result<(
+            StreamReader<u8>,
+            FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
+        )> {
+            let getter = store.getter();
+            let Response { body, .. } = store.get().0.http(id).table.delete(res)?;
+            body.consume(store, fut, move |data: &mut U| getter(data).0.http(id))
+        }
+
+        fn drop(
+            mut store: Access<'_, U, Self>,
+            id: NamedId,
+            res: Resource<Response>,
+        ) -> wasmtime::Result<()> {
+            let Response { body, .. } = store.get().0.http(id).table.delete(res)?;
+            body.drop(store)?;
+            Ok(())
+        }
     }
 }

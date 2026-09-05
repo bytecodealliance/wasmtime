@@ -118,3 +118,63 @@ mod sync {
         }
     }
 }
+
+mod named {
+    use crate::p2::SocketError;
+    use crate::p2::bindings::named_imports::wasi::sockets::ip_name_lookup;
+    use crate::p2::bindings::sockets::network::ErrorCode;
+    use crate::p2::bindings::sockets::network::{IpAddress, Network};
+    use crate::p2::ip_name_lookup::ResolveAddressStream;
+    use crate::sockets::WasiSocketsNamedView;
+    use crate::{NamedId, WasiCtxNamedView};
+    use wasmtime::Result;
+    use wasmtime::component::Resource;
+    use wasmtime_wasi_io::poll::DynPollable;
+
+    impl<T> ip_name_lookup::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        fn convert_error_code(&mut self, err: SocketError) -> wasmtime::Result<ErrorCode> {
+            err.downcast()
+        }
+
+        fn resolve_addresses(
+            &mut self,
+            id: NamedId,
+            network: Resource<Network>,
+            name: String,
+        ) -> Result<Resource<ResolveAddressStream>, SocketError> {
+            super::Host::resolve_addresses(&mut self.0.sockets(id), network, name)
+        }
+    }
+
+    impl<T> ip_name_lookup::HostResolveAddressStream for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        fn resolve_next_address(
+            &mut self,
+            id: NamedId,
+            resource: Resource<ResolveAddressStream>,
+        ) -> Result<Option<IpAddress>, SocketError> {
+            super::HostResolveAddressStream::resolve_next_address(&mut self.0.sockets(id), resource)
+        }
+
+        fn subscribe(
+            &mut self,
+            id: NamedId,
+            resource: Resource<ResolveAddressStream>,
+        ) -> Result<Resource<DynPollable>> {
+            super::HostResolveAddressStream::subscribe(&mut self.0.sockets(id), resource)
+        }
+
+        async fn drop(
+            &mut self,
+            id: NamedId,
+            resource: Resource<ResolveAddressStream>,
+        ) -> Result<()> {
+            super::HostResolveAddressStream::drop(&mut self.0.sockets(id), resource).await
+        }
+    }
+}
