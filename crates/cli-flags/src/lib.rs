@@ -285,6 +285,55 @@ wasmtime_option_group! {
         /// corruption in compiled code.
         pub metadata_for_gc_heap_corruption: Option<bool>,
 
+        /// Expose Wasmtime's unsafe intrinsics to the Wasm being compiled under
+        /// the given instance import name, which defaults to
+        /// `unsafe-intrinsics` when the name is omitted.
+        ///
+        /// The unsafe intrinsics are a set of raw, unchecked load and store
+        /// operations on the host's address space, along with the address of
+        /// the store's data. They may only be used with components, not core
+        /// Wasm modules.
+        ///
+        /// This is wildly unsafe: the Wasm is given the ability to read and
+        /// write arbitrary host memory. Only use this with Wasm that you trust
+        /// as much as you trust the CLI itself.
+        ///
+        /// When `-C compile-time-builtin` is also given, the intrinsics are
+        /// exposed only to the compile-time builtins and not to the main Wasm
+        /// program.
+        ///
+        /// See the API documentation for
+        /// `CodeBuilder::expose_unsafe_intrinsics` for more details.
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::deserialize_cli_parse_wrapper")]
+        #[serde(serialize_with = "crate::opt::serialize_cli_parse_wrapper")]
+        pub unsafe_intrinsics: Option<UnsafeIntrinsicsImport>,
+
+        /// Define a compile-time builtin: satisfy the `<name>` instance import
+        /// of the main component with the component at `<path>` at compile
+        /// time, rather than with a host-defined import at instantiation time.
+        ///
+        /// May be specified multiple times, once per builtin. Compile-time
+        /// builtins may only be used with components, not core Wasm modules,
+        /// and require `-C unsafe-intrinsics`.
+        ///
+        /// The `<name>=` prefix may be omitted, in which case `<name>` defaults
+        /// to the file name of `<path>` without its extension. For example
+        /// `-C compile-time-builtin=path/to/my-host-api.wat` satisfies the
+        /// `my-host-api` import. Note that a `<path>` which itself contains an
+        /// `=` is interpreted as the `<name>=<path>` form; pass the explicit
+        /// form to disambiguate.
+        ///
+        /// Compile-time builtins are part of your trusted compute base: they
+        /// are given access to the unsafe intrinsics described above. Calls
+        /// into them become direct calls, so pass `-C inlining=y` to let them
+        /// be inlined into their callers.
+        ///
+        /// See the API documentation for
+        /// `CodeBuilder::compile_time_builtin_binary` for more details.
+        #[serde(skip)]
+        pub compile_time_builtin: Vec<CompileTimeBuiltin>,
+
         #[prefixed = "cranelift"]
         #[serde(default)]
         /// Set a cranelift-specific option. Use `wasmtime settings` to see
@@ -619,6 +668,20 @@ pub struct WasiNnGraph {
 pub struct KeyValuePair {
     pub key: String,
     pub value: String,
+}
+
+/// The instance import name under which Wasmtime's unsafe intrinsics are
+/// exposed to the Wasm being compiled.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnsafeIntrinsicsImport(pub String);
+
+/// A compile-time builtin.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompileTimeBuiltin {
+    /// The instance import name that this satisfies in the main component.
+    pub name: String,
+    /// The path to the component that implements this builtin.
+    pub path: PathBuf,
 }
 
 /// Common options for commands that translate WebAssembly modules
@@ -1419,6 +1482,11 @@ impl CommonOptions {
                 // arbitrary code-defined caches.
                 cache: None,
                 cache_config: None,
+
+                // These are configured per-`CodeBuilder`, so they cannot be
+                // recovered here.
+                unsafe_intrinsics: None,
+                compile_time_builtin: Vec::new(),
             },
             debug: DebugOptions {
                 address_map: Some(engine.get_generate_address_map()),

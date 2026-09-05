@@ -5,7 +5,7 @@
 //! specifying options in a struct-like syntax where all other boilerplate about
 //! option parsing is contained exclusively within this module.
 
-use crate::{KeyValuePair, WasiNnGraph};
+use crate::{CompileTimeBuiltin, KeyValuePair, UnsafeIntrinsicsImport, WasiNnGraph};
 #[cfg(feature = "clap")]
 use clap::builder::{StringValueParser, TypedValueParser, ValueParserFactory};
 #[cfg(feature = "clap")]
@@ -14,7 +14,7 @@ use clap::error::{Error, ErrorKind};
 use serde::de::{self, Visitor};
 use std::fmt;
 use std::num::NonZeroU32;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use wasmtime::error::Context;
@@ -702,6 +702,63 @@ impl WasmtimeOptionValue for KeyValuePair {
             f.write_str(&self.value)?;
         }
         Ok(())
+    }
+}
+
+impl WasmtimeOptionValue for UnsafeIntrinsicsImport {
+    const VAL_HELP: &'static str = "[=name]";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match val {
+            None => Ok(UnsafeIntrinsicsImport("unsafe-intrinsics".to_string())),
+            Some("") => bail!("the unsafe intrinsics import name cannot be empty"),
+            Some(val) => Ok(UnsafeIntrinsicsImport(val.to_string())),
+        }
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl WasmtimeOptionValue for CompileTimeBuiltin {
+    const VAL_HELP: &'static str = "=[<name>=]<path>";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        let val = String::parse(val)?;
+
+        if let Some((name, path)) = val.split_once('=') {
+            if name.is_empty() {
+                bail!("the compile-time builtin's name cannot be empty in `{val}`");
+            }
+            if path.is_empty() {
+                bail!("the compile-time builtin's path cannot be empty in `{val}`");
+            }
+            return Ok(CompileTimeBuiltin {
+                name: name.to_string(),
+                path: PathBuf::from(path),
+            });
+        }
+
+        // No `<name>` was given: derive it from the file name of `<path>`, with
+        // its extension removed.
+        let path = PathBuf::from(&val);
+        let name = path
+            .file_stem()
+            .ok_or_else(|| format_err!("cannot derive a compile-time builtin name from `{val}`"))?
+            .to_str()
+            .ok_or_else(|| {
+                format_err!("compile-time builtin name derived from `{val}` is not valid UTF-8")
+            })?
+            .to_string();
+        if name.is_empty() {
+            bail!("compile-time builtin name derived from `{val}` is empty");
+        }
+        Ok(CompileTimeBuiltin { name, path })
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Always write the canonical `<name>=<path>` form so that this
+        // round-trips back through `parse` regardless of the file name.
+        write!(f, "{}={}", self.name, Path::display(&self.path))
     }
 }
 

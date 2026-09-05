@@ -80,6 +80,7 @@ impl CompileCommand {
 
         let mut code = CodeBuilder::new(&engine);
         code.wasm_binary_or_text_file(&self.module)?;
+        crate::common::configure_code_builder(&self.common, &mut code)?;
 
         let output = self.output.take().unwrap_or_else(|| {
             let mut output: PathBuf = self.module.file_name().unwrap().into();
