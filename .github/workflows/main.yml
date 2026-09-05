@@ -1432,6 +1432,8 @@ jobs:
         # Per-SMT-query timeout, in seconds (see the `--timeout` option in
         # cranelift/isle/veri/veri/src/bin/veri.rs).
         ISLE_VERI_TIMEOUT: "90"
+        # Print the counterexample for each verification failure.
+        ISLE_VERI_PRINT_COUNTEREXAMPLE: "1"
       run: |
         mkdir -p cranelift/isle/veri/cache
         ./cranelift/isle/veri/verify.sh rebuild-cache aarch64 opt x64-iadd-base-case

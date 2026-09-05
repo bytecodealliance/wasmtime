@@ -30,6 +30,10 @@ use crate::{
 
 const LOG_DIR: &str = ".veriisle";
 
+/// Cap on how many counterexamples `--print-counterexample` writes to the
+/// summary.
+const MAX_PRINTED_COUNTEREXAMPLES: usize = 25;
+
 #[derive(Debug, Clone, Copy)]
 pub enum SolverBackend {
     Z3,
@@ -426,6 +430,7 @@ pub struct FailureRecord {
     pub description: String,
     pub instantiation_index: usize,
     pub failure_path: PathBuf,
+    pub counterexample: Option<String>,
 }
 
 /// An expansion that could not be processed at all (for example, because a term
@@ -529,6 +534,7 @@ pub struct Runner {
     log_dir: PathBuf,
     skip_solver: bool,
     results_to_log_dir: bool,
+    print_counterexample: bool,
     debug: bool,
 
     /// Shared cache of SMT query results (None = no caching).
@@ -553,6 +559,7 @@ impl Runner {
             log_dir: PathBuf::from(LOG_DIR),
             results_to_log_dir: false,
             skip_solver: false,
+            print_counterexample: false,
             debug: false,
             cache: None,
         })
@@ -635,6 +642,10 @@ impl Runner {
 
     pub fn set_results_to_log_dir(&mut self, enabled: bool) {
         self.results_to_log_dir = enabled;
+    }
+
+    pub fn set_print_counterexample(&mut self, enabled: bool) {
+        self.print_counterexample = enabled;
     }
 
     pub fn skip_solver(&mut self, skip: bool) {
@@ -820,12 +831,36 @@ impl Runner {
                 "=== VERIFICATION FAILURES ({n}) ===",
                 n = verification_failures.len()
             );
+            let mut printed = 0;
             for failure in &verification_failures {
                 let line = format_line(failure);
                 eprintln!("FAILURE {line}");
                 if let Some(f) = summary.as_mut() {
                     let _ = writeln!(f, "{line}");
                 }
+
+                // With `--print-counterexample`, follow each failure with the
+                // model the solver found
+                let Some(counterexample) = &failure.counterexample else {
+                    continue;
+                };
+                if printed < MAX_PRINTED_COUNTEREXAMPLES {
+                    eprintln!(
+                        "#{id}\t{description}\tinstantiation={inst}",
+                        id = failure.expansion_id,
+                        description = failure.description,
+                        inst = failure.instantiation_index,
+                    );
+                    eprintln!("model:");
+                    eprint!("{counterexample}");
+                    printed += 1;
+                }
+            }
+            if printed > 0 && verification_failures.len() > printed {
+                eprintln!(
+                    "... and {n} more counterexamples not printed; see the failure.out files.",
+                    n = verification_failures.len() - printed
+                );
             }
             log::warn!(
                 "verification failures: {n}",
@@ -1382,6 +1417,7 @@ impl Runner {
                     description: description.to_string(),
                     instantiation_index,
                     failure_path: unknown_path,
+                    counterexample: None,
                 });
 
                 return Ok(VerifyReport {
@@ -1401,6 +1437,10 @@ impl Runner {
         writeln!(output, "\t\tverification = {verification}")?;
         Ok(match verification {
             Verification::Failure(model) => {
+                let mut rendered = Vec::new();
+                conditions.write_model(&mut rendered, &model, &self.prog)?;
+                let rendered = String::from_utf8(rendered)?;
+
                 let failure_path = log_dir.join("failure.out");
                 let mut failure_file = Self::open_log_file(log_dir.clone(), "failure.out")?;
                 writeln!(
@@ -1410,7 +1450,7 @@ impl Runner {
                 writeln!(failure_file, "expansion:")?;
                 write_expansion(&mut failure_file, &self.prog, expansion)?;
                 writeln!(failure_file, "model:")?;
-                conditions.write_model(&mut failure_file, &model, &self.prog)?;
+                write!(failure_file, "{rendered}")?;
 
                 writeln!(output, "\t\tfailure written to {}", failure_path.display())?;
                 log::warn!(
@@ -1424,6 +1464,7 @@ impl Runner {
                     description: description.to_string(),
                     instantiation_index,
                     failure_path,
+                    counterexample: self.print_counterexample.then_some(rendered),
                 });
 
                 VerifyReport {
