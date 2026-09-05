@@ -493,6 +493,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
+    fn use_apx(&mut self) -> bool {
+        self.backend.x64_flags.has_apx()
+    }
+
+    #[inline]
     fn has_lzcnt(&mut self) -> bool {
         self.backend.x64_flags.has_lzcnt()
     }
