@@ -507,6 +507,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         regs::r10()
     }
 
+    fn nixe_frame_reg() -> Reg {
+        regs::r15()
+    }
+
+    fn gen_nixe_frame_addr(offset: u32, into_reg: Writable<Reg>) -> Self::I {
+        let mem = SyntheticAmode::Real(Amode::imm_reg(offset.try_into().unwrap(), regs::r15()));
+        Inst::External {
+            inst: asm::inst::leaq_rm::new(into_reg, mem).into(),
+        }
+    }
+
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {
         // Only ever used for I64s, F128s and vectors; if that changes, see if
         // the ExtKind below needs to be changed.
@@ -873,11 +884,15 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
+        if flags.enable_nixe_abi() {
+            static MACHINE_ENV: MachineEnv = create_reg_env_systemv(true, true);
+            return &MACHINE_ENV;
+        }
         if flags.enable_pinned_reg() {
-            static MACHINE_ENV: MachineEnv = create_reg_env_systemv(true);
+            static MACHINE_ENV: MachineEnv = create_reg_env_systemv(true, false);
             &MACHINE_ENV
         } else {
-            static MACHINE_ENV: MachineEnv = create_reg_env_systemv(false);
+            static MACHINE_ENV: MachineEnv = create_reg_env_systemv(false, false);
             &MACHINE_ENV
         }
     }
@@ -1277,7 +1292,7 @@ const fn all_clobbers() -> PRegSet {
         .with(regs::fpr_preg(XMM15))
 }
 
-const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
+const fn create_reg_env_systemv(enable_pinned_reg: bool, nixe: bool) -> MachineEnv {
     const fn preg(r: Reg) -> PReg {
         r.to_real_reg().unwrap().preg()
     }
@@ -1293,8 +1308,7 @@ const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
                 .with(preg(regs::rdx()))
                 .with(preg(regs::r8()))
                 .with(preg(regs::r9()))
-                .with(preg(regs::r10()))
-                .with(preg(regs::r11())),
+                .with(preg(regs::r10())),
             // Preferred XMMs: the first 8, which can have smaller encodings
             // with AVX instructions.
             PRegSet::empty()
@@ -1313,9 +1327,7 @@ const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
             // Non-preferred GPRs: callee-saved in the SysV ABI.
             PRegSet::empty()
                 .with(preg(regs::rbx()))
-                .with(preg(regs::r12()))
-                .with(preg(regs::r13()))
-                .with(preg(regs::r14())),
+                .with(preg(regs::r12())),
             // Non-preferred XMMs: the last 8 registers, which can have larger
             // encodings with AVX instructions.
             PRegSet::empty()
@@ -1334,6 +1346,12 @@ const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
         scratch_by_class: [None, None, None],
     };
 
+    if !nixe {
+        env.preferred_regs_by_class[0] = env.preferred_regs_by_class[0].with(preg(regs::r11()));
+        env.non_preferred_regs_by_class[0] = env.non_preferred_regs_by_class[0]
+            .with(preg(regs::r13()))
+            .with(preg(regs::r14()));
+    }
     debug_assert!(regs::PINNED_REG == cranelift_assembler_x64::gpr::enc::R15);
     if !enable_pinned_reg {
         env.non_preferred_regs_by_class[0] =
@@ -1346,6 +1364,22 @@ const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn nixe_register_pool_preserves_ordinary_allocation_policy() {
+        let nixe = create_reg_env_systemv(true, true);
+        let normal = create_reg_env_systemv(false, false);
+        for hw in 0..16 {
+            let reg = PReg::new(hw, RegClass::Int);
+            let contains = |env: &MachineEnv| {
+                env.preferred_regs_by_class[0].contains(reg)
+                    || env.non_preferred_regs_by_class[0].contains(reg)
+            };
+            assert_eq!(
+                contains(&nixe),
+                contains(&normal) && ![11, 13, 14, 15].contains(&hw)
+            );
+        }
+    }
     use crate::machinst::abi::Callee;
     use alloc::vec::Vec;
 

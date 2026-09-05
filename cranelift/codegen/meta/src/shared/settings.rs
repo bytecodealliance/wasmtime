@@ -120,6 +120,19 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
+    settings.add_bool(
+        "enable_nixe_abi",
+        "Enable the Nixe leaf-fragment ABI.",
+        r#"
+            Experimental Nixe backend integration for Linux x86-64 and AArch64.
+            Requires enable_pinned_reg. The pinned register points to a 64-byte-aligned
+            16 KiB frame; the first 2 KiB are reserved for boundary transfers.
+            Fragments have no system-ABI arguments, calls, returns or stack frame.
+            Unsupported operations are rejected, not lowered through the system ABI.
+        "#,
+        false,
+    );
+
     settings.add_enum(
         "tls_model",
         "Defines the model used to perform TLS accesses.",

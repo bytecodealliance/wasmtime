@@ -360,6 +360,7 @@ pub struct MachBuffer<I: VCodeInst> {
     /// containing a function body, this allows interpretation of
     /// runtime state given a view of an active stack frame.
     frame_layout: Option<MachBufferFrameLayout>,
+    nixe_entries: Vec<(ir::Block, CodeOffset)>,
 }
 
 impl MachBufferFinalized<Stencil> {
@@ -383,6 +384,7 @@ impl MachBufferFinalized<Stencil> {
             unwind_info: self.unwind_info,
             alignment: self.alignment,
             frame_layout: self.frame_layout,
+            nixe_entries: self.nixe_entries,
             nop_units: self.nop_units,
         }
     }
@@ -425,6 +427,8 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// containing a function body, this allows interpretation of
     /// runtime state given a view of an active stack frame.
     pub(crate) frame_layout: Option<MachBufferFrameLayout>,
+    /// Selected canonical entry offsets, including entry allocator edits.
+    pub nixe_entries: Vec<(ir::Block, CodeOffset)>,
     /// Any unwind info at a given location.
     pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
     /// The required alignment of this buffer.
@@ -530,6 +534,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             used_constants: Default::default(),
             open_patchable: false,
             frame_layout: None,
+            nixe_entries: Vec::new(),
         }
     }
 
@@ -1678,6 +1683,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             alignment,
             frame_layout: self.frame_layout,
             nop_units: I::gen_nop_units(),
+            nixe_entries: self.nixe_entries,
         }
     }
 
@@ -1870,6 +1876,10 @@ impl<I: VCodeInst> MachBuffer<I> {
     pub fn set_frame_layout(&mut self, frame_layout: MachBufferFrameLayout) {
         debug_assert!(self.frame_layout.is_none());
         self.frame_layout = Some(frame_layout);
+    }
+
+    pub(crate) fn set_nixe_entries(&mut self, entries: Vec<(ir::Block, CodeOffset)>) {
+        self.nixe_entries = entries;
     }
 }
 
@@ -2350,6 +2360,9 @@ impl MachBranch {
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 pub struct MachBufferFrameLayout {
+    /// Nixe external-frame extent, including transfer storage, when enabled.
+    /// Stack-slot offsets then refer to the pinned base, not SP or FP.
+    pub nixe_frame_size: Option<u32>,
     /// Offset from bottom of frame to FP (near top of frame). This
     /// allows reading the frame given only FP.
     pub frame_to_fp_offset: u32,

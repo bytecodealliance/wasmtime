@@ -738,6 +738,14 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     #[inline]
     fn synthetic_amode_slot(&mut self, offset: i32) -> SyntheticAmode {
+        if self.backend.flags.enable_nixe_abi() {
+            return SyntheticAmode::Real(Amode::imm_reg(
+                offset
+                    .checked_add(crate::nixe::TRANSFER_BYTES as i32)
+                    .unwrap(),
+                regs::r15(),
+            ));
+        }
         SyntheticAmode::SlotOffset { simm32: offset }
     }
 

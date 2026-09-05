@@ -201,6 +201,11 @@ pub struct FunctionStencil {
     /// call instructions.
     pub debug_tags: DebugTags,
 
+    /// Nixe canonical external entries, in caller order. Set with
+    /// `nixe::set_entries`; the layout's first block is then analysis-only.
+    /// Entries have no block parameters and define their own live inputs.
+    pub nixe_entries: alloc::vec::Vec<Block>,
+
     /// An optional global value which represents an expression evaluating to
     /// the stack limit for this function. This `GlobalValue` will be
     /// interpreted in the prologue, if necessary, to insert a stack check to
@@ -219,6 +224,7 @@ impl FunctionStencil {
         self.layout.clear();
         self.srclocs.clear();
         self.debug_tags.clear();
+        self.nixe_entries.clear();
         self.stack_limit = None;
     }
 
@@ -420,6 +426,7 @@ impl Function {
                 srclocs: SecondaryMap::new(),
                 stack_limit: None,
                 debug_tags: DebugTags::default(),
+                nixe_entries: alloc::vec::Vec::new(),
             },
             params: FunctionParameters::new(),
         }

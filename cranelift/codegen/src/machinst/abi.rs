@@ -458,6 +458,17 @@ pub trait ABIMachineSpec {
     /// SP-based offset).
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Self::I;
 
+    /// Fixed external frame base, available only on the Nixe target ISAs.
+    fn nixe_frame_reg() -> Reg {
+        unreachable!("Nixe ABI was not validated for this ISA")
+    }
+
+    /// Compute an external frame address without referring to the host stack.
+    fn gen_nixe_frame_addr(offset: u32, into_reg: Writable<Reg>) -> Self::I {
+        let _ = (offset, into_reg);
+        unreachable!("Nixe ABI was not validated for this ISA")
+    }
+
     /// Get a fixed register to use to compute a stack limit. This is needed for
     /// certain sequences generated after the register allocator has already
     /// run. This must satisfy two requirements:
@@ -1217,6 +1228,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         isa_flags: &M::F,
         sigs: &SigSet,
     ) -> CodegenResult<Self> {
+        crate::nixe::validate(f, isa)?;
         trace!("ABI: func signature {:?}", f.signature);
 
         let flags = isa.flags().clone();
@@ -2172,6 +2184,12 @@ impl<M: ABIMachineSpec> Callee<M> {
         // Offset from beginning of stackslot area.
         let stack_off = self.sized_stackslots[slot] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
+        if self.flags.enable_nixe_abi() {
+            return M::gen_nixe_frame_addr(
+                crate::nixe::TRANSFER_BYTES + u32::try_from(sp_off).unwrap(),
+                into_reg,
+            );
+        }
         M::gen_get_stack_addr(StackAMode::Slot(sp_off), into_reg)
     }
 
@@ -2212,8 +2230,32 @@ impl<M: ABIMachineSpec> Callee<M> {
         function_calls: FunctionCalls,
     ) -> CodegenResult<()> {
         let bytes = M::word_bytes();
-        let total_stacksize = self.stackslots_size + bytes * spillslots as u32;
         let mask = M::stack_align(self.call_conv) - 1;
+        if self.flags.enable_nixe_abi() {
+            let total_stacksize = u32::try_from(spillslots)
+                .ok()
+                .and_then(|slots| slots.checked_mul(bytes))
+                .and_then(|bytes| self.stackslots_size.checked_add(bytes))
+                .and_then(|bytes| checked_round_up(bytes, mask))
+                .ok_or(CodegenError::ImplLimitExceeded)?;
+            if function_calls != FunctionCalls::None || self.outgoing_args_size != 0 {
+                return Err(CodegenError::Unsupported(
+                    "Nixe ABI: backend-introduced calls are not supported".into(),
+                ));
+            }
+            if total_stacksize > crate::nixe::FRAME_BYTES - crate::nixe::TRANSFER_BYTES {
+                return Err(CodegenError::ImplLimitExceeded);
+            }
+            self.frame_layout = Some(FrameLayout {
+                word_bytes: bytes,
+                fixed_frame_storage_size: total_stacksize,
+                stackslots_size: self.stackslots_size,
+                function_calls,
+                ..FrameLayout::default()
+            });
+            return Ok(());
+        }
+        let total_stacksize = self.stackslots_size + bytes * spillslots as u32;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
         let frame_layout = M::compute_frame_layout(
             self.call_conv,
@@ -2255,6 +2297,9 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// This should include any stack frame or other setup necessary to use the
     /// other methods (`load_arg`, `store_retval`, and spillslot accesses.)
     pub fn gen_prologue(&self) -> SmallInstVec<M::I> {
+        if self.flags.enable_nixe_abi() {
+            return smallvec![];
+        }
         let frame_layout = self.frame_layout();
         let mut insts = smallvec![];
 
@@ -2326,6 +2371,10 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// emitting this in the lowering logic), because the epilogue code comes
     /// before the return and the two are likely closely related.
     pub fn gen_epilogue(&self) -> SmallInstVec<M::I> {
+        assert!(
+            !self.flags.enable_nixe_abi(),
+            "Nixe fragments cannot return"
+        );
         let frame_layout = self.frame_layout();
         let mut insts = smallvec![];
 
@@ -2421,6 +2470,15 @@ impl<M: ABIMachineSpec> Callee<M> {
         let sp_off = self.get_spillslot_offset(to_slot);
         trace!("gen_spill: {from_reg:?} into slot {to_slot:?} at offset {sp_off}");
 
+        if self.flags.enable_nixe_abi() {
+            return M::gen_store_base_offset(
+                M::nixe_frame_reg(),
+                i32::try_from(i64::from(crate::nixe::TRANSFER_BYTES) + sp_off).unwrap(),
+                Reg::from(from_reg),
+                ty,
+            );
+        }
+
         let from = StackAMode::Slot(sp_off);
         <M>::gen_store_stack(from, Reg::from(from_reg), ty)
     }
@@ -2433,6 +2491,15 @@ impl<M: ABIMachineSpec> Callee<M> {
         let sp_off = self.get_spillslot_offset(from_slot);
         trace!("gen_reload: {to_reg:?} from slot {from_slot:?} at offset {sp_off}");
 
+        if self.flags.enable_nixe_abi() {
+            return M::gen_load_base_offset(
+                to_reg.map(Reg::from),
+                M::nixe_frame_reg(),
+                i32::try_from(i64::from(crate::nixe::TRANSFER_BYTES) + sp_off).unwrap(),
+                ty,
+            );
+        }
+
         let from = StackAMode::Slot(sp_off);
         <M>::gen_load_stack(from, to_reg.map(Reg::from), ty)
     }
@@ -2444,9 +2511,14 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// set up by compiled code in stackslots allocated for that
     /// purpose.
     pub fn frame_slot_metadata(&self) -> MachBufferFrameLayout {
-        let frame_to_fp_offset = self.sp_to_fp_offset();
+        let nixe = self.flags.enable_nixe_abi();
+        let frame_to_fp_offset = if nixe { 0 } else { self.sp_to_fp_offset() };
         let mut stackslots = SecondaryMap::with_capacity(self.sized_stackslots.len());
-        let storage_area_base = self.frame_layout().outgoing_args_size;
+        let storage_area_base = if nixe {
+            crate::nixe::TRANSFER_BYTES
+        } else {
+            self.frame_layout().outgoing_args_size
+        };
         for (slot, storage_area_offset) in &self.sized_stackslots {
             stackslots[slot] = MachBufferStackSlot {
                 offset: storage_area_base.checked_add(*storage_area_offset).unwrap(),
@@ -2456,6 +2528,9 @@ impl<M: ABIMachineSpec> Callee<M> {
         MachBufferFrameLayout {
             frame_to_fp_offset,
             stackslots,
+            nixe_frame_size: nixe.then_some(
+                crate::nixe::TRANSFER_BYTES + self.frame_layout().fixed_frame_storage_size,
+            ),
         }
     }
 }

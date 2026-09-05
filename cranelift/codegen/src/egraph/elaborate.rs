@@ -559,7 +559,7 @@ impl<'a> Elaborator<'a> {
                     // placing too much register pressure on the entire
                     // function. This is modeled with the `.saturating_sub(1)`
                     // as the default if there's otherwise no maximum.
-                    let loop_hoist_level = arg_values
+                    let mut loop_hoist_level = arg_values
                         .iter()
                         .map(|&value| {
                             // Find the outermost loop level at which
@@ -581,6 +581,17 @@ impl<'a> Elaborator<'a> {
                         })
                         .max()
                         .unwrap_or(self.loop_stack.len().saturating_sub(1));
+                    // The Nixe root exists only for analysis, not execution.
+                    // Keep LICM within executable dominators: nested loops can
+                    // still hoist into outer loops or canonical ingress blocks.
+                    if !self.func.nixe_entries.is_empty() {
+                        while loop_hoist_level < self.loop_stack.len()
+                            && Some(self.loop_stack[loop_hoist_level].hoist_block)
+                                == self.func.layout.entry_block()
+                        {
+                            loop_hoist_level += 1;
+                        }
+                    }
                     trace!(
                         " -> loop hoist level: {:?}; cur loop depth: {:?}, loop_stack: {:?}",
                         loop_hoist_level,

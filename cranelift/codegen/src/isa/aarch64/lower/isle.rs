@@ -24,8 +24,8 @@ use crate::{
         ValueList, immediates::*, types::*,
     },
     isa::aarch64::abi::AArch64MachineDeps,
-    isa::aarch64::inst::SImm7Scaled,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
+    isa::aarch64::inst::{AMode, SImm7Scaled, xreg},
     machinst::{
         CallArgList, CallRetList, InstOutput, MachInst, VCodeConstant, VCodeConstantData,
         abi::ArgPair, ty_bits,
@@ -74,6 +74,18 @@ pub struct ExtendedValue {
 }
 
 impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
+    fn abi_slot_amode(&mut self, offset: i32) -> AMode {
+        if self.backend.flags.enable_nixe_abi() {
+            AMode::RegOffset {
+                rn: xreg(21),
+                off: i64::from(offset) + i64::from(crate::nixe::TRANSFER_BYTES),
+            }
+        } else {
+            AMode::SlotOffset {
+                off: i64::from(offset),
+            }
+        }
+    }
     isle_lower_prelude_methods!();
 
     fn gen_call_info(

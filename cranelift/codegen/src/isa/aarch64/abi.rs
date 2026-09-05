@@ -556,6 +556,20 @@ impl ABIMachineSpec for AArch64MachineDeps {
         spilltmp_reg()
     }
 
+    fn nixe_frame_reg() -> Reg {
+        xreg(21)
+    }
+
+    fn gen_nixe_frame_addr(offset: u32, into_reg: Writable<Reg>) -> Inst {
+        Inst::LoadAddr {
+            rd: into_reg,
+            mem: AMode::RegOffset {
+                rn: xreg(21),
+                off: i64::from(offset),
+            },
+        }
+    }
+
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Inst {
         let mem = AMode::RegOffset {
             rn: base,
@@ -1177,11 +1191,15 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
+        if flags.enable_nixe_abi() {
+            static MACHINE_ENV: MachineEnv = create_reg_env(true, true);
+            return &MACHINE_ENV;
+        }
         if flags.enable_pinned_reg() {
-            static MACHINE_ENV: MachineEnv = create_reg_env(true);
+            static MACHINE_ENV: MachineEnv = create_reg_env(true, false);
             &MACHINE_ENV
         } else {
-            static MACHINE_ENV: MachineEnv = create_reg_env(false);
+            static MACHINE_ENV: MachineEnv = create_reg_env(false, false);
             &MACHINE_ENV
         }
     }
@@ -1640,7 +1658,7 @@ const WINCH_CLOBBERS: PRegSet = winch_clobbers();
 const ALL_CLOBBERS: PRegSet = all_clobbers();
 const NO_CLOBBERS: PRegSet = PRegSet::empty();
 
-const fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
+const fn create_reg_env(enable_pinned_reg: bool, nixe: bool) -> MachineEnv {
     const fn preg(r: Reg) -> PReg {
         r.to_real_reg().unwrap().preg()
     }
@@ -1701,8 +1719,6 @@ const fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
         ],
         non_preferred_regs_by_class: [
             PRegSet::empty()
-                .with(preg(xreg(19)))
-                .with(preg(xreg(20)))
                 // x21 is pinned reg if enabled; we add to this list below if not.
                 .with(preg(xreg(22)))
                 .with(preg(xreg(23)))
@@ -1727,10 +1743,39 @@ const fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
         scratch_by_class: [None, None, None],
     };
 
+    if !nixe {
+        env.non_preferred_regs_by_class[0] = env.non_preferred_regs_by_class[0]
+            .with(preg(xreg(19)))
+            .with(preg(xreg(20)));
+    }
     if !enable_pinned_reg {
         debug_assert!(PINNED_REG == 21);
         env.non_preferred_regs_by_class[0].add(preg(xreg(PINNED_REG)));
     }
 
     env
+}
+
+#[cfg(test)]
+mod nixe_tests {
+    use super::*;
+    #[test]
+    fn nixe_register_pool_preserves_ordinary_allocation_policy() {
+        let nixe = create_reg_env(true, true);
+        let normal = create_reg_env(false, false);
+        for hw in 0..32 {
+            let reg = PReg::new(hw, RegClass::Int);
+            let contains = |env: &MachineEnv| {
+                env.preferred_regs_by_class[0].contains(reg)
+                    || env.non_preferred_regs_by_class[0].contains(reg)
+            };
+            assert_eq!(
+                contains(&nixe),
+                contains(&normal) && ![19, 20, 21].contains(&hw)
+            );
+            if [16, 17].contains(&hw) {
+                assert!(!contains(&nixe));
+            }
+        }
+    }
 }

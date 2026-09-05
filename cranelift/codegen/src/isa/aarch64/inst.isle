@@ -3997,9 +3997,12 @@
         (if-let new_offset (i32_checked_add x offset))
         (amode_no_more_iconst ty y new_offset))
 
+(decl abi_slot_amode (i32) AMode)
+(extern constructor abi_slot_amode abi_slot_amode)
+
 (rule 3
       (amode ty (stack_addr _ slot offset1) offset2)
-      (AMode.SlotOffset
+      (abi_slot_amode
        (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
 
 (attr amode_no_more_iconst (veri chain))
