@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt::Write as _;
 use std::mem;
-use target_lexicon::{PointerWidth, Triple};
+use target_lexicon::{Environment, PointerWidth, Triple};
 
 /// A builder for `ObjectModule`.
 pub struct ObjectBuilder {
@@ -74,7 +74,29 @@ impl ObjectBuilder {
         let architecture = match isa.triple().architecture {
             target_lexicon::Architecture::X86_32(_) => object::Architecture::I386,
             target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
-            target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
+            target_lexicon::Architecture::Arm(_) => {
+                if binary_format != object::BinaryFormat::Elf {
+                    return Err(ModuleError::Backend(anyhow!(
+                        "binary format {binary_format:?} is not supported for arm",
+                    )));
+                }
+
+                let mut e_flags = object::elf::EF_ARM_EABI_VER5;
+                if matches!(
+                    isa.triple().environment,
+                    Environment::Gnueabihf | Environment::Musleabihf
+                ) {
+                    e_flags |= object::elf::EF_ARM_ABI_FLOAT_HARD;
+                }
+
+                // ARM EABI version 5 is the standard for ARM Linux ELF objects.
+                file_flags = object::FileFlags::Elf {
+                    os_abi: object::elf::ELFOSABI_NONE,
+                    abi_version: 0,
+                    e_flags,
+                };
+                object::Architecture::Arm
+            }
             target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
             target_lexicon::Architecture::Riscv64(_) => {
                 if binary_format != object::BinaryFormat::Elf {
@@ -888,6 +910,16 @@ impl ObjectModule {
                 kind: RelocationKind::Relative,
                 encoding: RelocationEncoding::AArch64Call,
                 size: 26,
+            },
+            Reloc::Arm32Call => match self.object.format() {
+                // The classic arm32 backend emits A32 (ARM-mode) `bl`, so the
+                // call site must use the ARM call relocation `R_ARM_CALL`.
+                // Using the Thumb relocation `R_ARM_THM_PC22` here would make
+                // the linker patch the instruction as Thumb and corrupt it.
+                object::BinaryFormat::Elf => RelocationFlags::Elf {
+                    r_type: object::elf::R_ARM_CALL,
+                },
+                _ => unimplemented!("Arm32Call is not supported for this file format"),
             },
             Reloc::ElfX86_64TlsGd => {
                 assert_eq!(

@@ -5323,6 +5323,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "wast-arm-runtest"
+version = "48.0.0"
+dependencies = [
+ "anyhow",
+ "cranelift-codegen",
+ "cranelift-frontend",
+ "cranelift-module",
+ "cranelift-object",
+ "json-from-wast",
+ "serde",
+ "serde_json",
+ "target-lexicon",
+ "tempfile",
+ "wasmparser 0.253.0",
+ "wasmtime-environ",
+ "wasmtime-internal-cranelift",
+ "wast 253.0.0",
+ "wat",
+]
+
+[[package]]
 name = "wat"
 version = "1.258.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
