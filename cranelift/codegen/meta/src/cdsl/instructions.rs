@@ -6,6 +6,8 @@ use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::operands::Operand;
 use crate::cdsl::typevar::TypeVar;
 
+use crate::display_join::DisplayJoinedVecExt;
+
 pub(crate) type AllInstructions = Vec<Instruction>;
 
 pub(crate) struct InstructionGroupBuilder<'all_inst> {
@@ -102,8 +104,8 @@ impl fmt::Display for InstructionContent {
                 .iter()
                 .map(|op| op.name)
                 .collect::<Vec<_>>()
-                .join(", ");
-            fmt.write_str(&operands_out)?;
+                .display_join(", ");
+            operands_out.fmt(fmt)?;
             fmt.write_str(" = ")?;
         }
 
@@ -115,9 +117,9 @@ impl fmt::Display for InstructionContent {
                 .iter()
                 .map(|op| op.name)
                 .collect::<Vec<_>>()
-                .join(", ");
+                .display_join(", ");
             fmt.write_str(" ")?;
-            fmt.write_str(&operands_in)?;
+            operands_in.fmt(fmt)?;
         }
 
         Ok(())
