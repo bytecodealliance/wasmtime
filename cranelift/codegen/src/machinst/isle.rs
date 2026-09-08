@@ -223,8 +223,7 @@ macro_rules! isle_lower_prelude_methods {
                 .iter()
                 .skip(1)
                 .next()
-                .copied()
-                == Some(val);
+                == Some(&val);
             if is_match { Some(val) } else { None }
         }
 
