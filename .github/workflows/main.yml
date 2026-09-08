@@ -650,6 +650,8 @@ jobs:
           os: ubuntu-latest
           cross: true
           test: cross build
+          env:
+            RUSTFLAGS: -Alinker-messages
         - target: wasm32-wasip1
           os: ubuntu-latest
           test: cargo build --no-default-features --features compile,cranelift,all-arch
@@ -858,9 +860,7 @@ jobs:
     needs: determine
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    env:
-      QEMU_BUILD_VERSION: 10.0.3
-      SDE_BUILD_VERSION: 9.58.0-2025-06-16
+    env: ${{ matrix.env || fromJSON('{}') }}
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
@@ -926,14 +926,6 @@ jobs:
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
         echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
 
-        # QEMU emulation is not always the speediest, so total testing time
-        # goes down if we build the libs in release mode when running tests.
-        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
-
-        # See comments in the source for why we enable this during QEMU
-        # emulation.
-        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
-
         # See if qemu is already in the cache
         if [ -f ${{ runner.tool_cache }}/qemu/built ]; then
           exit 0
@@ -962,18 +954,6 @@ jobs:
         # Set up SDE as runner for x86_64 targets
         echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=${{ runner.tool_cache }}/sde/sde64 -future --" >> $GITHUB_ENV
 
-        # SDE emulation is very slow, so use release mode for better performance
-        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
-
-        # Enable environment variable to indicate SDE is being used
-        echo WASMTIME_TEST_SDE=1 >> $GITHUB_ENV
-
-        # Generic variable for skipping tests that are problematic under SDE (performance, compatibility, etc.)
-        echo WASMTIME_TEST_NO_SDE=1 >> $GITHUB_ENV
-
-        # Similar to QEMU, reduce memory usage during SDE emulation
-        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
-
         # See if SDE is already in the cache
         if [ -f ${{ runner.tool_cache }}/sde/sde64 ]; then
           exit 0
@@ -988,14 +968,6 @@ jobs:
 
         chmod +x ${{ runner.tool_cache }}/sde/sde64
       if: matrix.sde != ''
-
-    - name: Configure ASAN
-      run: |
-        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
-        echo CARGO_PROFILE_TEST_OPT_LEVEL=2 >> $GITHUB_ENV
-        echo RUSTFLAGS=-Zsanitizer=address >> $GITHUB_ENV
-        echo RUSTDOCFLAGS="-Zsanitizer=address -Copt-level=2 -Ccodegen-units=16" >> $GITHUB_ENV
-      if: ${{ contains(matrix.name, 'ASAN') }}
 
     # Record some CPU details; this is helpful information if tests fail due
     # to CPU-specific features.

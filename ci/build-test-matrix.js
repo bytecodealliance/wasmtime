@@ -94,6 +94,8 @@ const FAST_MATRIX = [
 //
 // * `rust` - the Rust version to install, and if unset this'll be set to
 //   `default`
+//
+// * `env` - environment variables to set for this job.
 const FULL_MATRIX = [
   ...FAST_MATRIX,
   {
@@ -115,6 +117,12 @@ const FULL_MATRIX = [
     "filter": "asan",
     "rust": "wasmtime-ci-pinned-nightly",
     "target": "x86_64-unknown-linux-gnu",
+    "env": {
+      "CARGO_PROFILE_DEV_OPT_LEVEL": 2,
+      "CARGO_PROFILE_TEST_OPT_LEVEL": 2,
+      "RUSTFLAGS": "-Zsanitizer=address",
+      "RUSTDOCFLAGS": "-Zsanitizer=address -Copt-level=2 -Ccodegen-units=16",
+    },
   },
   {
     "name": "Test Intel SDE",
@@ -135,6 +143,9 @@ const FULL_MATRIX = [
     "os": macos,
     "filter": "macos-arm64",
     "target": "aarch64-apple-darwin",
+    "env": {
+      "RUSTFLAGS": "-Alinker-messages",
+    },
   },
   {
     "name": "Test MSVC x86_64",
@@ -351,6 +362,37 @@ async function main() {
   for (let config of FULL_MATRIX) {
     if (config.rust === undefined) {
       config.rust = 'default';
+    }
+
+    if (config.qemu !== undefined) {
+      if (config.env === undefined)
+        config.env = {};
+      config.env.QEMU_BUILD_VERSION = "10.0.3";
+
+      // QEMU emulation is not always the speediest, so total testing time
+      // goes down if we build the libs in release mode when running tests.
+      config.env.CARGO_PROFILE_DEV_OPT_LEVEL = 2;
+      // See comments in the source for why we enable this during QEMU
+      // emulation.
+      config.env.WASMTIME_TEST_NO_HOG_MEMORY = 1;
+    }
+
+    if (config.sde !== undefined) {
+      if (config.env === undefined)
+        config.env = {};
+      config.env.SDE_BUILD_VERSION = "9.58.0-2025-06-16";
+
+      // SDE emulation is very slow, so use release mode for better performance
+      config.env.CARGO_PROFILE_DEV_OPT_LEVEL = 2;
+
+      // Enable environment variable to indicate SDE is being used
+      config.env.WASMTIME_TEST_SDE = 1;
+
+      // Generic variable for skipping tests that are problematic under SDE (performance, compatibility, etc.)
+      config.env.WASMTIME_TEST_NO_SDE = 1;
+
+      // Similar to QEMU, reduce memory usage during SDE emulation
+      config.env.WASMTIME_TEST_NO_HOG_MEMORY = 1;
     }
   }
 
