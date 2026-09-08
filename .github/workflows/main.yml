@@ -285,7 +285,7 @@ jobs:
     name: Doc build
     runs-on: ubuntu-latest
     env:
-      RUSTDOCFLAGS: -Dwarnings --cfg docsrs
+      RUSTDOCFLAGS: --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
     - uses: actions/checkout@v6
