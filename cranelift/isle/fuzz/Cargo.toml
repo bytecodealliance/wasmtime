@@ -9,6 +9,9 @@ rust-version.workspace = true
 [package.metadata]
 cargo-fuzz = true
 
+[lints]
+workspace = true
+
 [dependencies]
 env_logger = { workspace = true }
 cranelift-isle = { path = "../isle" }

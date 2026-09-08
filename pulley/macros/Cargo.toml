@@ -7,6 +7,9 @@ name = "pulley-macros"
 repository = "https://github.com/bytecodealliance/wasmtime/tree/main/pulley/macros"
 version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 syn = { workspace = true, features = ['full'] }
 quote = { workspace = true }

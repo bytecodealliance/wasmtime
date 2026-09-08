@@ -4,6 +4,9 @@ version = "0.1.0"
 edition.workspace = true
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 cranelift-isle = { path = "../../isle/", features = ["fancy-errors", "logging"] }
 cranelift-isle-veri-caching = { path = "../caching" }

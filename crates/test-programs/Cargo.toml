@@ -21,6 +21,5 @@ sha2 = { workspace = true }
 base64 = { workspace = true }
 wasip1 = { version = "1.0.0", default-features = true }
 wasip2 = "1.0.0"
-once_cell = "1.19.0"
 flate2 = "1.0.28"
 regex = { workspace = true }

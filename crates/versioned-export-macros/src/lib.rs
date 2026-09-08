@@ -18,7 +18,7 @@ fn version(value: impl std::fmt::Display) -> String {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    format!("{}_{}", value, version)
+    format!("{value}_{version}")
 }
 
 fn versioned_lit_str(value: impl std::fmt::Display) -> syn::LitStr {

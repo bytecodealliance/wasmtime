@@ -230,7 +230,7 @@ impl SolverRule {
     /// Build a rule that selects the solver backend for expansions with an
     /// explicit `solver_<name>` tag.
     fn solver_tag(solver_backend: SolverBackend) -> Self {
-        let tag = format!("solver_{}", solver_backend);
+        let tag = format!("solver_{solver_backend}");
         Self {
             predicate: ExpansionPredicate::Tagged(tag),
             solver_backend,
@@ -769,7 +769,7 @@ impl Runner {
                 // expansion that has no spec) is recorded and reported rather
                 // than aborting the whole run, so that one un-verifiable
                 // expansion does not hide coverage of all the others.
-                let expansion_log_dir = self.log_dir.join("expansions").join(format!("{:05}", i));
+                let expansion_log_dir = self.log_dir.join("expansions").join(format!("{i:05}"));
                 match self.verify_expansion(expansion, i, expansion_log_dir.clone(), &failures) {
                     Ok(report) => Ok(Some(report)),
                     Err(err) => {
@@ -1296,7 +1296,7 @@ impl Runner {
                 continue;
             }
 
-            let solution_log_dir = log_dir.join(format!("{:03}", i));
+            let solution_log_dir = log_dir.join(format!("{i:03}"));
             let verify_report = self
                 .verify_expansion_type_instantiation(
                     &conditions,

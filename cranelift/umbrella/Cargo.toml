@@ -7,10 +7,12 @@ license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift"
 repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
-readme = "README.md"
 keywords = ["compile", "compiler", "jit"]
 edition.workspace = true
 rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 cranelift-codegen = { workspace = true }

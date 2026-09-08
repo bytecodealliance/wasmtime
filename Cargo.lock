@@ -334,7 +334,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "wasmtime",
- "wasmtime-wasi",
 ]
 
 [[package]]
@@ -800,9 +799,7 @@ dependencies = [
  "smallvec 1.15.1",
  "target-lexicon 0.13.5",
  "thiserror 2.0.17",
- "toml",
  "wasmtime-internal-unwinder",
- "wat",
 ]
 
 [[package]]
@@ -1040,7 +1037,6 @@ dependencies = [
  "similar",
  "target-lexicon 0.13.5",
  "thiserror 2.0.17",
- "toml",
  "walkdir",
 ]
 
@@ -3774,7 +3770,6 @@ dependencies = [
  "flate2",
  "futures",
  "libc",
- "once_cell",
  "regex",
  "sha2",
  "url",

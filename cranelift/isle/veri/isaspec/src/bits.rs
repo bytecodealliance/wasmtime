@@ -36,8 +36,7 @@ impl Bits {
         for segment in &self.segments {
             let value = match segment {
                 Segment::Symbolic(name, _) => assignment.get(name).ok_or(format_err!(
-                    "missing assignment for symbolic segment: {}",
-                    name
+                    "missing assignment for symbolic segment: {name}",
                 ))?,
                 Segment::Constant(c, _) => c,
             };

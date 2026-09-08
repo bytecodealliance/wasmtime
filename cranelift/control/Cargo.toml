@@ -5,10 +5,12 @@ version = "0.137.0-dev"
 description = "White-box fuzz testing framework"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 keywords = ["fuzz", "test"]
 edition.workspace = true
 rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 arbitrary = { workspace = true, optional = true }

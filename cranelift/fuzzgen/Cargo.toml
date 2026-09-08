@@ -5,7 +5,6 @@ authors = ["The Wasmtime Project Developers"]
 description = "Cranelift module generator"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 publish = false

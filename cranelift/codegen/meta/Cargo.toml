@@ -5,7 +5,6 @@ version = "0.137.0-dev"
 description = "Metaprogram for cranelift-codegen code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 
