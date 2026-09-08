@@ -6,6 +6,9 @@
 
 pub mod commands;
 
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+pub(crate) mod code_builder;
+
 #[cfg(any(feature = "run", feature = "wizer"))]
 pub(crate) mod common;
 
