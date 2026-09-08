@@ -13,7 +13,7 @@ workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-wasmtime = { workspace = true, features = ['std', 'cranelift'] }
+wasmtime = { workspace = true, features = ['default'] }
 
 [features]
 build-plugins = []
