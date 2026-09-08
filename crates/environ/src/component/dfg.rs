@@ -31,6 +31,7 @@ use crate::component::*;
 use crate::error::Result;
 use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, Trap, WasmValType};
+use cranelift_entity::EntitySet;
 use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
 use info::LinearMemoryOptions;
@@ -143,7 +144,7 @@ pub struct ComponentDfg {
     ///
     /// Currently all side effects are either instantiating core wasm modules or
     /// declaring a resource. These side effects affect the dataflow processing
-    /// of this component by idnicating what order operations should be
+    /// of this component by indicating what order operations should be
     /// performed during instantiation.
     pub side_effects: Vec<SideEffect>,
 
@@ -151,8 +152,9 @@ pub struct ComponentDfg {
     /// this component.
     pub options: Intern<OptionsId, CanonicalOptions>,
 
-    /// The thread-transparency analysis for this component.
-    pub transparency: ThreadTransparency,
+    /// The set of fused adapters which may skip their
+    /// `{enter,exit}-sync-call` window.
+    pub transparent_adapters: EntitySet<AdapterId>,
 }
 
 /// Possible side effects that are possible with instantiating this component.

@@ -130,7 +130,6 @@ pub(super) fn run(
     // the root frame which are then used for recording the exports of the
     // component.
     inliner.result.num_runtime_component_instances += 1;
-    inliner.result.transparency.push_root_instance(index);
     let frame = InlinerFrame::new(index, result, ComponentClosure::default(), args, None);
     let resources_snapshot = types.resources_mut().clone();
     let mut frames = vec![(frame, resources_snapshot)];
@@ -186,8 +185,8 @@ struct Inliner<'a> {
 /// incrementally processed via the `initializers` list here. Note that the
 /// inliner frames are stored on the heap to avoid recursion based on user
 /// input.
-pub(super) struct InlinerFrame<'a> {
-    pub(super) instance: RuntimeComponentInstanceIndex,
+struct InlinerFrame<'a> {
+    instance: RuntimeComponentInstanceIndex,
 
     /// The remaining initializers to process when instantiating this component.
     initializers: std::slice::Iter<'a, LocalInitializer<'a>>,
@@ -216,7 +215,7 @@ pub(super) struct InlinerFrame<'a> {
     modules: PrimaryMap<ModuleIndex, ModuleDef<'a>>,
 
     // component model index spaces
-    pub(super) component_funcs: PrimaryMap<ComponentFuncIndex, ComponentFuncDef<'a>>,
+    component_funcs: PrimaryMap<ComponentFuncIndex, ComponentFuncDef<'a>>,
     module_instances: PrimaryMap<ModuleInstanceIndex, ModuleInstanceDef<'a>>,
     component_instances: PrimaryMap<ComponentInstanceIndex, ComponentInstanceDef<'a>>,
     components: PrimaryMap<ComponentIndex, ComponentDef<'a>>,
@@ -259,7 +258,7 @@ struct ComponentClosure<'a> {
 /// values and so this is used to ensure that we primarily only deal with
 /// individual functions and modules instead of synthetic instances.
 #[derive(Clone, PartialEq, Hash, Eq)]
-pub(super) struct ImportPath<'a> {
+struct ImportPath<'a> {
     index: ImportIndex,
     path: Vec<Cow<'a, str>>,
 }
@@ -269,7 +268,7 @@ pub(super) struct ImportPath<'a> {
 /// This is the "value" of an item defined within a component and is used to
 /// represent both imports and exports.
 #[derive(Clone)]
-pub(super) enum ComponentItemDef<'a> {
+enum ComponentItemDef<'a> {
     Component(ComponentDef<'a>),
     Instance(ComponentInstanceDef<'a>),
     Func(ComponentFuncDef<'a>),
@@ -278,7 +277,7 @@ pub(super) enum ComponentItemDef<'a> {
 }
 
 #[derive(Clone)]
-pub(super) enum ModuleDef<'a> {
+enum ModuleDef<'a> {
     /// A core wasm module statically defined within the original component.
     ///
     /// The `StaticModuleIndex` indexes into the `static_modules` map in the
@@ -310,7 +309,7 @@ enum ModuleInstanceDef<'a> {
 }
 
 #[derive(Clone)]
-pub(super) enum ComponentFuncDef<'a> {
+enum ComponentFuncDef<'a> {
     /// A compile-time builtin intrinsic.
     UnsafeIntrinsic(UnsafeIntrinsic),
 
@@ -329,7 +328,7 @@ pub(super) enum ComponentFuncDef<'a> {
 }
 
 #[derive(Clone)]
-pub(super) enum ComponentInstanceDef<'a> {
+enum ComponentInstanceDef<'a> {
     /// The `__wasmtime_intrinsics` instance that exports all of our
     /// compile-time builtin intrinsics.
     Intrinsics,
@@ -357,7 +356,7 @@ pub(super) enum ComponentInstanceDef<'a> {
 }
 
 #[derive(Clone)]
-pub(super) struct ComponentDef<'a> {
+struct ComponentDef<'a> {
     index: StaticComponentIndex,
     closure: ComponentClosure<'a>,
 }
@@ -438,11 +437,6 @@ impl<'a> Inliner<'a> {
         use LocalInitializer::*;
 
         let (frame, _) = frames.last_mut().unwrap();
-
-        self.result
-            .transparency
-            .process_initializer(types, frame, initializer);
-
         match initializer {
             // When a component imports an item the actual definition of the
             // item is looked up here (not at runtime) via its name. The
@@ -1303,18 +1297,13 @@ impl<'a> Inliner<'a> {
                     self.result.num_runtime_component_instances,
                 );
                 self.result.num_runtime_component_instances += 1;
-                let args = args
-                    .iter()
-                    .map(|(name, item)| Ok((*name, frame.item(*item, types)?)))
-                    .collect::<Result<HashMap<_, _>>>()?;
-
-                self.result.transparency.push_instance(index, &args);
-
                 let frame = InlinerFrame::new(
                     index,
                     &self.nested_components[component.index],
                     component.closure.clone(),
-                    args,
+                    args.iter()
+                        .map(|(name, item)| Ok((*name, frame.item(*item, types)?)))
+                        .collect::<Result<_>>()?,
                     Some(*ty),
                 );
                 return Ok(Some(frame));

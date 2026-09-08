@@ -1071,10 +1071,14 @@ async fn async_call_stack_omits_transparent_adapters() -> Result<()> {
         config.wasm_component_model_async(true);
         let engine = Engine::new(&config)?;
 
-        let taint = if taint {
-            "(core func $unused (canon context.get i32 0))"
+        let (taint_canon, taint_import, taint_arg) = if taint {
+            (
+                r#"(core func $ctx (canon context.get i32 0))"#,
+                r#"(import "" "ctx" (func $ctx (result i32)))"#,
+                r#"(export "ctx" (func $ctx))"#,
+            )
         } else {
-            ""
+            ("", "", "")
         };
 
         let component = Component::new(
@@ -1101,13 +1105,14 @@ async fn async_call_stack_omits_transparent_adapters() -> Result<()> {
             ;; thread-transparent -- unless the taint below is present.
             (component $Mid
                 (import "a" (func $a))
-                {taint}
+                {taint_canon}
                 (core func $a (canon lower (func $a)))
                 (core module $m
                     (import "" "a" (func $a))
+                    {taint_import}
                     (func (export "a") call $a))
                 (core instance $m (instantiate $m
-                    (with "" (instance (export "a" (func $a))))))
+                    (with "" (instance (export "a" (func $a)) {taint_arg}))))
                 (func (export "a") (canon lift (core func $m "a")))
             )
 

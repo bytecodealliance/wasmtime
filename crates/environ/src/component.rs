@@ -69,11 +69,15 @@ mod compiler;
 #[cfg(feature = "compile")]
 pub mod dfg;
 #[cfg(feature = "compile")]
+mod thread_transparency;
+#[cfg(feature = "compile")]
 mod translate;
 #[cfg(feature = "compile")]
 mod types_builder;
 #[cfg(feature = "compile")]
 pub use self::compiler::*;
+#[cfg(feature = "compile")]
+pub use self::thread_transparency::*;
 #[cfg(feature = "compile")]
 pub use self::translate::*;
 #[cfg(feature = "compile")]

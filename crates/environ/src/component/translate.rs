@@ -23,8 +23,6 @@ use wasmparser::{Chunk, ComponentExternName, Encoding, Parser, Payload, Validato
 mod adapt;
 pub use self::adapt::*;
 mod inline;
-mod thread_transparency;
-pub use self::thread_transparency::ThreadTransparency;
 
 /// Structure used to translate a component and parse it.
 pub struct Translator<'a, 'data> {
@@ -545,6 +543,11 @@ impl<'a, 'data> Translator<'a, 'data> {
             &self.static_modules,
             &self.static_components,
         )?;
+
+        // Now that inlining has finished and the dataflow graph is complete,
+        // determine which fused adapters can skip their
+        // `{enter,exit}-sync-call` calls.
+        component.transparent_adapters = transparent_adapters(&component, self.types.types());
 
         self.partition_adapter_modules(&mut component);
 
