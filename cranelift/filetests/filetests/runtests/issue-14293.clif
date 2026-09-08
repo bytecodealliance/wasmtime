@@ -1,0 +1,111 @@
+test interpret
+test run
+set opt_level=speed_and_size
+set enable_llvm_abi_extensions=true
+set enable_multi_ret_implicit_sret=true
+target x86_64
+target aarch64
+
+function %a(f64, i8, i16x8, i16x8, i128, i32, i64 sext, f32, i16, i64x2, i16, f64, f64, f64, f64, f64) -> f64, i64x2, i64x2, i64x2, i64x2, i64x2, i64x2, i64x2, i64x2, i64x2, i64x2, i64, i64, i64, i64 system_v {
+    ss0 = explicit_slot 32, align = 1024
+    ss1 = explicit_slot 32, align = 1024
+    ss2 = explicit_slot 32, align = 1024
+    sig0 = (f32) -> f32 system_v
+    sig1 = (f64) -> f64 system_v
+    sig2 = (f32) -> f32 system_v
+    sig3 = (f64) -> f64 system_v
+    sig4 = (f32) -> f32 system_v
+    sig5 = (f64) -> f64 system_v
+    fn0 = %CeilF32 sig0
+    fn1 = %CeilF64 sig1
+    fn2 = %FloorF32 sig2
+    fn3 = %FloorF64 sig3
+    fn4 = %TruncF32 sig4
+    fn5 = %TruncF64 sig5
+    const0 = 0xffffff20202020ff2020202020202020
+    const1 = 0x202020202020202020202020202020ff
+
+block0(v0: f64, v1: i8, v2: i16x8, v3: i16x8, v4: i128, v5: i32, v6: i64, v7: f32, v8: i16, v9: i64x2, v10: i16, v11: f64, v12: f64, v13: f64, v14: f64, v15: f64):
+    v61 -> v5
+    v57 -> v8
+    v85 -> v9
+    v40 -> v10
+    v25 = iconst.i8 32
+    v26 = iconst.i8 32
+    v27 = vconst.i16x8 const0
+    v28 = vconst.i16x8 const1
+    v29 = iconst.i8 0
+    v30 = iconst.i16 0
+    v31 = iconst.i32 0
+    v32 = iconst.i64 0
+    v33 = uextend.i128 v32  ; v32 = 0
+    v34 = stack_addr.i64 ss0
+    store notrap v33, v34
+    v35 = stack_addr.i64 ss0+16
+    store notrap v33, v35
+    v36 = stack_addr.i64 ss1
+    store notrap v33, v36
+    v37 = stack_addr.i64 ss1+16
+    store notrap v33, v37
+    v38 = stack_addr.i64 ss2
+    store notrap v33, v38
+    v39 = stack_addr.i64 ss2+16
+    store notrap v33, v39
+    jump block1(v6, v13, v6)
+
+block1(v16: i64, v17: f64, v18: i64):
+    v84 -> v17
+    jump block2(v18, v18, v18)
+
+block2(v19: i64, v20: i64, v21: i64):
+    jump block3(v21, v21, v21)
+
+block3(v22: i64, v23: i64, v24: i64):
+    v41, v42 = smul_overflow.i16 v40, v40
+    v43 = ushr v24, v24
+    v44 = ushr v43, v43
+    v45 = ushr v44, v44
+    v46 = ushr v45, v45
+    v47 = ushr v46, v46
+    v48 = ushr v47, v47
+    v49 = ushr v48, v48
+    v50 = ushr v49, v49
+    v51 = ushr v50, v50
+    v52 = ushr v51, v51
+    v53 = ushr v52, v52
+    v54 = ushr v53, v53
+    v55 = ushr v54, v54
+    v56 = ushr v55, v55
+    v86 = iconst.i16 0
+    v87 = iconst.i16 1
+    v88 = icmp eq v41, v86  ; v86 = 0
+    v89 = select v88, v87, v41  ; v87 = 1
+    v58 = udiv.i16 v57, v89
+    v59 = ctz v56
+    v60 = ctz v59
+    v62 = bmask.i32 v61
+    v63 = ctz v60
+    v64 = ctz v63
+    v65 = ctz v64
+    v66 = ctz v65
+    v67 = ctz v66
+    v68 = ctz v67
+    v69 = ctz v68
+    v70 = ctz v69
+    v71 = ctz v70
+    v72 = ctz v71
+    v73 = ctz v72
+    v74 = ctz v73
+    v75 = ctz v74
+    v76 = ctz v75
+    v77 = ctz v76
+    v78 = ctz v77
+    v79 = ctz v78
+    v80 = ctz v79
+    v81 = ctz v80
+    v82 = ctz v81
+    v83 = ctz v82
+    return v84, v85, v85, v85, v85, v85, v85, v85, v85, v85, v85, v83, v83, v83, v83
+}
+
+; run: %a(0x1.0202020202020p-509, 32, 0xffff2020202020202020202020202020, 0x20202020202020ffffffffff20202020, -1162422913960926430029603821343203296, 538976288, 2314886492352151551, 0x1.404040p-63, 8224, 0x20202020202020202020202020202020, 8192, 0.0, 0.0, 0.0, 0.0, 0.0) == [0.0, 0x20202020202020202020202020202020, 0x20202020202020202020202020202020, 0x20202020202020202020202020202020, 0x20202020202020202020202020202020, 0x20202020202020202020202020202020, 0x20202020202020202020202020202020, 0x20202020202020202020202020202020, 0x20202020202020202020202020202020, 0x20202020202020202020202020202020, 0x20202020202020202020202020202020, 1, 1, 1, 1]
