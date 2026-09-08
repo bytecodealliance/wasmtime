@@ -1224,7 +1224,13 @@ impl<T> StoreContextMut<'_, T> {
         trap_on_idle: bool,
     ) -> Result<R> {
         debug_assert!(self.0.concurrency_support());
-        check_recursive_run();
+        let already_running = self
+            .0
+            .concurrent_state_mut_already_forced_current_thread()
+            .event_loop_running;
+        if already_running {
+            bail!("Recursive `StoreContextMut::run_concurrent` calls not supported")
+        }
         let token = StoreToken::new(self.as_context_mut());
 
         struct Dropper<'a, T: 'static, V> {
@@ -6099,16 +6105,6 @@ fn check_ambient_store(id: StoreId) {
 
         if !matched {
             panic!("{message}")
-        }
-    });
-}
-
-/// Assert that `StoreContextMut::run_concurrent` has not been called from
-/// within an store's event loop.
-fn check_recursive_run() {
-    tls::try_get(|store| {
-        if !matches!(store, tls::TryGet::None) {
-            panic!("Recursive `StoreContextMut::run_concurrent` calls not supported")
         }
     });
 }
