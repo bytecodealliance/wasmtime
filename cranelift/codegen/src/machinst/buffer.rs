@@ -208,12 +208,14 @@ use crate::machinst::{
 use crate::trace;
 use crate::{MachInstEmitState, ir};
 use crate::{VCodeConstantData, timing};
+use alloc::boxed::Box;
 use alloc::collections::BinaryHeap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::mem;
 use core::ops::Range;
+use core::ops::{Deref, DerefMut};
 use cranelift_control::ControlPlane;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use smallvec::SmallVec;
@@ -266,35 +268,29 @@ enum ForceVeneers {
 /// likely fine as long as it is stack-allocated for function emission then
 /// thrown away; but beware if many buffer objects are retained persistently.
 pub struct MachBuffer<I: VCodeInst> {
-    /// The buffer contents, as raw bytes.
-    data: SmallVec<[u8; 1024]>,
+    // --- machine-code data and metadata:
+    //
+    /// Data shared between the unfinalized and finalized MachBuffers.
+    inner: Box<MachBufferInner>,
+
     /// The required alignment of this buffer.
     min_alignment: u32,
     /// Any relocations referring to this code. Note that only *external*
     /// relocations are tracked here; references to labels within the buffer are
     /// resolved before emission.
+    ///
+    /// Rewritten into `FinalizedMachReloc` during finalization.
     relocs: SmallVec<[MachReloc; 16]>,
-    /// Any trap records referring to this code.
-    traps: SmallVec<[MachTrap; 16]>,
-    /// Any call site records referring to this code.
-    call_sites: SmallVec<[MachCallSite; 16]>,
-    /// Any patchable call site locations.
-    patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
     /// Any exception-handler records referred to at call sites.
+    ///
+    /// Rewritten into `FinalizedMachExceptionhandler` during
+    /// finalization.
     exception_handlers: SmallVec<[MachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc<Stencil>; 64]>,
-    /// Any debug tags referring to this code.
-    debug_tags: Vec<MachDebugTags>,
-    /// Pool of debug tags referenced by `MachDebugTags` entries.
-    debug_tag_pool: Vec<DebugTag>,
-    /// Any user stack maps for this code.
-    ///
-    /// Each entry is an `(offset, span, stack_map)` triple. Entries are sorted
-    /// by code offset, and each stack map covers `span` bytes on the stack.
-    user_stack_maps: SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]>,
-    /// Any unwind info at a given location.
-    unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
+
+    // --- emission-pass state:
+    //
     /// The current source location in progress (after `start_srcloc()` and
     /// before `end_srcloc()`).  This is a (start_offset, src_loc) tuple.
     cur_srcloc: Option<(CodeOffset, RelSourceLoc)>,
@@ -356,33 +352,94 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Indicates when a patchable region is currently open, to guard that it's
     /// not possible to nest patchable regions.
     open_patchable: bool,
+}
+
+/// Bulk data that is common between `MachBuffer` and
+/// `MachBufferFinalized`.
+///
+/// The goal is to indirect the large allocations (`SmallVec`s) so
+/// that we don't move a lot of memory during compilation.
+///
+/// The two named types differ in that `MachBufferFinalized` contains
+/// different forms of some of the fields of the `MachBuffer` that
+/// have been rewritten (see `MachBuffer::finish()`) -- this is not
+/// just typestate. (Note that `MachBufferFinalized` is also
+/// parameterized on `CompilePhase` which *is* typestate and is used
+/// to keep relative/absolute offsets straight.)
+///
+/// However, many of the fields are either moved over wholesale or
+/// patched then moved over (data). We put these fields in
+/// `MachBufferInner`, hold that shared data in a box so that
+/// finalization can just move a pointer, and then impl `Deref` on the
+/// two `MachBuffer` variants so accesses to these fields are
+/// transparent.
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct MachBufferInner {
+    /// The buffer contents, as raw bytes.
+    pub(crate) data: SmallVec<[u8; 1024]>,
+    /// Any trap records referring to this code.
+    pub(crate) traps: SmallVec<[MachTrap; 16]>,
+    /// Any call site records referring to this code.
+    pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
+    /// Any patchable call site locations.
+    pub(crate) patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
+    /// Any debug tags referring to this code.
+    pub(crate) debug_tags: Vec<MachDebugTags>,
+    /// Pool of debug tags referenced by `MachDebugTags` entries.
+    pub(crate) debug_tag_pool: Vec<DebugTag>,
+    /// Any user stack maps for this code.
+    ///
+    /// Each entry is an `(offset, span, stack_map)` triple. Entries are sorted
+    /// by code offset, and each stack map covers `span` bytes on the stack.
+    pub(crate) user_stack_maps: SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]>,
+    /// Any unwind info at a given location.
+    pub(crate) unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
     /// Stack frame layout metadata. If provided for a MachBuffer
     /// containing a function body, this allows interpretation of
     /// runtime state given a view of an active stack frame.
-    frame_layout: Option<MachBufferFrameLayout>,
+    pub(crate) frame_layout: Option<MachBufferFrameLayout>,
+}
+
+impl<I: VCodeInst> Deref for MachBuffer<I> {
+    type Target = MachBufferInner;
+    fn deref(&self) -> &Self::Target {
+        &*self.inner
+    }
+}
+impl<I: VCodeInst> DerefMut for MachBuffer<I> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.inner
+    }
+}
+impl<P: CompilePhase> Deref for MachBufferFinalized<P> {
+    type Target = MachBufferInner;
+    fn deref(&self) -> &Self::Target {
+        &*self.inner
+    }
+}
+impl<P: CompilePhase> DerefMut for MachBufferFinalized<P> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.inner
+    }
 }
 
 impl MachBufferFinalized<Stencil> {
     /// Get a finalized machine buffer by applying the function's base source location.
     pub fn apply_base_srcloc(self, base_srcloc: SourceLoc) -> MachBufferFinalized<Final> {
         MachBufferFinalized {
-            data: self.data,
+            inner: self.inner,
             relocs: self.relocs,
-            traps: self.traps,
-            call_sites: self.call_sites,
-            patchable_call_sites: self.patchable_call_sites,
             exception_handlers: self.exception_handlers,
             srclocs: self
                 .srclocs
                 .into_iter()
                 .map(|srcloc| srcloc.apply_base_srcloc(base_srcloc))
                 .collect(),
-            debug_tags: self.debug_tags,
-            debug_tag_pool: self.debug_tag_pool,
-            user_stack_maps: self.user_stack_maps,
-            unwind_info: self.unwind_info,
             alignment: self.alignment,
-            frame_layout: self.frame_layout,
             nop_units: self.nop_units,
         }
     }
@@ -396,37 +453,16 @@ impl MachBufferFinalized<Stencil> {
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 pub struct MachBufferFinalized<T: CompilePhase> {
-    /// The buffer contents, as raw bytes.
-    pub(crate) data: SmallVec<[u8; 1024]>,
+    /// The raw data and finalization-invariant metadata attached to it.
+    pub(crate) inner: Box<MachBufferInner>,
     /// Any relocations referring to this code. Note that only *external*
     /// relocations are tracked here; references to labels within the buffer are
     /// resolved before emission.
     pub(crate) relocs: SmallVec<[FinalizedMachReloc; 16]>,
-    /// Any trap records referring to this code.
-    pub(crate) traps: SmallVec<[MachTrap; 16]>,
-    /// Any call site records referring to this code.
-    pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
-    /// Any patchable call site locations referring to this code.
-    pub(crate) patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
     /// Any exception-handler records referred to at call sites.
     pub(crate) exception_handlers: SmallVec<[FinalizedMachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
     pub(crate) srclocs: SmallVec<[T::MachSrcLocType; 64]>,
-    /// Any debug tags referring to this code.
-    pub(crate) debug_tags: Vec<MachDebugTags>,
-    /// Pool of debug tags referenced by `MachDebugTags` entries.
-    pub(crate) debug_tag_pool: Vec<DebugTag>,
-    /// Any user stack maps for this code.
-    ///
-    /// Each entry is an `(offset, span, stack_map)` triple. Entries are sorted
-    /// by code offset, and each stack map covers `span` bytes on the stack.
-    pub(crate) user_stack_maps: SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]>,
-    /// Stack frame layout metadata. If provided for a MachBuffer
-    /// containing a function body, this allows interpretation of
-    /// runtime state given a view of an active stack frame.
-    pub(crate) frame_layout: Option<MachBufferFrameLayout>,
-    /// Any unwind info at a given location.
-    pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
     /// The required alignment of this buffer.
     pub alignment: u32,
     /// The means by which to NOP out patchable call sites.
@@ -501,19 +537,23 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Create a new section, known to start at `start_offset` and with a size limited to
     /// `length_limit`.
     pub fn new() -> MachBuffer<I> {
-        MachBuffer {
+        let inner = Box::new(MachBufferInner {
             data: SmallVec::new(),
-            min_alignment: I::function_alignment().minimum,
-            relocs: SmallVec::new(),
             traps: SmallVec::new(),
             call_sites: SmallVec::new(),
             patchable_call_sites: SmallVec::new(),
-            exception_handlers: SmallVec::new(),
-            srclocs: SmallVec::new(),
             debug_tags: vec![],
             debug_tag_pool: vec![],
             user_stack_maps: SmallVec::new(),
             unwind_info: SmallVec::new(),
+            frame_layout: None,
+        });
+        MachBuffer {
+            inner,
+            min_alignment: I::function_alignment().minimum,
+            relocs: SmallVec::new(),
+            exception_handlers: SmallVec::new(),
+            srclocs: SmallVec::new(),
             cur_srcloc: None,
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
@@ -529,7 +569,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             constants: Default::default(),
             used_constants: Default::default(),
             open_patchable: false,
-            frame_layout: None,
         }
     }
 
@@ -1236,14 +1275,14 @@ impl<I: VCodeInst> MachBuffer<I> {
                         let off_before_edit = self.cur_offset();
                         let prev_b = self.latest_branches.last_mut().unwrap();
                         let not_inverted = SmallVec::from(
-                            &self.data[(prev_b.start as usize)..(prev_b.end as usize)],
+                            &self.inner.data[(prev_b.start as usize)..(prev_b.end as usize)],
                         );
 
                         // Low-level edit: replaces bytes of branch with
                         // inverted form. cur_off remains the same afterward, so
                         // we do not need to modify label data structures.
-                        self.data.truncate(prev_b.start as usize);
-                        self.data.extend_from_slice(&data[..]);
+                        self.inner.data.truncate(prev_b.start as usize);
+                        self.inner.data.extend_from_slice(&data[..]);
 
                         // Save the original code as the inversion of the
                         // inverted branch, in case we later edit this branch
@@ -1664,19 +1703,11 @@ impl<I: VCodeInst> MachBuffer<I> {
         srclocs.sort_by_key(|entry| entry.start);
 
         MachBufferFinalized {
-            data: self.data,
+            inner: self.inner,
             relocs: finalized_relocs,
-            traps: self.traps,
-            call_sites: self.call_sites,
-            patchable_call_sites: self.patchable_call_sites,
             exception_handlers: finalized_exception_handlers,
             srclocs,
-            debug_tags: self.debug_tags,
-            debug_tag_pool: self.debug_tag_pool,
-            user_stack_maps: self.user_stack_maps,
-            unwind_info: self.unwind_info,
             alignment,
-            frame_layout: self.frame_layout,
             nop_units: I::gen_nop_units(),
         }
     }
@@ -1743,8 +1774,8 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add a trap record at the current offset.
     pub fn add_trap(&mut self, code: TrapCode) {
-        self.traps.push(MachTrap {
-            offset: self.data.len() as CodeOffset,
+        self.inner.traps.push(MachTrap {
+            offset: self.inner.data.len() as CodeOffset,
             code,
         });
     }
@@ -1766,8 +1797,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         let end = u32::try_from(self.exception_handlers.len()).unwrap();
         let exception_handler_range = start..end;
 
-        self.call_sites.push(MachCallSite {
-            ret_addr: self.data.len() as CodeOffset,
+        self.inner.call_sites.push(MachCallSite {
+            ret_addr: self.inner.data.len() as CodeOffset,
             frame_offset,
             exception_handler_range,
         });
@@ -1778,7 +1809,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// specifies how to NOP it out, and we carry that information to
     /// the finalized Machbuffer.
     pub fn add_patchable_call_site(&mut self, len: u32) {
-        self.patchable_call_sites.push(MachPatchableCallSite {
+        self.inner.patchable_call_sites.push(MachPatchableCallSite {
             ret_addr: self.cur_offset(),
             len,
         });
@@ -1786,7 +1817,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add an unwind record at the current offset.
     pub fn add_unwind(&mut self, unwind: UnwindInst) {
-        self.unwind_info.push((self.cur_offset(), unwind));
+        self.inner.unwind_info.push((self.cur_offset(), unwind));
     }
 
     /// Set the `SourceLoc` for code from this offset until the offset at the
@@ -1867,7 +1898,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         let start = u32::try_from(self.debug_tag_pool.len()).unwrap();
         self.debug_tag_pool.extend(tags.iter().cloned());
         let end = u32::try_from(self.debug_tag_pool.len()).unwrap();
-        self.debug_tags.push(MachDebugTags {
+        self.inner.debug_tags.push(MachDebugTags {
             offset: self.cur_offset(),
             pos,
             range: start..end,
