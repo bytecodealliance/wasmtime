@@ -501,10 +501,7 @@ where
         headers,
         body,
     };
-    let res = cx
-        .table
-        .push(res)
-        .context("failed to push response to table")?;
+    let res = cx.table.push(res)?;
     Ok((res, body_result))
 }
 
