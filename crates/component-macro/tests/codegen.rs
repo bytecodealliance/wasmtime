@@ -1086,6 +1086,31 @@ mod named_imports {
             }
         }
     }
+
+    mod trappable2 {
+        pub struct ErrorA;
+        pub struct ErrorB;
+        wasmtime::component::bindgen!({
+            inline: "
+                package test:collision;
+                interface a { enum error { failed } }
+                interface b { enum error { failed } }
+                interface combined {
+                    use a.{error as error-a};
+                    use b.{error as error-b};
+                    first: func() -> result<_, error-a>;
+                    second: func() -> result<_, error-b>;
+                }
+                world test { import combined; }
+            ",
+            imports: { default: trappable },
+            named_imports: { "test:collision/combined": usize },
+            trappable_error_type: {
+                "test:collision/a.error" => ErrorA,
+                "test:collision/b.error" => ErrorB,
+            },
+        });
+    }
 }
 
 mod include_component_type {
