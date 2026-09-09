@@ -77,7 +77,7 @@ mod types_builder;
 #[cfg(feature = "compile")]
 pub use self::compiler::*;
 #[cfg(feature = "compile")]
-pub use self::thread_transparency::*;
+pub use self::thread_transparency::transparent_adapters;
 #[cfg(feature = "compile")]
 pub use self::translate::*;
 #[cfg(feature = "compile")]

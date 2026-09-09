@@ -18,11 +18,11 @@
 //! their imports and then generating a core wasm module to implement all of
 //! that.
 
-use crate::component::dfg::CoreDef;
+use crate::component::dfg::{AdapterId, ComponentDfg, CoreDef};
 use crate::component::{
-    Adapter, AdapterOptions as AdapterOptionsDfg, CanonicalAbiInfo, ComponentTypesBuilder,
-    FlatType, InterfaceType, RuntimeComponentInstanceIndex, StringEncoding, Transcode,
-    TypeFuncIndex, UnsafeIntrinsic,
+    AdapterOptions as AdapterOptionsDfg, CanonicalAbiInfo, ComponentTypesBuilder, FlatType,
+    InterfaceType, RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
+    UnsafeIntrinsic,
 };
 use crate::fact::transcode::Transcoder;
 use crate::prelude::*;
@@ -129,7 +129,7 @@ struct AdapterData {
     /// thread state that `enter-sync-call`/`exit-sync-call` maintain, meaning
     /// that pair can be omitted entirely.
     ///
-    /// See `component::translate::ThreadTransparency` for details.
+    /// See `crates/environ/src/component/thread_transparency.rs` for details.
     thread_transparent: bool,
 }
 
@@ -305,12 +305,12 @@ impl<'a> Module<'a> {
     /// Registers a new adapter within this adapter module.
     ///
     /// The `name` provided is the export name of the adapter from the final
-    /// module, and `adapter` contains all metadata necessary for compilation.
-    ///
-    /// The `thread_transparent` flag indicates that nothing this adapter can
-    /// reach is able to observe the thread state that `enter-sync-call` and
-    /// `exit-sync-call` maintain, allowing that pair to be skipped.
-    pub fn adapt(&mut self, name: &str, adapter: &Adapter, thread_transparent: bool) {
+    /// module, and `adapter` indexes into `component` for all the metadata
+    /// necessary for compilation.
+    pub fn adapt(&mut self, name: &str, component: &ComponentDfg, adapter: AdapterId) {
+        let thread_transparent = component.transparent_adapters.contains(adapter);
+        let adapter = &component.adapters[adapter];
+
         // Import any items required by the various canonical options
         // (memories, reallocs, etc)
         let mut lift = self.import_options(adapter.lift_ty, &adapter.lift_options);

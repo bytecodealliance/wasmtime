@@ -36,7 +36,7 @@ use cranelift_entity::EntitySet;
 
 /// Something a component instance makes callable by its core Wasm instances.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum CoreCallable {
+enum CoreCallable {
     /// A `canon lower` of a function imported from the host.
     ///
     /// The host can do anything at all, including reading and writing the
@@ -65,7 +65,7 @@ pub enum CoreCallable {
 impl CoreCallable {
     /// Can calling this reach code that reads or writes component-model thread
     /// state?
-    pub fn may_touch_thread_state(self) -> bool {
+    fn may_touch_thread_state(self) -> bool {
         match self {
             // The host is unconstrained.
             CoreCallable::HostImport => true,
@@ -90,17 +90,17 @@ impl CoreCallable {
 /// Everything about one fused adapter that bears on whether it can skip its
 /// `{enter,exit}-sync-call` window.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct AdapterFacts {
+struct AdapterFacts {
     /// The component instance whose core Wasm this adapter calls into, i.e.
     /// the instance that did the `canon lift`.
-    pub callee: RuntimeComponentInstanceIndex,
+    callee: RuntimeComponentInstanceIndex,
 
     /// Whether either side of this adapter is `async` in either its canonical
     /// options or function signature.
-    pub any_async: bool,
+    any_async: bool,
 
     /// Whether either function signature mentions a handle.
-    pub any_handle: bool,
+    any_handle: bool,
 }
 
 /// A builder for a `ThreadTransparency`.
@@ -108,21 +108,21 @@ pub struct AdapterFacts {
 /// Accumulates the observations that ultimately produce the
 /// `ThreadTransparency` analysis.
 #[derive(Default)]
-pub struct ThreadTransparencyBuilder {
+struct ThreadTransparencyBuilder {
     /// The component instances observed to be able to touch thread state.
     opaque: EntitySet<RuntimeComponentInstanceIndex>,
 }
 
 impl ThreadTransparencyBuilder {
     /// Record that `instance` makes `callable` available to its core Wasm.
-    pub fn observe(&mut self, instance: RuntimeComponentInstanceIndex, callable: CoreCallable) {
+    fn observe(&mut self, instance: RuntimeComponentInstanceIndex, callable: CoreCallable) {
         if callable.may_touch_thread_state() {
             self.opaque.insert(instance);
         }
     }
 
     /// Finish observing and produce the queryable analysis results.
-    pub fn finish(self) -> ThreadTransparency {
+    fn finish(self) -> ThreadTransparency {
         ThreadTransparency {
             opaque: self.opaque,
         }
@@ -130,7 +130,7 @@ impl ThreadTransparencyBuilder {
 }
 
 /// A completed thread-transparency analysis, ready to be queried.
-pub struct ThreadTransparency {
+struct ThreadTransparency {
     /// The component instances that can touch thread state.
     opaque: EntitySet<RuntimeComponentInstanceIndex>,
 }
@@ -138,7 +138,7 @@ pub struct ThreadTransparency {
 impl ThreadTransparency {
     /// May the adapter described by `facts` omit its `{enter,exit}-sync-call`
     /// window?
-    pub fn adapter_is_transparent(&self, facts: AdapterFacts) -> bool {
+    fn adapter_is_transparent(&self, facts: AdapterFacts) -> bool {
         // Async adapters genuinely need thread state of their own.
         if facts.any_async {
             return false;
@@ -164,9 +164,8 @@ pub fn transparent_adapters(
 
     // Observe canonical built-ins.
     for (_, (_, trampoline)) in dfg.trampolines.iter() {
-        if let Some((instance, callable)) = trampoline_callable(dfg, trampoline) {
-            builder.observe(instance, callable);
-        }
+        let (instance, callable) = trampoline_callable(dfg, trampoline);
+        builder.observe(instance, callable);
     }
 
     // Observe fused adapters.
@@ -248,19 +247,15 @@ fn core_def_callable(def: &CoreDef) -> CoreCallable {
 }
 
 /// Classify a trampoline, and identify the component instance that declared it.
-///
-/// Returns `None` for trampolines that no component instance owns.
 fn trampoline_callable(
     dfg: &ComponentDfg,
     trampoline: &Trampoline,
-) -> Option<(RuntimeComponentInstanceIndex, CoreCallable)> {
+) -> (RuntimeComponentInstanceIndex, CoreCallable) {
     use Trampoline::*;
 
     // NB: deliberately exhaustive so that new variants must be classified here.
     match trampoline {
-        LowerImport { options, .. } => {
-            Some((dfg.options[*options].instance, CoreCallable::HostImport))
-        }
+        LowerImport { options, .. } => (dfg.options[*options].instance, CoreCallable::HostImport),
 
         ResourceNew { instance, .. }
         | ResourceRep { instance, .. }
@@ -301,10 +296,11 @@ fn trampoline_callable(
         | ThreadSuspendThenResume { instance, .. }
         | ThreadYieldThenResume { instance, .. }
         | ThreadSuspendThenPromote { instance, .. }
-        | ThreadYieldThenPromote { instance, .. } => {
-            Some((*instance, CoreCallable::ThreadStateBuiltin))
-        }
+        | ThreadYieldThenPromote { instance, .. } => (*instance, CoreCallable::ThreadStateBuiltin),
 
+        // These trampolines are only ever created in `translate::adapt`, which
+        // happens strictly after this analysis has run. Therefore none of them
+        // can exist yet.
         Transcoder { .. }
         | ResourceTransferOwn
         | ResourceTransferBorrow
@@ -316,7 +312,9 @@ fn trampoline_callable(
         | ErrorContextTransfer
         | Trap(_)
         | EnterSyncCall
-        | ExitSyncCall => None,
+        | ExitSyncCall => {
+            unreachable!("these trampolines do not exist yet")
+        }
     }
 }
 

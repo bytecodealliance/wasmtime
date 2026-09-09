@@ -760,7 +760,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // the thread state that `enter-sync-call`/`exit-sync-call` maintain then
         // none of its bookkeeping is necessary.
         //
-        // See `component::translate::ThreadTransparency` for details.
+        // See `crates/environ/src/component/thread_transparency.rs` for details.
         debug_assert!(
             !(adapter.thread_transparent && self.emit_resource_call),
             "resources are not thread transparent",
