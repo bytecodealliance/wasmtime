@@ -4992,7 +4992,7 @@
 ;; give an opportunistic def of the other output.
 (rule 4
       (is_nonzero
-       (second_result uadd @ (uadd_overflow (ty_32_or_64 ty) x y)))
+       (is_second_result uadd @ (uadd_overflow (ty_32_or_64 ty) x y)))
       (if-let (first_result sum_value) uadd)
       (let ((producer ProducesFlags (alu_rrr_with_flags_paired ty x y (ALUOp.AddS))))
         (CondResult.Cond
@@ -5012,7 +5012,7 @@
 ;; cmp out, out, uxt{b,h}
 (rule 5
       (is_nonzero
-       (second_result umul @ (umul_overflow (fits_in_16 ty) a b)))
+       (is_second_result umul @ (umul_overflow (fits_in_16 ty) a b)))
       (if-let (first_result prod_value) umul)
       (let ((a_uext Reg (put_in_reg_zext32 a))
             (b_uext Reg (put_in_reg_zext32 b))
@@ -5031,7 +5031,7 @@
 ;; cmp out, out, uxtw
 (rule 6
       (is_nonzero
-       (second_result umul @ (umul_overflow $I32 a b)))
+       (is_second_result umul @ (umul_overflow $I32 a b)))
       (if-let (first_result prod_value) umul)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (producer ProducesFlags
@@ -5048,7 +5048,7 @@
 ;; cmp tmp, #0
 (rule 7
       (is_nonzero
-       (second_result umul @ (umul_overflow $I64 a b)))
+       (is_second_result umul @ (umul_overflow $I64 a b)))
       (let ((tmp Reg (umulh $I64 a b))
             (producer ProducesFlags (cmp64_imm tmp (u8_into_imm12 0))))
         (CondResult.Cond producer (Cond.Ne))))
@@ -5057,7 +5057,7 @@
 ;; cmp out, out, sxt{b,h}
 (rule 8
       (is_nonzero
-       (second_result smul @ (smul_overflow (fits_in_16 ty) a b)))
+       (is_second_result smul @ (smul_overflow (fits_in_16 ty) a b)))
       (if-let (first_result prod_value) smul)
       (let ((a_sext Reg (put_in_reg_sext32 a))
             (b_sext Reg (put_in_reg_sext32 b))
@@ -5076,7 +5076,7 @@
 ;; cmp out, out, sxtw
 (rule 9
       (is_nonzero
-       (second_result smul @ (smul_overflow $I32 a b)))
+       (is_second_result smul @ (smul_overflow $I32 a b)))
       (if-let (first_result prod_value) smul)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (producer ProducesFlags
@@ -5093,7 +5093,7 @@
 ;; cmp tmp, out, asr #63
 (rule 10
       (is_nonzero
-       (second_result smul @ (smul_overflow $I64 a b)))
+       (is_second_result smul @ (smul_overflow $I64 a b)))
       (if-let (first_result prod_value) smul)
       (let ((prod Reg (put_in_reg prod_value))
             (tmp Reg (smulh $I64 a b))

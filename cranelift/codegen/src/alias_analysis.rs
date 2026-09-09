@@ -867,20 +867,26 @@ impl<'a> AliasAnalysis<'a> {
     }
 
     fn compute_block_input_states(&mut self, func: &Function) {
-        let mut queue = vec![];
-        let mut queue_set = FxHashSet::default();
-
         let entry = func.layout.entry_block().unwrap();
-        queue.push(entry);
-        queue_set.insert(entry);
+        self.block_input.insert(entry, LastStores::default());
+
+        // Seed the worklist in reverse post-order (well, post order, but
+        // visited in reverse due to popping). This visits a block's
+        // predecessors before the block itself, which minimizes the number of
+        // times we need to reprocess a block to reach the fixed point (ignoring
+        // backedges).
+        let mut queue = self.domtree.cfg_postorder().to_vec();
+        let mut queue_set: FxHashSet<Block> = queue.iter().copied().collect();
 
         while let Some(block) = queue.pop() {
             queue_set.remove(&block);
-            let mut state = self
-                .block_input
-                .entry(block)
-                .or_insert_with(|| LastStores::default())
-                .clone();
+
+            let Some(mut state) = self.block_input.get(&block).cloned() else {
+                // Nothing has propagated into this block yet, so there is
+                // nothing to propagate out of it. If/when some predecessor gets
+                // state to propagate to this block, it will be re-enqueued.
+                continue;
+            };
 
             trace!("analyzing {block:?}");
             trace!("    initial block state = {state:?}");

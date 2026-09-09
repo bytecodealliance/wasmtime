@@ -3879,7 +3879,7 @@
 ;; opportunistic def of the other output.
 (rule 3
       (is_nonzero
-       (second_result uadd @ (uadd_overflow (fits_in_64 ty) x y)))
+       (is_second_result uadd @ (uadd_overflow (fits_in_64 ty) x y)))
       (if-let (first_result sum_value) uadd)
       (let ((producer ProducesFlags (x64_add_with_flags_paired ty x y)))
         (CondResult.CC
@@ -3892,7 +3892,7 @@
 ;; `mul` of narrow types), so no extra compare is needed.
 (rule 4
       (is_nonzero
-       (second_result umul @ (umul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty)))))
+       (is_second_result umul @ (umul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty)))))
       (if-let (first_result prod_value) umul)
       (let ((producer ProducesFlags (x64_mul_lo_with_flags_paired ty false x y)))
         (CondResult.CC
@@ -3901,7 +3901,7 @@
 
 (rule 5
       (is_nonzero
-       (second_result umul @ (umul_overflow _ x y @ (value_type $I8))))
+       (is_second_result umul @ (umul_overflow _ x y @ (value_type $I8))))
       (if-let (first_result prod_value) umul)
       (let ((producer ProducesFlags (x64_mul8_with_flags_paired false x y)))
         (CondResult.CC
@@ -3910,7 +3910,7 @@
 
 (rule 6
       (is_nonzero
-       (second_result smul @ (smul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty)))))
+       (is_second_result smul @ (smul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty)))))
       (if-let (first_result prod_value) smul)
       (let ((producer ProducesFlags (x64_mul_lo_with_flags_paired ty true x y)))
         (CondResult.CC
@@ -3919,7 +3919,7 @@
 
 (rule 7
       (is_nonzero
-       (second_result smul @ (smul_overflow _ x y @ (value_type $I8))))
+       (is_second_result smul @ (smul_overflow _ x y @ (value_type $I8))))
       (if-let (first_result prod_value) smul)
       (let ((producer ProducesFlags (x64_mul8_with_flags_paired true x y)))
         (CondResult.CC

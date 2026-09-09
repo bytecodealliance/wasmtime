@@ -214,6 +214,20 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn is_second_result(&mut self, val: Value) -> Option<Value> {
+            let inst = self.def_inst(val)?;
+            let is_match = self
+                .lower_ctx
+                .dfg()
+                .inst_results(inst)
+                .iter()
+                .skip(1)
+                .next()
+                == Some(&val);
+            if is_match { Some(val) } else { None }
+        }
+
+        #[inline]
         fn second_result_used(&mut self, inst: Inst) -> bool {
             let second_result = self.lower_ctx.dfg().inst_results(inst).get(1).copied();
             second_result.is_some_and(|value| self.lower_ctx.value_lowered_used(value))

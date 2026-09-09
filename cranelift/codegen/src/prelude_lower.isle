@@ -301,9 +301,22 @@
 (extern extractor first_result first_result)
 
 ;; Extract the second result value of the given instruction.
+;;
+;; Be careful using this: if used to match on a *`Value`*, the
+;; auto-converter will take that `Value` to its defining `Inst`, then
+;; the inner result of this extractor will be the second def of the
+;; value; in other words, it will *fetch* the second result but will
+;; not *assert/only match if* the initial `Value` is the second
+;; result. Use `is_second_result` for that.
 (spec (second_result value) (provide (= result value)))
 (decl second_result (Value) Inst)
 (extern extractor second_result second_result)
+
+;; Determine whether the given value is the second result of its
+;; defining instruction.
+(spec (is_second_result value) (provide (= result value)))
+(decl is_second_result (Value) Value)
+(extern extractor is_second_result is_second_result)
 
 ;; Returns whether an instruction's second result still has uses to serve in
 ;; the lowering scan. Overflow operations use this while lowering their first

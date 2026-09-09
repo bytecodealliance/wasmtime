@@ -1,0 +1,15 @@
+test run
+set opt_level=speed_and_size
+target x86_64
+target aarch64
+
+function %a(i64) -> i8 {
+block0(v0: i64):
+    v1, v2 = smul_overflow.i64 v0, v0
+    v3 = iconst.i64 0
+    v4 = icmp eq v1, v3
+    return v4
+}
+
+; run: %a(0) == 1
+; run: %a(8192) == 0
