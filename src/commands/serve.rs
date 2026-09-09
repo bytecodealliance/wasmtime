@@ -1119,7 +1119,7 @@ impl MmuInterrupterRegistry {
             .iter()
             .position(|e| e.instance_id == instance_id)
         {
-            // O(n) but capped to the number of cores:
+            // O(n) but capped to the number of Stores:
             inner.instances_and_interrupters.remove(pos);
             // Slide `next` left to make up for the hole we just poked.
             if inner.next > pos {
