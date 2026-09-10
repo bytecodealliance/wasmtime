@@ -22,8 +22,8 @@
 
   (func (export "f") (param "s" string)
     (canon lift (core func $m "f")
-      (memory $m "mem")
-      (realloc (func $m "realloc"))
+      (memory (core memory $m "mem"))
+      (realloc (core func $m "realloc"))
     )
   )
 )
