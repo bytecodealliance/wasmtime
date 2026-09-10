@@ -77,6 +77,9 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // do that most of the time.
         config.disallow_traps = u.ratio(9, 10)?;
 
+        // not supported in wasmtime yet
+        config.compact_imports_enabled = false;
+
         Ok(ModuleConfig {
             component_model_async: false,
             component_model_more_async_builtins: false,
