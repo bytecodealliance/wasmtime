@@ -259,7 +259,7 @@ const _: () = {
                     wasmtime::component::ResourceType::host::<WorldResource>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_data::<D>(host_getter);
                             HostWorldResourceWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
@@ -574,7 +574,7 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Bar>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_data::<D>(host_getter);
                             HostBarWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
@@ -926,7 +926,7 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<A>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_data::<D>(host_getter);
                             HostAWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
@@ -1063,7 +1063,7 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Foo>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_data(host_getter);
+                            let accessor = &caller.with_data::<D>(host_getter);
                             HostFooWithStore::drop(
                                     accessor,
                                     wasmtime::component::Resource::new_own(rep),
