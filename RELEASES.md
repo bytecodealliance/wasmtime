@@ -1,6 +1,6 @@
 ## 36.0.15
 
-Unreleased
+Released 2026-09-10
 
 ### Changed
 
