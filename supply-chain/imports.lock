@@ -993,8 +993,8 @@ when = "2025-11-16"
 trusted-publisher = "github:JohnTitor/mach2"
 
 [[publisher.macro-string]]
-version = "0.2.0"
-when = "2026-02-24"
+version = "0.3.0"
+when = "2026-07-18"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -1065,6 +1065,13 @@ user-name = "Alex Crichton"
 [[publisher.prettyplease]]
 version = "0.2.31"
 when = "2025-03-13"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.prettyplease]]
+version = "0.3.0"
+when = "2026-07-18"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -1229,6 +1236,13 @@ user-name = "Nick Fitzgerald"
 [[publisher.syn]]
 version = "2.0.106"
 when = "2025-08-16"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.syn]]
+version = "3.0.5"
+when = "2026-09-04"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -1822,8 +1836,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen]]
-version = "0.61.1"
-when = "2026-08-25"
+version = "0.62.0"
+when = "2026-09-10"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
@@ -1832,8 +1846,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
-version = "0.61.1"
-when = "2026-08-25"
+version = "0.62.0"
+when = "2026-09-10"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rt]]
@@ -1848,8 +1862,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.61.1"
-when = "2026-08-25"
+version = "0.62.0"
+when = "2026-09-10"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
@@ -1858,8 +1872,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.61.1"
-when = "2026-08-25"
+version = "0.62.0"
+when = "2026-09-10"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-component]]
