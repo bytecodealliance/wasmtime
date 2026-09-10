@@ -283,7 +283,7 @@ const _: () = {
                             wasmtime::component::ResourceType::host::<Baz>(),
                             move |caller: &wasmtime::component::Accessor<T>, rep| {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_data(host_getter);
+                                    let accessor = &caller.with_data::<D>(host_getter);
                                     HostBazWithStore::drop(
                                             accessor,
                                             wasmtime::component::Resource::new_own(rep),
@@ -434,7 +434,7 @@ pub mod foo {
                             wasmtime::component::ResourceType::host::<Bar>(),
                             move |caller: &wasmtime::component::Accessor<T>, rep| {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_data(host_getter);
+                                    let accessor = &caller.with_data::<D>(host_getter);
                                     HostBarWithStore::drop(
                                             accessor,
                                             wasmtime::component::Resource::new_own(rep),
