@@ -278,14 +278,15 @@ impl VMContinuationStack {
             } else {
                 0
             };
-            let dynamic_data_size = args_data_size
-                .checked_add(gc_refs_data_size)
-                .ok_or_else(|| {
-                    format_err!(
-                        "continuation function type with {args_capacity} args \
+            let dynamic_data_size =
+                args_data_size
+                    .checked_add(gc_refs_data_size)
+                    .ok_or_else(|| {
+                        format_err!(
+                            "continuation function type with {args_capacity} args \
                          overflows stack control data size calculation"
-                    )
-                })?;
+                        )
+                    })?;
             let total_control_size = dynamic_data_size.checked_add(0x40).ok_or_else(|| {
                 format_err!(
                     "continuation function type with {args_capacity} args \
