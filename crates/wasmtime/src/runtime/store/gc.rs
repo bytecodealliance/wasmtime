@@ -801,9 +801,10 @@ impl StoreOpaque {
             let gc_ref_data = payloads.gc_ref_data;
             let payloads = &payloads.buffer;
             assert!(payloads.length <= payloads.capacity);
-            if gc_ref_data.is_null() {
+            let Some(gc_ref_data) = gc_ref_data else {
                 return;
-            }
+            };
+            let gc_ref_data = gc_ref_data.as_ptr();
 
             for index in 0..usize::try_from(payloads.length).unwrap() {
                 let marker = unsafe { gc_ref_data.add(index).read() };

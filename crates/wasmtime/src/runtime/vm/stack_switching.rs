@@ -121,14 +121,14 @@ impl VMPayloads {
     pub fn empty() -> Self {
         Self {
             buffer: VMHostArray::empty(),
-            gc_ref_data: core::ptr::null_mut(),
+            gc_ref_data: None,
         }
     }
 
     /// Makes this payload buffer empty and invalidates its GC metadata.
     pub fn clear(&mut self) {
         self.buffer.clear();
-        self.gc_ref_data = core::ptr::null_mut();
+        self.gc_ref_data = None;
     }
 }
 

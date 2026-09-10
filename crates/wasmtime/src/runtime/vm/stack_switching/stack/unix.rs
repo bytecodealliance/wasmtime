@@ -64,7 +64,7 @@ use std::ops::Range;
 use std::ptr;
 
 use crate::prelude::*;
-use crate::runtime::vm::{VMContext, VMFuncRef, VMHostArray, VMPayloads, ValRaw};
+use crate::runtime::vm::{VMContext, VMFuncRef, VMHostArray, VMPayloads, ValRaw, VmPtr};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Allocator {
@@ -317,7 +317,7 @@ impl VMContinuationStack {
                 if args_capacity > 0 {
                     data.write_bytes(0, usize::try_from(args_capacity)?);
                 }
-                payloads.gc_ref_data = data;
+                payloads.gc_ref_data = NonNull::new(data).map(VmPtr::from);
             }
 
             let to_store = [

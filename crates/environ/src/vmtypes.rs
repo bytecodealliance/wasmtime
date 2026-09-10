@@ -613,8 +613,8 @@ macro_rules! for_each_vm_type {
                 pub buffer: VMHostArray,
 
                 /// One marker byte per buffer slot, indicating whether that
-                /// slot contains a GC reference, or null when no slots do.
-                pub gc_ref_data: *mut u8,
+                /// slot contains a GC reference, or `None` when no slots do.
+                pub gc_ref_data: Option<VmPtr<u8>>,
             }
 
             /// The information saved for every stack, whether it is a

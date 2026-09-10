@@ -75,7 +75,7 @@ pub(crate) mod stack_switching_helpers {
     /// Compile-time reference to a runtime `VMPayloads` descriptor.
     ///
     /// This wrapper keeps the payload buffer and its GC-reference markers
-    /// paired. Its core invariant is that `gc_ref_data`, when non-null, points
+    /// paired. Its core invariant is that `gc_ref_data`, when present, points
     /// to one marker byte for every slot in `buffer`; callers must update a
     /// slot's value and marker together.
     #[derive(Copy, Clone)]
