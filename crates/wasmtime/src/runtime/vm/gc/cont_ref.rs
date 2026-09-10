@@ -1,9 +1,7 @@
 //! Side table for continuation references stored in the GC heap.
 //!
-//! Continuation references are sixteen bytes values, while every
-//! reference field in the GC heap is four bytes. GC objects therefore
-//! store an ID into this table rather than storing a `VMContObj`
-//! directly.
+//! This follows the same idea as `VMFuncRef` and `externref`. We
+//! cannot trust native addresses that come out of the GC heap.
 
 use crate::{Result, bail_bug, hash_map::HashMap, vm::VMContObj};
 use wasmtime_core::{
