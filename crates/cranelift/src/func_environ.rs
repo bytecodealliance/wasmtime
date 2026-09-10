@@ -234,6 +234,9 @@ pub struct FuncEnvironment<'module_environment> {
     /// backing the current continuation's `values` field.
     stack_switching_values_storage: Option<VMPayloadStackSlots>,
 
+    /// Reusable storage for `get_interned_contref` builtin.
+    stack_switching_cont_ref_result_storage: Option<ir::StackSlot>,
+
     /// The stack-slot used for exposing Wasm state via debug
     /// instrumentation, if any, and the builder containing its metadata.
     pub(crate) state_slot: Option<(ir::StackSlot, FrameStateSlotBuilder)>,
@@ -314,6 +317,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             stack_switching_handler_list_buffer: None,
             stack_switching_values_storage: None,
+            stack_switching_cont_ref_result_storage: None,
 
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
@@ -324,6 +328,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             alias_regions: AliasRegions::new(offsets),
         }
+    }
+
+    /// Returns the cached continuation-reference stack slot, creating it with
+    /// `data` if necessary.
+    pub(crate) fn get_or_create_contref_stack_slot(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        data: ir::StackSlotData,
+    ) -> ir::StackSlot {
+        *self
+            .stack_switching_cont_ref_result_storage
+            .get_or_insert_with(|| builder.create_sized_stack_slot(data))
     }
 
     /// Consume the branch hint for the instruction at module-relative `offset`

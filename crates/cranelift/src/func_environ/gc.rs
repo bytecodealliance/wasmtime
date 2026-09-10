@@ -464,16 +464,21 @@ fn read_cont_ref_at_addr(
 ) -> WasmResult<ir::Value> {
     let id = builder.ins().load(ir::types::I32, flags, addr, 0);
 
-    // We create a stack slot to hold the continuation values (16
-    // bytes), and pass the address of this slot as the out parameter
-    // to the builtin.
+    // We either create or fetch an existing a stack slot to hold the
+    // continuation values (16 bytes), and pass the address of this
+    // slot as the out parameter to the builtin.
     let pointer_type = func_env.pointer_type();
     let pointer_bytes = pointer_type.bytes();
-    let slot = builder.create_sized_stack_slot(ir::StackSlotData::new(
-        ir::StackSlotKind::ExplicitSlot,
-        2 * pointer_bytes,
-        u8::try_from(pointer_bytes.trailing_zeros()).unwrap(),
-    ));
+    let fatpointer_bytes = fatpointer::bytes(func_env);
+
+    let slot = func_env.get_or_create_contref_stack_slot(
+        builder,
+        ir::StackSlotData::new(
+            ir::StackSlotKind::ExplicitSlot,
+            fatpointer_bytes,
+            u8::try_from(pointer_bytes.trailing_zeros()).unwrap(),
+        ),
+    );
     let out_result = builder.ins().stack_addr(pointer_type, slot, 0);
 
     let vmctx = func_env.vmctx_val(&mut builder.cursor());
