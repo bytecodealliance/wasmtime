@@ -333,17 +333,17 @@ version = "0.7.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.logos]]
-version = "0.14.2"
+version = "0.15.1"
 criteria = "safe-to-deploy"
 notes = "safe when forbid_unsafe feature enabled, which it is in our dep through wasm-wave"
 
 [[exemptions.logos-codegen]]
-version = "0.14.2"
+version = "0.15.1"
 criteria = "safe-to-deploy"
 notes = "safe when forbid_unsafe feature enabled, which it is in our dep through wasm-wave"
 
 [[exemptions.logos-derive]]
-version = "0.14.2"
+version = "0.15.1"
 criteria = "safe-to-deploy"
 notes = "safe when forbid_unsafe feature enabled, which it is in our dep through wasm-wave"
 

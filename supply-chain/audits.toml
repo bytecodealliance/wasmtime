@@ -4538,6 +4538,12 @@ criteria = "safe-to-deploy"
 delta = "1.1.0 -> 2.0.0"
 notes = "Chris Fallin reviewed this update with me, and we didn't find anything surprising. We did verify that the new constants did originate in the paper referenced."
 
+[[audits.rustc_version]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.4.1"
+notes = "Minor changes, nothing worrisome"
+
 [[audits.rustix]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
