@@ -64,8 +64,8 @@ impl HandlerState {
             .copied()
             .rev()
             .map(|(tag, label)| match tag {
-                Some(tag) => MachExceptionHandler::Tag(tag, label),
-                None => MachExceptionHandler::Default(label),
+                Some(tag) => MachExceptionHandler::Tag(tag, label.into()),
+                None => MachExceptionHandler::Default(label.into()),
             })
     }
 

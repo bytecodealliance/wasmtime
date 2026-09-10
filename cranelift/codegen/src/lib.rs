@@ -70,12 +70,11 @@ pub mod write;
 
 pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::{
-    ExceptionContextLoc, FinalizedMachCallSite, FinalizedMachExceptionHandler, FinalizedMachReloc,
-    FinalizedRelocTarget, MachCallSite, MachExceptionHandler, MachSrcLoc, MachTextSectionBuilder,
-    MachTrap, OpenPatchRegion, PatchRegion,
+    ExceptionContextLoc, MachCallSite, MachCallSiteItem, MachExceptionHandler, MachReloc,
+    MachSrcLoc, MachTextSectionBuilder, MachTrap, OpenPatchRegion, PatchRegion, RelocTarget,
 };
 pub use crate::machinst::{
-    CallInfo, CompiledCode, Final, FrameLayout, MachBuffer, MachBufferDebugTagList,
+    CallInfo, CompiledCode, FrameLayout, LabelOrOffset, MachBuffer, MachBufferDebugTagList,
     MachBufferFinalized, MachBufferFrameLayout, MachDebugTagPos, MachInst, MachInstEmit,
     MachInstEmitState, MachLabel, RealReg, Reg, RegClass, RelocDistance, TextSectionBuilder,
     VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, Writable,

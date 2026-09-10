@@ -580,9 +580,9 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
 /// code (as bytes) and a disassembly, if requested.
 #[derive(PartialEq, Debug, Clone)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct CompiledCodeBase<T: CompilePhase> {
+pub struct CompiledCode {
     /// Machine code.
-    pub buffer: MachBufferFinalized<T>,
+    pub buffer: MachBufferFinalized,
     /// Disassembly, if requested.
     pub vcode: Option<String>,
     /// Debug info: value labels to registers/stackslots at code offsets.
@@ -601,20 +601,22 @@ pub struct CompiledCodeBase<T: CompilePhase> {
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 }
 
+/// Result of compiling a `FunctionStencil`, before applying `FunctionParameters` onto it.
+///
+/// Only used internally, in a transient manner, for the incremental compilation cache.
+#[derive(PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct CompiledCodeStencil(pub(crate) CompiledCode);
+
 impl CompiledCodeStencil {
     /// Apply function parameters to finalize a stencil into its final form.
-    pub fn apply_params(self, params: &FunctionParameters) -> CompiledCode {
-        CompiledCode {
-            buffer: self.buffer.apply_base_srcloc(params.base_srcloc()),
-            vcode: self.vcode,
-            value_labels_ranges: self.value_labels_ranges,
-            bb_starts: self.bb_starts,
-            bb_edges: self.bb_edges,
-        }
+    pub fn apply_params(mut self, params: &FunctionParameters) -> CompiledCode {
+        self.0.buffer.apply_base_srcloc(params.base_srcloc());
+        self.0
     }
 }
 
-impl<T: CompilePhase> CompiledCodeBase<T> {
+impl CompiledCode {
     /// Get a `CodeInfo` describing section sizes from this compilation result.
     pub fn code_info(&self) -> CodeInfo {
         CodeInfo {
@@ -749,18 +751,7 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
             anyhow::format_err!("{err}")
         }
     }
-}
 
-/// Result of compiling a `FunctionStencil`, before applying `FunctionParameters` onto it.
-///
-/// Only used internally, in a transient manner, for the incremental compilation cache.
-pub type CompiledCodeStencil = CompiledCodeBase<Stencil>;
-
-/// `CompiledCode` in its final form (i.e. after `FunctionParameters` have been applied), ready for
-/// consumption.
-pub type CompiledCode = CompiledCodeBase<Final>;
-
-impl CompiledCode {
     /// If available, return information about the code layout in the
     /// final machine code: the offsets (in bytes) of each basic-block
     /// start, and all basic-block edges.

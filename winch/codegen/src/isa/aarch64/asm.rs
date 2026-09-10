@@ -19,7 +19,7 @@ use cranelift_codegen::isa::aarch64::inst::{
     VecRRNarrowOp, VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmOp,
 };
 use cranelift_codegen::{
-    Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
+    MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
     Writable,
     ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
@@ -126,11 +126,12 @@ impl Assembler {
 
 impl Assembler {
     /// Return the emitted code.
-    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
-        let stencil = self
+    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized {
+        let mut buffer = self
             .buffer
             .finish(&self.pool.constants(), self.emit_state.ctrl_plane_mut());
-        stencil.apply_base_srcloc(loc.unwrap_or_default())
+        buffer.apply_base_srcloc(loc.unwrap_or_default());
+        buffer
     }
 
     fn emit(&mut self, inst: Inst) {

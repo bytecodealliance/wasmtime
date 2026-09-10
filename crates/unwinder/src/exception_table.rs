@@ -17,7 +17,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 #[cfg(feature = "cranelift")]
 use cranelift_codegen::{
-    ExceptionContextLoc, FinalizedMachCallSite, FinalizedMachExceptionHandler, binemit::CodeOffset,
+    ExceptionContextLoc, MachCallSiteItem, MachExceptionHandler, binemit::CodeOffset,
 };
 use wasmtime_environ::prelude::*;
 
@@ -127,7 +127,7 @@ impl ExceptionTableBuilder {
     pub fn add_func<'a>(
         &mut self,
         start_offset: CodeOffset,
-        call_sites: impl Iterator<Item = FinalizedMachCallSite<'a>>,
+        call_sites: impl Iterator<Item = MachCallSiteItem<'a>>,
     ) -> Result<()> {
         // Ensure that we see functions in offset order.
         assert!(start_offset >= self.last_start_offset);
@@ -144,7 +144,8 @@ impl ExceptionTableBuilder {
             let mut context = u32::MAX;
             for handler in call_site.exception_handlers {
                 match handler {
-                    FinalizedMachExceptionHandler::Tag(tag, offset) => {
+                    MachExceptionHandler::Tag(tag, label) => {
+                        let offset = label.as_offset();
                         self.tags.push(U32::new(LittleEndian, tag.as_u32()));
                         self.contexts.push(U32::new(LittleEndian, context));
                         self.handlers.push(U32::new(
@@ -152,7 +153,8 @@ impl ExceptionTableBuilder {
                             offset.checked_add(start_offset).unwrap(),
                         ));
                     }
-                    FinalizedMachExceptionHandler::Default(offset) => {
+                    MachExceptionHandler::Default(label) => {
+                        let offset = label.as_offset();
                         self.tags.push(U32::new(LittleEndian, u32::MAX));
                         self.contexts.push(U32::new(LittleEndian, context));
                         self.handlers.push(U32::new(
@@ -160,12 +162,10 @@ impl ExceptionTableBuilder {
                             offset.checked_add(start_offset).unwrap(),
                         ));
                     }
-                    FinalizedMachExceptionHandler::Context(ExceptionContextLoc::SPOffset(
-                        offset,
-                    )) => {
+                    MachExceptionHandler::Context(ExceptionContextLoc::SPOffset(offset)) => {
                         context = *offset;
                     }
-                    FinalizedMachExceptionHandler::Context(ExceptionContextLoc::GPR(_)) => {
+                    MachExceptionHandler::Context(ExceptionContextLoc::GPR(_)) => {
                         panic!(
                             "Wasmtime exception unwind info only supports dynamic contexts on the stack"
                         );
@@ -235,9 +235,8 @@ pub struct ExceptionTable<'a> {
 /// Wasmtime exception table item, after parsing.
 ///
 /// Note that this is separately defined from the equivalent type in
-/// Cranelift, `cranelift_codegen::FinalizedMachExceptionHandler`,
-/// because we need this in runtime-only builds when Cranelift is not
-/// included.
+/// Cranelift, `cranelift_codegen::MachExceptionHandler`, because we
+/// need this in runtime-only builds when Cranelift is not included.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExceptionHandler {
     /// A tag (arbitrary `u32` identifier from CLIF) or `None` for catch-all.
@@ -388,30 +387,31 @@ fn option_from_u32(value: u32) -> Option<u32> {
 #[cfg(all(test, feature = "cranelift"))]
 mod test {
     use super::*;
+    use cranelift_codegen::LabelOrOffset;
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::ExceptionTag;
 
     #[test]
     fn serialize_exception_table() {
         let callsites = [
-            FinalizedMachCallSite {
+            MachCallSiteItem {
                 ret_addr: 0x10,
                 frame_offset: None,
                 exception_handlers: &[
-                    FinalizedMachExceptionHandler::Tag(ExceptionTag::new(1), 0x20),
-                    FinalizedMachExceptionHandler::Tag(ExceptionTag::new(2), 0x30),
-                    FinalizedMachExceptionHandler::Default(0x40),
+                    MachExceptionHandler::Tag(ExceptionTag::new(1), LabelOrOffset::offset(0x20)),
+                    MachExceptionHandler::Tag(ExceptionTag::new(2), LabelOrOffset::offset(0x30)),
+                    MachExceptionHandler::Default(LabelOrOffset::offset(0x40)),
                 ],
             },
-            FinalizedMachCallSite {
+            MachCallSiteItem {
                 ret_addr: 0x48,
                 frame_offset: None,
                 exception_handlers: &[],
             },
-            FinalizedMachCallSite {
+            MachCallSiteItem {
                 ret_addr: 0x50,
                 frame_offset: Some(0x20),
-                exception_handlers: &[FinalizedMachExceptionHandler::Default(0x60)],
+                exception_handlers: &[MachExceptionHandler::Default(LabelOrOffset::offset(0x60))],
             },
         ];
 

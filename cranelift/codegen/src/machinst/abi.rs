@@ -2620,8 +2620,8 @@ impl TryCallInfo {
         layout: &FrameLayout,
     ) -> impl Iterator<Item = MachExceptionHandler> {
         self.exception_handlers.iter().map(|handler| match handler {
-            TryCallHandler::Tag(tag, label) => MachExceptionHandler::Tag(*tag, *label),
-            TryCallHandler::Default(label) => MachExceptionHandler::Default(*label),
+            TryCallHandler::Tag(tag, label) => MachExceptionHandler::Tag(*tag, LabelOrOffset::from(*label)),
+            TryCallHandler::Default(label) => MachExceptionHandler::Default(LabelOrOffset::from(*label)),
             TryCallHandler::Context(reg) => {
                 let loc = if let Some(spillslot) = reg.to_spillslot() {
                     // The spillslot offset is relative to the "fixed

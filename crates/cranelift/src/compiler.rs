@@ -19,7 +19,7 @@ use cranelift_codegen::isa::{
 };
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{
-    CompiledCode, Context, FinalizedMachCallSite, MachBufferDebugTagList, MachBufferFrameLayout,
+    CompiledCode, Context, MachBufferDebugTagList, MachBufferFrameLayout, MachCallSiteItem,
     MachDebugTagPos,
 };
 use cranelift_entity::PrimaryMap;
@@ -1691,7 +1691,7 @@ impl FunctionCompiler<'_> {
             1
         };
 
-        let alignment = compiled_code.buffer.alignment.max(preferred_alignment);
+        let alignment = compiled_code.buffer.min_alignment.max(preferred_alignment);
         let mut compiled_function = CompiledFunction::new(
             compiled_code.buffer.clone(),
             context.func.params.user_named_funcs().clone(),
@@ -1783,7 +1783,7 @@ fn clif_to_env_stack_maps(
 fn clif_to_env_exception_tables<'a>(
     builder: &mut ExceptionTableBuilder,
     range: Range<u64>,
-    call_sites: impl Iterator<Item = FinalizedMachCallSite<'a>>,
+    call_sites: impl Iterator<Item = MachCallSiteItem<'a>>,
 ) -> Result<()> {
     builder.add_func(CodeOffset::try_from(range.start).unwrap(), call_sites)
 }

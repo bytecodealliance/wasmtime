@@ -3,7 +3,7 @@ use core::fmt::Formatter;
 use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
 use cranelift_codegen::settings;
-use cranelift_codegen::{Final, MachBufferFinalized, TextSectionBuilder};
+use cranelift_codegen::{MachBufferFinalized, TextSectionBuilder};
 use std::{
     error,
     fmt::{self, Debug, Display},
@@ -199,7 +199,7 @@ pub trait TargetIsa: Send + Sync {
 
     fn emit_unwind_info(
         &self,
-        _result: &MachBufferFinalized<Final>,
+        _result: &MachBufferFinalized,
         _kind: UnwindInfoKind,
     ) -> Result<Option<UnwindInfo>>;
 

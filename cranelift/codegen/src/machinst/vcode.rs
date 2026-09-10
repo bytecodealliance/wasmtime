@@ -211,7 +211,7 @@ pub struct VCode<I: VCodeInst> {
 /// and optionally metadata about the code layout.
 pub struct EmitResult {
     /// The MachBuffer containing the machine code.
-    pub buffer: MachBufferFinalized<Stencil>,
+    pub buffer: MachBufferFinalized,
 
     /// Offset of each basic block, recorded during emission. Computed
     /// only if `machine_code_cfg_info` is enabled.

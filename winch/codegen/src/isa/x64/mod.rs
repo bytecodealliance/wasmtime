@@ -10,7 +10,7 @@ use crate::{
     codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv, TypeConverter},
 };
 use cranelift_codegen::settings::{self, Flags};
-use cranelift_codegen::{Final, MachBufferFinalized, isa::x64::settings as x64_settings};
+use cranelift_codegen::{MachBufferFinalized, isa::x64::settings as x64_settings};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
@@ -152,7 +152,7 @@ impl TargetIsa for X64 {
 
     fn emit_unwind_info(
         &self,
-        buffer: &MachBufferFinalized<Final>,
+        buffer: &MachBufferFinalized,
         kind: cranelift_codegen::isa::unwind::UnwindInfoKind,
     ) -> Result<Option<cranelift_codegen::isa::unwind::UnwindInfo>> {
         Ok(cranelift_codegen::isa::x64::emit_unwind_info(buffer, kind)?)

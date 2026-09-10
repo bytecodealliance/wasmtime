@@ -6,7 +6,7 @@ use crate::isa::{
     reg::{Reg, RegClass, WritableReg, writable},
 };
 use cranelift_codegen::{
-    Final, MachBufferFinalized, MachExceptionHandler, MachLabel,
+    MachBufferFinalized, MachExceptionHandler, MachLabel,
     binemit::CodeOffset,
     ir::{Endianness, MemFlagsData, RelSourceLoc, SourceLoc, UserExternalNameRef},
 };
@@ -1870,7 +1870,7 @@ pub(crate) trait MacroAssembler {
     fn push(&mut self, src: Reg, size: OperandSize) -> Result<StackSlot>;
 
     /// Finalize the assembly and return the result.
-    fn finalize(self, base: Option<SourceLoc>) -> Result<MachBufferFinalized<Final>>;
+    fn finalize(self, base: Option<SourceLoc>) -> Result<MachBufferFinalized>;
 
     /// Zero a particular register.
     fn zero(&mut self, reg: WritableReg) -> Result<()>;

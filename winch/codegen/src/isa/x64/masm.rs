@@ -34,7 +34,7 @@ use crate::{
     masm::CalleeKind,
 };
 use cranelift_codegen::{
-    ExceptionContextLoc, Final, MachBufferFinalized, MachExceptionHandler, MachLabel,
+    ExceptionContextLoc, MachBufferFinalized, MachExceptionHandler, MachLabel,
     binemit::CodeOffset,
     ir::{MemFlagsData, RelSourceLoc, SourceLoc},
     isa::{
@@ -955,7 +955,7 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn finalize(mut self, base: Option<SourceLoc>) -> Result<MachBufferFinalized<Final>> {
+    fn finalize(mut self, base: Option<SourceLoc>) -> Result<MachBufferFinalized> {
         if let Some(patch) = self.stack_max_use_add {
             patch.finalize(i32::try_from(self.sp_max).unwrap(), self.asm.buffer_mut());
         }

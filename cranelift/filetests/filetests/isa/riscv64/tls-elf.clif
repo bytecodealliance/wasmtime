@@ -40,7 +40,7 @@ block0(v0: i32):
 ; block1: ; offset 0x18
 ;   mv s1, a0
 ;   auipc a0, 0 ; reloc_external RiscvTlsGdHi20 u1:0 0
-;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+28 0
+;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0x1c 0
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt %ElfTlsGetAddr 0
 ;   jalr ra
 ;   mv a1, a0
@@ -85,7 +85,7 @@ block0(v0: i64):
 ;   mv s0, sp
 ; block1: ; offset 0x10
 ;   auipc a0, 0 ; reloc_external RiscvTlsGdHi20 u1:0 0
-;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+16 0
+;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0x10 0
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt %ElfTlsGetAddr 0
 ;   jalr ra
 ;   sb zero, 0(a0)

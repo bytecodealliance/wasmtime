@@ -10,7 +10,7 @@ use crate::{
     stack::Stack,
 };
 use cranelift_codegen::settings::{self, Flags};
-use cranelift_codegen::{Final, MachBufferFinalized, isa::aarch64::settings as aarch64_settings};
+use cranelift_codegen::{MachBufferFinalized, isa::aarch64::settings as aarch64_settings};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
@@ -147,7 +147,7 @@ impl TargetIsa for Aarch64 {
 
     fn emit_unwind_info(
         &self,
-        _result: &MachBufferFinalized<Final>,
+        _result: &MachBufferFinalized,
         _kind: cranelift_codegen::isa::unwind::UnwindInfoKind,
     ) -> Result<Option<cranelift_codegen::isa::unwind::UnwindInfo>> {
         // TODO: should fill this in with an actual implementation

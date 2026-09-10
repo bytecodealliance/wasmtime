@@ -36,7 +36,7 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a1, 0 ; reloc_external RiscvPCRelHi20 %sym 0
-;   mv a1, a1 ; reloc_external RiscvPCRelLo12I func+0 0
+;   mv a1, a1 ; reloc_external RiscvPCRelLo12I func+0x0 0
 ;   fence rw, w
 ;   sd a0, 0(a1) ; trap: heap_oob
 ;   ret
@@ -97,7 +97,7 @@ block0(v0: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a1, 0 ; reloc_external RiscvPCRelHi20 %sym 0
-;   mv a1, a1 ; reloc_external RiscvPCRelLo12I func+0 0
+;   mv a1, a1 ; reloc_external RiscvPCRelLo12I func+0x0 0
 ;   fence rw, w
 ;   sw a0, 0(a1) ; trap: heap_oob
 ;   ret

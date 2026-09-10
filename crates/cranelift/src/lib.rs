@@ -15,7 +15,7 @@
 #![warn(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use cranelift_codegen::{
-    FinalizedMachReloc, FinalizedRelocTarget, MachTrap, binemit,
+    MachReloc, MachTrap, RelocTarget, binemit,
     cursor::FuncCursor,
     ir::{self, AbiParam, ArgumentPurpose, ExternalName, InstBuilder, Signature, TrapCode},
     isa::{CallConv, TargetIsa},
@@ -307,21 +307,21 @@ fn clif_trap_to_env_trap(trap: ir::TrapCode, tunables: &Tunables) -> Option<Comp
 /// Converts machine relocations to relocation information
 /// to perform.
 fn mach_reloc_to_reloc(
-    reloc: &FinalizedMachReloc,
+    reloc: &MachReloc,
     name_map: &PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
 ) -> Relocation {
-    let &FinalizedMachReloc {
+    let &MachReloc {
         offset,
         kind,
         ref target,
         addend,
     } = reloc;
     let reloc_target = match *target {
-        FinalizedRelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
+        RelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
             let name = &name_map[user_func_ref];
             FuncKey::from_raw_parts(name.namespace, name.index)
         }
-        FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
+        RelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
             // We should have avoided any code that needs this style of libcalls
             // in the Wasm-to-Cranelift translator.
             panic!("unexpected libcall {libcall:?}");

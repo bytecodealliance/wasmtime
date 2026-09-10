@@ -12,7 +12,7 @@ use crate::{
     dominator_tree::DominatorTree,
     ir,
     isa::{self, IsaFlagsHashKey, OwnedTargetIsa, TargetIsa},
-    machinst::{self, CompiledCodeStencil, MachInst, SigSet, VCode},
+    machinst::{self, CompiledCode, CompiledCodeStencil, MachInst, SigSet, VCode},
     result::CodegenResult,
     settings::{self as shared_settings, Flags},
 };
@@ -198,13 +198,13 @@ where
             log::debug!("disassembly:\n{disasm}");
         }
 
-        Ok(CompiledCodeStencil {
+        Ok(CompiledCodeStencil(CompiledCode {
             buffer,
             vcode: emit_result.disasm,
             value_labels_ranges,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
-        })
+        }))
     }
 
     fn emit_unwind_info(

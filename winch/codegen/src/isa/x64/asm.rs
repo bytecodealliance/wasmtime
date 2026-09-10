@@ -10,7 +10,7 @@ use crate::{
     reg::writable,
 };
 use cranelift_codegen::{
-    CallInfo, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
+    CallInfo, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
     MachLabel, PatchRegion, Writable,
     ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, Type, UserExternalNameRef, types},
     isa::{
@@ -327,11 +327,12 @@ impl Assembler {
     }
 
     /// Return the emitted code.
-    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
-        let stencil = self
+    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized {
+        let mut buffer = self
             .buffer
             .finish(&self.pool.constants(), self.emit_state.ctrl_plane_mut());
-        stencil.apply_base_srcloc(loc.unwrap_or_default())
+        buffer.apply_base_srcloc(loc.unwrap_or_default());
+        buffer
     }
 
     fn emit(&mut self, inst: Inst) {
