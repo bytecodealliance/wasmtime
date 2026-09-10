@@ -959,6 +959,10 @@ impl wasmtime_environ::Compiler for Compiler {
         let func = func.downcast_ref::<CompiledFunction>().unwrap();
         Box::new(func.relocations().map(|r| r.reloc_target))
     }
+
+    fn release_caches(&self) {
+        *self.contexts.lock().unwrap() = Vec::new();
+    }
 }
 
 impl InliningCompiler for Compiler {
