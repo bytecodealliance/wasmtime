@@ -55,13 +55,14 @@ impl VMContinuationStack {
         panic!("Stack switching disabled or not implemented on this platform")
     }
 
-    pub fn initialize<const GC_REFS: bool>(
+    pub fn initialize(
         &self,
         _func_ref: *const VMFuncRef,
         _caller_vmctx: *mut VMContext,
         _args: *mut VMPayloads,
         _parameter_count: u32,
         _return_value_count: u32,
+        _gc_refs: bool,
     ) -> Result<()> {
         Ok(())
     }

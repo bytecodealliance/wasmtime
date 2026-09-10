@@ -195,12 +195,13 @@ unsafe impl Sync for VMContRef {}
 /// Implements `cont.new` instructions (i.e., creation of continuations).
 #[cfg(feature = "stack-switching")]
 #[inline(always)]
-pub fn cont_new<const GC_REFS: bool>(
+pub fn cont_new(
     store: &mut dyn crate::vm::VMStore,
     instance: crate::store::InstanceId,
     func: *mut u8,
     param_count: u32,
     result_count: u32,
+    gc_refs: bool,
 ) -> crate::Result<*mut VMContRef> {
     let instance = store.instance_mut(instance);
     let caller_vmctx = instance.vmctx();
@@ -219,13 +220,13 @@ pub fn cont_new<const GC_REFS: bool>(
     // The initialization function will allocate the actual args/return value buffer and
     // update this object (if needed).
     let contref_args_ptr = &mut contref.args as *mut VMPayloads;
-
-    contref.stack.initialize::<GC_REFS>(
+    contref.stack.initialize(
         func.cast::<crate::vm::VMFuncRef>(),
         caller_vmctx.as_ptr(),
         contref_args_ptr,
         param_count,
         result_count,
+        gc_refs,
     )?;
 
     // Now that the initial stack pointer was set by the initialization
