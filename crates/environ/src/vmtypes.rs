@@ -602,21 +602,6 @@ macro_rules! for_each_vm_type {
                 pub data: *mut u8,
             }
 
-            /// Payload values exchanged with a continuation and the metadata
-            /// needed to trace GC references among them.
-            #[derive(Debug, Clone)]
-            #[repr(C)]
-            #[snake_name = vm_payloads]
-            pub struct VMPayloads {
-                /// The payload values themselves.
-                #[aggregate]
-                pub buffer: VMHostArray,
-
-                /// One marker byte per buffer slot, indicating whether that
-                /// slot contains a GC reference, or `None` when no slots do.
-                pub gc_ref_data: Option<VmPtr<u8>>,
-            }
-
             /// The information saved for every stack, whether it is a
             /// continuation's or the initial stack's.
             #[derive(Debug, Clone)]
@@ -739,6 +724,21 @@ macro_rules! for_each_vm_type {
             pub struct VMNullHeapData {
                 /// The bump-allocation finger, an index into the GC heap.
                 pub next: NonZeroU32,
+            }
+
+            /// Payload values exchanged with a continuation and the metadata
+            /// needed to trace GC references among them.
+            #[derive(Debug, Clone)]
+            #[repr(C)]
+            #[snake_name = vm_payloads]
+            pub struct VMPayloads {
+                /// The payload values themselves.
+                #[aggregate]
+                pub buffer: VMHostArray,
+
+                /// One marker byte per buffer slot, indicating whether that
+                /// slot contains a GC reference, or `None` when no slots do.
+                pub gc_ref_data: Option<VmPtr<u8>>,
             }
         }
     };
