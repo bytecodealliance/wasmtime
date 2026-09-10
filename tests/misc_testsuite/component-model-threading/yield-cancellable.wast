@@ -29,7 +29,7 @@
       i32.const 1 ;; CALLBACK_CODE_YIELD
     )
 
-    ;; thread: call `thread.yield-cancellable` and double-check it didn't pick
+    ;; thread: call `thread.yield` and double-check it didn't pick
     ;; up anything
     (func $explicit-start (param $ctx i32)
       (if (call $thread.yield)
