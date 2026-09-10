@@ -4,7 +4,17 @@ Unreleased.
 
 ### Added
 
+* Added `RecGroupBuilder`, an embedder API for defining recursion groups of Wasm
+  types, including types that reference themselves or each other (e.g. linked
+  lists and mutually-recursive structs).
+  [#10176](https://github.com/bytecodealliance/wasmtime/issues/10176)
+
 ### Changed
+
+### Fixed
+
+* Fixed `StorageType::is_val_type` to report whether the storage type is a value
+  type; it previously returned whether it was an `i16`.
 
 --------------------------------------------------------------------------------
 
