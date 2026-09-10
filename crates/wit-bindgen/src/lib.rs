@@ -1527,7 +1527,7 @@ impl Wasmtime {
                         {wt}::component::ResourceType::host::<{camel}>(),
                         move |caller: &{wt}::component::Accessor::<T>, rep| {{
                             {wt}::component::__internal::Box::pin(async move {{
-                                let accessor = &caller.with_data(host_getter);
+                                let accessor = &caller.with_data::<D>(host_getter);
                                 Host{camel}WithStore::drop(accessor, {wt}::component::Resource::new_own(rep)).await
                             }})
                         }},
