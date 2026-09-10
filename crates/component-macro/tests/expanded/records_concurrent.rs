@@ -450,10 +450,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::tuple_arg(host, arg0).await;
                             Ok(r)
                         })
@@ -466,10 +466,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::tuple_result(host).await;
                             Ok((r,))
                         })
@@ -485,10 +485,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::empty_arg(host, arg0).await;
                             Ok(r)
                         })
@@ -501,10 +501,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::empty_result(host).await;
                             Ok((r,))
                         })
@@ -520,10 +520,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::scalar_arg(host, arg0)
                                 .await;
                             Ok(r)
@@ -537,10 +537,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::scalar_result(host).await;
                             Ok((r,))
                         })
@@ -556,10 +556,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::flags_arg(host, arg0).await;
                             Ok(r)
                         })
@@ -572,10 +572,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::flags_result(host).await;
                             Ok((r,))
                         })
@@ -591,10 +591,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::aggregate_arg(host, arg0)
                                 .await;
                             Ok(r)
@@ -608,10 +608,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::aggregate_result(host)
                                 .await;
                             Ok((r,))
@@ -628,10 +628,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::typedef_inout(host, arg0)
                                 .await;
                             Ok((r,))

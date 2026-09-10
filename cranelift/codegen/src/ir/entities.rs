@@ -22,7 +22,6 @@
 use crate::entity::entity_impl;
 use crate::ir::AliasRegion;
 use core::fmt;
-use core::u32;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 

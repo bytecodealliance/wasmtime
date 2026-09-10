@@ -1,7 +1,6 @@
 //! Helper functions and structures for the translation.
 use crate::func_environ::FuncEnvironment;
 use crate::translate::environ::TargetEnvironment;
-use core::u32;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;

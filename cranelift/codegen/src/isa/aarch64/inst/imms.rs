@@ -431,7 +431,7 @@ impl ImmLogic {
             let mask = (1 << d) - 1;
             (d, clz_a, 0, mask)
         } else {
-            (64, a.leading_zeros(), 1, u64::max_value())
+            (64, a.leading_zeros(), 1, u64::MAX)
         };
 
         // If the repeat period d is not a power of two, it can't be encoded.
@@ -476,7 +476,7 @@ impl ImmLogic {
         // makes the answer come out right for stretches that reach the very top of
         // the word (e.g. numbers like 0xffffc00000000000).
         let clz_b = if b == 0 {
-            u32::max_value() // -1
+            u32::MAX // -1
         } else {
             b.leading_zeros()
         };
@@ -489,7 +489,7 @@ impl ImmLogic {
             // where we compensate: the number of set bits becomes the number of clear
             // bits, and the rotation count is based on position b rather than position
             // a (since b is the location of the 'lowest' 1 bit after inversion).
-            // Need wrapping for when clz_b is max_value() (for when b == 0).
+            // Need wrapping for when clz_b is u32::MAX (for when b == 0).
             (d - s, clz_b.wrapping_add(1) & (d - 1))
         } else {
             (s, (clz_a + 1) & (d - 1))
@@ -977,7 +977,7 @@ mod test {
     #[test]
     fn imm_logical_test() {
         assert_eq!(None, ImmLogic::maybe_from_u64(0, I64));
-        assert_eq!(None, ImmLogic::maybe_from_u64(u64::max_value(), I64));
+        assert_eq!(None, ImmLogic::maybe_from_u64(u64::MAX, I64));
 
         assert_eq!(
             Some(ImmLogic {
@@ -1064,13 +1064,13 @@ mod test {
 
         assert_eq!(
             Some(ImmLogic {
-                value: u64::max_value() - 1,
+                value: u64::MAX - 1,
                 n: true,
                 r: 63,
                 s: 62,
                 size: OperandSize::Size64,
             }),
-            ImmLogic::maybe_from_u64(u64::max_value() - 1, I64)
+            ImmLogic::maybe_from_u64(u64::MAX - 1, I64)
         );
 
         assert_eq!(
