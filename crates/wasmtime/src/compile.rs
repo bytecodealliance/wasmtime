@@ -129,6 +129,8 @@ pub(crate) fn build_module_artifacts<T: FinishedObject>(
     object.serialize_info(&(&info, &index, &types));
     let result = T::finish_object(object, obj_state)?;
 
+    compiler.release_caches();
+
     Ok((result, Some((info, index, types))))
 }
 
@@ -235,6 +237,8 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         checksum: WasmChecksum::from_binary(binary, tunables.recording),
     };
     object.serialize_info(&artifacts);
+
+    compiler.release_caches();
 
     let result = T::finish_object(object, obj_state)?;
     Ok((result, Some(artifacts)))
