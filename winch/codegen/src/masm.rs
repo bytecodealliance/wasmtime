@@ -2100,7 +2100,7 @@ pub(crate) trait MacroAssembler {
     /// stack before returning.
     ///
     /// Note that the address is passed through the context's stack rather than
-    /// as a register to ensure that any spills can be perfomed when solving
+    /// as a register to ensure that any spills can be performed when solving
     /// ISA-specific constraints prior to emission.
     fn atomic_rmw(
         &mut self,

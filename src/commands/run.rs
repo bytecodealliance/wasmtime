@@ -42,7 +42,7 @@ pub struct RunCommand {
     #[expect(missing_docs, reason = "don't want to mess with clap doc-strings")]
     pub run: RunCommon,
 
-    /// The the function to run
+    /// The function to run
     ///
     /// When used with modules, this must be the export name of a function.
     /// Arguments to the function are parsed from trailing arguments provided
@@ -52,7 +52,7 @@ pub struct RunCommand {
     /// e.g. `wasi:cli/run.run@0.2.0()` or
     /// `your:pkg/iface.func("arguments in wave encoding")`. Bare function
     /// names (e.g. `run()`) are accepted and searched for in all exported
-    /// instances, and must be unambigious.
+    /// instances, and must be unambiguous.
     #[arg(long, value_name = "FUNCTION")]
     pub invoke: Option<String>,
 
