@@ -2195,11 +2195,13 @@ pub struct MachReloc {
 pub enum RelocTarget {
     /// Points to an [ExternalName] outside the current function.
     ExternalName(ExternalName),
-    /// Points to a [MachLabel] inside this function.
-    /// This is different from [MachLabelFixup] in that both the relocation and the
-    /// label will be emitted and are only resolved at link time.
+    /// Points to a [MachLabel] inside this function.  This is different
+    /// from an internal fixup/label reference in that both the
+    /// relocation and the label will be emitted and are only resolved
+    /// at link time.
     ///
-    /// There is no reason to prefer this over [MachLabelFixup] unless the ABI requires it.
+    /// There is no reason to prefer this over internal fixups unless
+    /// the ABI requires it.
     Label(LabelOrOffset),
 }
 
