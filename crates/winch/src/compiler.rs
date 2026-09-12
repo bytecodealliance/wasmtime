@@ -229,6 +229,10 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Box<dyn Iterator<Item = FuncKey> + 'a> {
         self.trampolines.compiled_function_relocation_targets(func)
     }
+
+    fn release_caches(&self) {
+        self.trampolines.release_caches();
+    }
 }
 
 /// A wrapper around another `Compiler` implementation that may or may not be an
@@ -323,6 +327,10 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
     ) -> Result<()> {
         self.0
             .append_dwarf(obj, translations, get_func, dwarf_package_bytes, tunables)
+    }
+
+    fn release_caches(&self) {
+        self.0.release_caches();
     }
 }
 
