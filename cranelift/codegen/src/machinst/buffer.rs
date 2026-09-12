@@ -389,10 +389,9 @@ pub struct MachBuffer<I: VCodeInst> {
 /// The goal is to indirect the large allocations (`SmallVec`s) so
 /// that we don't move a lot of memory during compilation.
 ///
-/// The two named types differ in that `MachBufferFinalized` contains
-/// different forms of some of the fields of the `MachBuffer` that
-/// have been rewritten (see `MachBuffer::finish()`) -- this is not
-/// just typestate.
+/// The two named types are essentially a builder/final object pair.
+/// The inner state is the same (except that the builder has further
+/// transient state that is later dropped).
 ///
 /// However, many of the fields are either moved over wholesale or
 /// patched then moved over (data). We put these fields in
