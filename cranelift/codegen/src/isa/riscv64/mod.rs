@@ -6,7 +6,6 @@ use crate::isa::riscv64::settings as riscv_settings;
 use crate::isa::{
     Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey, OwnedTargetIsa, TargetIsa,
 };
-#[cfg(feature = "unwind")]
 use crate::machinst::CompiledCode;
 use crate::machinst::{
     CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet, TextSectionBuilder, VCode,
