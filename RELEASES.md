@@ -4,7 +4,41 @@ Unreleased.
 
 ### Added
 
+* Winch now has initial experimental support for the WebAssembly
+  exception-handling proposal.
+  [#14066](https://github.com/bytecodealliance/wasmtime/pull/14066)
+  [#14081](https://github.com/bytecodealliance/wasmtime/pull/14081)
+  [#14132](https://github.com/bytecodealliance/wasmtime/pull/14132)
+  [#14149](https://github.com/bytecodealliance/wasmtime/pull/14149)
+  [#14180](https://github.com/bytecodealliance/wasmtime/pull/14180)
+  [#14209](https://github.com/bytecodealliance/wasmtime/pull/14209)
+
+* Wasmtime's type reflection APIs for WebAssembly GC types now have dedicated
+  enums for `Heap{Top,Bottom}Type`s.
+  [#14208](https://github.com/bytecodealliance/wasmtime/pull/14208)
+
+* Wasmtime now supports the use of environment variables to configure most CLI
+  arguments in addition to the preexisting CLI flags.
+  [#14217](https://github.com/bytecodealliance/wasmtime/pull/14217)
+
+* Cranelift will now fold `u{add,mul}_overflow` results combined with `brif`
+  instructions for more optimal codegen.
+  [#14217](https://github.com/bytecodealliance/wasmtime/pull/14217)
+  [#14254](https://github.com/bytecodealliance/wasmtime/pull/14254)
+
+* Components can be tested for equality with a new `Component::same` API.
+  [#14257](https://github.com/bytecodealliance/wasmtime/pull/14257)
+
+* The Wasmtime C/C++ API now supports the `component-model-implements` feature.
+  [#14264](https://github.com/bytecodealliance/wasmtime/pull/14264)
+
+* Cranelift will now emit the `{u,s}bfm` instructions on AArch64.
+  [#14187](https://github.com/bytecodealliance/wasmtime/pull/14187)
+
 ### Changed
+
+* The wide-arithmetic WebAssembly proposal is now enabled by default.
+  [#14110](https://github.com/bytecodealliance/wasmtime/pull/14110)
 
 * `Config::operator_cost` now applies to operators inside constant expressions
   (global initializers, element and data segment offsets, element segment
@@ -12,6 +46,56 @@ Unreleased.
   Previously each of those was charged 1 fuel unit regardless of the configured
   cost.
   [#14215](https://github.com/bytecodealliance/wasmtime/pull/14215)
+
+* Wasmtime's WASI implementation will no longer over-read stdin where possible.
+  [#14077](https://github.com/bytecodealliance/wasmtime/pull/14077)
+
+* Wasmtime's WASIp2 implementation now maps host-level "broken pipe" errors to
+  `StreamError::Closed`.
+  [#14107](https://github.com/bytecodealliance/wasmtime/pull/14107)
+
+* Wasmtime's WASIp2 implementation of `wasi:http` now validates ports in the
+  same manner as wasip3.
+  [#14123](https://github.com/bytecodealliance/wasmtime/pull/14123)
+
+* Wasmtime's WASI implementation of `wasi:filesystem` now returns the
+  `is-directory` error in some situations when a file is provided.
+  [#14135](https://github.com/bytecodealliance/wasmtime/pull/14135)
+
+* The `wasmtime-wasi-http` crate now has the `p3` feature enabled by default.
+  [#14137](https://github.com/bytecodealliance/wasmtime/pull/14137)
+
+* Wasmtime's WASIp2 implementation of `wasi:http` now runs more hooks from the
+  `WasiHttpHooks` trait in the same manner as wasip3.
+  [#14167](https://github.com/bytecodealliance/wasmtime/pull/14167)
+
+* Wasmtime now requires Rust 1.96.0 to compile.
+  [#14184](https://github.com/bytecodealliance/wasmtime/pull/14184)
+
+* Adjustments have been made to the scheduling of threads w.r.t. trapping
+  behavior for cooperatively threaded components. These changes are made to
+  align with the upstream component-model specification.
+  [#14146](https://github.com/bytecodealliance/wasmtime/pull/14146)
+  [#14250](https://github.com/bytecodealliance/wasmtime/pull/14250)
+
+* Fuel for bulk operations is now consumed after the bulk operation has
+  completed instead of up-front, restoring previous behavior where a failed very
+  large memory growth doesn't trap the original program.
+  [#14213](https://github.com/bytecodealliance/wasmtime/pull/14213)
+
+* A number of future `poll` calls throughout the WASIp2 implementation now
+  explicitly opt-out of Tokio's per-task cooperative budget to better uphold
+  guarantees of WASIp2 APIs.
+  [#14265](https://github.com/bytecodealliance/wasmtime/pull/14265)
+
+* The `run_concurrent` function is now allowed to run recursively for separate
+  stores, but it still can only be used at most once recursively for any one
+  store.
+  [#14302](https://github.com/bytecodealliance/wasmtime/pull/14302)
+
+* The compile-time performance of the alias analysis in Cranelift has been
+  greatly improved.
+  [#14306](https://github.com/bytecodealliance/wasmtime/pull/14306)
 
 --------------------------------------------------------------------------------
 
