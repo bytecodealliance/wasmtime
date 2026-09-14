@@ -413,6 +413,9 @@ fn define_control_flow(
         // https://github.com/bytecodealliance/wasmtime/pull/9078#issuecomment-2273869774.
         .call()
         .can_load()
+        // It may transfer control to something that may store. Declaring this
+        // makes us a memory fence.
+        .can_store()
         // Don't optimize me out just because I don't def anything. TODO: Can we use side_effects_idempotent()?
         .other_side_effects(),
         // If `load` is not can_trap(), this isn't either.
