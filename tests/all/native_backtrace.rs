@@ -1,4 +1,4 @@
-#![cfg(all(any(unix, windows), has_host_compiler_backend, not(miri)))]
+#![cfg(not(miri))]
 
 use wasmtime::{Caller, Config, Engine, Func, Inlining, Instance, Module, Result, Store};
 

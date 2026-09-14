@@ -43,6 +43,7 @@ mod missing_async;
 mod module;
 mod module_serialize;
 mod name;
+mod native_backtrace;
 mod native_debug;
 mod noextern;
 mod piped_tests;

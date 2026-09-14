@@ -93,7 +93,6 @@ mach2 = { workspace = true, optional = true }
 rustix = { workspace = true, optional = true, features = ["mm", "param"] }
 
 [dev-dependencies]
-backtrace = { workspace = true }
 env_logger = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true, features = ['thread_rng'] }
@@ -118,10 +117,6 @@ harness = false
 [[test]]
 name = "pooling_alloc_near_oom"
 harness = false
-
-[[test]]
-name = "native_backtrace"
-required-features = ["cranelift", "runtime", "std", "wat"]
 
 # =============================================================================
 #

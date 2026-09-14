@@ -4595,7 +4595,6 @@ version = "49.0.0-dev"
 dependencies = [
  "addr2line 0.26.0",
  "async-trait",
- "backtrace",
  "bitflags 2.11.1",
  "bumpalo",
  "bytes",
@@ -4697,6 +4696,7 @@ version = "49.0.0-dev"
 dependencies = [
  "anyhow",
  "async-trait",
+ "backtrace",
  "bstr",
  "bytes",
  "bytesize",

@@ -108,6 +108,7 @@ pin-project-lite = { workspace = true, optional = true }
 rustix = { workspace = true, features = ["mm", "process"] }
 
 [dev-dependencies]
+backtrace = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 filecheck = { workspace = true }
