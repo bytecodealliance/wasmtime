@@ -197,6 +197,37 @@ mod trappable_errors {
     });
 
     type MyX = u32;
+
+    mod trappable2 {
+        wasmtime::component::bindgen!({
+            inline: r#"
+                package test:pkg;
+
+                interface types {
+                    variant error {
+                        test,
+                    }
+                }
+
+                interface test {
+                    use types.{error};
+
+                    test: func() -> result<_, error>;
+                }
+
+                world repro {
+                    import test;
+                }
+            "#,
+            world: "repro",
+            trappable_error_type: {
+                "test:pkg/test.error" => String,
+            },
+            imports: {
+                default: trappable,
+            }
+        });
+    }
 }
 
 mod interface_name_with_rust_keyword {
@@ -1026,6 +1057,89 @@ mod named_imports {
                 "foo:foo/store": MyId,
             },
             imports: { default: async | store },
+        });
+    }
+
+    mod trappable_errors {
+        use wasmtime::component::Resource;
+
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface store {
+                    variant error {
+                        not-found,
+                    }
+
+                    resource cache {
+                        get: func(key: u32) -> result<u32, error>;
+                    }
+                }
+
+                world the-world {
+                    import store;
+                }
+            ",
+            imports: { default: trappable },
+            named_imports: {
+                "foo:foo/store": String,
+            },
+            trappable_error_type: {
+                "foo:foo/store.error" => MyError,
+            },
+        });
+
+        pub struct MyError;
+
+        struct MyHost;
+
+        impl named_imports::foo::foo::store::HostCache for MyHost {
+            fn get(
+                &mut self,
+                _id: String,
+                _self_: Resource<foo::foo::store::Cache>,
+                key: u32,
+            ) -> Result<u32, MyError> {
+                Ok(key)
+            }
+            fn drop(
+                &mut self,
+                _id: String,
+                _rep: Resource<foo::foo::store::Cache>,
+            ) -> wasmtime::Result<()> {
+                Ok(())
+            }
+        }
+        impl named_imports::foo::foo::store::Host for MyHost {
+            fn convert_error(&mut self, _err: MyError) -> wasmtime::Result<foo::foo::store::Error> {
+                Ok(foo::foo::store::Error::NotFound)
+            }
+        }
+    }
+
+    mod trappable2 {
+        pub struct ErrorA;
+        pub struct ErrorB;
+        wasmtime::component::bindgen!({
+            inline: "
+                package test:collision;
+                interface a { enum error { failed } }
+                interface b { enum error { failed } }
+                interface combined {
+                    use a.{error as error-a};
+                    use b.{error as error-b};
+                    first: func() -> result<_, error-a>;
+                    second: func() -> result<_, error-b>;
+                }
+                world test { import combined; }
+            ",
+            imports: { default: trappable },
+            named_imports: { "test:collision/combined": usize },
+            trappable_error_type: {
+                "test:collision/a.error" => ErrorA,
+                "test:collision/b.error" => ErrorB,
+            },
         });
     }
 }

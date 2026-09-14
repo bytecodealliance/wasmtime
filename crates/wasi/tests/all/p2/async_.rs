@@ -2,10 +2,10 @@ use crate::store::{Ctx, MyWasiCtx};
 use std::path::Path;
 use test_programs_artifacts::*;
 use wasmtime::Result;
-use wasmtime::component::{Component, Linker};
-use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p2::add_to_linker_async;
 use wasmtime_wasi::p2::bindings::Command;
+use wasmtime_wasi::{NamedId, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiNamedView, WasiView};
 
 async fn run(path: &str, with_builder: impl FnOnce(&mut WasiCtxBuilder)) -> Result<()> {
     run_with_workspace_setup(path, |_| Ok(()), with_builder).await
@@ -507,4 +507,71 @@ async fn file_stream_not_permitted(component_path: &str) {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_clocks_zero_wait() {
     run(P2_CLOCKS_ZERO_WAIT_COMPONENT, |_| {}).await.unwrap()
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_environment_named_imports() -> Result<()> {
+    struct StoreData {
+        default: WasiCtx,
+        a: WasiCtx,
+        b: WasiCtx,
+        table: ResourceTable,
+    }
+
+    impl WasiView for Ctx<StoreData> {
+        fn ctx(&mut self) -> WasiCtxView<'_> {
+            WasiCtxView {
+                ctx: &mut self.wasi.default,
+                table: &mut self.wasi.table,
+            }
+        }
+    }
+
+    impl WasiNamedView for Ctx<StoreData> {
+        fn ctx(&mut self, id: NamedId) -> WasiCtxView<'_> {
+            WasiCtxView {
+                ctx: match id.0 {
+                    0 => &mut self.wasi.a,
+                    1 => &mut self.wasi.b,
+                    _ => panic!("unexpected id: {}", id.0),
+                },
+                table: &mut self.wasi.table,
+            }
+        }
+    }
+
+    let path = Path::new(P2_ENVIRONMENT_NAMED_IMPORTS_COMPONENT);
+    let name = path.file_stem().unwrap().to_str().unwrap();
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_component_model_implements(true);
+    });
+    let component = Component::from_file(&engine, path)?;
+    let mut linker = Linker::new(&engine);
+    add_to_linker_async(&mut linker)?;
+    wasmtime_wasi::p2::add_named_to_linker_async(&mut linker, &component, |i, name| {
+        assert_eq!(i, wasmtime_wasi::p2::Interface::CliEnvironment);
+        Ok(match name {
+            "a" => NamedId(0),
+            "b" => NamedId(1),
+            _ => panic!("unexpected name: {name}"),
+        })
+    })?;
+
+    let (mut store, _td) = Ctx::new_with_workspace_setup(
+        &engine,
+        name,
+        |_| Ok(()),
+        |builder| StoreData {
+            default: builder.env("DEFAULT", "0").build(),
+            a: WasiCtx::builder().env("A", "0").build(),
+            b: WasiCtx::builder().env("B", "0").build(),
+            table: ResourceTable::default(),
+        },
+    )?;
+    let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+    command
+        .wasi_cli_run()
+        .call_run(&mut store)
+        .await?
+        .map_err(|()| wasmtime::format_err!("run returned a failure"))
 }

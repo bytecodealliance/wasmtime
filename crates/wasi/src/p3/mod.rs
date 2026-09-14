@@ -15,13 +15,15 @@ pub mod filesystem;
 pub mod random;
 pub mod sockets;
 
-use crate::WasiView;
 use crate::p3::bindings::LinkOptions;
+use crate::{NamedId, WasiNamedView, WasiView};
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use tokio::sync::oneshot;
 use wasmtime::StoreContextMut;
-use wasmtime::component::{Destination, Linker, StreamProducer, StreamResult, VecBuffer};
+use wasmtime::component::{
+    Component, Destination, Linker, StreamProducer, StreamResult, VecBuffer,
+};
 
 // Default buffer capacity to use for reads of byte-sized values.
 const DEFAULT_BUFFER_CAPACITY: usize = 8192;
@@ -188,5 +190,161 @@ where
     filesystem::add_to_linker(linker)?;
     random::add_to_linker(linker)?;
     sockets::add_to_linker(linker)?;
+    Ok(())
+}
+
+/// Interfaces that are added via [`add_named_to_linker`].
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Interface {
+    /// `wasi:clocks/monotonic-clock`
+    ClocksMonotonicClock,
+    /// `wasi:clocks/system-clock`
+    ClocksSystemClock,
+    /// `wasi:random/random`
+    RandomRandom,
+    /// `wasi:random/insecure`
+    RandomInsecure,
+    /// `wasi:random/insecure-seed`
+    RandomInsecureSeed,
+    /// `wasi:cli/exit`
+    CliExit,
+    /// `wasi:cli/environment`
+    CliEnvironment,
+    /// `wasi:cli/stdin`
+    CliStdin,
+    /// `wasi:cli/stdout`
+    CliStdout,
+    /// `wasi:cli/stderr`
+    CliStderr,
+    /// `wasi:cli/terminal-input`
+    CliTerminalInput,
+    /// `wasi:cli/terminal-output`
+    CliTerminalOutput,
+    /// `wasi:cli/terminal-stdin`
+    CliTerminalStdin,
+    /// `wasi:cli/terminal-stdout`
+    CliTerminalStdout,
+    /// `wasi:cli/terminal-stderr`
+    CliTerminalStderr,
+    /// `wasi:filesystem/types`
+    FilesystemTypes,
+    /// `wasi:filesystem/preopens`
+    FilesystemPreopens,
+    /// `wasi:sockets/types`
+    SocketsTypes,
+    /// `wasi:sockets/ip-name-lookup`
+    SocketsIpNameLookup,
+}
+
+/// Add all WASI interfaces from this module into the `linker` provided for any
+/// named imports that a component has.
+///
+/// This function is similar to [`add_to_linker`] except that it's specifically
+/// designed to work with named imports of WASI interfaces that components may
+/// have. This requires a [`Component`] parameter to be passed in when
+/// populating the [`Linker`] provided to see what the [`Component`] actually
+/// imports.
+///
+/// All interfaces implemented by this module are added here, so the
+/// per-package functions such as [`cli::add_named_to_linker`] do not
+/// additionally need to be invoked. If this isn't low level enough you can
+/// invoke those functions, or the bindgen-generated `add_to_linker` functions
+/// within the [`named_imports`] module, directly instead.
+///
+/// [`named_imports`]: crate::p3::bindings::named_imports
+///
+/// The `lookup` function provided here is invoked for every named import found
+/// for a particular interface. The [`Interface`] given is what's being bound,
+/// and the `&str` argument is the name that the component imports it as. The
+/// embedder can then decide how it would like to allocate a [`NamedId`] for
+/// this import. If `Ok` is returned then the linker is populated with this
+/// name, and imported functions will pass the [`NamedId`] later to the
+/// implementation of [`WasiNamedView`] on `T` when invoked. If `Err` is
+/// returned then the error will cause this entire function to fail and this
+/// function call will return the same error.
+///
+/// # Example
+///
+/// ```
+/// use std::collections::HashMap;
+/// use wasmtime::component::{Component, Linker, ResourceTable};
+/// use wasmtime::{Engine, Result, Store, Config};
+/// use wasmtime_wasi::{NamedId, WasiCtx, WasiCtxView, WasiNamedView};
+///
+/// fn main() -> Result<()> {
+///     let mut config = Config::new();
+///     config.wasm_component_model_async(true);
+///     let engine = Engine::new(&config)?;
+///     let component = Component::new(&engine, "(component)")?;
+///
+///     let mut linker = Linker::<MyState>::new(&engine);
+///
+///     // ... add default functionality to `linker` as needed ...
+///
+///     // and then additionally fill in any specific named imports `component`
+///     // might have for WASI interfaces.
+///     let mut name_map = HashMap::new();
+///     wasmtime_wasi::p3::add_named_to_linker(&mut linker, &component, |_i, name| {
+///         let len = name_map.len();
+///         Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///     })?;
+///
+///     // Here a `WasiCtx` is allocated per-named-import and will then be
+///     // referred to internally by the [`NamedId`] allocated above. You could
+///     // also use `name_map` to configure each context differently.
+///     let mut my_state = MyState::default();
+///     for _ in 0..name_map.len() {
+///         my_state.contexts.push(WasiCtx::default());
+///     }
+///     let mut store = Store::new(&engine, my_state);
+///
+///     // ... use `linker` to instantiate within `store` ...
+///
+///     Ok(())
+/// }
+///
+/// #[derive(Default)]
+/// struct MyState {
+///     table: ResourceTable,
+///     contexts: Vec<WasiCtx>,
+/// }
+///
+/// impl WasiNamedView for MyState {
+///     fn ctx(&mut self, id: NamedId) -> WasiCtxView<'_> {
+///         WasiCtxView {
+///             ctx: &mut self.contexts[id.0],
+///             table: &mut self.table,
+///         }
+///     }
+/// }
+/// ```
+pub fn add_named_to_linker<T>(
+    linker: &mut Linker<T>,
+    component: &Component,
+    lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiNamedView + 'static,
+{
+    let options = LinkOptions::default();
+    add_named_to_linker_with_options(linker, &options, component, lookup)
+}
+
+/// Same as [`add_named_to_linker`] except [`LinkOptions`] can be specified to
+/// configure interfaces that are added.
+pub fn add_named_to_linker_with_options<T>(
+    linker: &mut Linker<T>,
+    _options: &LinkOptions,
+    component: &Component,
+    mut lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiNamedView + 'static,
+{
+    cli::add_named_to_linker(linker, component, &mut lookup)?;
+    clocks::add_named_to_linker(linker, component, &mut lookup)?;
+    filesystem::add_named_to_linker(linker, component, &mut lookup)?;
+    random::add_named_to_linker(linker, component, &mut lookup)?;
+    sockets::add_named_to_linker(linker, component, &mut lookup)?;
     Ok(())
 }
