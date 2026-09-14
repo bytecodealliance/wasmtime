@@ -6532,7 +6532,7 @@ impl CheckedEntity {
             CheckedEntity::Elem(_) => false,
             // Tables that are lazily initialized can't be memset because the
             // initialized bit needs to be set when storing values.
-            CheckedEntity::Table { .. } => !env.tunables.table_lazy_init,
+            CheckedEntity::Table { .. } => false,
         }
     }
 }
