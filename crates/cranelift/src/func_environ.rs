@@ -2437,6 +2437,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     Some(tag) => ExceptionTableItem::Tag(tag, block_call),
                     None => ExceptionTableItem::Default(block_call),
                 });
+
+                // Tags are matched left-to-right in CLIF, so once a catch-all
+                // tag is pushed there's no more need to push any other
+                // handlers, even if present, as they're not going to be
+                // executed anyway.
+                if tag.is_none() {
+                    break;
+                }
             }
             let etd = ExceptionTableData::new(sig, continuation, handlers);
             let et = self.builder.func.dfg.exception_tables.push(etd);
