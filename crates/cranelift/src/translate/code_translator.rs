@@ -295,7 +295,17 @@ pub fn translate_operator(
 
             let next_block = builder.create_block();
             let (params, results) = blocktype_params_results(validator, *blockty)?;
-            let (destination, else_data) = if params.clone().eq(results.clone()) {
+
+            // We don't need an `else` if every parameter is a subtype of the
+            // result.
+            let resources = validator.resources();
+            let else_is_optional = params.len() == results.len()
+                && params
+                    .clone()
+                    .zip(results.clone())
+                    .all(|(param, result)| resources.is_subtype(param, result));
+
+            let (destination, else_data) = if else_is_optional {
                 // It is possible there is no `else` block, so we will only
                 // allocate a block for it if/when we find the `else`. For now,
                 // we if the condition isn't true, then we jump directly to the
