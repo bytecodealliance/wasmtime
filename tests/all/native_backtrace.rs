@@ -8,6 +8,10 @@ fn check_stack(wat: &str, expected: &[&str], value: i32) -> Result<()> {
         .native_unwind_info(true)
         .compiler_inlining(Inlining::No);
     let engine = Engine::new(&config)?;
+    // Interpreted Wasm calls do not create native frames for the unwinder to find.
+    if engine.is_pulley() {
+        return Ok(());
+    }
     let module = Module::new(&engine, wat)?;
     let start = module.text().as_ptr() as usize;
     let functions = module
