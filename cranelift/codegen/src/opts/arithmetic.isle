@@ -624,3 +624,7 @@
 ;; x /u (1 << y) --> x >>u y
 (rule (simplify_skeleton (udiv x (ishl ty (iconst_u ty 1) y)))
       (ushr ty x y))
+
+;; x %u (1 << k) --> x & ((1 << k) - 1).
+(rule (simplify_skeleton (urem x divisor @ (ishl ty (iconst_u ty 1) k)))
+      (band ty x (isub ty divisor (iconst_u ty 1))))

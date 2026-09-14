@@ -545,3 +545,64 @@
 ;; rotl(x, k) == rotl(y, k) --> x == y.
 (rule (simplify (eq ty (rotl cty x k) (rotl cty y k)))
       (subsume (eq ty x y)))
+
+;; (x >=s 0) & (x <s N) --> x <u N, 0 < N < 2^(B - 1).
+(rule (simplify (band rty
+                     (sge rty x (all_zero ty))
+                     (slt rty x n @ (iconst_s (ty_int ty) limit))))
+      (if-let true (i64_gt limit 0))
+      (ult rty x n))
+(rule (simplify (band rty
+                     (slt rty x n @ (iconst_s (ty_int ty) limit))
+                     (sge rty x (all_zero ty))))
+      (if-let true (i64_gt limit 0))
+      (ult rty x n))
+
+;; x %s 2^k == 0 --> (x & (2^k - 1)) == 0.
+;; x == ((x + (y >>u (B - k))) & -2^k) --> (x & (2^k - 1)) == 0.
+(rule (simplify (eq rty x
+                   (band (ty_int ty)
+                         (iadd ty x (ushr ty y (iconst_u _ shift)))
+                         (iconst_s ty mask))))
+      (if-let true (i64_is_negative_power_of_two mask))
+      (if-let bits (i64_trailing_zeros mask))
+      (if-let true (u32_lt bits (ty_bits ty)))
+      (if-let true (u64_eq (u64_and shift (ty_shift_mask ty))
+                          (u64_sub (ty_bits_u64 ty) bits)))
+      (subsume (eq rty (band ty x (iconst_s ty (i64_wrapping_sub (i64_wrapping_neg mask) 1)))
+                      (all_zero ty))))
+(rule (simplify (eq rty x
+                   (band (ty_int ty)
+                         (iadd ty (ushr ty y (iconst_u _ shift)) x)
+                         (iconst_s ty mask))))
+      (if-let true (i64_is_negative_power_of_two mask))
+      (if-let bits (i64_trailing_zeros mask))
+      (if-let true (u32_lt bits (ty_bits ty)))
+      (if-let true (u64_eq (u64_and shift (ty_shift_mask ty))
+                          (u64_sub (ty_bits_u64 ty) bits)))
+      (subsume (eq rty (band ty x (iconst_s ty (i64_wrapping_sub (i64_wrapping_neg mask) 1)))
+                      (all_zero ty))))
+(rule (simplify (eq rty
+                   (band (ty_int ty)
+                         (iadd ty x (ushr ty y (iconst_u _ shift)))
+                         (iconst_s ty mask))
+                   x))
+      (if-let true (i64_is_negative_power_of_two mask))
+      (if-let bits (i64_trailing_zeros mask))
+      (if-let true (u32_lt bits (ty_bits ty)))
+      (if-let true (u64_eq (u64_and shift (ty_shift_mask ty))
+                          (u64_sub (ty_bits_u64 ty) bits)))
+      (subsume (eq rty (band ty x (iconst_s ty (i64_wrapping_sub (i64_wrapping_neg mask) 1)))
+                      (all_zero ty))))
+(rule (simplify (eq rty
+                   (band (ty_int ty)
+                         (iadd ty (ushr ty y (iconst_u _ shift)) x)
+                         (iconst_s ty mask))
+                   x))
+      (if-let true (i64_is_negative_power_of_two mask))
+      (if-let bits (i64_trailing_zeros mask))
+      (if-let true (u32_lt bits (ty_bits ty)))
+      (if-let true (u64_eq (u64_and shift (ty_shift_mask ty))
+                          (u64_sub (ty_bits_u64 ty) bits)))
+      (subsume (eq rty (band ty x (iconst_s ty (i64_wrapping_sub (i64_wrapping_neg mask) 1)))
+                      (all_zero ty))))

@@ -329,3 +329,16 @@
 (rule (simplify (sshr ty (iconst_s ty -1) x)) (subsume (iconst_s ty -1)))
 (rule (simplify (rotl ty (iconst_s ty -1) x)) (subsume (iconst_s ty -1)))
 (rule (simplify (rotr ty (iconst_s ty -1) x)) (subsume (iconst_s ty -1)))
+
+;; x << (k & (B - 1)) --> x << k.
+(rule (simplify (ishl ty x (band _ k (iconst_u _ mask))))
+      (if-let mask (ty_shift_mask ty))
+      (ishl ty x k))
+;; x >>u (k & (B - 1)) --> x >>u k.
+(rule (simplify (ushr ty x (band _ k (iconst_u _ mask))))
+      (if-let mask (ty_shift_mask ty))
+      (ushr ty x k))
+;; x >>s (k & (B - 1)) --> x >>s k.
+(rule (simplify (sshr ty x (band _ k (iconst_u _ mask))))
+      (if-let mask (ty_shift_mask ty))
+      (sshr ty x k))
