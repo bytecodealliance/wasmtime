@@ -7,6 +7,8 @@ use pin_project_lite::pin_project;
 use std::convert::Infallible;
 use std::ffi::OsString;
 use std::net::SocketAddr;
+
+#[cfg(unix)]
 use std::net::TcpListener as StdTcpListener;
 #[cfg(unix)]
 use std::os::unix::net::UnixListener as StdUnixListener;
@@ -1534,6 +1536,7 @@ impl AsyncWrite for LogStream {
 }
 
 enum StdSocketServer {
+    #[cfg(unix)]
     Inet(StdTcpListener),
     #[cfg(unix)]
     Unix(StdUnixListener),
@@ -1548,12 +1551,17 @@ enum SocketServer {
 impl TryFrom<StdSocketServer> for SocketServer {
     type Error = wasmtime::Error;
 
+    #[cfg(unix)]
     fn try_from(value: StdSocketServer) -> Result<Self> {
         Ok(match value {
             StdSocketServer::Inet(listener) => Self::Inet(TcpListener::from_std(listener)?),
-            #[cfg(unix)]
             StdSocketServer::Unix(listener) => Self::Unix(UnixListener::from_std(listener)?),
         })
+    }
+
+    #[cfg(not(unix))]
+    fn try_from(_value: StdSocketServer) -> Result<Self> {
+        bail!("Only used for inherited sockets on Unix")
     }
 }
 
@@ -1580,6 +1588,7 @@ impl SocketServer {
     }
 }
 
+#[cfg(unix)]
 pin_project! {
     #[project = ClientSocketProj]
     enum ClientSocket {
@@ -1589,6 +1598,16 @@ pin_project! {
         #[cfg(unix)]
         Unix {
              #[pin] stream: UnixStream
+        },
+    }
+}
+
+#[cfg(not(unix))]
+pin_project! {
+    #[project = ClientSocketProj]
+    enum ClientSocket {
+        Inet {
+            #[pin] stream: TcpStream
         },
     }
 }
