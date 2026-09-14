@@ -20,6 +20,9 @@ target-lexicon = { workspace = true }
 [target.'cfg(target_arch = "riscv64")'.dependencies]
 libc = { workspace = true }
 
+[target.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.dependencies]
+mach2 = { workspace = true }
+
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std"]

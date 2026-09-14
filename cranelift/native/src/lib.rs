@@ -10,6 +10,9 @@ use target_lexicon::Triple;
 #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
 mod riscv;
 
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+mod macos;
+
 /// Return an `isa` builder configured for the current host
 /// machine, or `Err(())` if the host machine is not supported
 /// in the current configuration.
@@ -130,10 +133,15 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
             isa_builder.enable("has_i8mm").unwrap();
         }
 
-        if cfg!(target_os = "macos") {
-            // Pointer authentication is always available on Apple Silicon.
-            isa_builder.enable("sign_return_address").unwrap();
+        #[cfg(target_os = "macos")]
+        {
+            // Describing return addresses as signed when macOS has disabled
+            // pointer authentication makes the system DWARF unwinder reject them.
+            if macos::pointer_authentication_enabled()? {
+                isa_builder.enable("sign_return_address").unwrap();
+            }
             // macOS enforces the use of the B key for return addresses.
+            // Keep this default even when signing is explicitly enabled later.
             isa_builder.enable("sign_return_address_with_bkey").unwrap();
         }
     }

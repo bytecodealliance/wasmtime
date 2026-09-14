@@ -965,6 +965,7 @@ version = "0.137.0-dev"
 dependencies = [
  "cranelift-codegen",
  "libc",
+ "mach2 0.6.0",
  "target-lexicon 0.13.5",
 ]
 
@@ -4697,6 +4698,7 @@ version = "50.0.0-dev"
 dependencies = [
  "anyhow",
  "async-trait",
+ "backtrace",
  "bstr",
  "bytes",
  "bytesize",
