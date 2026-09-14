@@ -1,4 +1,5 @@
 use crate::cdsl::operands::OperandKind;
+use crate::display_join::DisplayJoinedVecExt;
 use std::fmt;
 use std::rc::Rc;
 
@@ -66,7 +67,7 @@ impl fmt::Display for InstructionFormat {
             .iter()
             .map(|field| format!("{}: {}", field.member, field.kind.rust_type))
             .collect::<Vec<_>>()
-            .join(", ");
+            .display_join(", ");
         fmt.write_fmt(format_args!(
             "{}(imms=({}), vals={}, blocks={}, raw_blocks={})",
             self.name,
