@@ -378,3 +378,57 @@ block2:
 ;   popq %rbp
 ;   retq
 
+
+function %no_load_sinking_sum_used_between(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = load.i32 v0
+  v3, v4 = uadd_overflow v1, v2
+  v5 = iadd v3, v1
+  brif v4, block1(v5), block2
+
+block1(v6: i32):
+  return v6
+
+block2:
+  return v1
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movl (%rdi), %edi
+;   movq %rsi, %r8
+;   addl %edi, %r8d
+;   movq %rsi, %rax
+;   jb      label2; j label1
+; block1:
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block2:
+;   leal (%r8, %rax), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl (%rdi), %edi ; trap: heap_oob
+;   movq %rsi, %r8
+;   addl %edi, %r8d
+;   movq %rsi, %rax
+;   jb 0x1a
+; block2: ; offset 0x15
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x1a
+;   addl %r8d, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

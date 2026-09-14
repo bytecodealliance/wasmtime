@@ -213,3 +213,41 @@ block2:
 ; run: %smulof_flags_brif_i32(0x7FFFFFFF, 2) == 1
 ; run: %smulof_flags_brif_i32(0x80000000, -1) == 1
 ; run: %smulof_flags_brif_i32(0x7FFFFFFF, -1) == 0
+
+function %smulof_flags_select_load_product_stored(i32, i32) -> i32, i8 {
+  ss0 = explicit_slot 8
+block0(v0: i32, v1: i32):
+  v2 = stack_addr.i64 ss0
+  store v1, v2
+  v3 = load.i32 v2
+  v4, v5 = smul_overflow v0, v3
+  v6 = stack_addr.i64 ss0+4
+  store v4, v6
+  v7 = iconst.i8 1
+  v8 = iconst.i8 0
+  v9 = select v5, v7, v8
+  v10 = load.i32 v6
+  return v10, v9
+}
+
+; run: %smulof_flags_select_load_product_stored(2, 3) == [6, 0]
+; run: %smulof_flags_select_load_product_stored(-2, 3) == [-6, 0]
+; run: %smulof_flags_select_load_product_stored(0x7FFFFFFF, 2) == [-2, 1]
+; run: %smulof_flags_select_load_product_stored(0x80000000, -1) == [0x80000000, 1]
+
+function %smulof_flags_select_load_product_used_between(i32, i32) -> i64 {
+  ss0 = explicit_slot 4
+block0(v0: i32, v1: i32):
+  v2 = stack_addr.i64 ss0
+  store v1, v2
+  v3 = load.i32 v2
+  v4, v5 = smul_overflow v0, v3
+  v6 = uextend.i64 v4
+  v7 = iconst.i64 -1
+  v8 = select v5, v7, v6
+  return v8
+}
+
+; run: %smulof_flags_select_load_product_used_between(2, 3) == 6
+; run: %smulof_flags_select_load_product_used_between(-2, 3) == 0xFFFFFFFA
+; run: %smulof_flags_select_load_product_used_between(0x7FFFFFFF, 2) == -1

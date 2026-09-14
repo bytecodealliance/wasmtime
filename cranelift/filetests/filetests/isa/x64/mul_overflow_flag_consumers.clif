@@ -271,3 +271,137 @@ block0(v0: i16, v1: i16):
 ;   popq %rbp
 ;   retq
 
+
+function %smul_flags_select_load_product_stored(i64, i32, i64, i64) -> i64 {
+block0(v0: i64, v1: i32, v2: i64, v3: i64):
+  v4 = load.i32 v0
+  v5, v6 = smul_overflow v1, v4
+  store v5, v0
+  v7 = select v6, v2, v3
+  return v7
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdx, %r8
+;   movl (%rdi), %r10d
+;   movq %rsi, %rax
+;   imull %r10d ;; implicit: %eax, %edx
+;   movl %eax, (%rdi)
+;   movq %rsi, %rax
+;   imull %r10d ;; implicit: %eax, %edx
+;   movq %r8, %rdx
+;   movq %rcx, %rax
+;   cmovoq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdx, %r8
+;   movl (%rdi), %r10d ; trap: heap_oob
+;   movq %rsi, %rax
+;   imull %r10d
+;   movl %eax, (%rdi) ; trap: heap_oob
+;   movq %rsi, %rax
+;   imull %r10d
+;   movq %r8, %rdx
+;   movq %rcx, %rax
+;   cmovoq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %smul_flags_select_load_product_used_between(i64, i32, i64) -> i64 {
+block0(v0: i64, v1: i32, v2: i64):
+  v4 = load.i32 v0
+  v5, v6 = smul_overflow v1, v4
+  v8 = uextend.i64 v5
+  v7 = select v6, v2, v8
+  return v7
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdx, %rcx
+;   movl (%rdi), %r10d
+;   movq %rsi, %rax
+;   imull %r10d ;; implicit: %eax, %edx
+;   movl %eax, %eax
+;   movq %rax, %rdx
+;   movq %rsi, %rax
+;   movq %rdx, %rsi
+;   imull %r10d ;; implicit: %eax, %edx
+;   movq %rsi, %rax
+;   movq %rcx, %rdx
+;   cmovoq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdx, %rcx
+;   movl (%rdi), %r10d ; trap: heap_oob
+;   movq %rsi, %rax
+;   imull %r10d
+;   movl %eax, %eax
+;   movq %rax, %rdx
+;   movq %rsi, %rax
+;   movq %rdx, %rsi
+;   imull %r10d
+;   movq %rsi, %rax
+;   movq %rcx, %rdx
+;   cmovoq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %smul_flags_select_load_product_unused(i64, i32, i64, i64) -> i64 {
+block0(v0: i64, v1: i32, v2: i64, v3: i64):
+  v4 = load.i32 v0
+  v5, v6 = smul_overflow v1, v4
+  v7 = select v6, v2, v3
+  return v7
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rsi, %rax
+;   movq %rdx, %r8
+;   imull (%rdi) ;; implicit: %eax, %edx
+;   movq %r8, %rdx
+;   movq %rcx, %rax
+;   cmovoq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rax
+;   movq %rdx, %r8
+;   imull (%rdi) ; trap: heap_oob
+;   movq %r8, %rdx
+;   movq %rcx, %rax
+;   cmovoq %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

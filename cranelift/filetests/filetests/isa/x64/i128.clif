@@ -2056,10 +2056,11 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
+;   movq (%rdi), %rdi
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
 ;   movq %rsi, %rax
-;   addq (%rdi), %rax
+;   addq %rdi, %rax
 ;   adcq $0x0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -2070,9 +2071,10 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   movq (%rdi), %rdi ; trap: heap_oob
 ;   xorq %rdx, %rdx
 ;   movq %rsi, %rax
-;   addq (%rdi), %rax ; trap: heap_oob
+;   addq %rdi, %rax
 ;   adcq $0, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp

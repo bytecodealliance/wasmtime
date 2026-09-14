@@ -308,33 +308,25 @@ pub struct Lower<'func, I: VCodeInst> {
 /// actually merged" point. Instead, we compute a
 /// transitive-uniqueness. That is what this enum represents.
 ///
-/// There is one final caveat as well to the result of this analysis.  Notably,
-/// we define some instructions to be "root" instructions, which means that we
-/// assume they will always be codegen'd at the root of a matching tree, and not
-/// matched. (This comes with the caveat that we actually enforce this property
-/// by making them "opaque" to subtree matching in
-/// `get_value_as_source_or_const`). Because they will always be codegen'd once,
-/// they in some sense "reset" multiplicity: these root instructions can be used
-/// many times, but because their result(s) are only computed once, they only
-/// use their inputs once.
-///
-/// We currently define all multi-result instructions to be "root" instructions,
-/// because it is too complex to reason about matching through them, and they
-/// cause too-coarse-grained approximation of multiplicity otherwise: the
-/// analysis would have to assume (as it used to!) that they are always
-/// multiply-used, simply because they have multiple outputs even if those
-/// outputs are used only once.
-///
-/// In the future we could define other instructions to be "root" instructions
-/// as well, if we make the corresponding change to get_value_as_source_or_const
-/// as well.
+/// Note that this analysis is fundamentally about *instructions*
+/// being codegen'd more than once, even though it is tracked per
+/// value. For an instruction with multiple results, a use of any
+/// result is a use of the instruction: a lowering that merges the
+/// instruction by matching on one of its results (e.g., a `brif` that
+/// directly consumes the flags produced by a `uadd_overflow`)
+/// generates the whole instruction, including its operands.  We
+/// account for this by treating a use of any result as a use of every
+/// result: as soon as a second result of the same instruction becomes
+/// used, all of its used results (and, transitively, its operand
+/// tree) become `Multiple`.
 ///
 /// To define `ValueUseState` more plainly: a value is `Unused` if no references
 /// exist to it; `Once` if only one other op refers to it, *and* that other op
-/// is `Unused` or `Once`; and `Multiple` otherwise. In other words, `Multiple`
-/// is contagious (except through root instructions): even if an op's result
-/// value is directly used only once in the CLIF, that value is `Multiple` if
-/// the op that uses it is itself used multiple times (hence could be codegen'd
+/// is `Unused` or `Once`, *and* no other result of the same instruction is
+/// used; and `Multiple` otherwise. In
+/// other words, `Multiple` is contagious: even if an op's result value is
+/// directly used only once in the CLIF, that value is `Multiple` if the op
+/// that uses it is itself used multiple times (hence could be codegen'd
 /// multiple times). In brief, this analysis tells us whether, if every op
 /// merged all of its operand tree, a given op could be codegen'd in more than
 /// one place.
@@ -543,7 +535,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             );
 
             for (i, param) in self.f.dfg.block_params(entry_bb).iter().enumerate() {
-                if self.value_ir_uses[*param] == ValueUseState::Unused {
+                if self.value_use_state(*param) == ValueUseState::Unused {
                     continue;
                 }
                 let regs = writable_value_regs(self.value_regs[*param]);
@@ -614,7 +606,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // for the benefit of debuginfo.
         if self.f.dfg.values_labels.is_some() {
             if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
-                if self.value_ir_uses[vmctx_val] != ValueUseState::Unused {
+                if self.value_use_state(vmctx_val) != ValueUseState::Unused {
                     let vmctx_reg = self.value_regs[vmctx_val].only_reg().unwrap();
                     self.emit(I::gen_dummy_use(vmctx_reg));
                 }
@@ -1347,11 +1339,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         Ok(vcode)
     }
 
+    fn value_use_state(&self, val: Value) -> ValueUseState {
+        let val = map_to_first_result(self.f, val);
+        self.value_ir_uses[val]
+    }
+
     pub fn value_is_unused(&self, val: Value) -> bool {
-        match self.value_ir_uses[val] {
-            ValueUseState::Unused => true,
-            _ => false,
-        }
+        self.value_lowered_uses[val] == 0
     }
 
     /// Does this value still have uses to serve at the current point in the
@@ -1372,6 +1366,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         trace!(" -> succs {succs:?}");
         let succ_block = *succs.get(succ).expect("Successor index out of range");
         MachLabel::from_block(succ_block)
+    }
+}
+
+/// Map any `Value` to the first `Value` defined by its defining
+/// instruction. (Leaves values defined by blockparams
+/// identity-mapped.)
+fn map_to_first_result(f: &Function, val: Value) -> Value {
+    match f.dfg.value_def(val) {
+        ValueDef::Result(_, idx) if idx == 0 => val,
+        ValueDef::Result(inst, _) => f.dfg.inst_results(inst)[0],
+        _ => val,
     }
 }
 
@@ -1401,25 +1406,29 @@ fn compute_use_states(
 
     let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
 
+    // Step 1: call `mark_use` on every use. When a value is used
+    // multiple times, it is pushed into `multiple_stack`, which we
+    // use to do the graph-walk that propagates multiplicity below.
+    let mut multiple_stack: SmallVec<[Value; 16]> = smallvec![];
+
     if let Some(sret_param) = sret_param {
         // There's an implicit use of the struct-return parameter in each
         // copy of the function epilogue, which we count here.
         value_ir_uses[sret_param] = ValueUseState::Multiple;
+        multiple_stack.push(sret_param);
     }
 
-    // Stack of iterators over Values as we do DFS to mark
-    // Multiple-state subtrees. The iterator type is whatever is
-    // returned by `uses` below.
-    let mut stack: SmallVec<[_; 16]> = smallvec![];
+    let mut mark_use = |val: Value, multiple_stack: &mut SmallVec<[Value; 16]>| {
+        let val = map_to_first_result(f, val);
+        let old = value_ir_uses[val];
+        value_ir_uses[val].inc();
+        if value_ir_uses[val] == ValueUseState::Multiple && old != ValueUseState::Multiple {
+            multiple_stack.push(val);
+        }
+    };
 
     // Find the args for the inst corresponding to the given value.
-    //
-    // Note that "root" instructions are skipped here. This means that multiple
-    // uses of any result of a multi-result instruction are not considered
-    // multiple uses of the operands of a multi-result instruction. This
-    // requires tight coupling with `get_value_as_source_or_const` above which
-    // is the consumer of the map that this function is producing.
-    let uses = |value| {
+    let uses = |value: Value| {
         trace!(" -> pushing args for {} onto stack", value);
         if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
             Some(f.dfg.inst_values(src_inst))
@@ -1439,43 +1448,18 @@ fn compute_use_states(
         // additional use on each operand.
         for arg in f.dfg.inst_values(inst) {
             debug_assert!(f.dfg.value_is_real(arg));
-            let old = value_ir_uses[arg];
-            value_ir_uses[arg].inc();
-            let new = value_ir_uses[arg];
-            trace!("arg {} used, old state {:?}, new {:?}", arg, old, new);
+            mark_use(arg, &mut multiple_stack);
+        }
+    }
 
-            // On transition to Multiple, do DFS.
-            if old == ValueUseState::Multiple || new != ValueUseState::Multiple {
-                continue;
-            }
-            if let Some(iter) = uses(arg) {
-                stack.push(iter);
-            }
-            while let Some(iter) = stack.last_mut() {
-                if let Some(value) = iter.next() {
-                    debug_assert!(f.dfg.value_is_real(value));
-                    trace!(" -> DFS reaches {}", value);
-                    if value_ir_uses[value] == ValueUseState::Multiple {
-                        // Truncate DFS here: no need to go further,
-                        // as whole subtree must already be Multiple.
-                        // With debug asserts, check one level of
-                        // that invariant at least.
-                        debug_assert!(uses(value).into_iter().flatten().all(|arg| {
-                            debug_assert!(f.dfg.value_is_real(arg));
-                            value_ir_uses[arg] == ValueUseState::Multiple
-                        }));
-                        continue;
-                    }
-                    value_ir_uses[value] = ValueUseState::Multiple;
-                    trace!(" -> became Multiple");
-                    if let Some(iter) = uses(value) {
-                        stack.push(iter);
-                    }
-                } else {
-                    // Empty iterator, discard.
-                    stack.pop();
-                }
-            }
+    // Step 2: propagate multiplicity. `Multiple` is
+    // transitive/contagious: if we can lower any value `v` multiple
+    // times, that might involve lowering its uses multiple times, and
+    // their uses, and so on, depending on how deep a lowering rule
+    // matches.
+    while let Some(value) = multiple_stack.pop() {
+        for u in uses(value).into_iter().flatten() {
+            mark_use(u, &mut multiple_stack);
         }
     }
 
@@ -1649,17 +1633,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // OK to merge source instruction if we have a source
             // instruction, and one of these two conditions hold:
             //
-            // - It has no side-effects and this instruction is not a "value-use
-            //   root" instruction. Instructions which are considered "roots"
-            //   for value-use calculations do not have accurate information
-            //   known about the `ValueUseState` of their operands. This is
-            //   currently done for multi-result instructions to prevent a use
-            //   of each result from forcing all operands of the multi-result
-            //   instruction to also be `Multiple`. This in turn means that the
-            //   `ValueUseState` for operands of a "root" instruction to be a
-            //   lie if pattern matching were to look through the multi-result
-            //   instruction. As a result the "look through this instruction"
-            //   logic only succeeds if it's not a root instruction.
+            // - It has no side-effects.
             //
             // - It has a side-effect, has one output value, that one
             //   output has only one use, directly or indirectly (so
@@ -1818,7 +1792,7 @@ mod tests {
     use crate::ir::{Function, InstBuilder};
 
     #[test]
-    fn multi_result_use_once() {
+    fn multi_result_two_results_used_once_each() {
         let mut func = Function::new();
         let block0 = func.dfg.make_block();
         let mut pos = FuncCursor::new(&mut func);
@@ -1831,10 +1805,33 @@ mod tests {
         let func = pos.func;
 
         let uses = super::compute_use_states(&func, None);
-        assert_eq!(uses[v1], ValueUseState::Once);
+        assert_eq!(uses[v1], ValueUseState::Multiple);
+        assert_eq!(uses[v2], ValueUseState::Multiple);
+        assert_eq!(uses[v3], ValueUseState::Multiple);
+        assert_eq!(uses[v4], ValueUseState::Multiple);
+        assert_eq!(uses[v5], ValueUseState::Unused);
+    }
+
+    #[test]
+    fn multi_result_one_result_used() {
+        let mut func = Function::new();
+        let block0 = func.dfg.make_block();
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block0);
+        let v1 = pos.ins().iconst(types::I64, 0);
+        let v2 = pos.ins().iconst(types::I64, 1);
+        let v3 = pos.ins().iadd(v1, v2);
+        let (v4, v5) = pos.ins().uadd_overflow(v3, v1);
+        let v6 = pos.ins().uextend(types::I64, v5);
+        pos.ins().return_(&[v6]);
+        let func = pos.func;
+
+        let uses = super::compute_use_states(&func, None);
+        assert_eq!(uses[v1], ValueUseState::Multiple);
         assert_eq!(uses[v2], ValueUseState::Once);
         assert_eq!(uses[v3], ValueUseState::Once);
         assert_eq!(uses[v4], ValueUseState::Once);
-        assert_eq!(uses[v5], ValueUseState::Once);
+        assert_eq!(uses[v5], ValueUseState::Unused); // use counted against first def.
+        assert_eq!(uses[v6], ValueUseState::Once);
     }
 }
