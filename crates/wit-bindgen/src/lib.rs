@@ -2508,11 +2508,6 @@ impl<'a> InterfaceGenerator<'a> {
     /// conversion.
     fn error_convert_path_to_host_and_id(&self, id: TypeId) -> (Option<String>, TypeId) {
         let trappable_error_id = resolve_type_definition_id(self.resolve, id);
-        assert!(
-            self.generator
-                .trappable_errors
-                .contains_key(&trappable_error_id)
-        );
 
         // If we're generating a trait for a named import then don't use the
         // `Host` trait for non-named imports since that's likely got other

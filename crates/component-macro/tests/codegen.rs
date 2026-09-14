@@ -197,6 +197,37 @@ mod trappable_errors {
     });
 
     type MyX = u32;
+
+    mod trappable2 {
+        wasmtime::component::bindgen!({
+            inline: r#"
+                package test:pkg;
+
+                interface types {
+                    variant error {
+                        test,
+                    }
+                }
+
+                interface test {
+                    use types.{error};
+
+                    test: func() -> result<_, error>;
+                }
+
+                world repro {
+                    import test;
+                }
+            "#,
+            world: "repro",
+            trappable_error_type: {
+                "test:pkg/test.error" => String,
+            },
+            imports: {
+                default: trappable,
+            }
+        });
+    }
 }
 
 mod interface_name_with_rust_keyword {
