@@ -199,14 +199,13 @@ pub unsafe extern "C" fn reset_adapter_state() {
     }
 }
 
-/// Toggle whether `clock_time_get` calls `monotonic_clock::now` or uses a
-/// cached value.
+/// Toggle whether `clock_time_get` calls the host clocks or uses cached values.
 ///
 /// When `paused` is true, subsequent calls to `clock_time_get` will return a
-/// cached value instead of calling `monotonic_clock::now`.  This is useful in
+/// cached value instead of calling either host clock. This is useful in
 /// cases where the module's `cabi_realloc` function might call `clock_time_get`
-/// with `CLOCKID_MONOTONIC`.  Since `cabi_realloc` is forbidden to call
-/// imports, we can avoid trapping by using the cached value.
+/// with `CLOCKID_MONOTONIC` or `CLOCKID_REALTIME`. Since `cabi_realloc` is
+/// forbidden to call imports, we can avoid trapping by using the cached value.
 ///
 /// This should be set back to false as soon as it is safe to call imports from
 /// `clock_time_get` again.
@@ -622,7 +621,7 @@ pub unsafe extern "C" fn environ_sizes_get(
     environ_buf_size: &mut Size,
 ) -> Errno {
     if !matches!(
-        unsafe { get_allocation_state() },
+        get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         *environc = 0;
@@ -708,7 +707,7 @@ pub unsafe extern "C" fn clock_time_get(
             // sometimes use a cached value instead of calling
             // `monotonic_clock::now` here.
             if matches!(
-                unsafe { get_allocation_state() },
+                get_allocation_state(),
                 AllocationState::StackAllocated | AllocationState::StateAllocated
             ) {
                 State::with(|state| {
@@ -732,6 +731,22 @@ pub unsafe extern "C" fn clock_time_get(
             }
         }
         CLOCKID_REALTIME => {
+            // Allocation may re-enter before State exists. Do not allocate State
+            // recursively or call a component import in that case.
+            let state = match get_allocation_state() {
+                AllocationState::StateAllocated => Some(State::ptr()),
+                AllocationState::StackAllocating | AllocationState::StateAllocating => {
+                    *time = 0;
+                    return ERRNO_SUCCESS;
+                }
+                _ => None,
+            };
+            if let Some(state) = state {
+                if state.monotonic_clock_paused.get() {
+                    *time = state.realtime_clock_cached.get();
+                    return ERRNO_SUCCESS;
+                }
+            }
             let res = wall_clock::now();
             *time = match Timestamp::from(res.seconds)
                 .checked_mul(1_000_000_000)
@@ -740,6 +755,9 @@ pub unsafe extern "C" fn clock_time_get(
                 Some(ns) => ns,
                 None => return ERRNO_OVERFLOW,
             };
+            if let Some(state) = state {
+                state.realtime_clock_cached.set(*time);
+            }
             ERRNO_SUCCESS
         }
         _ => ERRNO_BADF,
@@ -1158,7 +1176,7 @@ pub unsafe extern "C" fn fd_pread(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
     if !matches!(
-        unsafe { get_allocation_state() },
+        get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         return ERRNO_BADF;
@@ -1705,7 +1723,7 @@ pub unsafe extern "C" fn fd_write(
     nwritten: &mut Size,
 ) -> Errno {
     if !matches!(
-        unsafe { get_allocation_state() },
+        get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         *nwritten = 0;
@@ -2168,6 +2186,36 @@ pub unsafe extern "C" fn poll_oneoff(
         const EVENTTYPE_FD_READ: u8 = wasip1::EVENTTYPE_FD_READ.raw();
         const EVENTTYPE_FD_WRITE: u8 = wasip1::EVENTTYPE_FD_WRITE.raw();
 
+        // Go also performs a nonblocking timer poll when restarting GC.
+        // During canonical realloc only an immediate clock needs no host call.
+        if state.monotonic_clock_paused.get() {
+            if subscriptions.len() == 1 && subscriptions[0].u.tag == EVENTTYPE_CLOCK {
+                let subscription = &subscriptions[0];
+                // SAFETY: The subscription tag above identifies the clock union member.
+                let clock = unsafe { &subscription.u.u.clock };
+                if matches!(clock.id, CLOCKID_MONOTONIC | CLOCKID_REALTIME)
+                    && clock.timeout == 0
+                    && clock.flags == 0
+                {
+                    // SAFETY: The caller supplies space for nsubscriptions events (one here).
+                    unsafe {
+                        *out = Event {
+                            userdata: subscription.userdata,
+                            error: ERRNO_SUCCESS,
+                            type_: wasip1::EVENTTYPE_CLOCK,
+                            fd_readwrite: EventFdReadwrite {
+                                nbytes: 0,
+                                flags: 0,
+                            },
+                        };
+                    }
+                    *nevents = 1;
+                    return Ok(());
+                }
+            }
+            return Err(ERRNO_NOTSUP);
+        }
+
         let mut pollables = Pollables {
             pointer: pollables,
             index: 0,
@@ -2394,7 +2442,7 @@ pub unsafe extern "C" fn sched_yield() -> Errno {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
     if matches!(
-        unsafe { get_allocation_state() },
+        get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         State::with(|state| {
@@ -2750,8 +2798,11 @@ struct State {
     /// Cached copy of the most recent value returned by `monotonic_clock::now`
     monotonic_clock_cached: Cell<Timestamp>,
 
-    /// If true, skip calling `monotonic_clock::now` in `clock_time_get` and
-    /// instead return the value in `monotonic_clock_cached`.
+    /// Cached copy of the most recent wall-clock timestamp.
+    realtime_clock_cached: Cell<Timestamp>,
+
+    /// If true, `clock_time_get` returns cached monotonic and wall-clock values
+    /// instead of calling the host clocks.
     ///
     /// See `wasi_snapshot_preview1 adapter_monotonic_clock_set_paused` for
     /// details.
@@ -2820,6 +2871,7 @@ const fn temporary_data_size() -> usize {
     // Remove miscellaneous metadata also stored in state.
     let misc = if cfg!(feature = "proxy") { 12 } else { 14 };
     start -= misc * size_of::<usize>();
+    start -= size_of::<Timestamp>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2847,7 +2899,10 @@ enum AllocationState {
 unsafe extern "C" {
     fn get_state_ptr() -> *mut State;
     fn set_state_ptr(state: *mut State);
-    fn get_allocation_state() -> AllocationState;
+    // This intrinsic is a bare global.get with no caller preconditions. Its
+    // non-shared global starts at 0; the componentizer writes stack states 1/2,
+    // and the typed setter below writes StateAllocating/StateAllocated (3/4).
+    safe fn get_allocation_state() -> AllocationState;
     fn set_allocation_state(state: AllocationState);
 }
 
@@ -2887,7 +2942,7 @@ impl State {
         }
 
         assert!(matches!(
-            unsafe { get_allocation_state() },
+            get_allocation_state(),
             AllocationState::StackAllocated
         ));
 
@@ -2936,6 +2991,7 @@ impl State {
                 #[cfg(not(feature = "proxy"))]
                 dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
                 monotonic_clock_cached: Cell::new(0),
+                realtime_clock_cached: Cell::new(0),
                 monotonic_clock_paused: Cell::new(false),
             });
         }
