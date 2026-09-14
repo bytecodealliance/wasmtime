@@ -1809,7 +1809,7 @@ mod tests {
         assert_eq!(uses[v2], ValueUseState::Multiple);
         assert_eq!(uses[v3], ValueUseState::Multiple);
         assert_eq!(uses[v4], ValueUseState::Multiple);
-        assert_eq!(uses[v5], ValueUseState::Multiple);
+        assert_eq!(uses[v5], ValueUseState::Unused);
     }
 
     #[test]
@@ -1830,8 +1830,8 @@ mod tests {
         assert_eq!(uses[v1], ValueUseState::Multiple);
         assert_eq!(uses[v2], ValueUseState::Once);
         assert_eq!(uses[v3], ValueUseState::Once);
-        assert_eq!(uses[v4], ValueUseState::Unused);
-        assert_eq!(uses[v5], ValueUseState::Once);
+        assert_eq!(uses[v4], ValueUseState::Once);
+        assert_eq!(uses[v5], ValueUseState::Unused); // use counted against first def.
         assert_eq!(uses[v6], ValueUseState::Once);
     }
 }
