@@ -39,12 +39,29 @@ void VERSIONED_SYMBOL(wasmtime_debug_builtins_init)() {
 #endif // FEATURE_DEBUG_BUILTINS
 
 // For more information about this see `unix/unwind.rs` and the
-// `using_libunwind` function. The basic idea is that weak symbols aren't stable
+// `Libunwind` struct. The basic idea is that weak symbols aren't stable
 // in Rust so we use a bit of C to work around that.
 #ifndef CFG_TARGET_OS_windows
-__attribute__((weak)) extern void __unw_add_dynamic_fde();
+struct Libunwind {
+  void (*add_dynamic_fde)(uintptr_t);
+  void (*add_dynamic_eh_frame_section)(uintptr_t);
+  void (*remove_dynamic_eh_frame_section)(uintptr_t);
+};
 
-bool VERSIONED_SYMBOL(wasmtime_using_libunwind)() {
-  return __unw_add_dynamic_fde != NULL;
+__attribute__((weak)) extern void __unw_add_dynamic_fde(uintptr_t);
+#ifndef CFG_TARGET_OS_macos
+__attribute__((weak)) extern void __unw_add_dynamic_eh_frame_section(uintptr_t);
+__attribute__((weak)) extern void
+    __unw_remove_dynamic_eh_frame_section(uintptr_t);
+#endif
+
+struct Libunwind VERSIONED_SYMBOL(wasmtime_libunwind)(void) {
+  return (struct Libunwind){
+      .add_dynamic_fde = __unw_add_dynamic_fde,
+#ifndef CFG_TARGET_OS_macos
+      .add_dynamic_eh_frame_section = __unw_add_dynamic_eh_frame_section,
+      .remove_dynamic_eh_frame_section = __unw_remove_dynamic_eh_frame_section,
+#endif
+  };
 }
 #endif

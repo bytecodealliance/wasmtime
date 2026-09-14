@@ -650,3 +650,75 @@ fn deserialize_raw_fails_for_native() {
         );
     }
 }
+
+#[cfg(all(
+    any(target_os = "macos", target_os = "linux"),
+    target_arch = "x86_64",
+    not(miri)
+))]
+mod native_unwind {
+    use wasmtime::{Config, Engine, Module, Result};
+
+    // On macOS aarch64, the system unwinder currently stops before reaching the
+    // guest, including without bulk registration. Exercise the host/guest transition
+    // on x86-64 macOS and Linux until that separate process-ABI issue is fixed.
+    #[test]
+    fn native_unwind_walks_nested_wasm_frames() -> Result<()> {
+        use wasmtime::{Caller, Func, Inlining, Instance, Store, Strategy};
+
+        let mut config = Config::new();
+        config
+            .strategy(Strategy::Cranelift)
+            .native_unwind_info(true)
+            .compiler_inlining(Inlining::No);
+        let engine = Engine::new(&config)?;
+        // Post-call arithmetic keeps each guest caller live instead of tail calling.
+        let module = Module::new(
+            &engine,
+            r#"(module
+                (import "" "capture" (func $capture (result i32)))
+                (func $inner (result i32) call $capture i32.const 1 i32.add)
+                (func $middle (result i32) call $inner i32.const 2 i32.add)
+                (func $run (export "run") (result i32) call $middle i32.const 4 i32.add))"#,
+        )?;
+        let start = module.text().as_ptr() as usize;
+        let functions = module
+            .functions()
+            .map(|f| (f.name, start + f.offset, f.len))
+            .collect::<Vec<_>>();
+        let mut store = Store::new(&engine, Vec::<usize>::with_capacity(128));
+        let capture = Func::wrap(&mut store, |mut caller: Caller<'_, Vec<usize>>| {
+            backtrace::trace(|frame| {
+                let frames = caller.data_mut();
+                // Stop before growing the buffer to avoid allocating in the callback.
+                if frames.len() == frames.capacity() {
+                    return false;
+                }
+                frames.push(frame.ip() as usize);
+                true
+            });
+            10_i32
+        });
+        let instance = Instance::new(&mut store, &module, &[capture.into()])?;
+        assert_eq!(
+            instance
+                .get_typed_func::<(), i32>(&mut store, "run")?
+                .call(&mut store, ())?,
+            17
+        );
+        let names = store
+            .data()
+            .iter()
+            .filter_map(|pc| {
+                // Return addresses point after the call instruction. Match actual
+                // guest functions, not any trampoline inside the module's text.
+                functions
+                    .iter()
+                    .find(|(_, start, len)| *pc > *start && *pc <= start + len)
+                    .map(|(name, _, _)| name.as_deref().unwrap_or_default())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["inner", "middle", "run"]);
+        Ok(())
+    }
+}
