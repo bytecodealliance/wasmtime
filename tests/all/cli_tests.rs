@@ -2555,7 +2555,7 @@ start a print 1234
     async fn serve_inherit() -> Result<()> {
         use std::os::fd::{FromRawFd, OwnedFd};
         use std::os::unix::process::CommandExt;
-        use tokio::net::TcpListener;
+        use tokio::net::{TcpListener, UnixListener, UnixStream};
 
         // We can't easily inherit file descriptors to emulators like QEMU, so skip this test for
         // cross-compiled setups.
@@ -2563,14 +2563,17 @@ start a print 1234
             return Ok(());
         }
 
-        let socket = TcpListener::bind("localhost:0").await?;
-        let addr = socket.local_addr()?;
+        let tcp_socket = TcpListener::bind("localhost:0").await?;
+        let addr = tcp_socket.local_addr()?;
+        let (unix_socket, unix_path) = tempfile::Builder::new()
+            .make(|path| UnixListener::bind(path))?
+            .into_parts();
 
         // Using a shell script as a launcher since that uses exec, allowing us to provide the
         // LISTEN_PID variable.
         let mut cmd = Command::new("sh");
         cmd.arg("-c")
-            .arg(r#"export LISTEN_FDS=1 LISTEN_PID=$$; exec "$@""#)
+            .arg(r#"export LISTEN_FDS=2 LISTEN_PID=$$; exec "$@""#)
             .arg("sh")
             .arg(super::get_wasmtime_path())
             .arg("serve")
@@ -2578,16 +2581,22 @@ start a print 1234
             .arg("--systemd-listenfd")
             .arg(P2_CLI_SERVE_HELLO_WORLD_COMPONENT)
             .env("WASMTIME_CODEGEN_CACHE", "n");
+
         unsafe {
             cmd.pre_exec(move || {
-                let mut target = OwnedFd::from_raw_fd(3);
-                rustix::io::dup2(&socket, &mut target)?;
-                std::mem::forget(target);
+                let mut target_tcp = OwnedFd::from_raw_fd(3);
+                let mut target_unix = OwnedFd::from_raw_fd(4);
+
+                rustix::io::dup2(&tcp_socket, &mut target_tcp)?;
+                rustix::io::dup2(&unix_socket, &mut target_unix)?;
+                std::mem::forget(target_tcp);
+                std::mem::forget(target_unix);
                 Ok(())
             });
         }
 
         let server = WasmtimeServe::spawn(&mut cmd, Some(addr))?;
+        // Should accept http requests over the TCP socket
         let resp = server
             .send_request(
                 hyper::Request::builder()
@@ -2600,8 +2609,40 @@ start a print 1234
         assert!(resp.status().is_success());
         assert_eq!(resp.body(), "Hello, WASI!");
 
+        // As well as over the unix socket
+        {
+            let unix = wasmtime_wasi_http::io::TokioIo::new(
+                UnixStream::connect(&unix_path).await.with_context(|| {
+                    format!(
+                        "failed to connect to unix socket at {}",
+                        unix_path.display()
+                    )
+                })?,
+            );
+            let (mut send, conn) = hyper::client::conn::http1::handshake(unix)
+                .await
+                .context("failed http handshake")?;
+            let conn_task = tokio::task::spawn(conn);
+
+            let resp = WasmtimeServe::send_request_with(
+                &mut send,
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+            assert!(resp.status().is_success());
+            assert_eq!(resp.body(), "Hello, WASI!");
+
+            drop(send);
+            conn_task.await??;
+        }
+
         let (_, stderr) = server.finish()?;
         assert!(stderr.contains("Serving HTTP on inherited socket"));
+        drop(unix_path);
 
         Ok(())
     }
