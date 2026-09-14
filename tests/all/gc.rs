@@ -4207,3 +4207,45 @@ fn gc_during_epoch(wat: &str) -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn table_fill_null_barriers_ok() -> Result<()> {
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        eprintln!("collector: {collector:?}");
+        let engine = Engine::new(Config::new().collector(collector).table_lazy_init(false))?;
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (table $t (export "t") 1 (ref null extern))
+                    (func (export "fill") (param i32) (param i32)
+                        (table.fill $t (local.get 0) (ref.null extern) (local.get 1)))
+                )
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let fill = instance.get_typed_func::<(u32, u32), ()>(&mut store, "fill")?;
+        let table = instance.get_table(&mut store, "t").unwrap();
+
+        let flag = Arc::new(AtomicBool::new(false));
+
+        {
+            let mut scope = RootScope::new(&mut store);
+            let r = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
+            table.set(&mut scope, 0, r.into())?;
+        }
+
+        assert!(!flag.load(SeqCst));
+        store.gc(None)?;
+        assert!(!flag.load(SeqCst));
+
+        fill.call(&mut store, (0, 1))?;
+        store.gc(None)?;
+        assert!(flag.load(SeqCst));
+    }
+
+    Ok(())
+}
