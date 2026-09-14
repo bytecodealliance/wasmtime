@@ -2,10 +2,10 @@ use crate::prelude::*;
 use crate::runtime::component::{HostResourceData, Instance};
 use crate::runtime::vm;
 use crate::runtime::vm::component::{
-    CallContext, ComponentInstance, HandleTable, OwnedComponentInstance,
+    CallContext, ComponentInstance, CurrentScopeId, HandleTable, OwnedComponentInstance,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
-use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut};
+use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
 use core::pin::Pin;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
@@ -553,9 +553,12 @@ pub struct ComponentTasksNotConcurrent {
 }
 
 impl ComponentTaskState {
-    pub fn call_context(&mut self, id: u32) -> Result<&mut CallContext> {
+    pub fn call_context(&mut self, id: CurrentScopeId) -> Result<&mut CallContext> {
         match self {
-            ComponentTaskState::NotConcurrent(state) => Ok(&mut state.scopes[id as usize]),
+            ComponentTaskState::NotConcurrent(state) => match id {
+                CurrentScopeId::Id(id) => Ok(&mut state.scopes[id as usize]),
+                CurrentScopeId::HostId(_) => bail_bug!("non-concurrent scope cannot be a host ID"),
+            },
             #[cfg(feature = "component-model-async")]
             ComponentTaskState::Concurrent(state) => state.call_context(id),
         }

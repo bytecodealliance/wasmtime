@@ -75,7 +75,16 @@ pub struct ResourceTables<'a> {
 
     /// Identifier for the current "scope" which is used for various functions
     /// on `task_state` above to mutate borrows/etc of the current scope.
-    pub current_scope_id: Option<u32>,
+    pub current_scope_id: Option<CurrentScopeId>,
+}
+
+/// Identifier for a component call's resource-borrow scope.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CurrentScopeId {
+    /// A non-concurrent scope or a concurrent guest-task scope.
+    Id(u32),
+    /// A concurrent host-task scope.
+    HostId(u32),
 }
 
 /// Typed representation of a "rep" for a resource.
@@ -266,7 +275,7 @@ impl ResourceTables<'_> {
         }
     }
 
-    fn current_scope_id(&self) -> Result<u32> {
+    fn current_scope_id(&self) -> Result<CurrentScopeId> {
         match self.current_scope_id {
             Some(id) => Ok(id),
             None => bail_bug!("no current scope"),

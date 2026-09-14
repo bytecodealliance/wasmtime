@@ -2,6 +2,7 @@ use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
 use crate::store::StoreOpaque;
+use crate::vm::component::CurrentScopeId;
 use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;
@@ -169,7 +170,9 @@ impl StoreOpaque {
         Ok(self.exit_call_not_concurrent())
     }
 
-    pub(crate) fn current_scope_id(&mut self) -> Result<Option<u32>> {
-        self.current_scope_id_not_concurrent()
+    pub(crate) fn current_scope_id(&mut self) -> Result<Option<CurrentScopeId>> {
+        Ok(self
+            .current_scope_id_not_concurrent()?
+            .map(CurrentScopeId::Id))
     }
 }

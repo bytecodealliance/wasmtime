@@ -63,7 +63,7 @@ use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 #[cfg(feature = "gc")]
 use crate::vm::GcRootsList;
-use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
+use crate::vm::component::{CallContext, ComponentInstance, CurrentScopeId, InstanceState};
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMLazyThread, VMMemoryDefinition, VMStore};
 use crate::{
     AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
@@ -2429,18 +2429,18 @@ impl StoreOpaque {
 
     /// Used by `ResourceTables` to record the scope of a borrow to get undone
     /// in the future.
-    pub(crate) fn current_scope_id(&mut self) -> Result<Option<u32>> {
+    pub(crate) fn current_scope_id(&mut self) -> Result<Option<CurrentScopeId>> {
         if !self.concurrency_support() {
-            return self.current_scope_id_not_concurrent();
+            return Ok(self
+                .current_scope_id_not_concurrent()?
+                .map(CurrentScopeId::Id));
         }
-        let (bits, is_host) = match self.current_thread()? {
-            CurrentThread::Guest(id) => (id.task.rep(), false),
-            CurrentThread::GuestTask(id) => (id.rep(), false),
-            CurrentThread::Host(id) => (id.rep(), true),
+        Ok(match self.current_thread()? {
+            CurrentThread::Guest(id) => Some(CurrentScopeId::Id(id.task.rep())),
+            CurrentThread::GuestTask(id) => Some(CurrentScopeId::Id(id.rep())),
+            CurrentThread::Host(id) => Some(CurrentScopeId::HostId(id.rep())),
             CurrentThread::None => return Ok(None),
-        };
-        assert_eq!((bits << 1) >> 1, bits);
-        Ok(Some((bits << 1) | u32::from(is_host)))
+        })
     }
 
     fn queue_task(
@@ -5985,17 +5985,16 @@ impl ConcurrentState {
 
     /// Used by `ResourceTables` to acquire the current `CallContext` for the
     /// specified task.
-    ///
-    /// The `task` is bit-packed as returned by `current_call_context_scope_id`
-    /// below.
-    pub fn call_context(&mut self, task: u32) -> Result<&mut CallContext> {
-        let (task, is_host) = (task >> 1, task & 1 == 1);
-        if is_host {
-            let task: TableId<HostTask> = TableId::new(task);
-            Ok(&mut self.get_mut(task)?.call_context)
-        } else {
-            let task: TableId<GuestTask> = TableId::new(task);
-            Ok(&mut self.get_mut(task)?.call_context)
+    pub fn call_context(&mut self, task: CurrentScopeId) -> Result<&mut CallContext> {
+        match task {
+            CurrentScopeId::HostId(task) => {
+                let task: TableId<HostTask> = TableId::new(task);
+                Ok(&mut self.get_mut(task)?.call_context)
+            }
+            CurrentScopeId::Id(task) => {
+                let task: TableId<GuestTask> = TableId::new(task);
+                Ok(&mut self.get_mut(task)?.call_context)
+            }
         }
     }
 

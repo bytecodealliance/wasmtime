@@ -7,7 +7,9 @@ use crate::component::store::ComponentTaskState;
 use crate::component::{Instance, ResourceType, RuntimeInstance};
 use crate::prelude::*;
 use crate::runtime::vm::VMFuncRef;
-use crate::runtime::vm::component::{ComponentInstance, HandleTable, ResourceTables};
+use crate::runtime::vm::component::{
+    ComponentInstance, CurrentScopeId, HandleTable, ResourceTables,
+};
 use crate::store::{StoreId, StoreOpaque};
 use alloc::sync::Arc;
 use core::fmt;
@@ -325,7 +327,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
 #[doc(hidden)]
 pub struct LiftContext<'a> {
     store_id: StoreId,
-    current_scope_id: Option<u32>,
+    current_scope_id: Option<CurrentScopeId>,
     /// Like lowering, lifting always has options configured.
     options: OptionsIndex,
 
