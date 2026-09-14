@@ -13,6 +13,20 @@ target pulley32be
 target pulley64
 target pulley64be
 
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_zba
+target riscv64 has_zbb
+target riscv64 has_zbkb
+target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
 ;;;; basic uextend
 
 function %uextend8_16(i8) -> i16 {
@@ -248,3 +262,66 @@ block0(v0: i64):
 ; run: %nested_ireduce_i64_i8(0) == 0
 ; run: %nested_ireduce_i64_i8(-1) == -1
 ; run: %nested_ireduce_i64_i8(0x1234_5678_9abc_def0) == 0xf0
+
+function %ult_uextend_i8_i32(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i32 v0
+    v3 = uextend.i32 v1
+    v4 = icmp ult v2, v3
+    return v4
+}
+; run: %ult_uextend_i8_i32(0, 0) == 0
+; run: %ult_uextend_i8_i32(0, 255) == 1
+; run: %ult_uextend_i8_i32(255, 0) == 0
+; run: %ult_uextend_i8_i32(127, 128) == 1
+; run: %ult_uextend_i8_i32(128, 127) == 0
+
+function %ult_uextend_i16_i64(i16, i16) -> i8 {
+block0(v0: i16, v1: i16):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp ult v2, v3
+    return v4
+}
+; run: %ult_uextend_i16_i64(0, 0) == 0
+; run: %ult_uextend_i16_i64(0, 65535) == 1
+; run: %ult_uextend_i16_i64(65535, 0) == 0
+; run: %ult_uextend_i16_i64(32767, 32768) == 1
+; run: %ult_uextend_i16_i64(32768, 32767) == 0
+
+function %ult_uextend_i32_i64(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp ult v2, v3
+    return v4
+}
+; run: %ult_uextend_i32_i64(0, 0) == 0
+; run: %ult_uextend_i32_i64(0, 4294967295) == 1
+; run: %ult_uextend_i32_i64(4294967295, 0) == 0
+; run: %ult_uextend_i32_i64(2147483647, 2147483648) == 1
+; run: %ult_uextend_i32_i64(2147483648, 2147483647) == 0
+
+function %ult_uextend_i64_i128(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = icmp ult v2, v3
+    return v4
+}
+; run: %ult_uextend_i64_i128(0, 0) == 0
+; run: %ult_uextend_i64_i128(0, 18446744073709551615) == 1
+; run: %ult_uextend_i64_i128(18446744073709551615, 0) == 0
+; run: %ult_uextend_i64_i128(9223372036854775807, 9223372036854775808) == 1
+; run: %ult_uextend_i64_i128(9223372036854775808, 9223372036854775807) == 0
+
+function %ult_uextend_different_input_types(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = uextend.i32 v0
+    v3 = uextend.i32 v1
+    v4 = icmp ult v2, v3
+    return v4
+}
+; run: %ult_uextend_different_input_types(255, 256) == 1
+; run: %ult_uextend_different_input_types(255, 254) == 0
+; run: %ult_uextend_different_input_types(128, 32768) == 1
