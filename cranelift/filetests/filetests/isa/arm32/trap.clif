@@ -1,0 +1,16 @@
+test compile precise-output
+target arm
+
+function %trap() {
+block0:
+    trap user1
+}
+
+; VCode:
+; block0:
+;   udf ; user1
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   udf #0 ; trap: user1
+
