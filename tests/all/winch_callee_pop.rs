@@ -1,9 +1,41 @@
 //! Callee-pop returns, synchronous frame walking, and recovery after traps.
-//! These tests do not validate asynchronous native unwinding inside an epilogue.
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use wasmtime::*;
 
 use wasmtime_test_macros::wasmtime_test;
+
+#[wasmtime_test(strategies(only(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn callee_pop_epilogue_boundary(config: &mut Config) -> Result<()> {
+    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
+        return Ok(());
+    }
+    config.wasm_tail_call(false);
+    let engine = Engine::new(config)?;
+    // On x86 these land immediately below and above the compact-frame cutoff.
+    // Reuse the disassembly fixture to check both encoding and execution.
+    let module = Module::new(
+        &engine,
+        include_str!("../disas/winch/x64/callee_pop/epilogues.wat"),
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let no_args = instance.get_typed_func::<(), i64>(&mut store, "no_stack_args")?;
+    for name in ["compact", "fallback"] {
+        let f = instance
+            .get_typed_func::<(i64, i64, i64, i64, i64, i64, i64, i64), i64>(&mut store, name)?;
+        for seed in [-17, 0, 42] {
+            for _ in 0..10 {
+                assert_eq!(
+                    f.call(&mut store, (seed, 2, 3, 4, 5, 6, 7, seed + 8))?,
+                    2 * seed + 8
+                );
+                assert_eq!(no_args.call(&mut store, ())?, 42);
+            }
+        }
+    }
+    Ok(())
+}
 
 // Keep an operand live across each call and consume every argument and result.
 // This exercises combined padding/spill cleanup as well as the stack-result

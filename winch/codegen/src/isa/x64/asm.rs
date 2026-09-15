@@ -1207,6 +1207,12 @@ impl Assembler {
         self.emit(Inst::External { inst });
     }
 
+    /// Add a sign-extended 8-bit immediate to a 64-bit register.
+    pub fn add_ir8(&mut self, imm: i8, dst: WritableReg) {
+        let inst = asm::inst::addq_mi_sxb::new(pair_gpr(dst), imm).into();
+        self.emit(Inst::External { inst });
+    }
+
     /// Add register and register.
     pub fn add_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
         let dst = pair_gpr(dst);

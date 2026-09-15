@@ -1416,7 +1416,8 @@ pub(crate) trait MacroAssembler {
     fn check_stack(&mut self, vmctx: Reg) -> Result<()>;
 
     /// Emit the function epilogue.
-    fn epilogue(&mut self, stack_args_size: u32) -> Result<()> {
+    fn epilogue(&mut self, locals_size: u32, stack_args_size: u32) -> Result<()> {
+        self.free_stack(locals_size)?;
         self.frame_restore(stack_args_size)
     }
 
@@ -1426,11 +1427,12 @@ pub(crate) trait MacroAssembler {
     /// Free stack space.
     fn free_stack(&mut self, bytes: u32) -> Result<()>;
 
-    /// Restore stack space reserved for a call after the callee returns.
+    /// Reclaim stack space after the callee returns.
     ///
     /// `callee_pop_size` bytes have already been removed by a default-ABI
     /// callee. The implementation must update its abstract stack accounting
-    /// for those bytes and physically free only the remaining alignment space.
+    /// for those bytes and physically free only the remaining caller-owned
+    /// space, including alignment padding and any consumed argument spills.
     fn restore_stack_after_call(&mut self, reserved_size: u32, callee_pop_size: u32) -> Result<()>;
 
     /// Reset the stack pointer to the given offset;

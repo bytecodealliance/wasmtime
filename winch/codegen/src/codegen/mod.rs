@@ -611,7 +611,6 @@ where
             self.context.stack.len() == 0,
             CodeGenError::unexpected_value_in_value_stack()
         );
-        self.masm.free_stack(self.context.frame.locals_size)?;
         let stack_args_size = if self.sig.call_conv.is_default() {
             crate::abi::align_to(
                 self.sig.params_stack_size(),
@@ -620,7 +619,8 @@ where
         } else {
             0
         };
-        self.masm.epilogue(stack_args_size)?;
+        self.masm
+            .epilogue(self.context.frame.locals_size, stack_args_size)?;
         self.masm.end_source_loc()?;
         Ok(())
     }
