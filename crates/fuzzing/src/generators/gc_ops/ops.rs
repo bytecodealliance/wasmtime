@@ -2,8 +2,8 @@
 
 use crate::generators::gc_ops::types::StackType;
 use crate::generators::gc_ops::{
-    limits::GcOpsLimits,
-    types::{CompositeType, RecGroupId, StructField, TypeId, Types},
+    limits::{GcOpsLimits, MAX_INLINE_CONSTRUCTION},
+    types::{CompositeType, EmitCtx, RecGroupId, StructField, TypeId, Types, emit_new},
 };
 use mutatis::Generate;
 use serde::{Deserialize, Serialize};
@@ -36,6 +36,22 @@ fn array_element<'a>(
         .and_then(|def| match &def.composite_type {
             CompositeType::Array(at) => Some(&at.element),
             CompositeType::Struct(_) => None,
+        })
+}
+
+/// The fields of the struct type at `type_index`, or `None` if that index is
+/// out of range or names an array type.
+fn struct_fields<'a>(
+    types: &'a Types,
+    encoding_order: &[TypeId],
+    type_index: u32,
+) -> Option<&'a [StructField]> {
+    encoding_order
+        .get(usize::try_from(type_index).unwrap())
+        .and_then(|tid| types.type_defs.get(tid))
+        .and_then(|def| match &def.composite_type {
+            CompositeType::Struct(st) => Some(st.fields.as_slice()),
+            CompositeType::Array(_) => None,
         })
 }
 
@@ -499,7 +515,10 @@ impl GcOps {
 
         let typed_local_base: u32 = array_local_idx + 1;
         let typed_local2_base: u32 = typed_local_base + concrete_count;
-        for _ in 0..2 {
+        // A third set holds one shared prototype per concrete type; see
+        // `Types::prototype_types`.
+        let proto_local_base: u32 = typed_local2_base + concrete_count;
+        for _ in 0..3 {
             for i in 0..concrete_count {
                 let concrete = struct_type_base + i;
                 local_decls.push((
@@ -534,16 +553,48 @@ impl GcOps {
             array_length: self.limits.array_length,
         };
 
+        let mut inhabitable = BTreeMap::new();
+        self.types.inhabitable(&mut inhabitable);
+        let struct_ref_target = self.types.least_rank_inhabitable_struct(&inhabitable);
+
+        // Map each prototyped type to the local holding its instance. A type
+        // absent from this map is cheap enough to rebuild at every use.
+        let proto_order = self
+            .types
+            .prototype_types(&inhabitable, MAX_INLINE_CONSTRUCTION);
+        let protos: BTreeMap<TypeId, u32> = proto_order
+            .iter()
+            .map(|tid| {
+                let dense = type_ids_to_index[tid] - struct_type_base;
+                (*tid, proto_local_base + dense)
+            })
+            .collect();
+
+        let ctx = EmitCtx {
+            types: &self.types,
+            struct_ref_target,
+            protos: &protos,
+            type_ids_to_index: &type_ids_to_index,
+        };
+
         let mut func = Function::new(local_decls);
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
+
+        // Refill the prototypes at the top of every iteration, so the ops below
+        // never read a null local and each iteration allocates a fresh set of
+        // objects for the collector to find and reclaim. `proto_order` is in
+        // rank order, so a prototype's referents are already built.
+        for tid in &proto_order {
+            emit_new(*tid, &mut func, ctx);
+            func.instruction(&Instruction::LocalSet(protos[tid]));
+        }
         for op in &self.ops {
             op.encode(
                 &mut func,
                 scratch_local,
                 storage_bases,
-                &self.types,
+                ctx,
                 &encoding_order,
-                &type_ids_to_index,
             );
         }
         func.instruction(&Instruction::Br(0));
@@ -1363,10 +1414,10 @@ impl GcOp {
         func: &mut Function,
         scratch_local: u32,
         encoding_bases: WasmEncodingBases,
-        types: &Types,
+        ctx: EmitCtx<'_>,
         encoding_order: &[TypeId],
-        type_ids_to_index: &BTreeMap<TypeId, u32>,
     ) {
+        let types = ctx.types;
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
@@ -1459,37 +1510,57 @@ impl GcOp {
                 )));
             }
             Self::StructNew { type_index: x } => {
-                if let Some(tid) = encoding_order.get(usize::try_from(x).unwrap()) {
-                    if let Some(CompositeType::Struct(st)) =
-                        types.type_defs.get(tid).map(|def| &def.composite_type)
-                    {
-                        for field in &st.fields {
-                            field.field_type.emit_default_const(func, type_ids_to_index);
-                        }
-                    }
+                for field in struct_fields(types, encoding_order, x).unwrap_or(&[]) {
+                    field.field_type.emit_default_const(func, ctx);
                 }
                 func.instruction(&Instruction::StructNew(encoding_bases.struct_type_base + x));
             }
             Self::StructNewDefault { type_index: x } => {
-                func.instruction(&Instruction::StructNewDefault(
-                    encoding_bases.struct_type_base + x,
-                ));
+                // `struct.new_default` requires every field to be defaultable,
+                // which a non-nullable reference is not. Build those fields
+                // explicitly instead; the resulting value and stack effect are
+                // the same.
+                let fields = struct_fields(types, encoding_order, x).unwrap_or(&[]);
+                if fields.iter().all(|f| f.field_type.is_defaultable()) {
+                    func.instruction(&Instruction::StructNewDefault(
+                        encoding_bases.struct_type_base + x,
+                    ));
+                } else {
+                    for field in fields {
+                        field.field_type.emit_default_const(func, ctx);
+                    }
+                    func.instruction(&Instruction::StructNew(encoding_bases.struct_type_base + x));
+                }
             }
             Self::ArrayNewDefault { type_index: x } => {
                 // Create a default-initialized array of a fixed length so most
                 // subsequent indexed accesses are in-bounds.
-                func.instruction(&Instruction::I32Const(
-                    encoding_bases.array_length.cast_signed(),
-                ));
-                func.instruction(&Instruction::ArrayNewDefault(
-                    encoding_bases.struct_type_base + x,
-                ));
+                match array_element(types, encoding_order, x) {
+                    // As above, `array.new_default` needs a defaultable
+                    // element. `array.new` takes the initial value explicitly,
+                    // so it covers non-nullable elements at the same length.
+                    Some(element) if !element.field_type.is_defaultable() => {
+                        element.field_type.emit_default_const(func, ctx);
+                        func.instruction(&Instruction::I32Const(
+                            encoding_bases.array_length.cast_signed(),
+                        ));
+                        func.instruction(&Instruction::ArrayNew(
+                            encoding_bases.struct_type_base + x,
+                        ));
+                    }
+                    _ => {
+                        func.instruction(&Instruction::I32Const(
+                            encoding_bases.array_length.cast_signed(),
+                        ));
+                        func.instruction(&Instruction::ArrayNewDefault(
+                            encoding_bases.struct_type_base + x,
+                        ));
+                    }
+                }
             }
             Self::ArrayNew { type_index: x } => {
                 if let Some(element) = array_element(types, encoding_order, x) {
-                    element
-                        .field_type
-                        .emit_default_const(func, type_ids_to_index);
+                    element.field_type.emit_default_const(func, ctx);
                 }
                 func.instruction(&Instruction::I32Const(
                     encoding_bases.array_length.cast_signed(),
@@ -1499,9 +1570,7 @@ impl GcOp {
             Self::ArrayNewFixed { type_index: x, n } => {
                 if let Some(element) = array_element(types, encoding_order, x) {
                     for _ in 0..n {
-                        element
-                            .field_type
-                            .emit_default_const(func, type_ids_to_index);
+                        element.field_type.emit_default_const(func, ctx);
                     }
                 }
                 func.instruction(&Instruction::ArrayNewFixed {
@@ -1749,9 +1818,7 @@ impl GcOp {
                                 func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
                                 func.instruction(&Instruction::Else);
                                 func.instruction(&Instruction::LocalGet(typed_local));
-                                fields[idx]
-                                    .field_type
-                                    .emit_default_const(func, type_ids_to_index);
+                                fields[idx].field_type.emit_default_const(func, ctx);
                                 let idx = u32::try_from(idx).unwrap();
                                 func.instruction(&Instruction::StructSet {
                                     struct_type_index: wasm_type,
@@ -1942,9 +2009,7 @@ impl GcOp {
                         func.instruction(&Instruction::Else);
                         func.instruction(&Instruction::LocalGet(typed_local));
                         func.instruction(&Instruction::I32Const(index.cast_signed()));
-                        element
-                            .field_type
-                            .emit_default_const(func, type_ids_to_index);
+                        element.field_type.emit_default_const(func, ctx);
                         func.instruction(&Instruction::ArraySet(wasm_type));
                         func.instruction(&Instruction::End);
                     }
@@ -1969,9 +2034,7 @@ impl GcOp {
                         func.instruction(&Instruction::Else);
                         func.instruction(&Instruction::LocalGet(typed_local));
                         func.instruction(&Instruction::I32Const(offset.cast_signed()));
-                        element
-                            .field_type
-                            .emit_default_const(func, type_ids_to_index);
+                        element.field_type.emit_default_const(func, ctx);
                         func.instruction(&Instruction::I32Const(len.cast_signed()));
                         func.instruction(&Instruction::ArrayFill(wasm_type));
                         func.instruction(&Instruction::End);
