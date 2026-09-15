@@ -198,7 +198,7 @@ impl<'a, T> StoreContextMut<'a, T> {
 
     /// Manually grow the GC heap by at least `bytes` bytes.
     ///
-    /// For more information, see the documentation of [`Store::grow_gc_heap`].
+    /// For more information, see the documentation of [`Store::gc_heap_grow`].
     pub fn gc_heap_grow(&mut self, bytes: u64) -> Result<()> {
         let (mut limiter, store) = self.0.validate_sync_resource_limiter_and_store_opaque()?;
         vm::assert_ready(store.grow_gc_heap(limiter.as_mut(), bytes, crate::store::Asyncness::No))

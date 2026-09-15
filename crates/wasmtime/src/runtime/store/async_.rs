@@ -106,7 +106,7 @@ impl<T> Store<T> {
 
     /// Manually grow the GC heap by at least `bytes` bytes.
     ///
-    /// For more information, see the documentation of [`Store::grow_gc_heap`].
+    /// For more information, see the documentation of [`Store::gc_heap_grow`].
     #[cfg(feature = "gc")]
     pub async fn gc_heap_grow_async(&mut self, bytes: u64) -> Result<()> {
         StoreContextMut(&mut self.inner)
@@ -168,7 +168,7 @@ impl<'a, T> StoreContextMut<'a, T> {
 
     /// Manually grow the GC heap by at least `bytes` bytes.
     ///
-    /// For more information, see the documentation of [`Store::grow_gc_heap`].
+    /// For more information, see the documentation of [`Store::gc_heap_grow`].
     #[cfg(feature = "gc")]
     pub async fn gc_heap_grow_async(&mut self, bytes: u64) -> Result<()> {
         let (mut limiter, store) = self.0.resource_limiter_and_store_opaque();
