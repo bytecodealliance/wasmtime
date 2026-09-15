@@ -46,7 +46,7 @@ pub use self::handle_table::{HandleTable, RemovedResource};
 #[cfg(feature = "component-model-async")]
 pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
 pub use self::resources::{
-    CallContext, CurrentScopeId, ResourceTables, TypedResource, TypedResourceIndex,
+    CallContext, CurrentScope, ResourceTables, Scope, TypedResource, TypedResourceIndex,
 };
 
 /// Represents the state of a (sub-)component instance.

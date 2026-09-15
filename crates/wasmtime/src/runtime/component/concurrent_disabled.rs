@@ -2,7 +2,7 @@ use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
 use crate::store::StoreOpaque;
-use crate::vm::component::CurrentScopeId;
+use crate::vm::component::{CurrentScope, Scope};
 use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;
@@ -166,13 +166,17 @@ impl StoreOpaque {
         self.enter_call_not_concurrent()
     }
 
-    pub(crate) fn host_task_delete(&mut self, (): ()) -> Result<()> {
+    pub(crate) fn host_task_delete(&mut self, (): (), (): ()) -> Result<()> {
         Ok(self.exit_call_not_concurrent())
     }
 
-    pub(crate) fn current_scope_id(&mut self) -> Result<Option<CurrentScopeId>> {
+    pub(crate) fn current_materialized_host_task(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    pub(crate) fn current_scope(&mut self) -> Result<Option<CurrentScope>> {
         Ok(self
             .current_scope_id_not_concurrent()?
-            .map(CurrentScopeId::Id))
+            .map(|id| CurrentScope::Id(Scope::Id(id))))
     }
 }

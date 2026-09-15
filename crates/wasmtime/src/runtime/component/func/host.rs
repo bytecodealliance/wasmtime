@@ -419,7 +419,12 @@ where
             )?)
         };
         lower.validate_scope_exit()?;
-        lower.store.0.host_task_delete(entered_host_task)?;
+        // Check if running the future created an actual host task in the store.
+        let materialized_host_task = lower.store.0.current_materialized_host_task()?;
+        lower
+            .store
+            .0
+            .host_task_delete(entered_host_task, materialized_host_task)?;
         Self::lower_raw(&mut lower, ty, ret, dst)
     }
 
@@ -473,7 +478,12 @@ where
                 let result = result?;
                 let mut lower = LowerContext::new(store, options, instance);
                 lower.validate_scope_exit()?;
-                lower.store.0.host_task_delete(entered_host_task)?;
+                // Check if running the future created an actual host task in the store.
+                let materialized_host_task = lower.store.0.current_materialized_host_task()?;
+                lower
+                    .store
+                    .0
+                    .host_task_delete(entered_host_task, materialized_host_task)?;
                 Self::lower_raw(&mut lower, ty, result, Destination::Memory(retptr))?;
                 Status::Returned.pack(None)
             }
@@ -481,11 +491,14 @@ where
                 store.as_context_mut(),
                 entered_host_task,
                 future,
-                move |store, ret, immediate| {
+                move |store, ret, immediate, materialized_host_task| {
                     let mut lower = LowerContext::new(store, options, instance);
                     lower.validate_scope_exit()?;
                     if immediate {
-                        lower.store.0.host_task_delete(entered_host_task)?;
+                        lower
+                            .store
+                            .0
+                            .host_task_delete(entered_host_task, materialized_host_task)?;
                     }
                     // FIXME(WebAssembly/component-model#678) the currently
                     // running thread for this exit lower is wrong. This happens
