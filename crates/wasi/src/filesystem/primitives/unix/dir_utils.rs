@@ -96,7 +96,7 @@ pub(crate) fn readdir_options() -> OpenOptions {
 ///
 /// This function is not sandboxed and may trivially access any path that the
 /// host process has access to.
-pub(crate) fn open_ambient_dir_impl(path: &Path) -> io::Result<fs::File> {
+pub(crate) fn open_ambient_dir(path: &Path) -> io::Result<fs::File> {
     let mut options = fs::OpenOptions::new();
     options.read(true);
 

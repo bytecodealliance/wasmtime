@@ -7,7 +7,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 
 /// *Unsandboxed* function similar to `read_link`, but which does not perform
 /// sandboxing.
-pub(crate) fn read_link_impl(start: &fs::File, path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn read_link(start: &fs::File, path: &Path) -> io::Result<PathBuf> {
     // Open the link with no access mode, instead of generic read.
     // By default FILE_LIST_DIRECTORY is denied for the junction "C:\Documents and
     // Settings", so this is needed for a common case.

@@ -45,7 +45,7 @@ fn open_directory_with_truncate_is_error() {
     let mut options = p::OpenOptions::new();
     // The `maybe_dir` part of this test is gone along with the option itself.
     options.truncate(true).read(true).write(true);
-    p::create_dir(&start, Path::new("test"), &p::DirOptions::new()).unwrap();
+    p::create_dir(&start, Path::new("test")).unwrap();
     assert!(p::open(&start, Path::new("test"), &options).is_err());
 }
 
@@ -828,7 +828,7 @@ fn readlink_not_symlink() {
 
 #[cfg(not(windows))]
 #[test]
-fn read_link_contents() {
+fn read_link_relative() {
     let tmpdir = tmpdir();
     let start = h::dir_of(&tmpdir);
     let link = "link";
@@ -837,16 +837,19 @@ fn read_link_contents() {
     };
     check!(h::symlink_file(&start, &"foo", &link));
     assert_eq!(
-        check!(super::super::read_link_contents(&start, Path::new(link)))
+        check!(super::super::read_link(&start, Path::new(link)))
             .to_str()
             .unwrap(),
         "foo"
     );
 }
 
+/// Reading a symlink whose target is absolute is refused, even though the
+/// underlying `readlinkat` would succeed, to avoid leaking information about
+/// the host filesystem outside the sandbox.
 #[cfg(not(windows))]
 #[test]
-fn read_link_contents_absolute() {
+fn read_link_absolute() {
     let tmpdir = tmpdir();
     let start = h::dir_of(&tmpdir);
     let link = "link";
@@ -854,11 +857,9 @@ fn read_link_contents_absolute() {
         return;
     };
     check!(std::os::unix::fs::symlink("/foo", tmpdir.path().join(link)));
-    assert_eq!(
-        check!(super::super::read_link_contents(&start, Path::new(link)))
-            .to_str()
-            .unwrap(),
-        "/foo"
+    error_contains!(
+        super::super::read_link(&start, Path::new(link)),
+        "a path led outside of the filesystem"
     );
 }
 

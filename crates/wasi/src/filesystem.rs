@@ -1,5 +1,5 @@
 use crate::clocks::Datetime;
-use crate::filesystem::primitives::{DirOptions, FollowSymlinks, Metadata, OpenOptions};
+use crate::filesystem::primitives::{FollowSymlinks, Metadata, OpenOptions};
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use crate::{NamedId, WasiCtxNamedView};
 use std::collections::hash_map;
@@ -855,10 +855,8 @@ impl Dir {
         if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
-        self.run_blocking(move |d| {
-            crate::filesystem::primitives::create_dir(d, path.as_ref(), &DirOptions::new())
-        })
-        .await?;
+        self.run_blocking(move |d| crate::filesystem::primitives::create_dir(d, path.as_ref()))
+            .await?;
         Ok(())
     }
 
