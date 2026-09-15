@@ -17,9 +17,16 @@ multiple pull requests.
   proposal unimplemented for now (implementation comes in subsequent PRs).
   [(example)](https://github.com/bytecodealliance/wasmtime/pull/9399)
 * [ ] Add `Config::wasm_your_proposal` to the `wasmtime` crate.
+  * [ ] If the proposal adds a `WasmFeatures` flag, include it in
+    `features_known_to_wasmtime` in
+    [`crates/wasmtime/src/config.rs`](https://github.com/bytecodealliance/wasmtime/blob/0675528cca48cc8dd90cefe91eb7f1a279a7415b/crates/wasmtime/src/config.rs).
 * [ ] Implement the proposal in `wasmtime`, gated behind this flag.
-* [ ] Add `-Wyour-proposal` to the `wasmtime-cli-flags` crate.
-* [ ] Update `tests/wast.rs` to spec tests should pass for this proposal.
+* [ ] Add `your-proposal` to `WasmOptions` in the `wasmtime-cli-flags`
+  crate, apply it to `wasmtime::Config`, and decide whether it should be
+  included in `-W all-proposals`.
+* [ ] Configure the WAST test harness for the proposal in
+  `crates/test-util/src/wast.rs` and
+  `crates/test-util/src/wasmtime_wast.rs`.
 * [ ] Write custom tests in `tests/misc_testsuite/*.wast` for this proposal.
 * [ ] Enable the proposal in [the fuzz targets](./contributing-fuzzing.md).
   * [ ] Write a custom fuzz target, oracle, and/or test
@@ -39,12 +46,16 @@ multiple pull requests.
   > method.
 * [ ] Expose the proposal's new functionality in the C API.
 
-  > This may require extensions to the standard C API, and if so, should be
-  > defined in
-  > [`wasmtime.h`](https://github.com/bytecodealliance/wasmtime/blob/c7cd70fcec3eee66c9d7b5aa6fb4580d5a802218/crates/c-api/include/wasmtime.h)
-  > and prefixed with `wasmtime_`.
-* [ ] Update `docs/stability-tiers.md` with an implementation status of the
-  proposal.
+  > This may require extensions to the standard C API. Configuration extensions
+  > should be declared in
+  > [`crates/c-api/include/wasmtime/config.h`](https://github.com/bytecodealliance/wasmtime/blob/0675528cca48cc8dd90cefe91eb7f1a279a7415b/crates/c-api/include/wasmtime/config.h)
+  > and prefixed with `wasmtime_`. Implement them in
+  > [`crates/c-api/src/config.rs`](https://github.com/bytecodealliance/wasmtime/blob/0675528cca48cc8dd90cefe91eb7f1a279a7415b/crates/c-api/src/config.rs),
+  > and add corresponding C++ wrappers to
+  > [`crates/c-api/include/wasmtime/config.hh`](https://github.com/bytecodealliance/wasmtime/blob/0675528cca48cc8dd90cefe91eb7f1a279a7415b/crates/c-api/include/wasmtime/config.hh)
+  > when needed.
+* [ ] Update `docs/stability-wasm-proposals.md` with the proposal's
+  implementation status.
 
 
 [`wasm-tools` repository]: https://github.com/bytecodealliance/wasm-tools
