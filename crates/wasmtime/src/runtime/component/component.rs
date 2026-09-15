@@ -21,7 +21,6 @@ use wasmtime_environ::component::{
     CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
     GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
     TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
-    alternate_lookup_key,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace, WasmChecksum};
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
@@ -1009,17 +1008,6 @@ where
 
 impl ExportLookup for str {
     fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
-        let name = if component
-            .engine()
-            .features()
-            .contains(wasmparser::WasmFeatures::CM_CANON_NAMES)
-        {
-            alternate_lookup_key(self)
-                .map(|(short, _)| short)
-                .unwrap_or(self)
-        } else {
-            self
-        };
         let info = component.env_component();
         let exports = match instance {
             Some(idx) => match &info.export_items[*idx] {
@@ -1028,7 +1016,7 @@ impl ExportLookup for str {
             },
             None => &info.exports,
         };
-        let (index, _) = exports.get(name, &NameMapNoIntern)?;
+        let (index, _) = exports.get(self, &NameMapNoIntern)?;
         Some(*index)
     }
 }

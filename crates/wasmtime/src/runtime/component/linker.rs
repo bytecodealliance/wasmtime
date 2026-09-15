@@ -13,7 +13,7 @@ use alloc::sync::Arc;
 use core::marker;
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
-use wasmtime_environ::component::{NameMap, NameMapIntern, alternate_lookup_key};
+use wasmtime_environ::component::{NameMap, NameMapIntern};
 use wasmtime_environ::{Atom, PrimaryMap, StringPool};
 
 /// A type used to instantiate [`Component`]s.
@@ -915,17 +915,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// Same as [`LinkerInstance::instance`] except with different lifetime
     /// parameters.
     pub fn into_instance(mut self, name: &str) -> Result<Self> {
-        let name = if self
-            .engine
-            .features()
-            .contains(wasmparser::WasmFeatures::CM_CANON_NAMES)
-        {
-            alternate_lookup_key(name)
-                .map(|(short, _)| short)
-                .unwrap_or(name)
-        } else {
-            name
-        };
         let atom = self.strings.intern(name)?;
 
         // If this item is already an instance then don't stomp over it with a
