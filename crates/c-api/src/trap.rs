@@ -56,6 +56,10 @@ const _: () = {
     assert!(Trap::StreamOpTooBig as u8 == 47);
     assert!(Trap::WaitableSyncAndAsync as u8 == 48);
     assert!(Trap::UncaughtException as u8 == 49);
+    assert!(Trap::ReadFromDroppedStream as u8 == 50);
+    assert!(Trap::WriteToDroppedStream as u8 == 51);
+    assert!(Trap::WriteToDroppedFuture as u8 == 52);
+    assert!(Trap::LiftDroppedStream as u8 == 53);
 };
 
 #[repr(C)]

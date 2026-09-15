@@ -144,6 +144,18 @@ enum wasmtime_trap_code_enum {
   WASMTIME_TRAP_CODE_WAITABLE_SYNC_AND_ASYNC = 48,
   /// An exception propagated out of a component without being caught.
   WASMTIME_TRAP_CODE_UNCAUGHT_EXCEPTION = 49,
+  /// Guest attempted to read from a stream after being notified that the
+  /// writable end was dropped.
+  WASMTIME_TRAP_READ_FROM_DROPPED_STREAM = 50,
+  /// Guest attempted to write to a stream after being notified that the
+  /// readable end was dropped.
+  WASMTIME_TRAP_WRITE_TO_DROPPED_STREAM = 51,
+  /// Guest attempted to write to a future after being notified that the
+  /// readable end was dropped.
+  WASMTIME_TRAP_WRITE_TO_DROPPED_FUTURE = 52,
+  /// Guest attempted to lift a stream after being notified that the writable
+  /// end was dropped.
+  WASMTIME_TRAP_LIFT_DROPPED_STREAM = 53,
 };
 
 /**
