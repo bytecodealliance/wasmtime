@@ -95,6 +95,36 @@ impl<T> Store<T> {
         self.inner.gc_heap_capacity()
     }
 
+    /// Manually grow the GC heap by at least `bytes` bytes.
+    ///
+    /// This method will attempt to increase the size of the GC heap used for GC
+    /// objects by at least `bytes` bytes. The current capacity of the GC heap
+    /// can be determined by looking at [`Store::gc_heap_capacity`].
+    ///
+    /// This method can be useful, for example, to pre-allocate space in the GC
+    /// heap for guests that are known to have GC-heavy workloads. This can help
+    /// amortize startup costs in some situations.
+    ///
+    /// Note that GC heap capacity does not mean that an `(array i8)` of size
+    /// equal to the heap's capacity will succeed. Wasmtime's GC implementations
+    /// are responsible for how the heap is used and divvy'd up. As a result
+    /// the growth here does not have a precise semantic meaning and instead
+    /// it's recommended to primarily use this for performance tuning.
+    ///
+    /// # Errors
+    ///
+    /// GC heap growth is a resource-consuming operation that can fail for a
+    /// number of reasons:
+    ///
+    /// * The OS might reject growth of the GC heap.
+    /// * The GC heap's configuration may not allow it to grow further.
+    /// * The store's resource limiter might reject the growth.
+    /// * This method was used when the [`Store::gc_heap_grow_async`] method
+    ///   must be used instead.
+    pub fn gc_heap_grow(&mut self, bytes: u64) -> Result<()> {
+        StoreContextMut(&mut self.inner).gc_heap_grow(bytes)
+    }
+
     /// Set an exception as the currently pending exception, and
     /// return an error that propagates the throw.
     ///
@@ -164,6 +194,14 @@ impl<'a, T> StoreContextMut<'a, T> {
             Asyncness::No,
         ))?;
         Ok(())
+    }
+
+    /// Manually grow the GC heap by at least `bytes` bytes.
+    ///
+    /// For more information, see the documentation of [`Store::gc_heap_grow`].
+    pub fn gc_heap_grow(&mut self, bytes: u64) -> Result<()> {
+        let (mut limiter, store) = self.0.validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(store.grow_gc_heap(limiter.as_mut(), bytes, crate::store::Asyncness::No))
     }
 
     /// Set an exception as the currently pending exception, and
@@ -275,7 +313,7 @@ impl StoreOpaque {
     /// Returns an error if growing the GC heap fails.
     pub(crate) async fn grow_gc_heap(
         &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         bytes_needed: u64,
         asyncness: Asyncness,
     ) -> Result<()> {
@@ -301,6 +339,9 @@ impl StoreOpaque {
                 "needs_gc_before_next_growth should return false after a GC"
             );
         }
+
+        // Make sure the GC heap is actually allocated to get grown.
+        self.ensure_gc_store(limiter.as_deref_mut()).await?;
 
         let page_size = self.engine().tunables().gc_heap_memory_type().page_size();
 
