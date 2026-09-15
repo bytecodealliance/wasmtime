@@ -525,13 +525,6 @@ impl WastTest {
             return true;
         }
 
-        // Waiting for WebAssembly/component-model#716 to land
-        if self.path.ends_with("async/cancellable.wast")
-            || self.path.ends_with("binary/binary.wast")
-        {
-            return true;
-        }
-
         // Some tests are known to fail with the pooling allocator
         if config.pooling {
             // allocates too much memory for the pooling configuration here
