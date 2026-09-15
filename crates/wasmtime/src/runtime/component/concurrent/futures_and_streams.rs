@@ -3592,6 +3592,7 @@ impl Instance {
                 // read).
                 // ```
 
+                let write_count = count;
                 let write_complete = count == 0 || read_count > 0;
                 let read_complete = count > 0;
                 let read_buffer_remaining = count < read_count;
@@ -3645,7 +3646,7 @@ impl Instance {
                 // zero-length rendezvous case this specifically won't execute
                 // the `read_complete` logic above, which is intentional, as the
                 // reader remains blocked.
-                if read_buffer_remaining || (count == 0 && read_count == 0) {
+                if read_buffer_remaining || (write_count == 0 && read_count == 0) {
                     let transmit = concurrent_state.get_mut(transmit_id)?;
                     transmit.read = ReadState::GuestReady {
                         ty: read_ty,
