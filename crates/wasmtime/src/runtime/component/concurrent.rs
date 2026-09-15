@@ -863,7 +863,7 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
     // in `GuestTask::result` and resuming this fiber when the host task
     // completes.
     let mut future = Box::pin(async move {
-        let result = future.await?;
+        let result = run_with_host_task_set(task, future).await??;
         tls::get(move |store| {
             let state = store.concurrent_state_mut()?;
             let host_state = &mut state.get_mut(task)?.state;
@@ -3423,7 +3423,7 @@ impl Instance {
         // the guest's stack and memory, as well as notifying any waiters that
         // the task returned.
         let future = Box::pin(async move {
-            let result = match future.await {
+            let result = match run_with_host_task_set(task, future).await? {
                 Some(result) => Some(result?),
                 None => None,
             };
@@ -4789,6 +4789,27 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
 }
 
 type HostTaskFuture = Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>;
+
+/// Runs the given future with the current thread set to `task` each time it is
+/// polled.
+async fn run_with_host_task_set<F>(task: TableId<HostTask>, future: F) -> Result<F::Output>
+where
+    F: Future,
+{
+    let mut future = pin!(future);
+    future::poll_fn(|cx| {
+        let old_thread = match tls::get(|store| store.set_thread(task)) {
+            Ok(thread) => thread,
+            Err(error) => return Poll::Ready(Err(error)),
+        };
+        let result = future.as_mut().poll(cx);
+        match tls::get(|store| store.set_thread(old_thread)) {
+            Ok(_) => result.map(Ok),
+            Err(error) => Poll::Ready(Err(error)),
+        }
+    })
+    .await
+}
 
 /// Represents the state of a pending host task.
 ///
