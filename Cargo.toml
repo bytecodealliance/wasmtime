@@ -449,7 +449,7 @@ semver = { version = "1.0.27", default-features = false }
 ittapi = "0.4.0"
 libm = "0.2.16"
 tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "tls12", "logging"] }
-rustls = { version = "0.23", default-features = false, features = ["ring", "tls12", "logging"] }
+rustls = { version = "0.23.45", default-features = false, features = ["ring", "tls12", "logging"] }
 tokio-native-tls = "0.3.1"
 native-tls = "0.2.11"
 tokio-openssl = "0.6.5"
