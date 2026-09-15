@@ -1,0 +1,286 @@
+test compile precise-output
+target riscv64
+
+;; GHC STG integer args: x9, x18-x27
+;; f32: fs0-fs5; f64: fs6-fs11
+
+function %ghc_leaf(i64, i64, i64) ghc {
+block0(v0: i64, v1: i64, v2: i64):
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %ghc_call_ghc(i64, i64) ghc {
+    fn0 = %ghc_leaf(i64, i64, i64) ghc
+block0(v0: i64, v1: i64):
+    call fn0(v0, v1, v0)
+    return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_ext_name_far a0,%ghc_leaf+0
+;   mv s3,s1
+;   callind a0
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %ghc_leaf 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   mv s3, s1
+;   jalr a0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %ghc_call_system_v(i64) ghc {
+    fn0 = %sysv(i64) -> i64 system_v
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_ext_name_far a1,%sysv+0
+;   mv a0,s1
+;   callind a1
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %sysv 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   mv a0, s1
+;   jalr a1
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %system_v_call_ghc(i64) system_v {
+    fn0 = %ghc_leaf(i64, i64, i64) ghc
+block0(v0: i64):
+    call fn0(v0, v0, v0)
+    return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-192
+;   sd fp,184(sp)
+;   sd s1,176(sp)
+;   sd s2,168(sp)
+;   sd s3,160(sp)
+;   sd s4,152(sp)
+;   sd s5,144(sp)
+;   sd s6,136(sp)
+;   sd s7,128(sp)
+;   sd s8,120(sp)
+;   sd s9,112(sp)
+;   sd s10,104(sp)
+;   sd s11,96(sp)
+;   fsd fs0,88(sp)
+;   fsd fs2,80(sp)
+;   fsd fs3,72(sp)
+;   fsd fs4,64(sp)
+;   fsd fs5,56(sp)
+;   fsd fs6,48(sp)
+;   fsd fs7,40(sp)
+;   fsd fs8,32(sp)
+;   fsd fs9,24(sp)
+;   fsd fs10,16(sp)
+;   fsd fs11,8(sp)
+; block0:
+;   load_ext_name_far a1,%ghc_leaf+0
+;   mv s3,a0
+;   mv s1,s3
+;   mv s2,s3
+;   callind a1
+;   ld fp,184(sp)
+;   ld s1,176(sp)
+;   ld s2,168(sp)
+;   ld s3,160(sp)
+;   ld s4,152(sp)
+;   ld s5,144(sp)
+;   ld s6,136(sp)
+;   ld s7,128(sp)
+;   ld s8,120(sp)
+;   ld s9,112(sp)
+;   ld s10,104(sp)
+;   ld s11,96(sp)
+;   fld fs0,88(sp)
+;   fld fs2,80(sp)
+;   fld fs3,72(sp)
+;   fld fs4,64(sp)
+;   fld fs5,56(sp)
+;   fld fs6,48(sp)
+;   fld fs7,40(sp)
+;   fld fs8,32(sp)
+;   fld fs9,24(sp)
+;   fld fs10,16(sp)
+;   fld fs11,8(sp)
+;   addi sp,sp,192
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0xc0
+;   sd s0, 0xb8(sp)
+;   sd s1, 0xb0(sp)
+;   sd s2, 0xa8(sp)
+;   sd s3, 0xa0(sp)
+;   sd s4, 0x98(sp)
+;   sd s5, 0x90(sp)
+;   sd s6, 0x88(sp)
+;   sd s7, 0x80(sp)
+;   sd s8, 0x78(sp)
+;   sd s9, 0x70(sp)
+;   sd s10, 0x68(sp)
+;   sd s11, 0x60(sp)
+;   fsd fs0, 0x58(sp)
+;   fsd fs2, 0x50(sp)
+;   fsd fs3, 0x48(sp)
+;   fsd fs4, 0x40(sp)
+;   fsd fs5, 0x38(sp)
+;   fsd fs6, 0x30(sp)
+;   fsd fs7, 0x28(sp)
+;   fsd fs8, 0x20(sp)
+;   fsd fs9, 0x18(sp)
+;   fsd fs10, 0x10(sp)
+;   fsd fs11, 8(sp)
+; block1: ; offset 0x70
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %ghc_leaf 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   mv s3, a0
+;   mv s1, s3
+;   mv s2, s3
+;   jalr a1
+;   ld s0, 0xb8(sp)
+;   ld s1, 0xb0(sp)
+;   ld s2, 0xa8(sp)
+;   ld s3, 0xa0(sp)
+;   ld s4, 0x98(sp)
+;   ld s5, 0x90(sp)
+;   ld s6, 0x88(sp)
+;   ld s7, 0x80(sp)
+;   ld s8, 0x78(sp)
+;   ld s9, 0x70(sp)
+;   ld s10, 0x68(sp)
+;   ld s11, 0x60(sp)
+;   fld fs0, 0x58(sp)
+;   fld fs2, 0x50(sp)
+;   fld fs3, 0x48(sp)
+;   fld fs4, 0x40(sp)
+;   fld fs5, 0x38(sp)
+;   fld fs6, 0x30(sp)
+;   fld fs7, 0x28(sp)
+;   fld fs8, 0x20(sp)
+;   fld fs9, 0x18(sp)
+;   fld fs10, 0x10(sp)
+;   fld fs11, 8(sp)
+;   addi sp, sp, 0xc0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %ghc_return_call(i64, i64) ghc {
+    fn0 = %ghc_leaf(i64, i64, i64) ghc
+block0(v0: i64, v1: i64):
+    return_call fn0(v0, v1, v0)
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_ext_name_far t0,%ghc_leaf+0
+;   mv s3,s1
+;   return_call_ind t0 new_stack_arg_size:0 s1=s1 s2=s2 s3=s3
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   auipc t0, 0
+;   ld t0, 0xc(t0)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %ghc_leaf 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   mv s3, s1
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   jr t0
+
+function %ghc_float_args(f32, f32, f64) ghc {
+block0(v0: f32, v1: f32, v2: f64):
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+

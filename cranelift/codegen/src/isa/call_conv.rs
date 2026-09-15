@@ -56,6 +56,21 @@ pub enum CallConv {
     /// respective platform. It does not support tail-calls. It also
     /// does not support return values.
     PreserveAll,
+    /// GHC (Glasgow Haskell Compiler) calling convention.
+    ///
+    /// Passes arguments only in fixed STG registers, defines no
+    /// callee-saved registers, and does not support return values.
+    /// Used for register-pinning style ABIs similar to LLVM's
+    /// `ghccc`. Supported on x86_64, aarch64, and riscv64.
+    ///
+    /// Supports tail calls between `ghc` callers and callees. Does not
+    /// support exceptions.
+    ///
+    /// On x86_64, STG Sp is `%rbp`, so Cranelift `system_v` code cannot
+    /// pass a full STG register set into `ghc`; enter from Rust via a
+    /// naked assembly trampoline. See the `ghc` section in
+    /// `cranelift/docs/ir.md`.
+    Ghc,
 }
 
 impl CallConv {
@@ -87,7 +102,7 @@ impl CallConv {
     /// Does this calling convention support tail calls?
     pub fn supports_tail_calls(&self) -> bool {
         match self {
-            CallConv::Tail => true,
+            CallConv::Tail | CallConv::Ghc => true,
             _ => false,
         }
     }
@@ -140,6 +155,7 @@ impl fmt::Display for CallConv {
             Self::Probestack => "probestack",
             Self::Winch => "winch",
             Self::PreserveAll => "preserve_all",
+            Self::Ghc => "ghc",
         })
     }
 }
@@ -156,6 +172,7 @@ impl str::FromStr for CallConv {
             "probestack" => Ok(Self::Probestack),
             "winch" => Ok(Self::Winch),
             "preserve_all" => Ok(Self::PreserveAll),
+            "ghc" => Ok(Self::Ghc),
             _ => Err(()),
         }
     }
