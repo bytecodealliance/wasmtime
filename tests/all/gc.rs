@@ -4249,3 +4249,17 @@ fn table_fill_null_barriers_ok() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn manually_grow_gc_heap() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    assert_eq!(store.gc_heap_capacity(), 0);
+    store.gc_heap_grow(1)?;
+    assert_eq!(store.gc_heap_capacity(), 1 << 16);
+    store.gc_heap_grow(1)?;
+    assert_eq!(store.gc_heap_capacity(), 2 << 16);
+    store.gc_heap_grow_async(1).await?;
+    assert_eq!(store.gc_heap_capacity(), 4 << 16);
+    Ok(())
+}

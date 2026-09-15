@@ -104,6 +104,16 @@ impl<T> Store<T> {
         StoreContextMut(&mut self.inner).gc_async(why).await
     }
 
+    /// Manually grow the GC heap by at least `bytes` bytes.
+    ///
+    /// For more information, see the documentation of [`Store::gc_heap_grow`].
+    #[cfg(feature = "gc")]
+    pub async fn gc_heap_grow_async(&mut self, bytes: u64) -> Result<()> {
+        StoreContextMut(&mut self.inner)
+            .gc_heap_grow_async(bytes)
+            .await
+    }
+
     /// Configures epoch-deadline expiration to yield to the async
     /// caller and the update the deadline.
     ///
@@ -154,6 +164,17 @@ impl<'a, T> StoreContextMut<'a, T> {
             )
             .await?;
         Ok(())
+    }
+
+    /// Manually grow the GC heap by at least `bytes` bytes.
+    ///
+    /// For more information, see the documentation of [`Store::gc_heap_grow`].
+    #[cfg(feature = "gc")]
+    pub async fn gc_heap_grow_async(&mut self, bytes: u64) -> Result<()> {
+        let (mut limiter, store) = self.0.resource_limiter_and_store_opaque();
+        store
+            .grow_gc_heap(limiter.as_mut(), bytes, crate::store::Asyncness::Yes)
+            .await
     }
 
     /// Configures epoch-deadline expiration to yield to the async
