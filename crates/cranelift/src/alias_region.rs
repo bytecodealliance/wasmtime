@@ -80,9 +80,8 @@ enum VmType {
     BuiltinFunctionsArray,
     ComponentBuiltinFunctionsArray,
     HostValRaw,
-    // Keep new variants at the end: `VmType`'s discriminant participates in
-    // stable alias-region IDs printed by disassembly tests.
     VMPayloads,
+    VMRawContObj,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.

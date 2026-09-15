@@ -59,7 +59,11 @@ use crate::prelude::*;
 use crate::runtime::store::{Asyncness, InstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
+use crate::runtime::vm::provenance::VmPtr;
 use crate::runtime::vm::{self, HostResultHasUnwindSentinel, VMStore, f32x4, f64x2, i8x16};
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
+use crate::vm::vmcontext::VMRawContObj;
 use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
@@ -635,25 +639,19 @@ unsafe fn get_interned_contref(
 ) -> Result<()> {
     use crate::store::AutoAssertNoGc;
 
-    #[repr(C)]
-    struct RawContObj {
-        contref: *mut u8,
-        revision: usize,
-    }
-
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
     let contobj = store.unwrap_gc_store().cont_ref_table.get(contref_id)?;
     let raw = match contobj {
-        Some(contobj) => RawContObj {
-            contref: contobj.contref.as_ptr().cast(),
+        Some(contobj) => VMRawContObj {
+            contref: NonNull::new(contobj.contref.as_ptr().cast::<u8>()).map(VmPtr::from),
             revision: contobj.revision,
         },
-        None => RawContObj {
-            contref: core::ptr::null_mut(),
+        None => VMRawContObj {
+            contref: None,
             revision: 0,
         },
     };
-    unsafe { out_result.cast::<RawContObj>().write(raw) };
+    unsafe { out_result.cast::<VMRawContObj>().write(raw) };
     Ok(())
 }
 

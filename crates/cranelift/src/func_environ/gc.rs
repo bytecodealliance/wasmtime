@@ -18,7 +18,7 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::{SmallVec, smallvec};
 use wasmtime_environ::{
     Collector, GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, I31_DISCRIMINANT,
-    ModuleInternedTypeIndex, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
+    ModuleInternedTypeIndex, PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
     WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
     wasm_unsupported,
 };
@@ -464,20 +464,19 @@ fn read_cont_ref_at_addr(
 ) -> WasmResult<ir::Value> {
     let id = builder.ins().load(ir::types::I32, flags, addr, 0);
 
-    // We either create or fetch an existing a stack slot to hold the
-    // continuation values (16 bytes), and pass the address of this
-    // slot as the out parameter to the builtin.
+    // We either create or fetch an existing stack slot to hold the raw
+    // continuation object, and pass its address as the out parameter to the
+    // builtin.
     let pointer_type = func_env.pointer_type();
-    let pointer_bytes = pointer_type.bytes();
-    let fatpointer_bytes = fatpointer::bytes(func_env);
+    let layout = func_env.offsets.ptr.vm_raw_cont_obj();
+    let slot_size = u32::from(layout.size());
+    let slot_align = u8::try_from(layout.align().trailing_zeros()).unwrap();
+    let contref_offset = layout.contref();
+    let revision_offset = layout.revision();
 
     let slot = func_env.get_or_create_contref_stack_slot(
         builder,
-        ir::StackSlotData::new(
-            ir::StackSlotKind::ExplicitSlot,
-            fatpointer_bytes,
-            u8::try_from(pointer_bytes.trailing_zeros()).unwrap(),
-        ),
+        ir::StackSlotData::new(ir::StackSlotKind::ExplicitSlot, slot_size, slot_align),
     );
     let out_result = builder.ins().stack_addr(pointer_type, slot, 0);
 
@@ -489,13 +488,12 @@ fn read_cont_ref_at_addr(
 
     let region = func_env.alias_regions.stack_slot_region(builder.func, slot);
     let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
-    let contref = builder.ins().load(pointer_type, flags, out_result, 0);
-    let revision = builder.ins().load(
-        pointer_type,
-        flags,
-        out_result,
-        i32::try_from(pointer_bytes).unwrap(),
-    );
+    let contref = builder
+        .ins()
+        .load(pointer_type, flags, out_result, contref_offset);
+    let revision = builder
+        .ins()
+        .load(pointer_type, flags, out_result, revision_offset);
     Ok(fatpointer::construct(
         func_env,
         &mut builder.cursor(),

@@ -1,11 +1,6 @@
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::InstBuilder;
 
-/// Returns the platform size of a fat pointer.
-pub fn bytes(env: &crate::func_environ::FuncEnvironment) -> u32 {
-    2 * env.pointer_type().bytes()
-}
-
 /// Returns the Cranelift type used to represent all of the following:
 /// - wasm values of type `(ref null $ct)` and `(ref $ct)`
 /// - equivalently: runtime values of type `Option<VMContObj>` and `VMContObj`
