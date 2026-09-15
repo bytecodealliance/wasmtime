@@ -67,6 +67,7 @@ mod threads;
 mod traps;
 mod types;
 mod wait_notify;
+mod winch_callee_pop;
 mod winch_engine_features;
 
 /// A helper to compile a module in a new store with reference types enabled.

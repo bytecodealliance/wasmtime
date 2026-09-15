@@ -37,11 +37,18 @@ pub enum CallConv {
     AppleAarch64,
     /// Specialized convention for the probestack function.
     Probestack,
-    /// The winch calling convention, not ABI-stable.
+    /// Internal calling convention for Winch-generated functions.
+    /// Cranelift-generated trampolines use the same convention to
+    /// interoperate with them. This convention is not ABI-stable.
     ///
-    /// The main difference to SystemV is that the winch calling convention
-    /// defines no callee-save registers, and restricts the number of return
-    /// registers to one integer, and one floating point.
+    /// Callees reclaim their aligned incoming stack-argument area
+    /// before returning.
+    ///
+    /// Most registers are caller-saved. On AArch64, `x28` is
+    /// callee-saved because it holds Winch's shadow stack pointer.
+    ///
+    /// Only the last result is returned in a register; any preceding
+    /// results are written to the return area in memory.
     Winch,
     /// Calling convention optimized for callsite efficiency, at the
     /// cost of the callee. It does so by not clobbering any

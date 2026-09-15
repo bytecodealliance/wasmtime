@@ -12,6 +12,7 @@ use crate::{
 use cranelift_codegen::{
     CallInfo, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
     MachLabel, PatchRegion, Writable,
+    binemit::Reloc,
     ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, Type, UserExternalNameRef, types},
     isa::{
         unwind::UnwindInst,
@@ -379,9 +380,13 @@ impl Assembler {
         self.emit(Inst::External { inst });
     }
 
-    /// Return instruction.
-    pub fn ret(&mut self) {
-        let inst = asm::inst::retq_zo::new().into();
+    /// Return and pop the given number of stack-argument bytes.
+    pub fn ret(&mut self, stack_args_size: u16) {
+        let inst = if stack_args_size == 0 {
+            asm::inst::retq_zo::new().into()
+        } else {
+            asm::inst::retq_i::new(stack_args_size).into()
+        };
         self.emit(Inst::External { inst });
     }
 
@@ -1617,6 +1622,29 @@ impl Assembler {
         self.emit(Inst::CallKnown {
             info: Box::new(CallInfo::empty(ExternalName::user(name), cc.into())),
         });
+    }
+
+    /// Emit a tail jump to an unknown location through a register.
+    pub fn tail_jump_with_reg(&mut self, callee: Reg) {
+        let callee = Gpr::unwrap_new(callee.into());
+        let inst = asm::inst::jmpq_m::new(callee).into();
+        self.emit(Inst::External { inst });
+        self.buffer.add_call_site();
+    }
+
+    /// Emit a tail jump to a locally defined function through an index.
+    pub fn tail_jump_with_name(&mut self, name: UserExternalNameRef) {
+        let inst = asm::inst::jmp_d32::new(0).into();
+        self.emit(Inst::External { inst });
+
+        let offset = self.buffer.cur_offset();
+        self.buffer.add_reloc_at_offset(
+            offset - 4,
+            Reloc::X86CallPCRel4,
+            &ExternalName::user(name),
+            -4,
+        );
+        self.buffer.add_call_site();
     }
 
     /// Emits a conditional jump to the given label.

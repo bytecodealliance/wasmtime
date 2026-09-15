@@ -612,7 +612,15 @@ where
             CodeGenError::unexpected_value_in_value_stack()
         );
         self.masm.free_stack(self.context.frame.locals_size)?;
-        self.masm.epilogue()?;
+        let stack_args_size = if self.sig.call_conv.is_default() {
+            crate::abi::align_to(
+                self.sig.params_stack_size(),
+                u32::from(M::ABI::call_stack_align()),
+            )
+        } else {
+            0
+        };
+        self.masm.epilogue(stack_args_size)?;
         self.masm.end_source_loc()?;
         Ok(())
     }

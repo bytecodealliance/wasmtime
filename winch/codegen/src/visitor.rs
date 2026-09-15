@@ -191,6 +191,7 @@ macro_rules! def_unsupported {
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
+    (emit ReturnCall $($rest:tt)*) => {};
     (emit End $($rest:tt)*) => {};
     (emit Nop $($rest:tt)*) => {};
     (emit If $($rest:tt)*) => {};
@@ -215,6 +216,7 @@ macro_rules! def_unsupported {
     (emit Drop $($rest:tt)*) => {};
     (emit BrTable $($rest:tt)*) => {};
     (emit CallIndirect $($rest:tt)*) => {};
+    (emit ReturnCallIndirect $($rest:tt)*) => {};
     (emit TableInit $($rest:tt)*) => {};
     (emit TableCopy $($rest:tt)*) => {};
     (emit TableGet $($rest:tt)*) => {};
@@ -1695,6 +1697,19 @@ where
         Ok(())
     }
 
+    fn visit_return_call(&mut self, index: u32) -> Self::Output {
+        let callee = self.env.callee_from_index(FuncIndex::from_u32(index));
+        FnCall::emit_return::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            self.sig.params_stack_size(),
+            callee,
+        )?;
+        self.context.reachable = false;
+        Ok(())
+    }
+
     fn visit_call_indirect(&mut self, type_index: u32, table_index: u32) -> Self::Output {
         // Spill now because `emit_table_get` and the `FnCall::emit`
         // invocations will both trigger spills since they both call functions.
@@ -1724,6 +1739,38 @@ where
 
         let callee = self.env.funcref(type_index);
         FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)?;
+        Ok(())
+    }
+
+    fn visit_return_call_indirect(&mut self, type_index: u32, table_index: u32) -> Self::Output {
+        // As with a normal indirect call, spill before table lookup because
+        // lazy funcref initialization can itself make a call.
+        self.context.spill(self.masm)?;
+
+        let type_index = TypeIndex::from_u32(type_index);
+        let table_index = TableIndex::from_u32(table_index);
+
+        self.emit_table_get(table_index)?;
+
+        let funcref_ptr = self
+            .context
+            .stack
+            .peek()
+            .map(|v| v.unwrap_reg())
+            .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
+        self.masm
+            .trapz(funcref_ptr.into(), TRAP_INDIRECT_CALL_TO_NULL)?;
+        self.emit_typecheck_funcref(funcref_ptr.into(), type_index)?;
+
+        let callee = self.env.funcref(type_index);
+        FnCall::emit_return::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            self.sig.params_stack_size(),
+            callee,
+        )?;
+        self.context.reachable = false;
         Ok(())
     }
 

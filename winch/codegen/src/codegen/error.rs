@@ -82,6 +82,9 @@ pub(crate) enum InternalError {
     /// Expected memory location to be addressed via the stack pointer.
     #[error("Expected stack pointer addressing")]
     SPAddressingExpected,
+    /// Expected a fully resolved results area.
+    #[error("Results area expected")]
+    ResultsAreaExpected,
     /// Stack pointer offset is illegal.
     #[error("Invalid stack pointer offset")]
     InvalidSPOffset,
@@ -126,6 +129,10 @@ impl CodeGenError {
 
     pub(crate) const fn sp_addressing_expected() -> Self {
         Self::Internal(InternalError::SPAddressingExpected)
+    }
+
+    pub(crate) const fn results_area_expected() -> Self {
+        Self::Internal(InternalError::ResultsAreaExpected)
     }
 
     pub(crate) const fn invalid_sp_offset() -> Self {
