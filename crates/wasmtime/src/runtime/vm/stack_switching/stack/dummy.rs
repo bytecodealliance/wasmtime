@@ -1,7 +1,7 @@
 use crate::Result;
 use core::ops::Range;
 
-use crate::runtime::vm::VMHostArray;
+use crate::runtime::vm::VMPayloads;
 use crate::runtime::vm::{VMContext, VMFuncRef};
 
 /// Making sure that this has the same size as the non-dummy version, to
@@ -59,9 +59,10 @@ impl VMContinuationStack {
         &self,
         _func_ref: *const VMFuncRef,
         _caller_vmctx: *mut VMContext,
-        _args: *mut VMHostArray,
+        _args: *mut VMPayloads,
         _parameter_count: u32,
         _return_value_count: u32,
+        _gc_refs: bool,
     ) -> Result<()> {
         Ok(())
     }

@@ -71,6 +71,7 @@ macro_rules! define_vm_type_offsets {
     (@size ($p:expr) VMLazyThread) => { u32::from(($p).vm_lazy_thread().size()) };
     (@size ($p:expr) VMStackLimits) => { u32::from(($p).vm_stack_limits().size()) };
     (@size ($p:expr) VMHostArray) => { u32::from(($p).vm_host_array().size()) };
+    (@size ($p:expr) VMPayloads) => { u32::from(($p).vm_payloads().size()) };
     (@size ($p:expr) VMCommonStackInformation) => {
         u32::from(($p).vm_common_stack_information().size())
     };
@@ -116,6 +117,7 @@ macro_rules! define_vm_type_offsets {
     (@align ($p:expr) VMLazyThread) => { u32::from(($p).vm_lazy_thread().align()) };
     (@align ($p:expr) VMStackLimits) => { u32::from(($p).vm_stack_limits().align()) };
     (@align ($p:expr) VMHostArray) => { u32::from(($p).vm_host_array().align()) };
+    (@align ($p:expr) VMPayloads) => { u32::from(($p).vm_payloads().align()) };
     (@align ($p:expr) VMCommonStackInformation) => {
         u32::from(($p).vm_common_stack_information().align())
     };

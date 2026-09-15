@@ -59,7 +59,11 @@ use crate::prelude::*;
 use crate::runtime::store::{Asyncness, InstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
+use crate::runtime::vm::provenance::VmPtr;
 use crate::runtime::vm::{self, HostResultHasUnwindSentinel, VMStore, f32x4, f64x2, i8x16};
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
+use crate::vm::vmcontext::VMRawContObj;
 use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
@@ -604,6 +608,53 @@ fn get_interned_func_ref(
     Ok(func_ref.map_or(core::ptr::null_mut(), |f| f.as_ptr().cast()))
 }
 
+// Intern a continuation reference into the GC heap's side table.
+//
+// This libcall may not GC.
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
+unsafe fn intern_contref_for_gc_heap(
+    store: &mut dyn VMStore,
+    _instance: InstanceId,
+    contref: *mut u8,
+    revision: *mut u8,
+) -> Result<u32> {
+    use crate::store::AutoAssertNoGc;
+
+    let mut store = AutoAssertNoGc::new(store.store_opaque_mut());
+    let contobj = unsafe { crate::vm::VMContObj::from_raw_parts(contref, revision.addr()) };
+    let id = unsafe { store.require_gc_store_mut()?.cont_ref_table.intern(contobj) };
+    Ok(id)
+}
+
+// Resolve a continuation reference ID loaded from the GC heap and
+// write its 16 bytes value into caller provided storage `out_result`.
+//
+// This libcall may not GC.
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
+unsafe fn get_interned_contref(
+    store: &mut dyn VMStore,
+    _instance: InstanceId,
+    contref_id: u32,
+    out_result: *mut u8,
+) -> Result<()> {
+    use crate::store::AutoAssertNoGc;
+
+    let store = AutoAssertNoGc::new(store.store_opaque_mut());
+    let contobj = store.unwrap_gc_store().cont_ref_table.get(contref_id)?;
+    let raw = match contobj {
+        Some(contobj) => VMRawContObj {
+            contref: NonNull::new(contobj.contref.as_ptr().cast::<u8>()).map(VmPtr::from),
+            revision: contobj.revision,
+        },
+        None => VMRawContObj {
+            contref: None,
+            revision: 0,
+        },
+    };
+    unsafe { out_result.cast::<VMRawContObj>().write(raw) };
+    Ok(())
+}
+
 #[cfg(feature = "gc")]
 fn is_subtype(
     store: &mut dyn VMStore,
@@ -1119,9 +1170,16 @@ fn cont_new(
     func: *mut u8,
     param_count: u32,
     result_count: u32,
+    gc_refs: u32,
 ) -> Result<Option<AllocationSize>> {
-    let ans =
-        crate::vm::stack_switching::cont_new(store, instance, func, param_count, result_count)?;
+    let ans = crate::vm::stack_switching::cont_new(
+        store,
+        instance,
+        func,
+        param_count,
+        result_count,
+        gc_refs != 0,
+    )?;
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
 }
 

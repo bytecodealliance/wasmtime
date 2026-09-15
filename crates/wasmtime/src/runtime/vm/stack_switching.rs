@@ -3,7 +3,7 @@
 
 mod stack;
 
-use crate::vm::{VMCommonStackInformation, VMContRef, VMHostArray, VMStackLimits};
+use crate::vm::{VMCommonStackInformation, VMContRef, VMHostArray, VMPayloads, VMStackLimits};
 use core::{marker::PhantomPinned, ptr::NonNull};
 
 pub use stack::*;
@@ -51,7 +51,7 @@ pub const CONTROL_EFFECT_TRAP_ENCODING: u64 =
 /// (i.e., the one pointed to by the VMContObj) has a pointer to the
 /// other end of the chain (i.e., its last ancestor).
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VMContObj {
     pub contref: NonNull<VMContRef>,
     pub revision: usize,
@@ -109,6 +109,27 @@ impl VMHostArray {
             data: core::ptr::null_mut(),
         }
     }
+
+    /// Makes this array empty.
+    pub fn clear(&mut self) {
+        *self = Self::empty();
+    }
+}
+
+impl VMPayloads {
+    /// Creates an empty payload buffer with no GC metadata.
+    pub fn empty() -> Self {
+        Self {
+            buffer: VMHostArray::empty(),
+            gc_ref_data: None,
+        }
+    }
+
+    /// Makes this payload buffer empty and invalidates its GC metadata.
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+        self.gc_ref_data = None;
+    }
 }
 
 impl VMContRef {
@@ -135,8 +156,8 @@ impl VMContRef {
         let parent_chain = VMStackChain::Absent;
         let last_ancestor = core::ptr::null_mut();
         let stack = VMContinuationStack::unallocated();
-        let args = VMHostArray::empty();
-        let values = VMHostArray::empty();
+        let args = VMPayloads::empty();
+        let values = VMPayloads::empty();
         let revision = 0;
         let _marker = PhantomPinned;
 
@@ -180,6 +201,7 @@ pub fn cont_new(
     func: *mut u8,
     param_count: u32,
     result_count: u32,
+    gc_refs: bool,
 ) -> crate::Result<*mut VMContRef> {
     let instance = store.instance_mut(instance);
     let caller_vmctx = instance.vmctx();
@@ -197,14 +219,14 @@ pub fn cont_new(
 
     // The initialization function will allocate the actual args/return value buffer and
     // update this object (if needed).
-    let contref_args_ptr = &mut contref.args as *mut VMHostArray;
-
+    let contref_args_ptr = &mut contref.args as *mut VMPayloads;
     contref.stack.initialize(
         func.cast::<crate::vm::VMFuncRef>(),
         caller_vmctx.as_ptr(),
         contref_args_ptr,
         param_count,
         result_count,
+        gc_refs,
     )?;
 
     // Now that the initial stack pointer was set by the initialization
