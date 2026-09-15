@@ -529,6 +529,9 @@ wasmtime_option_group! {
         /// Component model support for `(implements ...)`, corresponds to the
         /// 🏷️ emoji in the upstream spec.
         pub component_model_implements: Option<bool>,
+        /// Component model support for canonical names, corresponds to the
+        /// 🔗 emoji in the upstream spec.
+        pub component_model_canonical_names: Option<bool>,
         /// Whether or not any concurrency infrastructure in Wasmtime is
         /// enabled or not.
         pub concurrency_support: Option<bool>,
@@ -1348,6 +1351,7 @@ impl CommonOptions {
             ("component-model", component_model_map, wasm_component_model_map)
             ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
             ("component-model", component_model_implements, wasm_component_model_implements)
+            ("component-model", component_model_canonical_names, wasm_component_model_canonical_names)
             ("component-model", component_model_memory64, wasm_component_model_memory64)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
@@ -1522,6 +1526,9 @@ impl CommonOptions {
                     features.contains(WasmFeatures::CM_FIXED_LENGTH_LISTS),
                 ),
                 component_model_implements: Some(features.contains(WasmFeatures::CM_IMPLEMENTS)),
+                component_model_canonical_names: Some(
+                    features.contains(WasmFeatures::CM_CANON_NAMES),
+                ),
                 component_model_map: Some(features.contains(WasmFeatures::CM_MAP)),
                 component_model_memory64: Some(features.contains(WasmFeatures::CM64)),
                 component_model_more_async_builtins: Some(
