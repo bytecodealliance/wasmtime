@@ -2553,6 +2553,8 @@ start a print 1234
     #[cfg(unix)]
     #[tokio::test]
     async fn serve_inherit() -> Result<()> {
+        use rustix::fd::AsRawFd;
+        use std::mem::ManuallyDrop;
         use std::os::fd::{FromRawFd, OwnedFd};
         use std::os::unix::process::CommandExt;
         use tokio::net::TcpListener;
@@ -2563,8 +2565,19 @@ start a print 1234
             return Ok(());
         }
 
-        let socket = TcpListener::bind("localhost:0").await?;
+        // This socket is required to be inherited to the child process as fd 3.
+        // This is done with a `dup2` below. If this socket is itself 3,
+        // however, then the `dup2` will be a noop. This `socket` is CLOEXEC,
+        // however, so if `dup2` is a noop then nothing will be inherited. Force
+        // this socket to NOT be fd 3 in this case by `dup`-ing it.
+        let mut socket = std::net::TcpListener::bind("localhost:0")?;
+        if socket.as_raw_fd() == 3 {
+            socket = socket.try_clone()?;
+            assert!(socket.as_raw_fd() != 3);
+        }
         let addr = socket.local_addr()?;
+        socket.set_nonblocking(true)?;
+        let socket = TcpListener::from_std(socket)?;
 
         // Using a shell script as a launcher since that uses exec, allowing us to provide the
         // LISTEN_PID variable.
@@ -2580,9 +2593,8 @@ start a print 1234
             .env("WASMTIME_CODEGEN_CACHE", "n");
         unsafe {
             cmd.pre_exec(move || {
-                let mut target = OwnedFd::from_raw_fd(3);
+                let mut target = ManuallyDrop::new(OwnedFd::from_raw_fd(3));
                 rustix::io::dup2(&socket, &mut target)?;
-                std::mem::forget(target);
                 Ok(())
             });
         }
