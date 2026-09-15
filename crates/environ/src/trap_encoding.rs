@@ -279,6 +279,22 @@ generate_trap_type! {
         /// An exception propagated out of a component without being caught.
         UncaughtException = "uncaught exception propagated out of component",
 
+        /// Guest attempted to read from a stream after being notified that the
+        /// writable end was dropped.
+        ReadFromDroppedStream = "cannot read from stream after being notified that the writable end dropped",
+
+        /// Guest attempted to write to a stream after being notified that the
+        /// readable end was dropped.
+        WriteToDroppedStream = "cannot write to stream after being notified that the readable end dropped",
+
+        /// Guest attempted to write to a future after being notified that the
+        /// readable end was dropped.
+        WriteToDroppedFuture = "cannot write to stream after previous write succeded or readable end dropped",
+
+        /// Guest attempted to lift a stream after being notified that the
+        /// writable end was dropped.
+        LiftDroppedStream = "cannot lift stream after being notified that the writable end dropped",
+
         // if adding a variant here be sure to update `trap.rs` and `trap.h` as
         // mentioned above
     }

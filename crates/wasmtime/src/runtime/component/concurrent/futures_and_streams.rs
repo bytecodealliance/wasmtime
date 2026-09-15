@@ -3712,6 +3712,24 @@ impl Instance {
                     transmit.done = true;
                 }
 
+                match Waitable::Transmit(transmit_handle).take_event(concurrent_state)? {
+                    Some(
+                        Event::StreamWrite {
+                            code: ReturnCode::Dropped(ItemCount::ZERO),
+                            ..
+                        }
+                        | Event::FutureWrite {
+                            code: ReturnCode::Dropped(ItemCount::ZERO),
+                            ..
+                        },
+                    ) => {}
+                    None => bail!(match ty {
+                        TransmitIndex::Future(_) => Trap::WriteToDroppedFuture,
+                        TransmitIndex::Stream(_) => Trap::WriteToDroppedStream,
+                    }),
+                    event => bail_bug!("expected pending dropped event for writer; got {event:?}"),
+                }
+
                 ReturnCode::Dropped(ItemCount::ZERO)
             }
         };
@@ -3938,7 +3956,24 @@ impl Instance {
                 ReturnCode::Blocked
             }
 
-            WriteState::Dropped => ReturnCode::Dropped(ItemCount::ZERO),
+            WriteState::Dropped => {
+                if let TransmitIndex::Future(_) = ty {
+                    bail_bug!(
+                        "should not be possible to read from a future whose write end was dropped"
+                    );
+                }
+
+                match Waitable::Transmit(transmit_handle).take_event(concurrent_state)? {
+                    Some(Event::StreamRead {
+                        code: ReturnCode::Dropped(ItemCount::ZERO),
+                        ..
+                    }) => {}
+                    None => bail!(Trap::ReadFromDroppedStream),
+                    event => bail_bug!("expected pending dropped event for reader; got {event:?}"),
+                }
+
+                ReturnCode::Dropped(ItemCount::ZERO)
+            }
         };
 
         if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
@@ -4622,7 +4657,10 @@ fn lift_index_to_transmit(
 
     let state = future.state;
     if concurrent_state.get_mut(state)?.done {
-        bail!("cannot lift {desc} after previous read succeeded");
+        match ty {
+            TransmitIndex::Future(_) => bail!("cannot lift {desc} after previous read succeeded"),
+            TransmitIndex::Stream(_) => bail!(Trap::LiftDroppedStream),
+        };
     }
 
     Ok(id)
@@ -4838,6 +4876,31 @@ impl Waitable {
         instance: Instance,
         event: Event,
     ) -> Result<()> {
+        if let Event::FutureRead {
+            code: ReturnCode::Dropped(_),
+            ..
+        }
+        | Event::FutureWrite {
+            code: ReturnCode::Dropped(_),
+            ..
+        }
+        | Event::StreamRead {
+            code: ReturnCode::Dropped(_),
+            ..
+        }
+        | Event::StreamWrite {
+            code: ReturnCode::Dropped(_),
+            ..
+        } = event
+        {
+            let Waitable::Transmit(transmit_handle) = self else {
+                bail_bug!("unexpected `{event:?}` for `{self:?}`");
+            };
+            let state = store.concurrent_state_mut()?;
+            let transmit_id = state.get_mut(*transmit_handle)?.state;
+            state.get_mut(transmit_id)?.done = true;
+        }
+
         let instance = instance.id().get_mut(store);
         let (rep, state, code) = match event {
             Event::FutureRead {
