@@ -1798,3 +1798,190 @@ async fn drop_after_sync_lowered_async_host_function() -> Result<()> {
     call.call_async(&mut store, (r,)).await?;
     Ok(())
 }
+
+mod host_call_cleans_up_borrow {
+    use super::*;
+
+    #[derive(Clone, Copy, Debug)]
+    enum HostAction {
+        Yield,
+        CallWasm,
+    }
+
+    #[derive(Default)]
+    struct State {
+        instance: Option<Instance>,
+        dropped: bool,
+    }
+
+    struct MyType;
+
+    #[tokio::test]
+    async fn host_borrow_yield_and_call_wasm_valid() -> Result<()> {
+        run(&[]).await?;
+        run(&[HostAction::Yield]).await?;
+        run(&[HostAction::CallWasm]).await?;
+        run(&[HostAction::Yield, HostAction::Yield]).await?;
+        run(&[HostAction::Yield, HostAction::CallWasm]).await?;
+        run(&[HostAction::CallWasm, HostAction::Yield]).await?;
+        run(&[HostAction::CallWasm, HostAction::CallWasm]).await?;
+        run(&[
+            HostAction::CallWasm,
+            HostAction::Yield,
+            HostAction::CallWasm,
+        ])
+        .await?;
+        run(&[HostAction::Yield, HostAction::CallWasm, HostAction::Yield]).await?;
+        Ok(())
+    }
+
+    async fn run(actions: &'static [HostAction]) -> Result<()> {
+        let mut config = Config::new();
+        config.wasm_component_model_async(true);
+        let engine = Engine::new(&config)?;
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "r" (type $r (sub resource)))
+                    (import "new" (func $new (result (own $r))))
+                    (import "borrow" (func $borrow async (param "r" (borrow $r))))
+
+                    (core func $new (canon lower (func $new)))
+                    (core func $borrow (canon lower (func $borrow) async))
+                    (core func $drop (canon resource.drop $r))
+                    (core func $task-return (canon task.return))
+                    (core func $waitable-set-new (canon waitable-set.new))
+                    (core func $waitable-set-drop (canon waitable-set.drop))
+                    (core func $waitable-join (canon waitable.join))
+                    (core func $subtask-drop (canon subtask.drop))
+
+                    (core module $m
+                        (import "" "new" (func $new (result i32)))
+                        (import "" "borrow" (func $borrow (param i32) (result i32)))
+                        (import "" "drop" (func $drop (param i32)))
+                        (import "" "task-return" (func $task-return))
+                        (import "" "waitable-set-new" (func $waitable-set-new (result i32)))
+                        (import "" "waitable-set-drop" (func $waitable-set-drop (param i32)))
+                        (import "" "waitable-join" (func $waitable-join (param i32 i32)))
+                        (import "" "subtask-drop" (func $subtask-drop (param i32)))
+
+                        (global $r (mut i32) (i32.const 0))
+                        (global $set (mut i32) (i32.const 0))
+                        (global $subtask (mut i32) (i32.const 0))
+
+                        (func $finish
+                            ;; This succeeds only if returning from `borrow`
+                            ;; restored the lend count on the owned handle.
+                            (call $drop (global.get $r))
+                            (call $waitable-set-drop (global.get $set))
+                            call $task-return)
+
+                        (func (export "run") (result i32)
+                            (local $status i32)
+                            (global.set $r (call $new))
+                            (global.set $set (call $waitable-set-new))
+                            (local.set $status (call $borrow (global.get $r)))
+                            (if (i32.eq
+                                    (i32.and (local.get $status) (i32.const 0xf))
+                                    (i32.const 2 (; RETURNED ;)))
+                                (then
+                                    call $finish
+                                    (return (i32.const 0 (; EXIT ;)))))
+                            (if (i32.ne
+                                    (i32.and (local.get $status) (i32.const 0xf))
+                                    (i32.const 1 (; STARTED ;)))
+                                (then unreachable))
+                            (global.set $subtask
+                                (i32.shr_u (local.get $status) (i32.const 4)))
+                            (call $waitable-join
+                                (global.get $subtask)
+                                (global.get $set))
+                            (i32.or
+                                (i32.const 2 (; WAIT ;))
+                                (i32.shl (global.get $set) (i32.const 4))))
+
+                        (func (export "callback")
+                            (param $event i32) (param $handle i32) (param $result i32)
+                            (result i32)
+                            (if (i32.ne (local.get $event) (i32.const 1 (; SUBTASK ;)))
+                                (then unreachable))
+                            (if (i32.ne (local.get $handle) (global.get $subtask))
+                                (then unreachable))
+                            (if (i32.ne (local.get $result) (i32.const 2 (; RETURNED ;)))
+                                (then unreachable))
+                            (call $subtask-drop (global.get $subtask))
+                            call $finish
+                            i32.const 0 (; EXIT ;))
+
+                        (func (export "reenter") (param i32)
+                            (call $drop (local.get 0))))
+                    (core instance $i (instantiate $m
+                        (with "" (instance
+                            (export "new" (func $new))
+                            (export "borrow" (func $borrow))
+                            (export "drop" (func $drop))
+                            (export "task-return" (func $task-return))
+                            (export "waitable-set-new" (func $waitable-set-new))
+                            (export "waitable-set-drop" (func $waitable-set-drop))
+                            (export "waitable-join" (func $waitable-join))
+                            (export "subtask-drop" (func $subtask-drop))))))
+                    (func (export "run") async
+                        (canon lift (core func $i "run") async
+                            (callback (core func $i "callback"))))
+                    (func (export "reenter") (param "r" (borrow $r))
+                        (canon lift (core func $i "reenter")))
+                )
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, State::default());
+        let mut linker = Linker::<State>::new(&engine);
+        linker
+            .root()
+            .resource("r", ResourceType::host::<MyType>(), |mut store, _| {
+                store.data_mut().dropped = true;
+                Ok(())
+            })?;
+        linker
+            .root()
+            .func_wrap("new", |_, ()| Ok((Resource::<MyType>::new_own(0),)))?;
+        linker.root().func_wrap_concurrent(
+            "borrow",
+            move |accessor: &Accessor<State>, (r,): (Resource<MyType>,)| {
+                let mut resource = Some(r);
+                Box::pin(async move {
+                    let reenter_func = accessor
+                        .with(|mut s| s.get().instance.unwrap().get_func(s, "reenter").unwrap());
+                    for a in actions {
+                        match a {
+                            HostAction::Yield => tokio::task::yield_now().await,
+                            HostAction::CallWasm => {
+                                let r = resource.take().unwrap();
+                                let any_r = accessor.with(|s| r.try_into_resource_any(s))?;
+                                let params = [Val::Resource(any_r)];
+                                reenter_func
+                                    .call_concurrent(accessor, &params, &mut [])
+                                    .await?;
+                                let [Val::Resource(any_r)] = params else {
+                                    panic!("Unexpected param type");
+                                };
+                                resource =
+                                    Some(accessor.with(|s| any_r.try_into_resource::<MyType>(s))?);
+                            }
+                        }
+                    }
+                    Ok(())
+                })
+            },
+        )?;
+
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        store.data_mut().instance = Some(instance);
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+        run.call_async(&mut store, ()).await?;
+        assert!(store.data().dropped);
+        store.assert_concurrent_state_empty();
+        Ok(())
+    }
+}
