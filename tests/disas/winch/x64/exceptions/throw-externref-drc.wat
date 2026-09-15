@@ -14,7 +14,7 @@
 ;;       movq    0x18(%r11), %r11
 ;;       addq    $0x30, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x16b
+;;       ja      0x15d
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
@@ -25,7 +25,7 @@
 ;;       movl    %r11d, (%rsp)
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
-;;       callq   0x21b
+;;       callq   0x20d
 ;;       addq    $0xc, %rsp
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[12, 28]
 ;;       movq    0x1c(%rsp), %r14
@@ -41,10 +41,9 @@
 ;;       movl    4(%rsp), %edx
 ;;       movl    $0x28, %ecx
 ;;       movl    $8, %r8d
-;;       callq   0x1cc
-;;       addq    $4, %rsp
+;;       callq   0x1be
+;;       addq    $8, %rsp
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[12, 28]
-;;       addq    $4, %rsp
 ;;       movq    0x20(%rsp), %r14
 ;;       movq    8(%r14), %rcx
 ;;       movq    0x28(%rcx), %rdx
@@ -58,19 +57,19 @@
 ;;       movl    (%rsp), %ecx
 ;;       addq    $4, %rsp
 ;;       testl   %ecx, %ecx
-;;       je      0x12f
-;;   e8: movl    %ecx, %r11d
+;;       je      0x128
+;;   e1: movl    %ecx, %r11d
 ;;       andl    $1, %r11d
 ;;       testl   %r11d, %r11d
-;;       jne     0x12f
-;;   fb: movq    8(%r14), %rbx
+;;       jne     0x128
+;;   f4: movq    8(%r14), %rbx
 ;;       movq    0x28(%rbx), %rsi
 ;;       movq    0x20(%rbx), %rbx
 ;;       movq    %rcx, %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsi, %r11
-;;       ja      0x16d
-;;  11a: movq    %rbx, %rdi
+;;       ja      0x15f
+;;  113: movq    %rbx, %rdi
 ;;       addq    %rcx, %rdi
 ;;       movq    8(%rdi), %r8
 ;;       addq    $1, %r8
@@ -81,13 +80,12 @@
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movl    0xc(%rsp), %esi
-;;       callq   0x248
-;;       addq    $0xc, %rsp
+;;       callq   0x23a
+;;       addq    $0x10, %rsp
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[28]
-;;       addq    $4, %rsp
 ;;       movq    0x18(%rsp), %r14
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  16b: ud2
-;;  16d: ud2
+;;  15d: ud2
+;;  15f: ud2

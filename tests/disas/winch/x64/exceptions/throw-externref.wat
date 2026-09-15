@@ -14,7 +14,7 @@
 ;;       movq    0x18(%r11), %r11
 ;;       addq    $0x30, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x11e
+;;       ja      0x110
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
@@ -25,7 +25,7 @@
 ;;       movl    %r11d, (%rsp)
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
-;;       callq   0x1cc
+;;       callq   0x1be
 ;;       addq    $0xc, %rsp
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[12, 28]
 ;;       movq    0x1c(%rsp), %r14
@@ -41,10 +41,9 @@
 ;;       movl    4(%rsp), %edx
 ;;       movl    $0x20, %ecx
 ;;       movl    $0x10, %r8d
-;;       callq   0x17d
-;;       addq    $4, %rsp
+;;       callq   0x16f
+;;       addq    $8, %rsp
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[12, 28]
-;;       addq    $4, %rsp
 ;;       movq    0x20(%rsp), %r14
 ;;       movq    8(%r14), %rcx
 ;;       movq    0x28(%rcx), %rdx
@@ -63,12 +62,11 @@
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movl    0xc(%rsp), %esi
-;;       callq   0x1f9
-;;       addq    $0xc, %rsp
+;;       callq   0x1eb
+;;       addq    $0x10, %rsp
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[28]
-;;       addq    $4, %rsp
 ;;       movq    0x18(%rsp), %r14
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  11e: ud2
+;;  110: ud2

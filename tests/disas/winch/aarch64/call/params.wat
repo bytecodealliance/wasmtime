@@ -48,7 +48,7 @@
 ;;       movk    x17, #0x40
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x14c
+;;       b.lo    #0x144
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -80,9 +80,7 @@
 ;;       stur    w16, [x28, #0x10]
 ;;       bl      #0x160
 ;;   a4: mov     x28, sp
-;;       add     x28, x28, #4
-;;       mov     sp, x28
-;;       add     x28, x28, #4
+;;       add     x28, x28, #8
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       ldur    w1, [x28, #4]
@@ -111,7 +109,7 @@
 ;;       mov     x16, #8
 ;;       stur    w16, [x28, #0x10]
 ;;       bl      #0x160
-;;  124: mov     x28, sp
+;;  11c: mov     x28, sp
 ;;       add     x28, x28, #8
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
@@ -121,7 +119,7 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  14c: udf     #0xc11f
+;;  144: udf     #0xc11f
 ;;
 ;; wasm[0]::function[1]::add:
 ;;       stp     x29, x30, [sp, #-0x10]!

@@ -554,7 +554,13 @@ impl FnCall {
         } else {
             0
         };
-        masm.restore_stack_after_call(reserved_space, callee_pop_size)?;
+        // Without stack results, reclaim alignment space and consumed argument
+        // spills together. Stack results need the intermediate SP for the
+        // result-area move below, so retain their existing cleanup order.
+        let combine_cleanup = ret_area.is_none();
+        if !combine_cleanup {
+            masm.restore_stack_after_call(reserved_space, callee_pop_size)?;
+        }
 
         ensure!(
             sig.params.len_without_retptr() >= callee_context.len(),
@@ -596,7 +602,16 @@ impl FnCall {
         };
 
         // Free the bytes consumed by the call.
-        masm.free_stack(stack_consumed)?;
+        if combine_cleanup {
+            masm.restore_stack_after_call(
+                reserved_space
+                    .checked_add(stack_consumed)
+                    .ok_or_else(CodeGenError::invalid_sp_offset)?,
+                callee_pop_size,
+            )?;
+        } else {
+            masm.free_stack(stack_consumed)?;
+        }
 
         let mut calculated_ret_area = None;
 

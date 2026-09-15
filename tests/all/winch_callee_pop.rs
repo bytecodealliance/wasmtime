@@ -5,6 +5,83 @@ use wasmtime::*;
 
 use wasmtime_test_macros::wasmtime_test;
 
+// Keep an operand live across each call and consume every argument and result.
+// This exercises combined padding/spill cleanup as well as the stack-result
+// path, where result movement must precede the final cleanup.
+#[wasmtime_test(strategies(only(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn callee_pop_cleanup_preserves_live_values(config: &mut Config) -> Result<()> {
+    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
+        return Ok(());
+    }
+    config.wasm_tail_call(false);
+    let engine = Engine::new(config)?;
+    for n in [0, 1, 5, 10, 32, 64, 80] {
+        for multi in [false, true] {
+            let params = " i64".repeat(n);
+            let sum = (0..n)
+                .map(|i| format!("local.get {i} i64.add "))
+                .collect::<String>();
+            let args = (1..=n)
+                .map(|i| format!("local.get 0 i64.const {i} i64.add "))
+                .collect::<String>();
+            let results = if multi { "i64 i64 f64" } else { "i64" };
+            let extra = if multi {
+                "i64.const 123 f64.const 3.5"
+            } else {
+                ""
+            };
+            let consume = if multi {
+                "i64.trunc_f64_s i64.add i64.add"
+            } else {
+                ""
+            };
+            let mut store = Store::new(&engine, ());
+            let provider = Module::new(
+                &engine,
+                format!(
+                    "(module (func (export \"leaf\") (param {params}) (result {results})
+                    i64.const 0 {sum} {extra}))"
+                ),
+            )?;
+            let provider = Instance::new(&mut store, &provider, &[])?;
+            let imported = provider.get_func(&mut store, "leaf").unwrap();
+            let module = Module::new(
+                &engine,
+                format!(
+                    r#"(module
+                (type $t (func (param {params}) (result {results})))
+                (import "p" "leaf" (func $imported (type $t)))
+                (func $local (type $t) i64.const 0 {sum} {extra})
+                (table funcref (elem $local $imported))
+                (func (export "local") (param i64) (result i64)
+                    local.get 0 {args} call $local {consume} i64.add)
+                (func (export "imported") (param i64) (result i64)
+                    local.get 0 {args} call $imported {consume} i64.add)
+                (func (export "indirect") (param i64 i32) (result i64)
+                    local.get 0 {args} local.get 1 call_indirect (type $t)
+                    {consume} i64.add))"#
+                ),
+            )?;
+            let instance = Instance::new(&mut store, &module, &[imported.into()])?;
+            let local = instance.get_typed_func::<i64, i64>(&mut store, "local")?;
+            let imported = instance.get_typed_func::<i64, i64>(&mut store, "imported")?;
+            let indirect = instance.get_typed_func::<(i64, i32), i64>(&mut store, "indirect")?;
+            for seed in [-17, 0, 42] {
+                let n = n as i64;
+                let expected = (n + 1) * seed + n * (n + 1) / 2 + if multi { 126 } else { 0 };
+                for _ in 0..3 {
+                    assert_eq!(local.call(&mut store, seed)?, expected);
+                    assert_eq!(imported.call(&mut store, seed)?, expected);
+                    assert_eq!(indirect.call(&mut store, (seed, 0))?, expected);
+                    assert_eq!(indirect.call(&mut store, (seed, 1))?, expected);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Default)]
 struct State {
     mode: u32,

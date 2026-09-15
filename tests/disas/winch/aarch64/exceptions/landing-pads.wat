@@ -26,7 +26,7 @@
 ;;       movk    x17, #0x20
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x118
+;;       b.lo    #0x110
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -46,22 +46,20 @@
 ;;       ldur    w2, [x28, #4]
 ;;       blr     x3
 ;;       ├─╼ exception frame offset: SP = FP - 0x30
-;;       ├─╼ exception handler: tag=0, context at [SP+0x18], handler=0xa8
-;;       ╰─╼ exception handler: default handler, context at [SP+0x18], handler=0x8c
-;;   74: add     x28, x28, #4
-;;       mov     sp, x28
-;;       add     x28, x28, #4
+;;       ├─╼ exception handler: tag=0, context at [SP+0x18], handler=0xa0
+;;       ╰─╼ exception handler: default handler, context at [SP+0x18], handler=0x84
+;;   74: add     x28, x28, #8
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
-;;       b       #0xf4
-;;   8c: mov     x28, x29
+;;       b       #0xec
+;;   84: mov     x28, x29
 ;;       sub     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
-;;       b       #0xfc
-;;   a8: mov     x28, x29
+;;       b       #0xf4
+;;   a0: mov     x28, x29
 ;;       sub     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       sub     x28, x28, #0x18
@@ -74,20 +72,20 @@
 ;;       add     x16, x16, #0x18
 ;;       cmp     x16, x2, uxtx
 ;;       sub     sp, x28, #8
-;;       b.hi    #0x11c
-;;   e0: mov     sp, x28
+;;       b.hi    #0x114
+;;   d8: mov     sp, x28
 ;;       mov     x2, x1
 ;;       add     x2, x2, x0, uxtx
 ;;       ldur    w0, [x2, #0x10]
-;;       b       #0x100
-;;   f4: mov     x0, #0
-;;       b       #0x100
-;;   fc: mov     x0, #0xffffffff
+;;       b       #0xf8
+;;   ec: mov     x0, #0
+;;       b       #0xf8
+;;   f4: mov     x0, #0xffffffff
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  118: udf     #0xc11f
-;;  11c: udf     #0xc11f
+;;  110: udf     #0xc11f
+;;  114: udf     #0xc11f

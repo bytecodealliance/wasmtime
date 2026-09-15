@@ -19,15 +19,15 @@
 ;;       movq    0x18(%r11), %r11
 ;;       addq    $0x30, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x1d8
+;;       ja      0x1bc
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movq    %r14, %rdi
-;;       callq   0x3bb
+;;       callq   0x39f
 ;;       ├─╼ exception frame offset: SP = FP - 0x10
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x8], handler=0x129
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x8], handler=0x114
 ;;       movq    8(%rsp), %r14
 ;;       movq    0x28(%r14), %rcx
 ;;       movl    0xc(%rcx), %ecx
@@ -41,11 +41,10 @@
 ;;       movl    8(%rsp), %edx
 ;;       movl    $0x20, %ecx
 ;;       movl    $0x10, %r8d
-;;       callq   0x2f4
+;;       callq   0x2d8
 ;;       ├─╼ exception frame offset: SP = FP - 0x20
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x129
-;;       addq    $8, %rsp
-;;       addq    $4, %rsp
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x114
+;;       addq    $0xc, %rsp
 ;;       movq    0xc(%rsp), %r14
 ;;       movq    8(%r14), %rcx
 ;;       movq    0x28(%rcx), %rdx
@@ -64,11 +63,10 @@
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movq    0xc(%rsp), %rsi
-;;       callq   0x343
+;;       callq   0x327
 ;;       ├─╼ exception frame offset: SP = FP - 0x30
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x28], handler=0x129
-;;       addq    $0xc, %rsp
-;;       addq    $8, %rsp
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x28], handler=0x114
+;;       addq    $0x14, %rsp
 ;;       movq    0x14(%rsp), %r14
 ;;       movl    (%rsp), %ecx
 ;;       addq    $4, %rsp
@@ -79,11 +77,10 @@
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movl    0xc(%rsp), %esi
-;;       callq   0x3e8
+;;       callq   0x3cc
 ;;       ├─╼ exception frame offset: SP = FP - 0x20
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x129
-;;       addq    $0xc, %rsp
-;;       addq    $4, %rsp
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x114
+;;       addq    $0x10, %rsp
 ;;       movq    8(%rsp), %r14
 ;;       movq    %rbp, %rsp
 ;;       subq    $0x10, %rsp
@@ -94,8 +91,8 @@
 ;;       movq    %rax, %r11
 ;;       addq    $0x20, %r11
 ;;       cmpq    %rdx, %r11
-;;       ja      0x1da
-;;  157: movq    %rcx, %rdx
+;;       ja      0x1be
+;;  142: movq    %rcx, %rdx
 ;;       addq    %rax, %rdx
 ;;       movl    0x18(%rdx), %ecx
 ;;       pushq   %rdx
@@ -106,7 +103,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    (%rsp), %esi
 ;;       movl    $0xffffffff, %edx
-;;       callq   0x370
+;;       callq   0x354
 ;;       addq    $4, %rsp
 ;;       ╰─╼ stack_map: frame_size=32, frame_offsets=[4]
 ;;       movq    0x14(%rsp), %r14
@@ -120,13 +117,12 @@
 ;;       subq    $4, %rsp
 ;;       movq    %r14, %rdi
 ;;       movl    4(%rsp), %esi
-;;       callq   0x3e8
-;;       addq    $4, %rsp
+;;       callq   0x3cc
+;;       addq    $8, %rsp
 ;;       ╰─╼ stack_map: frame_size=32, frame_offsets=[4]
-;;       addq    $4, %rsp
 ;;       movq    0x10(%rsp), %r14
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  1d8: ud2
-;;  1da: ud2
+;;  1bc: ud2
+;;  1be: ud2

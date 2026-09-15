@@ -17,24 +17,24 @@
 ;;       movq    0x18(%r11), %r11
 ;;       addq    $0x20, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x186
+;;       ja      0x17f
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movq    %r14, %rdi
-;;       callq   0x289
+;;       callq   0x282
 ;;       ├─╼ exception frame offset: SP = FP - 0x10
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x8], handler=0x146
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x8], handler=0x13f
 ;;       movq    8(%rsp), %r14
 ;;       movq    0x20(%r14), %r11
 ;;       movl    (%r11), %ecx
 ;;       addl    $7, %ecx
-;;       jb      0x188
+;;       jb      0x181
 ;;   4f: andl    $0xfffffff8, %ecx
 ;;       movl    %ecx, %edx
 ;;       addl    $0x18, %edx
-;;       jb      0x18a
+;;       jb      0x183
 ;;   63: subq    $4, %rsp
 ;;       movl    %eax, (%rsp)
 ;;       subq    $4, %rsp
@@ -52,9 +52,9 @@
 ;;       pushq   %rax
 ;;       movq    %r14, %rdi
 ;;       movq    (%rsp), %rsi
-;;       callq   0x242
+;;       callq   0x23b
 ;;       ├─╼ exception frame offset: SP = FP - 0x20
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x146
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x13f
 ;;       addq    $8, %rsp
 ;;       movq    0x10(%rsp), %r14
 ;;       movl    (%rsp), %eax
@@ -82,11 +82,10 @@
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movl    0xc(%rsp), %esi
-;;       callq   0x2b6
+;;       callq   0x2af
 ;;       ├─╼ exception frame offset: SP = FP - 0x20
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x146
-;;       addq    $0xc, %rsp
-;;       addq    $4, %rsp
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x13f
+;;       addq    $0x10, %rsp
 ;;       movq    8(%rsp), %r14
 ;;       movq    %rbp, %rsp
 ;;       subq    $0x10, %rsp
@@ -97,14 +96,14 @@
 ;;       movq    %rax, %r11
 ;;       addq    $0x18, %r11
 ;;       cmpq    %rdx, %r11
-;;       ja      0x18c
-;;  174: movq    %rcx, %rdx
+;;       ja      0x185
+;;  16d: movq    %rcx, %rdx
 ;;       addq    %rax, %rdx
 ;;       movl    0x10(%rdx), %eax
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  186: ud2
-;;  188: ud2
-;;  18a: ud2
-;;  18c: ud2
+;;  17f: ud2
+;;  181: ud2
+;;  183: ud2
+;;  185: ud2
