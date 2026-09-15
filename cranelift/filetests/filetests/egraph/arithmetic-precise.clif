@@ -634,3 +634,91 @@ block0(v0: i32x4):
 ;     v1 = vconst.i32x4 const0
 ;     return v1  ; v1 = const0
 ; }
+
+function %urem_shifted_1_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_1_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v2 = iconst.i8 1
+;     v3 = ishl v2, v1  ; v2 = 1
+;     v5 = isub v3, v2  ; v2 = 1
+;     v6 = band v0, v5
+;     v4 -> v6
+;     return v6
+; }
+
+function %urem_shifted_1_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = iconst.i16 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_1_i16(i16, i16) -> i16 fast {
+; block0(v0: i16, v1: i16):
+;     v2 = iconst.i16 1
+;     v3 = ishl v2, v1  ; v2 = 1
+;     v5 = isub v3, v2  ; v2 = 1
+;     v6 = band v0, v5
+;     v4 -> v6
+;     return v6
+; }
+
+function %urem_shifted_1_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_1_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 1
+;     v3 = ishl v2, v1  ; v2 = 1
+;     v5 = isub v3, v2  ; v2 = 1
+;     v6 = band v0, v5
+;     v4 -> v6
+;     return v6
+; }
+
+function %urem_shifted_1_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_1_i64(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 1
+;     v3 = ishl v2, v1  ; v2 = 1
+;     v5 = isub v3, v2  ; v2 = 1
+;     v6 = band v0, v5
+;     v4 -> v6
+;     return v6
+; }
+
+function %urem_shifted_2_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 2
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_2_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 2
+;     v3 = ishl v2, v1  ; v2 = 2
+;     v4 = urem v0, v3
+;     return v4
+; }

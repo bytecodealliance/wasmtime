@@ -881,3 +881,408 @@ block0(v0: i32x4):
 ;     v5 = vconst.i32x4 const1
 ;     return v5  ; v5 = const1
 ; }
+
+function %signed_bounds_i8_limit100(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = iconst.i8 100
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i8_limit100(i8) -> i8 fast {
+; block0(v0: i8):
+;     v2 = iconst.i8 100
+;     v6 = icmp ult v0, v2  ; v2 = 100
+;     return v6
+; }
+
+function %signed_bounds_i32_limit100(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 100
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i32_limit100(i32) -> i8 fast {
+; block0(v0: i32):
+;     v2 = iconst.i32 100
+;     v6 = icmp ult v0, v2  ; v2 = 100
+;     return v6
+; }
+
+function %signed_bounds_i64_limit100(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = iconst.i64 100
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v4, v3
+    return v5
+}
+
+; function %signed_bounds_i64_limit100(i64) -> i8 fast {
+; block0(v0: i64):
+;     v2 = iconst.i64 100
+;     v6 = icmp ult v0, v2  ; v2 = 100
+;     return v6
+; }
+
+function %signed_bounds_i32_limitneg1(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 -1
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i32_limitneg1(i32) -> i8 fast {
+; block0(v0: i32):
+;     v1 = iconst.i32 0
+;     v3 = icmp sge v0, v1  ; v1 = 0
+;     v2 = iconst.i32 -1
+;     v4 = icmp slt v0, v2  ; v2 = -1
+;     v5 = band v3, v4
+;     return v5
+; }
+
+function %signed_bounds_i8_limit128(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = iconst.i8 128
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i8_limit128(i8) -> i8 fast {
+; block0(v0: i8):
+;     v1 = iconst.i8 0
+;     return v1  ; v1 = 0
+; }
+
+function %signed_bounds_i32_limit0(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 0
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i32_limit0(i32) -> i8 fast {
+; block0(v0: i32):
+;     v6 = iconst.i8 0
+;     return v6  ; v6 = 0
+; }
+
+function %signed_bounds_variable_limit(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp sge v0, v2
+    v4 = icmp slt v0, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_variable_limit(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 0
+;     v3 = icmp sge v0, v2  ; v2 = 0
+;     v4 = icmp slt v0, v1
+;     v5 = band v3, v4
+;     return v5
+; }
+
+function %srem_zero_i8_divisor8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 8
+    v2 = srem v0, v1
+    v3 = iconst.i8 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i8_divisor8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v14 = iconst.i8 7
+;     v15 = band v0, v14  ; v14 = 7
+;     v3 = iconst.i8 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v16
+; }
+
+function %srem_zero_i16_divisor8(i16) -> i8 {
+block0(v0: i16):
+    v1 = iconst.i16 8
+    v2 = srem v0, v1
+    v3 = iconst.i16 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i16_divisor8(i16) -> i8 fast {
+; block0(v0: i16):
+;     v14 = iconst.i16 7
+;     v15 = band v0, v14  ; v14 = 7
+;     v3 = iconst.i16 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v16
+; }
+
+function %srem_zero_i32_divisor2(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i32_divisor2(i32) -> i8 fast {
+; block0(v0: i32):
+;     v14 = iconst.i32 1
+;     v15 = band v0, v14  ; v14 = 1
+;     v5 = iconst.i32 0
+;     v16 = icmp eq v15, v5  ; v5 = 0
+;     return v16
+; }
+
+function %srem_zero_i32_divisor8(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i32_divisor8(i32) -> i8 fast {
+; block0(v0: i32):
+;     v14 = iconst.i32 7
+;     v15 = band v0, v14  ; v14 = 7
+;     v3 = iconst.i32 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v16
+; }
+
+function %srem_zero_i64_divisor64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 64
+    v2 = srem v0, v1
+    v3 = iconst.i64 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i64_divisor64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v14 = iconst.i64 63
+;     v15 = band v0, v14  ; v14 = 63
+;     v3 = iconst.i64 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v16
+; }
+
+function %srem_zero_i32_divisorneg8(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 -8
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i32_divisorneg8(i32) -> i8 fast {
+; block0(v0: i32):
+;     v13 = iconst.i32 7
+;     v14 = band v0, v13  ; v13 = 7
+;     v3 = iconst.i32 0
+;     v15 = icmp eq v14, v3  ; v3 = 0
+;     return v15
+; }
+
+function %srem_zero_i32_divisor7(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 7
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i32_divisor7(i32) -> i8 fast {
+; block0(v0: i32):
+;     v5 = iconst.i32 -1840700269
+;     v6 = smulhi v0, v5  ; v5 = -1840700269
+;     v7 = iadd v6, v0
+;     v8 = iconst.i32 2
+;     v9 = sshr v7, v8  ; v8 = 2
+;     v10 = iconst.i32 31
+;     v11 = ushr v9, v10  ; v10 = 31
+;     v12 = iadd v9, v11
+;     v1 = iconst.i32 7
+;     v13 = imul v12, v1  ; v1 = 7
+;     v15 = icmp eq v0, v13
+;     return v15
+; }
+
+function %srem_zero_shared_remainder(i32) -> i32, i8 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v2, v4
+}
+
+; function %srem_zero_shared_remainder(i32) -> i32, i8 fast {
+; block0(v0: i32):
+;     v5 = iconst.i32 2
+;     v6 = sshr v0, v5  ; v5 = 2
+;     v7 = iconst.i32 29
+;     v8 = ushr v6, v7  ; v7 = 29
+;     v9 = iadd v0, v8
+;     v10 = iconst.i32 -8
+;     v11 = band v9, v10  ; v10 = -8
+;     v12 = isub v0, v11
+;     v2 -> v12
+;     v14 = iconst.i32 7
+;     v15 = band v0, v14  ; v14 = 7
+;     v3 = iconst.i32 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v12, v16
+; }
+
+function %rounding_eq_add0_eq0_shift29_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+
+; function %rounding_eq_add0_eq0_shift29_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v8 = iconst.i32 7
+;     v9 = band v0, v8  ; v8 = 7
+;     v10 = iconst.i32 0
+;     v11 = icmp eq v9, v10  ; v10 = 0
+;     return v11
+; }
+
+function %rounding_eq_add1_eq0_shift29_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v3, v0
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+
+; function %rounding_eq_add1_eq0_shift29_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v8 = iconst.i32 7
+;     v9 = band v0, v8  ; v8 = 7
+;     v10 = iconst.i32 0
+;     v11 = icmp eq v9, v10  ; v10 = 0
+;     return v11
+; }
+
+function %rounding_eq_add0_eq1_shift29_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v6, v0
+    return v7
+}
+
+; function %rounding_eq_add0_eq1_shift29_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v8 = iconst.i32 7
+;     v9 = band v0, v8  ; v8 = 7
+;     v10 = iconst.i32 0
+;     v11 = icmp eq v9, v10  ; v10 = 0
+;     return v11
+; }
+
+function %rounding_eq_add1_eq1_shift61_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 61
+    v3 = ushr v1, v2
+    v4 = iadd v3, v0
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v6, v0
+    return v7
+}
+
+; function %rounding_eq_add1_eq1_shift61_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v11 = iconst.i32 7
+;     v12 = band v0, v11  ; v11 = 7
+;     v13 = iconst.i32 0
+;     v14 = icmp eq v12, v13  ; v13 = 0
+;     return v14
+; }
+
+function %rounding_eq_add0_eq0_shift28_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 28
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+
+; function %rounding_eq_add0_eq0_shift28_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 28
+;     v3 = ushr v1, v2  ; v2 = 28
+;     v4 = iadd v0, v3
+;     v5 = iconst.i32 -8
+;     v6 = band v4, v5  ; v5 = -8
+;     v7 = icmp eq v0, v6
+;     return v7
+; }
+
+function %rounding_eq_add0_eq0_shift29_mask12(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -12
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+
+; function %rounding_eq_add0_eq0_shift29_mask12(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 29
+;     v3 = ushr v1, v2  ; v2 = 29
+;     v4 = iadd v0, v3
+;     v5 = iconst.i32 -12
+;     v6 = band v4, v5  ; v5 = -12
+;     v7 = icmp eq v0, v6
+;     return v7
+; }
