@@ -128,17 +128,20 @@ impl WasmtimeWithGdbstub {
 fn lldb_with_gdbstub_script(port: u16, script: &str) -> Result<String> {
     let _ = env_logger::try_init();
 
-    let mut cmd = Command::new(lldb_path());
-    cmd.arg("--batch");
-    cmd.arg("-o").arg(format!(
+    let mut script_file = tempfile::Builder::new().suffix(".lldb").tempfile()?;
+    writeln!(
+        script_file,
         "process connect --plugin wasm connect://127.0.0.1:{port}"
-    ));
+    )?;
     for line in script.lines() {
         let line = line.trim();
         if !line.is_empty() {
-            cmd.arg("-o").arg(line);
+            writeln!(script_file, "{line}")?;
         }
     }
+
+    let mut cmd = Command::new(lldb_path());
+    cmd.args(["--batch", "-s"]).arg(script_file.path());
 
     eprintln!("Running LLDB: {cmd:?}");
     let output = cmd.output()?;
@@ -235,6 +238,54 @@ c
         r#"
 check: stop reason
 check: fib
+"#,
+    )?;
+    Ok(())
+}
+
+/// Shared linear memories should be readable through the synthetic Wasm
+/// address space after the guest stops.
+#[test]
+#[ignore]
+fn guest_debug_cli_shared_memory() -> Result<()> {
+    let mut module = tempfile::Builder::new().suffix(".wat").tempfile()?;
+    module.write_all(
+        br#"(module
+  (memory (export "memory") 1 1 shared)
+  (func (export "_start")
+    i32.const 0
+    i32.const 42
+    i32.store
+    unreachable))
+"#,
+    )?;
+    let module = module.into_temp_path();
+    let module_path = module
+        .to_str()
+        .ok_or_else(|| format_err!("temporary module path is not UTF-8"))?;
+
+    let port = free_port();
+    let mut wt = WasmtimeWithGdbstub::spawn(
+        "run",
+        port,
+        &["-Ccache=n", "-W", "threads=y,shared-memory=y", module_path],
+        Duration::from_secs(30),
+    )?;
+
+    let output = lldb_with_gdbstub_script(
+        port,
+        r#"
+continue
+memory read --size 4 --format decimal --count 1 0x0
+"#,
+    )?;
+    wt.child.kill().ok();
+    wt.child.wait()?;
+
+    check_output(
+        &output,
+        r#"
+check: 42
 "#,
     )?;
     Ok(())
