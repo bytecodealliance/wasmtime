@@ -149,6 +149,7 @@ impl Config {
             component_model_memory64,
             component_model_fixed_length_lists,
             component_model_implements,
+            component_model_canonical_names,
             simd,
             exceptions,
             legacy_exceptions: _,
@@ -179,6 +180,8 @@ impl Config {
         self.module_config.component_model_fixed_length_lists =
             component_model_fixed_length_lists.unwrap_or(false);
         self.module_config.component_model_implements = component_model_implements.unwrap_or(false);
+        self.module_config.component_model_canonical_names =
+            component_model_canonical_names.unwrap_or(false);
         self.module_config.stack_switching = stack_switching.unwrap_or(false);
         self.wasmtime.branch_hinting = branch_hinting.unwrap_or(false);
 
@@ -337,6 +340,8 @@ impl Config {
         cfg.wasm.component_model_fixed_length_lists =
             Some(self.module_config.component_model_fixed_length_lists);
         cfg.wasm.component_model_implements = Some(self.module_config.component_model_implements);
+        cfg.wasm.component_model_canonical_names =
+            Some(self.module_config.component_model_canonical_names);
         cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
         cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
         cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);
