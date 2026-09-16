@@ -31,21 +31,6 @@ impl Metadata {
         Ok(Self::from_parts(std, ext, file_type))
     }
 
-    /// Constructs a new instance of `Self` from the given
-    /// [`std::fs::Metadata`].
-    ///
-    /// As with the comments in [`std::fs::Metadata::volume_serial_number`] and
-    /// nearby functions, some fields of the resulting metadata will be `None`.
-    ///
-    /// [`std::fs::Metadata::volume_serial_number`]: https://doc.rust-lang.org/std/os/windows/fs/trait.MetadataExt.html#tymethod.volume_serial_number
-    #[cfg(windows)]
-    #[inline]
-    pub fn from_just_metadata(std: fs::Metadata) -> Self {
-        let ext = ImplMetadataExt::from_just_metadata(&std);
-        let file_type = ImplFileTypeExt::from_just_metadata(&std);
-        Self::from_parts(std, ext, file_type)
-    }
-
     #[inline]
     fn from_parts(std: fs::Metadata, ext: ImplMetadataExt, file_type: FileType) -> Self {
         Self {

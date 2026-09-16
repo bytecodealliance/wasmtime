@@ -11,6 +11,7 @@ use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
 use core::{iter, mem};
+use std::ffi::OsString;
 use std::io;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -204,16 +205,15 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
 }
 
 fn map_dir_entry(
-    entry: std::io::Result<crate::filesystem::primitives::DirEntry>,
+    entry: std::io::Result<(OsString, crate::filesystem::primitives::FileType)>,
 ) -> Result<Option<DirectoryEntry>, ErrorCode> {
     match entry {
-        Ok(entry) => {
-            let meta = entry.metadata()?;
-            let Ok(name) = entry.file_name().into_string() else {
+        Ok((filename, ty)) => {
+            let Ok(name) = filename.into_string() else {
                 return Err(ErrorCode::IllegalByteSequence);
             };
             Ok(Some(DirectoryEntry {
-                type_: meta.file_type().into(),
+                type_: ty.into(),
                 name,
             }))
         }
@@ -250,7 +250,7 @@ impl ReadDirStream {
         let (tx, rx) = mpsc::channel(1);
         ReadDirStream {
             task: spawn_blocking(move || {
-                let entries = crate::filesystem::primitives::read_base_dir(&dir)?;
+                let entries = crate::filesystem::primitives::read_dir(&dir)?;
                 for entry in entries {
                     if let Some(entry) = map_dir_entry(entry)? {
                         if let Err(_) = tx.blocking_send(entry) {
@@ -541,7 +541,7 @@ fn read_directory(
             let allow_blocking_current_thread = dir.allow_blocking_current_thread;
             let dir = Arc::clone(dir.as_dir());
             if allow_blocking_current_thread {
-                match crate::filesystem::primitives::read_base_dir(&dir) {
+                match crate::filesystem::primitives::read_dir(&dir) {
                     Ok(readdir) => StreamReader::new(
                         &mut store,
                         FallibleIteratorProducer::new(

@@ -1,13 +1,16 @@
-use crate::filesystem::primitives::{MaybeOwnedFile, OpenOptions, open, open_parent};
-use rustix::fs::{AtFlags, utimensat};
+use crate::filesystem::primitives::{
+    FileType, FollowSymlinks, MaybeOwnedFile, OpenOptions, open, open_parent,
+};
+use rustix::fs::{AtFlags, Dir, utimensat};
 use rustix::io::Errno;
+use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
 mod create_dir_unchecked;
-mod dir_entry_inner;
 mod dir_utils;
 mod file_type_ext;
 mod hard_link_unchecked;
@@ -16,7 +19,6 @@ mod metadata_ext;
 mod oflags;
 mod open_options_ext;
 mod open_unchecked;
-mod read_dir_inner;
 mod read_link_unchecked;
 mod remove_dir_unchecked;
 mod remove_file_unchecked;
@@ -42,7 +44,6 @@ mod linux;
 pub(crate) use self::linux::*;
 
 pub(crate) use create_dir_unchecked::create_dir_unchecked;
-pub(crate) use dir_entry_inner::DirEntryInner;
 pub(crate) use dir_utils::*;
 pub(crate) use file_type_ext::ImplFileTypeExt;
 pub(crate) use hard_link_unchecked::hard_link_unchecked;
@@ -51,7 +52,6 @@ pub(crate) use is_same_file::{is_different_file, is_different_file_metadata, is_
 pub(crate) use metadata_ext::ImplMetadataExt;
 pub(crate) use open_options_ext::ImplOpenOptionsExt;
 pub(crate) use open_unchecked::open_unchecked;
-pub(crate) use read_dir_inner::ReadDirInner;
 pub(crate) use read_link_unchecked::read_link_unchecked;
 pub(crate) use remove_dir_unchecked::remove_dir_unchecked;
 pub(crate) use remove_file_unchecked::remove_file_unchecked;
@@ -151,4 +151,34 @@ pub(crate) fn set_times(
     //
     // So neither does what we need.
     Err(Errno::NOTSUP.into())
+}
+
+pub(crate) fn read_dir(
+    file: &fs::File,
+) -> io::Result<impl Iterator<Item = io::Result<(OsString, FileType)>> + 'static> {
+    // Open ".", to obtain a new independent file descriptor. Don't use
+    // `dup` since in that case the resulting file descriptor would share
+    // a current position with the original, and `read_dir` calls after
+    // the first `read_dir` call wouldn't start from the beginning.
+    let fd = open_unchecked(
+        file,
+        Component::CurDir.as_ref(),
+        readdir_options().follow(FollowSymlinks::No),
+    )?;
+    Ok(Dir::new(fd)?.filter_map(|entry| {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => return Some(Err(e.into())),
+        };
+        let file_name = entry.file_name().to_bytes();
+        if file_name == Component::CurDir.as_os_str().as_bytes()
+            || file_name == Component::ParentDir.as_os_str().as_bytes()
+        {
+            return None;
+        }
+        Some(Ok((
+            OsString::from_vec(file_name.to_vec()),
+            ImplFileTypeExt::from_raw_mode(entry.file_type().as_raw_mode()),
+        )))
+    }))
 }

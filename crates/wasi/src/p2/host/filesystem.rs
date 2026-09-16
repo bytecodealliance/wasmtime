@@ -171,13 +171,11 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
                 // within this `block` call, rather than delay calculating the metadata
                 // for entries when they're demanded later in the iterator chain.
                 Ok::<_, std::io::Error>(
-                    crate::filesystem::primitives::read_base_dir(d)?
+                    crate::filesystem::primitives::read_dir(d)?
                         .map(|entry| {
-                            let entry = entry?;
-                            let meta = entry.metadata()?;
-                            let type_ = descriptortype_from(meta.file_type());
-                            let name = entry
-                                .file_name()
+                            let (filename, ty) = entry?;
+                            let type_ = descriptortype_from(ty);
+                            let name = filename
                                 .into_string()
                                 .map_err(|_| ReaddirError::IllegalSequence)?;
                             Ok(types::DirectoryEntry { type_, name })

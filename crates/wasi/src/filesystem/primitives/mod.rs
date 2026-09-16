@@ -20,14 +20,12 @@
 use std::path::{Component, Path, PathBuf};
 use std::{fs, io};
 
-mod dir_entry;
 mod file_type;
 mod maybe_owned_file;
 mod metadata;
 mod open_options;
 mod open_parent;
 mod open_unchecked_error;
-mod read_dir;
 
 mod errors;
 mod manually;
@@ -51,7 +49,6 @@ use open_parent::open_parent;
 use open_unchecked_error::*;
 use sys::*;
 
-pub(crate) use dir_entry::DirEntry;
 pub(crate) use file_type::FileType;
 #[cfg(any(unix, target_os = "vxworks"))]
 pub(crate) use file_type::FileTypeExt;
@@ -59,8 +56,8 @@ pub(crate) use file_type::FileTypeExt;
 pub(crate) use metadata::_WindowsByHandle;
 pub(crate) use metadata::{Metadata, MetadataExt};
 pub(crate) use open_options::*;
-pub(crate) use read_dir::read_base_dir;
 pub(crate) use sys::open_ambient_dir;
+pub(crate) use sys::read_dir;
 pub(crate) use sys::set_times;
 pub(crate) use sys::set_times_nofollow;
 
@@ -283,18 +280,6 @@ fn open_dir(start: &fs::File, path: &Path) -> io::Result<fs::File> {
 #[allow(dead_code)]
 fn open_dir_unchecked(start: &fs::File, path: &Path) -> io::Result<fs::File> {
     open_unchecked(start, path, &dir_options()).map_err(Into::into)
-}
-
-/// Like `open_dir_unchecked`, but additionally request the ability to read the
-/// directory entries.
-#[inline]
-#[allow(dead_code)]
-fn open_dir_for_reading_unchecked(
-    start: &fs::File,
-    path: &Path,
-    follow: FollowSymlinks,
-) -> io::Result<fs::File> {
-    open_unchecked(start, path, readdir_options().follow(follow)).map_err(Into::into)
 }
 
 pub(crate) fn remove_file(start: &fs::File, path: &Path) -> io::Result<()> {
