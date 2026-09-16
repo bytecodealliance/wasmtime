@@ -693,3 +693,77 @@ block0(v0: i32, v1: i32, v2: i32):
     ; check: v7 = ishl v6, v2
     ; check: return v7
 }
+
+function %ishl_masked_count_i8_i8_mask7(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 7
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; check: ishl v0, v1
+
+function %ishl_masked_count_i32_i32_mask31(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 31
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; check: ishl v0, v1
+
+function %ishl_masked_count_i64_i8_mask63(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = iconst.i8 63
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; check: ishl v0, v1
+
+function %ishl_masked_count_i128_i32_mask127(i128, i32) -> i128 {
+block0(v0: i128, v1: i32):
+    v2 = iconst.i32 127
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; check: ishl v0, v1
+
+function %ushr_masked_count_i64_i32_mask63(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = iconst.i32 63
+    v3 = band v1, v2
+    v4 = ushr v0, v3
+    return v4
+}
+; check: ushr v0, v1
+
+function %sshr_masked_count_i32_i8_mask31(i32, i8) -> i32 {
+block0(v0: i32, v1: i8):
+    v2 = iconst.i8 31
+    v3 = band v1, v2
+    v4 = sshr v0, v3
+    return v4
+}
+; check: sshr v0, v1
+
+function %ishl_masked_count_i64_i32_mask31(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = iconst.i32 31
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; check: band v1, v2
+; check: ishl v0, v3
+
+;; The mask is determined by the lane width, not the total vector width.
+function %ishl_masked_count_i32x4(i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32):
+    v2 = iconst.i32 31
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; check: ishl v0, v1

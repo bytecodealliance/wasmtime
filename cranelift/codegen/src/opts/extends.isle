@@ -96,3 +96,9 @@
 
 ;; Select narrowest type
 (rule (simplify (ireduce ty (ireduce cty x))) (ireduce ty x))
+
+;; uextend(x) <u uextend(y) --> x <u y.
+(rule (simplify (ult rty
+                    (uextend ty x @ (value_type (ty_int narrow)))
+                    (uextend ty y @ (value_type narrow))))
+      (ult rty x y))

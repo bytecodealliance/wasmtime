@@ -10,6 +10,17 @@ target pulley32be
 target pulley64
 target pulley64be
 
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
 ; This test is also a regression test for aarch64.
 ; We were not correctly handling the fact that the rhs constant value
 ; overflows its type when viewed as a signed value, and thus encoding the wrong
@@ -260,3 +271,112 @@ block0(v0: i32, v1: i32):
 }
 ; run: %ne_ineg(7, 7) == 0
 ; run: %ne_ineg(7, 3) == 1
+
+function %signed_bounds_i8_limit100(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = iconst.i8 100
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+; run: %signed_bounds_i8_limit100(-1) == 0
+; run: %signed_bounds_i8_limit100(-128) == 0
+; run: %signed_bounds_i8_limit100(0) == 1
+; run: %signed_bounds_i8_limit100(99) == 1
+; run: %signed_bounds_i8_limit100(100) == 0
+; run: %signed_bounds_i8_limit100(127) == 0
+
+function %signed_bounds_i32_limit100(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 100
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+; run: %signed_bounds_i32_limit100(-1) == 0
+; run: %signed_bounds_i32_limit100(-2147483648) == 0
+; run: %signed_bounds_i32_limit100(0) == 1
+; run: %signed_bounds_i32_limit100(99) == 1
+; run: %signed_bounds_i32_limit100(100) == 0
+; run: %signed_bounds_i32_limit100(2147483647) == 0
+
+function %signed_bounds_i64_limit100(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = iconst.i64 100
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v4, v3
+    return v5
+}
+; run: %signed_bounds_i64_limit100(-1) == 0
+; run: %signed_bounds_i64_limit100(-9223372036854775808) == 0
+; run: %signed_bounds_i64_limit100(0) == 1
+; run: %signed_bounds_i64_limit100(99) == 1
+; run: %signed_bounds_i64_limit100(100) == 0
+; run: %signed_bounds_i64_limit100(9223372036854775807) == 0
+
+function %signed_bounds_i32_limitneg1(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 -1
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+; run: %signed_bounds_i32_limitneg1(-1) == 0
+; run: %signed_bounds_i32_limitneg1(-2147483648) == 0
+; run: %signed_bounds_i32_limitneg1(0) == 0
+; run: %signed_bounds_i32_limitneg1(99) == 0
+; run: %signed_bounds_i32_limitneg1(100) == 0
+; run: %signed_bounds_i32_limitneg1(2147483647) == 0
+
+function %signed_bounds_i8_limit128(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = iconst.i8 128
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+; run: %signed_bounds_i8_limit128(-1) == 0
+; run: %signed_bounds_i8_limit128(-128) == 0
+; run: %signed_bounds_i8_limit128(0) == 0
+; run: %signed_bounds_i8_limit128(99) == 0
+; run: %signed_bounds_i8_limit128(100) == 0
+; run: %signed_bounds_i8_limit128(127) == 0
+
+function %signed_bounds_i32_limit0(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 0
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+; run: %signed_bounds_i32_limit0(-1) == 0
+; run: %signed_bounds_i32_limit0(-2147483648) == 0
+; run: %signed_bounds_i32_limit0(0) == 0
+; run: %signed_bounds_i32_limit0(99) == 0
+; run: %signed_bounds_i32_limit0(100) == 0
+; run: %signed_bounds_i32_limit0(2147483647) == 0
+
+function %signed_bounds_variable_limit(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp sge v0, v2
+    v4 = icmp slt v0, v1
+    v5 = band v3, v4
+    return v5
+}
+; run: %signed_bounds_variable_limit(0, -1) == 0
+; run: %signed_bounds_variable_limit(-1, -1) == 0
+; run: %signed_bounds_variable_limit(0, 1) == 1
+; run: %signed_bounds_variable_limit(100, 100) == 0
