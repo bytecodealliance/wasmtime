@@ -46,6 +46,20 @@ use wasmtime_environ::{
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
+/// Function-local stack slots backing a continuation's
+/// `VMPayloads::values`.
+///
+/// The values and their GC-reference markers are logically one
+/// payload descriptor but use distinct stack slots so that Cranelift
+/// can assign them distinct alias regions. The marker slot is only
+/// allocated when this function contains a stack switching site whose
+/// payloads may contain GC references.
+#[derive(Clone, Copy)]
+pub(crate) struct VMPayloadStackSlots {
+    pub(crate) values: ir::StackSlot,
+    pub(crate) gc_ref_markers: Option<ir::StackSlot>,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum Extension {
     Sign,
@@ -216,10 +230,12 @@ pub struct FuncEnvironment<'module_environment> {
     /// current stack's `handler_list` field.
     stack_switching_handler_list_buffer: Option<ir::StackSlot>,
 
-    /// Used by the stack switching feature. If set, we have a allocated a
-    /// slot on this function's stack to be used for the
-    /// current continuation's `values` field.
-    stack_switching_values_buffer: Option<ir::StackSlot>,
+    /// Used by the stack switching feature. If set, these are the stack slots
+    /// backing the current continuation's `values` field.
+    stack_switching_values_storage: Option<VMPayloadStackSlots>,
+
+    /// Reusable storage for `get_interned_contref` builtin.
+    stack_switching_cont_ref_result_storage: Option<ir::StackSlot>,
 
     /// The stack-slot used for exposing Wasm state via debug
     /// instrumentation, if any, and the builder containing its metadata.
@@ -300,7 +316,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             stack_limit_at_function_entry: None,
 
             stack_switching_handler_list_buffer: None,
-            stack_switching_values_buffer: None,
+            stack_switching_values_storage: None,
+            stack_switching_cont_ref_result_storage: None,
 
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
@@ -311,6 +328,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             alias_regions: AliasRegions::new(offsets),
         }
+    }
+
+    /// Returns the cached continuation-reference stack slot, creating it with
+    /// `data` if necessary.
+    pub(crate) fn get_or_create_contref_stack_slot(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        data: ir::StackSlotData,
+    ) -> ir::StackSlot {
+        *self
+            .stack_switching_cont_ref_result_storage
+            .get_or_insert_with(|| builder.create_sized_stack_slot(data))
     }
 
     /// Consume the branch hint for the instruction at module-relative `offset`
@@ -5295,8 +5324,9 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder<'_>,
         contobj: ir::Value,
         args: &[ir::Value],
+        arg_types: &[WasmValType],
     ) -> ir::Value {
-        stack_switching::instructions::translate_cont_bind(self, builder, contobj, args)
+        stack_switching::instructions::translate_cont_bind(self, builder, contobj, args, arg_types)
     }
 
     pub fn translate_cont_new(
@@ -5376,13 +5406,15 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder<'_>,
         tag_index: u32,
         suspend_args: &[ir::Value],
-        tag_return_types: &[ir::Type],
+        suspend_arg_types: &[WasmValType],
+        tag_return_types: &[WasmValType],
     ) -> WasmResult<Vec<ir::Value>> {
         stack_switching::instructions::translate_suspend(
             self,
             builder,
             tag_index,
             suspend_args,
+            suspend_arg_types,
             tag_return_types,
         )
     }
@@ -5394,7 +5426,8 @@ impl FuncEnvironment<'_> {
         tag_index: u32,
         contobj: ir::Value,
         switch_args: &[ir::Value],
-        return_types: &[ir::Type],
+        switch_arg_types: &[WasmValType],
+        return_types: &[WasmValType],
     ) -> WasmResult<Vec<ir::Value>> {
         stack_switching::instructions::translate_switch(
             self,
@@ -5402,6 +5435,7 @@ impl FuncEnvironment<'_> {
             tag_index,
             contobj,
             switch_args,
+            switch_arg_types,
             return_types,
         )
     }

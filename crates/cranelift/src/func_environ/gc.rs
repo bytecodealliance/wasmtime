@@ -2,7 +2,7 @@
 
 use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
 use crate::bounds_checks::BoundsCheck;
-use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
+use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment, stack_switching::fatpointer};
 use crate::translate::{
     Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment, VmctxLoadChain,
 };
@@ -18,7 +18,7 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::{SmallVec, smallvec};
 use wasmtime_environ::{
     Collector, GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, I31_DISCRIMINANT,
-    ModuleInternedTypeIndex, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
+    ModuleInternedTypeIndex, PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
     WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
     wasm_unsupported,
 };
@@ -377,10 +377,7 @@ pub fn read_field_at_addr(
                         .call(get_interned_func_ref, &[vmctx, func_ref_id, expected_ty]);
                     builder.func.dfg.first_result(call_inst)
                 }
-                WasmHeapTopType::Cont => {
-                    // TODO(#10248) GC integration for stack switching
-                    return stack_switching_unsupported();
-                }
+                WasmHeapTopType::Cont => read_cont_ref_at_addr(func_env, builder, addr, flags)?,
             },
         },
     };
@@ -429,6 +426,92 @@ pub fn intern_func_ref(
         .call(intern_func_ref_for_gc_heap, &[vmctx, func_ref]);
     let func_ref_id = builder.func.dfg.first_result(call_inst);
     Ok(builder.ins().ireduce(ir::types::I32, func_ref_id))
+}
+
+fn intern_cont_ref(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    ref_type: WasmRefType,
+    contobj: ir::Value,
+) -> ir::Value {
+    assert_eq!(ref_type.heap_type.top(), WasmHeapTopType::Cont);
+
+    if ref_type.heap_type == WasmHeapType::NoCont {
+        let zero = builder.ins().iconst(ir::types::I32, 0);
+
+        if !ref_type.nullable {
+            builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
+        }
+
+        return zero;
+    }
+
+    let (revision, contref) = fatpointer::deconstruct(func_env, &mut builder.cursor(), contobj);
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+    let intern = func_env
+        .builtin_functions
+        .intern_contref_for_gc_heap(builder.func);
+    let call = builder.ins().call(intern, &[vmctx, contref, revision]);
+    let id = builder.func.dfg.first_result(call);
+    builder.ins().ireduce(ir::types::I32, id)
+}
+
+fn read_cont_ref_at_addr(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    addr: ir::Value,
+    flags: ir::MemFlagsData,
+) -> WasmResult<ir::Value> {
+    let id = builder.ins().load(ir::types::I32, flags, addr, 0);
+
+    // We either create or fetch an existing stack slot to hold the raw
+    // continuation object, and pass its address as the out parameter to the
+    // builtin.
+    let pointer_type = func_env.pointer_type();
+    let layout = func_env.offsets.ptr.vm_raw_cont_obj();
+    let slot_size = u32::from(layout.size());
+    let slot_align = u8::try_from(layout.align().trailing_zeros()).unwrap();
+    let contref_offset = layout.contref();
+    let revision_offset = layout.revision();
+
+    let slot = func_env.get_or_create_contref_stack_slot(
+        builder,
+        ir::StackSlotData::new(ir::StackSlotKind::ExplicitSlot, slot_size, slot_align),
+    );
+    let out_result = builder.ins().stack_addr(pointer_type, slot, 0);
+
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+    let get = func_env
+        .builtin_functions
+        .get_interned_contref(builder.func);
+    builder.ins().call(get, &[vmctx, id, out_result]);
+
+    let region = func_env.alias_regions.stack_slot_region(builder.func, slot);
+    let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
+    let contref = builder
+        .ins()
+        .load(pointer_type, flags, out_result, contref_offset);
+    let revision = builder
+        .ins()
+        .load(pointer_type, flags, out_result, revision_offset);
+    Ok(fatpointer::construct(
+        func_env,
+        &mut builder.cursor(),
+        revision,
+        contref,
+    ))
+}
+
+fn write_cont_ref_at_addr(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    ref_type: WasmRefType,
+    flags: ir::MemFlagsData,
+    field_addr: ir::Value,
+    contobj: ir::Value,
+) {
+    let id = intern_cont_ref(func_env, builder, ref_type, contobj);
+    builder.ins().store(flags, id, field_addr, 0);
 }
 
 fn write_func_ref_at_addr(
@@ -487,7 +570,9 @@ pub fn write_field_at_addr(
                     func_env, builder, r, field_addr, new_val, flags,
                 )?;
             }
-            WasmHeapTopType::Cont => return stack_switching_unsupported(),
+            WasmHeapTopType::Cont => {
+                write_cont_ref_at_addr(func_env, builder, r, flags, field_addr, new_val)
+            }
         },
         WasmStorageType::Val(_) => {
             assert_eq!(
@@ -527,6 +612,10 @@ fn default_value(
             }
             WasmValType::Ref(r) => {
                 assert!(r.nullable);
+                if r.heap_type.top() == WasmHeapTopType::Cont {
+                    let zero = cursor.ins().iconst(func_env.pointer_type(), 0);
+                    return fatpointer::construct(func_env, cursor, zero, zero);
+                }
                 let (ty, needs_stack_map) = func_env.reference_type(r.heap_type);
 
                 // NB: The collector doesn't need to know about null references.

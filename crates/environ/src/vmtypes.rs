@@ -602,6 +602,21 @@ macro_rules! for_each_vm_type {
                 pub data: *mut u8,
             }
 
+            /// Payload values exchanged with a continuation and the metadata
+            /// needed to trace GC references among them.
+            #[derive(Debug, Clone)]
+            #[repr(C)]
+            #[snake_name = vm_payloads]
+            pub struct VMPayloads {
+                /// The payload values themselves.
+                #[aggregate]
+                pub buffer: VMHostArray,
+
+                /// One marker byte per buffer slot, indicating whether that
+                /// slot contains a GC reference, or `None` when no slots do.
+                pub gc_ref_data: Option<VmPtr<u8>>,
+            }
+
             /// The information saved for every stack, whether it is a
             /// continuation's or the initial stack's.
             #[derive(Debug, Clone)]
@@ -651,12 +666,12 @@ macro_rules! for_each_vm_type {
                 /// The arguments to, and return values of, the function passed
                 /// to `cont.new`.
                 #[aggregate]
-                pub args: VMHostArray,
+                pub args: VMPayloads,
 
                 /// The payloads passed to and from this continuation once it
                 /// has been suspended.
                 #[aggregate]
-                pub values: VMHostArray,
+                pub values: VMPayloads,
 
                 /// Tells the compiler that this structure has potential
                 /// self-references, through `last_ancestor`.
@@ -665,6 +680,19 @@ macro_rules! for_each_vm_type {
                 /// neither this type's size nor its alignment.
                 #[aggregate]
                 pub _marker: PhantomPinned,
+            }
+
+            /// A slight variation of `VMContObj` which allows the
+            /// `contref` to be instantiated to null,
+            /// i.e. `Option::None`. This representation is used by
+            /// the GC infrastructure to construct a canonical
+            /// null-esque continuation object.
+            #[cfg(all(feature = "gc", feature = "stack-switching"))]
+            #[repr(C)]
+            #[snake_name = vm_raw_cont_obj]
+            pub struct VMRawContObj {
+                pub contref: Option<VmPtr<u8>>,
+                pub revision: usize,
             }
 
             /// The deferred-reference-counting collector's JIT-accessible heap
