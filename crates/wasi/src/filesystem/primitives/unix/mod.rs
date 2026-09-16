@@ -168,29 +168,31 @@ pub(crate) fn read_dir(
     let mut dir = Dir::new(fd)?;
     Ok(std::iter::from_fn(move || {
         let result = (|| {
-            let Some(entry) = dir.read() else {
-                return Ok(None);
-            };
-            let entry = entry?;
-            let file_name = entry.file_name().to_bytes();
-            if file_name == Component::CurDir.as_os_str().as_bytes()
-                || file_name == Component::ParentDir.as_os_str().as_bytes()
-            {
-                return Ok(None);
+            loop {
+                let Some(entry) = dir.read() else {
+                    return Ok(None);
+                };
+                let entry = entry?;
+                let file_name = entry.file_name().to_bytes();
+                if file_name == Component::CurDir.as_os_str().as_bytes()
+                    || file_name == Component::ParentDir.as_os_str().as_bytes()
+                {
+                    continue;
+                }
+
+                let raw_mode = cfg_select! {
+                    target_os = "illumos" => rustix::fs::statat(
+                        dir.fd()?,
+                        entry.file_name(),
+                        AtFlags::SYMLINK_NOFOLLOW,
+                    )?.st_mode,
+                    _ => entry.file_type().as_raw_mode(),
+
+                };
+
+                let file_type = ImplFileTypeExt::from_raw_mode(raw_mode);
+                return Ok(Some((OsString::from_vec(file_name.to_vec()), file_type)));
             }
-
-            let raw_mode = cfg_select! {
-                target_os = "illumos" => rustix::fs::statat(
-                    dir.fd()?,
-                    entry.file_name(),
-                    AtFlags::SYMLINK_NOFOLLOW,
-                )?.st_mode,
-                _ => entry.file_type().as_raw_mode(),
-
-            };
-
-            let file_type = ImplFileTypeExt::from_raw_mode(raw_mode);
-            Ok(Some((OsString::from_vec(file_name.to_vec()), file_type)))
         })();
         match result {
             Ok(Some(entry)) => Some(Ok(entry)),
