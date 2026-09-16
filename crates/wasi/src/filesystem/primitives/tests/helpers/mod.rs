@@ -76,11 +76,6 @@ pub fn open_dir_nofollow(d: &File, path: impl AsRef<Path>) -> io::Result<File> {
     )
 }
 
-/// `Dir::read_dir`: open the subdirectory, then read its entries.
-pub fn read_dir(d: &File, path: impl AsRef<Path>) -> io::Result<super::super::read_dir::ReadDir> {
-    p::read_base_dir(&p::open_dir(d, path.as_ref())?)
-}
-
 pub fn exists(d: &File, path: impl AsRef<Path>) -> bool {
     metadata(d, path).is_ok()
 }

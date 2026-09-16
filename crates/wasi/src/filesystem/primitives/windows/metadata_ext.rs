@@ -21,18 +21,6 @@ impl ImplMetadataExt {
         Ok(Self::from_parts(std, Some(t32)))
     }
 
-    /// Constructs a new instance of `Self` from the given
-    /// [`std::fs::Metadata`].
-    ///
-    /// As with the comments in [`std::fs::Metadata::volume_serial_number`] and
-    /// nearby functions, some fields of the resulting metadata will be `None`.
-    ///
-    /// [`std::fs::Metadata::volume_serial_number`]: https://doc.rust-lang.org/std/os/windows/fs/trait.MetadataExt.html#tymethod.volume_serial_number
-    #[inline]
-    pub(crate) fn from_just_metadata(std: &fs::Metadata) -> Self {
-        Self::from_parts(std, None)
-    }
-
     #[inline]
     fn from_parts(std: &fs::Metadata, number_of_links: Option<u32>) -> Self {
         use std::os::windows::fs::MetadataExt;

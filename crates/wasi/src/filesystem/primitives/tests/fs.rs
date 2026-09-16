@@ -57,15 +57,13 @@ fn dir_entry_methods() {
     h::create_dir_all(&start, "a").unwrap();
     h::create(&start, "b").unwrap();
 
-    // `DirEntry::file_type` is gone; the metadata checks still cover this.
-    for file in h::read_dir(&start, ".").unwrap().map(|f| f.unwrap()) {
-        let fname = file.file_name();
+    for (fname, ty) in p::read_dir(&start).unwrap().map(|f| f.unwrap()) {
         match fname.to_str() {
             Some("a") => {
-                assert!(file.metadata().unwrap().is_dir());
+                assert!(ty.is_dir());
             }
             Some("b") => {
-                assert!(file.metadata().unwrap().file_type().is_file());
+                assert!(ty.is_file());
             }
             f => panic!("unknown file name: {f:?}"),
         }
@@ -600,10 +598,13 @@ fn file_test_directoryinfo_readdir() {
         let msg = msg_str.as_bytes();
         check!(w.write(msg));
     }
-    let files = check!(h::read_dir(&start, dir));
+    let files = {
+        let dir_handle = check!(p::open_dir(&start, dir.as_ref()));
+        check!(p::read_dir(&dir_handle))
+    };
     let mut mem = [0; 4];
     for f in files {
-        let f = f.unwrap().file_name();
+        let (f, _ty) = f.unwrap();
         {
             check!(check!(h::open(&start, &f)).read(&mut mem));
             let read_str = str::from_utf8(&mem).unwrap();
@@ -1028,22 +1029,10 @@ fn mkdir_trailing_slash() {
 }
 
 #[test]
-fn dir_entry_debug() {
-    let tmpdir = tmpdir();
-    let start = h::dir_of(&tmpdir);
-    h::create(&start, "b").unwrap();
-    let mut read_dir = h::read_dir(&start, ".").unwrap();
-    let dir_entry = read_dir.next().unwrap().unwrap();
-    let actual = format!("{dir_entry:?}");
-    let expected = format!("DirEntry({:?})", dir_entry.file_name());
-    assert_eq!(actual, expected);
-}
-
-#[test]
 fn read_dir_not_found() {
     let tmpdir = tmpdir();
     let start = h::dir_of(&tmpdir);
-    let res = h::read_dir(&start, "path/that/does/not/exist");
+    let res = p::open_dir(&start, "path/that/does/not/exist".as_ref());
     assert_eq!(res.err().unwrap().kind(), ErrorKind::NotFound);
 }
 

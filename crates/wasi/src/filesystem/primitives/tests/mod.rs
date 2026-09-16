@@ -9,7 +9,6 @@ mod fs;
 mod fs_additional;
 mod metadata_ext;
 mod paths_containing_nul;
-mod readdir;
 mod rename;
 mod rename_directory;
 mod reopendir;

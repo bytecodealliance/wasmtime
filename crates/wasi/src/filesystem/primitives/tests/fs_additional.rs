@@ -124,7 +124,8 @@ fn dotdot_at_end_of_symlink() {
 
     check!(h::metadata(&start, path));
 
-    let contents = check!(h::read_dir(&start, path));
+    let dir_handle = check!(p::open_dir(&start, path.as_ref()));
+    let contents = check!(p::read_dir(&dir_handle));
     for entry in contents {
         let _entry = check!(entry);
     }
@@ -149,7 +150,8 @@ fn dotdot_at_end_of_symlink_all_inside_dir() {
 
     check!(h::metadata(&start, path));
 
-    let contents = check!(h::read_dir(&start, path));
+    let dir_handle = check!(p::open_dir(&start, path.as_ref()));
+    let contents = check!(p::read_dir(&dir_handle));
     for entry in contents {
         let _entry = check!(entry);
     }
@@ -174,7 +176,8 @@ fn dotdot_slashdot_at_end_of_symlink() {
 
     check!(h::metadata(&start, path));
 
-    let contents = check!(h::read_dir(&start, path));
+    let dir_handle = check!(p::open_dir(&start, path.as_ref()));
+    let contents = check!(p::read_dir(&dir_handle));
     for entry in contents {
         let _entry = check!(entry);
     }
@@ -200,7 +203,8 @@ fn dotdot_slashdot_at_end_of_symlink_all_inside_dir() {
 
     check!(h::metadata(&start, path));
 
-    let contents = check!(h::read_dir(&start, path));
+    let dir_handle = check!(p::open_dir(&start, path.as_ref()));
+    let contents = check!(p::read_dir(&dir_handle));
     for entry in contents {
         let _entry = check!(entry);
     }
@@ -454,17 +458,17 @@ fn file_test_directoryinfo_readdir() {
         check!(w.write(msg));
     }
     let sub = check!(p::open_dir(&start, Path::new(dir)));
-    let files = check!(p::read_base_dir(&sub));
+    let files = check!(p::read_dir(&sub));
     let mut mem = [0; 4];
     for f in files {
-        let f = f.unwrap();
+        let (f, _ty) = f.unwrap();
         {
-            check!(check!(h::open(&sub, f.file_name())).read(&mut mem));
+            check!(check!(h::open(&sub, &f)).read(&mut mem));
             let read_str = str::from_utf8(&mem).unwrap();
-            let expected = format!("{}{}", prefix, f.file_name().to_str().unwrap());
+            let expected = format!("{}{}", prefix, f.to_str().unwrap());
             assert_eq!(expected, read_str);
         }
-        check!(p::remove_file(&sub, Path::new(&f.file_name())));
+        check!(p::remove_file(&sub, Path::new(&f)));
     }
     drop(sub);
     check!(p::remove_dir(&start, Path::new(dir)));
@@ -895,9 +899,12 @@ fn readdir_with_trailing_slashdot() {
     check!(h::create(&start, "dir/green"));
     check!(h::create(&start, "dir/blue"));
 
-    assert_eq!(check!(h::read_dir(&start, "dir")).count(), 3);
-    assert_eq!(check!(h::read_dir(&start, "dir/")).count(), 3);
-    assert_eq!(check!(h::read_dir(&start, "dir/.")).count(), 3);
+    let h1 = check!(p::open_dir(&start, "dir".as_ref()));
+    let h2 = check!(p::open_dir(&start, "dir/".as_ref()));
+    let h3 = check!(p::open_dir(&start, "dir/.".as_ref()));
+    assert_eq!(check!(p::read_dir(&h1)).count(), 3);
+    assert_eq!(check!(p::read_dir(&h2)).count(), 3);
+    assert_eq!(check!(p::read_dir(&h3)).count(), 3);
 }
 
 #[test]
@@ -910,13 +917,12 @@ fn metadata_vs_std_fs() {
 
     let cap_std_dir = check!(p::Metadata::from_file(&dir));
     let cap_std_file = check!(p::Metadata::from_file(&file));
-    let cap_std_dir_entry = {
-        let mut entries = check!(p::read_base_dir(&dir));
-        let entry = check!(entries.next().unwrap());
-        assert_eq!(entry.file_name(), "file");
+    {
+        let mut entries = check!(p::read_dir(&dir));
+        let (entry, _ty) = check!(entries.next().unwrap());
+        assert_eq!(entry, "file");
         assert!(entries.next().is_none(), "unexpected dir entry");
-        check!(entry.metadata())
-    };
+    }
 
     let std_dir = check!(dir.metadata());
     let std_file = check!(file.metadata());
@@ -928,7 +934,6 @@ fn metadata_vs_std_fs() {
 
     check_metadata(&std_dir, &cap_std_dir);
     check_metadata(&std_file, &cap_std_file);
-    check_metadata(&std_file, &cap_std_dir_entry);
 }
 
 fn check_metadata(std: &std::fs::Metadata, cap: &p::Metadata) {
@@ -1278,12 +1283,9 @@ fn trailing_slash_symlink() {
 
     for path in ["hidden", "hidden/", "indirect", "indirect/"] {
         let open_dir = p::open_dir(&sandbox, Path::new(path));
-        let read_dir = h::read_dir(&sandbox, path);
         assert!(open_dir.is_err());
-        assert!(read_dir.is_err());
         if cfg!(unix) {
             error_contains!(open_dir, "a path led outside of the filesystem");
-            error_contains!(read_dir, "a path led outside of the filesystem");
         }
     }
 }
@@ -1343,12 +1345,9 @@ fn trailing_slash_symlink_more() {
         "root_link/",
     ] {
         let open_dir = p::open_dir(&sandbox, Path::new(path));
-        let read_dir = h::read_dir(&sandbox, path);
         assert!(open_dir.is_err());
-        assert!(read_dir.is_err());
         if cfg!(unix) {
             error_contains!(open_dir, "a path led outside of the filesystem");
-            error_contains!(read_dir, "a path led outside of the filesystem");
         }
     }
 }
