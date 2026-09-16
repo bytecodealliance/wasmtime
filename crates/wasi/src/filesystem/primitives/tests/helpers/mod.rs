@@ -38,9 +38,9 @@ pub fn open(d: &File, path: impl AsRef<Path>) -> io::Result<File> {
     p::open(d, path.as_ref(), p::OpenOptions::new().read(true))
 }
 
-/// `Dir::create_dir`, with the default `DirOptions`.
+/// `Dir::create_dir`.
 pub fn create_dir(d: &File, path: impl AsRef<Path>) -> io::Result<()> {
-    p::create_dir(d, path.as_ref(), &p::DirOptions::new())
+    p::create_dir(d, path.as_ref())
 }
 
 /// `Dir::create_dir_all`, in terms of the single-level `create_dir`.
@@ -48,7 +48,7 @@ pub fn create_dir_all(d: &File, path: impl AsRef<Path>) -> io::Result<()> {
     let mut acc = PathBuf::new();
     for component in path.as_ref().components() {
         acc.push(component);
-        match p::create_dir(d, &acc, &p::DirOptions::new()) {
+        match p::create_dir(d, &acc) {
             Ok(()) => {}
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
             Err(e) => return Err(e),

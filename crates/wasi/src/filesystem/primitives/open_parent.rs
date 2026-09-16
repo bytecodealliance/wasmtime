@@ -12,7 +12,7 @@ use std::path::{Component, Path};
 /// the single remaining path component. This last component will not be `..`,
 /// though it may be `.` or a symbolic link to anywhere (possibly
 /// including `..` or an absolute path).
-pub(super) fn open_parent<'path, 'borrow>(
+pub(crate) fn open_parent<'path, 'borrow>(
     start: MaybeOwnedFile<'borrow>,
     path: &'path Path,
 ) -> io::Result<(MaybeOwnedFile<'borrow>, &'path OsStr)> {

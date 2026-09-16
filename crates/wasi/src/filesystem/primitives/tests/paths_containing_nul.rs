@@ -11,8 +11,8 @@
 
 use super::sys_common::io::tmpdir;
 use crate::filesystem::primitives::{
-    DirOptions, FollowSymlinks, OpenOptions, create_dir, hard_link, open, open_ambient_dir,
-    read_link, remove_dir, remove_file, rename, stat,
+    FollowSymlinks, OpenOptions, create_dir, hard_link, open, open_ambient_dir, read_link,
+    remove_dir, remove_file, rename, stat,
 };
 use std::io;
 use std::path::Path;
@@ -72,6 +72,6 @@ fn paths_containing_nul() {
     assert_invalid_input("hard_link1", hard_link(&dir, nul, &dir, Path::new("a")));
     assert_invalid_input("hard_link2", hard_link(&dir, dummy_file, &dir, nul));
     assert_invalid_input("read_link", read_link(&dir, nul));
-    assert_invalid_input("create_dir", create_dir(&dir, nul, &DirOptions::new()));
+    assert_invalid_input("create_dir", create_dir(&dir, nul));
     assert_invalid_input("remove_dir", remove_dir(&dir, nul));
 }

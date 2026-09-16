@@ -7,7 +7,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 
 #[inline]
-pub(crate) fn set_times_impl(
+pub(crate) fn set_times(
     start: &fs::File,
     path: &Path,
     atime: Option<SystemTime>,
@@ -17,7 +17,7 @@ pub(crate) fn set_times_impl(
 }
 
 #[inline]
-pub(crate) fn set_times_nofollow_impl(
+pub(crate) fn set_times_nofollow(
     start: &fs::File,
     path: &Path,
     atime: Option<SystemTime>,
