@@ -70,12 +70,6 @@ pub(crate) fn dir_options() -> OpenOptions {
         .clone()
 }
 
-/// Like `dir_options`, but additionally request the ability to read the
-/// directory entries.
-pub(crate) fn readdir_options() -> OpenOptions {
-    dir_options().readdir_required(true).clone()
-}
-
 /// Open a directory named by a bare path, using the host process' ambient
 /// authority.
 ///
