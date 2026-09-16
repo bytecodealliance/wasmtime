@@ -1019,7 +1019,8 @@
        ;; to x9.
        (DeadLoadWithContext (dst WritableReg)
                             (load_ptr Reg)
-                            (context Reg))))
+                            (context Reg)
+                            (trap_code TrapCode))))
 
 (spec (MInst.AluRRImmLogic alu_op size rd rn imml)
       (provide

@@ -1,6 +1,7 @@
 ;;! target = "x86_64"
 ;;! test = "compile"
 ;;! flags = ["-Wmmu-interruption=y"]
+;;! objdump = "--traps"
 
 ;; Nail down codegen for the snippet in mmu_interrupt_check_offsets() test. If
 ;; this starts failing, that may need the offsets in its assert reexamined.
@@ -15,5 +16,7 @@
 ;;       movq    8(%rdi), %rsi
 ;;       movq    0x10(%rsi), %rsi
 ;;       movq    (%rsi), %r10
+;;       ╰─╼ trap: MmuInterrupt
 ;;       movq    (%rsi), %r10
+;;       ╰─╼ trap: MmuInterrupt
 ;;       jmp     0xf

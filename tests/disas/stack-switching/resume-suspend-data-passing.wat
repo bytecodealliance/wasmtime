@@ -72,7 +72,7 @@
 ;;                                 block4(v10: i64, v11: i64, v62: i32):
 ;;                                     v71 = iconst.i64 1
 ;;                                     v72 = icmp eq v10, v71  ; v71 = 1
-;; @0044                               trapnz v72, user22
+;; @0044                               trapnz v72, user23
 ;; @0044                               jump block5
 ;;
 ;;                                 block5:
@@ -168,7 +168,7 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0056                               v2 = iconst.i32 0
 ;; @0056                               v3 = call fn0(v0, v2)  ; v2 = 0
-;; @0058                               trapz v3, user16
+;; @0058                               trapz v3, user17
 ;; @0058                               v6 = call fn1(v0, v3, v2, v2)  ; v2 = 0, v2 = 0
 ;; @0058                               v7 = load.i64 notrap aligned region2 v6+72
 ;; @0058                               v9 = uextend.i128 v7
@@ -198,13 +198,13 @@
 ;;
 ;;                                 block5:
 ;; @0062                               v15 = ireduce.i64 v14
-;; @0062                               trapz v15, user16
+;; @0062                               trapz v15, user17
 ;; @0062                               v20 = load.i64 notrap aligned region2 v15+72
 ;;                                     v122 = iconst.i64 64
 ;;                                     v123 = ushr.i128 v14, v122  ; v122 = 64
 ;; @0062                               v19 = ireduce.i64 v123
 ;; @0062                               v21 = icmp eq v20, v19
-;; @0062                               trapz v21, user23
+;; @0062                               trapz v21, user24
 ;;                                     v124 = iconst.i64 1
 ;;                                     v125 = iadd v20, v124  ; v124 = 1
 ;; @0062                               store notrap aligned region2 v125, v15+72
@@ -273,7 +273,7 @@
 ;; @0062                               jump block8
 ;;
 ;;                                 block9 cold:
-;; @0062                               trap user12
+;; @0062                               trap user13
 ;;
 ;;                                 block10:
 ;; @0062                               v95 = iconst.i64 120

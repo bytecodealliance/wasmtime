@@ -18,6 +18,8 @@ use std::mem;
 #[cfg(has_mmu_interruption)]
 use std::ptr::NonNull;
 use std::ptr::{self, null_mut};
+#[cfg(has_mmu_interruption)]
+use wasmtime_environ::CompiledTrap;
 use wasmtime_unwinder::Handler;
 
 /// Function which may handle custom signals while processing traps.
@@ -149,8 +151,8 @@ now.
 /// Consequently, this returns only after this fiber resumes, appearing to be a
 /// normal synchronous function from the standpoint of the caller.
 ///
-/// `wasm_resume_pc` is the address of the instruction after the load that
-/// triggered the signal. `trampoline_fp` is a pointer to
+/// `wasm_resume_pc` is the address of the load that triggered the signal; it
+/// is re-executed on resume. `trampoline_fp` is a pointer to
 /// `task_switch_trampoline`'s frame, which points at the slot where it saved
 /// the Wasm caller's frame pointer. Providing these allows this to ape the behavior of
 /// the wasm-to-host trampoline so backtrace capture works in the case of fiber
@@ -230,12 +232,13 @@ unsafe extern "C" fn yield_current_fiber(
 /// interruption.
 ///
 /// Saves register state, makes a host call to switch tasks, restores state, and
-/// jumps back to the instruction after the one that triggered the signal. The
-/// address of that instruction has been squirreled away by the signal handler
-/// in the scratch register that `dead_load_with_context` reserves: r10 on x64,
-/// x9 on aarch64. The signal handler has also left the address of the vmctx in
-/// the first argument register (rdi on x64, x0 on aarch64), where
-/// `dead_load_with_context` pinned it.
+/// jumps back to the load instruction that triggered the signal, re-executing
+/// it. (The interrupt page has been unprotected by then, so the retry
+/// succeeds.) The address of that instruction has been squirreled away by the
+/// signal handler in the scratch register that `dead_load_with_context`
+/// reserves: r10 on x64, x9 on aarch64. The signal handler has also left the
+/// address of the vmctx in the first argument register (rdi on x64, x0 on
+/// aarch64), where `dead_load_with_context` pinned it.
 ///
 /// # Safety
 ///
@@ -357,8 +360,8 @@ unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
         // Pop off the fake return address.
         add rsp, 8
 
-        // Resume right after the load instruction that triggered the signal
-        // handler.
+        // Resume at the load instruction that triggered the signal handler,
+        // re-executing it.
         jmp r10
         ",
         sym yield_current_fiber
@@ -453,8 +456,9 @@ unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
 
         ldp x29, x30, [sp], #16
 
-        // Resume right after the load instruction that triggered the signal
-        // handler. x9 was restored above, so it again holds the return address.
+        // Resume at the load instruction that triggered the signal handler,
+        // re-executing it. x9 was restored above, so it again holds the
+        // return address.
         br x9
         ",
         sym yield_current_fiber
@@ -519,32 +523,25 @@ unsafe extern "C" fn trap_handler(
             None => return false,
         };
 
-        // Check for segfaults meant as cues to end an epoch.
+        // Check for segfaults meant as cues to interrupt a guest.
         #[cfg(has_mmu_interruption)]
         // SAFETY: `si_code` field is always initialized for SIGSEGV.
         if signum == libc::SIGSEGV && unsafe { (*siginfo).si_code } == SEGV_ACCERR {
-            // Compare it with the offsets of MMU-interrupt-check instructions
-            // as stored in the object file.
+            // See whether the faulting PC is recorded in the trap table as an
+            // MMU-interrupt check.
             let ucontext = unsafe { &mut *(context as *mut libc::ucontext_t) };
             let pc = ucontext_pc(ucontext);
             // Now things get expensive: we call lookup_code(), which takes a global lock.
-            if let Some((code_memory, offset_within_code)) = lookup_code(pc) {
-                // Every host that `has_mmu_interruption` allows is
-                // little-endian, so we can just treat the stored
-                // little-endians as native u32s.
-                if let Some(return_address) = code_memory.return_address_for_mmu_interrupt_check(
-                    offset_within_code
-                        .try_into()
-                        .expect("MMU-interrupt-check location should fit in 32 bits"),
-                ) {
-                    // It is an interrupt check. Arrange to resume at the asm
-                    // trampoline after the signal handler exits.
-                    resume_into_task_switch_trampoline(ucontext, return_address);
-                    return true;
-                }
+            if let Some((code_memory, offset_within_code)) = lookup_code(pc)
+                && let Some(CompiledTrap::MmuInterrupt) =
+                    code_memory.lookup_trap_code(offset_within_code)
+            {
+                // It is an interrupt check. Arrange to resume at the asm
+                // trampoline after the signal handler exits.
+                resume_into_task_switch_trampoline(ucontext, pc as *const ());
+                return true;
             }
-            // Else it is an ordinary trap or the .wasmtime.mmu_interrupt_checks
-            // section is missing from the binary; continue on.
+            // Else it is an ordinary trap; continue on.
         }
 
         // If we hit an exception while handling a previous trap, that's

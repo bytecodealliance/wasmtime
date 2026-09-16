@@ -25,7 +25,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @002f                               trapz v2, user16
+;; @002f                               trapz v2, user17
 ;; @002f                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @002f                               v8 = load.i64 notrap aligned readonly can_move region2 v7+40
 ;; @002f                               v6 = uextend.i64 v2
@@ -38,7 +38,7 @@
 ;; @002f                               v18 = iadd v14, v15
 ;; @002f                               v13 = uextend.i64 v12
 ;; @002f                               v19 = icmp ugt v18, v13
-;; @002f                               trapnz v19, user17
+;; @002f                               trapnz v19, user18
 ;; @002f                               v36 = load.i64 notrap aligned region3 v7+48
 ;; @002f                               v24 = iconst.i64 20
 ;; @002f                               v25 = iadd v9, v24  ; v24 = 20
@@ -82,7 +82,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
-;; @003d                               trapz v2, user16
+;; @003d                               trapz v2, user17
 ;; @003d                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @003d                               v8 = load.i64 notrap aligned readonly can_move region2 v7+40
 ;; @003d                               v6 = uextend.i64 v2
@@ -95,7 +95,7 @@
 ;; @003d                               v18 = iadd v14, v15
 ;; @003d                               v13 = uextend.i64 v12
 ;; @003d                               v19 = icmp ugt v18, v13
-;; @003d                               trapnz v19, user17
+;; @003d                               trapnz v19, user18
 ;; @003d                               v36 = load.i64 notrap aligned region3 v7+48
 ;; @003d                               v24 = iconst.i64 20
 ;; @003d                               v25 = iadd v9, v24  ; v24 = 20

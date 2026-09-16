@@ -83,14 +83,14 @@
 ;; @0025                               v45 = iconst.i64 16
 ;; @0025                               v46 = iadd v44, v45  ; v45 = 16
 ;; @0025                               store user2 region8 v5, v46  ; v5 = 3
-;; @0025                               trapz v43, user16
+;; @0025                               trapz v43, user17
 ;;                                     v260 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;;                                     v261 = load.i64 notrap aligned readonly can_move region7 v260+40
 ;; @0025                               v48 = uextend.i64 v43
 ;; @0025                               v51 = iadd v261, v48
 ;; @0025                               v53 = iadd v51, v45  ; v45 = 16
 ;; @0025                               v54 = load.i32 user2 readonly region8 v53
-;; @0025                               trapz v54, user17
+;; @0025                               trapz v54, user18
 ;; @0025                               v57 = uextend.i64 v54
 ;;                                     v142 = iconst.i64 2
 ;;                                     v172 = ishl v57, v142  ; v142 = 2
@@ -112,7 +112,7 @@
 ;; @0025                               v82 = load.i32 user2 readonly region8 v53
 ;; @0025                               v75 = iconst.i32 1
 ;;                                     v196 = icmp ugt v82, v75  ; v75 = 1
-;; @0025                               trapz v196, user17
+;; @0025                               trapz v196, user18
 ;; @0025                               v85 = uextend.i64 v82
 ;;                                     v199 = ishl v85, v142  ; v142 = 2
 ;;                                     v264 = ushr v199, v262  ; v262 = 32
@@ -130,7 +130,7 @@
 ;; @0025                               store user2 little region8 v134, v102
 ;; @0025                               v110 = load.i32 user2 readonly region8 v53
 ;;                                     v222 = icmp ugt v110, v179  ; v179 = 2
-;; @0025                               trapz v222, user17
+;; @0025                               trapz v222, user18
 ;; @0025                               v113 = uextend.i64 v110
 ;;                                     v225 = ishl v113, v142  ; v142 = 2
 ;;                                     v265 = ushr v225, v262  ; v262 = 32

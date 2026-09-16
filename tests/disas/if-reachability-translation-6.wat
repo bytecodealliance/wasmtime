@@ -27,13 +27,13 @@
 ;; @001c                               brif v2, block2, block4
 ;;
 ;;                                 block2:
-;; @001e                               trap user12
+;; @001e                               trap user13
 ;;
 ;;                                 block4:
 ;; @0022                               brif.i32 v3, block3, block5
 ;;
 ;;                                 block5:
-;; @0024                               trap user12
+;; @0024                               trap user13
 ;;
 ;;                                 block3:
 ;; @0026                               v4 = iconst.i32 0

@@ -32,21 +32,21 @@
 ;;                                     v82 = ishl v5, v81  ; v81 = 3
 ;; @0022                               v8 = iconst.i64 32
 ;; @0022                               v9 = ushr v82, v8  ; v8 = 32
-;; @0022                               trapnz v9, user18
+;; @0022                               trapnz v9, user19
 ;; @0022                               v4 = iconst.i32 16
 ;;                                     v88 = iconst.i32 3
 ;;                                     v89 = ishl v3, v88  ; v88 = 3
-;; @0022                               v11 = uadd_overflow_trap v4, v89, user18  ; v4 = 16
+;; @0022                               v11 = uadd_overflow_trap v4, v89, user19  ; v4 = 16
 ;; @0022                               v13 = iconst.i32 -67108864
 ;; @0022                               v14 = band v11, v13  ; v13 = -67108864
-;; @0022                               trapnz v14, user18
+;; @0022                               trapnz v14, user19
 ;; @0022                               v15 = load.i64 notrap aligned readonly can_move region2 v0+32
 ;; @0022                               v16 = load.i32 notrap aligned region3 v15
 ;;                                     v92 = iconst.i32 7
-;; @0022                               v19 = uadd_overflow_trap v16, v92, user18  ; v92 = 7
+;; @0022                               v19 = uadd_overflow_trap v16, v92, user19  ; v92 = 7
 ;;                                     v98 = iconst.i32 -8
 ;; @0022                               v21 = band v19, v98  ; v98 = -8
-;; @0022                               v22 = uadd_overflow_trap v21, v11, user18
+;; @0022                               v22 = uadd_overflow_trap v21, v11, user19
 ;; @0022                               v24 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0022                               v25 = load.i64 notrap aligned region4 v24+48
 ;; @0022                               v23 = uextend.i64 v22
@@ -68,7 +68,7 @@
 ;; @0022                               v6 = iconst.i64 8
 ;; @0022                               v38 = iadd v32, v6  ; v6 = 8
 ;; @0022                               store.i32 user2 region8 v3, v38
-;; @0022                               trapz v116, user16
+;; @0022                               trapz v116, user17
 ;; @0022                               v70 = load.i64 notrap aligned region4 v24+48
 ;; @0022                               v58 = iconst.i64 16
 ;; @0022                               v59 = iadd v32, v58  ; v58 = 16

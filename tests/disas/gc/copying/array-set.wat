@@ -20,7 +20,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i64):
-;; @0024                               trapz v2, user16
+;; @0024                               trapz v2, user17
 ;; @0024                               v6 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0024                               v7 = load.i64 notrap aligned readonly can_move region2 v6+40
 ;; @0024                               v5 = uextend.i64 v2
@@ -29,7 +29,7 @@
 ;; @0024                               v10 = iadd v8, v9  ; v9 = 16
 ;; @0024                               v11 = load.i32 user2 readonly region4 v10
 ;; @0024                               v12 = icmp ult v3, v11
-;; @0024                               trapz v12, user17
+;; @0024                               trapz v12, user18
 ;; @0024                               v14 = uextend.i64 v11
 ;;                                     v33 = iconst.i64 3
 ;;                                     v34 = ishl v14, v33  ; v33 = 3

@@ -3634,8 +3634,16 @@ impl MachInstEmit for Inst {
                 sink.bind_label(loop_end, &mut state.ctrl_plane);
             }
 
-            &Inst::DeadLoadWithContext { dst, load_ptr, .. } => {
-                let start = sink.cur_offset();
+            &Inst::DeadLoadWithContext {
+                dst,
+                load_ptr,
+                trap_code,
+                ..
+            } => {
+                // Record the address of the load in the trap table so a signal
+                // handler can later distinguish whether a segfault is its
+                // fault.
+                sink.add_trap(trap_code);
 
                 // Emit `ldr dst, [load_ptr]`. Reuse the `dst` address as the
                 // destination of the dead load, since we are clobbering it
@@ -3649,10 +3657,6 @@ impl MachInstEmit for Inst {
                     flags: MemFlagsData::trusted(),
                 }
                 .emit(sink, emit_info, state);
-
-                // Mark the address of this instruction as part of mmu
-                // interrupt.
-                sink.add_mmu_interrupt_check(start, sink.cur_offset());
             }
         }
 

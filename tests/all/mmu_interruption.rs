@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use object::{LittleEndian, Object, ObjectSection, U32};
+use object::{Object, ObjectSection};
 use std::future::Future;
 use std::pin::Pin;
 use std::ptr::null;
@@ -11,33 +11,26 @@ use wasmtime::{Config, Engine, Module, Result};
     target_os = "linux"
 ))]
 use wasmtime::{Instance, Store};
-use wasmtime_environ::obj::ELF_WASMTIME_MMU_INTERRUPT_CHECKS;
+use wasmtime_environ::obj::ELF_WASMTIME_TRAPS;
+use wasmtime_environ::{CompiledTrap, iterate_traps};
 use wasmtime_test_macros::wasmtime_test;
 
-// Parses the MMU-interrupt-check section out of a precompiled module,
-// returning the check offsets and the packed bits giving each check's load
-// length.
-fn mmu_interrupt_checks(elf_bytes: &[u8]) -> (Vec<u32>, Vec<u8>) {
+// Returns the offset of every MMU-interrupt check recorded in a compiled
+// module's trap table.
+fn mmu_interrupt_checks(elf_bytes: &[u8]) -> Vec<u32> {
     let elf = object::read::elf::ElfFile64::<object::Endianness>::parse(elf_bytes)
         .expect("ELF should be parseable");
     let section = elf
-        .section_by_name(ELF_WASMTIME_MMU_INTERRUPT_CHECKS)
-        .expect(&format!(
-            "{ELF_WASMTIME_MMU_INTERRUPT_CHECKS} section should be present"
-        ));
-    let data = section.data().unwrap();
+        .section_by_name(ELF_WASMTIME_TRAPS)
+        .expect(&format!("{ELF_WASMTIME_TRAPS} section should be present"));
 
-    let (count_raw, rest) = object::from_bytes::<U32<LittleEndian>>(data).expect(
-        ".wasmtime.mmu_interrupt_checks section should be long enough to contain a count of MMU-interrupt checks",
-    );
-    let count = count_raw.get(LittleEndian) as usize;
-    let (starts_raw, rest) = object::slice_from_bytes::<U32<LittleEndian>>(rest, count)
-        .expect(".wasmtime.mmu_interrupt_checks section should be long enough to contain a location for each MMU-interrupt check");
-    let starts: Vec<u32> = starts_raw.iter().map(|b| b.get(LittleEndian)).collect();
-    let (length_bits, _rest) = object::slice_from_bytes::<u8>(rest, count.div_ceil(8))
-        .expect(".wasmtime.mmu_interrupt_checks section should be long enough to contain a length bit for each MMU-interrupt check");
-
-    (starts, length_bits.to_vec())
+    iterate_traps(section.data().unwrap())
+        .expect(&format!("{ELF_WASMTIME_TRAPS} section should be parseable"))
+        .filter_map(|(offset, trap)| match trap {
+            CompiledTrap::MmuInterrupt => Some(offset),
+            _ => None,
+        })
+        .collect()
 }
 
 // A function with an infinite loop contains two MMU-interrupt checks, one in
@@ -48,8 +41,8 @@ const LOOPING_MODULE: &str = r#"(module
              (func (loop (br 0)))
            )"#;
 
-// Asserts that each MMU-interrupt-check offset encoded into the binary points
-// to the byte after its corresponding dead load.
+// Asserts that each MMU-interrupt check is recorded in the trap table at the
+// offset of its dead load.
 #[wasmtime_test(strategies(only(CraneliftNative)))]
 fn mmu_interrupt_check_offsets(config: &mut Config) -> Result<()> {
     config.mmu_interruption(true);
@@ -57,7 +50,7 @@ fn mmu_interrupt_check_offsets(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config).unwrap();
 
     let elf_bytes = engine.precompile_module(LOOPING_MODULE.as_bytes()).unwrap();
-    let (starts, length_bits) = mmu_interrupt_checks(&elf_bytes);
+    let starts = mmu_interrupt_checks(&elf_bytes);
 
     // The emitted machine code is nailed down by the
     // mmu-interruption-compile-loop.wat disas test. As long as that keeps
@@ -66,11 +59,6 @@ fn mmu_interrupt_check_offsets(config: &mut Config) -> Result<()> {
         starts,
         vec![12, 15],
         "There should be 2 MMU-interrupt checks (function prologue & loop backedge). The offset of the prologue's dead load should be 12, and that of the loop's backedge should be 15."
-    );
-    assert_eq!(
-        length_bits,
-        vec![0],
-        "Neither check's load instruction uses R12 or RSP as its source, so all length bits should be 0."
     );
     Ok(())
 }
@@ -83,7 +71,7 @@ fn mmu_interrupt_check_offsets_aarch64(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config).unwrap();
 
     let elf_bytes = engine.precompile_module(LOOPING_MODULE.as_bytes()).unwrap();
-    let (starts, length_bits) = mmu_interrupt_checks(&elf_bytes);
+    let starts = mmu_interrupt_checks(&elf_bytes);
 
     // The emitted machine code is nailed down by the
     // mmu-interruption-compile-loop-aarch64.wat disas test. As long as that
@@ -92,11 +80,6 @@ fn mmu_interrupt_check_offsets_aarch64(config: &mut Config) -> Result<()> {
         starts,
         vec![20, 24],
         "There should be 2 MMU-interrupt checks (function prologue & loop backedge). The offset of the prologue's dead load should be 20, and that of the loop's backedge should be 24."
-    );
-    assert_eq!(
-        length_bits,
-        vec![0b11],
-        "Every aarch64 instruction is 4 bytes wide, so both checks' length bits should be 1."
     );
     Ok(())
 }

@@ -45,7 +45,7 @@
 ;;                                 block2(v7: i64, v8: i64):
 ;;                                     v60 = iconst.i64 1
 ;;                                     v61 = icmp eq v7, v60  ; v60 = 1
-;; @003b                               trapnz v61, user22
+;; @003b                               trapnz v61, user23
 ;; @003b                               jump block3
 ;;
 ;;                                 block3:
@@ -129,7 +129,7 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0043                               v9 = iconst.i32 0
 ;; @0043                               v10 = call fn0(v0, v9)  ; v9 = 0
-;; @0045                               trapz v10, user16
+;; @0045                               trapz v10, user17
 ;; @0045                               v13 = call fn1(v0, v10, v9, v9)  ; v9 = 0, v9 = 0
 ;; @0045                               v14 = load.i64 notrap aligned region2 v13+72
 ;; @004e                               jump block3
@@ -140,14 +140,14 @@
 ;;                                     v130 = ishl v16, v5  ; v5 = 64
 ;;                                     v132 = ireduce.i64 v130
 ;;                                     v134 = bor v132, v13
-;; @004e                               trapz v134, user16
+;; @004e                               trapz v134, user17
 ;; @004e                               v26 = load.i64 notrap aligned region2 v134+72
 ;; @0045                               v15 = uextend.i128 v13
 ;; @0045                               v20 = bor v130, v15
 ;;                                     v136 = ushr v20, v5  ; v5 = 64
 ;; @004e                               v25 = ireduce.i64 v136
 ;; @004e                               v27 = icmp eq v26, v25
-;; @004e                               trapz v27, user23
+;; @004e                               trapz v27, user24
 ;; @004e                               v28 = iconst.i64 1
 ;; @004e                               v29 = iadd v26, v28  ; v28 = 1
 ;; @004e                               store notrap aligned region2 v29, v134+72
@@ -219,7 +219,7 @@
 ;; @004e                               jump block6
 ;;
 ;;                                 block7 cold:
-;; @004e                               trap user12
+;; @004e                               trap user13
 ;;
 ;;                                 block8:
 ;; @004e                               v101 = iconst.i64 120

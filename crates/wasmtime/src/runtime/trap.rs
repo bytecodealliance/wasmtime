@@ -114,6 +114,9 @@ pub(crate) fn from_runtime_box(
                 CompiledTrap::GcHeapCorrupt => {
                     bug!("gc heap corruption detected in compiled code").into()
                 }
+                CompiledTrap::MmuInterrupt => {
+                    bug!("mmu-interruption check location was raised as a trap").into()
+                }
             };
 
             // If a fault address was present, for example with segfaults,

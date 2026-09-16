@@ -44,7 +44,7 @@
 ;; @0041                               v7 = load.i64 notrap aligned readonly can_move region2 v0+104
 ;; @0041                               v8 = load.i64 notrap aligned readonly can_move region3 v0+88
 ;; @0041                               call_indirect sig1, v8(v7, v0, v2, v3)  ; v2 = 1, v3 = 2
-;; @0043                               trap user12
+;; @0043                               trap user13
 ;;
 ;;                                 block2:
 ;; @0045                               v9 = load.i64 notrap aligned readonly can_move region2 v0+136

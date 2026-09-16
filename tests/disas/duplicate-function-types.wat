@@ -49,7 +49,7 @@
 ;; @002d                               v12 = iadd v9, v11
 ;; @002d                               v13 = iconst.i64 0
 ;; @002d                               v14 = select_spectre_guard v6, v13, v12  ; v13 = 0
-;; @002d                               v15 = load.i64 user6 aligned region5 v14
+;; @002d                               v15 = load.i64 user7 aligned region5 v14
 ;; @002d                               v16 = iconst.i64 -2
 ;; @002d                               v17 = band v15, v16  ; v16 = -2
 ;; @002d                               brif v15, block3(v17), block2
@@ -63,10 +63,10 @@
 ;;                                 block3(v18: i64):
 ;; @002d                               v22 = load.i64 notrap aligned readonly can_move region6 v0+40
 ;; @002d                               v23 = load.i32 notrap aligned readonly can_move region7 v22
-;; @002d                               v24 = load.i32 user7 aligned readonly region8 v18+16
+;; @002d                               v24 = load.i32 user8 aligned readonly region8 v18+16
 ;; @002d                               v25 = icmp eq v24, v23
 ;; @002d                               v26 = uextend.i32 v25
-;; @002d                               trapz v26, user8
+;; @002d                               trapz v26, user9
 ;; @002d                               v27 = load.i64 notrap aligned readonly region9 v18+8
 ;; @002d                               v28 = load.i64 notrap aligned readonly region10 v18+24
 ;; @002d                               v29 = call_indirect sig0, v27(v28, v0)
@@ -82,7 +82,7 @@
 ;; @0032                               v40 = iadd v37, v39
 ;; @0032                               v41 = iconst.i64 0
 ;; @0032                               v42 = select_spectre_guard v34, v41, v40  ; v41 = 0
-;; @0032                               v43 = load.i64 user6 aligned region5 v42
+;; @0032                               v43 = load.i64 user7 aligned region5 v42
 ;; @0032                               v44 = iconst.i64 -2
 ;; @0032                               v45 = band v43, v44  ; v44 = -2
 ;; @0032                               brif v43, block5(v45), block4
@@ -96,10 +96,10 @@
 ;;                                 block5(v46: i64):
 ;; @0032                               v50 = load.i64 notrap aligned readonly can_move region6 v0+40
 ;; @0032                               v51 = load.i32 notrap aligned readonly can_move region7 v50
-;; @0032                               v52 = load.i32 user7 aligned readonly region8 v46+16
+;; @0032                               v52 = load.i32 user8 aligned readonly region8 v46+16
 ;; @0032                               v53 = icmp eq v52, v51
 ;; @0032                               v54 = uextend.i32 v53
-;; @0032                               trapz v54, user8
+;; @0032                               trapz v54, user9
 ;; @0032                               v55 = load.i64 notrap aligned readonly region9 v46+8
 ;; @0032                               v56 = load.i64 notrap aligned readonly region10 v46+24
 ;; @0032                               v57 = call_indirect sig0, v55(v56, v0)

@@ -65,7 +65,7 @@
 ;; @004b                               v7 = load.i64 notrap aligned readonly can_move region2 v0+56
 ;; @004b                               v8 = iadd v7, v6
 ;; @004b                               v9 = sload16.i64 little region4 v8
-;; @004e                               trap user12
+;; @004e                               trap user13
 ;;
 ;;                                 block6:
 ;; @005d                               v10 = popcnt.i32 v3  ; v3 = 35

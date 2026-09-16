@@ -387,26 +387,32 @@ fn define_control_flow(
             r#"
         Load a pointer-sized value from memory at ``load_ptr`` while also
         keeping ``context`` in a fixed register and reserving a second as
-        scratch space.
+        scratch space. (Which registers these are is ISA-specific; see each
+        backend's ``get_operands`` for the choices and the reasoning behind
+        them.) The address of the load instruction is recorded in the binary's
+        trap table.
 
-        This is intended for implementing MMU-triggered jumps as in
-        `mmu-interruption`, where the load conditionally triggers a
-        segfault, which hands off control to a signal handler for further
-        action. The handler has access to ``context`` (typically the
-        ``VMContext``'s ``vm_store_context``) and can use the second
-        reserved register to store a temp value--like the original return
-        value--as needed on platforms where signal handlers cannot push stack
-        frames.
-
-        Which registers these are is ISA-specific; see each backend's
-        ``get_operands`` for the choices and the reasoning behind them.
+        This aids in implementing virtual-memory-triggered interrupts, with the
+        load trapping if the loaded location is inaccessible. The interrupt
+        handler can then take further action, using the trap table to
+        distinguish uses of this instruction from other interrupts. The handler
+        can receive further arbitrary input in ``context``. It use the second
+        reserved register as scratch space: for example, to record the original
+        resumption address so it can arrange to "return to" a trampoline first,
+        which would ultimately then jump to the original address. (Such
+        gymnastics are necessary on platforms where signal handlers cannot push
+        stack frames.) It is expected that execution will resume at the load,
+        re-executing it; care must be taken to ensure it succeeds the second
+        time, lest the whole process repeat.
         "#,
-            &formats.binary,
+            &formats.int_add_trap,
         )
         .operands_in(vec![
             Operand::new("load_ptr", iAddr).with_doc("memory location to load from"),
             Operand::new("context", iAddr)
                 .with_doc("arbitrary address-sized context to pass to signal handler"),
+            Operand::new("code", &imm.trapcode)
+                .with_doc("trap code to record at the load's address"),
         ])
         // Are we a call? stack_switch calls itself one "as it continues
         // execution elsewhere". See reasoning at

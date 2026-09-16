@@ -9,7 +9,7 @@ use crate::translate::{
 };
 use crate::trap::TranslateTrap;
 use crate::{
-    BuiltinFunctionSignatures, TRAP_ARRAY_OUT_OF_BOUNDS, TRAP_GC_HEAP_CORRUPT,
+    BuiltinFunctionSignatures, TRAP_ARRAY_OUT_OF_BOUNDS, TRAP_GC_HEAP_CORRUPT, TRAP_MMU_INTERRUPT,
     TRAP_TABLE_OUT_OF_BOUNDS,
 };
 use cranelift_codegen::cursor::FuncCursor;
@@ -733,8 +733,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.mmu_interrupt_check(mmu_interrupt_page_ptr, builder);
     }
 
-    /// Codegens a dead load from the MMU-interrupt page, which causes a trap
-    /// if an interrupt is due.
+    /// Codegens a dead load from the MMU-interrupt page, which causes a
+    /// segfault if an interrupt is due. The load's address is recorded in the
+    /// trap table as `TRAP_MMU_INTERRUPT` so the signal handler can recognize
+    /// it.
     fn mmu_interrupt_check(
         &mut self,
         mmu_interrupt_page_ptr: ir::Value,
@@ -743,7 +745,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         let _ = builder
             .ins()
-            .dead_load_with_context(mmu_interrupt_page_ptr, vmctx);
+            .dead_load_with_context(mmu_interrupt_page_ptr, vmctx, TRAP_MMU_INTERRUPT);
     }
 
     #[cfg(feature = "wmemcheck")]

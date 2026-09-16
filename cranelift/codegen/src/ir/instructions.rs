@@ -617,7 +617,7 @@ impl InstructionData {
                 opcode: Opcode::StackSwitch,
                 ..
             }
-            | Self::Binary {
+            | Self::IntAddTrap {
                 opcode: Opcode::DeadLoadWithContext,
                 ..
             } => {

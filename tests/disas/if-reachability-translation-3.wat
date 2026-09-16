@@ -28,7 +28,7 @@
 ;; @001e                               jump block3
 ;;
 ;;                                 block4:
-;; @001f                               trap user12
+;; @001f                               trap user13
 ;;
 ;;                                 block3:
 ;; @0021                               v3 = iconst.i32 0

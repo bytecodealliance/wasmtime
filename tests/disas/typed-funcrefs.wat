@@ -147,7 +147,7 @@
 ;; @0048                               v11 = load.i64 notrap aligned readonly can_move region2 v0+48
 ;;                                     v62 = iconst.i64 8
 ;; @0048                               v14 = iadd v11, v62  ; v62 = 8
-;; @0048                               v17 = load.i64 user6 aligned region3 v14
+;; @0048                               v17 = load.i64 user7 aligned region3 v14
 ;; @0048                               v18 = iconst.i64 -2
 ;; @0048                               v19 = band v17, v18  ; v18 = -2
 ;; @0048                               brif v17, block3(v19), block2
@@ -159,12 +159,12 @@
 ;; @0048                               jump block3(v23)
 ;;
 ;;                                 block3(v20: i64):
-;; @004a                               v24 = load.i64 user16 aligned readonly region4 v20+8
+;; @004a                               v24 = load.i64 user17 aligned readonly region4 v20+8
 ;; @004a                               v25 = load.i64 notrap aligned readonly region5 v20+24
 ;; @004a                               v26 = call_indirect sig1, v24(v25, v0, v2, v3, v4, v5)
 ;;                                     v69 = iconst.i64 16
 ;; @005b                               v40 = iadd.i64 v11, v69  ; v69 = 16
-;; @005b                               v43 = load.i64 user6 aligned region3 v40
+;; @005b                               v43 = load.i64 user7 aligned region3 v40
 ;;                                     v70 = iconst.i64 -2
 ;;                                     v71 = band v43, v70  ; v70 = -2
 ;; @005b                               brif v43, block5(v71), block4
@@ -176,7 +176,7 @@
 ;; @005b                               jump block5(v49)
 ;;
 ;;                                 block5(v46: i64):
-;; @005d                               v50 = load.i64 user16 aligned readonly region4 v46+8
+;; @005d                               v50 = load.i64 user17 aligned readonly region4 v46+8
 ;; @005d                               v51 = load.i64 notrap aligned readonly region5 v46+24
 ;; @005d                               v52 = call_indirect sig1, v50(v51, v0, v2, v3, v4, v5)
 ;; @0066                               jump block1
@@ -205,7 +205,7 @@
 ;; @0075                               v11 = load.i64 notrap aligned readonly can_move region2 v0+48
 ;;                                     v62 = iconst.i64 8
 ;; @0075                               v14 = iadd v11, v62  ; v62 = 8
-;; @0075                               v17 = load.i64 user6 aligned region3 v14
+;; @0075                               v17 = load.i64 user7 aligned region3 v14
 ;; @0075                               v18 = iconst.i64 -2
 ;; @0075                               v19 = band v17, v18  ; v18 = -2
 ;; @0075                               brif v17, block3(v19), block2
@@ -217,12 +217,12 @@
 ;; @0075                               jump block3(v23)
 ;;
 ;;                                 block3(v20: i64):
-;; @0075                               v24 = load.i64 user7 aligned readonly region4 v20+8
+;; @0075                               v24 = load.i64 user8 aligned readonly region4 v20+8
 ;; @0075                               v25 = load.i64 notrap aligned readonly region5 v20+24
 ;; @0075                               v26 = call_indirect sig0, v24(v25, v0, v2, v3, v4, v5)
 ;;                                     v69 = iconst.i64 16
 ;; @0087                               v40 = iadd.i64 v11, v69  ; v69 = 16
-;; @0087                               v43 = load.i64 user6 aligned region3 v40
+;; @0087                               v43 = load.i64 user7 aligned region3 v40
 ;;                                     v70 = iconst.i64 -2
 ;;                                     v71 = band v43, v70  ; v70 = -2
 ;; @0087                               brif v43, block5(v71), block4
@@ -234,7 +234,7 @@
 ;; @0087                               jump block5(v49)
 ;;
 ;;                                 block5(v46: i64):
-;; @0087                               v50 = load.i64 user7 aligned readonly region4 v46+8
+;; @0087                               v50 = load.i64 user8 aligned readonly region4 v46+8
 ;; @0087                               v51 = load.i64 notrap aligned readonly region5 v46+24
 ;; @0087                               v52 = call_indirect sig0, v50(v51, v0, v2, v3, v4, v5)
 ;; @0091                               jump block1
@@ -259,11 +259,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @009e                               v7 = load.i64 notrap aligned region2 v0+64
-;; @00a0                               v8 = load.i64 user16 aligned readonly region3 v7+8
+;; @00a0                               v8 = load.i64 user17 aligned readonly region3 v7+8
 ;; @00a0                               v9 = load.i64 notrap aligned readonly region4 v7+24
 ;; @00a0                               v10 = call_indirect sig0, v8(v9, v0, v2, v3, v4, v5)
 ;; @00af                               v12 = load.i64 notrap aligned region5 v0+80
-;; @00b1                               v13 = load.i64 user16 aligned readonly region3 v12+8
+;; @00b1                               v13 = load.i64 user17 aligned readonly region3 v12+8
 ;; @00b1                               v14 = load.i64 notrap aligned readonly region4 v12+24
 ;; @00b1                               v15 = call_indirect sig0, v13(v14, v0, v2, v3, v4, v5)
 ;; @00ba                               jump block1

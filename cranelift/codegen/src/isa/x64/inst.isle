@@ -196,7 +196,8 @@
 
        (DeadLoadWithContext (dst WritableGpr)
                             (load_ptr Gpr)
-                            (context Gpr))
+                            (context Gpr)
+                            (trap_code TrapCode))
 
        ;; =========================================
        ;; Instructions pertaining to atomic memory accesses.

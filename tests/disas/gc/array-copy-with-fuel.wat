@@ -49,7 +49,7 @@
 ;;
 ;;                                 block3(v89: i64):
 ;;                                     v180 = load.i32 notrap aligned region6 v181
-;; @002b                               trapz v180, user16
+;; @002b                               trapz v180, user17
 ;; @002b                               v24 = load.i64 notrap aligned readonly can_move region3 v7+40
 ;; @002b                               v22 = uextend.i64 v180
 ;; @002b                               v25 = iadd v24, v22
@@ -61,9 +61,9 @@
 ;; @002b                               v34 = iadd v30, v31
 ;; @002b                               v29 = uextend.i64 v28
 ;; @002b                               v35 = icmp ugt v34, v29
-;; @002b                               trapnz v35, user17
+;; @002b                               trapnz v35, user18
 ;;                                     v174 = load.i32 notrap aligned region7 v182
-;; @002b                               trapz v174, user16
+;; @002b                               trapz v174, user17
 ;; @002b                               v46 = uextend.i64 v174
 ;; @002b                               v49 = iadd v24, v46
 ;; @002b                               v51 = iadd v49, v26  ; v26 = 16
@@ -72,7 +72,7 @@
 ;; @002b                               v58 = iadd v54, v31
 ;; @002b                               v53 = uextend.i64 v52
 ;; @002b                               v59 = icmp ugt v58, v53
-;; @002b                               trapnz v59, user17
+;; @002b                               trapnz v59, user18
 ;; @002b                               v78 = load.i64 notrap aligned region4 v7+48
 ;; @002b                               v40 = iconst.i64 20
 ;; @002b                               v41 = iadd v25, v40  ; v40 = 20

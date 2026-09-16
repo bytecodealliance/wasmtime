@@ -42,7 +42,7 @@
 ;; @005c                               jump block3
 ;;
 ;;                                 block4:
-;; @005d                               trap user12
+;; @005d                               trap user13
 ;;
 ;;                                 block3:
 ;; @005f                               jump block1

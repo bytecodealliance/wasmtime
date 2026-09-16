@@ -37,11 +37,11 @@
 ;;                                     v99 = ishl v4, v98  ; v98 = 2
 ;; @001f                               v7 = iconst.i64 32
 ;; @001f                               v8 = ushr v99, v7  ; v7 = 32
-;; @001f                               trapnz v8, user18
+;; @001f                               trapnz v8, user19
 ;; @001f                               v3 = iconst.i32 20
 ;;                                     v105 = iconst.i32 2
 ;;                                     v106 = ishl v2, v105  ; v105 = 2
-;; @001f                               v10 = uadd_overflow_trap v3, v106, user18  ; v3 = 20
+;; @001f                               v10 = uadd_overflow_trap v3, v106, user19  ; v3 = 20
 ;; @001f                               v11 = load.i64 notrap aligned readonly can_move region2 v0+32
 ;; @001f                               v12 = load.i32 notrap aligned region3 v11
 ;; @001f                               v13 = load.i32 notrap aligned region4 v11+4
@@ -93,7 +93,7 @@
 ;; @001f                               v42 = iconst.i64 16
 ;; @001f                               v43 = iadd v41, v42  ; v42 = 16
 ;; @001f                               store.i32 user2 region8 v2, v43
-;; @001f                               trapz v40, user16
+;; @001f                               trapz v40, user17
 ;;                                     v142 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;;                                     v143 = load.i64 notrap aligned readonly can_move region7 v142+40
 ;; @001f                               v46 = uextend.i64 v40
@@ -102,7 +102,7 @@
 ;; @001f                               v52 = load.i32 user2 readonly region8 v51
 ;; @001f                               v53 = uextend.i64 v52
 ;; @001f                               v59 = icmp.i64 ugt v4, v53
-;; @001f                               trapnz v59, user17
+;; @001f                               trapnz v59, user18
 ;; @001f                               v76 = load.i64 notrap aligned region9 v142+48
 ;; @001f                               v64 = iconst.i64 20
 ;; @001f                               v65 = iadd v49, v64  ; v64 = 20

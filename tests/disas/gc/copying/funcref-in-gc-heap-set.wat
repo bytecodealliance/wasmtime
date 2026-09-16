@@ -22,7 +22,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i64):
-;; @0022                               trapz v2, user16
+;; @0022                               trapz v2, user17
 ;; @0022                               v10 = call fn0(v0, v3)
 ;; @0022                               v11 = ireduce.i32 v10
 ;; @0022                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8

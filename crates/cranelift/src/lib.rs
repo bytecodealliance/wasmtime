@@ -50,7 +50,8 @@ use self::compiler::Compiler;
 
 const TRAP_INTERNAL_ASSERT: TrapCode = TrapCode::unwrap_user(1);
 const TRAP_GC_HEAP_CORRUPT: TrapCode = TrapCode::unwrap_user(2);
-const TRAP_OFFSET: u8 = 3;
+const TRAP_MMU_INTERRUPT: TrapCode = TrapCode::unwrap_user(3);
+const TRAP_OFFSET: u8 = 4;
 pub const TRAP_CANNOT_LEAVE_COMPONENT: TrapCode =
     TrapCode::unwrap_user(Trap::CannotLeaveComponent as u8 + TRAP_OFFSET);
 pub const TRAP_INDIRECT_CALL_TO_NULL: TrapCode =
@@ -288,6 +289,7 @@ fn clif_trap_to_env_trap(trap: ir::TrapCode, tunables: &Tunables) -> Option<Comp
                 None
             };
         }
+        TRAP_MMU_INTERRUPT => return Some(CompiledTrap::MmuInterrupt),
 
         other => Trap::from_u8(other.as_raw().get() - TRAP_OFFSET).unwrap(),
     }))

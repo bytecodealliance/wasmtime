@@ -35,7 +35,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0033                               trapz v2, user16
+;; @0033                               trapz v2, user17
 ;; @0033                               v3 = uextend.i64 v2
 ;; @0033                               v4 = iconst.i64 24
 ;; @0033                               v5 = uadd_overflow_trap v3, v4, user2  ; v4 = 24
@@ -67,7 +67,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @003c                               trapz v2, user16
+;; @003c                               trapz v2, user17
 ;; @003c                               v3 = uextend.i64 v2
 ;; @003c                               v4 = iconst.i64 24
 ;; @003c                               v5 = uadd_overflow_trap v3, v4, user2  ; v4 = 24
@@ -100,7 +100,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0045                               trapz v2, user16
+;; @0045                               trapz v2, user17
 ;; @0045                               v3 = uextend.i64 v2
 ;; @0045                               v4 = iconst.i64 24
 ;; @0045                               v5 = uadd_overflow_trap v3, v4, user2  ; v4 = 24
@@ -133,7 +133,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @004e                               trapz v2, user16
+;; @004e                               trapz v2, user17
 ;; @004e                               v3 = uextend.i64 v2
 ;; @004e                               v4 = iconst.i64 24
 ;; @004e                               v5 = uadd_overflow_trap v3, v4, user2  ; v4 = 24

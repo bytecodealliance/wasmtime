@@ -29,7 +29,7 @@
 ;;     v5 = get_return_address.i64 
 ;;     store notrap aligned region2 v5, v3+64
 ;;     v6 = load.i32 notrap aligned region3 v0+32
-;;     trapz v6, user26
+;;     trapz v6, user27
 ;;     v9 = load.i64 notrap aligned readonly region4 v0+8
 ;;     v10 = load.i64 notrap aligned readonly can_move region5 v9+16
 ;;     v7 = iconst.i32 0

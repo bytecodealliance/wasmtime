@@ -1,6 +1,7 @@
 ;;! target = "aarch64"
 ;;! test = "compile"
 ;;! flags = ["-Wmmu-interruption=y"]
+;;! objdump = "--traps"
 
 (module
   (memory 0)
@@ -13,5 +14,6 @@
 ;;       ldr     x4, [x4, #0x10]
 ;;       mov     x0, x2
 ;;       ldr     x9, [x4]
+;;       ╰─╼ trap: MmuInterrupt
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

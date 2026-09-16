@@ -145,14 +145,14 @@
 ;; @0048                               v11 = load.i64 notrap aligned readonly can_move region2 v0+48
 ;;                                     v44 = iconst.i64 8
 ;; @0048                               v14 = iadd v11, v44  ; v44 = 8
-;; @0048                               v17 = load.i64 user6 aligned region3 v14
-;; @004a                               v18 = load.i64 user16 aligned readonly region4 v17+8
+;; @0048                               v17 = load.i64 user7 aligned region3 v14
+;; @004a                               v18 = load.i64 user17 aligned readonly region4 v17+8
 ;; @004a                               v19 = load.i64 notrap aligned readonly region5 v17+24
 ;; @004a                               v20 = call_indirect sig0, v18(v19, v0, v2, v3, v4, v5)
 ;;                                     v51 = iconst.i64 16
 ;; @005b                               v29 = iadd v11, v51  ; v51 = 16
-;; @005b                               v32 = load.i64 user6 aligned region3 v29
-;; @005d                               v33 = load.i64 user16 aligned readonly region4 v32+8
+;; @005b                               v32 = load.i64 user7 aligned region3 v29
+;; @005d                               v33 = load.i64 user17 aligned readonly region4 v32+8
 ;; @005d                               v34 = load.i64 notrap aligned readonly region5 v32+24
 ;; @005d                               v35 = call_indirect sig0, v33(v34, v0, v2, v3, v4, v5)
 ;; @0066                               jump block1
@@ -179,14 +179,14 @@
 ;; @0075                               v11 = load.i64 notrap aligned readonly can_move region2 v0+48
 ;;                                     v44 = iconst.i64 8
 ;; @0075                               v14 = iadd v11, v44  ; v44 = 8
-;; @0075                               v17 = load.i64 user6 aligned region3 v14
-;; @0075                               v18 = load.i64 user7 aligned readonly region4 v17+8
+;; @0075                               v17 = load.i64 user7 aligned region3 v14
+;; @0075                               v18 = load.i64 user8 aligned readonly region4 v17+8
 ;; @0075                               v19 = load.i64 notrap aligned readonly region5 v17+24
 ;; @0075                               v20 = call_indirect sig0, v18(v19, v0, v2, v3, v4, v5)
 ;;                                     v51 = iconst.i64 16
 ;; @0087                               v29 = iadd v11, v51  ; v51 = 16
-;; @0087                               v32 = load.i64 user6 aligned region3 v29
-;; @0087                               v33 = load.i64 user7 aligned readonly region4 v32+8
+;; @0087                               v32 = load.i64 user7 aligned region3 v29
+;; @0087                               v33 = load.i64 user8 aligned readonly region4 v32+8
 ;; @0087                               v34 = load.i64 notrap aligned readonly region5 v32+24
 ;; @0087                               v35 = call_indirect sig0, v33(v34, v0, v2, v3, v4, v5)
 ;; @0091                               jump block1
@@ -211,11 +211,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @009e                               v7 = load.i64 notrap aligned region2 v0+64
-;; @00a0                               v8 = load.i64 user16 aligned readonly region3 v7+8
+;; @00a0                               v8 = load.i64 user17 aligned readonly region3 v7+8
 ;; @00a0                               v9 = load.i64 notrap aligned readonly region4 v7+24
 ;; @00a0                               v10 = call_indirect sig0, v8(v9, v0, v2, v3, v4, v5)
 ;; @00af                               v12 = load.i64 notrap aligned region5 v0+80
-;; @00b1                               v13 = load.i64 user16 aligned readonly region3 v12+8
+;; @00b1                               v13 = load.i64 user17 aligned readonly region3 v12+8
 ;; @00b1                               v14 = load.i64 notrap aligned readonly region4 v12+24
 ;; @00b1                               v15 = call_indirect sig0, v13(v14, v0, v2, v3, v4, v5)
 ;; @00ba                               jump block1

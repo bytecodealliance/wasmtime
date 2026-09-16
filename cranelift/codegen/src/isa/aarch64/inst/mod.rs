@@ -930,6 +930,7 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             dst,
             load_ptr,
             context,
+            trap_code: _,
         } => {
             // `load_ptr` is an ordinary input.
             collector.reg_use(load_ptr);
@@ -2952,11 +2953,12 @@ impl Inst {
                 dst,
                 load_ptr,
                 context,
+                trap_code,
             } => {
                 let dst = pretty_print_reg(dst.to_reg());
                 let load_ptr = pretty_print_reg(load_ptr);
                 let context = pretty_print_reg(context);
-                format!("dead_load_with_context {dst}, {load_ptr}, {context}")
+                format!("dead_load_with_context {dst}, {load_ptr}, {context} #trap={trap_code}")
             }
         }
     }

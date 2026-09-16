@@ -41,9 +41,9 @@ use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
     FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize, HostCall,
-    InliningCompiler, MmuInterruptCheckSection, ModulePC, ModuleStartup, ModuleTranslation,
-    ModuleTypesBuilder, StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel,
-    TripleExt, Tunables, WasmFuncType, WasmValType, prelude::*,
+    InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder,
+    StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables,
+    WasmFuncType, WasmValType, prelude::*,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
@@ -688,7 +688,6 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut stack_maps = StackMapSection::default();
         let mut exception_tables = ExceptionTableBuilder::default();
         let mut frame_tables = FrameTableBuilder::default();
-        let mut mmu_interrupt_checks = MmuInterruptCheckSection::default();
 
         let funcs = funcs
             .iter()
@@ -760,9 +759,6 @@ impl wasmtime_environ::Compiler for Compiler {
                 )?;
                 nop_units.get_or_insert_with(|| func.buffer.nop_units.clone());
             }
-            if self.tunables.mmu_interruption {
-                mmu_interrupt_checks.push(range.clone(), &func.buffer.mmu_interrupt_checks);
-            }
             builder.append_padding(self.linkopts.padding_between_functions);
 
             let info = FunctionLoc {
@@ -809,9 +805,6 @@ impl wasmtime_environ::Compiler for Compiler {
         }
         stack_maps.append_to(obj);
         traps.append_to(obj);
-        if self.tunables.mmu_interruption {
-            mmu_interrupt_checks.append_to(obj);
-        }
 
         let exception_section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),

@@ -31,7 +31,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: f32):
-;; @0034                               trapz v2, user16
+;; @0034                               trapz v2, user17
 ;; @0034                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0034                               v6 = load.i64 notrap aligned readonly can_move region2 v5+40
 ;; @0034                               v4 = uextend.i64 v2
@@ -57,7 +57,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @003f                               trapz v2, user16
+;; @003f                               trapz v2, user17
 ;; @003f                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @003f                               v6 = load.i64 notrap aligned readonly can_move region2 v5+40
 ;; @003f                               v4 = uextend.i64 v2
@@ -83,7 +83,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @004a                               trapz v2, user16
+;; @004a                               trapz v2, user17
 ;; @004a                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @004a                               v6 = load.i64 notrap aligned readonly can_move region2 v5+40
 ;; @004a                               v4 = uextend.i64 v2

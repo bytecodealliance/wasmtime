@@ -30,7 +30,7 @@
 ;; @002a                               brif v5, block2, block4
 ;;
 ;;                                 block2:
-;; @002c                               trap user12
+;; @002c                               trap user13
 ;;
 ;;                                 block4:
 ;; @002e                               v6 = iconst.i32 6

@@ -50,7 +50,7 @@
 ;;     v11 = uextend.i64 v10
 ;;     v39 = iconst.i64 10
 ;;     v51 = icmp ult v11, v39  ; v39 = 10
-;;     trapnz v51, user6
+;;     trapnz v51, user7
 ;;     v18 = load.i64 notrap aligned region0 v0+48
 ;;     v3 = iconst.i32 1
 ;;     v81 = iconst.i64 36

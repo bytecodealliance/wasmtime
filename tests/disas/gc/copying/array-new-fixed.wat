@@ -71,14 +71,14 @@
 ;; @0025                               v45 = iconst.i64 16
 ;; @0025                               v46 = iadd v44, v45  ; v45 = 16
 ;; @0025                               store user2 region8 v5, v46  ; v5 = 3
-;; @0025                               trapz v43, user16
+;; @0025                               trapz v43, user17
 ;;                                     v248 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;;                                     v249 = load.i64 notrap aligned readonly can_move region7 v248+40
 ;; @0025                               v48 = uextend.i64 v43
 ;; @0025                               v51 = iadd v249, v48
 ;; @0025                               v53 = iadd v51, v45  ; v45 = 16
 ;; @0025                               v54 = load.i32 user2 readonly region8 v53
-;; @0025                               trapz v54, user17
+;; @0025                               trapz v54, user18
 ;; @0025                               v57 = uextend.i64 v54
 ;;                                     v131 = iconst.i64 3
 ;;                                     v162 = ishl v57, v131  ; v131 = 3
@@ -98,7 +98,7 @@
 ;; @0025                               v82 = load.i32 user2 readonly region8 v53
 ;; @0025                               v75 = iconst.i32 1
 ;;                                     v185 = icmp ugt v82, v75  ; v75 = 1
-;; @0025                               trapz v185, user17
+;; @0025                               trapz v185, user18
 ;; @0025                               v85 = uextend.i64 v82
 ;;                                     v188 = ishl v85, v131  ; v131 = 3
 ;; @0025                               v88 = ushr v188, v10  ; v10 = 32
@@ -116,7 +116,7 @@
 ;; @0025                               v110 = load.i32 user2 readonly region8 v53
 ;; @0025                               v103 = iconst.i32 2
 ;;                                     v211 = icmp ugt v110, v103  ; v103 = 2
-;; @0025                               trapz v211, user17
+;; @0025                               trapz v211, user18
 ;; @0025                               v113 = uextend.i64 v110
 ;;                                     v214 = ishl v113, v131  ; v131 = 3
 ;; @0025                               v116 = ushr v214, v10  ; v10 = 32

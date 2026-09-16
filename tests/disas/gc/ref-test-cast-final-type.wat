@@ -98,7 +98,7 @@
 ;; @002c                               jump block4(v20)
 ;;
 ;;                                 block4(v21: i32):
-;; @002c                               trapz v21, user19
+;; @002c                               trapz v21, user20
 ;; @002f                               jump block1
 ;;
 ;;                                 block1:

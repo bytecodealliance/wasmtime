@@ -22,5 +22,5 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0019                               trap user12
+;; @0019                               trap user13
 ;; }

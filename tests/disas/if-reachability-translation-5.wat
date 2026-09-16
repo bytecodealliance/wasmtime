@@ -30,10 +30,10 @@
 ;; @0020                               brif.i32 v3, block3, block4
 ;;
 ;;                                 block4:
-;; @0022                               trap user12
+;; @0022                               trap user13
 ;;
 ;;                                 block5:
-;; @0024                               trap user12
+;; @0024                               trap user13
 ;;
 ;;                                 block3:
 ;; @0026                               v4 = iconst.i32 0

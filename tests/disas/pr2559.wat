@@ -88,7 +88,7 @@
 ;; @0044                               v19 = iconst.i32 87
 ;; @0047                               v20 = bitcast.i8x16 little v12
 ;; @0047                               v21 = select.i8x16 v19, v5, v20  ; v19 = 87
-;; @0048                               trap user12
+;; @0048                               trap user13
 ;;
 ;;                                 block1(v24: i8x16):
 ;; @0055                               return v2, v5, v24
@@ -130,7 +130,7 @@
 ;; @006e                               v19 = iconst.i32 87
 ;; @0071                               v20 = bitcast.i8x16 little v12
 ;; @0071                               v21 = select.i8x16 v19, v5, v20  ; v19 = 87
-;; @0074                               trap user12
+;; @0074                               trap user13
 ;;
 ;;                                 block1(v24: i8x16):
 ;; @0081                               return v2, v5, v24

@@ -46,7 +46,7 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @003a                               v2 = iconst.i32 1
 ;; @003a                               v3 = call fn0(v0, v2)  ; v2 = 1
-;; @003c                               trapz v3, user16
+;; @003c                               trapz v3, user17
 ;; @003c                               v4 = iconst.i32 1
 ;; @003c                               v5 = iconst.i32 0
 ;; @003c                               v6 = call fn1(v0, v3, v4, v5)  ; v4 = 1, v5 = 0
@@ -62,10 +62,10 @@
 ;; @003e                               v16 = uextend.i128 v15  ; v15 = 64
 ;; @003e                               v17 = ushr v13, v16
 ;; @003e                               v18 = ireduce.i64 v17
-;; @003e                               trapz v14, user16
+;; @003e                               trapz v14, user17
 ;; @003e                               v19 = load.i64 notrap aligned region2 v14+72
 ;; @003e                               v20 = icmp eq v19, v18
-;; @003e                               trapz v20, user23
+;; @003e                               trapz v20, user24
 ;; @003e                               v21 = iconst.i64 1
 ;; @003e                               v22 = iadd v19, v21  ; v21 = 1
 ;; @003e                               store notrap aligned region2 v22, v14+72
@@ -107,7 +107,7 @@
 ;; @003e                               brif v46, block6, block4(v48)
 ;;
 ;;                                 block7 cold:
-;; @003e                               trap user22
+;; @003e                               trap user23
 ;;
 ;;                                 block6:
 ;; @003e                               store.i64 notrap aligned region2 v29, v27+64
@@ -270,7 +270,7 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0047                               v2 = iconst.i32 0
 ;; @0047                               v3 = call fn0(v0, v2)  ; v2 = 0
-;; @0049                               trapz v3, user16
+;; @0049                               trapz v3, user17
 ;; @0049                               v4 = iconst.i32 0
 ;; @0049                               v5 = iconst.i32 0
 ;; @0049                               v6 = call fn1(v0, v3, v4, v5)  ; v4 = 0, v5 = 0
@@ -289,10 +289,10 @@
 ;; @004b                               v16 = uextend.i128 v15  ; v15 = 64
 ;; @004b                               v17 = ushr.i128 v13, v16
 ;; @004b                               v18 = ireduce.i64 v17
-;; @004b                               trapz v14, user16
+;; @004b                               trapz v14, user17
 ;; @004b                               v19 = load.i64 notrap aligned region2 v14+72
 ;; @004b                               v20 = icmp eq v19, v18
-;; @004b                               trapz v20, user23
+;; @004b                               trapz v20, user24
 ;; @004b                               v21 = iconst.i64 1
 ;; @004b                               v22 = iadd v19, v21  ; v21 = 1
 ;; @004b                               store notrap aligned region2 v22, v14+72
@@ -399,7 +399,7 @@
 ;; @004b                               jump block5
 ;;
 ;;                                 block6 cold:
-;; @004b                               trap user12
+;; @004b                               trap user13
 ;;
 ;;                                 block5:
 ;; @004b                               br_table v86, block6, []

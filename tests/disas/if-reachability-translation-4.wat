@@ -25,8 +25,8 @@
 ;; @001b                               brif v2, block2, block4
 ;;
 ;;                                 block2:
-;; @001d                               trap user12
+;; @001d                               trap user13
 ;;
 ;;                                 block4:
-;; @001f                               trap user12
+;; @001f                               trap user13
 ;; }

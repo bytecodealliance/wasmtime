@@ -36,7 +36,7 @@
 ;; @0054                               v9 = iadd v6, v8
 ;; @0054                               v10 = iconst.i64 0
 ;; @0054                               v11 = select_spectre_guard v4, v10, v9  ; v10 = 0
-;; @0054                               v12 = load.i32 user6 aligned region3 v11
+;; @0054                               v12 = load.i32 user7 aligned region3 v11
 ;; @0056                               jump block1
 ;;
 ;;                                 block1:
@@ -63,7 +63,7 @@
 ;; @005b                               v9 = iadd v6, v8
 ;; @005b                               v10 = iconst.i64 0
 ;; @005b                               v11 = select_spectre_guard v4, v10, v9  ; v10 = 0
-;; @005b                               v12 = load.i32 user6 aligned region3 v11
+;; @005b                               v12 = load.i32 user7 aligned region3 v11
 ;; @005d                               jump block1
 ;;
 ;;                                 block1:

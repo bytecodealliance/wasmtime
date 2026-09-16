@@ -676,11 +676,12 @@ impl PrettyPrint for Inst {
                 dst,
                 load_ptr,
                 context,
+                trap_code,
             } => {
                 let dst = pretty_print_reg(*dst.to_reg(), 8);
                 let load_ptr = pretty_print_reg(**load_ptr, 8);
                 let context = pretty_print_reg(**context, 8);
-                format!("dead_load_with_context {dst}, {load_ptr}, {context}")
+                format!("dead_load_with_context {dst}, {load_ptr}, {context} #trap={trap_code}")
             }
 
             Inst::JmpKnown { dst } => {
@@ -1067,20 +1068,27 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             dst,
             load_ptr,
             context,
+            trap_code: _,
         } => {
             // load_ptr is an input param.
             collector.reg_use(load_ptr);
             // Demand context (vmctx) go into RDI.
             collector.reg_fixed_use(context, regs::rdi());
-            // Reserve r10 as a place for the signal handler to stow the return
-            // address (which we're overwriting with that of the epoch-ending
-            // stub). Picking r10 because it's caller-saved and not used for arg
-            // passing in Linux/x64. It is used as "a static chain pointer
-            // in case of nested functions" according to SystemV, but that's
-            // inapplicable to compiled Wasm code. It is also used to store the
-            // function stack limit in Cranelift, but the stack-limit check is
-            // over by the time we need r10, in the case of the use of this
-            // instruction for MMU-based epoch interruption.
+            // Reserve r10 as a place for the signal handler to stow the
+            // original resume address. This allows the handler to twiddle saved
+            // machine state to return to a custom trampoline when it exits,
+            // allowing it to accomplish things that are unsafe at interrupt
+            // time. The trampoline can jump to the address in r10 when done to
+            // resume.
+            //
+            // r10 is chosen because it is caller-saved and not used for
+            // arg passing in Linux/x64. It is used as "a static chain pointer
+            // in case of nested functions" according to SystemV, but Cranelift
+            // does not emit those. (Do take care if you are interacting with
+            // external ones.) It is also used to store the function stack limit
+            // in Cranelift, but the stack-limit check is confined to the
+            // function prologue and thus over by the time this instruction is
+            // used.
             //
             // Also def it so we can use it as the destination of the dead load
             // rather than consuming another arbitrary reg.

@@ -1101,6 +1101,9 @@ fn trap(_store: &mut dyn VMStore, _instance: InstanceId, code: u8) -> Result<Inf
         CompiledTrap::Normal(trap) => Err(trap.into()),
         CompiledTrap::InternalAssert => bail_bug!("internal assert hit in wasm"),
         CompiledTrap::GcHeapCorrupt => bail_bug!("GC heap corruption detected"),
+        CompiledTrap::MmuInterrupt => {
+            bail_bug!("mmu-interruption check location was raised as a trap")
+        }
     }
 }
 
