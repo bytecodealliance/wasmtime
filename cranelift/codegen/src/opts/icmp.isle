@@ -558,7 +558,6 @@
       (if-let true (i64_gt limit 0))
       (ult rty x n))
 
-;; x %s 2^k == 0 --> (x & (2^k - 1)) == 0.
 ;; x == ((x + (y >>u (B - k))) & -2^k) --> (x & (2^k - 1)) == 0.
 (rule (simplify (eq rty x
                    (band (ty_int ty)
