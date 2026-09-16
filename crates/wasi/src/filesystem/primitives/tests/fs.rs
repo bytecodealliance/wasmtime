@@ -598,8 +598,10 @@ fn file_test_directoryinfo_readdir() {
         let msg = msg_str.as_bytes();
         check!(w.write(msg));
     }
-    let dir_handle = check!(p::open_dir(&start, dir.as_ref()));
-    let files = check!(p::read_dir(&dir_handle));
+    let files = {
+        let dir_handle = check!(p::open_dir(&start, dir.as_ref()));
+        check!(p::read_dir(&dir_handle))
+    };
     let mut mem = [0; 4];
     for f in files {
         let (f, _ty) = f.unwrap();
