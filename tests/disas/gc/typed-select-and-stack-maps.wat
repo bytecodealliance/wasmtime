@@ -45,7 +45,7 @@
 ;;     region1 = 160 ""
 ;;     region2 = 25 ""
 ;;     region3 = 68 ""
-;;     region4 = 232 ""
+;;     region4 = 135 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

@@ -1,7 +1,7 @@
 mod gc;
 pub(crate) mod stack_switching;
 
-use crate::alias_region::AliasRegions;
+use crate::alias_region::{AliasRegions, GcAccess};
 use crate::compiler::Compiler;
 use crate::translate::{
     FuncTranslationStacks, Heap, HeapData, MemoryKind, StructFieldsVec, TableData, TableSize,
@@ -498,7 +498,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         match entity {
             CheckedEntity::Memory(index) => self.memory_alias_region(func, index),
             CheckedEntity::Table { table, .. } => self.table_alias_region(func, table),
-            CheckedEntity::Array { .. } => self.alias_regions.gc_heap_region(func),
+            CheckedEntity::Array { ty, .. } => self.alias_regions.gc_access_region(
+                func,
+                self.types,
+                GcAccess::ArrayElements { ty },
+            ),
             CheckedEntity::Elem(_) => self.alias_regions.element_segment_region(func),
             CheckedEntity::Data { .. } | CheckedEntity::RuntimeData(_) => {
                 self.alias_regions.data_segment_region(func)
@@ -3960,9 +3964,14 @@ impl FuncEnvironment<'_> {
                     initialized,
                 )?
             }
-            CheckedEntity::Array { initialized, .. } => {
+            CheckedEntity::Array {
+                initialized, ty, ..
+            } => {
+                let access = GcAccess::ArrayElements { ty };
                 if is_pre_interned_funcref {
-                    let region = self.alias_regions.gc_heap_region(builder.func);
+                    let region =
+                        self.alias_regions
+                            .gc_access_region(builder.func, self.types, access);
                     builder.ins().store(
                         ir::MemFlagsData::trusted()
                             .with_endianness(Endianness::Little)
@@ -3972,9 +3981,9 @@ impl FuncEnvironment<'_> {
                         0,
                     );
                 } else if initialized {
-                    gc::write_field_at_addr(self, builder, elem_ty, elem_addr, value)?
+                    gc::write_field_at_addr(self, builder, elem_ty, elem_addr, access, value)?
                 } else {
-                    gc::init_field_at_addr(self, builder, elem_ty, elem_addr, value)?
+                    gc::init_field_at_addr(self, builder, elem_ty, elem_addr, access, value)?
                 }
             }
             _ => unreachable!(),
@@ -4594,10 +4603,19 @@ impl FuncEnvironment<'_> {
                         assert!(initialized);
                         this.translate_table_get(builder, table, src_index)?
                     }
-                    CheckedEntity::Array { initialized, .. } => {
+                    CheckedEntity::Array {
+                        initialized, ty, ..
+                    } => {
                         assert!(initialized);
                         let read_ty = src_entity.storage_type(this);
-                        gc::read_field_at_addr(this, builder, read_ty, src, None)?
+                        gc::read_field_at_addr(
+                            this,
+                            builder,
+                            read_ty,
+                            src,
+                            GcAccess::ArrayElements { ty },
+                            None,
+                        )?
                     }
                     CheckedEntity::Elem(_) => {
                         let WasmStorageType::Val(WasmValType::Ref(ty)) = write_ty else {
@@ -4636,11 +4654,14 @@ impl FuncEnvironment<'_> {
                             initialized,
                         )?;
                     }
-                    CheckedEntity::Array { initialized, .. } => {
+                    CheckedEntity::Array {
+                        initialized, ty, ..
+                    } => {
+                        let access = GcAccess::ArrayElements { ty };
                         if initialized {
-                            gc::write_field_at_addr(this, builder, write_ty, dst, val)?
+                            gc::write_field_at_addr(this, builder, write_ty, dst, access, val)?
                         } else {
-                            gc::init_field_at_addr(this, builder, write_ty, dst, val)?
+                            gc::init_field_at_addr(this, builder, write_ty, dst, access, val)?
                         }
                     }
                     CheckedEntity::Memory(_)

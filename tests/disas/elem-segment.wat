@@ -44,7 +44,7 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
-;;     region0 = 191 ""
+;;     region0 = 116 ""
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     sig1 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u805306368:4 sig0

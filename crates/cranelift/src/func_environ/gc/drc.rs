@@ -432,6 +432,7 @@ impl GcCompiler for DrcCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             instance_id_addr,
+            GcAccess::Header,
             instance_id,
         )?;
         let tag_addr = builder
@@ -442,6 +443,7 @@ impl GcCompiler for DrcCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             tag_addr,
+            GcAccess::Header,
             tag,
         )?;
 
@@ -909,6 +911,7 @@ impl GcCompiler for DrcCompiler {
         builder: &mut FunctionBuilder<'_>,
         ty: WasmStorageType,
         field_addr: ir::Value,
+        access: GcAccess,
         val: ir::Value,
     ) -> WasmResult<()> {
         if let WasmStorageType::Val(WasmValType::Ref(r)) = ty
@@ -916,12 +919,12 @@ impl GcCompiler for DrcCompiler {
         {
             // Data inside GC objects is always little endian.
             let flags = func_env
-                .gc_memflags(&mut builder.func)
+                .gc_memflags_for(&mut builder.func, access)
                 .with_endianness(ir::Endianness::Little);
             return self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags);
         }
 
-        write_field_at_addr(func_env, builder, ty, field_addr, val)?;
+        write_field_at_addr(func_env, builder, ty, field_addr, access, val)?;
 
         Ok(())
     }

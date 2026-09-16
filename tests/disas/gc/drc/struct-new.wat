@@ -18,9 +18,12 @@
 ;;     region2 = 130 ""
 ;;     region3 = 6 ""
 ;;     region4 = 196 ""
-;;     region5 = 108 ""
-;;     region6 = 206 ""
-;;     region7 = 232 ""
+;;     region5 = 147 ""
+;;     region6 = 225 ""
+;;     region7 = 152 ""
+;;     region8 = 206 ""
+;;     region9 = 108 ""
+;;     region10 = 135 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -30,7 +33,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: f32, v3: i32, v4: i32):
 ;;                                     v52 = stack_addr.i64 ss0
-;;                                     store notrap aligned region7 v4, v52
+;;                                     store notrap aligned region10 v4, v52
 ;; @002a                               v6 = iconst.i32 -1342177280
 ;; @002a                               v7 = load.i64 notrap aligned readonly can_move region2 v0+40
 ;; @002a                               v8 = load.i32 notrap aligned readonly can_move region3 v7
@@ -46,8 +49,8 @@
 ;; @002a                               store user2 little region5 v2, v16
 ;; @002a                               v17 = iconst.i64 28
 ;; @002a                               v18 = iadd v14, v17  ; v17 = 28
-;; @002a                               istore8 user2 little region5 v3, v18
-;;                                     v51 = load.i32 notrap aligned region7 v52
+;; @002a                               istore8 user2 little region6 v3, v18
+;;                                     v51 = load.i32 notrap aligned region10 v52
 ;; @002a                               v21 = iconst.i32 1
 ;; @002a                               v22 = band v51, v21  ; v21 = 1
 ;; @002a                               v23 = iconst.i32 0
@@ -61,16 +64,16 @@
 ;; @002a                               v30 = iadd.i64 v12, v27
 ;; @002a                               v31 = iconst.i64 8
 ;; @002a                               v32 = iadd v30, v31  ; v31 = 8
-;; @002a                               v33 = load.i64 user2 region5 v32
+;; @002a                               v33 = load.i64 user2 region9 v32
 ;; @002a                               v34 = iconst.i64 1
 ;; @002a                               v35 = iadd v33, v34  ; v34 = 1
-;; @002a                               store user2 region5 v35, v32
+;; @002a                               store user2 region9 v35, v32
 ;; @002a                               jump block3
 ;;
 ;;                                 block3:
 ;; @002a                               v19 = iconst.i64 32
 ;; @002a                               v20 = iadd.i64 v14, v19  ; v19 = 32
-;; @002a                               store.i32 user2 little region5 v51, v20
+;; @002a                               store.i32 user2 little region7 v51, v20
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:

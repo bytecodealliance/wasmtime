@@ -19,6 +19,7 @@
 ;;     region6 = 130 ""
 ;;     region7 = 6 ""
 ;;     region8 = 108 ""
+;;     region9 = 147 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -58,7 +59,7 @@
 ;; @0020                               v32 = ireduce.i32 v31
 ;; @0020                               v29 = iconst.i64 8
 ;; @0020                               v30 = iadd v24, v29  ; v29 = 8
-;; @0020                               store user2 little region8 v32, v30
+;; @0020                               store user2 little region9 v32, v30
 ;; @0023                               jump block1
 ;;
 ;;                                 block3 cold:
