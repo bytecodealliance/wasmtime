@@ -290,7 +290,9 @@ fn emit_gc_kind_assert(
             object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
         },
     );
-    let flags = func_env.gc_memflags(&mut builder.func).with_readonly();
+    let flags = func_env
+        .gc_header_memflags(&mut builder.func)
+        .with_readonly();
     let kind_and_reserved_bits = builder.ins().load(ir::types::I32, flags, kind_addr, 0);
     let kind_mask = builder
         .ins()
@@ -1040,7 +1042,9 @@ pub fn translate_array_len(
             access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
         },
     );
-    let flags = func_env.gc_memflags(&mut builder.func).with_readonly();
+    let flags = func_env
+        .gc_header_memflags(&mut builder.func)
+        .with_readonly();
     let result = builder.ins().load(ir::types::I32, flags, len_field, 0);
     log::trace!("translate_array_len(..) -> {result:?}");
     Ok(result)
@@ -1370,7 +1374,7 @@ pub fn translate_ref_test(
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
             },
         );
-        let gc_memflags = func_env.gc_memflags(&mut builder.func);
+        let gc_memflags = func_env.gc_header_memflags(&mut builder.func);
         let actual_kind =
             builder
                 .ins()
@@ -1452,7 +1456,7 @@ pub fn translate_ref_test(
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
             );
-            let gc_memflags = func_env.gc_memflags(&mut builder.func);
+            let gc_memflags = func_env.gc_header_memflags(&mut builder.func);
             let actual_shared_ty =
                 builder
                     .ins()
@@ -1627,19 +1631,19 @@ fn initialize_struct_fields(
 }
 
 impl FuncEnvironment<'_> {
-    /// Flags to use for GC loads/stores of non-payload bytes; payloads use
-    /// [`Self::gc_memflags_for`] for a more precise alias region.
+    /// Flags to use for GC loads/stores of non-field/element bytes;
+    /// fields/elements use `gc_memflags_for`.
     ///
     /// This is used for accesses to the GC heap which aren't expected to trap, but
     /// retain internal assertion metadata to report if such a trap happens. This
     /// is here to ensure that in the face of heap corruption that there's no
     /// possible UB within Cranelift and/or the runtime.
-    fn gc_memflags(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
+    fn gc_header_memflags(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
         self.gc_memflags_for(func, GcAccess::Header)
     }
 
-    /// Like [`Self::gc_memflags`], but for an access of the given part of a GC
-    /// object, which gets its own alias region.
+    /// Like `gc_memflags`, but for an access of the given part of a GC object,
+    /// which gets its own alias region.
     fn gc_memflags_for(&mut self, func: &mut ir::Function, access: GcAccess) -> ir::MemFlagsData {
         let region = self
             .alias_regions

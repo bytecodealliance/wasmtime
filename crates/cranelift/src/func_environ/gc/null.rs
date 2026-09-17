@@ -157,7 +157,7 @@ impl NullCompiler {
                 i64::from(VMSharedTypeIndex::reserved_value().as_bits()),
             ),
         };
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(
             flags,
             kind_and_size,
@@ -228,7 +228,7 @@ impl GcCompiler for NullCompiler {
         let len_addr = builder
             .ins()
             .iadd_imm_s(ptr_to_object, i64::from(len_offset));
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(flags, len, len_addr, 0);
 
         Ok(gc_ref)

@@ -172,7 +172,7 @@ impl CopyingCompiler {
 
             // These header writes target the GC heap, so tag them with the
             // GC-heap region (like the null collector does).
-            let header_flags = func_env.gc_memflags(&mut builder.func);
+            let header_flags = func_env.gc_header_memflags(&mut builder.func);
 
             // Write `VMGcHeader::kind` with inline trace info bits included.
             let kind_val = builder
@@ -255,7 +255,7 @@ impl GcCompiler for CopyingCompiler {
             reserved_bits,
         )?;
         let len_addr = builder.ins().iadd_imm_s(object_addr, i64::from(len_offset));
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(flags, len, len_addr, 0);
 
         Ok(array_ref)
