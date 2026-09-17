@@ -157,7 +157,7 @@ impl NullCompiler {
                 i64::from(VMSharedTypeIndex::reserved_value().as_bits()),
             ),
         };
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(
             flags,
             kind_and_size,
@@ -228,7 +228,7 @@ impl GcCompiler for NullCompiler {
         let len_addr = builder
             .ins()
             .iadd_imm_s(ptr_to_object, i64::from(len_offset));
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(flags, len, len_addr, 0);
 
         Ok(gc_ref)
@@ -337,6 +337,7 @@ impl GcCompiler for NullCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             instance_id_addr,
+            GcAccess::Header,
             instance_id,
         )?;
         let tag_addr = builder
@@ -347,6 +348,7 @@ impl GcCompiler for NullCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             tag_addr,
+            GcAccess::Header,
             tag,
         )?;
 
@@ -396,8 +398,9 @@ impl GcCompiler for NullCompiler {
         builder: &mut FunctionBuilder<'_>,
         ty: WasmStorageType,
         field_addr: ir::Value,
+        access: GcAccess,
         val: ir::Value,
     ) -> WasmResult<()> {
-        write_field_at_addr(func_env, builder, ty, field_addr, val)
+        write_field_at_addr(func_env, builder, ty, field_addr, access, val)
     }
 }

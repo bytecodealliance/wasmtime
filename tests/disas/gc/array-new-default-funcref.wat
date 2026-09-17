@@ -21,7 +21,8 @@
 ;;     region7 = 196 ""
 ;;     region8 = 108 ""
 ;;     region9 = 206 ""
-;;     region10 = 232 ""
+;;     region10 = 5 ""
+;;     region11 = 135 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -89,7 +90,7 @@
 ;;
 ;;                                 block4(v40: i32, v41: i64):
 ;;                                     v97 = stack_addr.i64 ss0
-;;                                     store notrap aligned region10 v40, v97
+;;                                     store notrap aligned region11 v40, v97
 ;; @001f                               v42 = iconst.i64 16
 ;; @001f                               v43 = iadd v41, v42  ; v42 = 16
 ;; @001f                               store.i32 user2 region8 v2, v43
@@ -119,7 +120,7 @@
 ;; @001f                               brif v84, block6, block5(v65)
 ;;
 ;;                                 block5(v85: i64):
-;; @001f                               store.i32 notrap aligned little region8 v81, v85
+;; @001f                               store.i32 notrap aligned little region10 v81, v85
 ;;                                     v144 = iconst.i64 4
 ;;                                     v145 = iadd v85, v144  ; v144 = 4
 ;; @001f                               v88 = icmp eq v145, v82
@@ -129,6 +130,6 @@
 ;; @0022                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v90 = load.i32 notrap aligned region10 v97
+;;                                     v90 = load.i32 notrap aligned region11 v97
 ;; @0022                               return v90
 ;; }

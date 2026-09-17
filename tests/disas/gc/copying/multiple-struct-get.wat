@@ -15,7 +15,8 @@
 ;;     region1 = 160 ""
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
-;;     region4 = 108 ""
+;;     region4 = 147 ""
+;;     region5 = 225 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -32,7 +33,7 @@
 ;; @0023                               v9 = load.f32 user2 little region4 v8
 ;; @0029                               v14 = iconst.i64 20
 ;; @0029                               v15 = iadd v6, v14  ; v14 = 20
-;; @0029                               v16 = load.i8 user2 little region4 v15
+;; @0029                               v16 = load.i8 user2 little region5 v15
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:

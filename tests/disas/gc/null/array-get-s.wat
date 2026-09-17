@@ -15,6 +15,7 @@
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
 ;;     region4 = 108 ""
+;;     region5 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -44,7 +45,7 @@
 ;; @0022                               v28 = isub v19, v22
 ;; @0022                               v29 = uextend.i64 v28
 ;; @0022                               v30 = isub v27, v29
-;; @0022                               v31 = load.i8 user2 little region4 v30
+;; @0022                               v31 = load.i8 user2 little region5 v30
 ;; @0025                               jump block1
 ;;
 ;;                                 block1:

@@ -21,6 +21,7 @@
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
 ;;     region4 = 108 ""
+;;     region5 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -68,12 +69,12 @@
 ;; @002a                               v72 = uadd_overflow_trap v54, v90, user2  ; v90 = 28
 ;; @002a                               v73 = icmp ugt v72, v64
 ;; @002a                               trapnz v73, user2
-;; @002a                               v74 = load.i8x16 notrap aligned little region4 v54
-;; @002a                               v75 = load.i64 notrap aligned little region4 v54+16
-;; @002a                               v76 = load.i32 notrap aligned little region4 v54+24
-;; @002a                               store notrap aligned little region4 v74, v30
-;; @002a                               store notrap aligned little region4 v75, v30+16
-;; @002a                               store notrap aligned little region4 v76, v30+24
+;; @002a                               v74 = load.i8x16 notrap aligned little region5 v54
+;; @002a                               v75 = load.i64 notrap aligned little region5 v54+16
+;; @002a                               v76 = load.i32 notrap aligned little region5 v54+24
+;; @002a                               store notrap aligned little region5 v74, v30
+;; @002a                               store notrap aligned little region5 v75, v30+16
+;; @002a                               store notrap aligned little region5 v76, v30+24
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:

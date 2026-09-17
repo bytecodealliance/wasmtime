@@ -23,6 +23,7 @@
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
 ;;     region4 = 108 ""
+;;     region5 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -61,7 +62,7 @@
 ;; @0030                               brif v42, block3, block2(v29)
 ;;
 ;;                                 block2(v43: i64):
-;; @0030                               store.i32 user2 little region4 v4, v43
+;; @0030                               store.i32 user2 little region5 v4, v43
 ;;                                     v54 = iconst.i64 4
 ;;                                     v55 = iadd v43, v54  ; v54 = 4
 ;; @0030                               v46 = icmp eq v55, v40
@@ -80,6 +81,7 @@
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
 ;;     region4 = 108 ""
+;;     region5 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -120,7 +122,7 @@
 ;;
 ;;                                 block2(v43: i64):
 ;;                                     v54 = iconst.i32 0
-;; @003e                               store user2 little region4 v54, v43  ; v54 = 0
+;; @003e                               store user2 little region5 v54, v43  ; v54 = 0
 ;;                                     v55 = iconst.i64 4
 ;;                                     v56 = iadd v43, v55  ; v55 = 4
 ;; @003e                               v46 = icmp eq v56, v40
@@ -139,6 +141,7 @@
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
 ;;     region4 = 108 ""
+;;     region5 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -179,7 +182,7 @@
 ;;
 ;;                                 block2(v47: i64):
 ;;                                     v64 = iconst.i32 -1
-;; @004e                               store user2 little region4 v64, v47  ; v64 = -1
+;; @004e                               store user2 little region5 v64, v47  ; v64 = -1
 ;;                                     v65 = iconst.i64 4
 ;;                                     v66 = iadd v47, v65  ; v65 = 4
 ;; @004e                               v50 = icmp eq v66, v44

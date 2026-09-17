@@ -21,7 +21,10 @@
 ;;     region6 = 6 ""
 ;;     region7 = 196 ""
 ;;     region8 = 108 ""
-;;     region9 = 232 ""
+;;     region9 = 147 ""
+;;     region10 = 225 ""
+;;     region11 = 152 ""
+;;     region12 = 135 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -31,7 +34,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: f32, v3: i32, v4: i32):
 ;;                                     v45 = stack_addr.i64 ss0
-;;                                     store notrap aligned region9 v4, v45
+;;                                     store notrap aligned region12 v4, v45
 ;; @002a                               v6 = load.i64 notrap aligned readonly can_move region2 v0+32
 ;; @002a                               v7 = load.i32 notrap aligned region3 v6
 ;; @002a                               v8 = load.i32 notrap aligned region4 v6+4
@@ -74,14 +77,14 @@
 ;;                                 block4(v35: i32, v36: i64):
 ;; @002a                               v37 = iconst.i64 16
 ;; @002a                               v38 = iadd v36, v37  ; v37 = 16
-;; @002a                               store.f32 user2 little region8 v2, v38
+;; @002a                               store.f32 user2 little region9 v2, v38
 ;; @002a                               v39 = iconst.i64 20
 ;; @002a                               v40 = iadd v36, v39  ; v39 = 20
-;; @002a                               istore8.i32 user2 little region8 v3, v40
-;;                                     v44 = load.i32 notrap aligned region9 v45
+;; @002a                               istore8.i32 user2 little region10 v3, v40
+;;                                     v44 = load.i32 notrap aligned region12 v45
 ;; @002a                               v41 = iconst.i64 24
 ;; @002a                               v42 = iadd v36, v41  ; v41 = 24
-;; @002a                               store user2 little region8 v44, v42
+;; @002a                               store user2 little region11 v44, v42
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:

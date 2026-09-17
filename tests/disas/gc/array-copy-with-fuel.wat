@@ -18,8 +18,9 @@
 ;;     region3 = 196 ""
 ;;     region4 = 206 ""
 ;;     region5 = 108 ""
-;;     region6 = 232 ""
-;;     region7 = 240 ""
+;;     region6 = 5 ""
+;;     region7 = 135 ""
+;;     region8 = 187 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -29,9 +30,9 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
 ;;                                     v162 = stack_addr.i64 ss0
-;;                                     store notrap aligned region6 v2, v162
+;;                                     store notrap aligned region7 v2, v162
 ;;                                     v163 = stack_addr.i64 ss1
-;;                                     store notrap aligned region7 v4, v163
+;;                                     store notrap aligned region8 v4, v163
 ;; @0020                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0020                               v8 = load.i64 notrap aligned region2 v7
 ;; @0020                               v9 = iconst.i64 1
@@ -48,7 +49,7 @@
 ;; @0020                               jump block3(v16)
 ;;
 ;;                                 block3(v125: i64):
-;;                                     v161 = load.i32 notrap aligned region6 v162
+;;                                     v161 = load.i32 notrap aligned region7 v162
 ;; @002b                               trapz v161, user16
 ;; @002b                               v24 = load.i64 notrap aligned readonly can_move region3 v7+32
 ;; @002b                               v22 = uextend.i64 v161
@@ -62,7 +63,7 @@
 ;; @002b                               v29 = uextend.i64 v28
 ;; @002b                               v35 = icmp ugt v34, v29
 ;; @002b                               trapnz v35, user17
-;;                                     v155 = load.i32 notrap aligned region7 v163
+;;                                     v155 = load.i32 notrap aligned region8 v163
 ;; @002b                               trapz v155, user16
 ;; @002b                               v46 = uextend.i64 v155
 ;; @002b                               v49 = iadd v24, v46
@@ -102,8 +103,8 @@
 ;; @002b                               brif v89, block5(v45, v69, v5), block6(v94, v95, v97)
 ;;
 ;;                                 block5(v98: i64, v99: i64, v100: i32):
-;; @002b                               v103 = load.i32 user2 little region5 v99
-;; @002b                               store user2 little region5 v103, v98
+;; @002b                               v103 = load.i32 user2 little region6 v99
+;; @002b                               store user2 little region6 v103, v98
 ;;                                     v178 = iconst.i64 4
 ;;                                     v179 = iadd v99, v178  ; v178 = 4
 ;; @002b                               v110 = icmp eq v179, v95
@@ -115,9 +116,9 @@
 ;;                                 block6(v111: i64, v112: i64, v113: i32):
 ;;                                     v173 = iconst.i64 4
 ;;                                     v174 = isub v112, v173  ; v173 = 4
-;; @002b                               v122 = load.i32 user2 little region5 v174
+;; @002b                               v122 = load.i32 user2 little region6 v174
 ;;                                     v175 = isub v111, v173  ; v173 = 4
-;; @002b                               store user2 little region5 v122, v175
+;; @002b                               store user2 little region6 v122, v175
 ;; @002b                               v123 = icmp eq v174, v69
 ;;                                     v176 = iconst.i32 1
 ;;                                     v177 = isub v113, v176  ; v176 = 1

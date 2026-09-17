@@ -22,6 +22,10 @@
 ;;     region6 = 6 ""
 ;;     region7 = 196 ""
 ;;     region8 = 108 ""
+;;     region9 = 147 ""
+;;     region10 = 225 ""
+;;     region11 = 152 ""
+;;     region12 = 245 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -74,18 +78,18 @@
 ;; @0023                               v2 = f32const 0.0
 ;; @0023                               v38 = iconst.i64 16
 ;; @0023                               v39 = iadd v37, v38  ; v38 = 16
-;; @0023                               store user2 little region8 v2, v39  ; v2 = 0.0
+;; @0023                               store user2 little region9 v2, v39  ; v2 = 0.0
 ;; @0023                               v3 = iconst.i32 0
 ;; @0023                               v40 = iconst.i64 20
 ;; @0023                               v41 = iadd v37, v40  ; v40 = 20
-;; @0023                               istore8 user2 little region8 v3, v41  ; v3 = 0
+;; @0023                               istore8 user2 little region10 v3, v41  ; v3 = 0
 ;; @0023                               v42 = iconst.i64 24
 ;; @0023                               v43 = iadd v37, v42  ; v42 = 24
-;; @0023                               store user2 little region8 v3, v43  ; v3 = 0
+;; @0023                               store user2 little region11 v3, v43  ; v3 = 0
 ;; @0023                               v5 = vconst.i8x16 const0
 ;; @0023                               v44 = iconst.i64 32
 ;; @0023                               v45 = iadd v37, v44  ; v44 = 32
-;; @0023                               store user2 little region8 v5, v45  ; v5 = const0
+;; @0023                               store user2 little region12 v5, v45  ; v5 = const0
 ;; @0026                               jump block1
 ;;
 ;;                                 block1:

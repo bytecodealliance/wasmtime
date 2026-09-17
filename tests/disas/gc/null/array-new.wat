@@ -19,6 +19,7 @@
 ;;     region6 = 130 ""
 ;;     region7 = 6 ""
 ;;     region8 = 108 ""
+;;     region9 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -82,7 +83,7 @@
 ;; @0022                               brif v76, block5, block4(v59)
 ;;
 ;;                                 block4(v77: i64):
-;; @0022                               store.i64 user2 little region8 v2, v77
+;; @0022                               store.i64 user2 little region9 v2, v77
 ;;                                     v118 = iconst.i64 8
 ;;                                     v119 = iadd v77, v118  ; v118 = 8
 ;; @0022                               v80 = icmp eq v119, v74

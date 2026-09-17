@@ -39,7 +39,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().load(ir::types::I64, flags, pointer, 0)
     }
 
@@ -63,7 +63,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(flags, new_ref_count, pointer, 0);
     }
 
@@ -231,7 +231,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(flags, next, ptr, 0);
     }
 
@@ -268,7 +268,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(flags, new_reserved, ptr, 0);
     }
 }
@@ -321,7 +321,7 @@ impl GcCompiler for DrcCompiler {
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), array_ref);
         let object_addr = builder.ins().iadd(base, extended_array_ref);
         let len_addr = builder.ins().iadd_imm_s(object_addr, i64::from(len_offset));
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(flags, len, len_addr, 0);
         Ok(array_ref)
     }
@@ -432,6 +432,7 @@ impl GcCompiler for DrcCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             instance_id_addr,
+            GcAccess::Header,
             instance_id,
         )?;
         let tag_addr = builder
@@ -442,6 +443,7 @@ impl GcCompiler for DrcCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             tag_addr,
+            GcAccess::Header,
             tag,
         )?;
 
@@ -571,7 +573,7 @@ impl GcCompiler for DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         let reserved = builder.ins().load(ir::types::I32, flags, ptr, 0);
         let in_set_bit = builder.ins().iconst(
             ir::types::I32,
@@ -909,6 +911,7 @@ impl GcCompiler for DrcCompiler {
         builder: &mut FunctionBuilder<'_>,
         ty: WasmStorageType,
         field_addr: ir::Value,
+        access: GcAccess,
         val: ir::Value,
     ) -> WasmResult<()> {
         if let WasmStorageType::Val(WasmValType::Ref(r)) = ty
@@ -916,12 +919,12 @@ impl GcCompiler for DrcCompiler {
         {
             // Data inside GC objects is always little endian.
             let flags = func_env
-                .gc_memflags(&mut builder.func)
+                .gc_memflags_for(&mut builder.func, access)
                 .with_endianness(ir::Endianness::Little);
             return self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags);
         }
 
-        write_field_at_addr(func_env, builder, ty, field_addr, val)?;
+        write_field_at_addr(func_env, builder, ty, field_addr, access, val)?;
 
         Ok(())
     }

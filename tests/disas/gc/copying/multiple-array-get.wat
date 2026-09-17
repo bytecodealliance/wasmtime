@@ -15,6 +15,7 @@
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
 ;;     region4 = 108 ""
+;;     region5 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -49,7 +50,7 @@
 ;; @0024                               v29 = isub v20, v23
 ;; @0024                               v30 = uextend.i64 v29
 ;; @0024                               v31 = isub v28, v30
-;; @0024                               v32 = load.i64 user2 little region4 v31
+;; @0024                               v32 = load.i64 user2 little region5 v31
 ;; @002b                               v40 = icmp ult v4, v11
 ;; @002b                               trapz v40, user17
 ;;                                     v78 = ishl v4, v70  ; v70 = 3
@@ -57,7 +58,7 @@
 ;; @002b                               v57 = isub v20, v51
 ;; @002b                               v58 = uextend.i64 v57
 ;; @002b                               v59 = isub v28, v58
-;; @002b                               v60 = load.i64 user2 little region4 v59
+;; @002b                               v60 = load.i64 user2 little region5 v59
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:

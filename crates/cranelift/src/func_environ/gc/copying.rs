@@ -172,7 +172,7 @@ impl CopyingCompiler {
 
             // These header writes target the GC heap, so tag them with the
             // GC-heap region (like the null collector does).
-            let header_flags = func_env.gc_memflags(&mut builder.func);
+            let header_flags = func_env.gc_header_memflags(&mut builder.func);
 
             // Write `VMGcHeader::kind` with inline trace info bits included.
             let kind_val = builder
@@ -255,7 +255,7 @@ impl GcCompiler for CopyingCompiler {
             reserved_bits,
         )?;
         let len_addr = builder.ins().iadd_imm_s(object_addr, i64::from(len_offset));
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_header_memflags(&mut builder.func);
         builder.ins().store(flags, len, len_addr, 0);
 
         Ok(array_ref)
@@ -344,6 +344,7 @@ impl GcCompiler for CopyingCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             instance_id_addr,
+            GcAccess::Header,
             instance_id,
         )?;
         let tag_addr = builder
@@ -354,6 +355,7 @@ impl GcCompiler for CopyingCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             tag_addr,
+            GcAccess::Header,
             tag,
         )?;
 
@@ -427,11 +429,12 @@ impl GcCompiler for CopyingCompiler {
         builder: &mut FunctionBuilder<'_>,
         ty: WasmStorageType,
         field_addr: ir::Value,
+        access: GcAccess,
         val: ir::Value,
     ) -> WasmResult<()> {
         // Data inside GC objects is always little endian.
         let flags = func_env
-            .gc_memflags(&mut builder.func)
+            .gc_memflags_for(&mut builder.func, access)
             .with_endianness(ir::Endianness::Little);
 
         match ty {
@@ -445,7 +448,7 @@ impl GcCompiler for CopyingCompiler {
                     unbarriered_store_gc_ref(builder, r.heap_type, field_addr, val, flags)?;
                 }
                 WasmHeapTopType::Cont => {
-                    write_field_at_addr(func_env, builder, ty, field_addr, val)?
+                    write_field_at_addr(func_env, builder, ty, field_addr, access, val)?
                 }
             },
             WasmStorageType::I8 => {

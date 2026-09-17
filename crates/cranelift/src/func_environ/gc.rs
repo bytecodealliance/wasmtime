@@ -1,6 +1,7 @@
 //! Interface to compiling GC-related things.
 
 use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
+use crate::alias_region::GcAccess;
 use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment, stack_switching::fatpointer};
 use crate::translate::{
@@ -179,6 +180,7 @@ pub trait GcCompiler {
         builder: &mut FunctionBuilder,
         ty: WasmStorageType,
         addr: ir::Value,
+        access: GcAccess,
         val: ir::Value,
     ) -> WasmResult<()>;
 }
@@ -288,7 +290,9 @@ fn emit_gc_kind_assert(
             object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
         },
     );
-    let flags = func_env.gc_memflags(&mut builder.func).with_readonly();
+    let flags = func_env
+        .gc_header_memflags(&mut builder.func)
+        .with_readonly();
     let kind_and_reserved_bits = builder.ins().load(ir::types::I32, flags, kind_addr, 0);
     let kind_mask = builder
         .ins()
@@ -316,6 +320,7 @@ pub fn read_field_at_addr(
     builder: &mut FunctionBuilder<'_>,
     ty: WasmStorageType,
     addr: ir::Value,
+    access: GcAccess,
     extension: Option<Extension>,
 ) -> WasmResult<ir::Value> {
     assert_eq!(extension.is_none(), matches!(ty, WasmStorageType::Val(_)));
@@ -326,7 +331,7 @@ pub fn read_field_at_addr(
 
     // Data inside GC objects is always little endian.
     let flags = func_env
-        .gc_memflags(&mut builder.func)
+        .gc_memflags_for(&mut builder.func, access)
         .with_endianness(ir::Endianness::Little);
 
     let value = match ty {
@@ -537,9 +542,10 @@ pub fn init_field_at_addr(
     builder: &mut FunctionBuilder<'_>,
     field_ty: WasmStorageType,
     field_addr: ir::Value,
+    access: GcAccess,
     new_val: ir::Value,
 ) -> WasmResult<()> {
-    gc_compiler(func_env)?.init_field(func_env, builder, field_ty, field_addr, new_val)
+    gc_compiler(func_env)?.init_field(func_env, builder, field_ty, field_addr, access, new_val)
 }
 
 pub fn write_field_at_addr(
@@ -547,11 +553,12 @@ pub fn write_field_at_addr(
     builder: &mut FunctionBuilder<'_>,
     field_ty: WasmStorageType,
     field_addr: ir::Value,
+    access: GcAccess,
     new_val: ir::Value,
 ) -> WasmResult<()> {
     // Data inside GC objects is always little endian.
     let flags = func_env
-        .gc_memflags(&mut builder.func)
+        .gc_memflags_for(&mut builder.func, access)
         .with_endianness(ir::Endianness::Little);
 
     match field_ty {
@@ -687,6 +694,10 @@ pub fn translate_struct_get(
         builder,
         field_ty.element_type,
         field_addr,
+        GcAccess::StructField {
+            ty: interned_type_index,
+            field: u32::try_from(field_index).unwrap(),
+        },
         extension,
     );
     log::trace!("translate_struct_get(..) -> {result:?}");
@@ -736,6 +747,10 @@ pub fn translate_struct_set(
         builder,
         field_ty.element_type,
         field_addr,
+        GcAccess::StructField {
+            ty: interned_type_index,
+            field: u32::try_from(field_index).unwrap(),
+        },
         new_val,
     )?;
 
@@ -768,12 +783,21 @@ pub fn translate_exn_unbox(
     // `func_env`, which we later mutate below via
     // `prepare_gc_ref_access()`.
     let mut accesses: SmallVec<[_; 4]> = smallvec![];
-    for (field_ty, field_layout) in exception_ty.fields.iter().zip(exn_layout.fields.iter()) {
-        accesses.push((field_layout.offset, field_ty.element_type));
+    for (i, (field_ty, field_layout)) in exception_ty
+        .fields
+        .iter()
+        .zip(exn_layout.fields.iter())
+        .enumerate()
+    {
+        accesses.push((
+            u32::try_from(i).unwrap(),
+            field_layout.offset,
+            field_ty.element_type,
+        ));
     }
 
     let mut result = smallvec![];
-    for (field_offset, field_ty) in accesses {
+    for (field_index, field_offset, field_ty) in accesses {
         let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty);
         assert!(field_offset + field_size <= exn_size);
         let field_addr = func_env.prepare_gc_ref_access(
@@ -786,7 +810,17 @@ pub fn translate_exn_unbox(
             },
         );
 
-        let value = read_field_at_addr(func_env, builder, field_ty, field_addr, None)?;
+        let value = read_field_at_addr(
+            func_env,
+            builder,
+            field_ty,
+            field_addr,
+            GcAccess::ExnPayload {
+                exn_ty: exception_ty_idx,
+                field: field_index,
+            },
+            None,
+        )?;
         result.push(value);
     }
 
@@ -981,6 +1015,7 @@ pub fn translate_array_new_fixed(
             builder,
             array_ty.0.element_type,
             addr,
+            GcAccess::ArrayElements { ty },
             *elem,
         )?;
     }
@@ -1007,7 +1042,9 @@ pub fn translate_array_len(
             access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
         },
     );
-    let flags = func_env.gc_memflags(&mut builder.func).with_readonly();
+    let flags = func_env
+        .gc_header_memflags(&mut builder.func)
+        .with_readonly();
     let result = builder.ins().load(ir::types::I32, flags, len_field, 0);
     log::trace!("translate_array_len(..) -> {result:?}");
     Ok(result)
@@ -1157,7 +1194,16 @@ pub fn translate_array_get(
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
-    let result = read_field_at_addr(func_env, builder, elem_ty, elem_addr, extension)?;
+    let result = read_field_at_addr(
+        func_env,
+        builder,
+        elem_ty,
+        elem_addr,
+        GcAccess::ArrayElements {
+            ty: array_type_index,
+        },
+        extension,
+    )?;
     log::trace!("translate_array_get(..) -> {result:?}");
     Ok(result)
 }
@@ -1180,7 +1226,16 @@ pub fn translate_array_set(
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
-    write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)?;
+    write_field_at_addr(
+        func_env,
+        builder,
+        elem_ty,
+        elem_addr,
+        GcAccess::ArrayElements {
+            ty: array_type_index,
+        },
+        value,
+    )?;
 
     log::trace!("translate_array_set: finished");
     Ok(())
@@ -1319,7 +1374,7 @@ pub fn translate_ref_test(
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
             },
         );
-        let gc_memflags = func_env.gc_memflags(&mut builder.func);
+        let gc_memflags = func_env.gc_header_memflags(&mut builder.func);
         let actual_kind =
             builder
                 .ins()
@@ -1401,7 +1456,7 @@ pub fn translate_ref_test(
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
             );
-            let gc_memflags = func_env.gc_memflags(&mut builder.func);
+            let gc_memflags = func_env.gc_header_memflags(&mut builder.func);
             let actual_shared_ty =
                 builder
                     .ins()
@@ -1529,36 +1584,70 @@ fn initialize_struct_fields(
     assert_eq!(field_offsets.len(), field_values.len());
 
     assert!(!func_env.types[struct_ty].composite_type.shared);
-    let fields = match &func_env.types[struct_ty].composite_type.inner {
-        WasmCompositeInnerType::Struct(s) => &s.fields,
-        WasmCompositeInnerType::Exn(e) => &e.fields,
+    // Struct and exception payloads use different alias region keys.
+    let (fields, is_exn) = match &func_env.types[struct_ty].composite_type.inner {
+        WasmCompositeInnerType::Struct(s) => (&s.fields, false),
+        WasmCompositeInnerType::Exn(e) => (&e.fields, true),
         _ => panic!("Not a struct or exception type"),
     };
 
     let field_types: SmallVec<[_; 8]> = fields.iter().cloned().collect();
     assert_eq!(field_types.len(), field_values.len());
 
-    for ((ty, val), offset) in field_types.into_iter().zip(field_values).zip(field_offsets) {
+    for (i, ((ty, val), offset)) in field_types
+        .into_iter()
+        .zip(field_values)
+        .zip(field_offsets)
+        .enumerate()
+    {
         let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
         assert!(offset + size_of_access <= struct_size);
         let field_addr = builder
             .ins()
             .iadd_imm_s(raw_ptr_to_struct, i64::from(offset));
-        gc_compiler(func_env)?.init_field(func_env, builder, ty.element_type, field_addr, *val)?;
+        let field = u32::try_from(i).unwrap();
+        let access = if is_exn {
+            GcAccess::ExnPayload {
+                exn_ty: struct_ty,
+                field,
+            }
+        } else {
+            GcAccess::StructField {
+                ty: struct_ty,
+                field,
+            }
+        };
+        gc_compiler(func_env)?.init_field(
+            func_env,
+            builder,
+            ty.element_type,
+            field_addr,
+            access,
+            *val,
+        )?;
     }
 
     Ok(())
 }
 
 impl FuncEnvironment<'_> {
-    /// Flags to use for general-purpose GC loads/stores.
+    /// Flags to use for GC loads/stores of non-field/element bytes;
+    /// fields/elements use `gc_memflags_for`.
     ///
     /// This is used for accesses to the GC heap which aren't expected to trap, but
     /// retain internal assertion metadata to report if such a trap happens. This
     /// is here to ensure that in the face of heap corruption that there's no
     /// possible UB within Cranelift and/or the runtime.
-    fn gc_memflags(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
-        let region = self.alias_regions.gc_heap_region(func);
+    fn gc_header_memflags(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
+        self.gc_memflags_for(func, GcAccess::Header)
+    }
+
+    /// Like `gc_memflags`, but for an access of the given part of a GC object,
+    /// which gets its own alias region.
+    fn gc_memflags_for(&mut self, func: &mut ir::Function, access: GcAccess) -> ir::MemFlagsData {
+        let region = self
+            .alias_regions
+            .gc_access_region(func, self.types, access);
         ir::MemFlagsData::new()
             .with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT))
             .with_alias_region(Some(region))

@@ -22,7 +22,7 @@
 ;;     ss0 = explicit_slot 28, key = 0
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 232 ""
+;;     region2 = 135 ""
 ;;     sig0 = (i64 vmctx, i8) tail
 ;;     sig1 = (i64 vmctx) tail
 ;;     sig2 = (i64) preserve_all

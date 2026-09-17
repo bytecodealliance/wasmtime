@@ -45,7 +45,7 @@
 ;; }
 ;;
 ;; function u0:0(i64 vmctx, i64, i64) -> i32 tail {
-;;     region0 = 35 ""
+;;     region0 = 113 ""
 ;;
 ;; block0(v0: i64, v1: i64, v2: i64):
 ;;     v3 = load.i8 notrap aligned region0 v2
