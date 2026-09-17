@@ -10,38 +10,7 @@ use wasmtime_core::truncate::{truncate_i32_to_i8, truncate_i32_to_i16};
 use wasmtime_environ::packed_option::ReservedValue;
 use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
-/// The common header for all objects allocated in a GC heap.
-///
-/// This header is shared across all collectors, although particular collectors
-/// may always add their own trailing fields to this header for all of their own
-/// GC objects.
-///
-/// This is a bit-packed structure that logically has the following fields:
-///
-/// ```ignore
-/// struct VMGcHeader {
-///     // Highest 5 bits.
-///     kind: VMGcKind,
-///
-///     // 27 bits available for the `GcRuntime` to make use of however it sees fit.
-///     reserved: u27,
-///
-///     // The `VMSharedTypeIndex` for this GC object, if it isn't an
-///     // `externref` (or an `externref` re-wrapped as an `anyref`). `None` is
-///     // represented with `VMSharedTypeIndex::reserved_value()`.
-///     ty: Option<VMSharedTypeIndex>,
-/// }
-/// ```
-#[repr(C, align(8))]
-#[derive(Debug, Clone, Copy)]
-pub struct VMGcHeader {
-    /// The object's `VMGcKind` and 27 bits of space reserved for however the GC
-    /// sees fit to use it.
-    kind: u32,
-
-    /// The object's type index.
-    ty: VMSharedTypeIndex,
-}
+pub use crate::runtime::vm::vmcontext::VMGcHeader;
 
 unsafe impl GcHeapObject for VMGcHeader {
     #[inline]
