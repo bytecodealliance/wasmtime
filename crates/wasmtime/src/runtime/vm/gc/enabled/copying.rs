@@ -14,8 +14,8 @@ use super::VMArrayRef;
 use super::trace_infos::TraceInfos;
 use crate::runtime::vm::{
     ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
-    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMCopyingHeapData,
-    VMCopyingHeader, VMExternRef, VMGcHeader, VMGcRef, VMMemoryDefinition,
+    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMCopyingHeader,
+    VMCopyingHeapData, VMExternRef, VMGcHeader, VMGcRef, VMMemoryDefinition,
 };
 use crate::{Engine, bail_bug, prelude::*};
 use core::{
