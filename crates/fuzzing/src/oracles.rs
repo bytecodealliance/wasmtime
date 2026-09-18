@@ -1348,6 +1348,7 @@ mod tests {
             | WasmFeatures::FUNCTION_REFERENCES
             | WasmFeatures::GC
             | WasmFeatures::GC_TYPES
+            | WasmFeatures::COMPACT_IMPORTS
             | WasmFeatures::CUSTOM_PAGE_SIZES
             | WasmFeatures::EXTENDED_CONST
             | WasmFeatures::EXCEPTIONS;

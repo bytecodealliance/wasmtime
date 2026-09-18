@@ -56,6 +56,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         let _ = config.tail_call_enabled;
         let _ = config.extended_const_enabled;
         let _ = config.gc_enabled;
+        let _ = config.compact_imports_enabled;
         let _ = config.exceptions_enabled;
         config.custom_page_sizes_enabled = u.arbitrary()?;
         config.wide_arithmetic_enabled = u.arbitrary()?;
@@ -77,9 +78,6 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // We get better differential execution when we disallow traps, so we'll
         // do that most of the time.
         config.disallow_traps = u.ratio(9, 10)?;
-
-        // not supported in wasmtime yet
-        config.compact_imports_enabled = false;
 
         Ok(ModuleConfig {
             component_model_async: false,

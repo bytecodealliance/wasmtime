@@ -336,6 +336,7 @@ macro_rules! foreach_config_option {
             extended_const
             wide_arithmetic
             branch_hinting
+            compact_imports
             hogs_memory
             nan_canonicalization
             component_model_async
