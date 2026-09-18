@@ -59,8 +59,6 @@ pub use self::view::*;
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 #[doc(no_inline)]
-pub use public_cap_primitives::fs::SystemTimeSpec;
-#[doc(no_inline)]
 pub use rand::Rng;
 #[doc(no_inline)]
 pub use wasmtime::component::{ResourceTable, ResourceTableError};
