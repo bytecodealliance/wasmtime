@@ -3,6 +3,139 @@ use wasmtime_test_macros::wasmtime_test;
 
 #[wasmtime_test(strategies(only(Winch)))]
 #[cfg_attr(miri, ignore)]
+fn tail_calls_release_callee_registers(config: &mut Config) -> Result<()> {
+    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
+        return Ok(());
+    }
+
+    config.wasm_tail_call(true);
+    let engine = Engine::new(&config)?;
+    for call in [
+        "i32.const 0 return_call_indirect (type $t)",
+        "return_call $leaf",
+    ] {
+        // Each taken branch exits the function, but compilation continues at
+        // the join. Its temporary target/context registers must be released.
+        // Use enough branches to exhaust the registers on either architecture.
+        let branches = (0..32)
+            .map(|i| format!("local.get 0 i32.const {i} i32.eq if {call} end "))
+            .collect::<String>();
+        let module = Module::new(
+            &engine,
+            format!(
+                r#"(module
+                    (type $t (func (result i32)))
+                    (import "" "leaf" (func $leaf (type $t)))
+                    (table funcref (elem $leaf))
+                    (func (export "run") (param i32) (result i32)
+                        {branches}
+                        i32.const -1))"#
+            ),
+        )?;
+        let mut store = Store::new(&engine, ());
+        let leaf = Func::wrap(&mut store, || 42i32);
+        let instance = Instance::new(&mut store, &module, &[leaf.into()])?;
+        let run = instance.get_typed_func::<i32, i32>(&mut store, "run")?;
+        for i in 0..32 {
+            assert_eq!(run.call(&mut store, i)?, 42);
+        }
+        assert_eq!(run.call(&mut store, 32)?, -1);
+    }
+    Ok(())
+}
+
+#[wasmtime_test(strategies(only(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn tail_calls_skip_unreachable_loops(config: &mut Config) -> Result<()> {
+    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
+        return Ok(());
+    }
+
+    for (fuel, epoch) in [(true, false), (false, true), (true, true)] {
+        let mut config = config.clone();
+        config
+            .wasm_tail_call(true)
+            .consume_fuel(fuel)
+            .epoch_interruption(epoch);
+        let engine = Engine::new(&config)?;
+        for call in [
+            "return_call $leaf",
+            "i32.const 0 return_call_indirect (type $t)",
+        ] {
+            let module = Module::new(
+                &engine,
+                format!(
+                    r#"(module
+                        (type $t (func (result i32)))
+                        (import "" "interrupt" (func $interrupt))
+                        (func $leaf (type $t) i32.const 42)
+                        (table funcref (elem $leaf))
+                        ;; Compile the minimal self-recursive reproducer too.
+                        (func $recursive return_call $recursive (loop))
+                        (func (export "run") (param i32) (result i32)
+                            local.get 0
+                            if
+                                {call}
+                                (loop (loop))
+                            end
+                            ;; The join restores reachability and the frame.
+                            (loop)
+                            i32.const 7)
+                        (func (export "interrupt") (param i32) (result i32)
+                            local.get 0
+                            if
+                                {call}
+                                (loop)
+                            end
+                            call $interrupt
+                            ;; This reachable loop must still check for interruption.
+                            (loop)
+                            i32.const 7))"#
+                ),
+            )?;
+            let mut store = Store::new(&engine, ());
+            if fuel {
+                store.set_fuel(1_000_000)?;
+            }
+            if epoch {
+                store.set_epoch_deadline(1);
+            }
+            let interrupt = Func::wrap(
+                &mut store,
+                move |mut caller: Caller<'_, ()>| -> Result<()> {
+                    if fuel {
+                        caller.set_fuel(0)?;
+                    } else {
+                        caller.engine().increment_epoch();
+                    }
+                    Ok(())
+                },
+            );
+            let instance = Instance::new(&mut store, &module, &[interrupt.into()])?;
+            let run = instance.get_typed_func::<i32, i32>(&mut store, "run")?;
+            assert_eq!(run.call(&mut store, 1)?, 42);
+            assert_eq!(run.call(&mut store, 0)?, 7);
+            let interrupt = instance.get_typed_func::<i32, i32>(&mut store, "interrupt")?;
+            assert_eq!(interrupt.call(&mut store, 1)?, 42);
+            let trap = interrupt
+                .call(&mut store, 0)
+                .unwrap_err()
+                .downcast::<Trap>()?;
+            assert_eq!(
+                trap,
+                if fuel {
+                    Trap::OutOfFuel
+                } else {
+                    Trap::Interrupt
+                }
+            );
+        }
+    }
+    Ok(())
+}
+
+#[wasmtime_test(strategies(only(Winch)))]
+#[cfg_attr(miri, ignore)]
 fn tail_calls_preserve_stack_across_argument_area_resize(config: &mut Config) -> Result<()> {
     if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
         return Ok(());

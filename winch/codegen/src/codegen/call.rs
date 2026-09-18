@@ -223,6 +223,9 @@ impl FnCall {
 
         masm.reset_stack_pointer(SPOffset::from_u32(0))?;
         masm.tail_jump(kind);
+        // There is no returning-call cleanup, but compilation can continue at
+        // another reachable branch. Release the lowering temporaries there too.
+        Self::free_callee_registers(&callee_context, &kind, context);
         Ok(())
     }
 
@@ -519,17 +522,12 @@ impl FnCall {
         Ok(())
     }
 
-    /// Cleanup stack space, handle multiple results, and free registers after
-    /// emitting the call.
-    fn cleanup<M: MacroAssembler>(
-        sig: &ABISig,
+    /// Release the temporary registers used to lower an ordinary or tail call.
+    fn free_callee_registers(
         callee_context: &ContextArgs,
         callee_kind: &CalleeKind,
-        reserved_space: u32,
-        ret_area: Option<RetArea>,
-        masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) -> Result<()> {
+    ) {
         // Free any registers holding any function references.
         match callee_kind {
             CalleeKind::Indirect(r) => context.free_reg(*r),
@@ -543,6 +541,21 @@ impl FnCall {
                 _ => {}
             }
         }
+    }
+
+    /// Cleanup stack space, handle multiple results, and free registers after
+    /// emitting the call.
+    fn cleanup<M: MacroAssembler>(
+        sig: &ABISig,
+        callee_context: &ContextArgs,
+        callee_kind: &CalleeKind,
+        reserved_space: u32,
+        ret_area: Option<RetArea>,
+        masm: &mut M,
+        context: &mut CodeGenContext<Emission>,
+    ) -> Result<()> {
+        Self::free_callee_registers(callee_context, callee_kind, context);
+
         // Default-ABI callees pop their aligned stack-argument area. Update the
         // abstract stack depth for that pop and deallocate only the remaining
         // call-alignment space. Other calling conventions remain caller-pop.

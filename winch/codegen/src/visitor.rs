@@ -1999,6 +1999,12 @@ where
             &mut self.context,
         )?);
 
+        // Unreachable loops still need a control frame, but must not emit
+        // runtime-limit checks against a potentially unwound stack frame.
+        if !self.context.reachable {
+            return Ok(());
+        }
+
         self.maybe_emit_epoch_check()?;
         self.maybe_emit_fuel_check()
     }
