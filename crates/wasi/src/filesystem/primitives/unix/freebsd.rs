@@ -1,7 +1,5 @@
 use crate::filesystem::primitives::unix::{compute_oflags, to_timespec};
-use crate::filesystem::primitives::{
-    FollowSymlinks, ImplMetadataExt, Metadata, OpenOptions, errors,
-};
+use crate::filesystem::primitives::{FollowSymlinks, Metadata, OpenOptions, errors};
 use rustix::fs::{
     AtFlags, CWD, Mode, OFlags, RawMode, Timestamps, openat, statat, unlinkat, utimensat,
 };
@@ -114,7 +112,7 @@ pub(crate) fn stat_fast(
         } else {
             AtFlags::SYMLINK_NOFOLLOW
         };
-    let stat = ImplMetadataExt::from_rustix(statat(start, path, flags)?);
+    let stat = Metadata::Stat(statat(start, path, flags)?);
     Ok(Some(stat))
 }
 

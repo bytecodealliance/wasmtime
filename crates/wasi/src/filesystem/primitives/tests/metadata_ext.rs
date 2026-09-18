@@ -6,9 +6,7 @@
 use super::helpers as h;
 use super::sys_common::io::tmpdir;
 use super::sys_common::symlink_supported;
-use crate::filesystem::primitives::{
-    FollowSymlinks, Metadata, MetadataExt, hard_link, open_ambient_dir, stat,
-};
+use crate::filesystem::primitives::{FollowSymlinks, Metadata, hard_link, open_ambient_dir, stat};
 use std::path::Path;
 
 #[test]

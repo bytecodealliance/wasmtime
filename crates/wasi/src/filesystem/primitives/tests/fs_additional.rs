@@ -947,11 +947,11 @@ fn check_metadata(std: &std::fs::Metadata, cap: &p::Metadata) {
     {
         assert_eq!(
             std::os::unix::fs::FileTypeExt::is_block_device(&std.file_type()),
-            p::FileTypeExt::is_block_device(&cap.file_type())
+            cap.file_type().is_block_device()
         );
         assert_eq!(
             std::os::unix::fs::FileTypeExt::is_char_device(&std.file_type()),
-            p::FileTypeExt::is_char_device(&cap.file_type())
+            cap.file_type().is_char_device()
         );
     }
 
@@ -1006,9 +1006,9 @@ fn check_metadata(std: &std::fs::Metadata, cap: &p::Metadata) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        assert_eq!(std.dev(), p::MetadataExt::dev(cap));
-        assert_eq!(std.ino(), p::MetadataExt::ino(cap));
-        assert_eq!(std.nlink(), p::MetadataExt::nlink(cap));
+        assert_eq!(std.dev(), cap.dev());
+        assert_eq!(std.ino(), cap.ino());
+        assert_eq!(std.nlink(), cap.nlink());
     }
 }
 

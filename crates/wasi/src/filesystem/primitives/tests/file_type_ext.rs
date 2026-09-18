@@ -1,8 +1,6 @@
 // This file contains tests for `FileTypeExt`.
 
 use super::sys_common::io::tmpdir;
-#[cfg(unix)]
-use crate::filesystem::primitives::FileTypeExt;
 use crate::filesystem::primitives::{Metadata, OpenOptions, open, open_ambient_dir};
 use std::path::Path;
 

@@ -7,7 +7,7 @@ use crate::filesystem::{
 use std::fs::File;
 use std::io::{self, Write};
 use std::mem::{self, MaybeUninit};
-use std::os::windows::fs::FileExt;
+use std::os::windows::fs::{FileExt, MetadataExt};
 use std::os::windows::io::*;
 use std::path::Path;
 use std::sync::OnceLock;
@@ -129,10 +129,7 @@ fn open_metadata_handle(start: &File, path: &Path, follow: FollowSymlinks) -> io
 
 pub(crate) fn stat(f: &std::fs::File) -> io::Result<DescriptorStat> {
     let meta = Metadata::from_file(f)?;
-
-    let link_count = crate::filesystem::primitives::_WindowsByHandle::number_of_links(&meta)
-        .unwrap()
-        .into();
+    let link_count = by_handle_info(f)?.nNumberOfLinks.into();
     Ok(DescriptorStat::new(&meta, link_count))
 }
 
@@ -194,11 +191,9 @@ pub(crate) fn remove_file_or_symlink(start: &File, path: &Path) -> io::Result<()
     opts.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
     let file = crate::filesystem::primitives::open(start, path, &opts)?;
 
-    let meta = Metadata::from_file(&file)?;
+    let meta = file.metadata()?;
     if meta.file_type().is_symlink()
-        && crate::filesystem::primitives::MetadataExt::file_attributes(&meta)
-            & FILE_ATTRIBUTE_DIRECTORY
-            == FILE_ATTRIBUTE_DIRECTORY
+        && meta.file_attributes() & FILE_ATTRIBUTE_DIRECTORY == FILE_ATTRIBUTE_DIRECTORY
     {
         crate::filesystem::primitives::remove_dir(start, path)?;
     } else {

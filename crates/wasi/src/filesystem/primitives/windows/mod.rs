@@ -1,10 +1,11 @@
+use crate::filesystem::primitives::Metadata;
+use std::os::windows::fs::MetadataExt;
+
 mod create_dir_unchecked;
 mod create_file_at_w;
 mod dir_utils;
-mod file_type_ext;
 mod get_path;
 mod hard_link_unchecked;
-mod metadata_ext;
 mod oflags;
 mod open_fast;
 mod open_options_ext;
@@ -23,9 +24,7 @@ pub(crate) mod errors;
 
 pub(crate) use create_dir_unchecked::*;
 pub(crate) use dir_utils::*;
-pub(crate) use file_type_ext::*;
 pub(crate) use hard_link_unchecked::*;
-pub(crate) use metadata_ext::*;
 pub(crate) use open_fast::*;
 pub(crate) use open_options_ext::*;
 pub(crate) use open_unchecked::*;
@@ -48,3 +47,10 @@ pub(crate) fn file_path(file: &std::fs::File) -> Option<std::path::PathBuf> {
 }
 
 pub(super) use oflags::*;
+
+impl Metadata {
+    pub(super) fn file_attributes(&self) -> u32 {
+        let Metadata::Std(std) = self;
+        std.file_attributes()
+    }
+}

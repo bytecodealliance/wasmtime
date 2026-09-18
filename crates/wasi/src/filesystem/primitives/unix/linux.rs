@@ -1,6 +1,6 @@
 use crate::filesystem::primitives::unix::{compute_oflags, to_timespec};
 use crate::filesystem::primitives::{
-    FollowSymlinks, ImplMetadataExt, Metadata, OpenOptions, OpenOptionsExt, errors, open,
+    FollowSymlinks, Metadata, OpenOptions, OpenOptionsExt, errors, open,
 };
 use rustix::fs::{
     AtFlags, Mode, OFlags, RawMode, ResolveFlags, Timestamps, openat2, statat, utimensat,
@@ -162,7 +162,7 @@ pub(crate) fn stat_fast(
             // If `fstat` with `O_PATH` isn't supported, use `statat` with
             // `AT_EMPTY_PATH`.
             Ok(Some(
-                statat(file, "", AtFlags::EMPTY_PATH).map(ImplMetadataExt::from_rustix)?,
+                statat(file, "", AtFlags::EMPTY_PATH).map(Metadata::Stat)?,
             ))
         }
         Err(err) => match Errno::from_io_error(&err) {
