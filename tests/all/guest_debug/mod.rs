@@ -245,6 +245,7 @@ check: fib
 
 /// Shared linear memories should be readable through the synthetic Wasm
 /// address space after the guest stops.
+#[cfg(feature = "threads")]
 #[test]
 #[ignore]
 fn guest_debug_cli_shared_memory() -> Result<()> {

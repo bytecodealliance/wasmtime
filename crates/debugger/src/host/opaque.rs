@@ -6,12 +6,14 @@ use crate::host::{
     api::{Memory, WasmValue},
     bindings::val_type_to_wasm_type,
 };
+#[cfg(feature = "threads")]
 use std::sync::atomic::{AtomicU8, Ordering};
 use wasmtime::{
     Engine, ExnRef, ExnRefPre, ExnType, FrameHandle, Func, FuncType, Global, Instance, Module,
     OwnedRooted, Result, Table, Tag, TagType, Val, ValType,
 };
 
+#[cfg(feature = "threads")]
 fn shared_memory_read_bytes(
     memory: &wasmtime::SharedMemory,
     addr: u64,
@@ -32,6 +34,7 @@ fn shared_memory_read_bytes(
     )
 }
 
+#[cfg(feature = "threads")]
 fn shared_memory_write_bytes(
     memory: &wasmtime::SharedMemory,
     addr: u64,
@@ -209,14 +212,14 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         idx: u32,
     ) -> Result<Option<Memory>> {
         self.with_store(move |mut store| {
-            instance
-                .debug_memory(&mut store, idx)
-                .map(Memory::Unshared)
-                .or_else(|| {
-                    instance
-                        .debug_shared_memory(&mut store, idx)
-                        .map(Memory::Shared)
-                })
+            let memory = instance.debug_memory(&mut store, idx).map(Memory::Unshared);
+            #[cfg(feature = "threads")]
+            let memory = memory.or_else(|| {
+                instance
+                    .debug_shared_memory(&mut store, idx)
+                    .map(Memory::Shared)
+            });
+            memory
         })
         .await
     }
@@ -248,6 +251,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
     async fn memory_size_bytes(&mut self, memory: Memory) -> Result<u64> {
         self.with_store(move |store| match memory {
             Memory::Unshared(memory) => u64::try_from(memory.data_size(&store)).unwrap(),
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => u64::try_from(memory.data_size()).unwrap(),
         })
         .await
@@ -256,6 +260,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
     async fn memory_page_size(&mut self, memory: Memory) -> Result<u64> {
         self.with_store(move |store| match memory {
             Memory::Unshared(memory) => memory.page_size(&store),
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => memory.page_size(),
         })
         .await
@@ -265,6 +270,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         self.with_store(move |mut store| -> Result<u64> {
             let page_size = match &memory {
                 Memory::Unshared(memory) => memory.page_size(&store),
+                #[cfg(feature = "threads")]
                 Memory::Shared(memory) => memory.page_size(),
             };
             if delta_bytes & (page_size - 1) != 0 {
@@ -275,6 +281,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 Memory::Unshared(memory) => memory
                     .grow(&mut store, delta_pages)
                     .map_err(|_| wit::Error::MemoryGrowFailure)?,
+                #[cfg(feature = "threads")]
                 Memory::Shared(memory) => memory
                     .grow(delta_pages)
                     .map_err(|_| wit::Error::MemoryGrowFailure)?,
@@ -298,6 +305,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 let end = addr.checked_add(len)?;
                 data.get(addr..end).map(|s| s.to_vec())
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => shared_memory_read_bytes(&memory, addr, len),
         })
         .await
@@ -318,6 +326,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 dest.copy_from_slice(&bytes);
                 Some(())
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => shared_memory_write_bytes(&memory, addr, &bytes),
         })
         .await
@@ -330,6 +339,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 let addr = usize::try_from(addr).ok()?;
                 Some(*data.get(addr)?)
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => Some(shared_memory_read_bytes(&memory, addr, 1)?[0]),
         })
         .await
@@ -342,6 +352,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 let addr = usize::try_from(addr).ok()?;
                 Some(u16::from_le_bytes([*data.get(addr)?, *data.get(addr + 1)?]))
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => Some(u16::from_le_bytes(
                 shared_memory_read_bytes(&memory, addr, 2)?
                     .try_into()
@@ -363,6 +374,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                     *data.get(addr + 3)?,
                 ]))
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => Some(u32::from_le_bytes(
                 shared_memory_read_bytes(&memory, addr, 4)?
                     .try_into()
@@ -388,6 +400,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                     *data.get(addr + 7)?,
                 ]))
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => Some(u64::from_le_bytes(
                 shared_memory_read_bytes(&memory, addr, 8)?
                     .try_into()
@@ -410,6 +423,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 *data.get_mut(addr)? = value;
                 Some(())
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => shared_memory_write_bytes(&memory, addr, &[value]),
         })
         .await
@@ -430,6 +444,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                     .copy_from_slice(&value.to_le_bytes());
                 Some(())
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => {
                 shared_memory_write_bytes(&memory, addr, &value.to_le_bytes())
             }
@@ -452,6 +467,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                     .copy_from_slice(&value.to_le_bytes());
                 Some(())
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => {
                 shared_memory_write_bytes(&memory, addr, &value.to_le_bytes())
             }
@@ -474,6 +490,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                     .copy_from_slice(&value.to_le_bytes());
                 Some(())
             }
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => {
                 shared_memory_write_bytes(&memory, addr, &value.to_le_bytes())
             }

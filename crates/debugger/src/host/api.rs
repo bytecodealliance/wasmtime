@@ -20,6 +20,7 @@ use wasmtime_wasi::p2::{DynPollable, Pollable, subscribe};
 #[derive(Clone)]
 pub enum Memory {
     Unshared(wasmtime::Memory),
+    #[cfg(feature = "threads")]
     Shared(wasmtime::SharedMemory),
 }
 
@@ -27,6 +28,7 @@ impl Memory {
     fn unique_id(&self) -> u64 {
         match self {
             Memory::Unshared(memory) => memory.debug_index_in_store(),
+            #[cfg(feature = "threads")]
             Memory::Shared(memory) => memory.debug_index_in_store(),
         }
     }
