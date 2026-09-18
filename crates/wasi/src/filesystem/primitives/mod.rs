@@ -16,6 +16,7 @@
     clippy::allow_attributes_without_reason,
     reason = "preexisting from when cap-primitives was imported"
 )]
+#![allow(clippy::useless_conversion, reason = "typedefs are platform-specific")]
 
 use std::path::{Component, Path, PathBuf};
 use std::{fs, io};
@@ -42,19 +43,13 @@ mod windows;
 #[cfg(windows)]
 use self::windows as sys;
 
-#[cfg(windows)]
-use file_type::_WindowsFileTypeExt;
 use maybe_owned_file::MaybeOwnedFile;
 use open_parent::open_parent;
 use open_unchecked_error::*;
 use sys::*;
 
 pub(crate) use file_type::FileType;
-#[cfg(any(unix, target_os = "vxworks"))]
-pub(crate) use file_type::FileTypeExt;
-#[cfg(windows)]
-pub(crate) use metadata::_WindowsByHandle;
-pub(crate) use metadata::{Metadata, MetadataExt};
+pub(crate) use metadata::Metadata;
 pub(crate) use open_options::*;
 pub(crate) use sys::open_ambient_dir;
 pub(crate) use sys::read_dir;
