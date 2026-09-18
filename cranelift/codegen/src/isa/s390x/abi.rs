@@ -698,6 +698,7 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn gen_clobber_save(
         call_conv: isa::CallConv,
         flags: &settings::Flags,
+        _isa_flags: &s390x_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
@@ -860,6 +861,7 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
         _flags: &settings::Flags,
+        _isa_flags: &s390x_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
