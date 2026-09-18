@@ -1188,7 +1188,19 @@ impl<'a, 'b> Compiler<'a, 'b> {
             InterfaceType::FixedLengthList(i) => self.types[*i].size as usize,
         };
 
-        match self.fuel.checked_sub(cost) {
+        // If this function has the initial set of fuel then we want to be sure
+        // to translate at least one type, even if it's a huge one,
+        // unconditionally allow this type to get translate.d Here
+        // `saturating_sub` will clamp at 0 if `cost` is higher than `fuel`,
+        // which is what we want anyway where if this type is huge it just
+        // prevents other translations in this function.
+        let remaining_fuel = if self.fuel == INITIAL_FUEL {
+            Some(self.fuel.saturating_sub(cost))
+        } else {
+            self.fuel.checked_sub(cost)
+        };
+
+        match remaining_fuel {
             // This function has enough fuel to perform the layer of translation
             // necessary for this type, so the fuel is updated in-place and
             // translation continues. Note that the recursion here is bounded by
