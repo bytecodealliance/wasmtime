@@ -18,7 +18,7 @@
 ;;       movk    x17, #0x30
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x1dc
+;;       b.lo    #0x1cc
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -32,7 +32,7 @@
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       mov     x0, x9
-;;       bl      #0x2b4
+;;       bl      #0x2a4
 ;;   64: add     x28, x28, #4
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[4, 12]
 ;;       mov     sp, x28
@@ -41,13 +41,13 @@
 ;;       ldur    w1, [x16]
 ;;       sub     sp, x28, #4
 ;;       adds    w1, w1, #7
-;;       b.hs    #0x1e0
+;;       b.hs    #0x1d0
 ;;   84: mov     sp, x28
 ;;       and     w1, w1, #0xfffffff8
 ;;       mov     w2, w1
 ;;       sub     sp, x28, #4
 ;;       adds    w2, w2, #0x18
-;;       b.hs    #0x1e4
+;;       b.hs    #0x1d4
 ;;   9c: mov     sp, x28
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28
@@ -65,7 +65,7 @@
 ;;       ldur    x2, [x1, #0x28]
 ;;       ldur    x1, [x1, #0x20]
 ;;       cmp     x0, x2, uxtx
-;;       b.ls    #0x120
+;;       b.ls    #0x118
 ;;       b       #0xe8
 ;;   e8: sub     x0, x0, x2, uxtx
 ;;       sub     x28, x28, #8
@@ -75,11 +75,9 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       ldur    x1, [x28, #4]
-;;       bl      #0x260
-;;  10c: add     x28, x28, #4
+;;       bl      #0x250
+;;  10c: add     x28, x28, #0xc
 ;;       ╰─╼ stack_map: frame_size=64, frame_offsets=[20, 28]
-;;       mov     sp, x28
-;;       add     x28, x28, #8
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x1c]
 ;;       ldur    w0, [x28]
@@ -117,11 +115,9 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       ldur    w1, [x28, #4]
-;;       bl      #0x2e4
-;;  1b0: add     x28, x28, #4
+;;       bl      #0x2d4
+;;  1a8: add     x28, x28, #8
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[12]
-;;       mov     sp, x28
-;;       add     x28, x28, #4
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       add     x28, x28, #0x18
@@ -130,6 +126,6 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  1dc: udf     #0xc11f
-;;  1e0: udf     #0xc11f
-;;  1e4: udf     #0xc11f
+;;  1cc: udf     #0xc11f
+;;  1d0: udf     #0xc11f
+;;  1d4: udf     #0xc11f

@@ -595,10 +595,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         // Emit return instruction.
-        let stack_bytes_to_pop = if call_conv == CallConv::Tail {
-            frame_layout.tail_args_size
-        } else {
-            0
+        let stack_bytes_to_pop = match call_conv {
+            CallConv::Tail => frame_layout.tail_args_size,
+            CallConv::Winch => frame_layout.incoming_args_size,
+            _ => 0,
         };
         let inst = if stack_bytes_to_pop == 0 {
             asm::inst::retq_zo::new().into()

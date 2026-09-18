@@ -14,7 +14,7 @@
 ;;       movq    0x18(%r11), %r11
 ;;       addq    $0x40, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x1b4
+;;       ja      0x19f
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
@@ -24,17 +24,17 @@
 ;;       pushq   %r11
 ;;       subq    $8, %rsp
 ;;       movq    %r14, %rdi
-;;       callq   0x28c
+;;       callq   0x277
 ;;       addq    $8, %rsp
 ;;       movq    0x20(%rsp), %r14
 ;;       movq    0x20(%r14), %r11
 ;;       movl    (%r11), %ecx
 ;;       addl    $7, %ecx
-;;       jb      0x1b6
+;;       jb      0x1a1
 ;;   6a: andl    $0xfffffff8, %ecx
 ;;       movl    %ecx, %edx
 ;;       addl    $0x18, %edx
-;;       jb      0x1b8
+;;       jb      0x1a3
 ;;   7e: subq    $4, %rsp
 ;;       movl    %eax, (%rsp)
 ;;       subq    $4, %rsp
@@ -47,15 +47,14 @@
 ;;       movq    0x28(%rcx), %rdx
 ;;       movq    0x20(%rcx), %rcx
 ;;       cmpq    %rdx, %rax
-;;       jbe     0xe6
+;;       jbe     0xdf
 ;;   bb: subq    %rdx, %rax
 ;;       pushq   %rax
 ;;       subq    $8, %rsp
 ;;       movq    %r14, %rdi
 ;;       movq    8(%rsp), %rsi
-;;       callq   0x218
-;;       addq    $8, %rsp
-;;       addq    $8, %rsp
+;;       callq   0x203
+;;       addq    $0x10, %rsp
 ;;       movq    0x28(%rsp), %r14
 ;;       movl    (%rsp), %eax
 ;;       addq    $4, %rsp
@@ -84,9 +83,8 @@
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movq    0xc(%rsp), %rsi
-;;       callq   0x25f
-;;       addq    $0xc, %rsp
-;;       addq    $8, %rsp
+;;       callq   0x24a
+;;       addq    $0x14, %rsp
 ;;       movq    0x24(%rsp), %r14
 ;;       movl    (%rsp), %ecx
 ;;       addq    $4, %rsp
@@ -97,13 +95,12 @@
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movl    0xc(%rsp), %esi
-;;       callq   0x2b9
-;;       addq    $0xc, %rsp
-;;       addq    $4, %rsp
+;;       callq   0x2a4
+;;       addq    $0x10, %rsp
 ;;       movq    0x18(%rsp), %r14
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  1b4: ud2
-;;  1b6: ud2
-;;  1b8: ud2
+;;  19f: ud2
+;;  1a1: ud2
+;;  1a3: ud2

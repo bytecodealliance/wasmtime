@@ -1,0 +1,151 @@
+test compile precise-output
+target aarch64
+
+function %direct_winch_call() winch {
+    fn0 = colocated %direct_callee() winch
+
+block0:
+    call fn0()
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   bl 0
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   bl #8 ; reloc_external Call %direct_callee 0
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %indirect_winch_call(i64) winch {
+    sig0 = () winch
+
+block0(v0: i64):
+    call_indirect sig0, v0()
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   blr x0
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   blr x0
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %try_winch_call() -> i32 winch {
+    sig0 = () winch
+    fn0 = colocated %try_callee sig0
+
+block0:
+    try_call fn0(), sig0, block1(), [ default: block2 ]
+
+block1:
+    v0 = iconst.i32 0
+    return v0
+
+block2:
+    v1 = iconst.i32 1
+    return v1
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+; block0:
+;   bl 0; b MachLabel(1); catch [default: MachLabel(2)]
+; block1:
+;   movz w0, #0
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+; block2:
+;   movz w0, #1
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
+; block1: ; offset 0x2c
+;   bl #0x2c ; reloc_external Call %try_callee 0
+; block2: ; offset 0x30
+;   mov w0, #0
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+; block3: ; offset 0x60
+;   mov w0, #1
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret

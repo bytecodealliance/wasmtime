@@ -462,7 +462,6 @@ impl Compiler {
 
             Compiler::Winch => {
                 if config.gc()
-                    || config.tail_call()
                     || config.function_references()
                     || config.relaxed_simd()
                     || config.legacy_exceptions()

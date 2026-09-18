@@ -23,25 +23,25 @@
 ;;       movk    x17, #0x30
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x2d0
+;;       b.lo    #0x2b8
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
 ;;       mov     x0, x9
-;;       bl      #0x51c
+;;       bl      #0x504
 ;;       ├─╼ exception frame offset: SP = FP - 0x20
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x8], handler=0x1dc
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x8], handler=0x1cc
 ;;   48: ldur    x9, [x28, #8]
 ;;       ldur    x16, [x9, #0x20]
 ;;       ldur    w1, [x16]
 ;;       adds    w1, w1, #7
-;;       b.hs    #0x2d4
+;;       b.hs    #0x2bc
 ;;   5c: and     w1, w1, #0xfffffff8
 ;;       mov     w2, w1
 ;;       adds    w2, w2, #0x18
-;;       b.hs    #0x2d8
+;;       b.hs    #0x2c0
 ;;   6c: sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       stur    w0, [x28]
@@ -66,9 +66,9 @@
 ;;       stur    x0, [x28]
 ;;       mov     x0, x9
 ;;       ldur    x1, [x28]
-;;       bl      #0x440
+;;       bl      #0x428
 ;;       ├─╼ exception frame offset: SP = FP - 0x30
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x1dc
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x1cc
 ;;   d0: add     x28, x28, #8
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
@@ -110,12 +110,10 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       ldur    x1, [x28, #0xc]
-;;       bl      #0x494
+;;       bl      #0x47c
 ;;       ├─╼ exception frame offset: SP = FP - 0x40
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x28], handler=0x1dc
-;;  178: add     x28, x28, #0xc
-;;       mov     sp, x28
-;;       add     x28, x28, #8
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x28], handler=0x1cc
+;;  178: add     x28, x28, #0x14
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x14]
 ;;       ldur    w1, [x28]
@@ -132,12 +130,10 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       ldur    w1, [x28, #0xc]
-;;       bl      #0x54c
+;;       bl      #0x534
 ;;       ├─╼ exception frame offset: SP = FP - 0x30
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x1dc
-;;  1c8: add     x28, x28, #0xc
-;;       mov     sp, x28
-;;       add     x28, x28, #4
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0x1cc
+;;  1c0: add     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #8]
 ;;       mov     x28, x29
@@ -152,8 +148,8 @@
 ;;       mov     x16, x0
 ;;       add     x16, x16, #0x18
 ;;       cmp     x16, x2, uxtx
-;;       b.hi    #0x2dc
-;;  210: mov     x2, x1
+;;       b.hi    #0x2c4
+;;  200: mov     x2, x1
 ;;       add     x2, x2, x0, uxtx
 ;;       ldur    w1, [x2, #0x10]
 ;;       sub     x28, x28, #8
@@ -168,8 +164,8 @@
 ;;       mov     x0, x9
 ;;       ldur    w1, [x28]
 ;;       mov     x2, #0xffffffff
-;;       bl      #0x4c4
-;;  250: add     x28, x28, #4
+;;       bl      #0x4ac
+;;  240: add     x28, x28, #4
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[4]
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x14]
@@ -190,11 +186,9 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       ldur    w1, [x28, #4]
-;;       bl      #0x54c
-;;  2a4: add     x28, x28, #4
+;;       bl      #0x534
+;;  294: add     x28, x28, #8
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[4]
-;;       mov     sp, x28
-;;       add     x28, x28, #4
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       add     x28, x28, #0x10
@@ -203,7 +197,7 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  2d0: udf     #0xc11f
-;;  2d4: udf     #0xc11f
-;;  2d8: udf     #0xc11f
-;;  2dc: udf     #0xc11f
+;;  2b8: udf     #0xc11f
+;;  2bc: udf     #0xc11f
+;;  2c0: udf     #0xc11f
+;;  2c4: udf     #0xc11f

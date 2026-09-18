@@ -713,10 +713,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
             });
         }
 
-        if call_conv == isa::CallConv::Tail && frame_layout.tail_args_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.tail_args_size.try_into().unwrap(),
-            ));
+        let callee_pop_size = match call_conv {
+            isa::CallConv::Tail => frame_layout.tail_args_size,
+            isa::CallConv::Winch => frame_layout.incoming_args_size,
+            _ => 0,
+        };
+        if callee_pop_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(callee_pop_size.try_into().unwrap()));
         }
 
         insts
