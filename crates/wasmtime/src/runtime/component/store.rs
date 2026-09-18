@@ -2,10 +2,10 @@ use crate::prelude::*;
 use crate::runtime::component::{HostResourceData, Instance};
 use crate::runtime::vm;
 use crate::runtime::vm::component::{
-    CallContext, ComponentInstance, HandleTable, OwnedComponentInstance,
+    CallContext, ComponentInstance, HandleTable, OwnedComponentInstance, Scope,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
-use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut};
+use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
 use core::pin::Pin;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
@@ -402,7 +402,7 @@ impl StoreOpaque {
         vm::component::ResourceTables<'_>,
         &mut crate::component::HostResourceData,
     )> {
-        let current_scope_id = self.current_scope_id()?;
+        let current_scope = self.current_scope()?;
 
         let store_id = self.id();
         let data = self.component_data_mut();
@@ -421,7 +421,7 @@ impl StoreOpaque {
                 host_table: &mut data.component_host_table,
                 task_state: &mut data.task_state,
                 guest,
-                current_scope_id,
+                current_scope,
             },
             &mut data.host_resource_data,
         ))
@@ -553,11 +553,32 @@ pub struct ComponentTasksNotConcurrent {
 }
 
 impl ComponentTaskState {
-    pub fn call_context(&mut self, id: u32) -> Result<&mut CallContext> {
+    pub fn call_context(&mut self, id: Scope) -> Result<&mut CallContext> {
         match self {
-            ComponentTaskState::NotConcurrent(state) => Ok(&mut state.scopes[id as usize]),
+            ComponentTaskState::NotConcurrent(state) => match id {
+                Scope::Id(id) => Ok(&mut state.scopes[id as usize]),
+                Scope::HostId(_) => bail_bug!("non-concurrent scope cannot be a host ID"),
+            },
             #[cfg(feature = "component-model-async")]
             ComponentTaskState::Concurrent(state) => state.call_context(id),
+        }
+    }
+
+    pub(crate) fn materialize_current_scope(&mut self) -> Result<Scope> {
+        match self {
+            ComponentTaskState::NotConcurrent(_) => {
+                bail_bug!("a non-concurrent scope cannot be deferred")
+            }
+            #[cfg(feature = "component-model-async")]
+            ComponentTaskState::Concurrent(state) => state.materialize_current_scope(),
+        }
+    }
+
+    pub(crate) fn deferred_host_call_context(&mut self) -> Option<&mut CallContext> {
+        match self {
+            ComponentTaskState::NotConcurrent(_) => None,
+            #[cfg(feature = "component-model-async")]
+            ComponentTaskState::Concurrent(state) => state.deferred_host_call_context(),
         }
     }
 
