@@ -18,8 +18,10 @@
 ;;     region5 = 196 ""
 ;;     region6 = 130 ""
 ;;     region7 = 6 ""
-;;     region8 = 108 ""
-;;     region9 = 5 ""
+;;     region8 = 239 ""
+;;     region9 = 134 ""
+;;     region10 = 108 ""
+;;     region11 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -64,11 +66,11 @@
 ;; @0022                               store user2 region8 v99, v32
 ;; @0022                               v35 = load.i64 notrap aligned readonly can_move region6 v0+40
 ;; @0022                               v36 = load.i32 notrap aligned readonly can_move region7 v35
-;; @0022                               store user2 region8 v36, v32+4
+;; @0022                               store user2 region9 v36, v32+4
 ;; @0022                               store.i32 notrap aligned region3 v22, v15
 ;; @0022                               v6 = iconst.i64 8
 ;; @0022                               v38 = iadd v32, v6  ; v6 = 8
-;; @0022                               store.i32 user2 region8 v3, v38
+;; @0022                               store.i32 user2 region10 v3, v38
 ;; @0022                               trapz v116, user16
 ;; @0022                               v70 = load.i64 notrap aligned region4 v24+40
 ;; @0022                               v58 = iconst.i64 16
@@ -83,7 +85,7 @@
 ;; @0022                               brif v76, block5, block4(v59)
 ;;
 ;;                                 block4(v77: i64):
-;; @0022                               store.i64 user2 little region9 v2, v77
+;; @0022                               store.i64 user2 little region11 v2, v77
 ;;                                     v118 = iconst.i64 8
 ;;                                     v119 = iadd v77, v118  ; v118 = 8
 ;; @0022                               v80 = icmp eq v119, v74

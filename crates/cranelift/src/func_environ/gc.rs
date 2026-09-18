@@ -291,7 +291,7 @@ fn emit_gc_kind_assert(
         },
     );
     let flags = func_env
-        .gc_header_memflags(&mut builder.func)
+        .gc_memflags(&mut builder.func, GcAccess::HeaderKind)
         .with_readonly();
     let kind_and_reserved_bits = builder.ins().load(ir::types::I32, flags, kind_addr, 0);
     let kind_mask = builder
@@ -331,7 +331,7 @@ pub fn read_field_at_addr(
 
     // Data inside GC objects is always little endian.
     let flags = func_env
-        .gc_memflags_for(&mut builder.func, access)
+        .gc_memflags(&mut builder.func, access)
         .with_endianness(ir::Endianness::Little);
 
     let value = match ty {
@@ -558,7 +558,7 @@ pub fn write_field_at_addr(
 ) -> WasmResult<()> {
     // Data inside GC objects is always little endian.
     let flags = func_env
-        .gc_memflags_for(&mut builder.func, access)
+        .gc_memflags(&mut builder.func, access)
         .with_endianness(ir::Endianness::Little);
 
     match field_ty {
@@ -1043,7 +1043,7 @@ pub fn translate_array_len(
         },
     );
     let flags = func_env
-        .gc_header_memflags(&mut builder.func)
+        .gc_memflags(&mut builder.func, GcAccess::ArrayLength)
         .with_readonly();
     let result = builder.ins().load(ir::types::I32, flags, len_field, 0);
     log::trace!("translate_array_len(..) -> {result:?}");
@@ -1374,11 +1374,10 @@ pub fn translate_ref_test(
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
             },
         );
-        let gc_memflags = func_env.gc_header_memflags(&mut builder.func);
-        let actual_kind =
-            builder
-                .ins()
-                .load(ir::types::I32, gc_memflags.with_readonly(), kind_addr, 0);
+        let kind_flags = func_env
+            .gc_memflags(&mut builder.func, GcAccess::HeaderKind)
+            .with_readonly();
+        let actual_kind = builder.ins().load(ir::types::I32, kind_flags, kind_addr, 0);
         let expected_kind = builder
             .ins()
             .iconst(ir::types::I32, i64::from(expected_kind.as_u32()));
@@ -1456,11 +1455,10 @@ pub fn translate_ref_test(
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
             );
-            let gc_memflags = func_env.gc_header_memflags(&mut builder.func);
-            let actual_shared_ty =
-                builder
-                    .ins()
-                    .load(ir::types::I32, gc_memflags.with_readonly(), ty_addr, 0);
+            let ty_flags = func_env
+                .gc_memflags(&mut builder.func, GcAccess::HeaderTypeIndex)
+                .with_readonly();
+            let actual_shared_ty = builder.ins().load(ir::types::I32, ty_flags, ty_addr, 0);
 
             func_env.is_subtype(
                 builder,
@@ -1631,20 +1629,13 @@ fn initialize_struct_fields(
 }
 
 impl FuncEnvironment<'_> {
-    /// Flags to use for GC loads/stores of non-field/element bytes;
-    /// fields/elements use `gc_memflags_for`.
+    /// Flags to use for a memory access of the given part of a GC object.
     ///
-    /// This is used for accesses to the GC heap which aren't expected to trap, but
-    /// retain internal assertion metadata to report if such a trap happens. This
-    /// is here to ensure that in the face of heap corruption that there's no
-    /// possible UB within Cranelift and/or the runtime.
-    fn gc_header_memflags(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
-        self.gc_memflags_for(func, GcAccess::Header)
-    }
-
-    /// Like `gc_memflags`, but for an access of the given part of a GC object,
-    /// which gets its own alias region.
-    fn gc_memflags_for(&mut self, func: &mut ir::Function, access: GcAccess) -> ir::MemFlagsData {
+    /// These accesses aren't expected to trap, but retain internal assertion
+    /// metadata to report if such a trap happens. This is here to ensure that
+    /// in the face of GC heap corruption that there's no possible UB within
+    /// Cranelift and/or the runtime.
+    fn gc_memflags(&mut self, func: &mut ir::Function, access: GcAccess) -> ir::MemFlagsData {
         let region = self
             .alias_regions
             .gc_access_region(func, self.types, access);

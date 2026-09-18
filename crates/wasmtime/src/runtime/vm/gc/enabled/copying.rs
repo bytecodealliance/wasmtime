@@ -14,8 +14,8 @@ use super::VMArrayRef;
 use super::trace_infos::TraceInfos;
 use crate::runtime::vm::{
     ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
-    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMCopyingHeapData,
-    VMExternRef, VMGcHeader, VMGcRef, VMMemoryDefinition,
+    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMCopyingHeader,
+    VMCopyingHeapData, VMExternRef, VMGcHeader, VMGcRef, VMMemoryDefinition,
 };
 use crate::{Engine, bail_bug, prelude::*};
 use core::{
@@ -46,13 +46,6 @@ unsafe impl GcRuntime for CopyingCollector {
         let heap = CopyingHeap::new()?;
         Ok(Box::new(heap) as _)
     }
-}
-
-/// The common header for all objects in the copying collector.
-#[repr(C)]
-struct VMCopyingHeader {
-    header: VMGcHeader,
-    object_size: u32,
 }
 
 // Safety: All copying collector objects have a `VMCopyingHeader`.

@@ -157,15 +157,16 @@ impl NullCompiler {
                 i64::from(VMSharedTypeIndex::reserved_value().as_bits()),
             ),
         };
-        let flags = func_env.gc_header_memflags(&mut builder.func);
+        let kind_flags = func_env.gc_memflags(&mut builder.func, GcAccess::HeaderKind);
         builder.ins().store(
-            flags,
+            kind_flags,
             kind_and_size,
             ptr_to_object,
             i32::try_from(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET).unwrap(),
         );
+        let ty_flags = func_env.gc_memflags(&mut builder.func, GcAccess::HeaderTypeIndex);
         builder.ins().store(
-            flags,
+            ty_flags,
             ty,
             ptr_to_object,
             i32::try_from(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET).unwrap(),
@@ -228,7 +229,7 @@ impl GcCompiler for NullCompiler {
         let len_addr = builder
             .ins()
             .iadd_imm_s(ptr_to_object, i64::from(len_offset));
-        let flags = func_env.gc_header_memflags(&mut builder.func);
+        let flags = func_env.gc_memflags(&mut builder.func, GcAccess::ArrayLength);
         builder.ins().store(flags, len, len_addr, 0);
 
         Ok(gc_ref)
@@ -337,7 +338,7 @@ impl GcCompiler for NullCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             instance_id_addr,
-            GcAccess::Header,
+            GcAccess::ExnTagInstance,
             instance_id,
         )?;
         let tag_addr = builder
@@ -348,7 +349,7 @@ impl GcCompiler for NullCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             tag_addr,
-            GcAccess::Header,
+            GcAccess::ExnTagDefined,
             tag,
         )?;
 

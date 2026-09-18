@@ -53,7 +53,7 @@ use crate::runtime::vm::{
     GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMExternRef,
     VMGcHeader, VMGcObjectData, VMGcRef,
 };
-use crate::vm::{VMDrcHeapData, VMMemoryDefinition};
+use crate::vm::{VMDrcHeader, VMDrcHeapData, VMMemoryDefinition};
 use crate::{Engine, Trap, bail_bug, prelude::*};
 use core::sync::atomic::AtomicUsize;
 use core::{
@@ -727,19 +727,6 @@ fn externref_to_drc(externref: &VMExternRef) -> &TypedGcRef<VMDrcExternRef> {
     gc_ref.as_typed_unchecked()
 }
 
-/// The common header for all objects in the DRC collector.
-///
-/// This adds a ref count on top collector-agnostic `VMGcHeader`.
-///
-/// This is accessed by JIT code.
-#[repr(C)]
-struct VMDrcHeader {
-    header: VMGcHeader,
-    ref_count: u64,
-    next_over_approximated_stack_root: Option<VMGcRef>,
-    object_size: u32,
-}
-
 unsafe impl GcHeapObject for VMDrcHeader {
     #[inline]
     fn is(_header: &VMGcHeader) -> bool {
@@ -1324,62 +1311,12 @@ impl<T> DerefMut for DebugOnly<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wasmtime_environ::HostPtr;
-
-    #[test]
-    fn vm_drc_header_size_align() {
-        assert_eq!(
-            (wasmtime_environ::drc::HEADER_SIZE as usize),
-            core::mem::size_of::<VMDrcHeader>()
-        );
-        assert_eq!(
-            (wasmtime_environ::drc::HEADER_ALIGN as usize),
-            core::mem::align_of::<VMDrcHeader>()
-        );
-    }
 
     #[test]
     fn vm_drc_array_header_length_offset() {
         assert_eq!(
             wasmtime_environ::drc::ARRAY_LENGTH_OFFSET,
             u32::try_from(core::mem::offset_of!(VMDrcArrayHeader, length)).unwrap(),
-        );
-    }
-
-    #[test]
-    fn ref_count_is_at_correct_offset() {
-        let extern_data = VMDrcHeader {
-            header: VMGcHeader::externref(),
-            ref_count: 0,
-            next_over_approximated_stack_root: None,
-            object_size: 0,
-        };
-
-        let extern_data_ptr = &extern_data as *const _;
-        let ref_count_ptr = &extern_data.ref_count as *const _;
-
-        let actual_offset = (ref_count_ptr as usize) - (extern_data_ptr as usize);
-
-        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: HostPtr,
-            num_imported_functions: 0,
-            num_imported_tables: 0,
-            num_imported_memories: 0,
-            num_imported_globals: 0,
-            num_imported_tags: 0,
-            num_defined_tables: 0,
-            num_defined_memories: 0,
-            num_owned_memories: 0,
-            num_defined_globals: 0,
-            num_defined_tags: 0,
-            num_escaped_funcs: 0,
-            num_runtime_data: 0,
-            has_startup_func: false,
-        });
-
-        assert_eq!(
-            offsets.vm_drc_header_ref_count(),
-            u32::try_from(actual_offset).unwrap(),
         );
     }
 }
