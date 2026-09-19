@@ -1,0 +1,68 @@
+test compile precise-output
+target arm
+
+function %add(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   add r0, r0, r1
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add r0, r0, r1
+;   bx lr
+
+function %add_imm(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 10
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   add r0, r0, #10
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add r0, r0, #0xa
+;   bx lr
+
+function %sub(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sub r0, r0, r1
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sub r0, r0, r1
+;   bx lr
+
+function %neg(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   rsb r0, r0, #0
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   rsb r0, r0, #0
+;   bx lr
+
