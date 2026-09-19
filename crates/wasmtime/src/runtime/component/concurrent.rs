@@ -2443,7 +2443,7 @@ impl StoreOpaque {
         Ok(Some((bits << 1) | u32::from(is_host)))
     }
 
-    fn queue_task(
+    pub(crate) fn queue_task(
         &mut self,
         task: impl FnOnce(&mut dyn VMStore) -> Result<()> + Send + 'static,
     ) -> Result<()> {
