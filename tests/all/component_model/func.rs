@@ -8,7 +8,7 @@ use std::sync::{
 };
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Config, Engine, Store, StoreContextMut, Trap};
+use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, format_err};
 
 const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
 const CANON_64BIT_NAN: u64 = 0b0111111111111000000000000000000000000000000000000000000000000000;
@@ -3209,8 +3209,9 @@ async fn thread_index_via_resource_drop_concurrent() -> Result<()> {
     thread_index_via_resource_drop(ApiStyle::Concurrent).await
 }
 
-async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
-    let component = r#"
+/// A component exporting a resource whose destructor traps unless it runs on a
+/// non-zero `thread.index`, i.e. within a guest thread context.
+const THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT: &str = r#"
 (component
   (core module $m
     (import "" "thread.index" (func $thread-index (result i32)))
@@ -3247,8 +3248,10 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
   (export "i" (instance $c))
 )
 "#;
+
+async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     let engine = Engine::new(&style.config())?;
-    let component = Component::new(&engine, component)?;
+    let component = Component::new(&engine, THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
     let instance = style.instantiate(&mut store, &linker, &component).await?;
@@ -3259,6 +3262,52 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
     let (resource,) = style.call(&mut store, run, ()).await?;
     style.resource_drop(&mut store, resource).await?;
+    Ok(())
+}
+
+/// Test that a guest-exported `ResourceAny` can be dropped from within a
+/// spawned `AccessorTask` while the store's event loop is already running.
+///
+/// This mirrors the scenario from issue #14291: the host holds a
+/// `ResourceAny` inside a background task and only has an `Accessor`, not a
+/// `StoreContextMut`, at the point where it wants to drop it.
+#[tokio::test]
+async fn resource_drop_concurrent_from_accessor_task() -> Result<()> {
+    let style = ApiStyle::Concurrent;
+    let engine = Engine::new(&style.config())?;
+    let component = Component::new(&engine, THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
+    let instance_index = instance.get_export_index(&mut store, None, "i").unwrap();
+    let func_index = instance
+        .get_export_index(&mut store, Some(&instance_index), "new")
+        .unwrap();
+    let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
+
+    struct DropTask {
+        run: TypedFunc<(), (ResourceAny,)>,
+        tx: futures::channel::oneshot::Sender<Result<()>>,
+    }
+
+    impl AccessorTask<(), HasSelf<()>> for DropTask {
+        async fn run(self, accessor: &Accessor<()>) -> Result<()> {
+            let result = async {
+                let (resource,) = self.run.call_concurrent(accessor, ()).await?;
+                resource.resource_drop_concurrent(accessor).await
+            }
+            .await;
+            _ = self.tx.send(result);
+            Ok(())
+        }
+    }
+
+    let (tx, rx) = futures::channel::oneshot::channel();
+    store.spawn(DropTask { run, tx })?;
+    store
+        .run_concurrent(async |_| rx.await.map_err(|_| format_err!("task dropped")))
+        .await???;
+    store.assert_concurrent_state_empty();
     Ok(())
 }
 
