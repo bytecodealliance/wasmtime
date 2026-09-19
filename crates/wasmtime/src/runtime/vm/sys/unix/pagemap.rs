@@ -1049,24 +1049,28 @@ mod tests {
         let page = rustix::param::page_size();
         let mut reset_pages = 0;
         let mut decommitted = 0;
+        let reset_manually = |region: &mut [u8]| {
+            reset_pages += region.len() / page;
+            region.fill(0);
+        };
+        let decommit = |ptr: *mut u8, len: usize| {
+            decommitted += len;
+            if len > 0 {
+                // SAFETY: `ptr..ptr+len` lies inside the test's own mapping.
+                unsafe {
+                    madvise(ptr.cast(), len, Advice::LinuxDontNeed).unwrap();
+                }
+            }
+        };
+        // SAFETY: the mapping is readable and writable for `mmap.len` bytes.
         let resident = unsafe {
             super::reset_with_pagemap(
                 Some(&pagemap),
                 mmap.ptr.cast(),
                 HostAlignedByteCount::new(mmap.len).unwrap(),
                 HostAlignedByteCount::new(keep_resident_pages * page).unwrap(),
-                |region| {
-                    reset_pages += region.len() / page;
-                    region.fill(0);
-                },
-                |ptr, len| {
-                    decommitted += len;
-                    if len > 0 {
-                        unsafe {
-                            madvise(ptr.cast(), len, Advice::LinuxDontNeed).unwrap();
-                        }
-                    }
-                },
+                reset_manually,
+                decommit,
             )
         };
         assert_eq!(resident, reset_pages * page);
