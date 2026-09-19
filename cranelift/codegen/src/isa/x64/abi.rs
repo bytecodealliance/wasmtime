@@ -1122,6 +1122,7 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
         },
         CallConv::WindowsFastcall => match fltreg_idx {
             0 => Some(regs::xmm0()),
+            1 => Some(regs::xmm1()), // The Rust ABI for float scalar pairs needs this.
             _ => None,
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),
