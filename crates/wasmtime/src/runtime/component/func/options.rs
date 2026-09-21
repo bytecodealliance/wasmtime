@@ -641,4 +641,16 @@ impl<'a> LiftContext<'a> {
         }
         Ok(())
     }
+
+    /// Same as [`Self::consume_fuel`], but safely multiplies `len` and `size`
+    /// together before calling that.
+    pub fn consume_fuel_array(&mut self, len: usize, size: usize) -> Result<()> {
+        match len.checked_mul(size) {
+            Some(bytes) => self.consume_fuel(bytes),
+            None => bail!(
+                "too much data is being copied between the host and the guest: \
+                 fuel allocated for hostcalls has been exhausted"
+            ),
+        }
+    }
 }
