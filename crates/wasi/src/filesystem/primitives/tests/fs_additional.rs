@@ -1351,3 +1351,33 @@ fn trailing_slash_symlink_more() {
         }
     }
 }
+
+#[test]
+fn trailing_slash_requires_a_directory() {
+    let tmpdir = tempfile::tempdir().unwrap();
+
+    check!(std::fs::create_dir(tmpdir.path().join("dir")));
+    std::fs::File::create(tmpdir.path().join("file")).unwrap();
+
+    let start = check!(h::open_ambient_dir(tmpdir.path()));
+    check!(p::open_dir(&start, "dir".as_ref()));
+    check!(p::open_dir(&start, "dir/".as_ref()));
+    check!(p::open_dir(&start, "dir/.".as_ref()));
+    let mut opts = p::OpenOptions::new();
+    opts.read(true);
+    check!(p::open(&start, "file".as_ref(), &opts));
+    assert!(p::open(&start, "file/".as_ref(), &opts).is_err());
+    if !cfg!(windows) {
+        assert!(p::open(&start, "file/.".as_ref(), &opts).is_err());
+    }
+
+    check!(p::stat(&start, "dir".as_ref(), p::FollowSymlinks::No));
+    check!(p::stat(&start, "dir/".as_ref(), p::FollowSymlinks::No));
+    check!(p::stat(&start, "dir/.".as_ref(), p::FollowSymlinks::No));
+
+    check!(p::stat(&start, "file".as_ref(), p::FollowSymlinks::No));
+    assert!(p::stat(&start, "file/".as_ref(), p::FollowSymlinks::No).is_err());
+    if !cfg!(windows) {
+        assert!(p::stat(&start, "file/.".as_ref(), p::FollowSymlinks::No).is_err());
+    }
+}

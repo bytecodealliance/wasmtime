@@ -303,7 +303,7 @@ pub(crate) fn stat(start: &fs::File, path: &Path, follow: FollowSymlinks) -> io:
     // Optimization: if path has exactly one component and it's not ".." or
     // anything non-normal and we're not following symlinks we can go straight
     // to `stat_unchecked`, which can be faster than various paths below.
-    if follow == FollowSymlinks::No {
+    if follow == FollowSymlinks::No && !path_requires_dir(path) {
         let mut components = path.components();
         if let Some(Component::Normal(component)) = components.next() {
             if components.next().is_none() {
