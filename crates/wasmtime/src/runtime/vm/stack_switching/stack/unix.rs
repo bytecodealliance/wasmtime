@@ -75,9 +75,10 @@ pub enum Allocator {
 #[derive(Debug)]
 #[repr(C)]
 pub struct VMContinuationStack {
-    // The top of the stack; for stacks allocated by the fiber implementation itself,
-    // the base address of the allocation will be `top.sub(len.unwrap())`
-    top: *mut u8,
+    // The top of the stack. For stacks allocated by the fiber implementation
+    // itself, the base address of the allocation will be `top.sub(len)`.
+    // Zero-length, unallocated stacks use a non-null dangling pointer.
+    top: VmPtr<u8>,
     // The length of the stack
     len: usize,
     // allocation strategy
@@ -112,7 +113,7 @@ impl VMContinuationStack {
             )?;
 
             Ok(Self {
-                top: mmap.cast::<u8>().add(mmap_len),
+                top: VmPtr::from(NonNull::new_unchecked(mmap.cast::<u8>().add(mmap_len))),
                 len: mmap_len,
                 allocator: Allocator::Mmap,
             })
@@ -121,14 +122,13 @@ impl VMContinuationStack {
 
     pub fn unallocated() -> Self {
         Self {
-            top: std::ptr::null_mut(),
+            top: VmPtr::dangling(),
             len: 0,
             allocator: Allocator::Custom,
         }
     }
 
     pub fn is_unallocated(&self) -> bool {
-        debug_assert_eq!(self.len == 0, self.top == std::ptr::null_mut());
         self.len == 0
     }
 
@@ -138,7 +138,10 @@ impl VMContinuationStack {
         len: usize,
     ) -> io::Result<Self> {
         Ok(Self {
-            top: unsafe { base.add(len) },
+            top: VmPtr::from(
+                NonNull::new(unsafe { base.add(len) })
+                    .expect("a continuation stack's top-of-stack pointer must be non-null"),
+            ),
             len,
             allocator: Allocator::Custom,
         })
@@ -149,11 +152,12 @@ impl VMContinuationStack {
     }
 
     pub fn top(&self) -> Option<*mut u8> {
-        Some(self.top)
+        Some(self.top.as_ptr())
     }
 
     pub fn range(&self) -> Option<Range<usize>> {
-        let base = unsafe { self.top.sub(self.len).addr() };
+        let top = self.top.as_ptr();
+        let base = unsafe { top.sub(self.len).addr() };
         Some(base..base + self.len)
     }
 
@@ -161,7 +165,7 @@ impl VMContinuationStack {
         // See picture at top of this file:
         // RIP is stored 8 bytes below top of stack.
         unsafe {
-            let ptr = self.top.sub(8).cast::<usize>();
+            let ptr = self.top.as_ptr().sub(8).cast::<usize>();
             *ptr
         }
     }
@@ -170,7 +174,7 @@ impl VMContinuationStack {
         // See picture at top of this file:
         // RBP is stored 16 bytes below top of stack.
         unsafe {
-            let ptr = self.top.sub(16).cast::<usize>();
+            let ptr = self.top.as_ptr().sub(16).cast::<usize>();
             *ptr
         }
     }
@@ -179,7 +183,7 @@ impl VMContinuationStack {
         // See picture at top of this file:
         // RSP is stored 24 bytes below top of stack.
         unsafe {
-            let ptr = self.top.sub(24).cast::<usize>();
+            let ptr = self.top.as_ptr().sub(24).cast::<usize>();
             *ptr
         }
     }
@@ -241,7 +245,7 @@ impl VMContinuationStack {
         return_value_count: u32,
         gc_refs: bool,
     ) -> Result<()> {
-        let tos = self.top;
+        let tos = self.top.as_ptr();
 
         unsafe {
             let store = |tos_neg_offset, value| {
@@ -318,7 +322,7 @@ impl VMContinuationStack {
             };
 
             args_ref.capacity = args_capacity;
-            args_ref.data = args_data_ptr;
+            args_ref.data = NonNull::new(args_data_ptr).map(VmPtr::from);
             if cfg!(feature = "gc") && gc_refs {
                 let data = if args_capacity == 0 {
                     ptr::null_mut()
@@ -364,7 +368,8 @@ impl Drop for VMContinuationStack {
         unsafe {
             match self.allocator {
                 Allocator::Mmap => {
-                    let ret = rustix::mm::munmap(self.top.sub(self.len) as _, self.len);
+                    let top = self.top.as_ptr();
+                    let ret = rustix::mm::munmap(top.sub(self.len) as _, self.len);
                     debug_assert!(ret.is_ok());
                 }
                 Allocator::Custom => {} // It's the creator's responsibility to reclaim the memory.
@@ -388,8 +393,12 @@ unsafe extern "C" fn fiber_start(
         let params_and_returns: NonNull<[ValRaw]> = if args.capacity == 0 {
             NonNull::from(&[])
         } else {
+            let data = args
+                .data
+                .expect("non-empty continuation arguments require an allocated buffer")
+                .as_ptr();
             std::slice::from_raw_parts_mut(
-                args.data.cast::<ValRaw>(),
+                data.cast::<ValRaw>(),
                 usize::try_from(args.capacity).unwrap(),
             )
             .into()

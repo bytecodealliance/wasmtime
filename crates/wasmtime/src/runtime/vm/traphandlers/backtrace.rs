@@ -158,11 +158,7 @@ impl Backtrace {
             .last_wasm_entry_fp;
 
         unsafe {
-            // FIXME(frank-emrich) Casting from *const to *mut pointer is
-            // terrible, but we won't actually modify any of the continuations
-            // here.
-            let stack_chain =
-                VMStackChain::Continuation(continuation as *const VMContRef as *mut VMContRef);
+            let stack_chain = VMStackChain::Continuation(continuation.into());
 
             if let ControlFlow::Break(()) = Self::trace_through_continuations(
                 stack_chain,
@@ -330,12 +326,12 @@ impl Backtrace {
         // pair continuations[i] with stack_limits[i + 1].
         let mut stack_limits_iter = unsafe { chain.clone().into_stack_limits_iter() };
         // Skip the first stack limits (current running stack, handled above).
-        let _current: Option<*mut VMStackLimits> = stack_limits_iter.next();
+        let _current: Option<core::ptr::NonNull<VMStackLimits>> = stack_limits_iter.next();
 
         let mut continuations_iter = unsafe { chain.into_continuation_iter() }.peekable();
 
         while let Some(continuation_ptr) = continuations_iter.next() {
-            let continuation = unsafe { &*continuation_ptr };
+            let continuation = unsafe { continuation_ptr.as_ref() };
             let Some(parent_limits_ptr) = stack_limits_iter.next() else {
                 // A detached suspended continuation chain ends in `Absent`,
                 // unlike a running chain which ends in an initial stack. The
@@ -344,10 +340,10 @@ impl Backtrace {
                 debug_assert_eq!(continuation.parent_chain, VMStackChain::Absent);
                 break;
             };
-            let parent_limits = unsafe { &*parent_limits_ptr };
+            let parent_limits = unsafe { parent_limits_ptr.as_ref() };
 
             // The parent of `continuation` if present and not the last in the chain.
-            let parent_continuation = continuations_iter.peek().map(|&c| unsafe { &*c });
+            let parent_continuation = continuations_iter.peek().map(|c| unsafe { c.as_ref() });
 
             let fiber_stack = continuation.fiber_stack();
             let resume_pc = fiber_stack.control_context_instruction_pointer();

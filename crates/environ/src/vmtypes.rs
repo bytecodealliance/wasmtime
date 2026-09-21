@@ -599,7 +599,7 @@ macro_rules! for_each_vm_type {
 
                 /// The buffer itself, which lives on the continuation's stack
                 /// rather than in this object.
-                pub data: *mut u8,
+                pub data: Option<VmPtr<u8>>,
             }
 
             /// Payload values exchanged with a continuation and the metadata
@@ -652,9 +652,9 @@ macro_rules! for_each_vm_type {
                 #[aggregate]
                 pub parent_chain: VMStackChain,
 
-                /// The end of this continuation's parent chain, used only while
-                /// it is `Suspended` or `Fresh`.
-                pub last_ancestor: *mut VMContRef,
+                /// The end of this continuation's parent chain while it is
+                /// `Suspended` or `Fresh`, and `None` while it is running.
+                pub last_ancestor: Option<VmPtr<VMContRef>>,
 
                 /// Revision counter.
                 pub revision: usize,
