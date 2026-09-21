@@ -3509,10 +3509,6 @@ impl Instance {
             bail!(Trap::ConcurrentFutureStreamOp);
         };
 
-        if done {
-            bail!("cannot write after being notified that the readable end dropped");
-        }
-
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
         let concurrent_state = store.0.concurrent_state_mut()?;
@@ -3523,8 +3519,11 @@ impl Instance {
             transmit.read
         );
 
-        if transmit.done {
-            bail!("cannot write to future after previous write succeeded or readable end dropped");
+        if done || transmit.done {
+            bail!(match ty {
+                TransmitIndex::Future(_) => Trap::WriteToDroppedFuture,
+                TransmitIndex::Stream(_) => Trap::WriteToDroppedStream,
+            });
         }
 
         let new_state = if let ReadState::Dropped = &transmit.read {
@@ -3723,10 +3722,6 @@ impl Instance {
                             ..
                         },
                     ) => {}
-                    None => bail!(match ty {
-                        TransmitIndex::Future(_) => Trap::WriteToDroppedFuture,
-                        TransmitIndex::Stream(_) => Trap::WriteToDroppedStream,
-                    }),
                     event => bail_bug!("expected pending dropped event for writer; got {event:?}"),
                 }
 
@@ -3773,10 +3768,6 @@ impl Instance {
             bail!(Trap::ConcurrentFutureStreamOp);
         };
 
-        if done {
-            bail!("cannot read after being notified that the writable end dropped");
-        }
-
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
         let caller_thread = store.0.current_guest_thread()?;
@@ -3788,8 +3779,13 @@ impl Instance {
             transmit.write
         );
 
-        if transmit.done {
-            bail!("cannot read from future after previous read succeeded");
+        if done || transmit.done {
+            match ty {
+                TransmitIndex::Future(_) => {
+                    bail!("cannot read from future after previous read succeeded")
+                }
+                TransmitIndex::Stream(_) => bail!(Trap::ReadFromDroppedStream),
+            }
         }
 
         let new_state = if let WriteState::Dropped = &transmit.write {
@@ -3968,7 +3964,6 @@ impl Instance {
                         code: ReturnCode::Dropped(ItemCount::ZERO),
                         ..
                     }) => {}
-                    None => bail!(Trap::ReadFromDroppedStream),
                     event => bail_bug!("expected pending dropped event for reader; got {event:?}"),
                 }
 

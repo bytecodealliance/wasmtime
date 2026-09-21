@@ -289,7 +289,7 @@ generate_trap_type! {
 
         /// Guest attempted to write to a future after being notified that the
         /// readable end was dropped.
-        WriteToDroppedFuture = "cannot write to stream after previous write succeded or readable end dropped",
+        WriteToDroppedFuture = "cannot write to future after previous write succeeded or readable end dropped",
 
         /// Guest attempted to lift a stream after being notified that the
         /// writable end was dropped.
