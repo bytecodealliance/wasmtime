@@ -1,6 +1,4 @@
-use crate::filesystem::primitives::{
-    FileType, FileTypeExt, FollowSymlinks, Metadata, MetadataExt, OpenOptions,
-};
+use crate::filesystem::primitives::{FileType, FollowSymlinks, Metadata, OpenOptions};
 use crate::filesystem::{
     Advice, DescriptorFlags, DescriptorStat, DescriptorType, MetadataHashValue,
 };

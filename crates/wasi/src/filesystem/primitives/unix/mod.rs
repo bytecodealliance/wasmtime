@@ -1,21 +1,20 @@
 use crate::filesystem::primitives::{
-    FileType, FollowSymlinks, MaybeOwnedFile, OpenOptions, open, open_parent,
+    FileType, FollowSymlinks, MaybeOwnedFile, Metadata, OpenOptions, open, open_parent,
 };
-use rustix::fs::{AtFlags, Dir, utimensat};
+use rustix::fs::{AtFlags, Dir, RawMode, utimensat};
 use rustix::io::Errno;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Component, Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 mod create_dir_unchecked;
 mod dir_utils;
-mod file_type_ext;
 mod hard_link_unchecked;
 mod is_same_file;
-mod metadata_ext;
 mod oflags;
 mod open_options_ext;
 mod open_unchecked;
@@ -45,11 +44,9 @@ pub(crate) use self::linux::*;
 
 pub(crate) use create_dir_unchecked::create_dir_unchecked;
 pub(crate) use dir_utils::*;
-pub(crate) use file_type_ext::ImplFileTypeExt;
 pub(crate) use hard_link_unchecked::hard_link_unchecked;
 #[allow(unused_imports)]
 pub(crate) use is_same_file::{is_different_file, is_different_file_metadata, is_same_file};
-pub(crate) use metadata_ext::ImplMetadataExt;
 pub(crate) use open_options_ext::ImplOpenOptionsExt;
 pub(crate) use open_unchecked::open_unchecked;
 pub(crate) use read_link_unchecked::read_link_unchecked;
@@ -190,7 +187,7 @@ pub(crate) fn read_dir(
 
                 };
 
-                let file_type = ImplFileTypeExt::from_raw_mode(raw_mode);
+                let file_type = FileType::from_raw_mode(raw_mode.into());
                 return Ok(Some((OsString::from_vec(file_name.to_vec()), file_type)));
             }
         })();
@@ -200,4 +197,96 @@ pub(crate) fn read_dir(
             Err(e) => Some(Err(e)),
         }
     }))
+}
+
+#[allow(clippy::similar_names)]
+pub(super) fn system_time_from_rustix(sec: i64, nsec: u64) -> Option<SystemTime> {
+    if sec >= 0 {
+        SystemTime::UNIX_EPOCH.checked_add(Duration::new(u64::try_from(sec).unwrap(), nsec as _))
+    } else {
+        SystemTime::UNIX_EPOCH
+            .checked_sub(Duration::new(sec.unsigned_abs(), 0))
+            .map(|t| t.checked_add(Duration::new(0, nsec as u32)))
+            .flatten()
+    }
+}
+
+impl Metadata {
+    #[inline]
+    pub fn dev(&self) -> u64 {
+        match self {
+            Metadata::Std(m) => m.dev(),
+            #[allow(unused_comparisons, reason = "platform-specific typedef")]
+            Metadata::Stat(m) => {
+                // The type of `st_dev` is `dev_t` which is signed on some
+                // platforms and unsigned on other platforms. A `u64` is enough
+                // to work for all unsigned platforms, and for signed platforms
+                // perform a sign extension to `i64` and then view that as an
+                // unsigned 64-bit number instead.
+                //
+                // Note that the `unused_comparisons` is ignored here for
+                // platforms where it's unsigned since the first branch here
+                // will never be taken.
+                if m.st_dev < 0 {
+                    i64::try_from(m.st_dev).unwrap().cast_unsigned()
+                } else {
+                    u64::try_from(m.st_dev).unwrap()
+                }
+            }
+            #[cfg(target_os = "linux")]
+            Metadata::Statx(m) => rustix::fs::makedev(m.stx_dev_major, m.stx_dev_minor),
+        }
+    }
+
+    #[inline]
+    pub fn ino(&self) -> u64 {
+        match self {
+            Metadata::Std(m) => m.ino(),
+            Metadata::Stat(m) => m.st_ino,
+            #[cfg(target_os = "linux")]
+            Metadata::Statx(m) => m.stx_ino,
+        }
+    }
+
+    #[inline]
+    pub fn nlink(&self) -> u64 {
+        match self {
+            Metadata::Std(m) => m.nlink(),
+            Metadata::Stat(m) => m.st_nlink.into(),
+            #[cfg(target_os = "linux")]
+            Metadata::Statx(m) => m.stx_nlink.into(),
+        }
+    }
+}
+
+impl FileType {
+    pub(super) fn from_raw_mode(raw_mode: RawMode) -> Self {
+        Self::Unix(rustix::fs::FileType::from_raw_mode(raw_mode))
+    }
+
+    pub fn is_char_device(&self) -> bool {
+        match self {
+            Self::Std(std) => std.is_char_device(),
+            #[cfg(unix)]
+            Self::Unix(unix) => unix.is_char_device(),
+        }
+    }
+
+    pub fn is_block_device(&self) -> bool {
+        match self {
+            Self::Std(std) => std.is_block_device(),
+            #[cfg(unix)]
+            Self::Unix(unix) => unix.is_block_device(),
+        }
+    }
+}
+
+/// It should be possible to represent times before the Epoch.
+/// https://github.com/bytecodealliance/cap-std/issues/328
+#[test]
+fn negative_time() {
+    let system_time = system_time_from_rustix(-1, 1).unwrap();
+    let d = SystemTime::UNIX_EPOCH.duration_since(system_time).unwrap();
+    assert_eq!(d.as_secs(), 0);
+    assert_eq!(d.subsec_nanos(), 999999999);
 }
