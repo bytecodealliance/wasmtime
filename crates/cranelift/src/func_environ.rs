@@ -5222,6 +5222,15 @@ impl FuncEnvironment<'_> {
         Ok(())
     }
 
+    /// Hook invoked at the start of a catch block for a `try_table`,
+    /// i.e. the block that control lands in when a `try_call` returns
+    /// along its exceptional edge.
+    pub fn on_catch_block_entry(&mut self, builder: &mut FunctionBuilder) {
+        if self.tunables.consume_fuel {
+            self.fuel_load_into_var(builder);
+        }
+    }
+
     pub fn before_unconditionally_trapping_memory_access(&mut self, builder: &mut FunctionBuilder) {
         if self.tunables.consume_fuel {
             self.fuel_increment_var(builder);
