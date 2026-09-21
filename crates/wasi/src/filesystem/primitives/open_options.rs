@@ -53,7 +53,6 @@ impl OpenOptions {
     /// Creates a blank new set of options ready for configuration.
     ///
     /// This corresponds to [`std::fs::OpenOptions::new`].
-    #[allow(clippy::new_without_default)]
     #[inline]
     pub const fn new() -> Self {
         Self {

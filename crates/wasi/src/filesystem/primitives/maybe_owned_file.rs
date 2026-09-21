@@ -42,7 +42,6 @@ impl<'borrow> MaybeOwnedFile<'borrow> {
 
     /// Produce an owned `File`. This uses `open` on "." if needed to convert a
     /// borrowed `File` to an owned one.
-    #[cfg_attr(windows, allow(dead_code))]
     pub(super) fn into_file(self, options: &OpenOptions) -> io::Result<fs::File> {
         match self {
             Self::Owned(file) => Ok(file),

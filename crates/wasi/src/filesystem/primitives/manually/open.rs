@@ -211,7 +211,6 @@ impl<'start> Context<'start> {
 
         let dir_required = self.dir_required || use_options.dir_required;
 
-        #[allow(clippy::redundant_clone)]
         match open_unchecked(
             &self.base,
             one.as_ref(),

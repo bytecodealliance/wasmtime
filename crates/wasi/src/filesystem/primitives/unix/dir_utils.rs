@@ -65,7 +65,6 @@ pub(crate) fn append_dir_suffix(path: PathBuf) -> PathBuf {
 /// Strip trailing `/`s, unless this reduces `path` to `/` itself. This is
 /// used by `create_dir` and others to prevent paths like `foo/` from
 /// canonicalizing to `foo/.` since these syscalls treat these differently.
-#[allow(clippy::indexing_slicing)]
 pub(crate) fn strip_dir_suffix(path: &Path) -> impl Deref<Target = Path> + '_ {
     let mut bytes = path.as_os_str().as_bytes();
     while bytes.len() > 1 && *bytes.last().unwrap() == b'/' {

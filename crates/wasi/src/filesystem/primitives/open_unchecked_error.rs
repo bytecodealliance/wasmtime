@@ -17,15 +17,6 @@ pub(crate) enum SymlinkKind {
     Dir,
 }
 
-impl OpenUncheckedError {
-    #[allow(dead_code)]
-    pub(crate) fn kind(&self) -> io::ErrorKind {
-        match self {
-            Self::Other(err) | Self::Symlink(err, _) | Self::NotFound(err) => err.kind(),
-        }
-    }
-}
-
 impl From<OpenUncheckedError> for io::Error {
     fn from(error: OpenUncheckedError) -> Self {
         match error {

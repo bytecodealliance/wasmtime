@@ -271,6 +271,10 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
 ///
 /// Invoked by Windows' vectored exception system; should not be called by
 /// anyone else.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "too fiddly to handle and wouldn't help much anyway"
+)]
 unsafe extern "system" fn continue_handler(exception_info: *mut EXCEPTION_POINTERS) -> i32 {
     let context = unsafe { &(*(*exception_info).ContextRecord) };
     let last_exception_pc = LAST_EXCEPTION_PC.with(|s| s.replace(0));
