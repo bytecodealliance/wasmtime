@@ -1,6 +1,6 @@
 ## 49.0.0
 
-Released 2026-09-20.
+Released 2026-09-21.
 
 ### Added
 
