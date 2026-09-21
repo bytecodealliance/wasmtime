@@ -4631,6 +4631,7 @@ fn create_catch_block(
     let block = builder.create_block();
     let exn_ref = builder.append_block_param(block, exn_payload_ty);
     builder.switch_to_block(block);
+    environ.on_catch_block_entry(builder);
     debug_assert!(exn_ref_ty.bits() <= exn_payload_ty.bits());
     let exn_ref = if exn_ref_ty.bits() < exn_payload_ty.bits() {
         builder.ins().ireduce(exn_ref_ty, exn_ref)

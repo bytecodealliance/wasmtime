@@ -1213,3 +1213,83 @@ fn call_ref_respects_fuel(config: &mut Config) -> Result<()> {
     assert!(format!("{result:?}").contains("all fuel consumed by WebAssembly"));
     Ok(())
 }
+
+#[wasmtime_test(wasm_features(exceptions), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn try_call_normal_return_respects_fuel(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (tag $e)
+          (func $run (export "run") (param $cnt i32) (param $depth i32)
+            (local $i i32)
+            (local.set $i (local.get $cnt))
+            local.get $depth
+            if
+              (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+              loop $l
+                (block $catch
+                  (try_table (catch $e $catch)
+                    (call $run (local.get $cnt) (local.get $depth))))
+                (local.tee $i (i32.sub (local.get $i) (i32.const 1)))
+                if br $l end
+              end
+            end
+          )
+        )
+    "#;
+
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let result = func.call(&mut store, &[Val::I32(10), Val::I32(10)], &mut []);
+    assert!(result.is_err());
+    assert!(format!("{result:?}").contains("all fuel consumed by WebAssembly"));
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn try_call_exceptional_return_respects_fuel(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (tag $e)
+          (func $run (param $cnt i32) (param $depth i32)
+            (local $i i32)
+            (local.set $i (local.get $cnt))
+            local.get $depth
+            if
+              (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+              loop $l
+                (block $catch
+                  (try_table (catch $e $catch)
+                    (call $run (local.get $cnt) (local.get $depth))))
+                (local.tee $i (i32.sub (local.get $i) (i32.const 1)))
+                if br $l end
+              end
+            end
+            throw $e
+          )
+          (func (export "run") (param $cnt i32) (param $depth i32)
+            (block $catch
+              (try_table (catch $e $catch)
+                (call $run (local.get $cnt) (local.get $depth))))
+          )
+        )
+    "#;
+
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let result = func.call(&mut store, &[Val::I32(10), Val::I32(10)], &mut []);
+    assert!(result.is_err());
+    assert!(format!("{result:?}").contains("all fuel consumed by WebAssembly"));
+    Ok(())
+}
