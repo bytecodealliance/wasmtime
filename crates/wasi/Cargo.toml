@@ -25,7 +25,6 @@ tokio = { workspace = true,  features = ["time", "sync", "io-std", "io-util", "r
 bytes = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true, features = ["std", "attributes"] }
-public-cap-primitives = { version = "4.0.3", package = 'cap-primitives' }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
@@ -43,12 +42,11 @@ wasmtime-test-util = { workspace = true }
 env_logger = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["event", "fs", "net"] }
+rustix = { workspace = true, features = ["event", "fs", "net", "time"] }
 rustix-linux-procfs = "0.1.1"
 
 [target.'cfg(windows)'.dependencies]
 rustix = { workspace = true, features = ["event", "net"] }
-winx = "0.36.0"
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 workspace = true
