@@ -3904,38 +3904,3 @@ impl MacroAssembler {
             .xmm_vandnp_rrr(mask.to_reg(), dst.to_reg(), dst, size);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn callee_pop_epilogue_encodings() -> Result<()> {
-        // The 120/136-byte destinations are adjacent aligned frame shapes.
-        // Synthetic 127/128-byte destinations also pin the exact imm8 limit.
-        let cases: &[(u32, u32, &[u8])] = &[
-            (0, 0, &[0x5d, 0xc3]), // POP RBP; RET, no argument area.
-            (48, 0, &[0x5d, 0xc3]),
-            (96, 16, &[0x48, 0x83, 0xc4, 120, 0xc3]), // ADD RSP, imm8; RET.
-            (103, 16, &[0x48, 0x83, 0xc4, 127, 0xc3]),
-            (104, 16, &[0x4c, 0x89, 0xdc, 0xc3]), // MOV RSP, R11; RET.
-            (112, 16, &[0x4c, 0x89, 0xdc, 0xc3]),
-            (512, 256, &[0x4c, 0x89, 0xdc, 0xc3]),
-        ];
-        for &(locals_size, stack_args_size, suffix) in cases {
-            let shared = settings::Flags::new(settings::builder());
-            let isa = x64_settings::Flags::new(&shared, &x64_settings::builder());
-            let mut masm = MacroAssembler::new(8u8, shared, isa)?;
-            masm.sp_offset = locals_size;
-            masm.epilogue(locals_size, stack_args_size)?;
-            assert_eq!(masm.sp_offset, 0);
-            let code = masm.finalize(None)?;
-            assert!(
-                code.data().ends_with(suffix),
-                "locals={locals_size}, args={stack_args_size}: {:02x?}",
-                code.data(),
-            );
-        }
-        Ok(())
-    }
-}

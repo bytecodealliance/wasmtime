@@ -44,9 +44,6 @@ pub enum CallConv {
     /// Callees reclaim their aligned incoming stack-argument area
     /// before returning.
     ///
-    /// Most registers are caller-saved. On AArch64, `x28` is
-    /// callee-saved because it holds Winch's shadow stack pointer.
-    ///
     /// Only the last result is returned in a register; any preceding
     /// results are written to the return area in memory.
     Winch,

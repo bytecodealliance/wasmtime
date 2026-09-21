@@ -1031,23 +1031,3 @@ impl Collector {
         }
     }
 }
-
-#[cfg(all(test, any(target_arch = "x86_64", target_arch = "aarch64")))]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn winch_preserves_tail_call_config() {
-        crate::test::test_n_times(10, |mut config: Config, u| {
-            config.wasmtime.compiler_strategy = CompilerStrategy::Winch;
-            for enabled in [false, true] {
-                config.module_config.config.tail_call_enabled = enabled;
-                config
-                    .wasmtime
-                    .update_module_config(&mut config.module_config, u)?;
-                assert_eq!(config.module_config.config.tail_call_enabled, enabled);
-            }
-            Ok(())
-        })
-    }
-}

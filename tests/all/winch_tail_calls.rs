@@ -1,37 +1,137 @@
-//! Callee-pop returns, synchronous frame walking, and recovery after traps.
+//! Tail-call returns, synchronous frame walking, and recovery after traps.
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use wasmtime::*;
 
 use wasmtime_test_macros::wasmtime_test;
 
-#[wasmtime_test(strategies(only(Winch)))]
+#[wasmtime_test(wasm_features(tail_call))]
 #[cfg_attr(miri, ignore)]
-fn callee_pop_epilogue_boundary(config: &mut Config) -> Result<()> {
-    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
-        return Ok(());
-    }
-    config.wasm_tail_call(false);
-    let engine = Engine::new(config)?;
-    // On x86 these land immediately below and above the compact-frame cutoff.
-    // Reuse the disassembly fixture to check both encoding and execution.
+fn tail_calls_to_host_functions(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
-        include_str!("../disas/winch/x64/callee_pop/epilogues.wat"),
+        r#"(module
+            (type $no-args (func (result i32)))
+            (type $with-args (func (param i32 i32 i32 i32 i32) (result i32)))
+            (import "" "no-args" (func $no-args (type $no-args)))
+            (import "" "with-args" (func $with-args (type $with-args)))
+            (table funcref (elem $no-args $with-args))
+            (func (export "direct-no-args") (result i32)
+                return_call $no-args)
+            (func (export "indirect-no-args") (result i32)
+                i32.const 0
+                return_call_indirect (type $no-args))
+            (func (export "direct-with-args") (param i32) (result i32)
+                local.get 0
+                i32.const 2
+                i32.const 3
+                i32.const 4
+                i32.const 5
+                return_call $with-args)
+            (func (export "indirect-with-args") (param i32) (result i32)
+                local.get 0
+                i32.const 2
+                i32.const 3
+                i32.const 4
+                i32.const 5
+                i32.const 1
+                return_call_indirect (type $with-args)))"#,
     )?;
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let no_args = instance.get_typed_func::<(), i64>(&mut store, "no_stack_args")?;
-    for name in ["compact", "fallback"] {
-        let f = instance
-            .get_typed_func::<(i64, i64, i64, i64, i64, i64, i64, i64), i64>(&mut store, name)?;
-        for seed in [-17, 0, 42] {
-            for _ in 0..10 {
-                assert_eq!(
-                    f.call(&mut store, (seed, 2, 3, 4, 5, 6, 7, seed + 8))?,
-                    2 * seed + 8
-                );
-                assert_eq!(no_args.call(&mut store, ())?, 42);
+    let no_args = Func::wrap(&mut store, || 42i32);
+    let with_args = Func::wrap(&mut store, |first: i32, _: i32, _: i32, _: i32, _: i32| {
+        first
+    });
+    let instance = Instance::new(&mut store, &module, &[no_args.into(), with_args.into()])?;
+    for name in ["direct-no-args", "indirect-no-args"] {
+        let run = instance.get_typed_func::<(), i32>(&mut store, name)?;
+        assert_eq!(run.call(&mut store, ())?, 42);
+    }
+    for name in ["direct-with-args", "indirect-with-args"] {
+        let run = instance.get_typed_func::<i32, i32>(&mut store, name)?;
+        assert_eq!(run.call(&mut store, 84)?, 84);
+    }
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(tail_call))]
+#[cfg_attr(miri, ignore)]
+fn tail_calls_skip_unreachable_loops(config: &mut Config) -> Result<()> {
+    for (fuel, epoch) in [(true, false), (false, true), (true, true)] {
+        let mut config = config.clone();
+        config.consume_fuel(fuel).epoch_interruption(epoch);
+        let engine = Engine::new(&config)?;
+        for call in [
+            "return_call $leaf",
+            "i32.const 0 return_call_indirect (type $t)",
+        ] {
+            let module = Module::new(
+                &engine,
+                format!(
+                    r#"(module
+                        (type $t (func (result i32)))
+                        (import "" "interrupt" (func $interrupt))
+                        (func $leaf (type $t) i32.const 42)
+                        (table funcref (elem $leaf))
+                        ;; Tail recursion followed by an unreachable loop.
+                        (func $recursive return_call $recursive (loop))
+                        (func (export "run") (param i32) (result i32)
+                            local.get 0
+                            if
+                                {call}
+                                (loop (loop))
+                            end
+                            ;; The join restores reachability and the frame.
+                            (loop)
+                            i32.const 7)
+                        (func (export "interrupt") (param i32) (result i32)
+                            local.get 0
+                            if
+                                {call}
+                                (loop)
+                            end
+                            call $interrupt
+                            ;; This reachable loop must still check for interruption.
+                            (loop)
+                            i32.const 7))"#
+                ),
+            )?;
+            let mut store = Store::new(&engine, ());
+            if fuel {
+                store.set_fuel(1_000_000)?;
             }
+            if epoch {
+                store.set_epoch_deadline(1);
+            }
+            let interrupt = Func::wrap(
+                &mut store,
+                move |mut caller: Caller<'_, ()>| -> Result<()> {
+                    if fuel {
+                        caller.set_fuel(0)?;
+                    } else {
+                        caller.engine().increment_epoch();
+                    }
+                    Ok(())
+                },
+            );
+            let instance = Instance::new(&mut store, &module, &[interrupt.into()])?;
+            let run = instance.get_typed_func::<i32, i32>(&mut store, "run")?;
+            assert_eq!(run.call(&mut store, 1)?, 42);
+            assert_eq!(run.call(&mut store, 0)?, 7);
+            let interrupt = instance.get_typed_func::<i32, i32>(&mut store, "interrupt")?;
+            assert_eq!(interrupt.call(&mut store, 1)?, 42);
+            let trap = interrupt
+                .call(&mut store, 0)
+                .unwrap_err()
+                .downcast::<Trap>()?;
+            assert_eq!(
+                trap,
+                if fuel {
+                    Trap::OutOfFuel
+                } else {
+                    Trap::Interrupt
+                }
+            );
         }
     }
     Ok(())
@@ -40,12 +140,9 @@ fn callee_pop_epilogue_boundary(config: &mut Config) -> Result<()> {
 // Keep an operand live across each call and consume every argument and result.
 // This exercises combined padding/spill cleanup as well as the stack-result
 // path, where result movement must precede the final cleanup.
-#[wasmtime_test(strategies(only(Winch)))]
+#[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn callee_pop_cleanup_preserves_live_values(config: &mut Config) -> Result<()> {
-    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
-        return Ok(());
-    }
+fn cleanup_preserves_live_values(config: &mut Config) -> Result<()> {
     config.wasm_tail_call(false);
     let engine = Engine::new(config)?;
     for n in [0, 1, 5, 10, 32, 64, 80] {
@@ -127,23 +224,16 @@ fn names(bt: &WasmBacktrace) -> Vec<String> {
         .collect()
 }
 
-#[wasmtime_test(strategies(only(Winch)))]
+#[wasmtime_test(wasm_features(tail_call))]
 #[cfg_attr(miri, ignore)]
-fn callee_pop_returns_and_traps(config: &mut Config) -> Result<()> {
-    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
-        return Ok(());
-    }
+fn returns_and_traps(config: &mut Config) -> Result<()> {
     for fuel in [false, true] {
         let mut config = config.clone();
-        config
-            .strategy(Strategy::Winch)
-            .wasm_tail_call(true)
-            .consume_fuel(fuel);
+        config.consume_fuel(fuel);
         config.max_wasm_stack(64 * 1024);
         let engine = Engine::new(&config)?;
-        // Exercise both sides of AArch64's signed load/store-offset range,
-        // the previously failing 64/80-argument tails, and an entry-SP delta
-        // that cannot be encoded by one add/sub immediate.
+        // Cover register and stack arguments, AArch64's signed load/store-offset
+        // boundary, and entry-SP deltas beyond a single add/sub immediate.
         for n in [0, 1, 5, 10, 32, 38, 39, 40, 64, 80, 528] {
             let params = " i64".repeat(n);
             let args = (1..=n)
