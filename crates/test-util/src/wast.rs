@@ -148,6 +148,16 @@ fn spec_test_config(test: &Path) -> TestConfig {
         Some("custom-descriptors") => {
             ret.custom_descriptors = Some(true);
         }
+        Some("compact-import-section") => {
+            ret.compact_imports = Some(true);
+            ret.reference_types = Some(true);
+            ret.multi_memory = Some(true);
+            ret.exceptions = Some(true);
+        }
+        Some("extended-name-section") => {
+            ret.gc = Some(true);
+            ret.exceptions = Some(true);
+        }
         Some(proposal) => panic!("unsupported proposal {proposal:?}"),
 
         // The rough goal here is to enable a minimal set of features for the
@@ -204,6 +214,9 @@ fn spec_test_config(test: &Path) -> TestConfig {
             }
             if test_name.contains("return_") || test_name.contains("try_table") {
                 ret.tail_call = Some(true);
+            }
+            if test_name == "return_call.wast" || test_name == "return_call_indirect.wast" {
+                ret.function_references = Some(true);
             }
             if test_name.contains("tag")
                 || test_name.contains("try_table")
