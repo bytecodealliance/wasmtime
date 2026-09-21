@@ -1810,7 +1810,7 @@ impl StoreOpaque {
     }
 
     // A result of `None` may indicate that this is either the top-level event
-    // loop, a deferred hast task, or concurrency support is disabled. In all
+    // loop, a deferred host task, or concurrency support is disabled. In all
     // cases we don't have an ID for the task.
     pub(crate) fn current_materialized_host_task(&mut self) -> Result<Option<TableId<HostTask>>> {
         match self.current_thread()? {
@@ -1983,6 +1983,10 @@ impl StoreOpaque {
         let caller = self.current_guest_thread()?;
         log::trace!("new deferred host task with caller {caller:?}");
         self.set_thread(CurrentThread::DeferredHost(caller))?;
+        let state = self.concurrent_state_mut()?;
+        debug_assert!(state.deferred_host_call_context.is_none());
+        state.deferred_host_call_context = Some(CallContext::default());
+        state.debug_assert_deferred_host_invariant();
         Ok(Some(caller))
     }
 
@@ -2000,6 +2004,15 @@ impl StoreOpaque {
         match original_task {
             Some(caller) => {
                 self.set_thread(caller)?;
+                if materialized_task.is_none() {
+                    let state = self.concurrent_state_mut()?;
+                    let context = state
+                        .deferred_host_call_context
+                        .take()
+                        .expect("deferred host call context should be present");
+                    debug_assert!(context.is_empty());
+                    state.debug_assert_deferred_host_invariant();
+                }
                 log::trace!(
                     "delete host task with caller {original_task:?} and materialized as {materialized_task:?}"
                 );
@@ -2008,6 +2021,7 @@ impl StoreOpaque {
                 }
             }
             None => {
+                debug_assert!(materialized_task.is_none());
                 self.exit_call_not_concurrent();
             }
         }
@@ -2031,21 +2045,6 @@ impl StoreOpaque {
         let state = self.concurrent_state_mut()?;
         state.debug_assert_deferred_host_invariant();
         let old_thread = mem::replace(&mut state.unforced_current_thread, thread);
-
-        // Ensure `deferred_host_call_context` invariant is maintained when
-        // switching threads and that we aren't dropping a non-empty
-        // `CallContext`.
-        if let CurrentThread::DeferredHost(_) = old_thread {
-            let context = state
-                .deferred_host_call_context
-                .take()
-                .expect("deferred host call context should be present");
-            debug_assert!(context.is_empty());
-        };
-        if let CurrentThread::DeferredHost(_) = thread {
-            state.deferred_host_call_context = Some(CallContext::default());
-        };
-        state.debug_assert_deferred_host_invariant();
 
         // First thing to do after swapping threads is updating the context
         // slots for this thread within the store. This restores the behavior of
