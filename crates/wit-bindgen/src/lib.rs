@@ -205,6 +205,11 @@ pub struct Opts {
     /// the `Resolve` and `WorldId` used to generate the bindings, without
     /// requiring separate bookkeeping of the original WIT files.
     pub include_component_type: bool,
+
+    /// Whether to emit canonical interface names (e.g. `wasi:io/streams@0.2`)
+    /// instead of full versioned names (e.g. `wasi:io/streams@0.2.1`) in the
+    /// generated linker bindings and export lookups.
+    pub canonical_names: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -249,6 +254,22 @@ enum InterfaceKind {
 }
 
 impl Wasmtime {
+    fn world_key_name(&self, resolve: &Resolve, key: &WorldKey) -> String {
+        if self.opts.canonical_names {
+            resolve.name_canonicalized_world_key(key)
+        } else {
+            resolve.name_world_key(key)
+        }
+    }
+
+    fn interface_id_of(&self, resolve: &Resolve, id: InterfaceId) -> Option<String> {
+        if self.opts.canonical_names {
+            resolve.canonicalized_id_of(id)
+        } else {
+            resolve.id_of(id)
+        }
+    }
+
     fn populate_world_and_interface_options(&mut self, resolve: &Resolve, world: WorldId) {
         self.world_link_options.add_world(resolve, &world);
 
@@ -499,7 +520,7 @@ impl Wasmtime {
         generator.src.push_str(&format!(
             "#[allow(unused_imports)] use {wt}::component::__internal::Box;\n"
         ));
-        let key_name = resolve.name_world_key(&key);
+        let key_name = generator.generator.world_key_name(resolve, &key);
         generator.generate_add_to_linker(id, &key_name);
         let body = String::from(mem::take(&mut generator.src));
         let interface_name = to_rust_ident(resolve.interfaces[id].name.as_ref().unwrap());
@@ -594,7 +615,7 @@ impl Wasmtime {
             // actually generate bindings here.
             generator.generator.interface_link_options[&id].write_struct(&mut generator.src);
             generator.types(id);
-            let key_name = resolve.name_world_key(name);
+            let key_name = generator.generator.world_key_name(resolve, name);
             generator.generate_add_to_linker(id, &key_name);
 
             let module = &generator.src[..];
@@ -704,7 +725,7 @@ impl Wasmtime {
                 uwriteln!(generator.src, "}}");
 
                 uwriteln!(generator.src, "impl {struct_name}Indices {{");
-                let instance_name = resolve.name_world_key(name);
+                let instance_name = generator.generator.world_key_name(resolve, name);
                 uwrite!(
                     generator.src,
                     "
@@ -2718,7 +2739,7 @@ impl<'a> InterfaceGenerator<'a> {
         match &self.named_import_id {
             Some(id_ty) => {
                 let (id, _, _) = self.current_interface.unwrap();
-                let wit_name = self.resolve.id_of(id).unwrap();
+                let wit_name = self.generator.interface_id_of(self.resolve, id).unwrap();
                 uwriteln!(
                     self.src,
                     "
@@ -3202,7 +3223,7 @@ pub fn add_to_linker<T, D>(
             }
 
             let ns = match ns {
-                Some(key) => resolve.name_world_key(key),
+                Some(key) => self.generator.world_key_name(resolve, key),
                 None => "default".to_string(),
             };
             self.src.push_str(&format!(
