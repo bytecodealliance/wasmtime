@@ -27,3 +27,4 @@ env_logger = { workspace = true }
 
 [features]
 default = []
+threads = ["wasmtime/threads"]
