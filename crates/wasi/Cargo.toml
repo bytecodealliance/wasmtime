@@ -42,7 +42,7 @@ wasmtime-test-util = { workspace = true }
 env_logger = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["event", "fs", "net"] }
+rustix = { workspace = true, features = ["event", "fs", "net", "time"] }
 rustix-linux-procfs = "0.1.1"
 
 [target.'cfg(windows)'.dependencies]
