@@ -1682,3 +1682,74 @@ mod named_imports_resources_async {
         Ok(())
     }
 }
+
+mod canonical_names {
+    use super::*;
+    use wasmtime::component::HasSelf;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package test:pkg@0.2.1;
+
+            interface iface {
+                foo: func() -> u32;
+            }
+
+            world canon {
+                import iface;
+                export bar: func() -> u32;
+            }
+        ",
+        canonical_names: true,
+    });
+
+    #[test]
+    fn run() -> Result<()> {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_canonical_names(true);
+        let engine = Engine::new(&config)?;
+
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "test:pkg/iface@0.2" (versionsuffix ".2")
+                        (instance $i
+                            (export "foo" (func (result u32)))
+                        )
+                    )
+                    (core module $m
+                        (import "" "" (func $foo (result i32)))
+                        (func (export "bar") (result i32)
+                            call $foo
+                        )
+                    )
+                    (core func $f (canon lower (func $i "foo")))
+                    (core instance $i (instantiate $m
+                        (with "" (instance (export "" (func $f))))
+                    ))
+                    (func $bar (export "bar") (result u32)
+                        (canon lift (core func $i "bar"))
+                    )
+                )
+            "#,
+        )?;
+
+        struct MyHost;
+
+        impl test::pkg::iface::Host for MyHost {
+            fn foo(&mut self) -> u32 {
+                42
+            }
+        }
+
+        let mut linker = Linker::new(&engine);
+        Canon::add_to_linker::<_, HasSelf<_>>(&mut linker, |h| h)?;
+        let mut store = Store::new(&engine, MyHost);
+        let canon = Canon::instantiate(&mut store, &component, &linker)?;
+        let result = canon.call_bar(&mut store)?;
+        assert_eq!(result, 42);
+        Ok(())
+    }
+}
