@@ -1052,3 +1052,43 @@ fn fuel_around_table_grow() -> Result<()> {
     assert_eq!(trap, Trap::TableOutOfBounds);
     Ok(())
 }
+
+#[wasmtime_test(strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn call_ref_respects_fuel(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (type $t (func (param i32 i32)))
+          (func $run (export "run") (param $cnt i32) (param $depth i32)
+            (local $i i32)
+            (local.set $i (local.get $cnt))
+            local.get $depth
+            if
+              (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+              loop $l
+                (call_ref $t
+                  (local.get $cnt)
+                  (local.get $depth)
+                  (ref.func $run))
+                (local.tee $i (i32.sub (local.get $i) (i32.const 1)))
+                if br $l end
+              end
+            end
+          )
+        )
+    "#;
+
+    config.consume_fuel(true);
+    config.wasm_reference_types(true);
+    config.wasm_function_references(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let result = func.call(&mut store, &[Val::I32(10), Val::I32(10)], &mut []);
+    assert!(result.is_err());
+    assert!(format!("{result:?}").contains("all fuel consumed by WebAssembly"));
+    Ok(())
+}
