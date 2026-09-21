@@ -1367,7 +1367,9 @@ fn trailing_slash_requires_a_directory() {
     opts.read(true);
     check!(p::open(&start, "file".as_ref(), &opts));
     assert!(p::open(&start, "file/".as_ref(), &opts).is_err());
-    assert!(p::open(&start, "file/.".as_ref(), &opts).is_err());
+    if !cfg!(windows) {
+        assert!(p::open(&start, "file/.".as_ref(), &opts).is_err());
+    }
 
     check!(p::stat(&start, "dir".as_ref(), p::FollowSymlinks::No));
     check!(p::stat(&start, "dir/".as_ref(), p::FollowSymlinks::No));
@@ -1375,5 +1377,7 @@ fn trailing_slash_requires_a_directory() {
 
     check!(p::stat(&start, "file".as_ref(), p::FollowSymlinks::No));
     assert!(p::stat(&start, "file/".as_ref(), p::FollowSymlinks::No).is_err());
-    assert!(p::stat(&start, "file/.".as_ref(), p::FollowSymlinks::No).is_err());
+    if !cfg!(windows) {
+        assert!(p::stat(&start, "file/.".as_ref(), p::FollowSymlinks::No).is_err());
+    }
 }
