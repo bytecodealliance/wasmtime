@@ -1,3 +1,13 @@
+## 48.0.3
+
+Released 2026-09-24.
+
+### Fixed
+
+* Do not drop fuel-spend accrued by callees of `call_ref` and callees that
+  return via exception throws.
+  [GHSA-m63x-6p34-q65x](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m63x-6p34-q65x)
+
 ## 48.0.2
 
 Released 2026-09-10.
