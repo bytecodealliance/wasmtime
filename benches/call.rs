@@ -904,12 +904,12 @@ mod component {
 #[cfg(feature = "component-model-async")]
 mod component_async {
     use super::*;
-    use wasmtime::component::{Component, Linker};
+    use wasmtime::component::{Component, Linker, Resource, ResourceType};
 
     pub fn measure_execution_time(c: &mut Criterion) {
         let mut group = c.benchmark_group("component-async");
-        host_to_guest(&mut group);
-        guest_to_host(&mut group);
+        host_to_wasm(&mut group);
+        wasm_to_host(&mut group);
     }
 
     fn engine() -> Engine {
@@ -918,7 +918,7 @@ mod component_async {
         Engine::new(&config).unwrap()
     }
 
-    fn host_to_guest(group: &mut BenchmarkGroup<'_, WallTime>) {
+    fn host_to_wasm(group: &mut BenchmarkGroup<'_, WallTime>) {
         let engine = engine();
         let component = Component::new(
             &engine,
@@ -957,7 +957,7 @@ mod component_async {
             .get_typed_func::<(), ()>(&mut store, "nop")
             .unwrap();
 
-        group.bench_function("host-to-guest", |b| {
+        group.bench_function("host-to-wasm", |b| {
             b.iter(|| {
                 run_await(store.run_concurrent(async |accessor| {
                     nop.call_concurrent(accessor, ()).await.unwrap()
@@ -967,16 +967,46 @@ mod component_async {
         });
     }
 
-    fn guest_to_host(group: &mut BenchmarkGroup<'_, WallTime>) {
-        let engine = engine();
+    fn wasm_to_host(group: &mut BenchmarkGroup<'_, WallTime>) {
+        let mut config = Config::new();
+        config.wasm_component_model_async(true);
+        config.wasm_component_model_async_stackful(true);
+        let engine = Engine::new(&config).unwrap();
         let component = Component::new(
             &engine,
             r#"
                 (component
+                    (import "r" (type $r (sub resource)))
                     (import "nop" (func $nop async))
+                    (import "new" (func $new (result (own $r))))
+                    (import "borrow" (func $borrow async (param "r" (borrow $r))))
+                    (import "pending-once" (func $pending-once async))
+                    (core module $memory (memory (export "memory") 1))
+                    (core instance $memory (instantiate $memory))
                     (core func $nop (canon lower (func $nop) async))
+                    (core func $new (canon lower (func $new)))
+                    (core func $borrow (canon lower (func $borrow) async))
+                    (core func $pending-once (canon lower (func $pending-once) async))
+                    (core func $drop (canon resource.drop $r))
+                    (core func $waitable-set-new (canon waitable-set.new))
+                    (core func $waitable-join (canon waitable.join))
+                    (core func $waitable-set-wait
+                        (canon waitable-set.wait (memory (core memory $memory "memory"))))
+                    (core func $waitable-set-drop (canon waitable-set.drop))
+                    (core func $subtask-drop (canon subtask.drop))
                     (core module $m
+                        (import "" "memory" (memory 1))
                         (import "" "nop" (func $nop (result i32)))
+                        (import "" "new" (func $new (result i32)))
+                        (import "" "borrow" (func $borrow (param i32) (result i32)))
+                        (import "" "pending-once" (func $pending-once (result i32)))
+                        (import "" "drop" (func $drop (param i32)))
+                        (import "" "waitable-set.new" (func $waitable-set-new (result i32)))
+                        (import "" "waitable.join" (func $waitable-join (param i32 i32)))
+                        (import "" "waitable-set.wait"
+                            (func $waitable-set-wait (param i32 i32) (result i32)))
+                        (import "" "waitable-set.drop" (func $waitable-set-drop (param i32)))
+                        (import "" "subtask.drop" (func $subtask-drop (param i32)))
                         (import "" "task.return" (func $task-return))
                         (func (export "run") (param $iters i64) (result i32)
                             loop $l
@@ -990,6 +1020,49 @@ mod component_async {
                             call $task-return
                             i32.const 0
                         )
+                        (func (export "run-borrow") (param $iters i64) (result i32)
+                            (local $r i32)
+                            (local.set $r (call $new))
+                            loop $l
+                                (drop (call $borrow (local.get $r)))
+                                (local.tee $iters (i64.add (local.get $iters) (i64.const -1)))
+                                i64.const 0
+                                i64.ne
+                                br_if $l
+                            end
+
+                            (call $drop (local.get $r))
+                            call $task-return
+                            i32.const 0
+                        )
+                        (func (export "run-pending-once") (param $iters i64)
+                            (local $ret i32)
+                            (local $task i32)
+                            (local $set i32)
+                            (local.set $set (call $waitable-set-new))
+                            loop $l
+                                (local.set $ret (call $pending-once))
+                                ;; Verify that the first poll returned Pending.
+                                (if (i32.ne
+                                        (i32.and (local.get $ret) (i32.const 0xf))
+                                        (i32.const 1))
+                                    (then unreachable))
+                                (local.set $task
+                                    (i32.shr_u (local.get $ret) (i32.const 4)))
+                                (call $waitable-join
+                                    (local.get $task) (local.get $set))
+                                (drop (call $waitable-set-wait
+                                    (local.get $set) (i32.const 0)))
+                                (call $subtask-drop (local.get $task))
+                                (local.tee $iters
+                                    (i64.sub (local.get $iters) (i64.const 1)))
+                                i64.const 0
+                                i64.ne
+                                br_if $l
+                            end
+                            (call $waitable-set-drop (local.get $set))
+                            call $task-return
+                        )
                         (func (export "callback") (param i32 i32 i32) (result i32)
                             unreachable
                         )
@@ -997,7 +1070,17 @@ mod component_async {
                     (core func $task-return (canon task.return))
                     (core instance $i (instantiate $m
                         (with "" (instance
+                            (export "memory" (memory $memory "memory"))
                             (export "nop" (func $nop))
+                            (export "new" (func $new))
+                            (export "borrow" (func $borrow))
+                            (export "pending-once" (func $pending-once))
+                            (export "drop" (func $drop))
+                            (export "waitable-set.new" (func $waitable-set-new))
+                            (export "waitable.join" (func $waitable-join))
+                            (export "waitable-set.wait" (func $waitable-set-wait))
+                            (export "waitable-set.drop" (func $waitable-set-drop))
+                            (export "subtask.drop" (func $subtask-drop))
                             (export "task.return" (func $task-return))
                         ))
                     ))
@@ -1007,6 +1090,15 @@ mod component_async {
                             (callback (core func $i "callback"))
                         )
                     )
+                    (func (export "run-borrow") async (param "iterations" u64)
+                        (canon lift (core func $i "run-borrow")
+                            async
+                            (callback (core func $i "callback"))
+                        )
+                    )
+                    (func (export "run-pending-once") async (param "iterations" u64)
+                        (canon lift (core func $i "run-pending-once") async)
+                    )
                 )
             "#,
         )
@@ -1015,18 +1107,81 @@ mod component_async {
         let mut linker = Linker::new(&engine);
         linker
             .root()
+            .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))
+            .unwrap();
+        linker
+            .root()
             .func_wrap_concurrent("nop", |_, ()| Box::pin(async { Ok(()) }))
+            .unwrap();
+        linker
+            .root()
+            .func_wrap("new", |_, ()| Ok((Resource::<u32>::new_own(0),)))
+            .unwrap();
+        linker
+            .root()
+            .func_wrap_concurrent("borrow", |_, (_r,): (Resource<u32>,)| {
+                Box::pin(async { Ok(()) })
+            })
+            .unwrap();
+        linker
+            .root()
+            .func_wrap_concurrent("pending-once", |_, ()| {
+                let mut pending = true;
+                Box::pin(std::future::poll_fn(move |cx| {
+                    if std::mem::take(&mut pending) {
+                        cx.waker().wake_by_ref();
+                        Poll::Pending
+                    } else {
+                        Poll::Ready(Ok(()))
+                    }
+                }))
+            })
             .unwrap();
         let instance = run_await(linker.instantiate_async(&mut store, &component)).unwrap();
         let run = instance
             .get_typed_func::<(u64,), ()>(&mut store, "run")
             .unwrap();
 
-        group.bench_function("guest-to-host", |b| {
+        group.bench_function("wasm-to-host", |b| {
             b.iter_custom(|iterations| {
                 let start = Instant::now();
                 run_await(store.run_concurrent(async |accessor| {
                     run.call_concurrent(accessor, (iterations,)).await.unwrap()
+                }))
+                .unwrap();
+                start.elapsed()
+            });
+        });
+
+        let run_borrow = instance
+            .get_typed_func::<(u64,), ()>(&mut store, "run-borrow")
+            .unwrap();
+        group.bench_function("wasm-to-host-borrow", |b| {
+            b.iter_custom(|iterations| {
+                let start = Instant::now();
+                run_await(store.run_concurrent(async |accessor| {
+                    run_borrow
+                        .call_concurrent(accessor, (iterations,))
+                        .await
+                        .unwrap()
+                }))
+                .unwrap();
+                start.elapsed()
+            });
+        });
+
+        let run_pending_once = instance
+            .get_typed_func::<(u64,), ()>(&mut store, "run-pending-once")
+            .unwrap();
+
+        group.bench_function("wasm-to-host-pending-once", |b| {
+            b.iter_custom(|iterations| {
+                let start = Instant::now();
+                run_await(store.run_concurrent(async |accessor| {
+                    run_pending_once
+                        .call_concurrent(accessor, (iterations,))
+                        .await
+                        .unwrap()
                 }))
                 .unwrap();
                 start.elapsed()
