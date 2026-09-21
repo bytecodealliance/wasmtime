@@ -24,7 +24,7 @@ impl<'a> Parse<'a> for FuelWast<'a> {
     }
 }
 
-#[wasmtime_test(wasm_features(bulk_memory, reference_types, gc))]
+#[wasmtime_test(wasm_features(bulk_memory, reference_types, gc, function_references, exceptions))]
 #[cfg_attr(miri, ignore)]
 fn run(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
