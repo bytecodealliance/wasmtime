@@ -21,11 +21,12 @@
 ;;     region1 = 160 ""
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
-;;     region4 = 108 ""
+;;     region4 = 239 ""
 ;;     region5 = 130 ""
 ;;     region6 = 6 ""
-;;     region7 = 25 ""
-;;     region8 = 68 ""
+;;     region7 = 134 ""
+;;     region8 = 25 ""
+;;     region9 = 68 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -58,7 +59,7 @@
 ;;                                 block6:
 ;; @002e                               v28 = iconst.i64 4
 ;; @002e                               v29 = iadd.i64 v13, v28  ; v28 = 4
-;; @002e                               v30 = load.i32 user2 readonly region4 v29
+;; @002e                               v30 = load.i32 user2 readonly region7 v29
 ;; @002e                               v22 = load.i64 notrap aligned readonly can_move region5 v0+40
 ;; @002e                               v23 = load.i32 notrap aligned readonly can_move region6 v22
 ;; @002e                               v31 = icmp eq v30, v23
@@ -69,14 +70,14 @@
 ;; @002e                               brif v33, block7, block2
 ;;
 ;;                                 block7:
-;; @0034                               v35 = load.i64 notrap aligned readonly can_move region8 v0+56
-;; @0034                               v34 = load.i64 notrap aligned readonly can_move region7 v0+72
+;; @0034                               v35 = load.i64 notrap aligned readonly can_move region9 v0+56
+;; @0034                               v34 = load.i64 notrap aligned readonly can_move region8 v0+72
 ;; @0034                               call_indirect sig0, v35(v34, v0)
 ;; @0036                               return
 ;;
 ;;                                 block2:
-;; @0038                               v37 = load.i64 notrap aligned readonly can_move region8 v0+88
-;; @0038                               v36 = load.i64 notrap aligned readonly can_move region7 v0+104
+;; @0038                               v37 = load.i64 notrap aligned readonly can_move region9 v0+88
+;; @0038                               v36 = load.i64 notrap aligned readonly can_move region8 v0+104
 ;; @0038                               call_indirect sig0, v37(v36, v0)
 ;; @003a                               return
 ;; }

@@ -90,7 +90,9 @@ where
         let header_extent = i64::from(
             self.env
                 .vmoffsets
-                .vm_drc_header_next_over_approximated_stack_root(),
+                .ptr
+                .vm_drc_header()
+                .next_over_approximated_stack_root(),
         ) + 4;
         self.emit_gc_ref_bounds_check(ref_reg, bound_reg, header_extent)?;
 
@@ -139,7 +141,7 @@ where
         let old_reg = self.context.any_gpr(self.masm)?;
         self.masm.load(addr, writable!(old_reg), OperandSize::S32)?;
 
-        let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+        let ref_count_offset = u32::from(self.env.vmoffsets.ptr.vm_drc_header().ref_count());
         let header_extent = i64::from(ref_count_offset + DRC_REF_COUNT_SIZE);
 
         // Retain the new heap reference before publishing it. This ordering
@@ -202,7 +204,7 @@ where
         object_addr: Reg,
         skip: MachLabel,
     ) -> Result<()> {
-        let reserved_offset = self.env.vmoffsets.vm_gc_header_reserved_bits();
+        let reserved_offset = u32::from(self.env.vmoffsets.ptr.vm_gc_header().kind());
         self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
             masm.load(
                 masm.address_at_reg(object_addr, reserved_offset)?,
@@ -253,11 +255,14 @@ where
                 .vm_drc_heap_data()
                 .current_over_approximated_stack_roots_len(),
         );
-        let next_offset = self
-            .env
-            .vmoffsets
-            .vm_drc_header_next_over_approximated_stack_root();
-        let reserved_offset = self.env.vmoffsets.vm_gc_header_reserved_bits();
+        let next_offset = u32::from(
+            self.env
+                .vmoffsets
+                .ptr
+                .vm_drc_header()
+                .next_over_approximated_stack_root(),
+        );
+        let reserved_offset = u32::from(self.env.vmoffsets.ptr.vm_gc_header().kind());
 
         let heap_data_reg = self.context.any_gpr(self.masm)?;
         self.masm.load_ptr(
@@ -401,7 +406,7 @@ where
         heap_base: Reg,
         heap_bound: Reg,
     ) -> Result<()> {
-        let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+        let ref_count_offset = u32::from(self.env.vmoffsets.ptr.vm_drc_header().ref_count());
         let header_extent = i64::from(ref_count_offset + DRC_REF_COUNT_SIZE);
         self.emit_gc_ref_bounds_check(gc_ref, heap_bound, header_extent)?;
 
@@ -431,7 +436,7 @@ where
         object_addr: Reg,
         mutation: RefCountMutation,
     ) -> Result<Reg> {
-        let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+        let ref_count_offset = u32::from(self.env.vmoffsets.ptr.vm_drc_header().ref_count());
         let count = self.context.any_gpr(self.masm)?;
         self.masm.load(
             self.masm.address_at_reg(object_addr, ref_count_offset)?,
@@ -452,7 +457,7 @@ where
     }
 
     fn emit_store_ref_count(&mut self, object_addr: Reg, count: Reg) -> Result<()> {
-        let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+        let ref_count_offset = u32::from(self.env.vmoffsets.ptr.vm_drc_header().ref_count());
         self.masm.store(
             count.into(),
             self.masm.address_at_reg(object_addr, ref_count_offset)?,

@@ -33,9 +33,12 @@
 ;;     region5 = 196 ""
 ;;     region6 = 130 ""
 ;;     region7 = 26 ""
-;;     region8 = 108 ""
-;;     region9 = 110 ""
-;;     region10 = 142 ""
+;;     region8 = 239 ""
+;;     region9 = 134 ""
+;;     region10 = 110 ""
+;;     region11 = 142 ""
+;;     region12 = 229 ""
+;;     region13 = 96 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -72,21 +75,21 @@
 ;; @003a                               store user2 region8 v52, v27  ; v52 = 0x0400_0020
 ;; @003a                               v30 = load.i64 notrap aligned readonly can_move region6 v0+40
 ;; @003a                               v31 = load.i32 notrap aligned readonly can_move region7 v30+12
-;; @003a                               store user2 region8 v31, v27+4
+;; @003a                               store user2 region9 v31, v27+4
 ;; @003a                               store.i32 notrap aligned region3 v17, v10
 ;; @003a                               v32 = iconst.i64 16
 ;; @003a                               v33 = iadd v27, v32  ; v32 = 16
-;; @003a                               store.i32 user2 little region9 v2, v33
+;; @003a                               store.i32 user2 little region10 v2, v33
 ;; @003a                               v34 = iconst.i64 24
 ;; @003a                               v35 = iadd v27, v34  ; v34 = 24
-;; @003a                               store.i64 user2 little region10 v3, v35
+;; @003a                               store.i64 user2 little region11 v3, v35
 ;; @003a                               v36 = iconst.i64 8
 ;; @003a                               v37 = iadd v27, v36  ; v36 = 8
-;; @003a                               store.i32 user2 little region8 v4, v37
+;; @003a                               store.i32 user2 little region12 v4, v37
 ;; @003a                               v5 = iconst.i32 0
 ;; @003a                               v38 = iconst.i64 12
 ;; @003a                               v39 = iadd v27, v38  ; v38 = 12
-;; @003a                               store user2 little region8 v5, v39  ; v5 = 0
+;; @003a                               store user2 little region13 v5, v39  ; v5 = 0
 ;; @003a                               try_call fn2(v0, v58), sig2, block4, [ context v0 ]
 ;;
 ;;                                 block4:

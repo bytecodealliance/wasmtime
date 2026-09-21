@@ -18,8 +18,10 @@
 ;;     region5 = 196 ""
 ;;     region6 = 130 ""
 ;;     region7 = 6 ""
-;;     region8 = 108 ""
-;;     region9 = 5 ""
+;;     region8 = 239 ""
+;;     region9 = 134 ""
+;;     region10 = 108 ""
+;;     region11 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -51,12 +53,12 @@
 ;; @0025                               store user2 region8 v149, v34  ; v149 = -1476394968
 ;; @0025                               v37 = load.i64 notrap aligned readonly can_move region6 v0+40
 ;; @0025                               v38 = load.i32 notrap aligned readonly can_move region7 v37
-;; @0025                               store user2 region8 v38, v34+4
+;; @0025                               store user2 region9 v38, v34+4
 ;; @0025                               store.i32 notrap aligned region3 v24, v17
 ;; @0025                               v5 = iconst.i32 3
 ;; @0025                               v8 = iconst.i64 8
 ;; @0025                               v40 = iadd v34, v8  ; v8 = 8
-;; @0025                               store user2 region8 v5, v40  ; v5 = 3
+;; @0025                               store user2 region10 v5, v40  ; v5 = 3
 ;; @0025                               trapz v242, user16
 ;;                                     v244 = iconst.i32 40
 ;; @0025                               v61 = uadd_overflow_trap v242, v244, user2  ; v244 = 40
@@ -64,12 +66,12 @@
 ;; @0025                               v65 = iadd v32, v62
 ;;                                     v126 = iconst.i64 24
 ;; @0025                               v68 = isub v65, v126  ; v126 = 24
-;; @0025                               store.i64 user2 little region9 v2, v68
+;; @0025                               store.i64 user2 little region11 v2, v68
 ;;                                     v211 = iconst.i64 16
 ;; @0025                               v96 = isub v65, v211  ; v211 = 16
-;; @0025                               store.i64 user2 little region9 v3, v96
+;; @0025                               store.i64 user2 little region11 v3, v96
 ;; @0025                               v124 = isub v65, v8  ; v8 = 8
-;; @0025                               store.i64 user2 little region9 v4, v124
+;; @0025                               store.i64 user2 little region11 v4, v124
 ;; @0029                               jump block1
 ;;
 ;;                                 block3 cold:

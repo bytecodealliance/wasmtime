@@ -19,9 +19,10 @@
 ;;     region1 = 160 ""
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
-;;     region4 = 108 ""
+;;     region4 = 239 ""
 ;;     region5 = 130 ""
 ;;     region6 = 6 ""
+;;     region7 = 134 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -53,7 +54,7 @@
 ;;                                 block5:
 ;; @0024                               v28 = iconst.i64 4
 ;; @0024                               v29 = iadd.i64 v13, v28  ; v28 = 4
-;; @0024                               v30 = load.i32 user2 readonly region4 v29
+;; @0024                               v30 = load.i32 user2 readonly region7 v29
 ;; @0024                               v22 = load.i64 notrap aligned readonly can_move region5 v0+40
 ;; @0024                               v23 = load.i32 notrap aligned readonly can_move region6 v22
 ;; @0024                               v31 = icmp eq v30, v23
@@ -72,9 +73,10 @@
 ;;     region1 = 160 ""
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
-;;     region4 = 108 ""
+;;     region4 = 239 ""
 ;;     region5 = 130 ""
 ;;     region6 = 6 ""
+;;     region7 = 134 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -106,7 +108,7 @@
 ;;                                 block5:
 ;; @002c                               v28 = iconst.i64 4
 ;; @002c                               v29 = iadd.i64 v13, v28  ; v28 = 4
-;; @002c                               v30 = load.i32 user2 readonly region4 v29
+;; @002c                               v30 = load.i32 user2 readonly region7 v29
 ;; @002c                               v22 = load.i64 notrap aligned readonly can_move region5 v0+40
 ;; @002c                               v23 = load.i32 notrap aligned readonly can_move region6 v22
 ;; @002c                               v31 = icmp eq v30, v23

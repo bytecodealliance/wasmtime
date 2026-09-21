@@ -753,6 +753,86 @@ macro_rules! for_each_vm_type {
                 /// The bump-allocation finger, an index into the GC heap.
                 pub next: NonZeroU32,
             }
+
+            /// The common header for all objects allocated in a GC heap.
+            ///
+            /// This header is shared across all collectors, although particular
+            /// collectors may always add their own trailing fields to this
+            /// header for all of their own GC objects.
+            ///
+            /// This is a bit-packed structure that logically has the following
+            /// fields:
+            ///
+            /// ```ignore
+            /// struct VMGcHeader {
+            ///     // Highest 5 bits.
+            ///     kind: VMGcKind,
+            ///
+            ///     // 27 bits available for the `GcRuntime` to make use of
+            ///     // however it sees fit.
+            ///     reserved: u27,
+            ///
+            ///     // The `VMSharedTypeIndex` for this GC object, if it isn't an
+            ///     // `externref` (or an `externref` re-wrapped as an
+            ///     // `anyref`). `None` is represented with
+            ///     // `VMSharedTypeIndex::reserved_value()`.
+            ///     ty: Option<VMSharedTypeIndex>,
+            /// }
+            /// ```
+            ///
+            /// NB: the `kind` and `reserved` fields share one word, and
+            /// therefore one alias region: splitting them would let Cranelift
+            /// forward a stale kind across a reserved-bits store.
+            #[derive(Debug, Clone, Copy)]
+            #[repr(C, align(8))]
+            #[snake_name = vm_gc_header]
+            pub struct VMGcHeader {
+                /// The object's `VMGcKind` and 27 bits of space reserved for
+                /// however the GC sees fit to use it.
+                pub(crate) kind: u32,
+
+                /// The object's type index.
+                pub(crate) ty: VMSharedTypeIndex,
+            }
+
+            /// The common header for all objects in the DRC collector.
+            ///
+            /// This adds a ref count and over-approximated-stack-roots list
+            /// link on top of the collector-agnostic [`VMGcHeader`].
+            #[cfg(feature = "gc-drc")]
+            #[repr(C)]
+            #[snake_name = vm_drc_header]
+            pub(crate) struct VMDrcHeader {
+                /// The collector-agnostic header.
+                #[aggregate]
+                pub(crate) header: VMGcHeader,
+
+                /// This object's reference count.
+                pub(crate) ref_count: u64,
+
+                /// The next object in the over-approximated-stack-roots list,
+                /// if this object is in that list.
+                pub(crate) next_over_approximated_stack_root: Option<VMGcRef>,
+
+                /// The size of this object in the GC heap.
+                ///
+                /// Written by the runtime at allocation time; compiled Wasm
+                /// never accesses it.
+                pub(crate) object_size: u32,
+            }
+
+            /// The common header for all objects in the copying collector.
+            #[cfg(feature = "gc-copying")]
+            #[repr(C)]
+            #[snake_name = vm_copying_header]
+            pub(crate) struct VMCopyingHeader {
+                /// The collector-agnostic header.
+                #[aggregate]
+                pub(crate) header: VMGcHeader,
+
+                /// The size of this object in the GC heap.
+                pub(crate) object_size: u32,
+            }
         }
     };
 }
