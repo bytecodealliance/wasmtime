@@ -605,6 +605,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             | Operator::Return
             | Operator::CallIndirect { .. }
             | Operator::Call { .. }
+            | Operator::CallRef { .. }
             | Operator::ReturnCall { .. }
             | Operator::ReturnCallRef { .. }
             | Operator::ReturnCallIndirect { .. }
@@ -670,7 +671,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // After a function call we need to reload our fuel value since the
         // function may have changed it.
         match op {
-            Operator::Call { .. } | Operator::CallIndirect { .. } => {
+            Operator::Call { .. } | Operator::CallIndirect { .. } | Operator::CallRef { .. } => {
                 self.fuel_load_into_var(builder);
             }
             _ => {}
