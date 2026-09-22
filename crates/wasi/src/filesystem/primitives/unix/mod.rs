@@ -14,7 +14,6 @@ use std::time::{Duration, SystemTime};
 mod create_dir_unchecked;
 mod dir_utils;
 mod hard_link_unchecked;
-mod is_same_file;
 mod oflags;
 mod open_options_ext;
 mod open_unchecked;
@@ -45,8 +44,6 @@ pub(crate) use self::linux::*;
 pub(crate) use create_dir_unchecked::create_dir_unchecked;
 pub(crate) use dir_utils::*;
 pub(crate) use hard_link_unchecked::hard_link_unchecked;
-#[allow(unused_imports)]
-pub(crate) use is_same_file::{is_different_file, is_different_file_metadata, is_same_file};
 pub(crate) use open_options_ext::ImplOpenOptionsExt;
 pub(crate) use open_unchecked::open_unchecked;
 pub(crate) use read_link_unchecked::read_link_unchecked;
@@ -199,7 +196,6 @@ pub(crate) fn read_dir(
     }))
 }
 
-#[allow(clippy::similar_names)]
 pub(super) fn system_time_from_rustix(sec: i64, nsec: u64) -> Option<SystemTime> {
     if sec >= 0 {
         SystemTime::UNIX_EPOCH.checked_add(Duration::new(u64::try_from(sec).unwrap(), nsec as _))

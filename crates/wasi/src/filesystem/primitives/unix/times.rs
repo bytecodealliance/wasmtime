@@ -3,7 +3,6 @@ use rustix::time::Timespec;
 use std::io;
 use std::time::SystemTime;
 
-#[allow(clippy::useless_conversion)]
 pub(crate) fn to_timespec(ft: Option<SystemTime>) -> io::Result<Timespec> {
     Ok(match ft {
         None => Timespec {

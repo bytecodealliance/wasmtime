@@ -1,6 +1,5 @@
 use super::helpers as h;
 use super::sys_common::io::tmpdir;
-#[allow(unused_imports)]
 use super::sys_common::symlink_supported;
 use crate::filesystem::primitives as p;
 
@@ -124,8 +123,7 @@ fn cap_smoke_test() {
 
 #[test]
 fn symlinks() {
-    #[cfg(windows)]
-    if !symlink_supported() {
+    if cfg!(windows) && !symlink_supported() {
         return;
     }
 
@@ -204,8 +202,7 @@ fn symlink_loop() {
 
 #[test]
 fn symlink_loop_from_rename() {
-    #[cfg(windows)]
-    if !symlink_supported() {
+    if cfg!(windows) && !symlink_supported() {
         return;
     }
 

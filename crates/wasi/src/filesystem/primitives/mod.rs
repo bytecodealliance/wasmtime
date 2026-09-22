@@ -1,21 +1,10 @@
 //! Filesystem utilities.
 
 #![allow(
-    trivial_numeric_casts,
-    reason = "preexisting from when cap-primitives was imported"
-)]
-#![allow(
-    unsafe_op_in_unsafe_fn,
-    reason = "preexisting from when cap-primitives was imported"
-)]
-#![allow(
     clippy::unnecessary_fallible_conversions,
-    reason = "platform-agnostic code can't always take advantage of this"
+    reason = "typedefs are platform-specific"
 )]
-#![allow(
-    clippy::allow_attributes_without_reason,
-    reason = "preexisting from when cap-primitives was imported"
-)]
+#![allow(trivial_numeric_casts, reason = "typedefs are platform-specific")]
 #![allow(clippy::useless_conversion, reason = "typedefs are platform-specific")]
 
 use std::path::{Component, Path, PathBuf};
@@ -268,13 +257,6 @@ pub(crate) fn rename(
 #[inline]
 fn open_dir(start: &fs::File, path: &Path) -> io::Result<fs::File> {
     open(start, path, &dir_options())
-}
-
-/// Open a directory by performing an unsandboxed `openat`-like operation.
-#[inline]
-#[allow(dead_code)]
-fn open_dir_unchecked(start: &fs::File, path: &Path) -> io::Result<fs::File> {
-    open_unchecked(start, path, &dir_options()).map_err(Into::into)
 }
 
 pub(crate) fn remove_file(start: &fs::File, path: &Path) -> io::Result<()> {

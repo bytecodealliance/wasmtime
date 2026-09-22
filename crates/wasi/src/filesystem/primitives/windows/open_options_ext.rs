@@ -1,5 +1,3 @@
-#![allow(unsafe_code)]
-
 use crate::filesystem::primitives::OpenOptions;
 use std::io;
 use std::ptr::null_mut;

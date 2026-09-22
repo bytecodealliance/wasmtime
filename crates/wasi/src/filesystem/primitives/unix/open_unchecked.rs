@@ -14,7 +14,6 @@ pub(crate) fn open_unchecked(
 ) -> Result<fs::File, OpenUncheckedError> {
     let oflags = compute_oflags(options).map_err(OpenUncheckedError::Other)?;
 
-    #[allow(clippy::useless_conversion)]
     #[cfg(not(target_os = "wasi"))]
     let mode = Mode::from_bits_truncate(options.ext.mode as _);
     #[cfg(target_os = "wasi")]

@@ -1,5 +1,8 @@
 use crate::filesystem::primitives::Metadata;
+use std::fs;
+use std::io;
 use std::os::windows::fs::MetadataExt;
+use std::path::Path;
 
 mod create_dir_unchecked;
 mod create_file_at_w;
@@ -53,4 +56,10 @@ impl Metadata {
         let Metadata::Std(std) = self;
         std.file_attributes()
     }
+}
+
+/// Open a directory by performing an unsandboxed `openat`-like operation.
+#[inline]
+pub(super) fn open_dir_unchecked(start: &fs::File, path: &Path) -> io::Result<fs::File> {
+    open_unchecked(start, path, &dir_options()).map_err(Into::into)
 }

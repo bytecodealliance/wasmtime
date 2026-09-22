@@ -1,12 +1,9 @@
-#![allow(unused_imports)]
-
 mod symlink_junction;
 
 pub mod io;
 
 pub use symlink_junction::*;
 
-#[allow(unused)]
 macro_rules! check {
     ($e:expr) => {
         match $e {
@@ -17,7 +14,6 @@ macro_rules! check {
 }
 
 #[cfg(windows)]
-#[allow(unused)]
 macro_rules! error {
     ($e:expr, $s:expr) => {
         match $e {
@@ -35,14 +31,12 @@ macro_rules! error {
 }
 
 #[cfg(any(unix, target_os = "wasi"))]
-#[allow(unused)]
 macro_rules! error {
     ($e:expr, $s:expr) => {
         error_contains!($e, $s)
     };
 }
 
-#[allow(unused)]
 macro_rules! error_contains {
     ($e:expr, $s:expr) => {
         match $e {
@@ -64,7 +58,6 @@ macro_rules! error_contains {
 // a78a62fc996ba16f7a111c99520b23f77029f4eb.
 
 #[cfg(windows)]
-#[allow(dead_code)]
 pub fn symlink_supported() -> bool {
     let dir = tempfile::tempdir().unwrap();
 
@@ -78,9 +71,8 @@ pub fn symlink_supported() -> bool {
         }
         Err(e) => {
             eprintln!(
-                "symlinks not supported: {:?}\n\
+                "symlinks not supported: {e:?}\n\
                  Windows 10 users should enable developer mode.",
-                e
             );
             false
         }
@@ -90,7 +82,6 @@ pub fn symlink_supported() -> bool {
 }
 
 #[cfg(not(windows))]
-#[allow(dead_code)]
 pub fn symlink_supported() -> bool {
     true
 }

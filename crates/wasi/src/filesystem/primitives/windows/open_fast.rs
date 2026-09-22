@@ -40,7 +40,6 @@ fn file_prefix(path: &Path) -> Option<&OsStr> {
 
 // This code is derived from
 // https://github.com/rust-lang/rust/blob/9fe9041cc8eddaed402d17aa4facb2ce8f222e95/library/std/src/path.rs#L340
-#[allow(unsafe_code)]
 fn split_file_at_dot(file: &OsStr) -> (&OsStr, Option<&OsStr>) {
     let slice = file.as_encoded_bytes();
     if slice == b".." {

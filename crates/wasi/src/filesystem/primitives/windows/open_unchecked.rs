@@ -1,7 +1,5 @@
 //! Windows implementation of `openat` functionality.
 
-#![allow(unsafe_code)]
-
 use super::create_file_at_w::CreateFileAtW;
 use super::prepare_open_options_for_open;
 use crate::filesystem::primitives::{

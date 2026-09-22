@@ -2,11 +2,12 @@
 // library/std/src/sys/windows/fs.rs at revision
 // 3ffb27ff89db780e88abe829783565a7122be1c5.
 
+#![cfg_attr(windows, expect(non_snake_case, reason = "matching C conventions"))]
+
 use std::path::Path;
 use std::{fs, io};
 
 #[cfg(not(windows))]
-#[allow(dead_code)]
 pub fn symlink_junction<P: AsRef<Path>, Q: AsRef<Path>>(
     src: P,
     dst_dir: &fs::File,
@@ -16,7 +17,6 @@ pub fn symlink_junction<P: AsRef<Path>, Q: AsRef<Path>>(
 }
 
 #[cfg(windows)]
-#[allow(dead_code)]
 pub fn symlink_junction<P: AsRef<Path>, Q: AsRef<Path>>(
     src: P,
     dst_dir: &fs::File,
@@ -35,8 +35,6 @@ pub fn symlink_junction<P: AsRef<Path>, Q: AsRef<Path>>(
 struct Align8<T: ?Sized>(pub T);
 
 #[cfg(windows)]
-#[allow(dead_code)]
-#[allow(non_snake_case)]
 #[repr(C)]
 pub struct REPARSE_MOUNTPOINT_DATA_BUFFER {
     pub ReparseTag: u32,
@@ -49,7 +47,6 @@ pub struct REPARSE_MOUNTPOINT_DATA_BUFFER {
 }
 
 #[cfg(windows)]
-#[allow(dead_code)]
 pub fn cvt(i: windows_sys::core::BOOL) -> io::Result<windows_sys::core::BOOL> {
     if i == 0 {
         Err(io::Error::last_os_error())
@@ -64,7 +61,6 @@ pub fn cvt(i: windows_sys::core::BOOL) -> io::Result<windows_sys::core::BOOL> {
 //
 // http://www.flexhex.com/docs/articles/hard-links.phtml
 #[cfg(windows)]
-#[allow(dead_code)]
 fn symlink_junction_inner(original: &Path, dir: &fs::File, junction: &Path) -> io::Result<()> {
     use crate::filesystem::primitives::{OpenOptions, OpenOptionsExt, create_dir, open};
     use std::mem::MaybeUninit;

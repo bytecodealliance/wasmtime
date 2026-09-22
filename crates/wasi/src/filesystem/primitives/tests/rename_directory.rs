@@ -4,7 +4,6 @@
 
 // run-pass
 
-#![allow(unused_must_use)]
 // This test can't be a unit test in std,
 // because it needs `TempDir`, which is in extra
 
@@ -27,7 +26,7 @@ fn rename_directory() {
 
     let new_path = Path::new("quux/blat");
     h::create_dir_all(&dir, &new_path).unwrap();
-    rename(&dir, &old_path, &dir, &new_path.join("newdir"));
+    rename(&dir, &old_path, &dir, &new_path.join("newdir")).unwrap();
     assert!(h::is_dir(&dir, &new_path.join("newdir")));
     assert!(h::exists(&dir, &new_path.join("newdir/temp.txt")));
 }
