@@ -987,9 +987,20 @@ impl Config {
 
     /// Configures whether the WebAssembly compact imports proposal is enabled.
     ///
+    /// The [WebAssembly compact import section proposal]
+    /// adds two compact encodings for imports:
+    /// - A module name and a list of `(item name, type)` pairs
+    /// - A module name, a type, and a list of item names
+    ///
+    /// This reduces redundant module and type listings, and can
+    /// reduce WebAssembly file size, especially in files with many
+    /// repeated imports.
+    ///
+    /// When enabled, compact imports are accepted in binary and text-format inputs.
+    ///
     /// This feature is `false` by default.
     ///
-    /// [proposal]: https://github.com/WebAssembly/compact-import-section
+    /// [WebAssembly compact import section proposal]: https://github.com/WebAssembly/compact-import-section
     pub fn wasm_compact_imports(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::COMPACT_IMPORTS, enable);
         self
