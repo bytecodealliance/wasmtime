@@ -151,11 +151,20 @@ impl ResourceAny {
 
     /// Destroy this resource and release any state associated with it.
     ///
-    /// This is required to be called (or the async version) for all instances
-    /// of [`ResourceAny`] to ensure that state associated with this resource is
-    /// properly cleaned up. For owned resources this may execute the
-    /// guest-defined destructor if applicable (or the host-defined destructor
-    /// if one was specified).
+    /// This is required to be called for all instances of [`ResourceAny`] to
+    /// ensure that state associated with this resource is properly cleaned up.
+    /// For owned resources this may execute the guest-defined destructor if
+    /// applicable (or the host-defined destructor if one was specified).
+    ///
+    /// Exactly one of the following must be called for each [`ResourceAny`],
+    /// depending on how the store is being driven:
+    ///
+    /// * [`ResourceAny::resource_drop`] for synchronous stores.
+    /// * `ResourceAny::resource_drop_async` for [async](crate#async) stores
+    ///   when a `StoreContextMut` is available.
+    /// * `ResourceAny::resource_drop_concurrent` when only an `Accessor` is
+    ///   available, such as inside `Store::run_concurrent` or an
+    ///   `AccessorTask`.
     ///
     /// # Errors
     ///
@@ -182,6 +191,42 @@ impl ResourceAny {
         store
             .on_fiber(|store| self.resource_drop_impl(store))
             .await?
+    }
+
+    /// Same as [`ResourceAny::resource_drop`] except for use with an
+    /// [`Accessor`](crate::component::Accessor) while a store is executing
+    /// [`Store::run_concurrent`](crate::Store::run_concurrent).
+    ///
+    /// The resource drop is queued for execution on the store's worker fiber.
+    /// This method must be awaited while the store's concurrent event loop is
+    /// running so the queued drop can make progress.
+    ///
+    /// Once this future has been polled and the drop has been queued, dropping
+    /// the future does not cancel the resource drop.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    #[cfg(feature = "component-model-async")]
+    pub async fn resource_drop_concurrent(
+        self,
+        accessor: impl crate::component::AsAccessor,
+    ) -> Result<()> {
+        let receiver = accessor.as_accessor().with(|mut store| -> Result<_> {
+            let mut store = store.as_context_mut();
+            let (sender, receiver) = futures::channel::oneshot::channel();
+            let token = crate::store::StoreToken::new(store.as_context_mut());
+            store.0.queue_task(move |store| {
+                _ = sender.send(self.resource_drop_impl(&mut token.as_context_mut(store)));
+                Ok(())
+            })?;
+            Ok(receiver)
+        })?;
+        receiver
+            .await
+            .map_err(|_| format_err!("resource drop task canceled"))?
     }
 
     fn resource_drop_impl<T: 'static>(self, store: &mut StoreContextMut<'_, T>) -> Result<()> {

@@ -3209,8 +3209,9 @@ async fn thread_index_via_resource_drop_concurrent() -> Result<()> {
     thread_index_via_resource_drop(ApiStyle::Concurrent).await
 }
 
-async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
-    let component = r#"
+/// A component exporting a resource whose destructor traps unless it runs on a
+/// non-zero `thread.index`, i.e. within a guest thread context.
+const THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT: &str = r#"
 (component
   (core module $m
     (import "" "thread.index" (func $thread-index (result i32)))
@@ -3247,8 +3248,10 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
   (export "i" (instance $c))
 )
 "#;
+
+async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     let engine = Engine::new(&style.config())?;
-    let component = Component::new(&engine, component)?;
+    let component = Component::new(&engine, THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
     let instance = style.instantiate(&mut store, &linker, &component).await?;
@@ -3259,6 +3262,33 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
     let (resource,) = style.call(&mut store, run, ()).await?;
     style.resource_drop(&mut store, resource).await?;
+    Ok(())
+}
+
+/// Test that a guest-exported `ResourceAny` can be dropped with
+/// `resource_drop_concurrent` inside the same `Store::run_concurrent` call
+/// that produced it, i.e. while the store's event loop is already running.
+/// This is the scenario from issue #14291.
+#[tokio::test]
+async fn resource_drop_concurrent_in_run_concurrent() -> Result<()> {
+    let style = ApiStyle::Concurrent;
+    let engine = Engine::new(&style.config())?;
+    let component = Component::new(&engine, THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
+    let instance_index = instance.get_export_index(&mut store, None, "i").unwrap();
+    let func_index = instance
+        .get_export_index(&mut store, Some(&instance_index), "new")
+        .unwrap();
+    let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
+    store
+        .run_concurrent(async |accessor| {
+            let (resource,) = run.call_concurrent(accessor, ()).await?;
+            resource.resource_drop_concurrent(accessor).await
+        })
+        .await??;
+    store.assert_concurrent_state_empty();
     Ok(())
 }
 
