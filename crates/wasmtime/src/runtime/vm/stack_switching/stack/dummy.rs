@@ -2,14 +2,14 @@ use crate::Result;
 use core::ops::Range;
 
 use crate::runtime::vm::VMPayloads;
-use crate::runtime::vm::{VMContext, VMFuncRef};
+use crate::runtime::vm::{VMContext, VMFuncRef, VmPtr};
 
 /// Making sure that this has the same size as the non-dummy version, to
 /// make some tests happy.
 #[derive(Debug)]
 #[repr(C)]
 pub struct VMContinuationStack {
-    _top: *mut u8,
+    _top: VmPtr<u8>,
     _len: usize,
     _match_size_on_unix: u8,
 }

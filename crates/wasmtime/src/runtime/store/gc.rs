@@ -846,11 +846,15 @@ impl StoreOpaque {
                 return;
             };
             let gc_ref_data = gc_ref_data.as_ptr();
+            let data = payloads
+                .data
+                .expect("payload GC metadata requires an allocated payload buffer")
+                .as_ptr();
 
             for index in 0..usize::try_from(payloads.length).unwrap() {
                 let marker = unsafe { gc_ref_data.add(index).read() };
                 if marker == wasmtime_environ::CONTINUATION_PAYLOAD_GC_REF {
-                    let slot = unsafe { payloads.data.cast::<ValRaw>().add(index).cast::<u32>() };
+                    let slot = unsafe { data.cast::<ValRaw>().add(index).cast::<u32>() };
                     unsafe {
                         StoreOpaque::trace_wasm_stack_slot(gc_roots_list, slot);
                     }
