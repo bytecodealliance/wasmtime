@@ -1799,10 +1799,6 @@
 (rule -1 (lower (smax (fits_in_64 ty) x y))
       (cmp_and_choose ty (CC.NL) x y))
 
-;; `i128`: mid-end select→min/max rewrites can produce these (#13790). Lower via
-;; the existing i128 compare + select path, matching AArch64's scalar-int
-;; approach rather than leaving an unsupported ISLE hole.
-;; Priority above the vector catch-alls so the overlap checker accepts both.
 (rule 3 (lower (umin $I128 x y))
       (lower_select (emit_cmp (IntCC.UnsignedLessThan) x y) x y))
 (rule 3 (lower (umax $I128 x y))
