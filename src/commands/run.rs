@@ -77,6 +77,12 @@ pub struct RunCommand {
     #[arg(skip)]
     pub module_bytes: Option<&'static [u8]>,
 
+    /// The MMU interrupter given to the engine, kept so it can be started and
+    /// stopped
+    #[cfg(has_mmu_interruption)]
+    #[arg(skip)]
+    pub(crate) timing_wheel: Option<std::sync::Arc<wasmtime::TimingWheelInterrupter>>,
+
     /// The WebAssembly module to run and arguments to pass to it.
     ///
     /// Arguments passed to the wasm module will be configured as WASI CLI
@@ -355,6 +361,13 @@ impl RunCommand {
             None => {}
         }
 
+        #[cfg(has_mmu_interruption)]
+        if wasm_options.mmu_interruption == Some(true) {
+            let wheel = std::sync::Arc::new(wasmtime::TimingWheelInterrupter::new(1));
+            config.with_mmu_interrupter(wheel.clone());
+            self.timing_wheel = Some(wheel);
+        }
+
         Engine::new(&config)
     }
 
@@ -588,20 +601,24 @@ impl RunCommand {
             }
 
             if let Some(timeout) = self.run.common.wasm.timeout {
-                store.set_epoch_deadline(1);
-                let engine = store.engine().clone();
-                // Store isn't Send, so we can't move it to the thread.
+                if store.engine().get_epoch_interruption() {
+                    store.set_epoch_deadline(1);
+                    let engine = store.engine().clone();
+                    thread::spawn(move || {
+                        thread::sleep(timeout);
+                        engine.increment_epoch();
+                    });
+                }
                 #[cfg(has_mmu_interruption)]
-                let mmu_interrupter = store.mmu_interrupter();
-                thread::spawn(move || {
-                    thread::sleep(timeout);
-                    #[cfg(has_mmu_interruption)]
-                    if let Some(interrupter) = mmu_interrupter {
-                        interrupter.interrupt();
-                        return;
-                    }
-                    engine.increment_epoch();
-                });
+                if let Some(wheel) = self.timing_wheel.clone() {
+                    // Unlike an epoch increment, a tick doesn't stick, so keep ticking.
+                    thread::spawn(move || {
+                        loop {
+                            thread::sleep(timeout);
+                            wheel.tick();
+                        }
+                    });
+                }
             }
         }
 

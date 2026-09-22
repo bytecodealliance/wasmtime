@@ -93,13 +93,13 @@ use crate::runtime::vm::{
     SendSyncPtr, SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore,
     VMStoreContext,
 };
+#[cfg(has_mmu_interruption)]
+use crate::runtime::vm::{MmuInterrupter, PageHandle};
 use crate::trampoline::VMHostGlobalContext;
 #[cfg(feature = "debug")]
 use crate::{BreakpointState, DebugHandler, FrameDataCache};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Table};
-#[cfg(has_mmu_interruption)]
-use alloc::sync::Arc;
 use core::convert::Infallible;
 use core::fmt;
 #[cfg(any(feature = "async", feature = "gc"))]
@@ -110,8 +110,6 @@ use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
 use core::ptr::NonNull;
-#[cfg(has_mmu_interruption)]
-use core::sync::atomic::AtomicUsize;
 #[cfg(any(feature = "async", feature = "gc"))]
 use core::task::Poll;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
@@ -576,10 +574,15 @@ pub struct StoreOpaque {
 
     /// The number of fibers currently executing on this Store, including ones
     /// further down in the call stack which, directly or indirectly, caused the
-    /// current one to run. Used for efficiency of MMU interruption, by letting
-    /// it ignore non-running Stores.
+    /// current one to run. Defined only if the `mmu_interruption` Engine
+    /// tunable is on.
     #[cfg(has_mmu_interruption)]
-    pub(super) fibers_on_stack: Arc<AtomicUsize>,
+    fibers_on_stack: usize,
+
+    /// Partly opaque token that lets us get our interrupt page ptr or detach
+    /// ourselves from it
+    #[cfg(has_mmu_interruption)]
+    mmu_interrupt_page_handle: Option<Box<dyn PageHandle>>,
 }
 
 /// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
@@ -754,21 +757,10 @@ impl<T> Store<T> {
         log::trace!("creating new store {:?}", store_data.id());
 
         let pkey = engine.allocator().next_available_pkey();
-
-        #[cfg(has_mmu_interruption)]
-        let vm_store_context = if engine.tunables().mmu_interruption {
-            VMStoreContext::with_interrupt_page()
-        } else {
-            VMStoreContext::default()
-        };
-
-        #[cfg(not(has_mmu_interruption))]
-        let vm_store_context = VMStoreContext::default();
-
         let inner = StoreOpaque {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
-            vm_store_context,
+            vm_store_context: VMStoreContext::default(),
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: TryPrimaryMap::new(),
@@ -801,7 +793,9 @@ impl<T> Store<T> {
             wasm_val_raw_storage: TryVec::new(),
             pkey,
             #[cfg(has_mmu_interruption)]
-            fibers_on_stack: Arc::new(AtomicUsize::new(0)),
+            fibers_on_stack: 0,
+            #[cfg(has_mmu_interruption)]
+            mmu_interrupt_page_handle: None,
             executor: Executor::new(engine)?,
             #[cfg(feature = "debug")]
             breakpoints: Default::default(),
@@ -1200,20 +1194,6 @@ impl<T> Store<T> {
         callback: impl FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync + 'static,
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
-    }
-
-    /// Returns an [`MmuEpochInterrupter`] iff MMU-based interruption is enabled
-    /// for this store.
-    ///
-    /// The returned handle is `Send + Sync` and can be used from any thread
-    /// to trigger an epoch interruption, like
-    /// [`Engine::increment_epoch`](crate::Engine::increment_epoch) can for
-    /// deadline-based epochs.
-    #[cfg(has_mmu_interruption)]
-    pub fn mmu_interrupter(&self) -> Option<vm::MmuInterrupter> {
-        self.inner
-            .vm_store_context()
-            .mmu_interrupter(self.inner.fibers_on_stack.clone())
     }
 
     /// Tests whether there is a pending exception.
@@ -2107,6 +2087,123 @@ impl StoreOpaque {
         self.set_fuel(self.get_fuel()?)
     }
 
+    /// Assigns an interrupt page to this store so its wasm interrupts itself
+    /// when the page becomes unreadable.
+    ///
+    /// Both gets ahold of a `PageHandle` (so we can relinquish the page later)
+    /// and puts the pointer into our `VMStoreContext` so JITted code can read
+    /// it. The `PageHandle` is one of the `MmuInterrupter`'s choice; it
+    /// controls interruption scheduling.
+    ///
+    /// Panics if a page is already assigned to this store. Otherwise, we'd risk
+    /// leaking one. Also panics if the `mmu_interruption` Engine tunable is
+    /// off; without the instructions compiled in which load from the page,
+    /// there's no sense attaching one to the store.
+    #[cfg(has_mmu_interruption)]
+    fn acquire_interrupt_page(&mut self) {
+        match &self.mmu_interrupt_page_handle {
+            Some(_) => panic!(
+                "attempted to attach an interrupt page to a store when one was already attached"
+            ),
+            None => {
+                // No wasm under this store is running while the store's methods
+                // are running; call_async(), for example, one of the canonical
+                // wasm entrypoints, takes a `mut Store`, ruling out this method
+                // having one at the same time. Thus, there are no races w.r.t.
+                // the order of the following several lines; the JITted code
+                // isn't reading the page ptr, and it isn't firing off the
+                // signal handler that does so (via trampoline) either.
+                let new_page = self.mmu_interrupter().acquire_page();
+                self.vm_store_context.mmu_interrupt_page_ptr = Some(new_page.page_ptr().into());
+                self.mmu_interrupt_page_handle = Some(new_page);
+            }
+        }
+    }
+
+    /// Dissociates the interrupt page this store was watching. Panics if it had
+    /// no page assigned.
+    ///
+    /// If you call this but do not assign another page, be warned: wasm under
+    /// this store may run forever without interruption.
+    #[cfg(has_mmu_interruption)]
+    fn release_interrupt_page(&mut self) {
+        // See comment in `acquire_interrupt_page()` establishing the
+        // lack of races here.
+        drop(
+            self.mmu_interrupt_page_handle.take().expect(
+                "attempted to detach an interrupt page from a store, but none was attached",
+            ),
+        );
+        self.vm_store_context.mmu_interrupt_page_ptr = None;
+    }
+
+    /// Increments the count of fibers currently stacked up to run on this
+    /// store. If it goes from 0 to >0, it attaches this store to a readable
+    /// interrupt page, as that means it is running. Does nothing unless the
+    /// Engine has both the `mmu_interruption` tunable and an MMU interrupter.
+    #[cfg(has_mmu_interruption)]
+    pub(crate) fn increment_fibers(&mut self) {
+        if !self.uses_interrupt_pages() {
+            return;
+        }
+
+        // There's no way wrapping should happen if stack frames are
+        // non-zero in size. You'd run out of addressible memory first.
+        debug_assert!(
+            self.fibers_on_stack < usize::MAX,
+            "The fibers-on-stack count for a Store exceeded the size of a usize."
+        );
+        self.fibers_on_stack += 1;
+
+        // If we just incremented from 0 to 1, attach to an interrupt page.
+        if self.fibers_on_stack == 1 {
+            self.acquire_interrupt_page();
+        }
+    }
+
+    /// Decrements the count of fibers currently stacked up to run on this
+    /// store. If it reaches 0, detaches the store from its interrupt page,
+    /// since we don't want it to be interrupted if it's not running, lest it
+    /// yield its timeslice almost immediately after it runs again. Does nothing
+    /// unless the Engine has both the `mmu_interruption` tunable and an MMU
+    /// interrupter.
+    #[cfg(has_mmu_interruption)]
+    pub(crate) fn decrement_fibers(&mut self) {
+        if !self.uses_interrupt_pages() {
+            return;
+        }
+        debug_assert!(
+            self.fibers_on_stack > 0,
+            "The fibers-on-stack count for a Store was about to go negative."
+        );
+        self.fibers_on_stack -= 1;
+        if self.fibers_on_stack == 0 {
+            self.release_interrupt_page();
+        }
+    }
+
+    /// Returns whether running fibers on this store need interrupt pages.
+    ///
+    /// To support compile-only engines, `Engine` defers the check that an MMU
+    /// interrupter is provided until Module instantiation time. But, even in
+    /// the absence of a module, it ought to be possible to call host functions
+    /// through this store with, for example, `call_async`. This convenience
+    /// method allows our fiber-tracking routines to avoid reaching for an
+    /// interrupt page that isn't there.
+    #[cfg(has_mmu_interruption)]
+    fn uses_interrupt_pages(&self) -> bool {
+        self.engine.tunables().mmu_interruption && self.engine.mmu_interrupter().is_some()
+    }
+
+    /// Return the MMU interrupter provided by this Store's Engine, panicking if
+    /// none is.
+    #[cfg(has_mmu_interruption)]
+    fn mmu_interrupter(&self) -> &dyn MmuInterrupter {
+        self.engine
+            .mmu_interrupter()
+            .expect("an MMU interrupter should be configured in the Engine")
+    }
+
     #[inline]
     pub fn signal_handler(&self) -> Option<*const SignalHandler> {
         let handler = self.signal_handler.as_ref()?;
@@ -2643,8 +2740,11 @@ impl Drop for StoreOpaque {
             }
 
             self.store_data.decrement_allocator_resources(allocator);
-            #[cfg(has_mmu_interruption)]
-            self.vm_store_context_mut().unmap_interrupt_page();
+        }
+
+        #[cfg(has_mmu_interruption)]
+        if self.mmu_interrupt_page_handle.is_some() {
+            self.release_interrupt_page();
         }
     }
 }

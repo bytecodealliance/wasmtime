@@ -28,6 +28,9 @@ use crate::stack::{StackCreator, StackCreatorProxy};
 #[cfg(feature = "async")]
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
+#[cfg(has_mmu_interruption)]
+use crate::runtime::vm::MmuInterrupter;
+
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
 #[cfg(feature = "cache")]
@@ -171,6 +174,10 @@ pub struct Config {
     pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
     #[cfg(feature = "runtime")]
     pub(crate) custom_code_memory: Option<Arc<dyn CustomCodeMemory>>,
+    /// Required, when running guest code, if the `mmu_interruption` tunable is
+    /// true
+    #[cfg(has_mmu_interruption)]
+    pub(crate) mmu_interrupter: Option<Arc<dyn MmuInterrupter>>,
     pub(crate) allocation_strategy: InstanceAllocationStrategy,
     pub(crate) max_wasm_stack: usize,
     /// Explicitly enabled features via `Config::wasm_*` methods. This is a
@@ -283,6 +290,8 @@ impl Config {
             mem_creator: None,
             #[cfg(feature = "runtime")]
             custom_code_memory: None,
+            #[cfg(has_mmu_interruption)]
+            mmu_interrupter: None,
             allocation_strategy: InstanceAllocationStrategy::OnDemand,
             // 512k of stack -- note that this is chosen currently to not be too
             // big, not be too small, and be a good default for most platforms.
@@ -777,9 +786,9 @@ impl Config {
     /// from a per-store "interrupt page". To trigger an interruption, the
     /// embedder marks that page as inaccessible; the resulting SIGSEGV is
     /// caught by Wasmtime's signal handler, which distinguishes an
-    /// interrupt-check load from an actual crash by consulting the trap table
-    /// stored in the compiled artifact, where each such load is recorded. The
-    /// signal handler then causes the active fiber to yield.
+    /// interrupt-check load from an actual crash by consulting a record of each
+    /// such load in the trap table. The signal handler then causes the active
+    /// fiber to yield.
     ///
     /// # Compared to `epoch_interruption`
     ///
@@ -801,16 +810,14 @@ impl Config {
     ///
     /// # Triggering an interruption
     ///
-    /// Unlike with epoch-based interruption, the embedder must trigger an
-    /// interruption from outside the Wasm guest code. Obtain an
-    /// [`MmuInterrupter`](crate::runtime::vm::MmuInterrupter) from
-    /// [`Store::mmu_interrupter`](crate::Store::mmu_interrupter). It is `Send +
-    /// Sync` and can be handed to another thread or a timer. Then, to interrupt
-    /// the Wasm running on that store, call
-    /// [`interrupt()`](crate::MmuInterrupter::interrupt()) on your
-    /// `MmuInterrupter`. That protects the memory page, causing the Wasm to
-    /// yield at its next checkpoint. The memory page is automatically
-    /// unprotected just beforehand to ready it for next time.
+    /// Interruptions are triggered from outside the Wasm guest code by an
+    /// [`MmuInterrupter`](crate::MmuInterrupter), which hands each running
+    /// [`Store`] an interrupt page and protects it when that store is due to
+    /// yield. The [`Engine`] owns a single interrupter, shared by all its
+    /// stores. You must provide this interrupter using
+    /// [`Config::with_mmu_interrupter`] before running code.
+    /// [`TimingWheelInterrupter`](crate::TimingWheelInterrupter) is one; like the
+    /// epoch counter, it does nothing until you tick it.
     ///
     /// # Requirements
     ///
@@ -1774,6 +1781,18 @@ impl Config {
         custom_code_memory: Option<Arc<dyn CustomCodeMemory>>,
     ) -> &mut Self {
         self.custom_code_memory = custom_code_memory;
+        self
+    }
+
+    /// Sets the [`MmuInterrupter`](crate::MmuInterrupter) that schedules
+    /// interruptions under [`Config::mmu_interruption`].
+    ///
+    /// It is an error, reported by [`Engine::new`], to set this without also
+    /// enabling [`Config::mmu_interruption`]. Conversely, loading code to run
+    /// with MMU interruption enabled fails if this was not set.
+    #[cfg(has_mmu_interruption)]
+    pub fn with_mmu_interrupter(&mut self, interrupter: Arc<dyn MmuInterrupter>) -> &mut Self {
+        self.mmu_interrupter = Some(interrupter);
         self
     }
 
@@ -2814,6 +2833,12 @@ impl Config {
                 "MMU interruption requires signals-based traps"
             );
         }
+
+        #[cfg(has_mmu_interruption)]
+        ensure!(
+            tunables.mmu_interruption || self.mmu_interrupter.is_none(),
+            "an MMU interrupter was configured, but MMU interruption is not enabled"
+        );
 
         // Concurrency support is required for some component model features.
         let requires_concurrency = WasmFeatures::CM_ASYNC

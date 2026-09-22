@@ -107,7 +107,8 @@ pub use trap::*;
 pub use types::*;
 pub use v128::V128;
 pub use values::*;
-pub use vm::MmuInterrupter;
+#[cfg(has_mmu_interruption)]
+pub use vm::{MmuInterrupter, PageHandle, TimingWheelInterrupter};
 
 #[cfg(feature = "pooling-allocator")]
 pub use vm::{PoolConcurrencyLimitError, PoolingAllocatorMetrics};

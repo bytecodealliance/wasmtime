@@ -396,6 +396,7 @@ impl Engine {
         // - An x86_64 or aarch64 Linux host
         // - Signals based traps
         // - Async support
+        // - An MMU interrupter
         if self.tunables().mmu_interruption {
             use target_lexicon::{Architecture, OperatingSystem};
 
@@ -411,6 +412,12 @@ impl Engine {
 
             if !cfg!(has_native_signals) {
                 return Err("MMU interruption requires native signals".into());
+            }
+
+            #[cfg(has_mmu_interruption)]
+            if self.config().mmu_interrupter.is_none() {
+                return Err("MMU interruption requires an MMU interrupter; see `Config::with_mmu_interrupter()`"
+                    .into());
             }
         }
 
@@ -837,6 +844,12 @@ impl Engine {
     #[cfg(feature = "runtime")]
     pub(crate) fn custom_code_memory(&self) -> Option<&Arc<dyn CustomCodeMemory>> {
         self.config().custom_code_memory.as_ref()
+    }
+
+    /// Returns the interrupter shared by this engine's stores, if one was configured.
+    #[cfg(has_mmu_interruption)]
+    pub(crate) fn mmu_interrupter(&self) -> Option<&dyn crate::runtime::vm::MmuInterrupter> {
+        self.config().mmu_interrupter.as_deref()
     }
 
     #[cfg(target_has_atomic = "64")]

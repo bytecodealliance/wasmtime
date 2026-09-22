@@ -22,8 +22,7 @@ use tokio::sync::{Notify, Semaphore};
 use wasmtime::component::{Component, GuestTaskId, Linker};
 use wasmtime::error::Context as _;
 use wasmtime::{
-    AsContextMut as _, Engine, MmuInterrupter, Result, Store, StoreContextMut, StoreLimits,
-    UpdateDeadline, bail,
+    AsContextMut as _, Engine, Result, Store, StoreContextMut, StoreLimits, UpdateDeadline, bail,
 };
 use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
@@ -550,6 +549,11 @@ impl ServeCommand {
         cfg!(has_mmu_interruption) && self.run.common.wasm.mmu_interruption == Some(true)
     }
 
+    /// Returns whether we're using MMU interruption to effect timeouts.
+    fn using_mmu_timeout(&self) -> bool {
+        self.using_mmu_interruption() && self.run.common.wasm.timeout.is_some()
+    }
+
     async fn serve(mut self) -> Result<()> {
         #[cfg(feature = "debug")]
         let debug_run = self.debugger_setup()?;
@@ -573,6 +577,24 @@ impl ServeCommand {
             }
             None => {}
         }
+
+        #[cfg(has_mmu_interruption)]
+        let _mmu_ticker_thread = match (self.using_mmu_interruption(), self.run.common.wasm.timeout)
+        {
+            (false, _) => None,
+            (true, None) => {
+                config.with_mmu_interrupter(Arc::new(wasmtime::TimingWheelInterrupter::new(0)));
+                None
+            }
+            (true, Some(timeout)) => {
+                let timeslice = EPOCH_INTERRUPT_PERIOD.min(timeout);
+                let interval = timeslice.min(MMU_TICK_PERIOD);
+                let ticks = u32::try_from(timeslice.as_nanos().div_ceil(interval.as_nanos()))?;
+                let wheel = Arc::new(wasmtime::TimingWheelInterrupter::new(ticks));
+                config.with_mmu_interrupter(wheel.clone());
+                Some(TickerThread::spawn(interval, move || wheel.tick()))
+            }
+        };
 
         let engine = Engine::new(&config)?;
         let mut linker = Linker::new(&engine);
@@ -655,14 +677,12 @@ impl ServeCommand {
 
         log::info!("Listening on {}", self.addr);
 
-        let using_mmu_timeout =
-            self.using_mmu_interruption() && self.run.common.wasm.timeout.is_some();
         // We always use epoch interruption for profiling and debugging because
         // MMU interruption doesn't support arbitrary callbacks.
         let epoch_interval = if let Some(Profile::Guest { interval, .. }) = self.run.profile {
             Some(interval)
         } else if let Some(t) = self.run.common.wasm.timeout
-            && !using_mmu_timeout
+            && !self.using_mmu_timeout()
         {
             Some(EPOCH_INTERRUPT_PERIOD.min(t))
         } else if debuggee_store.is_some() {
@@ -670,21 +690,10 @@ impl ServeCommand {
         } else {
             None
         };
-        let _epoch_thread = epoch_interval.map(|t| EpochThread::spawn(t, engine.clone()));
-
-        // Spin up a thread to do MMU-based interrupts of worker threads in
-        // round-robin order. Hang onto the thread to keep it alive.
-        #[cfg(has_mmu_interruption)]
-        let (interrupter_registry, _interrupter_thread) = if using_mmu_timeout {
-            let registry = Arc::new(MmuInterrupterRegistry::default());
-            let thread = MmuInterruptThread::spawn(
-                EPOCH_INTERRUPT_PERIOD.min(self.run.common.wasm.timeout.unwrap_or(Duration::MAX)),
-                registry.clone(),
-            );
-            (Some(registry), Some(thread))
-        } else {
-            (None, None)
-        };
+        let _epoch_thread = epoch_interval.map(|t| {
+            let engine = engine.clone();
+            TickerThread::spawn(t, move || engine.increment_epoch())
+        });
 
         let max_instance_reuse_count = self.max_instance_reuse_count.unwrap_or_else(|| {
             if let ProxyPre::P3(_) = &instance {
@@ -726,8 +735,6 @@ impl ServeCommand {
             instance,
             next_instance_id: AtomicU64::default(),
             next_request_id: AtomicU64::default(),
-            #[cfg(has_mmu_interruption)]
-            interrupter_registry,
             // Give one shutdown guard to this handler which will track the
             // full lifetime of any instances spawned.
             _shutdown_guard: Box::new(shutdown.clone().increment()),
@@ -842,10 +849,6 @@ struct HostWorkerState {
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
     request_timeout: Duration,
-    /// Registry from which this store's MMU interrupter must be removed before
-    /// the store is dropped. `None` when MMU interruption is not in use.
-    #[cfg(has_mmu_interruption)]
-    interrupter_registry: Option<Arc<MmuInterrupterRegistry>>,
 }
 
 impl WorkerState for HostWorkerState {
@@ -877,14 +880,6 @@ impl WorkerState for HostWorkerState {
     }
 
     fn drop(&self, mut store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>) {
-        // Unregister the store's MMU interrupter before dropping the store. The
-        // interrupter holds a raw pointer into the store's `VMStoreContext` and
-        // must not remain reachable.
-        #[cfg(has_mmu_interruption)]
-        if let Some(registry) = &self.interrupter_registry {
-            registry.unregister(self.instance_id);
-        }
-
         if let Err(error) = result {
             eprintln!("worker failed: {error:?}");
         }
@@ -907,10 +902,6 @@ struct HostHandlerState {
     next_instance_id: AtomicU64,
     next_request_id: AtomicU64,
     sem_requests: Semaphore,
-    /// Registry of live stores' MMU interrupters shared with the background
-    /// interrupter thread. `None` when MMU interruption is not used.
-    #[cfg(has_mmu_interruption)]
-    interrupter_registry: Option<Arc<MmuInterrupterRegistry>>,
     _shutdown_guard: Box<dyn std::any::Any + Send + Sync>,
 }
 
@@ -934,33 +925,7 @@ impl HandlerState for HostHandlerState {
         let mut store = self
             .cmd
             .new_store(self.component.engine(), Some(instance_id))?;
-
-        // Register this store's MMU interrupter so the `MmuInterruptThread` can
-        // do its work. It is normally unregistered in `HostWorkerState::drop()` before
-        // the store is dropped. We register it before instantiate_into(), lest
-        // the Wasm's initializer run on unreasonably long.
-        #[cfg(has_mmu_interruption)]
-        if let Some(registry) = &self.interrupter_registry {
-            if let Some(interrupter) = store.mmu_interrupter() {
-                registry.register(instance_id, interrupter);
-            }
-        }
-
-        // If something goes wrong instantiating the pre-instance into the
-        // store, we won't ever construct a HostWorkerState whose drop() is
-        // responsible for calling unregister(). So unregister it here before
-        // bailing out. Critically, we avoid leaving a raw pointer to a freed
-        // `VMStoreContext` in the registry.
-        let proxy = match self.instantiate_into(&mut store).await {
-            Ok(proxy) => proxy,
-            Err(e) => {
-                #[cfg(has_mmu_interruption)]
-                if let Some(registry) = &self.interrupter_registry {
-                    registry.unregister(instance_id);
-                }
-                return Err(e);
-            }
-        };
+        let proxy = self.instantiate_into(&mut store).await?;
 
         Ok(Instance {
             store,
@@ -976,8 +941,6 @@ impl HandlerState for HostHandlerState {
                 max_instance_concurrent_reuse_count: self.max_instance_concurrent_reuse_count,
                 instance_id,
                 request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
-                #[cfg(has_mmu_interruption)]
-                interrupter_registry: self.interrupter_registry.clone(),
             },
         })
     }
@@ -1033,195 +996,41 @@ impl GracefulShutdown {
     }
 }
 
-/// When executing with a timeout enabled, this is how frequently epoch or (at
-/// floor) MMU interrupts will be executed to check for timeouts. If guest
-/// profiling is enabled, the guest epoch period will be used.
+/// When executing with a timeout enabled, this is how frequently epoch
+/// interrupts will be executed to check for timeouts. It also sets a ceiling on
+/// the MMU interruption timeslice. If guest profiling is enabled, the guest
+/// epoch period will be used.
 const EPOCH_INTERRUPT_PERIOD: Duration = Duration::from_millis(50);
 
-struct EpochThread {
+/// The longest interval between ticks of the MMU interrupter
+#[cfg(has_mmu_interruption)]
+const MMU_TICK_PERIOD: Duration = Duration::from_millis(10);
+
+/// Calls a function periodically until dropped
+struct TickerThread {
     shutdown: Arc<AtomicBool>,
     handle: Option<std::thread::JoinHandle<()>>,
 }
 
-impl EpochThread {
-    fn spawn(interval: std::time::Duration, engine: Engine) -> Self {
+impl TickerThread {
+    fn spawn(interval: std::time::Duration, tick: impl Fn() + Send + 'static) -> Self {
         let shutdown = Arc::new(AtomicBool::new(false));
         let handle = {
             let shutdown = Arc::clone(&shutdown);
             let handle = std::thread::spawn(move || {
                 while !shutdown.load(Ordering::Relaxed) {
                     std::thread::sleep(interval);
-                    engine.increment_epoch();
+                    tick();
                 }
             });
             Some(handle)
         };
 
-        EpochThread { shutdown, handle }
+        TickerThread { shutdown, handle }
     }
 }
 
-impl Drop for EpochThread {
-    fn drop(&mut self) {
-        if let Some(handle) = self.handle.take() {
-            self.shutdown.store(true, Ordering::Relaxed);
-            handle.join().unwrap();
-        }
-    }
-}
-
-/// A registry of MMU interrupters belonging to the stores of in-progress
-/// requests.
-#[cfg(has_mmu_interruption)]
-#[derive(Default)]
-struct MmuInterrupterRegistry {
-    inner: Mutex<MmuInterrupterRegistryInner>,
-}
-
-#[cfg(has_mmu_interruption)]
-#[derive(Default)]
-struct MmuInterrupterRegistryInner {
-    instances_and_interrupters: Vec<InstanceAndInterrupter>,
-    /// Index of the `entries` element at which the next round of interruption
-    /// will begin.
-    next: usize,
-}
-
-#[cfg(has_mmu_interruption)]
-struct InstanceAndInterrupter {
-    instance_id: u64,
-    interrupter: MmuInterrupter,
-}
-
-#[cfg(has_mmu_interruption)]
-impl MmuInterrupterRegistry {
-    fn lock(&self) -> std::sync::MutexGuard<'_, MmuInterrupterRegistryInner> {
-        self.inner.lock().unwrap()
-    }
-
-    /// Registers a store's interrupter by its `instance_id`.
-    fn register(&self, instance_id: u64, interrupter: MmuInterrupter) {
-        let mut inner = self.lock();
-        inner
-            .instances_and_interrupters
-            .push(InstanceAndInterrupter {
-                instance_id,
-                interrupter,
-            });
-    }
-
-    /// Removes a store's interrupter. This must be called before the store is
-    /// dropped.
-    fn unregister(&self, instance_id: u64) {
-        let mut inner = self.lock();
-        if let Some(pos) = inner
-            .instances_and_interrupters
-            .iter()
-            .position(|e| e.instance_id == instance_id)
-        {
-            // O(n) but capped to the number of Stores:
-            inner.instances_and_interrupters.remove(pos);
-            // Slide `next` left to make up for the hole we just poked.
-            if inner.next > pos {
-                inner.next -= 1;
-            }
-        }
-    }
-
-    /// Interrupts the next store in round-robin order, returning the number of
-    /// stores currently running Wasm code.
-    ///
-    /// We skip stores that aren't currently running. Interrupting them would be
-    /// counterproductive, as the interruption would take effect very soon after
-    /// they swap back in, rubbing them of their timeslice.
-    fn interrupt_next(&self) -> usize {
-        // It's vital to hold this lock while interrupt() runs. Otherwise,
-        // unregister() could be called before or during, and interrupt() could
-        // mprotect a page that has been munmap()'d.
-        let mut inner = self.lock();
-        let len = inner.instances_and_interrupters.len();
-        if len == 0 {
-            inner.next = 0;
-            return 0;
-        }
-        if inner.next >= len {
-            inner.next = 0;
-        }
-
-        let mut running = 0;
-        let mut interrupted_i: Option<usize> = None;
-        let (head, tail) = inner.instances_and_interrupters.split_at(inner.next);
-        let head_enum = head.iter().enumerate();
-        let tail_enum = tail.iter().enumerate().map(|(i, e)| (i + inner.next, e));
-        for (i, instance_and_interrupter) in tail_enum.chain(head_enum) {
-            if instance_and_interrupter.interrupter.is_running() {
-                running += 1;
-                if interrupted_i.is_none() {
-                    instance_and_interrupter.interrupter.interrupt();
-                    interrupted_i = Some(i);
-                }
-            }
-        }
-        inner.next = match interrupted_i {
-            Some(index) => index + 1,
-            // If nothing was found running, still advance so we don't just wait
-            // around for this entry to start, pouncing on it as soon as it
-            // does.
-            None => inner.next + 1,
-        };
-        running
-    }
-}
-
-/// A background thread that triggers MMU interrupts, in round-robin order,
-/// across the live, *running* stores registered in an [`MmuInterrupterRegistry`].
-///
-/// The cadence is adaptive: with `N` live stores and one interrupt per tick,
-/// ticking every `period / N` interrupts every store about once per timeout
-/// window, comparable to how epoch interruption behaves. That interval is
-/// clamped to a 0.5ms floor so heavy concurrency doesn't turn this into a busy
-/// loop.
-#[cfg(has_mmu_interruption)]
-struct MmuInterruptThread {
-    shutdown: Arc<AtomicBool>,
-    handle: Option<std::thread::JoinHandle<()>>,
-}
-
-#[cfg(has_mmu_interruption)]
-impl MmuInterruptThread {
-    /// Spins off a thread to periodically interrupt each running worker in a
-    /// passed-in registry. Each is interrupted about once per `period`. There's
-    /// a little bit of slop because we update our running count only after each
-    /// round of interruption.
-    fn spawn(period: Duration, registry: Arc<MmuInterrupterRegistry>) -> Self {
-        let shutdown = Arc::new(AtomicBool::new(false));
-        let handle = {
-            let shutdown = Arc::clone(&shutdown);
-            std::thread::spawn(move || {
-                let mut running: usize = 0;
-                while !shutdown.load(Ordering::Relaxed) {
-                    // Even if nothing is running now (`running` = 0), be there to
-                    // interrupt within `period` in case something starts up.
-                    let period_between_workers =
-                        period / u32::try_from(running.max(1)).unwrap_or(u32::MAX);
-
-                    // sleep() can't sleep much shorter than 169µs. Introduce
-                    // batching or something if we need better.
-                    std::thread::sleep(period_between_workers);
-                    running = registry.interrupt_next();
-                }
-            })
-        };
-
-        MmuInterruptThread {
-            shutdown,
-            handle: Some(handle),
-        }
-    }
-}
-
-#[cfg(has_mmu_interruption)]
-impl Drop for MmuInterruptThread {
+impl Drop for TickerThread {
     fn drop(&mut self) {
         if let Some(handle) = self.handle.take() {
             self.shutdown.store(true, Ordering::Relaxed);
@@ -1250,10 +1059,8 @@ fn setup_epoch_handler(
 
     // Profiling is disabled, but there's a global request timeout. When MMU
     // interruption is handling that timeout, it yields the fiber on its own.
-    // Set up epoch interruption for cases which require other kinds of
-    // on-interrupt behavior.
-    let mmu_timeout = cmd.using_mmu_interruption() && cmd.run.common.wasm.timeout.is_some();
-    if (cmd.run.common.wasm.timeout.is_some() && !mmu_timeout)
+    // Set up epoch interruption otherwise.
+    if (cmd.run.common.wasm.timeout.is_some() && !cmd.using_mmu_timeout())
         || cmd.run.common.debug.debugger.is_some()
     {
         store.epoch_deadline_async_yield_and_update(1);

@@ -5,13 +5,9 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-#[cfg(has_mmu_interruption)]
-use crate::runtime::vm::SendSyncPtr;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
 use crate::vm::stack_switching::VMStackChain;
-#[cfg(has_mmu_interruption)]
-use alloc::sync::Arc;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
 use core::fmt;
@@ -19,12 +15,7 @@ use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::ops::Range;
 use core::ptr::{self, NonNull};
-#[cfg(has_mmu_interruption)]
 use core::sync::atomic::{AtomicUsize, Ordering};
-#[cfg(has_mmu_interruption)]
-use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect, munmap};
-#[cfg(has_mmu_interruption)]
-use rustix::param::page_size;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     DefinedTagIndex, NUM_COMPONENT_CONTEXT_SLOTS, VMCONTEXT_MAGIC, VMSharedTypeIndex,
@@ -1112,8 +1103,8 @@ pub struct VMStoreContext {
     /// tasks. Compiled guest code regularly attempts a read at this address.
     /// When it is time to switch, the host uses mprotect() to forbid reads. The
     /// fault soon caused by guest code then lands in the signal handler, which
-    /// effects a switch and resets the page permissions.
-    mmu_interrupt_page_ptr: Option<VmPtr<c_void>>, // ptr-sized
+    /// effects a switch.
+    pub(crate) mmu_interrupt_page_ptr: Option<VmPtr<c_void>>, // ptr-sized
 
     /// The "store version".
     ///
@@ -1353,148 +1344,6 @@ impl Default for VMStoreContext {
             component_context: UnsafeCell::new([0; NUM_COMPONENT_CONTEXT_SLOTS]),
             current_thread: UnsafeCell::new(VMLazyThread::none()),
         }
-    }
-}
-
-/// Methods related to the special memory page that supports MMU interrupts
-#[cfg(has_mmu_interruption)]
-impl VMStoreContext {
-    /// Returns a new instance that has a page of memory allocated for use with
-    /// `mmu-interruption`.
-    ///
-    /// The caller is responsible for calling
-    /// [`VMStoreContext::unmap_interrupt_page()`], since this has no
-    /// destructor.
-    pub fn with_interrupt_page() -> Self {
-        let mut ret = Self::default();
-        // SAFETY: `mmap_anonymous()` is unsafe, but passing a null ptr, as we do,
-        // satisfies its safety conditions, letting the kernel select the
-        // address. The returned memory is owned by us and freed in
-        // `unmap_interrupt_page`.
-        ret.mmu_interrupt_page_ptr = unsafe {
-            let page_ptr = mmap_anonymous(
-                ptr::null_mut(), // Let the kernel pick location.
-                page_size(),
-                ProtFlags::READ,
-                // Privacy doesn't matter, as we never write to the
-                // interrupt page. However, private is the safer choice in
-                // case someone starts doing so.
-                MapFlags::PRIVATE,
-            )
-            .expect("an interrupt page should be allocable");
-            let non_null_page_ptr = NonNull::new(page_ptr)
-                .expect("if mmap returns successfully, its result should not be null");
-            Some(non_null_page_ptr.into())
-        };
-        ret
-    }
-
-    /// Iff MMU interruption is on, returns an object from which we can
-    /// perform an interrupt (that is, protect the interrupt page).
-    ///
-    /// `running` is the store's "a fiber of this store is currently resumed"
-    /// flag, maintained by `StoreOpaque`; see
-    /// [`MmuInterrupter::is_running()`].
-    pub fn mmu_interrupter(&self, fibers_on_stack: Arc<AtomicUsize>) -> Option<MmuInterrupter> {
-        if self.mmu_interrupt_page_ptr.is_some() {
-            Some(MmuInterrupter {
-                vm_store_context: crate::runtime::vm::SendSyncPtr::new(NonNull::from(self)),
-                fibers_on_stack,
-            })
-        } else {
-            None
-        }
-    }
-
-    /// Sets the MMU access control bits to prevent read access. The public road
-    /// to this is through [`VMStoreContext::mmu_interrupter()`].
-    fn protect_interrupt_page(&self) {
-        if let Some(page_ptr) = self.mmu_interrupt_page_ptr {
-            // SAFETY: `page_ptr` originates from `with_interrupt_page()`'s
-            // `mmap_anonymous()` of `page_size()` bytes and is still mapped
-            // (freed only in `unmap_interrupt_page`, which wipes out
-            // `mmu_interrupt_page_ptr`).
-            unsafe {
-                mprotect(page_ptr.as_ptr(), page_size(), MprotectFlags::empty())
-                    .expect("any error from mprotect is a programming error")
-            }
-        } else {
-            panic!("called protect_interrupt_page though mmu-interruption was not on")
-        }
-    }
-
-    /// Sets the MMU access control bits to allow read access to the interrupt
-    /// page, effectively completing an MMU interruption cycle.
-    pub fn unprotect_interrupt_page(&self) {
-        if let Some(page_ptr) = self.mmu_interrupt_page_ptr {
-            // SAFETY: Same as `protect_interrupt_page()`
-            unsafe {
-                mprotect(page_ptr.as_ptr(), page_size(), MprotectFlags::READ)
-                    .expect("any error from mprotect is a programming error")
-            }
-        } else {
-            panic!("called unprotect_interrupt_page though mmu-interruption was not on")
-        }
-    }
-
-    /// Disposes of any allocated MMU-interrupt page. This must be called if
-    /// [`VMStoreContext::with_interrupt_page()`] was used to construct this
-    /// instance, lest we leak a page.
-    pub fn unmap_interrupt_page(&mut self) {
-        if let Some(interrupt_page) = self.mmu_interrupt_page_ptr {
-            // SAFETY: The only origin of the interrupt_page ptr is
-            // with_interrupt_page(), which panics unless it succeeds and is
-            // non-null.
-            unsafe {
-                munmap(interrupt_page.as_ptr(), page_size())
-                    .expect("should be able to unmap interrupt page");
-            }
-        }
-        self.mmu_interrupt_page_ptr = None
-    }
-}
-
-/// A thread-safe handle that can trigger an MMU interruption
-#[cfg(has_mmu_interruption)]
-#[derive(Clone)]
-pub struct MmuInterrupter {
-    vm_store_context: SendSyncPtr<VMStoreContext>,
-    fibers_on_stack: Arc<AtomicUsize>,
-}
-
-#[cfg(has_mmu_interruption)]
-impl MmuInterrupter {
-    /// Twiddles MMU access control bits such that reads from the interrupt page
-    /// will cause a segfault. This soon interrupts the running Wasm, as it will
-    /// will execute such reads at the next function or loop header.
-    pub fn interrupt(&self) {
-        // SAFETY: `MmuInterrupter` is constructed only from a `VMStoreContext`
-        // owned by a `Store`, which outlives the page pointer used here. Also,
-        // the ptr is stable for the store's lifetime, and we here perform only
-        // a thread-safe `mprotect`.
-        unsafe { self.vm_store_context.as_ref().protect_interrupt_page() }
-    }
-
-    /// Returns whether the Store this is associated with is actually running
-    /// Wasm code at the moment. If it isn't, we oughtn't bother interrupting
-    /// it, lest it interrupt itself immediately after it leaves the idle state.
-    ///
-    /// This also returns true if the Store is executing a host call that was
-    /// called from Wasm, so it's a bit of an overshoot.
-    ///
-    /// Naturally, any decision based on this may be out of date. However,
-    /// empirically, it lets the interruption loop of `wasmtime serve` scale
-    /// with CPU core count rather than with the number of Wasm instances
-    /// waiting for CPU. Inaccuracies do not result in disaster: interrupting a
-    /// Wasm that isn't running means only that it will interrupt itself when it
-    /// next runs, missing its timeslice. Failing to interrupt one that is
-    /// running means it gets to run one more timeslice. Pathologically, the
-    /// same mistake could be made for the same Wasm in perpetuity, but
-    /// measurements show amortized improvements in both latency (p50 and p90)
-    /// and throughput compared to the more deterministic epoch interruption.
-    #[cfg(has_mmu_interruption)]
-    pub fn is_running(&self) -> bool {
-        self.fibers_on_stack.load(Ordering::Relaxed) > 0
     }
 }
 
