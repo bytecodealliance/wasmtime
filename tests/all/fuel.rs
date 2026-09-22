@@ -694,6 +694,103 @@ fn custom_operator_cost(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
+#[wasmtime_test(wasm_features(tail_call))]
+#[cfg_attr(miri, ignore)]
+fn unreachable_control_operator_cost(config: &mut Config) -> Result<()> {
+    // Use nonzero costs so charging unreachable control operators is observable.
+    config.consume_fuel(true).operator_cost(OperatorCost {
+        Block: 1,
+        Loop: 1,
+        If: 1,
+        Else: 1,
+        End: 1,
+        ..Default::default()
+    });
+    let engine = Engine::new(config)?;
+    for terminator in [
+        "return",
+        "unreachable",
+        "return_call $leaf",
+        "i32.const 0 return_call_indirect (type $t)",
+        "br $exit",
+    ] {
+        let body = |dead: &str| {
+            format!(
+                r#"(param i32)
+                    block $exit
+                        local.get 0
+                        if
+                            {terminator}
+                            {dead}
+                        else
+                            i32.const 3 drop
+                        end
+                        i32.const 5 drop
+                    end
+                    i32.const 7 drop"#
+            )
+        };
+        let module = Module::new(
+            &engine,
+            format!(
+                r#"(module
+                    (type $t (func))
+                    (func $leaf (type $t))
+                    (table funcref (elem $leaf))
+                    (func (export "with_dead") {})
+                    (func (export "without_dead") {}))"#,
+                body("block loop end i32.const 0 if else end end"),
+                body(""),
+            ),
+        )?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        // Exercise both the terminating path and the reachable else/end joins.
+        for condition in [0, 1] {
+            let mut consumed = Vec::new();
+            for export in ["with_dead", "without_dead"] {
+                store.set_fuel(1_000)?;
+                let run = instance.get_typed_func::<i32, ()>(&mut store, export)?;
+                let result = run.call(&mut store, condition);
+                if terminator == "unreachable" && condition == 1 {
+                    assert_eq!(
+                        result.unwrap_err().downcast::<Trap>()?,
+                        Trap::UnreachableCodeReached
+                    );
+                } else {
+                    result?;
+                }
+                consumed.push(1_000 - store.get_fuel()?);
+            }
+            assert_eq!(consumed[0], consumed[1], "{terminator}, {condition}");
+        }
+    }
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[cfg_attr(miri, ignore)]
+fn unreachable_try_table_fuel(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (func (export "run") (result i32)
+                i32.const 42
+                return
+                (try_table)))"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    assert_eq!(run.call(&mut store, ())?, 42);
+    // Only function entry and i32.const consume fuel.
+    assert_eq!(store.get_fuel()?, 98);
+    Ok(())
+}
+
 #[wasmtime_test(wasm_features(exceptions, reference_types))]
 #[cfg_attr(miri, ignore)]
 fn exceptions_with_fuel(config: &mut Config) -> Result<()> {
