@@ -1,0 +1,19 @@
+test interpret
+test run
+set enable_llvm_abi_extensions
+set opt_level=speed_and_size
+target x86_64
+
+;; Mid-end select(ugt)->umin must remain lowerable on x64 (#13790).
+function %select_ugt_to_umin() -> i128 {
+block0:
+    v0 = iconst.i64 0
+    v1 = uextend.i128 v0
+    v2 = iconst.i64 0
+    v3 = iconcat v2, v2
+    v4 = isub v3, v1
+    v5 = icmp ugt v4, v3
+    v6 = select v5, v3, v4
+    return v6
+}
+; run: %select_ugt_to_umin() == 0

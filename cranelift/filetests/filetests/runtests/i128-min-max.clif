@@ -5,6 +5,9 @@ target riscv64
 target riscv64 has_c has_zcb
 set enable_multi_ret_implicit_sret
 target s390x
+;; x86_64 now lowers i128 min/max (#13790).
+set enable_llvm_abi_extensions
+target x86_64
 
 
 function %smin_i128(i128, i128) -> i128 {
