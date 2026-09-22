@@ -225,7 +225,7 @@ here is:
 | [`relaxed-simd`]                        | ✅        | ❌     |
 | [`multi-memory`]                        | ✅        | ✅     |
 | [`threads`]                             | ✅        | ✅     |
-| [`tail-call`]                           | ✅        | ❌     |
+| [`tail-call`]                           | ✅        | ✅     |
 | [`extended-const`]                      | ✅        | ✅     |
 | [`memory64`]                            | ✅        | ✅     |
 | [`function-references`]                 | ✅        | ❌     |
@@ -250,7 +250,7 @@ here is:
 | [`relaxed-simd`]                        | ✅        | ❌        |
 | [`multi-memory`]                        | ✅        | ✅        |
 | [`threads`]                             | ✅        | ❌        |
-| [`tail-call`]                           | ✅        | ❌        |
+| [`tail-call`]                           | ✅        | ✅        |
 | [`extended-const`]                      | ✅        | ✅        |
 | [`memory64`]                            | ✅        | ✅        |
 | [`function-references`]                 | ✅        | ❌        |

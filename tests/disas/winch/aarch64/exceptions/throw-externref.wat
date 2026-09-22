@@ -18,7 +18,7 @@
 ;;       movk    x17, #0x30
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x150
+;;       b.lo    #0x140
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -32,7 +32,7 @@
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       mov     x0, x9
-;;       bl      #0x21c
+;;       bl      #0x20c
 ;;   64: add     x28, x28, #4
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[4, 12]
 ;;       mov     sp, x28
@@ -53,11 +53,9 @@
 ;;       ldur    w2, [x28, #0xc]
 ;;       mov     x3, #0x20
 ;;       mov     x4, #0x10
-;;       bl      #0x1cc
-;;   b4: add     x28, x28, #0xc
+;;       bl      #0x1bc
+;;   b4: add     x28, x28, #0x10
 ;;       ╰─╼ stack_map: frame_size=64, frame_offsets=[20, 28]
-;;       mov     sp, x28
-;;       add     x28, x28, #4
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x18]
 ;;       ldur    x1, [x9, #8]
@@ -82,11 +80,9 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       ldur    w1, [x28, #4]
-;;       bl      #0x24c
-;;  124: add     x28, x28, #4
+;;       bl      #0x23c
+;;  11c: add     x28, x28, #8
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[12]
-;;       mov     sp, x28
-;;       add     x28, x28, #4
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       add     x28, x28, #0x18
@@ -95,4 +91,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  150: udf     #0xc11f
+;;  140: udf     #0xc11f

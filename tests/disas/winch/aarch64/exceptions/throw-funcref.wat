@@ -18,7 +18,7 @@
 ;;       movk    x17, #0x30
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x1a4
+;;       b.lo    #0x18c
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -30,7 +30,7 @@
 ;;       mov     sp, x28
 ;;       stur    x16, [x28]
 ;;       mov     x0, x9
-;;       bl      #0x2a0
+;;       bl      #0x288
 ;;   5c: ldur    x9, [x28, #0x18]
 ;;       ldur    x1, [x9, #0x28]
 ;;       ldur    w1, [x1, #4]
@@ -48,10 +48,8 @@
 ;;       ldur    w2, [x28, #8]
 ;;       mov     x3, #0x20
 ;;       mov     x4, #0x10
-;;       bl      #0x220
-;;   a4: add     x28, x28, #8
-;;       mov     sp, x28
-;;       add     x28, x28, #4
+;;       bl      #0x208
+;;   a4: add     x28, x28, #0xc
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x1c]
 ;;       ldur    x1, [x9, #8]
@@ -81,10 +79,8 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       ldur    x1, [x28, #4]
-;;       bl      #0x270
-;;  128: add     x28, x28, #4
-;;       mov     sp, x28
-;;       add     x28, x28, #8
+;;       bl      #0x258
+;;  120: add     x28, x28, #0xc
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x1c]
 ;;       ldur    w1, [x28]
@@ -101,10 +97,8 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       ldur    w1, [x28, #4]
-;;       bl      #0x2d0
-;;  178: add     x28, x28, #4
-;;       mov     sp, x28
-;;       add     x28, x28, #4
+;;       bl      #0x2b8
+;;  168: add     x28, x28, #8
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       add     x28, x28, #0x18
@@ -113,4 +107,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  1a4: udf     #0xc11f
+;;  18c: udf     #0xc11f

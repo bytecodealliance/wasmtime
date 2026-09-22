@@ -938,7 +938,7 @@ impl Config {
     /// programs to implement some recursive algorithms with *O(1)* stack space
     /// usage.
     ///
-    /// This is `true` by default except when the Winch compiler is enabled.
+    /// This is `true` by default.
     ///
     /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
     pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
@@ -2485,7 +2485,6 @@ impl Config {
                 unsupported |= WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD
-                    | WasmFeatures::TAIL_CALL
                     | WasmFeatures::LEGACY_EXCEPTIONS
                     | WasmFeatures::STACK_SWITCHING;
 

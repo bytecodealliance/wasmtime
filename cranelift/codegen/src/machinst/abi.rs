@@ -2168,8 +2168,9 @@ impl<M: ABIMachineSpec> Callee<M> {
         // after the register allocator has run and thus cannot have register allocator-inserted
         // references to SP offsets.)
 
-        let callee_pop_size = if callee_conv == isa::CallConv::Tail {
-            // The tail calling convention has callees pop stack arguments.
+        let callee_pop_size = if matches!(callee_conv, isa::CallConv::Tail | isa::CallConv::Winch) {
+            // The tail and Winch calling conventions have callees pop stack
+            // arguments.
             stack_arg_space
         } else {
             0
