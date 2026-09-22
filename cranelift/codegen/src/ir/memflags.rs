@@ -27,6 +27,8 @@ pub enum Endianness {
 ///
 /// Alias regions identify disjoint categories of memory for alias analysis.
 /// Two memory operations in different alias regions are known not to alias.
+/// An access with no region occupies a separate implicit "other" category,
+/// also disjoint from every named region (explicit no-region).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct AliasRegion(u32);
