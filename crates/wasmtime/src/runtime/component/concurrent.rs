@@ -241,7 +241,7 @@ where
     /// Spawn a background task.
     ///
     /// See [`Accessor::spawn`] for details.
-    pub fn spawn(&mut self, task: impl AccessorTask<T, D>) -> Result<JoinHandle>
+    pub fn spawn(&mut self, task: impl for<'fut> AccessorTask<'fut, T, D>) -> Result<JoinHandle>
     where
         T: 'static,
     {
@@ -517,7 +517,7 @@ where
     /// Panics if called within a closure provided to the [`Accessor::with`]
     /// function. This can only be called outside an active invocation of
     /// [`Accessor::with`].
-    pub fn spawn(&self, task: impl AccessorTask<T, D>) -> Result<JoinHandle>
+    pub fn spawn(&self, task: impl for<'fut> AccessorTask<'fut, T, D>) -> Result<JoinHandle>
     where
         T: 'static,
     {
@@ -614,23 +614,47 @@ where
     }
 }
 
-/// Represents a task which may be provided to `Accessor::spawn`,
-/// `Accessor::forward`, or `StorecContextMut::spawn`.
-// TODO: Replace this with `core::ops::AsyncFnOnce` when that becomes a viable
-// option.
+/// Represents an async closure which may be provided to `Accessor::spawn`,
+/// `Accessor::forward`, or `StoreContextMut::spawn`.
+// TODO: Replace this with `core::ops::AsyncFnOnce` when we are able to put `Send`
+// bound on the unnamed `Future` directly.
 //
 // As of this writing, it's not possible to specify e.g. `Send` and `Sync`
 // bounds on the `Future` type returned by an `AsyncFnOnce`.  Also, using `F:
 // Future<Output = Result<()>> + Send + Sync, FN: FnOnce(&Accessor<T>) -> F +
-// Send + Sync + 'static` fails with a type mismatch error when we try to pass
-// it an async closure (e.g. `async move |_| { ... }`).  So this seems to be the
-// best we can do for the time being.
-pub trait AccessorTask<T, D = HasSelf<T>>: Send + 'static
+// Send + Sync + 'static` fails with a type mismatch error as we cannot describe
+// that `F` should have `&Accessor<T>`'s unnamed lifetime
+//
+// Instead, this trait is used as a workaround for this limitation, the bound on `Self`
+// implementing `AsyncFnOnce()` is required for Rust to automatically infer that an async
+// closure is to be provided wherever we are accepting `impl for<'fut> AccessorTask<'fut, T, D>`
+// as argument. Otherwise, users will have to fully qualify the closure types before it
+// is accepted as a valid value. This also means that it is not intended for a user
+// to manually implement this trait for any arbitrary type, since they would first
+// have to implement `AsyncFnOnce`, which is unstable.
+//
+// The blanket implementation for this trait will ensure that `Self` is an async closure
+// that returns a `Future` that is `Send`, and lives as long as `&Accessor<T, D>`
+pub trait AccessorTask<'fut, T, D = HasSelf<T>>:
+    AsyncFnOnce(&Accessor<T, D>) -> Result<()> + Send + 'static
 where
     D: HasData + ?Sized,
 {
     /// Run the task.
-    fn run(self, accessor: &Accessor<T, D>) -> impl Future<Output = Result<()>> + Send;
+    fn run(self, accessor: &'fut Accessor<T, D>) -> impl Future<Output = Result<()>> + Send + 'fut;
+}
+
+impl<'fut, F, Fut, T, D> AccessorTask<'fut, T, D> for F
+where
+    T: 'static,
+    F: AsyncFnOnce(&Accessor<T, D>) -> Result<()>,
+    F: FnOnce(&'fut Accessor<T, D>) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<()>> + Send + 'fut,
+    D: HasData,
+{
+    fn run(self, accessor: &'fut Accessor<T, D>) -> impl Future<Output = Result<()>> + Send + 'fut {
+        (self)(accessor)
+    }
 }
 
 /// Represents parameter and result metadata for the caller side of a
@@ -1027,7 +1051,10 @@ impl<T> Store<T> {
     }
 
     /// Convenience wrapper for [`StoreContextMut::spawn`].
-    pub fn spawn(&mut self, task: impl AccessorTask<T, HasSelf<T>>) -> Result<JoinHandle>
+    pub fn spawn(
+        &mut self,
+        task: impl for<'fut> AccessorTask<'fut, T, HasSelf<T>>,
+    ) -> Result<JoinHandle>
     where
         T: 'static,
     {
@@ -1092,7 +1119,7 @@ impl<T> StoreContextMut<'_, T> {
     /// for this instance is run.
     ///
     /// The returned [`JoinHandle`] may be used to cancel the task.
-    pub fn spawn(mut self, task: impl AccessorTask<T>) -> Result<JoinHandle>
+    pub fn spawn(mut self, task: impl for<'fut> AccessorTask<'fut, T>) -> Result<JoinHandle>
     where
         T: 'static,
     {
@@ -1105,7 +1132,7 @@ impl<T> StoreContextMut<'_, T> {
     fn spawn_with_accessor<D>(
         self,
         accessor: Accessor<T, D>,
-        task: impl AccessorTask<T, D>,
+        task: impl for<'fut> AccessorTask<'fut, T, D>,
     ) -> Result<JoinHandle>
     where
         T: 'static,
