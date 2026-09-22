@@ -106,3 +106,18 @@ async fn http_outbound_request_missing_path_and_query() -> Result<()> {
     )
     .await
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn http_outbound_body_write_backpressure() -> Result<()> {
+    let server = Server::http1()?;
+    let e = run(HTTP_OUTBOUND_BODY_WRITE_BACKPRESSURE_COMPONENT, &server)
+        .await
+        .err()
+        .expect("guest execution should trap");
+    let e_debug = format!("{e:?}");
+    assert!(
+        e_debug.contains("write exceeded budget"),
+        "expected trap to contain 'write exceeded budget': {e:?}"
+    );
+    Ok(())
+}
