@@ -39,7 +39,7 @@ pub unsafe fn commit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     unsafe { expose_existing_mapping(addr, len) }
 }
 
-#[allow(non_camel_case_types)] // matching C conventions
+#[expect(non_camel_case_types, reason = "matching C conventions")]
 #[cfg(feature = "pooling-allocator")]
 pub struct iovec {
     pub iov_base: *mut u8,
