@@ -694,6 +694,20 @@ impl WastTest {
             return true;
         }
 
+        // `stream.forward` not yet implemented:
+        let uses_stream_forward = [
+            "component-model/test/values/post-return.wast",
+            "component-model/test/async/big-interleaving-test.wast",
+            "component-model/test/async/forward.wast",
+        ];
+
+        if uses_stream_forward
+            .iter()
+            .any(|part| self.path.ends_with(part))
+        {
+            return true;
+        }
+
         false
     }
 }
