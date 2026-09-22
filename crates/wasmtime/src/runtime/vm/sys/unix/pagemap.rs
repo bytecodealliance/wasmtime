@@ -136,7 +136,6 @@ impl PageMap {
 /// this function will perform a scan of `ptr` for `len` bytes which will search
 /// for pages that:
 ///
-/// * Are present.
 /// * Have been written.
 /// * Are NOT backed by the "zero" page.
 /// * Are NOT backed by a "file" page.
@@ -170,12 +169,13 @@ impl PageMap {
 /// Putting this all together this helps explain the search criteria for
 /// `PAGEMAP_SCAN`, notably:
 ///
-/// * `Categories::PRESENT` - we're only interested in present pages, anything
-///   unmapped wasn't touched by the guest so no need for the host to touch it
-///   either.
-///
 /// * `Categories::WRITTEN` - if a page was only read by the guest no need to
 ///   take a look at it as the contents aren't changed from the initial image.
+///   Note that this is not paired with `Categories::PRESENT`: a page the
+///   kernel has swapped out is not present but still holds the previous
+///   instance's contents, so it must be reset (which pages it back in) or
+///   decommitted like any other dirty page. A page that was never touched is
+///   neither written nor present, so nothing is scanned that need not be.
 ///
 /// * `!Categories::PFNZERO` - if a page is mapped to the zero page then it's
 ///   guaranteed to be readonly and it means that wasm read the memory but
@@ -217,12 +217,6 @@ impl PageMap {
 ///   dirty set never causes memory to be decommitted that would have fit in
 ///   the budget. The buffer stays on the stack: the loop costs one ioctl per
 ///   `MAX_REGIONS` regions and no allocation.
-///
-/// Dirty pages are matched by `WRITTEN` regardless of whether they are
-/// `PRESENT`: a page the kernel has swapped out still holds the previous
-/// instance's contents and must be reset (which pages it back in) or
-/// decommitted like any other dirty page. Requiring `PRESENT` would leave such
-/// pages untouched before `walk_end` and expose them to the next instance.
 ///
 /// In the end this ends up being a "more clever" version of this function than
 /// the one in the `pagemap_disabled` module. By using `PAGEMAP_SCAN` we can
@@ -292,20 +286,18 @@ pub unsafe fn reset_with_pagemap(
     // decommitted instead of reset in place.
     const MAX_REGIONS: usize = 64;
     let mut storage = [MaybeUninit::uninit(); MAX_REGIONS];
-    let page_budget = keep_resident.byte_count() / host_page_size;
     let end = ptr.addr() + len.byte_count();
     let mut cursor = ptr.cast_const();
-    let mut pages_found = 0usize;
+    // Pages that may still be reset in place instead of decommitted. Each
+    // region the scan reports spends part of it; when it is gone the rest of
+    // memory is decommitted.
+    let mut budget = keep_resident.byte_count() / host_page_size;
     let mut bytes_resident = 0;
 
-    loop {
-        let remaining_budget = page_budget - pages_found;
-        if remaining_budget == 0 {
-            break;
-        }
+    while budget > 0 {
         let remaining_len = end - cursor.addr();
         let scan_arg = PageMapScanBuilder::new(ptr::slice_from_raw_parts(cursor, remaining_len))
-            .max_pages(remaining_budget)
+            .max_pages(budget)
             // We specifically want pages that are NOT backed by the zero page
             // or backed by files. Such pages mean that they haven't changed
             // from their original contents, so they're inverted.
@@ -342,8 +334,8 @@ pub unsafe fn reset_with_pagemap(
                 log::warn!("failed pagemap scan {err}");
                 let tail_len =
                     HostAlignedByteCount::new(remaining_len).expect("cursor stays page aligned");
-                let tail_keep = HostAlignedByteCount::new(remaining_budget * host_page_size)
-                    .expect("page multiple");
+                let tail_keep =
+                    HostAlignedByteCount::new(budget * host_page_size).expect("page multiple");
                 return bytes_resident
                     + crate::runtime::vm::pagemap_disabled::reset_with_pagemap(
                         None,
@@ -356,8 +348,9 @@ pub unsafe fn reset_with_pagemap(
             },
         };
 
-        // Reset every region the scan reported in place.
-        let mut found_this_round = 0;
+        // Reset every region the scan reported in place. The kernel promises
+        // their total size is within `max_pages`, so the budget cannot go
+        // negative here.
         for region in result.regions() {
             // SAFETY: we're relying on Linux to pass in valid region ranges
             // within the `ptr/len` we specified to the original syscall.
@@ -365,24 +358,22 @@ pub unsafe fn reset_with_pagemap(
                 reset_manually(&mut *region.region().cast_mut());
             }
             bytes_resident += region.len();
-            found_this_round += region.len() / host_page_size;
+            budget -= region.len() / host_page_size;
         }
-        pages_found += found_this_round;
 
-        let walk_end = result.walk_end();
         let regions_full = result.regions().len() == MAX_REGIONS;
-        cursor = walk_end;
-        if walk_end.addr() >= end {
+        cursor = result.walk_end();
+        if cursor.addr() >= end {
             // The whole memory was scanned: nothing left to decommit.
             return bytes_resident;
         }
-        if regions_full && pages_found < page_budget {
-            // The output buffer filled up before the budget did: resume.
-            continue;
+        if !regions_full {
+            // The kernel stopped for a reason other than a full buffer, which
+            // leaves the resident budget: decommit the rest.
+            break;
         }
-        // The budget is spent (or the kernel stopped for another reason):
-        // decommit the rest.
-        break;
+        // The output buffer filled up: resume from `walk_end` while budget
+        // remains.
     }
 
     // Everything from the cursor to the end of memory was not reset in
