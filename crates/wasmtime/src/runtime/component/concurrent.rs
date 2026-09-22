@@ -2553,11 +2553,17 @@ impl Instance {
     ) -> Result<Option<(Event, Option<(Waitable, u32)>)>> {
         let state = store.concurrent_state_mut()?;
 
-        let event = &mut state.get_mut(guest_task)?.event;
+        let task = state.get_mut(guest_task)?;
+        let event = &mut task.event;
         if let Some(ev) = event
             && (cancellable || !matches!(ev, Event::Cancelled))
         {
             log::trace!("deliver event {ev:?} to {guest_task:?}");
+
+            if matches!(ev, Event::Cancelled) {
+                task.cancel_request_delivered = true;
+            }
+
             let ev = *ev;
             *event = None;
             return Ok(Some((ev, None)));
@@ -3610,7 +3616,7 @@ impl Instance {
         let guest_thread = store.current_guest_thread()?;
         let state = store.concurrent_state_mut()?;
         let task = state.get_mut(guest_thread.task)?;
-        if !task.cancel_sent {
+        if !task.cancel_request_delivered {
             bail!(Trap::TaskCancelNotCancelled);
         }
         _ = task
@@ -4245,7 +4251,7 @@ impl Instance {
             } else if !task.returned_or_cancelled() {
                 // Started, but not yet returned or cancelled; send the
                 // `CANCELLED` event
-                task.cancel_sent = true;
+                //
                 // Note that this might overwrite an event that was set earlier
                 // (e.g. `Event::None` if the task is yielding, or
                 // `Event::Cancelled` if it was already cancelled), but that's
@@ -5148,9 +5154,10 @@ pub(crate) struct GuestTask {
     /// A place to stash the lowered result for a sync-to-async call until it
     /// can be returned to the caller.
     sync_result: SyncResult,
-    /// Whether or not the task has been cancelled (i.e. whether the task is
-    /// permitted to call `task.cancel`).
-    cancel_sent: bool,
+    /// Whether or not the task has been cancelled (i.e. whether the
+    /// cancellation request has been delivered to the task, and thus whether
+    /// the task is permitted to call `task.cancel`).
+    cancel_request_delivered: bool,
     /// Whether or not we've sent a `Status::Starting` event to any current or
     /// future waiters for this waitable.
     starting_sent: bool,
@@ -5248,7 +5255,7 @@ impl GuestTask {
             caller,
             call_context: CallContext::default(),
             sync_result: SyncResult::NotProduced,
-            cancel_sent: false,
+            cancel_request_delivered: false,
             starting_sent: false,
             instance,
             event: None,
