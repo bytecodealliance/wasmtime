@@ -1,6 +1,7 @@
 //! This module contains the runtime components of the implementation of the
 //! stack switching proposal.
 
+pub(crate) mod asan;
 mod stack;
 
 use crate::vm::{
@@ -88,6 +89,8 @@ impl VMCommonStackInformation {
             state: VMStackState::Running,
             handlers: VMHostArray::empty(),
             first_switch_handler_index: 0,
+            asan_stack_bottom: None,
+            asan_stack_size: 0,
         }
     }
 }
@@ -154,6 +157,8 @@ impl VMContRef {
             state,
             handlers,
             first_switch_handler_index: 0,
+            asan_stack_bottom: None,
+            asan_stack_size: 0,
         };
         let parent_chain = VMStackChain::Absent;
         let last_ancestor = None;

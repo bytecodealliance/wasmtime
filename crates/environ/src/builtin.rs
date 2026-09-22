@@ -187,6 +187,13 @@ macro_rules! foreach_builtin_function {
                 contref_id: u32,
                 result: pointer
             ) -> bool;
+
+            // Helpers used around stack switch instructions in
+            // ASan-instrumented builds.
+            #[cfg(feature = "stack-switching")]
+            asan_start_switch_fiber(vmctx: vmctx, fake_stack_save: pointer, target_csi: pointer);
+            #[cfg(feature = "stack-switching")]
+            asan_finish_switch_fiber(vmctx: vmctx, fake_stack: pointer);
         }
     };
 }

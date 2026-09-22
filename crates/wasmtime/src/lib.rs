@@ -374,6 +374,8 @@
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(asan, allow(unstable_features))]
+#![cfg_attr(asan, feature(sanitize))]
 // NB: this list is currently being burned down to remove all features listed
 // here to get warnings in all configurations of Wasmtime.
 #![cfg_attr(
