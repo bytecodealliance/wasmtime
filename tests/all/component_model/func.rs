@@ -8,7 +8,7 @@ use std::sync::{
 };
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, format_err};
+use wasmtime::{Config, Engine, Store, StoreContextMut, Trap};
 
 const CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
 const CANON_64BIT_NAN: u64 = 0b0111111111111000000000000000000000000000000000000000000000000000;
@@ -3265,14 +3265,12 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     Ok(())
 }
 
-/// Test that a guest-exported `ResourceAny` can be dropped from within a
-/// spawned `AccessorTask` while the store's event loop is already running.
-///
-/// This mirrors the scenario from issue #14291: the host holds a
-/// `ResourceAny` inside a background task and only has an `Accessor`, not a
-/// `StoreContextMut`, at the point where it wants to drop it.
+/// Test that a guest-exported `ResourceAny` can be dropped with
+/// `resource_drop_concurrent` inside the same `Store::run_concurrent` call
+/// that produced it, i.e. while the store's event loop is already running.
+/// This is the scenario from issue #14291.
 #[tokio::test]
-async fn resource_drop_concurrent_from_accessor_task() -> Result<()> {
+async fn resource_drop_concurrent_in_run_concurrent() -> Result<()> {
     let style = ApiStyle::Concurrent;
     let engine = Engine::new(&style.config())?;
     let component = Component::new(&engine, THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT)?;
@@ -3284,29 +3282,12 @@ async fn resource_drop_concurrent_from_accessor_task() -> Result<()> {
         .get_export_index(&mut store, Some(&instance_index), "new")
         .unwrap();
     let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
-
-    struct DropTask {
-        run: TypedFunc<(), (ResourceAny,)>,
-        tx: futures::channel::oneshot::Sender<Result<()>>,
-    }
-
-    impl AccessorTask<(), HasSelf<()>> for DropTask {
-        async fn run(self, accessor: &Accessor<()>) -> Result<()> {
-            let result = async {
-                let (resource,) = self.run.call_concurrent(accessor, ()).await?;
-                resource.resource_drop_concurrent(accessor).await
-            }
-            .await;
-            _ = self.tx.send(result);
-            Ok(())
-        }
-    }
-
-    let (tx, rx) = futures::channel::oneshot::channel();
-    store.spawn(DropTask { run, tx })?;
     store
-        .run_concurrent(async |_| rx.await.map_err(|_| format_err!("task dropped")))
-        .await???;
+        .run_concurrent(async |accessor| {
+            let (resource,) = run.call_concurrent(accessor, ()).await?;
+            resource.resource_drop_concurrent(accessor).await
+        })
+        .await??;
     store.assert_concurrent_state_empty();
     Ok(())
 }
