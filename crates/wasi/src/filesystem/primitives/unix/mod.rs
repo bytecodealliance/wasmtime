@@ -174,17 +174,13 @@ pub(crate) fn read_dir(
                     continue;
                 }
 
-                let raw_mode = cfg_select! {
-                    target_os = "illumos" => rustix::fs::statat(
-                        dir.fd()?,
-                        entry.file_name(),
-                        AtFlags::SYMLINK_NOFOLLOW,
-                    )?.st_mode,
-                    _ => entry.file_type().as_raw_mode(),
+                let file_type = cfg_select! {
+                    target_os = "illumos" => rustix::fs::FileType::Unknown,
+                    _ => entry.file_type(),
 
                 };
+                let file_type = FileType::Unix(file_type);
 
-                let file_type = FileType::from_raw_mode(raw_mode.into());
                 return Ok(Some((OsString::from_vec(file_name.to_vec()), file_type)));
             }
         })();
