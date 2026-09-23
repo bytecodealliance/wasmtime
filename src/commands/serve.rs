@@ -8,10 +8,6 @@ use std::convert::Infallible;
 use std::ffi::OsString;
 use std::net::SocketAddr;
 
-#[cfg(unix)]
-use std::net::TcpListener as StdTcpListener;
-#[cfg(unix)]
-use std::os::unix::net::UnixListener as StdUnixListener;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{
@@ -24,8 +20,6 @@ use std::{
 };
 use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
-#[cfg(unix)]
-use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Semaphore;
 use wasmtime::component::{Component, GuestTaskId, Linker};
 use wasmtime::error::Context as _;
@@ -179,22 +173,19 @@ pub struct ServeCommand {
     /// point in time.
     #[arg(long)]
     max_concurrent_connections: Option<usize>,
+
+    #[arg(skip)]
+    inherited_sockets: InheritedSockets,
 }
 
 impl ServeCommand {
     /// Start a server to run the given wasi-http proxy component
     pub fn execute(mut self) -> Result<()> {
-        let inherited_socket = if self.systemd_listenfd {
-            Some(
-                unsafe {
-                    // Safety: Called early before any other file descriptors are opened.
-                    Self::inherit_socket()
-                }
-                .with_context(|| "Failed to resolve inherited sockets")?,
-            )
-        } else {
-            None
-        };
+        if self.systemd_listenfd {
+            // SAFETY: Called early before any other file descriptors are opened.
+            unsafe { self.inherited_sockets.inherit_sockets() }
+                .with_context(|| "Failed to resolve inherited sockets")?;
+        }
 
         self.run.common.init_logging()?;
 
@@ -226,7 +217,7 @@ impl ServeCommand {
             .enable_io()
             .build()?;
 
-        runtime.block_on(self.serve(inherited_socket))?;
+        runtime.block_on(self.serve())?;
 
         Ok(())
     }
@@ -337,7 +328,6 @@ impl ServeCommand {
         mut debug_run: RunCommand,
         linker: Linker<Host>,
         component: Component,
-        inherited_socket: Option<Vec<StdSocketServer>>,
     ) -> Result<()> {
         let mut debuggee_store = self.new_store(linker.engine(), None)?;
 
@@ -371,14 +361,7 @@ impl ServeCommand {
                 &debug_component,
                 &mut debug_linker,
                 debuggee_store,
-                move |store| {
-                    Box::pin(self.serve_maybe_debug(
-                        linker,
-                        component,
-                        Some(store),
-                        inherited_socket,
-                    ))
-                },
+                move |store| Box::pin(self.serve_maybe_debug(linker, component, Some(store))),
             )
             .await
     }
@@ -563,7 +546,7 @@ impl ServeCommand {
         Ok(())
     }
 
-    async fn serve(mut self, inherited_socket: Option<Vec<StdSocketServer>>) -> Result<()> {
+    async fn serve(mut self) -> Result<()> {
         #[cfg(feature = "debug")]
         let debug_run = self.debugger_setup()?;
 
@@ -600,20 +583,18 @@ impl ServeCommand {
         #[cfg(feature = "debug")]
         if let Some(debug_run) = debug_run {
             return self
-                .serve_under_debugger(debug_run, linker, component, inherited_socket)
+                .serve_under_debugger(debug_run, linker, component)
                 .await;
         }
 
-        self.serve_maybe_debug(linker, component, None, inherited_socket)
-            .await
+        self.serve_maybe_debug(linker, component, None).await
     }
 
     async fn serve_maybe_debug(
-        self,
+        mut self,
         linker: Linker<Host>,
         component: Component,
         debuggee_store: Option<&mut Store<Host>>,
-        inherited_socket: Option<Vec<StdSocketServer>>,
     ) -> Result<()> {
         let engine = linker.engine();
         let request_headers = RequestHeaders::parse(&self.headers)?;
@@ -650,19 +631,15 @@ impl ServeCommand {
             });
         }
 
-        let mut servers = vec![];
-
-        match inherited_socket {
+        let servers = match self.inherited_sockets.take()? {
             Some(listeners) => {
                 assert!(!listeners.is_empty());
-                for listener in listeners {
-                    servers.push(listener.try_into()?);
-                }
-
                 eprintln!("Serving HTTP on inherited socket");
                 log::info!("Listening on inherited socket");
+                listeners
             }
             None => {
+                let mut servers = vec![];
                 for addr in &self.addr {
                     let socket = match addr {
                         SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
@@ -682,8 +659,9 @@ impl ServeCommand {
 
                     eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
                     log::info!("Listening on {addr}");
-                    servers.push(SocketServer::Inet(listener));
+                    servers.push(SocketServer::Tcp(listener));
                 }
+                servers
             }
         };
 
@@ -840,98 +818,6 @@ impl ServeCommand {
                 }
             }
         }
-    }
-
-    /// Takes ownership of file descriptors this process has inherited from a parent process like a
-    /// service manager.
-    ///
-    /// These are looked up with the [protocol from systemd](https://www.freedesktop.org/software/systemd/man/latest/sd_listen_fds.html#Notes).
-    /// This is used to implement socket activation for `wasmtime serve`.
-    ///
-    /// ## Safety
-    ///
-    /// This function takes ownership of raw file descriptors and must be called before any other
-    /// file descriptors are opened.
-    #[cfg(unix)]
-    unsafe fn inherit_socket() -> Result<Vec<StdSocketServer>> {
-        use rustix::fs::{FileType, fstat};
-        use rustix::net::{AddressFamily, SocketType, getsockname, sockopt::socket_type};
-        use std::os::fd::{FromRawFd, OwnedFd, RawFd};
-        use std::{env, process};
-
-        // The logic here is taken from https://github.com/systemd/systemd/blob/main/src/libsystemd/sd-daemon/sd-daemon.c.
-        if !env::var("LISTEN_PID")
-            .ok()
-            .and_then(|pid| pid.parse().ok())
-            .is_some_and(|pid: u32| pid == process::id())
-        {
-            bail!("Missing or mismatched LISTEN_PID environment variable");
-        }
-
-        let Some(num_fds) = env::var("LISTEN_FDS")
-            .ok()
-            .and_then(|fds| fds.parse().ok())
-            .take_if(|e| *e >= 1)
-        else {
-            bail!("Missing or invalid LISTEN_FDS environment variable");
-        };
-
-        let first_fd: RawFd = 3;
-        let Some(last_fd) = first_fd.checked_add(num_fds) else {
-            bail!("Invalid amount of file descriptors in LISTEN_FDS");
-        };
-
-        let mut sockets = vec![];
-        // We want to take ownership of all file descriptors here, but only use the first socket to
-        // listen on it.
-        for fd in first_fd..last_fd {
-            let fd = unsafe {
-                // Safety: We're calling this first in Self::execute(), before any other file
-                // descriptors part from stdin, stdout and stderr are opened.
-                OwnedFd::from_raw_fd(fd)
-            };
-
-            // Set the close-on-exec flag, matching libsystemd.
-            #[cfg(any(target_vendor = "apple", target_os = "linux", target_os = "android"))]
-            rustix::io::ioctl_fioclex(&fd)?;
-
-            // Check if this file descriptor is a TCP socket.
-            let stat = fstat(&fd)?;
-            if !FileType::from_raw_mode(stat.st_mode).is_socket() {
-                continue;
-            }
-
-            if socket_type(&fd)? != SocketType::STREAM {
-                continue;
-            }
-
-            let address_family = getsockname(&fd)?.address_family();
-            let this_listener = if address_family == AddressFamily::INET
-                || address_family == AddressFamily::INET6
-            {
-                let listener = StdTcpListener::from(fd);
-                listener.set_nonblocking(true)?;
-                StdSocketServer::Inet(listener)
-            } else if address_family == AddressFamily::UNIX {
-                let listener = StdUnixListener::from(fd);
-                listener.set_nonblocking(true)?;
-                StdSocketServer::Unix(listener)
-            } else {
-                continue;
-            };
-            sockets.push(this_listener);
-        }
-
-        if sockets.is_empty() {
-            bail!("No socket inherited")
-        }
-
-        Ok(sockets)
-    }
-
-    #[cfg(not(unix))]
-    unsafe fn inherit_socket() -> Result<Vec<StdSocketServer>> {
-        bail!("The --listenfd option is not available on Windows")
     }
 }
 
@@ -1297,7 +1183,7 @@ fn setup_guest_profiler(
 type Request = hyper::Request<hyper::body::Incoming>;
 
 async fn handle_client(
-    client: ClientSocket,
+    client: impl AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
     handler: &ProxyHandler<HostHandlerState>,
     debuggee_store: Option<&mut Store<Host>>,
 ) {
@@ -1574,40 +1460,16 @@ impl AsyncWrite for LogStream {
     }
 }
 
-enum StdSocketServer {
-    #[cfg(unix)]
-    Inet(StdTcpListener),
-    #[cfg(unix)]
-    Unix(StdUnixListener),
-}
-
 enum SocketServer {
-    Inet(TcpListener),
-    #[cfg(unix)]
-    Unix(UnixListener),
-}
-
-impl TryFrom<StdSocketServer> for SocketServer {
-    type Error = wasmtime::Error;
-
-    #[cfg(unix)]
-    fn try_from(value: StdSocketServer) -> Result<Self> {
-        Ok(match value {
-            StdSocketServer::Inet(listener) => Self::Inet(TcpListener::from_std(listener)?),
-            StdSocketServer::Unix(listener) => Self::Unix(UnixListener::from_std(listener)?),
-        })
-    }
-
-    #[cfg(not(unix))]
-    fn try_from(_value: StdSocketServer) -> Result<Self> {
-        bail!("Only used for inherited sockets on Unix")
-    }
+    Tcp(TcpListener),
+    #[allow(dead_code, reason = "not used on all platforms")]
+    Platform(PlatformListener),
 }
 
 impl SocketServer {
     async fn accept(&self) -> Result<ClientSocket> {
         Ok(match self {
-            SocketServer::Inet(listener) => {
+            SocketServer::Tcp(listener) => {
                 let (stream, _) = listener.accept().await?;
                 // The Nagle algorithm can impose a significant latency penalty
                 // (e.g. 40ms on Linux) on guests which write small, intermittent
@@ -1616,80 +1478,57 @@ impl SocketServer {
                 // TCP fragmentation.
                 stream.set_nodelay(true)?;
 
-                ClientSocket::Inet { stream }
+                ClientSocket::Tcp(stream)
             }
-            #[cfg(unix)]
-            SocketServer::Unix(listener) => {
+            SocketServer::Platform(listener) => {
                 let (stream, _) = listener.accept().await?;
-                ClientSocket::Unix { stream }
+                ClientSocket::Platform(stream)
             }
         })
     }
 }
 
-#[cfg(unix)]
-pin_project! {
-    #[project = ClientSocketProj]
-    enum ClientSocket {
-        Inet {
-            #[pin] stream: TcpStream
-        },
-        Unix {
-             #[pin] stream: UnixStream
-        },
-    }
-}
-
-#[cfg(not(unix))]
-pin_project! {
-    #[project = ClientSocketProj]
-    enum ClientSocket {
-        Inet {
-            #[pin] stream: TcpStream
-        },
-    }
+enum ClientSocket {
+    Tcp(TcpStream),
+    Platform(PlatformStream),
 }
 
 impl AsyncRead for ClientSocket {
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut io::ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
-        match self.project() {
-            ClientSocketProj::Inet { stream } => stream.poll_read(cx, buf),
-            #[cfg(unix)]
-            ClientSocketProj::Unix { stream } => stream.poll_read(cx, buf),
+        match &mut *self {
+            ClientSocket::Tcp(stream) => Pin::new(stream).poll_read(cx, buf),
+            ClientSocket::Platform(stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
 
 impl AsyncWrite for ClientSocket {
     fn poll_write(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        match self.project() {
-            ClientSocketProj::Inet { stream } => stream.poll_write(cx, buf),
-            #[cfg(unix)]
-            ClientSocketProj::Unix { stream } => stream.poll_write(cx, buf),
+        match &mut *self {
+            ClientSocket::Tcp(stream) => Pin::new(stream).poll_write(cx, buf),
+            ClientSocket::Platform(stream) => Pin::new(stream).poll_write(cx, buf),
         }
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.project() {
-            ClientSocketProj::Inet { stream } => stream.poll_flush(cx),
-            #[cfg(unix)]
-            ClientSocketProj::Unix { stream } => stream.poll_flush(cx),
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self {
+            ClientSocket::Tcp(stream) => Pin::new(stream).poll_flush(cx),
+            ClientSocket::Platform(stream) => Pin::new(stream).poll_flush(cx),
         }
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        match self.project() {
-            ClientSocketProj::Inet { stream } => stream.poll_shutdown(cx),
-            #[cfg(unix)]
-            ClientSocketProj::Unix { stream } => stream.poll_shutdown(cx),
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self {
+            ClientSocket::Tcp(stream) => Pin::new(stream).poll_shutdown(cx),
+            ClientSocket::Platform(stream) => Pin::new(stream).poll_shutdown(cx),
         }
     }
 }
@@ -1730,5 +1569,162 @@ fn use_pooling_allocator_by_default() -> Result<Option<bool>> {
         Ok(Some(true))
     } else {
         Ok(None)
+    }
+}
+
+#[cfg(unix)]
+use unix::*;
+#[cfg(unix)]
+mod unix {
+    use super::SocketServer;
+    use rustix::fs::{FileType, fstat};
+    use rustix::net::{AddressFamily, SocketType, getsockname, sockopt::socket_type};
+    use std::net::TcpListener;
+    use std::os::fd::{FromRawFd, OwnedFd, RawFd};
+    use std::os::unix::net::UnixListener;
+    use std::{env, process};
+    use wasmtime::{Result, bail};
+
+    pub use tokio::net::UnixListener as PlatformListener;
+    pub use tokio::net::UnixStream as PlatformStream;
+
+    #[derive(Default)]
+    pub struct InheritedSockets {
+        sockets: Vec<InheritedSocket>,
+    }
+
+    enum InheritedSocket {
+        Tcp(TcpListener),
+        Unix(UnixListener),
+    }
+
+    impl InheritedSockets {
+        /// Takes ownership of file descriptors this process has inherited from a parent process like a
+        /// service manager.
+        ///
+        /// These are looked up with the [protocol from systemd](https://www.freedesktop.org/software/systemd/man/latest/sd_listen_fds.html#Notes).
+        /// This is used to implement socket activation for `wasmtime serve`.
+        ///
+        /// ## Safety
+        ///
+        /// This function takes ownership of raw file descriptors and must be called before any other
+        /// file descriptors are opened.
+        pub unsafe fn inherit_sockets(&mut self) -> Result<()> {
+            // The logic here is taken from https://github.com/systemd/systemd/blob/main/src/libsystemd/sd-daemon/sd-daemon.c.
+            if !env::var("LISTEN_PID")
+                .ok()
+                .and_then(|pid| pid.parse().ok())
+                .is_some_and(|pid: u32| pid == process::id())
+            {
+                bail!("Missing or mismatched LISTEN_PID environment variable");
+            }
+
+            let Some(num_fds) = env::var("LISTEN_FDS")
+                .ok()
+                .and_then(|fds| fds.parse().ok())
+                .take_if(|e| *e >= 1)
+            else {
+                bail!("Missing or invalid LISTEN_FDS environment variable");
+            };
+
+            let first_fd: RawFd = 3;
+            let Some(last_fd) = first_fd.checked_add(num_fds) else {
+                bail!("Invalid amount of file descriptors in LISTEN_FDS");
+            };
+
+            // We want to take ownership of all file descriptors here, but only use the first socket to
+            // listen on it.
+            for fd in first_fd..last_fd {
+                let fd = unsafe {
+                    // Safety: We're calling this first in Self::execute(), before any other file
+                    // descriptors part from stdin, stdout and stderr are opened.
+                    OwnedFd::from_raw_fd(fd)
+                };
+
+                // Set the close-on-exec flag, matching libsystemd.
+                #[cfg(any(target_vendor = "apple", target_os = "linux", target_os = "android"))]
+                rustix::io::ioctl_fioclex(&fd)?;
+
+                // Check if this file descriptor is a TCP socket.
+                let stat = fstat(&fd)?;
+                if !FileType::from_raw_mode(stat.st_mode).is_socket() {
+                    continue;
+                }
+
+                if socket_type(&fd)? != SocketType::STREAM {
+                    continue;
+                }
+
+                let address_family = getsockname(&fd)?.address_family();
+                let this_listener = if address_family == AddressFamily::INET
+                    || address_family == AddressFamily::INET6
+                {
+                    let listener = TcpListener::from(fd);
+                    listener.set_nonblocking(true)?;
+                    InheritedSocket::Tcp(listener)
+                } else if address_family == AddressFamily::UNIX {
+                    let listener = UnixListener::from(fd);
+                    listener.set_nonblocking(true)?;
+                    InheritedSocket::Unix(listener)
+                } else {
+                    continue;
+                };
+                self.sockets.push(this_listener);
+            }
+
+            if self.sockets.is_empty() {
+                bail!("No socket inherited")
+            }
+
+            Ok(())
+        }
+
+        pub fn take(&mut self) -> Result<Option<Vec<SocketServer>>> {
+            if self.sockets.is_empty() {
+                return Ok(None);
+            }
+            self.sockets
+                .drain(..)
+                .map(|socket| match socket {
+                    InheritedSocket::Tcp(listener) => Ok(SocketServer::Tcp(
+                        tokio::net::TcpListener::from_std(listener)?,
+                    )),
+                    InheritedSocket::Unix(listener) => Ok(SocketServer::Platform(
+                        tokio::net::UnixListener::from_std(listener)?,
+                    )),
+                })
+                .collect::<Result<Vec<_>>>()
+                .map(Some)
+        }
+    }
+}
+
+#[cfg(not(unix))]
+use not_unix::*;
+#[cfg(not(unix))]
+mod not_unix {
+    use super::SocketServer;
+    use wasmtime::{Result, bail};
+
+    pub use tokio::io::Empty as PlatformStream;
+
+    #[derive(Default)]
+    pub struct InheritedSockets;
+
+    impl InheritedSockets {
+        pub unsafe fn inherit_sockets(&mut self) -> Result<()> {
+            bail!("The --listenfd option is not available on this platform")
+        }
+        pub fn take(&mut self) -> Result<Option<Vec<SocketServer>>> {
+            Ok(None)
+        }
+    }
+
+    pub enum PlatformListener {}
+
+    impl PlatformListener {
+        pub async fn accept(&self) -> Result<(PlatformStream, ())> {
+            match *self {}
+        }
     }
 }
