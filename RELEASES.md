@@ -7,6 +7,9 @@ Released 2026-09-24.
 * Fix fuel spend for dynamic record lifting.
   [GHSA-jqpg-j7w6-42pr](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-jqpg-j7w6-42pr)
 
+* Fix host memory exhaustion on outgoing HTTP body write.
+  [GHSA-c9gc-w9vx-w86p](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-c9gc-w9vx-w86p)
+
 ## 36.0.15
 
 Released 2026-09-10
