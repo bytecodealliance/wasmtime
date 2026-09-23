@@ -707,6 +707,14 @@ impl WastTest {
             return true;
         }
 
+        // Obsolete test to be removed in https://github.com/WebAssembly/component-model/pull/726
+        if self
+            .path
+            .ends_with("component-model/test/async/cancel-instance-wide-resume.wast")
+        {
+            return true;
+        }
+
         false
     }
 }
