@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::thread;
 use wasmtime::{
-    Engine, Error, Func, Module, Result, Store, StoreHookState, StoreLimits, Val, ValType, bail,
+    Engine, Error, Func, Module, Result, Store, StoreLimits, Val, ValType, bail,
     error::Context as _, format_err,
 };
 use wasmtime_wasi::{WasiCtxView, WasiView};
@@ -593,7 +593,7 @@ impl RunCommand {
         path: &str,
         interval: std::time::Duration,
     ) -> Result<Box<dyn FnOnce(&mut Store<Host>) + Send>> {
-        use wasmtime::{AsContext, GuestProfiler, StoreContext, UpdateDeadline};
+        use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreHookState, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
         store.data_mut().guest_profiler = match main_target {
