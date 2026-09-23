@@ -261,7 +261,7 @@ private:
                      uint64_t *epoch_deadline_delta,
                      wasmtime_update_deadline_kind_t *update_kind) {
     auto &callback = *static_cast<F *>(data);
-    Context ctx(const_cast<wasmtime_context_t*>(context));
+    Context ctx(const_cast<wasmtime_context_t *>(context));
     auto result = callback(ctx, *epoch_deadline_delta);
 
     if (!result) {
