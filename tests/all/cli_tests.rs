@@ -2615,6 +2615,7 @@ start a print 1234
         }
 
         let server = WasmtimeServe::spawn(&mut cmd, Some(addr))?;
+        drop(cmd);
         // Should accept http requests over the TCP socket
         let resp = server
             .send_request(
