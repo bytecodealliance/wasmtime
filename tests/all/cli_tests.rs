@@ -1423,7 +1423,7 @@ mod test_programs {
         child: Option<Child>,
         stdout: Option<JoinHandle<io::Result<Vec<u8>>>>,
         stderr: Option<JoinHandle<io::Result<Vec<u8>>>>,
-        addr: SocketAddr,
+        addr: Vec<SocketAddr>,
         shutdown_addr: SocketAddr,
     }
 
@@ -1439,10 +1439,10 @@ mod test_programs {
             let mut cmd = super::get_wasmtime_command()?;
             cmd.arg("serve").arg("--addr=127.0.0.1:0").arg(wasm);
             configure(&mut cmd);
-            Self::spawn(&mut cmd, None)
+            Self::spawn(&mut cmd, 1)
         }
 
-        fn spawn(cmd: &mut Command, inherited_addr: Option<SocketAddr>) -> Result<WasmtimeServe> {
+        fn spawn(cmd: &mut Command, expected_addresses: usize) -> Result<WasmtimeServe> {
             cmd.arg("--shutdown-addr=127.0.0.1:0");
             cmd.stdin(Stdio::null());
             cmd.stdout(Stdio::piped());
@@ -1474,16 +1474,25 @@ mod test_programs {
                     None => bail!("failed to address from: {line}"),
                 }
             };
+
             let shutdown_addr = read_addr_from_line("Listening for shutdown");
-            let addr = match inherited_addr {
-                Some(addr) => Ok(addr),
-                None => read_addr_from_line("Serving HTTP on"),
-            };
-            let (shutdown_addr, addr) = match (shutdown_addr, addr) {
-                (Ok(a), Ok(b)) => (a, b),
+            let mut addr = Vec::with_capacity(expected_addresses);
+            let mut addr_error = None;
+            for _ in 0..expected_addresses {
+                match read_addr_from_line("Serving HTTP on") {
+                    Ok(a) => addr.push(a),
+                    Err(e) => {
+                        addr_error = Some(e);
+                        break;
+                    }
+                };
+            }
+
+            let (shutdown_addr, addr) = match (shutdown_addr, addr_error) {
+                (Ok(a), None) => (a, addr),
                 // If either failed kill the child and otherwise try to shepherd
                 // along any contextual information we have.
-                (Err(a), _) | (_, Err(a)) => {
+                (Err(a), _) | (_, Some(a)) => {
                     child.kill()?;
                     child.wait()?;
                     stderr.read_to_string(&mut line)?;
@@ -1506,6 +1515,10 @@ mod test_programs {
                 addr,
                 shutdown_addr,
             })
+        }
+
+        fn first_addr(&self) -> &SocketAddr {
+            &self.addr[0]
         }
 
         /// Completes this server gracefully by printing the output on failure.
@@ -1579,7 +1592,17 @@ mod test_programs {
             hyper::client::conn::http1::SendRequest<String>,
             tokio::task::JoinHandle<hyper::Result<()>>,
         )> {
-            let tcp = TcpStream::connect(&self.addr)
+            self.start_requests_at(0).await
+        }
+
+        async fn start_requests_at(
+            &self,
+            address: usize,
+        ) -> Result<(
+            hyper::client::conn::http1::SendRequest<String>,
+            tokio::task::JoinHandle<hyper::Result<()>>,
+        )> {
+            let tcp = TcpStream::connect(&self.addr[address])
                 .await
                 .context("failed to connect")?;
             let tcp = wasmtime_wasi_http::io::TokioIo::new(tcp);
@@ -1804,9 +1827,9 @@ mod test_programs {
             super::get_wasmtime_command()?
                 .arg("serve")
                 .arg("-Scli")
-                .arg(format!("--addr={}", server.addr))
+                .arg(format!("--addr={}", server.first_addr()))
                 .arg(wasm),
-            None,
+            1,
         )
         .err()
         .expect("server spawn should have failed but it succeeded");
@@ -1829,7 +1852,7 @@ mod test_programs {
         let server = WasmtimeServe::new(wasm, |cmd| {
             cmd.arg("-Scli");
         })?;
-        let addr = server.addr;
+        let addr = *server.first_addr();
 
         // Start up a `send` and `conn_task` which represents a connection to
         // this server.
@@ -1864,7 +1887,7 @@ mod test_programs {
                 .arg("-Scli")
                 .arg(format!("--addr={addr}"))
                 .arg(wasm),
-            None,
+            1,
         )?;
 
         Ok(())
@@ -2614,7 +2637,8 @@ start a print 1234
             });
         }
 
-        let server = WasmtimeServe::spawn(&mut cmd, Some(addr))?;
+        let mut server = WasmtimeServe::spawn(&mut cmd, 0)?;
+        server.addr.push(addr);
         drop(cmd);
         // Should accept http requests over the TCP socket
         let resp = server
@@ -2664,6 +2688,43 @@ start a print 1234
         assert!(stderr.contains("Serving HTTP on inherited socket"));
         drop(unix_path);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn serve_multiple_addresses() -> Result<()> {
+        let server = WasmtimeServe::spawn(
+            super::get_wasmtime_command()?
+                .arg("serve")
+                .arg("-Scli")
+                .arg("--addr=127.0.0.1:0")
+                .arg("--addr=127.0.0.1:0")
+                .arg(P2_CLI_SERVE_HELLO_WORLD_COMPONENT),
+            2,
+        )?;
+        assert_eq!(server.addr.len(), 2);
+        assert_ne!(server.addr[0], server.addr[1]);
+
+        // Should accept http requests on each address.
+        for i in 0..server.addr.len() {
+            let (mut send, conn_task) = server.start_requests_at(i).await?;
+            let resp = WasmtimeServe::send_request_with(
+                &mut send,
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+            assert!(resp.status().is_success());
+            assert_eq!(resp.body(), "Hello, WASI!");
+
+            drop(send);
+            conn_task.await??;
+        }
+
+        server.finish()?;
         Ok(())
     }
 
