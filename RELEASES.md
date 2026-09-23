@@ -8,6 +8,9 @@ Released 2026-09-24.
   return via exception throws.
   [GHSA-m63x-6p34-q65x](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m63x-6p34-q65x)
 
+* Fix fuel spend for dynamic record lifting.
+  [GHSA-jqpg-j7w6-42pr](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-jqpg-j7w6-42pr)
+
 ## 49.0.0
 
 Released 2026-09-21.
