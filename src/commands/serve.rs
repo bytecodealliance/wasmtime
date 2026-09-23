@@ -1210,7 +1210,7 @@ fn setup_guest_profiler(
     )?));
 
     fn sample(
-        mut store: StoreContextMut<Host>,
+        mut store: wasmtime::StoreHookState<Host>,
         f: impl FnOnce(&mut GuestProfiler, StoreContext<Host>),
     ) {
         let mut profiler = store.data_mut().guest_profiler.take().unwrap();

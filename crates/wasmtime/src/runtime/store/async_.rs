@@ -13,7 +13,7 @@ use crate::{Store, StoreContextMut, UpdateDeadline};
 pub trait CallHookHandler<T>: Send {
     /// A callback to run when wasmtime is about to enter a host call, or when about to
     /// exit the hostcall.
-    async fn handle_call_event(&self, t: StoreContextMut<'_, T>, ch: CallHook) -> Result<()>;
+    async fn handle_call_event(&self, t: crate::StoreHookState<'_, T>, ch: CallHook) -> Result<()>;
 }
 
 impl<T> Store<T> {

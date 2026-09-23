@@ -151,7 +151,7 @@ struct MyAsyncCallHook;
 
 #[async_trait::async_trait]
 impl CallHookHandler<()> for MyAsyncCallHook {
-    async fn handle_call_event(&self, _: StoreContextMut<'_, ()>, _: CallHook) -> Result<()> {
+    async fn handle_call_event(&self, _: StoreHookState<'_, ()>, _: CallHook) -> Result<()> {
         Ok(())
     }
 }
