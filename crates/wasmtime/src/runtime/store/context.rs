@@ -221,3 +221,47 @@ impl<'a, T: AsContextMut> From<&'a mut T> for StoreContextMut<'a, T::Data> {
         t.as_context_mut()
     }
 }
+
+/// State yielded to and epoch deadline callback or a call hook.
+///
+/// This structure is similar to [`StoreContextMut`] except that it does not
+/// implement [`AsContextMut`] and instead only implements [`AsContext`]. This
+/// means that the store can be inspected and read but not mutated. This
+/// structure does allow mutable access to the underlying `T` within the
+/// store, however.
+///
+/// This type is used in APIs such as [`Store::epoch_deadline_callback`] and
+/// [`Store::call_hook`] where the embedder is given access to the store at
+/// points in time where it's not valid to mutate WebAssembly-facing state.
+/// For example when an epoch deadline happens WebAssembly is between two
+/// instructions and general state in the module cannot be mutated spec-wise.
+/// This type expresses this static guarantee by ensuring that store data
+/// can be read, embedder-specific data can be mutated, but nothing within the
+/// store otherwise can be mutated.
+pub struct StoreHookState<'a, T: 'static> {
+    inner: StoreContextMut<'a, T>,
+}
+
+impl<'a, T> StoreHookState<'a, T> {
+    pub(crate) fn new(inner: StoreContextMut<'a, T>) -> Self {
+        Self { inner }
+    }
+
+    /// Returns a shared reference to the underlying store data.
+    pub fn data(&self) -> &T {
+        self.inner.data()
+    }
+
+    /// Returns a mutable reference to the underlying store data.
+    pub fn data_mut(&mut self) -> &mut T {
+        self.inner.data_mut()
+    }
+}
+
+impl<'a, T> AsContext for StoreHookState<'a, T> {
+    type Data = T;
+
+    fn as_context(&self) -> StoreContext<'_, T> {
+        self.inner.as_context()
+    }
+}

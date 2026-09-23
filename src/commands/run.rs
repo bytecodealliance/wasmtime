@@ -593,7 +593,7 @@ impl RunCommand {
         path: &str,
         interval: std::time::Duration,
     ) -> Result<Box<dyn FnOnce(&mut Store<Host>) + Send>> {
-        use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut, UpdateDeadline};
+        use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreHookState, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
         store.data_mut().guest_profiler = match main_target {
@@ -613,7 +613,7 @@ impl RunCommand {
         };
 
         fn sample(
-            mut store: StoreContextMut<Host>,
+            mut store: StoreHookState<Host>,
             f: impl FnOnce(&mut GuestProfiler, StoreContext<Host>),
         ) {
             let mut profiler = store.data_mut().guest_profiler.take().unwrap();
