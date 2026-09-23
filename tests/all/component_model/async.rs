@@ -1,7 +1,13 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
+use futures::stream::{FuturesUnordered, TryStreamExt as _};
+use std::collections::HashMap;
+use std::iter;
+use std::mem;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use wasmtime::Result;
+use wasmtime::component::{TaskGroupHook, TaskGroupId};
 use wasmtime::{AsContextMut, Config, Engine, Store, StoreContextMut, Trap, component::*};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
@@ -973,7 +979,8 @@ async fn bytes_stream_producer() -> Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn async_call_stack() -> Result<()> {
+async fn task_group_hook() -> Result<()> {
+    _ = env_logger::try_init();
     let mut config = Config::new();
     config.wasm_component_model_async(true);
     let engine = Engine::new(&config)?;
@@ -982,185 +989,191 @@ async fn async_call_stack() -> Result<()> {
         &engine,
         r#"
         (component
-            (import "a" (func $a))
-            (core func $a (canon lower (func $a)))
+            (import "a" (func $a async))
+            (core func $a (canon lower (func $a) async))
 
             (core module $a
-                (import "" "a" (func $a))
-                (func (export "a") call $a)
-            )
-            (core instance $a (instantiate $a
-                (with "" (instance (export "a" (func $a))))
-            ))
-            (func (export "a") async (canon lift (core func $a "a")))
-        )
-    "#,
-    )?;
+                (import "" "a" (func $a (result i32)))
+                (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+                (import "" "waitable.join" (func $waitable.join (param i32 i32)))
+                (import "" "subtask.drop" (func $subtask.drop (param i32)))
+                (import "" "task.return" (func $task.return))
+                (func (export "a") (result i32)
+                    (local $ret i32)
+                    (local $subtask i32)
+                    (local $set i32)
 
-    let mut linker = Linker::new(&engine);
-    linker.root().func_wrap(
-        "a",
-        |mut store: StoreContextMut<Option<GuestTaskId>>, (): ()| {
-            let stack = store.async_call_stack()?.collect::<Vec<_>>();
-            assert_eq!(stack, [store.data().unwrap()]);
-            Ok(())
-        },
-    )?;
-    let mut store = Store::new(&engine, None);
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
-
-    let call = func.start_call_concurrent(&mut store, ())?;
-    *store.data_mut() = Some(call.task());
-    store
-        .run_concurrent(async |store| func.finish_call_concurrent(store, call).await)
-        .await??;
-
-    let component = Component::new(
-        &engine,
-        r#"
-        (component
-            (import "a" (func $a))
-            (component $a
-                (import "a" (func $a))
-                (core func $a (canon lower (func $a)))
-
-                (core module $a
-                    (import "" "a" (func $a))
-                    (func (export "a") call $a)
+                    (local.set $ret (call $a))
+                    (if (i32.ne (i32.const 1 (; STARTED ;)) (i32.and (local.get $ret) (i32.const 0xf)))
+                        (then unreachable))
+                    (local.set $subtask (i32.shr_u (local.get $ret) (i32.const 4)))
+                    (local.set $set (call $waitable-set.new))
+                    (call $waitable.join (local.get $subtask) (local.get $set))
+                    (i32.or (i32.const 2 (; WAIT ;)) (i32.shl (local.get $set) (i32.const 4)))
                 )
-                (core instance $a (instantiate $a
-                    (with "" (instance (export "a" (func $a))))
-                ))
-                (func (export "a") (canon lift (core func $a "a")))
-            )
 
-            (instance $a (instantiate $a (with "a" (func $a))))
-            (instance $b (instantiate $a (with "a" (func $a "a"))))
-            (export "a" (func $b "a"))
+                (func (export "a-callback") (param $event_code i32) (param $waitable i32) (param $payload i32) (result i32)
+                    (if (i32.ne (local.get $event_code) (i32.const 1 (; SUBTASK ;)))
+                        (then unreachable))
+                    (if (i32.ne (local.get $payload) (i32.const 2 (; RETURNED ;)))
+                        (then unreachable))
+                    (call $waitable.join (local.get $waitable) (i32.const 0))
+                    (call $subtask.drop (local.get $waitable))
+                    (call $task.return)
+                    (i32.const 0 (; EXIT ;))
+                )
+            )
+            (canon waitable-set.new (core func $waitable-set.new))
+            (canon waitable.join (core func $waitable.join))
+            (canon subtask.drop (core func $subtask.drop))
+            (canon task.return (core func $task.return))
+            (core instance $a (instantiate $a
+                (with "" (instance
+                    (export "a" (func $a))
+                    (export "waitable-set.new" (func $waitable-set.new))
+                    (export "waitable.join" (func $waitable.join))
+                    (export "subtask.drop" (func $subtask.drop))
+                    (export "task.return" (func $task.return))
+                ))
+            ))
+            (func (export "a") async (canon lift (core func $a "a") async (callback (core func $a "a-callback"))))
         )
     "#,
     )?;
 
-    let mut linker = Linker::new(&engine);
-    linker.root().func_wrap(
-        "a",
-        |mut store: StoreContextMut<Option<GuestTaskId>>, (): ()| {
-            let stack = store.async_call_stack()?.collect::<Vec<_>>();
-            assert_eq!(stack.len(), 2);
-            assert_eq!(stack.last(), store.data().as_ref());
-            Ok(())
-        },
-    )?;
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
-
-    let call = func.start_call_concurrent(&mut store, ())?;
-    *store.data_mut() = Some(call.task());
-    store
-        .run_concurrent(async |store| func.finish_call_concurrent(store, call).await)
-        .await??;
-    Ok(())
-}
-
-#[tokio::test]
-#[cfg_attr(miri, ignore)]
-async fn async_call_stack_omits_transparent_adapters() -> Result<()> {
-    async fn call_stack(taint: bool) -> Result<(Vec<GuestTaskId>, GuestTaskId)> {
-        let mut config = Config::new();
-        config.wasm_component_model_async(true);
-        let engine = Engine::new(&config)?;
-
-        let (taint_canon, taint_import, taint_arg) = if taint {
-            (
-                r#"(core func $ctx (canon context.get i32 0))"#,
-                r#"(import "" "ctx" (func $ctx (result i32)))"#,
-                r#"(export "ctx" (func $ctx))"#,
-            )
-        } else {
-            ("", "", "")
-        };
-
-        let component = Component::new(
-            &engine,
-            &format!(
-                r#"
-        (component
-            (import "a" (func $a))
-
-            ;; Lowers the host import, so this is never thread-transparent.
-            (component $Deep
-                (import "a" (func $a))
-                (core func $a (canon lower (func $a)))
-                (core module $m
-                    (import "" "a" (func $a))
-                    (func (export "a") call $a))
-                (core instance $m (instantiate $m
-                    (with "" (instance (export "a" (func $a))))))
-                (func (export "a") (canon lift (core func $m "a")))
-            )
-
-            ;; Declares nothing but a `canon lower` of an imported *lifted*,
-            ;; non-`async` function, so an instance of this component is
-            ;; thread-transparent -- unless the taint below is present.
-            (component $Mid
-                (import "a" (func $a))
-                {taint_canon}
-                (core func $a (canon lower (func $a)))
-                (core module $m
-                    (import "" "a" (func $a))
-                    {taint_import}
-                    (func (export "a") call $a))
-                (core instance $m (instantiate $m
-                    (with "" (instance (export "a" (func $a)) {taint_arg}))))
-                (func (export "a") (canon lift (core func $m "a")))
-            )
-
-            (instance $deep (instantiate $Deep (with "a" (func $a))))
-            (instance $mid (instantiate $Mid (with "a" (func $deep "a"))))
-            (instance $top (instantiate $Mid (with "a" (func $mid "a"))))
-            (export "a" (func $top "a"))
-        )
-        "#
-            ),
-        )?;
-
-        let mut linker = Linker::new(&engine);
-        linker.root().func_wrap(
-            "a",
-            |mut store: StoreContextMut<Option<Vec<GuestTaskId>>>, (): ()| {
-                let stack = store.async_call_stack()?.collect::<Vec<_>>();
-                *store.data_mut() = Some(stack);
-                Ok(())
-            },
-        )?;
-
-        let mut store = Store::new(&engine, None);
-        let instance = linker.instantiate_async(&mut store, &component).await?;
-        let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
-
-        let call = func.start_call_concurrent(&mut store, ())?;
-        let root = call.task();
-        store
-            .run_concurrent(async |store| func.finish_call_concurrent(store, call).await)
-            .await??;
-
-        Ok((store.data_mut().take().unwrap(), root))
+    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+    enum Event {
+        Start,
+        PollHostCall,
+        Finish,
     }
 
-    // With the intermediate instances tainted into opacity, all three
-    // guest-to-guest calls materialize a task and all three show up.
-    let (stack, root) = call_stack(true).await?;
-    assert_eq!(stack.len(), 3);
-    assert_eq!(stack.last(), Some(&root));
+    #[derive(Default)]
+    struct HookInner {
+        events: Vec<(Event, usize)>,
+        next_id: usize,
+        ids: HashMap<TaskGroupId, usize>,
+        entered: Option<usize>,
+    }
 
-    // Without the taint, `$top -> $mid` is a thread-transparent call, its task
-    // is never materialized, and so it is omitted from the stack. The root
-    // host-to-guest call is always materialized, so it is still reported, and
-    // `$mid -> $deep` still is too since `$deep` is opaque.
-    let (stack, root) = call_stack(false).await?;
-    assert_eq!(stack.len(), 2);
-    assert_eq!(stack.last(), Some(&root));
+    #[derive(Clone)]
+    struct Hook(Arc<Mutex<HookInner>>);
+
+    impl TaskGroupHook for Hook {
+        fn handle_start(&mut self, group: TaskGroupId) -> Result<()> {
+            let mut inner = self.0.try_lock().unwrap();
+            let id = inner.next_id;
+            inner.next_id += 1;
+            // This `group` should not be equal to any other
+            // started-and-not-yet-finished group:
+            assert!(inner.ids.insert(group, id).is_none());
+            inner.events.push((Event::Start, id));
+            Ok(())
+        }
+
+        fn handle_enter(&mut self, group: TaskGroupId) -> Result<()> {
+            let mut inner = self.0.try_lock().unwrap();
+            let id = *inner.ids.get(&group).unwrap();
+            // We should not have entered-but-not-yet-exited this or any other
+            // group:
+            assert!(inner.entered.replace(id).is_none());
+            Ok(())
+        }
+
+        fn handle_exit(&mut self, group: TaskGroupId) -> Result<()> {
+            let mut inner = self.0.try_lock().unwrap();
+            let id = *inner.ids.get(&group).unwrap();
+            // We should have entered-but-not-yet-exited this group:
+            assert_eq!(Some(id), inner.entered);
+            inner.entered = None;
+            Ok(())
+        }
+
+        fn handle_finish(&mut self, group: TaskGroupId) -> Result<()> {
+            let mut inner = self.0.try_lock().unwrap();
+            let id = inner.ids.remove(&group).unwrap();
+            inner.events.push((Event::Finish, id));
+            Ok(())
+        }
+    }
+
+    let hook = Hook(Arc::new(Mutex::new(HookInner::default())));
+    let yield_count = 5;
+
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap_concurrent("a", {
+        let hook = hook.clone();
+        move |_, ()| {
+            let hook = hook.clone();
+            Box::pin(async move {
+                let mut previous_id = None;
+                let mut on_poll = move || {
+                    let mut inner = hook.0.try_lock().unwrap();
+                    // We should only ever be polled after a `handle_enter` and
+                    // before a `handle_exit` event:
+                    let id = inner.entered.unwrap();
+                    inner.events.push((Event::PollHostCall, id));
+
+                    // Should see the same task group on every poll:
+                    if let Some(previous_id) = previous_id {
+                        assert_eq!(previous_id, id);
+                    } else {
+                        previous_id = Some(id);
+                    }
+
+                    id
+                };
+
+                on_poll();
+                for _ in 0..yield_count {
+                    tokio::task::yield_now().await;
+                    on_poll();
+                }
+
+                Ok(())
+            })
+        }
+    })?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+
+    store.task_group_hook(hook.clone());
+
+    let call_count = 3;
+
+    // Call the guest export `call_count` times concurrently, recording the
+    // events in `hook`:
+    store
+        .run_concurrent(async |store| {
+            iter::repeat_with(|| func.call_concurrent(store, ()))
+                .take(call_count)
+                .collect::<FuturesUnordered<_>>()
+                .try_collect::<()>()
+                .await
+        })
+        .await??;
+
+    // Group the events by task group, preserving order:
+    let mut map = HashMap::<_, Vec<_>>::new();
+    for (event, id) in mem::take(&mut hook.0.try_lock().unwrap().events) {
+        map.entry(id).or_default().push(event);
+    }
+
+    // Assert that the events start with a `Start`, followed by the expected
+    // number of `PollHostCall`s, followed by a `Finish`:
+    let expected = iter::once(Event::Start)
+        .chain(iter::repeat(Event::PollHostCall).take(yield_count + 1))
+        .chain(Some(Event::Finish))
+        .collect::<Vec<_>>();
+
+    for id in 0..call_count {
+        assert_eq!(&map.get(&id).unwrap()[..], &expected[..])
+    }
+
+    assert_eq!(None, hook.0.try_lock().unwrap().entered);
+    assert!(hook.0.try_lock().unwrap().ids.is_empty());
 
     Ok(())
 }

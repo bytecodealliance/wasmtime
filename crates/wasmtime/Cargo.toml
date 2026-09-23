@@ -431,3 +431,5 @@ rr = [
   "component-model",
   "wasmtime-environ/rr"
 ]
+
+task-group-hook = [ "component-model", "component-model-async" ]
