@@ -1852,7 +1852,7 @@ mod test_programs {
         let server = WasmtimeServe::new(wasm, |cmd| {
             cmd.arg("-Scli");
         })?;
-        let addr = server.first_addr().clone();
+        let addr = *server.first_addr();
 
         // Start up a `send` and `conn_task` which represents a connection to
         // this server.
