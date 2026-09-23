@@ -157,6 +157,17 @@ pub struct ServeCommand {
     #[arg(long, default_value = "1s", value_parser = parse_duration)]
     idle_instance_timeout: Duration,
 
+    /// Optional maximum idle time before exiting the process.
+    ///
+    /// If no connection is open for this interval after the first connection has been received, the
+    /// process gracefully shuts down. This is mainly useful when starting `wasmtime serve` via
+    /// socket activation, as a system manager can restart the process when the next request comes
+    /// in.
+    ///
+    /// This accepts the same syntax as `--idle-instance-timeout`.
+    #[arg(long, value_parser = parse_duration)]
+    idle_process_timeout: Option<Duration>,
+
     /// Replace or add a request header before forwarding it to the component.
     ///
     /// The argument must have the form `name: value`. May be specified more
@@ -618,6 +629,19 @@ impl ServeCommand {
                 shutdown.request_shutdown();
             }
         });
+        if let Some(timeout) = self.idle_process_timeout {
+            let shutdown = shutdown.clone();
+            let idle = shutdown.wait_idle_connections(timeout);
+            tokio::task::spawn(async move {
+                tokio::select! {
+                    _ = shutdown.requested() => {}
+                    _ = idle => {
+                        eprintln!("No connections for {timeout:?}, shutting down");
+                        shutdown.request_shutdown();
+                    }
+                }
+            });
+        }
         if let Some(addr) = self.shutdown_addr {
             let listener = tokio::net::TcpListener::bind(addr).await?;
             eprintln!(
@@ -721,7 +745,7 @@ impl ServeCommand {
             next_request_id: AtomicU64::default(),
             // Give one shutdown guard to this handler which will track the
             // full lifetime of any instances spawned.
-            _shutdown_guard: Box::new(shutdown.clone().increment()),
+            _shutdown_guard: Box::new(shutdown.clone().increment(false)),
         });
 
         if debuggee_store.is_some() {
@@ -742,7 +766,6 @@ impl ServeCommand {
             let mut listener_tasks = vec![];
 
             for server in servers {
-                let handler = handler.clone();
                 listener_tasks.push(tokio::task::spawn(Self::serve_on_listener(
                     server,
                     shutdown.clone(),
@@ -801,7 +824,7 @@ impl ServeCommand {
             // In addition to the shutdown guard given to the handler above,
             // also give one to the tokio tasks doing HTTP I/O as well to ensure
             // it keeps them alive too.
-            let shutdown_guard = shutdown.clone().increment();
+            let shutdown_guard = shutdown.clone().increment(true);
 
             // When debugging, handle the client synchronously since
             // concurrent requests can't be served. Otherwise though spawn a
@@ -964,7 +987,8 @@ impl HandlerState for HostHandlerState {
 use shutdown::GracefulShutdown;
 mod shutdown {
     use std::sync::{Arc, Mutex};
-    use tokio::sync::Notify;
+    use std::time::Duration;
+    use tokio::sync::{Notify, watch};
 
     /// Helper structure to manage graceful shutdown int he accept loop above.
     #[derive(Default)]
@@ -976,6 +1000,8 @@ mod shutdown {
         complete: Notify,
         /// Internal state related to what's in progress when shutdown is requested.
         state: Mutex<GracefulShutdownState>,
+        /// Current connections, used for [super::ServeCommand::idle_process_timeout].
+        open_connections: watch::Sender<u32>,
     }
 
     #[derive(Default)]
@@ -991,22 +1017,62 @@ mod shutdown {
         ///
         /// Live `increment` return values prevent the `close` return value from
         /// resolving, for example.
-        pub fn increment(self: Arc<Self>) -> impl Drop + Send + Sync {
-            struct Guard(Arc<GracefulShutdown>);
+        ///
+        /// When `for_connection` is enabled, this also tracks the guard in
+        /// [Self::open_connections].
+        pub fn increment(self: Arc<Self>, for_connection: bool) -> impl Drop + Send + Sync {
+            struct Guard {
+                state: Arc<GracefulShutdown>,
+                for_connection: bool,
+            }
 
             let mut state = self.state.lock().unwrap();
             assert!(!state.notify_when_done);
             state.active_tasks += 1;
+            if for_connection {
+                self.open_connections.send_modify(|n| *n += 1);
+            }
+
             drop(state);
 
-            return Guard(self);
+            return Guard {
+                state: self,
+                for_connection,
+            };
 
             impl Drop for Guard {
                 fn drop(&mut self) {
-                    let mut state = self.0.state.lock().unwrap();
+                    let shutdown = &self.state;
+
+                    let mut state = shutdown.state.lock().unwrap();
                     state.active_tasks -= 1;
+                    if self.for_connection {
+                        shutdown.open_connections.send_modify(|n| *n -= 1);
+                    }
+
                     if state.notify_when_done && state.active_tasks == 0 {
-                        self.0.complete.notify_one();
+                        self.state.complete.notify_one();
+                    }
+                }
+            }
+        }
+
+        /// Returns a future which resolves once no connections have been open for `timeout`.
+        pub fn wait_idle_connections(
+            &self,
+            timeout: Duration,
+        ) -> impl Future<Output = ()> + Send + use<> {
+            let mut connections = self.open_connections.subscribe();
+            async move {
+                // Start the idle timer after the first connection.
+                connections.changed().await.unwrap();
+                loop {
+                    connections.wait_for(|n| *n == 0).await.unwrap();
+                    tokio::select! {
+                        _ = tokio::time::sleep(timeout) => return,
+                        _ = connections.changed() => {
+                            // New connection was opened, reset the idle timer.
+                        }
                     }
                 }
             }
