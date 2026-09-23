@@ -971,6 +971,7 @@ mod test_programs {
     use std::net::SocketAddr;
     use std::process::{Child, Command, Stdio};
     use std::thread::{self, JoinHandle};
+    use std::time::Duration;
     use test_programs_artifacts::*;
     use tokio::net::TcpStream;
     use wasmtime::{Result, bail, error::Context as _, format_err};
@@ -1526,6 +1527,11 @@ mod test_programs {
             self._finish()
         }
 
+        fn wait(mut self) -> Result<(String, String)> {
+            let child = self.child.take().unwrap();
+            self._wait_with_output(child)
+        }
+
         fn _finish(&mut self) -> Result<(String, String)> {
             let mut child = self.child.take().unwrap();
 
@@ -1543,6 +1549,10 @@ mod test_programs {
             // was already shut down (e.g. panicked or similar), wait for the
             // result here. The result should succeed (e.g. 0 exit status), and
             // if it did then the stdout/stderr are the caller's problem.
+            self._wait_with_output(child)
+        }
+
+        fn _wait_with_output(&mut self, child: Child) -> Result<(String, String)> {
             let mut output = child.wait_with_output()?;
             output.stdout = self.stdout.take().unwrap().join().unwrap()?;
             output.stderr = self.stderr.take().unwrap().join().unwrap()?;
@@ -2728,6 +2738,36 @@ start a print 1234
         Ok(())
     }
 
+    #[tokio::test]
+    async fn serve_idle_process_timeout() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli").arg("--idle-process-timeout=100ms");
+        })?;
+
+        let request = || {
+            hyper::Request::builder()
+                .uri("http://localhost/")
+                .body(String::new())
+                .context("failed to make request")
+        };
+
+        let (mut send, conn_task) = server.start_requests().await?;
+        let resp = WasmtimeServe::send_request_with(&mut send, request()?).await?;
+        assert_eq!(resp.body(), "Hello, WASI!");
+
+        // An open connection, even when idle, keeps the process alive.
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let resp = WasmtimeServe::send_request_with(&mut send, request()?).await?;
+        assert_eq!(resp.body(), "Hello, WASI!");
+
+        // Once the connection is closed the process exits.
+        drop(send);
+        conn_task.await??;
+        server.wait()?;
+        Ok(())
+    }
+
     async fn cli_serve_hello_world(
         component: &str,
         connection_count: usize,
@@ -3051,7 +3091,7 @@ start a print 1234
             let _ = tx.send(res);
         });
 
-        let buf = match rx.recv_timeout(std::time::Duration::from_secs(100)) {
+        let buf = match rx.recv_timeout(Duration::from_secs(100)) {
             Ok(Ok(buf)) => buf,
             Ok(Err(e)) => {
                 let _ = child.kill();
