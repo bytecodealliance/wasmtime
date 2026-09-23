@@ -1380,4 +1380,17 @@ fn trailing_slash_requires_a_directory() {
     if !cfg!(windows) {
         assert!(p::stat(&start, "file/.".as_ref(), p::FollowSymlinks::No).is_err());
     }
+
+    if symlink_supported() {
+        check!(h::symlink_dir(&start, "dir", "sym_dir"));
+        check!(h::symlink_file(&start, "file", "sym_file"));
+
+        let stat_sym = check!(p::stat(&start, "sym_dir".as_ref(), p::FollowSymlinks::No));
+        assert!(stat_sym.file_type().is_symlink());
+
+        let stat_sym_dir = check!(p::stat(&start, "sym_dir/".as_ref(), p::FollowSymlinks::No));
+        assert!(stat_sym_dir.file_type().is_dir());
+
+        assert!(p::stat(&start, "sym_file/".as_ref(), p::FollowSymlinks::No).is_err());
+    }
 }
