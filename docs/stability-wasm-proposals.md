@@ -53,28 +53,31 @@ The emoji legend is:
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
 | [`threads`]              | ✅      | ✅    | 🚧[^8]   | ❌[^4] | ✅  | ✅     |
 
-[^4]: Fuzzing with threads is an open implementation question that is expected
-    to get fleshed out as the [`shared-everything-threads`] proposal advances.
 [^8]: There are [known
     issues](https://github.com/bytecodealliance/wasmtime/issues/4245) with
     shared memories and the implementation/API in Wasmtime, for example they
     aren't well integrated with resource-limiting features in `Store`.
     Additionally `shared` memories aren't supported in the pooling allocator.
+[^4]: Fuzzing with threads is an open implementation question that is expected
+    to get fleshed out as the [`shared-everything-threads`] proposal advances.
 
 [cm-capi-gaps]: https://github.com/bytecodealliance/wasmtime/issues?q=is%3Aissue%20state%3Aopen%20label%3Awasm-proposal%3Acomponent-model%20label%3Awasmtime%3Ac-api
 
 ## Tier 3 WebAssembly Proposals
 
-|  Proposal                   | Phase 4 | Tests | Finished | Fuzzed | API | C API |
-|-----------------------------|---------|-------|----------|--------|-----|-------|
-| [`branch-hinting`] [^12]    | ✅      | ✅    | ✅       | ❌     | ✅  | ✅    |
-| [`stack-switching`] [^11]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
+|  Proposal                        | Phase 4 | Tests | Finished | Fuzzed | API | C API |
+|----------------------------------|---------|-------|----------|--------|-----|-------|
+| [`branch-hinting`] [^12]         | ✅      | ✅    | ✅       | ❌     | ✅  | ✅    |
+| [`stack-switching`] [^11]        | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
+| [`compact-import-section`] [^13] | ✅      | ✅    | ✅       | ❌     | ✅  | ✅    |
 
+[^12]: Disabled by default (`Config::wasm_branch_hinting`) pending fuzzing;
+    tracked at [#9463](https://github.com/bytecodealliance/wasmtime/issues/9463).
 [^11]: The stack-switching proposal is a work-in-progress being tracked
     at [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465).
     Currently the implementation is only for x86\_64 Linux.
-[^12]: Disabled by default (`Config::wasm_branch_hinting`) pending fuzzing;
-    tracked at [#9463](https://github.com/bytecodealliance/wasmtime/issues/9463).
+[^13]: Disabled by default (`Config::wasm_compact_imports`) pending fuzzing;
+    tracked at [#14108](https://github.com/bytecodealliance/wasmtime/issues/14108).
 
 ## Unimplemented proposals
 
@@ -83,7 +86,6 @@ The emoji legend is:
 | [`flexible-vectors`]          | [#9464](https://github.com/bytecodealliance/wasmtime/issues/9464) |
 | [`memory-control`]            | [#9467](https://github.com/bytecodealliance/wasmtime/issues/9467) |
 | [`shared-everything-threads`] | [#9466](https://github.com/bytecodealliance/wasmtime/issues/9466) |
-| [`compact-import-section`]    | [#14108](https://github.com/bytecodealliance/wasmtime/issues/14108) |
 
 [`mutable-globals`]: https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md
 [`sign-extension-ops`]: https://github.com/WebAssembly/spec/blob/master/proposals/sign-extension-ops/Overview.md

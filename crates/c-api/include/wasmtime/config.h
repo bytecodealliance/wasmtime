@@ -332,6 +332,14 @@ WASMTIME_CONFIG_PROP(void, wasm_exceptions, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_custom_page_sizes, bool)
 
+/**
+ * \brief Configures whether the WebAssembly compact imports proposal is
+ * enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_compact_imports, bool)
+
 #ifdef WASMTIME_FEATURE_COMPILER
 
 /**

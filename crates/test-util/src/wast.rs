@@ -148,6 +148,16 @@ fn spec_test_config(test: &Path) -> TestConfig {
         Some("custom-descriptors") => {
             ret.custom_descriptors = Some(true);
         }
+        Some("compact-import-section") => {
+            ret.compact_imports = Some(true);
+            ret.reference_types = Some(true);
+            ret.multi_memory = Some(true);
+            ret.exceptions = Some(true);
+        }
+        Some("extended-name-section") => {
+            ret.gc = Some(true);
+            ret.exceptions = Some(true);
+        }
         Some(proposal) => panic!("unsupported proposal {proposal:?}"),
 
         // The rough goal here is to enable a minimal set of features for the
@@ -204,6 +214,9 @@ fn spec_test_config(test: &Path) -> TestConfig {
             }
             if test_name.contains("return_") || test_name.contains("try_table") {
                 ret.tail_call = Some(true);
+            }
+            if test_name == "return_call.wast" || test_name == "return_call_indirect.wast" {
+                ret.function_references = Some(true);
             }
             if test_name.contains("tag")
                 || test_name.contains("try_table")
@@ -336,6 +349,7 @@ macro_rules! foreach_config_option {
             extended_const
             wide_arithmetic
             branch_hinting
+            compact_imports
             hogs_memory
             nan_canonicalization
             component_model_async
@@ -560,6 +574,18 @@ impl WastTest {
         }
 
         if config.compiler.should_fail(&self.config) {
+            return true;
+        }
+
+        // Waiting for bytecodealliance/wasm-tools#2664 zero-length compact imports,
+        // as well as the Extended Name Section Proposal.
+        let unsupported = [
+            "spec_testsuite/proposals/compact-import-section/imports-compact.wast",
+            "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
+            "spec_testsuite/proposals/extended-name-section/custom/name.wast",
+            "spec_testsuite/type-subtyping.wast",
+        ];
+        if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
         }
 
