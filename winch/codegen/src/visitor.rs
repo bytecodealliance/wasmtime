@@ -1905,6 +1905,14 @@ where
     // Record the handlers that apply to calls within this `try_table`. Their
     // landing pads are emitted when the control frame ends.
     fn visit_try_table(&mut self, try_table: TryTable) -> Self::Output {
+        // When this `try_table` is unreachable at entry, its handlers cannot run.
+        // Use a plain block to match its `end`, without registering catches.
+        // Unreachable blocks do not record the machine-stack state needed to
+        // emit landing pads.
+        if !self.context.reachable {
+            return self.visit_block(try_table.ty);
+        }
+
         let checkpoint = self.context.exception_handlers.take_checkpoint();
         let mut catches = Vec::with_capacity(try_table.catches.len());
 

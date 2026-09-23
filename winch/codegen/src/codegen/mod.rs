@@ -2358,7 +2358,10 @@ where
         if !self.context.reachable {
             // `self.fuel_consumed` must be correctly flushed to memory when
             // entering an unreachable state.
-            ensure!(self.fuel_consumed == 0, CodeGenError::illegal_fuel_state())
+            ensure!(self.fuel_consumed == 0, CodeGenError::illegal_fuel_state());
+            // Control operators are still visited to track nesting and restore
+            // reachability at `else` or `end`, but those visits must not charge fuel.
+            return Ok(());
         }
 
         // Generally, most instructions require 1 fuel unit.
