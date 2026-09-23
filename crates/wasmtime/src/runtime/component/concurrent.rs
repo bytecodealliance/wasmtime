@@ -70,6 +70,7 @@ use crate::{
 };
 use crate::{Instance as ModuleInstance, bail_bug};
 use alloc::borrow::ToOwned;
+use alloc::collections::btree_map::Entry;
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use core::any::Any;
 use core::cell::UnsafeCell;
@@ -836,6 +837,21 @@ enum WorkItem {
     WorkerFunction(AlwaysMut<Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send>>),
 }
 
+// A fiber between store-owned locations must be disposed if an operation
+// fails before it reaches its destination.
+struct DisposeFiber<'a> {
+    store: &'a mut StoreOpaque,
+    fiber: Option<StoreFiber<'static>>,
+}
+
+impl Drop for DisposeFiber<'_> {
+    fn drop(&mut self) {
+        if let Some(fiber) = &mut self.fiber {
+            fiber.dispose(self.store);
+        }
+    }
+}
+
 impl fmt::Debug for WorkItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -1558,13 +1574,15 @@ impl<T> StoreContextMut<'_, T> {
                 self.0.resume_fiber(fiber).await?;
             }
             WorkItem::ResumeThread { thread, .. } => {
-                if let GuestThreadState::Ready { fiber, .. } = mem::replace(
-                    &mut self.0.concurrent_state_mut()?.get_mut(thread.thread)?.state,
-                    GuestThreadState::Running,
-                ) {
-                    self.0.resume_fiber(fiber).await?;
-                } else {
-                    bail_bug!("cannot resume non-pending thread {thread:?}");
+                let state = &mut self.0.concurrent_state_mut()?.get_mut(thread.thread)?.state;
+                match mem::replace(state, GuestThreadState::Running) {
+                    GuestThreadState::Ready { fiber, .. } => {
+                        self.0.resume_fiber(fiber).await?;
+                    }
+                    other => {
+                        *state = other;
+                        bail_bug!("cannot resume non-pending thread {thread:?}");
+                    }
                 }
             }
             WorkItem::GuestCall { call, .. } => {
@@ -1641,11 +1659,18 @@ impl<T> StoreContextMut<'_, T> {
             }
         };
 
-        let worker_item = &mut self.0.concurrent_state_mut()?.worker_item;
+        let mut dispose = DisposeFiber {
+            store: self.0,
+            fiber: Some(worker),
+        };
+        let worker_item = &mut dispose.store.concurrent_state_mut()?.worker_item;
         assert!(worker_item.is_none());
         *worker_item = Some(item);
 
-        self.0.resume_fiber(worker).await
+        dispose
+            .store
+            .resume_fiber(dispose.fiber.take().unwrap())
+            .await
     }
 
     /// Wrap the specified host function in a future which will call it, passing
@@ -2215,21 +2240,26 @@ impl StoreOpaque {
     /// Resume the specified fiber, giving it exclusive access to the specified
     /// store.
     async fn resume_fiber(&mut self, fiber: StoreFiber<'static>) -> Result<()> {
-        let old_thread = self.current_thread()?;
+        let mut dispose = DisposeFiber {
+            store: self,
+            fiber: Some(fiber),
+        };
+        let old_thread = dispose.store.current_thread()?;
         log::trace!("resume_fiber: save current thread {old_thread:?}");
 
-        let fiber = fiber::resolve_or_release(self, fiber).await?;
+        dispose.fiber =
+            fiber::resolve_or_release(dispose.store, dispose.fiber.take().unwrap()).await?;
 
-        self.set_thread(old_thread)?;
+        dispose.store.set_thread(old_thread)?;
 
-        let state = self.concurrent_state_mut()?;
+        let state = dispose.store.concurrent_state_mut()?;
 
         if let Some(ot) = old_thread.guest() {
             state.get_mut(ot.thread)?.state = GuestThreadState::Running;
         }
         log::trace!("resume_fiber: restore current thread {old_thread:?}");
 
-        if let Some(mut fiber) = fiber {
+        if dispose.fiber.is_some() {
             log::trace!("resume_fiber: suspend reason {:?}", &state.suspend_reason);
             // See the `SuspendReason` documentation for what each case means.
             let reason = match state.suspend_reason.take() {
@@ -2239,33 +2269,40 @@ impl StoreOpaque {
             match reason {
                 SuspendReason::NeedWork => {
                     if state.worker.is_none() {
-                        state.worker = Some(fiber);
-                    } else {
-                        fiber.dispose(self);
+                        state.worker = dispose.fiber.take();
                     }
                 }
                 SuspendReason::Yielding { thread } => {
-                    state.get_mut(thread.thread)?.state = GuestThreadState::Ready { fiber };
+                    let slot = &mut state.get_mut(thread.thread)?.state;
+                    *slot = GuestThreadState::Ready {
+                        fiber: dispose.fiber.take().unwrap(),
+                    };
                     let instance = state.get_mut(thread.task)?.instance;
                     state.push_low_priority(WorkItem::ResumeThread { instance, thread });
                 }
                 SuspendReason::ExplicitlySuspending { thread } => {
-                    state.get_mut(thread.thread)?.state = GuestThreadState::Suspended(fiber);
+                    let slot = &mut state.get_mut(thread.thread)?.state;
+                    *slot = GuestThreadState::Suspended(dispose.fiber.take().unwrap());
                 }
                 SuspendReason::Waiting { set, thread } => {
-                    let old = state
-                        .get_mut(set)?
-                        .waiting
-                        .insert(thread, WaitMode::Fiber(fiber));
-                    assert!(old.is_none());
+                    match state.get_mut(set)?.waiting.entry(thread) {
+                        Entry::Vacant(entry) => {
+                            entry.insert(WaitMode::Fiber(dispose.fiber.take().unwrap()));
+                        }
+                        Entry::Occupied(_) => panic!("waiter already present"),
+                    }
                 }
                 SuspendReason::WaitingForGuestSubtask { caller, callee } => {
                     let set = state.get_mut(caller.thread)?.sync_call_set;
-                    let old = state
-                        .get_mut(set)?
-                        .waiting
-                        .insert(caller, WaitMode::Caller { fiber, callee });
-                    assert!(old.is_none());
+                    match state.get_mut(set)?.waiting.entry(caller) {
+                        Entry::Vacant(entry) => {
+                            entry.insert(WaitMode::Caller {
+                                fiber: dispose.fiber.take().unwrap(),
+                                callee,
+                            });
+                        }
+                        Entry::Occupied(_) => panic!("waiter already present"),
+                    }
                 }
             };
         } else {
@@ -4037,7 +4074,7 @@ impl Instance {
             }
             GuestThreadState::Suspended(fiber) => {
                 log::trace!("resuming thread {thread_id:?} that was suspended");
-                store.concurrent_state_mut()?.push_work_item(
+                state.push_work_item(
                     WorkItem::ResumeFiber {
                         instance: self.runtime_instance(runtime_instance),
                         thread: guest_thread,
@@ -4326,7 +4363,8 @@ impl Instance {
 
                     if let Some(set) = thread_mut.wake_on_cancel.take() {
                         // The thread is in a cancellable wait, so wake it up:
-                        let item = match concurrent_state.get_mut(set)?.waiting.remove(&thread) {
+                        let waiting = &mut concurrent_state.get_mut(set)?.waiting;
+                        let item = match waiting.remove(&thread) {
                             Some(WaitMode::Fiber(fiber)) => WorkItem::ResumeFiber {
                                 instance: runtime_instance,
                                 thread,
@@ -4342,7 +4380,8 @@ impl Instance {
                                     },
                                 },
                             },
-                            Some(WaitMode::Caller { .. }) => {
+                            Some(mode @ WaitMode::Caller { .. }) => {
+                                waiting.insert(thread, mode);
                                 bail_bug!("unexpected `WaitMode::Caller` in wake_on_cancel set")
                             }
                             None => bail_bug!("thread not present in wake_on_cancel set"),
@@ -5444,66 +5483,91 @@ impl Waitable {
             let set_state = state.get_mut(set)?;
             set_state.ready.insert(*self);
 
-            if let Some((thread, mode)) = set_state.waiting.pop_first() {
+            // The first waiter may own a fiber, so finish any fallible lookups
+            // before removing it from the set.
+            let waiter = set_state.waiting.first_key_value().map(|(thread, mode)| {
+                let callee = match mode {
+                    WaitMode::Caller { callee, .. } => Some(*callee),
+                    WaitMode::Fiber(_) | WaitMode::Callback(_) => None,
+                };
+                (*thread, callee)
+            });
+
+            if let Some((thread, callee)) = waiter {
                 let wake_on_cancel = state.get_mut(thread.thread)?.wake_on_cancel.take();
                 assert!(wake_on_cancel.is_none() || wake_on_cancel == Some(set));
 
-                let item = match mode {
-                    WaitMode::Caller { fiber, callee } => {
-                        // In this case, a caller is waiting for a subtask
-                        // status update, but we can't necessarily deliver that
-                        // update immediately because the callee may still be
-                        // running, nor are we allowed queue delivery in a
-                        // general-purpose work queues because the CM spec
-                        // requires deterministic delivery of such updates.
-                        //
-                        // Therefore, we'll schedule delivery for when the
-                        // callee suspends for the first time or exits as
-                        // required by the spec.
+                let instance = state.get_mut(thread.task)?.instance;
 
-                        let item = WorkItem::ResumeFiber {
-                            instance: state.get_mut(thread.task)?.instance,
-                            thread,
-                            fiber,
-                        };
-
-                        if let Some(Event::Subtask {
-                            status: Status::Starting,
-                        }) = &self.common(state)?.event
-                        {
-                            // `Status::Starting` means we can't invoke the
-                            // callee yet due to e.g. backpressure, so go ahead
-                            // and deliver the update now.
-                            state.set_switch_item(item)?;
-                        } else {
-                            if state.get_mut(callee)?.switch_item.is_some() {
-                                bail_bug!(
-                                    "`GuestTask::switch_item` is already `Some(_)` when we need \
-                                     to deliver a subtask status update to the caller"
-                                );
-                            }
-                            state.get_mut(callee)?.switch_item = Some(item);
-                        }
-                        None
+                if let Some(callee) = callee {
+                    // In this case, a caller is waiting for a subtask
+                    // status update, but we can't necessarily deliver that
+                    // update immediately because the callee may still be
+                    // running, nor are we allowed queue delivery in a
+                    // general-purpose work queues because the CM spec
+                    // requires deterministic delivery of such updates.
+                    //
+                    // Therefore, we'll schedule delivery for when the
+                    // callee suspends for the first time or exits as
+                    // required by the spec.
+                    let starting = matches!(
+                        &self.common(state)?.event,
+                        Some(Event::Subtask {
+                            status: Status::Starting
+                        })
+                    );
+                    if !starting && state.get_mut(callee)?.switch_item.is_some() {
+                        bail_bug!(
+                            "`GuestTask::switch_item` is already `Some(_)` when we need \
+                             to deliver a subtask status update to the caller"
+                        );
                     }
-                    WaitMode::Fiber(fiber) => Some(WorkItem::ResumeFiber {
-                        instance: state.get_mut(thread.task)?.instance,
+
+                    let Some((_, WaitMode::Caller { fiber, .. })) =
+                        state.get_mut(set)?.waiting.pop_first()
+                    else {
+                        unreachable!()
+                    };
+                    let item = WorkItem::ResumeFiber {
+                        instance,
                         thread,
                         fiber,
-                    }),
-                    WaitMode::Callback(instance) => Some(WorkItem::GuestCall {
-                        instance: state.get_mut(thread.task)?.instance,
-                        call: GuestCall {
+                    };
+
+                    if starting {
+                        // `Status::Starting` means we can't invoke the
+                        // callee yet due to e.g. backpressure, so go ahead
+                        // and deliver the update now.
+                        state.set_switch_item(item)?;
+                    } else {
+                        match state.get_mut(callee) {
+                            Ok(task) => task.switch_item = Some(item),
+                            Err(e) => {
+                                // Keep the fiber in the store for disposal.
+                                state.push_high_priority(item);
+                                return Err(e.into());
+                            }
+                        }
+                    }
+                } else {
+                    let item = match state.get_mut(set)?.waiting.pop_first() {
+                        Some((_, WaitMode::Fiber(fiber))) => WorkItem::ResumeFiber {
+                            instance,
                             thread,
-                            kind: GuestCallKind::DeliverEvent {
-                                instance,
-                                set: Some(set),
+                            fiber,
+                        },
+                        Some((_, WaitMode::Callback(callback_instance))) => WorkItem::GuestCall {
+                            instance,
+                            call: GuestCall {
+                                thread,
+                                kind: GuestCallKind::DeliverEvent {
+                                    instance: callback_instance,
+                                    set: Some(set),
+                                },
                             },
                         },
-                    }),
-                };
-
-                if let Some(item) = item {
+                        Some((_, WaitMode::Caller { .. })) | None => unreachable!(),
+                    };
                     state.push_high_priority(item);
                 }
             }
@@ -5987,6 +6051,9 @@ impl ConcurrentState {
         log::trace!("set switch item: {item:?}");
 
         if self.switch_item.is_some() {
+            // The incoming item may own a suspended fiber. Keep it in the
+            // store for disposal even though this scheduling request failed.
+            self.push_high_priority(item);
             bail_bug!("switch item already set");
         }
 
@@ -6493,5 +6560,215 @@ fn stage_call0<T: 'static>(
             post_return.map(SendSyncPtr::new),
             true,
         )
+    }
+}
+
+#[cfg(test)]
+mod fiber_disposal_tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    struct Exited(Arc<AtomicBool>);
+
+    impl Drop for Exited {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn failed_waiter_wakeup_keeps_waiter_in_set() {
+        let mut config = crate::Config::new();
+        config.wasm_component_model_async(true);
+        let engine = crate::Engine::new(&config).unwrap();
+        let mut store = Store::new(&engine, ());
+        let store = store.as_context_mut().0;
+
+        let fiber = unsafe { fiber::make_fiber_unchecked(store, |_| Ok(())) }.unwrap();
+        let state = store.concurrent_state_mut().unwrap();
+        let set = state.push(WaitableSet::default()).unwrap();
+        let host = state
+            .push(HostTask::new(
+                TableId::new(u32::MAX),
+                HostTaskState::CalleeStarted,
+            ))
+            .unwrap();
+        let thread = QualifiedThreadId {
+            task: TableId::new(u32::MAX),
+            thread: TableId::new(u32::MAX),
+        };
+        state.get_mut(host).unwrap().common.set = Some(set);
+        state
+            .get_mut(set)
+            .unwrap()
+            .waiting
+            .insert(thread, WaitMode::Fiber(fiber));
+
+        let error = Waitable::Host(host).mark_ready(state).unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<ResourceTableError>(),
+            Some(ResourceTableError::NotPresent)
+        ));
+        assert!(state.get_mut(set).unwrap().waiting.contains_key(&thread));
+        // Dropping the store disposes the waiting live fiber.
+    }
+
+    #[test]
+    fn invalid_waiting_set_returns_error_without_dropping_live_fiber() {
+        let mut config = crate::Config::new();
+        config.wasm_component_model_async(true);
+        let engine = crate::Engine::new(&config).unwrap();
+        let mut store = Store::new(&engine, ());
+        let store = store.as_context_mut().0;
+        let exited = Arc::new(AtomicBool::new(false));
+        let fiber_exited = exited.clone();
+
+        // A suspended fiber names a waitable set that does not exist. The
+        // destination lookup must return its original table error while the
+        // live fiber is disposed using the store.
+        let fiber = unsafe {
+            fiber::make_fiber_unchecked(store, move |store| {
+                let _exited = Exited(fiber_exited);
+                store.concurrent_state_mut()?.suspend_reason = Some(SuspendReason::Waiting {
+                    set: TableId::new(u32::MAX),
+                    thread: QualifiedThreadId {
+                        task: TableId::new(u32::MAX),
+                        thread: TableId::new(u32::MAX),
+                    },
+                });
+                store.with_blocking(|_, cx| cx.suspend(StoreFiberYield::ReleaseStore))?;
+                Ok(())
+            })
+        }
+        .unwrap();
+
+        let result = {
+            let mut future = Box::pin(store.resume_fiber(fiber));
+            future
+                .as_mut()
+                .poll(&mut Context::from_waker(Waker::noop()))
+        };
+        let Poll::Ready(Err(error)) = result else {
+            panic!("expected resource table error from invalid waitable set");
+        };
+        assert!(matches!(
+            error.downcast_ref::<ResourceTableError>(),
+            Some(ResourceTableError::NotPresent)
+        ));
+        assert!(exited.load(Ordering::SeqCst));
+    }
+
+    // Exercise each suspend destination with an invalid thread handle. The
+    // returned table error and the exit marker show that a live fiber did not
+    // escape both store ownership and disposal.
+    fn invalid_thread_suspend_returns_original_error(
+        reason: fn(QualifiedThreadId) -> SuspendReason,
+    ) {
+        let mut config = crate::Config::new();
+        config.wasm_component_model_async(true);
+        let engine = crate::Engine::new(&config).unwrap();
+        let mut store = Store::new(&engine, ());
+        let store = store.as_context_mut().0;
+        let exited = Arc::new(AtomicBool::new(false));
+        let fiber_exited = exited.clone();
+
+        let fiber = unsafe {
+            fiber::make_fiber_unchecked(store, move |store| {
+                let _exited = Exited(fiber_exited);
+                store.concurrent_state_mut()?.suspend_reason = Some(reason(QualifiedThreadId {
+                    task: TableId::new(u32::MAX),
+                    thread: TableId::new(u32::MAX),
+                }));
+                store.with_blocking(|_, cx| cx.suspend(StoreFiberYield::ReleaseStore))?;
+                Ok(())
+            })
+        }
+        .unwrap();
+
+        let result = {
+            let mut future = Box::pin(store.resume_fiber(fiber));
+            future
+                .as_mut()
+                .poll(&mut Context::from_waker(Waker::noop()))
+        };
+        let Poll::Ready(Err(error)) = result else {
+            panic!("expected resource table error from invalid thread");
+        };
+        assert!(matches!(
+            error.downcast_ref::<ResourceTableError>(),
+            Some(ResourceTableError::NotPresent)
+        ));
+        assert!(exited.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn occupied_switch_keeps_incoming_fiber_in_store() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        let mut config = crate::Config::new();
+        config.wasm_component_model_async(true);
+        let engine = crate::Engine::new(&config).unwrap();
+        let mut store = Store::new(&engine, ());
+        let store = store.as_context_mut().0;
+        let fiber = unsafe { fiber::make_fiber_unchecked(store, |_| Ok(())) }.unwrap();
+        let instance = RuntimeInstance {
+            instance: crate::component::ComponentInstanceId::from_u32(0),
+            index: RuntimeComponentInstanceIndex::from_u32(0),
+        };
+        let thread = QualifiedThreadId {
+            task: TableId::new(u32::MAX),
+            thread: TableId::new(u32::MAX),
+        };
+        let state = store.concurrent_state_mut().unwrap();
+        state.switch_item = Some(WorkItem::ResumeThread { instance, thread });
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            state.push_work_item(
+                WorkItem::ResumeFiber {
+                    instance,
+                    thread,
+                    fiber,
+                },
+                Priority::Switch,
+            )
+        }));
+        if cfg!(debug_assertions) {
+            let panic = result.expect_err("debug builds must keep the original bail_bug panic");
+            let message = panic
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| panic.downcast_ref::<&str>().copied())
+                .unwrap();
+            assert!(message.contains("BUG: switch item already set"));
+        } else {
+            let error = result.unwrap().unwrap_err();
+            assert!(error.is::<crate::WasmtimeBug>());
+            assert!(error.to_string().contains("switch item already set"));
+        }
+        assert_eq!(state.high_priority.len(), 1);
+        // The store disposes the fiber retained in its queue.
+    }
+
+    #[test]
+    fn yielding_invalid_thread_returns_table_error() {
+        invalid_thread_suspend_returns_original_error(|thread| SuspendReason::Yielding { thread });
+    }
+
+    #[test]
+    fn explicitly_suspending_invalid_thread_returns_table_error() {
+        invalid_thread_suspend_returns_original_error(|thread| {
+            SuspendReason::ExplicitlySuspending { thread }
+        });
+    }
+
+    #[test]
+    fn waiting_for_guest_subtask_invalid_caller_returns_table_error() {
+        invalid_thread_suspend_returns_original_error(|caller| {
+            SuspendReason::WaitingForGuestSubtask {
+                caller,
+                callee: TableId::new(u32::MAX),
+            }
+        });
     }
 }
