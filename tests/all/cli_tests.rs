@@ -2555,9 +2555,11 @@ start a print 1234
     async fn serve_inherit() -> Result<()> {
         use rustix::fd::AsRawFd;
         use std::mem::ManuallyDrop;
+        use std::net::TcpListener;
         use std::os::fd::{FromRawFd, OwnedFd};
+        use std::os::unix::net::UnixListener;
         use std::os::unix::process::CommandExt;
-        use tokio::net::TcpListener;
+        use tokio::net::UnixStream;
 
         // We can't easily inherit file descriptors to emulators like QEMU, so skip this test for
         // cross-compiled setups.
@@ -2570,20 +2572,30 @@ start a print 1234
         // however, then the `dup2` will be a noop. This `socket` is CLOEXEC,
         // however, so if `dup2` is a noop then nothing will be inherited. Force
         // this socket to NOT be fd 3 in this case by `dup`-ing it.
-        let mut socket = std::net::TcpListener::bind("localhost:0")?;
-        if socket.as_raw_fd() == 3 {
-            socket = socket.try_clone()?;
-            assert!(socket.as_raw_fd() != 3);
+        let tcp_socket = {
+            let mut socket = TcpListener::bind("localhost:0")?;
+            if socket.as_raw_fd() == 3 {
+                socket = socket.try_clone()?;
+                assert!(socket.as_raw_fd() != 3);
+            }
+            socket.set_nonblocking(true)?;
+            socket
+        };
+
+        let addr = tcp_socket.local_addr()?;
+        let (mut unix_socket, unix_path) = tempfile::Builder::new()
+            .make(|path| UnixListener::bind(path))?
+            .into_parts();
+        if unix_socket.as_raw_fd() == 4 {
+            unix_socket = unix_socket.try_clone()?;
+            assert!(unix_socket.as_raw_fd() != 4);
         }
-        let addr = socket.local_addr()?;
-        socket.set_nonblocking(true)?;
-        let socket = TcpListener::from_std(socket)?;
 
         // Using a shell script as a launcher since that uses exec, allowing us to provide the
         // LISTEN_PID variable.
         let mut cmd = Command::new("sh");
         cmd.arg("-c")
-            .arg(r#"export LISTEN_FDS=1 LISTEN_PID=$$; exec "$@""#)
+            .arg(r#"export LISTEN_FDS=2 LISTEN_PID=$$; exec "$@""#)
             .arg("sh")
             .arg(super::get_wasmtime_path())
             .arg("serve")
@@ -2591,15 +2603,19 @@ start a print 1234
             .arg("--systemd-listenfd")
             .arg(P2_CLI_SERVE_HELLO_WORLD_COMPONENT)
             .env("WASMTIME_CODEGEN_CACHE", "n");
+
         unsafe {
             cmd.pre_exec(move || {
-                let mut target = ManuallyDrop::new(OwnedFd::from_raw_fd(3));
-                rustix::io::dup2(&socket, &mut target)?;
+                let mut target_3 = ManuallyDrop::new(OwnedFd::from_raw_fd(3));
+                let mut target_4 = ManuallyDrop::new(OwnedFd::from_raw_fd(4));
+                rustix::io::dup2(&tcp_socket, &mut target_3)?;
+                rustix::io::dup2(&unix_socket, &mut target_4)?;
                 Ok(())
             });
         }
 
         let server = WasmtimeServe::spawn(&mut cmd, Some(addr))?;
+        // Should accept http requests over the TCP socket
         let resp = server
             .send_request(
                 hyper::Request::builder()
@@ -2612,8 +2628,40 @@ start a print 1234
         assert!(resp.status().is_success());
         assert_eq!(resp.body(), "Hello, WASI!");
 
+        // As well as over the unix socket
+        {
+            let unix = wasmtime_wasi_http::io::TokioIo::new(
+                UnixStream::connect(&unix_path).await.with_context(|| {
+                    format!(
+                        "failed to connect to unix socket at {}",
+                        unix_path.display()
+                    )
+                })?,
+            );
+            let (mut send, conn) = hyper::client::conn::http1::handshake(unix)
+                .await
+                .context("failed http handshake")?;
+            let conn_task = tokio::task::spawn(conn);
+
+            let resp = WasmtimeServe::send_request_with(
+                &mut send,
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+            assert!(resp.status().is_success());
+            assert_eq!(resp.body(), "Hello, WASI!");
+
+            drop(send);
+            conn_task.await??;
+        }
+
         let (_, stderr) = server.finish()?;
         assert!(stderr.contains("Serving HTTP on inherited socket"));
+        drop(unix_path);
 
         Ok(())
     }

@@ -7,7 +7,11 @@ use pin_project_lite::pin_project;
 use std::convert::Infallible;
 use std::ffi::OsString;
 use std::net::SocketAddr;
+
+#[cfg(unix)]
 use std::net::TcpListener as StdTcpListener;
+#[cfg(unix)]
+use std::os::unix::net::UnixListener as StdUnixListener;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{
@@ -18,8 +22,10 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio::io::{self, AsyncWrite};
-use tokio::net::TcpListener;
+use tokio::io::{self, AsyncRead, AsyncWrite};
+use tokio::net::{TcpListener, TcpStream};
+#[cfg(unix)]
+use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{Notify, Semaphore};
 use wasmtime::component::{Component, GuestTaskId, Linker};
 use wasmtime::error::Context as _;
@@ -92,10 +98,10 @@ impl wasmtime_wasi_http::WasiHttpView for Host {
     }
 }
 
-const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
+const DEFAULT_ADDRS: &[std::net::SocketAddr] = &[std::net::SocketAddr::new(
     std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
     8080,
-);
+)];
 
 fn parse_duration(s: &str) -> Result<Duration, String> {
     Duration::parse(Some(s)).map_err(|e| e.to_string())
@@ -107,9 +113,9 @@ pub struct ServeCommand {
     #[command(flatten)]
     run: RunCommon,
 
-    /// Socket address for the web server to bind to.
-    #[arg(long , value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR)]
-    addr: SocketAddr,
+    /// Socket addresses for the web server to bind to.
+    #[arg(long , value_name = "SOCKADDR", default_values_t = DEFAULT_ADDRS)]
+    addr: Vec<SocketAddr>,
 
     /// Socket address where, when connected to, will initiate a graceful
     /// shutdown.
@@ -331,7 +337,7 @@ impl ServeCommand {
         mut debug_run: RunCommand,
         linker: Linker<Host>,
         component: Component,
-        inherited_socket: Option<StdTcpListener>,
+        inherited_socket: Option<Vec<StdSocketServer>>,
     ) -> Result<()> {
         let mut debuggee_store = self.new_store(linker.engine(), None)?;
 
@@ -557,7 +563,7 @@ impl ServeCommand {
         Ok(())
     }
 
-    async fn serve(mut self, inherited_socket: Option<StdTcpListener>) -> Result<()> {
+    async fn serve(mut self, inherited_socket: Option<Vec<StdSocketServer>>) -> Result<()> {
         #[cfg(feature = "debug")]
         let debug_run = self.debugger_setup()?;
 
@@ -606,8 +612,8 @@ impl ServeCommand {
         self,
         linker: Linker<Host>,
         component: Component,
-        mut debuggee_store: Option<&mut Store<Host>>,
-        inherited_socket: Option<StdTcpListener>,
+        debuggee_store: Option<&mut Store<Host>>,
+        inherited_socket: Option<Vec<StdSocketServer>>,
     ) -> Result<()> {
         let engine = linker.engine();
         let request_headers = RequestHeaders::parse(&self.headers)?;
@@ -628,7 +634,7 @@ impl ServeCommand {
             let shutdown = shutdown.clone();
             async move {
                 tokio::signal::ctrl_c().await.unwrap();
-                shutdown.requested.notify_one();
+                shutdown.requested.notify_waiters();
             }
         });
         if let Some(addr) = self.shutdown_addr {
@@ -640,37 +646,44 @@ impl ServeCommand {
             let shutdown = shutdown.clone();
             tokio::task::spawn(async move {
                 let _ = listener.accept().await;
-                shutdown.requested.notify_one();
+                shutdown.requested.notify_waiters();
             });
         }
 
-        let listener = match inherited_socket {
-            Some(listener) => {
+        let mut servers = vec![];
+
+        match inherited_socket {
+            Some(listeners) => {
+                assert!(!listeners.is_empty());
+                for listener in listeners {
+                    servers.push(listener.try_into()?);
+                }
+
                 eprintln!("Serving HTTP on inherited socket");
                 log::info!("Listening on inherited socket");
-
-                TcpListener::from_std(listener)?
             }
             None => {
-                let socket = match &self.addr {
-                    SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
-                    SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
-                };
-                // Conditionally enable `SO_REUSEADDR` depending on the current
-                // platform. On Unix we want this to be able to rebind an address in
-                // the `TIME_WAIT` state which can happen then a server is killed with
-                // active TCP connections and then restarted. On Windows though if
-                // `SO_REUSEADDR` is specified then it enables multiple applications to
-                // bind the port at the same time which is not something we want. Hence
-                // this is conditionally set based on the platform (and deviates from
-                // Tokio's default from always-on).
-                socket.set_reuseaddr(!cfg!(windows))?;
-                socket.bind(self.addr)?;
-                let listener = socket.listen(100)?;
+                for addr in &self.addr {
+                    let socket = match addr {
+                        SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
+                        SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
+                    };
+                    // Conditionally enable `SO_REUSEADDR` depending on the current
+                    // platform. On Unix we want this to be able to rebind an address in
+                    // the `TIME_WAIT` state which can happen then a server is killed with
+                    // active TCP connections and then restarted. On Windows though if
+                    // `SO_REUSEADDR` is specified then it enables multiple applications to
+                    // bind the port at the same time which is not something we want. Hence
+                    // this is conditionally set based on the platform (and deviates from
+                    // Tokio's default from always-on).
+                    socket.set_reuseaddr(!cfg!(windows))?;
+                    socket.bind(*addr)?;
+                    let listener = socket.listen(100)?;
 
-                eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
-                log::info!("Listening on {}", self.addr);
-                listener
+                    eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
+                    log::info!("Listening on {addr}");
+                    servers.push(SocketServer::Inet(listener));
+                }
             }
         };
 
@@ -712,6 +725,9 @@ impl ServeCommand {
         if debuggee_store.is_some() && max_concurrent_requests != 1 {
             bail!("cannot have more than 1 max concurrent requests with a debugger");
         }
+        if debuggee_store.is_some() && servers.len() != 1 {
+            bail!("Cannot listen on more than one socket with a debugger");
+        }
 
         let sem_connections = Arc::new(Semaphore::new(max_concurrent_connections));
 
@@ -730,44 +746,36 @@ impl ServeCommand {
             _shutdown_guard: Box::new(shutdown.clone().increment()),
         });
 
-        loop {
-            // Wait for a socket, but also "race" against shutdown to break out
-            // of this loop. Once the graceful shutdown signal is received then
-            // this loop exits immediately.
-            let (connection_permit, stream) = tokio::select! {
-                _ = shutdown.requested.notified() => break,
-                v = async {
-                    let permit = sem_connections.clone().acquire_owned().await?;
-                    let (stream, _) = listener.accept().await?;
-                    wasmtime::error::Ok((permit, stream))
-                } => v?,
-            };
+        if debuggee_store.is_some() {
+            for server in servers {
+                Self::serve_on_listener(
+                    server,
+                    shutdown.clone(),
+                    sem_connections,
+                    handler.clone(),
+                    debuggee_store,
+                )
+                .await?;
 
-            // The Nagle algorithm can impose a significant latency penalty
-            // (e.g. 40ms on Linux) on guests which write small, intermittent
-            // response body chunks (e.g. SSE streams).  Here we disable that
-            // algorithm and rely on the guest to buffer if appropriate to avoid
-            // TCP fragmentation.
-            stream.set_nodelay(true)?;
+                // There can only be one socket with a debugger attached.
+                break;
+            }
+        } else {
+            let mut listener_tasks = vec![];
 
-            // In addition to the shutdown guard given to the handler above,
-            // also give one to the tokio tasks doing HTTP I/O as well to ensure
-            // it keeps them alive too.
-            let shutdown_guard = shutdown.clone().increment();
+            for server in servers {
+                let handler = handler.clone();
+                listener_tasks.push(tokio::task::spawn(Self::serve_on_listener(
+                    server,
+                    shutdown.clone(),
+                    sem_connections.clone(),
+                    handler.clone(),
+                    None,
+                )));
+            }
 
-            // When debugging, handle the client synchronously since
-            // concurrent requests can't be served. Otherwise though spawn a
-            // task to handle this client.
-            match &mut debuggee_store {
-                Some(store) => handle_client(stream, &handler, Some(store)).await,
-                None => {
-                    let handler = handler.clone();
-                    tokio::task::spawn(async move {
-                        handle_client(stream, &handler, None).await;
-                        drop(shutdown_guard);
-                        drop(connection_permit);
-                    });
-                }
+            for task in listener_tasks {
+                task.await??;
             }
         }
 
@@ -793,6 +801,48 @@ impl ServeCommand {
         Ok(())
     }
 
+    async fn serve_on_listener(
+        server: SocketServer,
+        shutdown: Arc<GracefulShutdown>,
+        sem_connections: Arc<Semaphore>,
+        handler: ProxyHandler<HostHandlerState>,
+        mut debuggee_store: Option<&mut Store<Host>>,
+    ) -> Result<()> {
+        loop {
+            // Wait for a socket, but also "race" against shutdown to break out
+            // of this loop. Once the graceful shutdown signal is received then
+            // this loop exits immediately.
+            let (connection_permit, stream) = tokio::select! {
+                _ = shutdown.requested.notified() => break Ok(()),
+                v = async {
+                    let permit = sem_connections.clone().acquire_owned().await?;
+                    let stream = server.accept().await?;
+                    wasmtime::error::Ok((permit, stream))
+                } => v?,
+            };
+
+            // In addition to the shutdown guard given to the handler above,
+            // also give one to the tokio tasks doing HTTP I/O as well to ensure
+            // it keeps them alive too.
+            let shutdown_guard = shutdown.clone().increment();
+
+            // When debugging, handle the client synchronously since
+            // concurrent requests can't be served. Otherwise though spawn a
+            // task to handle this client.
+            match &mut debuggee_store {
+                Some(store) => handle_client(stream, &handler, Some(store)).await,
+                None => {
+                    let handler = handler.clone();
+                    tokio::task::spawn(async move {
+                        handle_client(stream, &handler, None).await;
+                        drop(shutdown_guard);
+                        drop(connection_permit);
+                    });
+                }
+            }
+        }
+    }
+
     /// Takes ownership of file descriptors this process has inherited from a parent process like a
     /// service manager.
     ///
@@ -804,12 +854,11 @@ impl ServeCommand {
     /// This function takes ownership of raw file descriptors and must be called before any other
     /// file descriptors are opened.
     #[cfg(unix)]
-    unsafe fn inherit_socket() -> Result<StdTcpListener> {
+    unsafe fn inherit_socket() -> Result<Vec<StdSocketServer>> {
         use rustix::fs::{FileType, fstat};
         use rustix::net::{AddressFamily, SocketType, getsockname, sockopt::socket_type};
         use std::os::fd::{FromRawFd, OwnedFd, RawFd};
         use std::{env, process};
-        use wasmtime::format_err;
 
         // The logic here is taken from https://github.com/systemd/systemd/blob/main/src/libsystemd/sd-daemon/sd-daemon.c.
         if !env::var("LISTEN_PID")
@@ -833,7 +882,7 @@ impl ServeCommand {
             bail!("Invalid amount of file descriptors in LISTEN_FDS");
         };
 
-        let mut first_tcp_socket = None;
+        let mut sockets = vec![];
         // We want to take ownership of all file descriptors here, but only use the first socket to
         // listen on it.
         for fd in first_fd..last_fd {
@@ -853,29 +902,36 @@ impl ServeCommand {
                 continue;
             }
 
-            let address_family = getsockname(&fd)?.address_family();
-            if address_family != AddressFamily::INET && address_family != AddressFamily::INET6 {
-                continue;
-            }
-
             if socket_type(&fd)? != SocketType::STREAM {
                 continue;
             }
 
-            if !first_tcp_socket.is_none() {
-                bail!("Inherited multiple TCP sockets, which is unsupported.")
-            }
-
-            let listener = StdTcpListener::from(fd);
-            listener.set_nonblocking(true)?;
-            first_tcp_socket = Some(listener);
+            let address_family = getsockname(&fd)?.address_family();
+            let this_listener = if address_family == AddressFamily::INET
+                || address_family == AddressFamily::INET6
+            {
+                let listener = StdTcpListener::from(fd);
+                listener.set_nonblocking(true)?;
+                StdSocketServer::Inet(listener)
+            } else if address_family == AddressFamily::UNIX {
+                let listener = StdUnixListener::from(fd);
+                listener.set_nonblocking(true)?;
+                StdSocketServer::Unix(listener)
+            } else {
+                continue;
+            };
+            sockets.push(this_listener);
         }
 
-        first_tcp_socket.ok_or_else(|| format_err!("No TCP socket inherited"))
+        if sockets.is_empty() {
+            bail!("No socket inherited")
+        }
+
+        Ok(sockets)
     }
 
     #[cfg(not(unix))]
-    unsafe fn inherit_socket() -> Result<StdTcpListener> {
+    unsafe fn inherit_socket() -> Result<Vec<StdSocketServer>> {
         bail!("The --listenfd option is not available on Windows")
     }
 }
@@ -1202,7 +1258,7 @@ fn setup_guest_profiler(
 type Request = hyper::Request<hyper::body::Incoming>;
 
 async fn handle_client(
-    client: tokio::net::TcpStream,
+    client: ClientSocket,
     handler: &ProxyHandler<HostHandlerState>,
     debuggee_store: Option<&mut Store<Host>>,
 ) {
@@ -1476,6 +1532,126 @@ impl AsyncWrite for LogStream {
     }
     fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
+    }
+}
+
+enum StdSocketServer {
+    #[cfg(unix)]
+    Inet(StdTcpListener),
+    #[cfg(unix)]
+    Unix(StdUnixListener),
+}
+
+enum SocketServer {
+    Inet(TcpListener),
+    #[cfg(unix)]
+    Unix(UnixListener),
+}
+
+impl TryFrom<StdSocketServer> for SocketServer {
+    type Error = wasmtime::Error;
+
+    #[cfg(unix)]
+    fn try_from(value: StdSocketServer) -> Result<Self> {
+        Ok(match value {
+            StdSocketServer::Inet(listener) => Self::Inet(TcpListener::from_std(listener)?),
+            StdSocketServer::Unix(listener) => Self::Unix(UnixListener::from_std(listener)?),
+        })
+    }
+
+    #[cfg(not(unix))]
+    fn try_from(_value: StdSocketServer) -> Result<Self> {
+        bail!("Only used for inherited sockets on Unix")
+    }
+}
+
+impl SocketServer {
+    async fn accept(&self) -> Result<ClientSocket> {
+        Ok(match self {
+            SocketServer::Inet(listener) => {
+                let (stream, _) = listener.accept().await?;
+                // The Nagle algorithm can impose a significant latency penalty
+                // (e.g. 40ms on Linux) on guests which write small, intermittent
+                // response body chunks (e.g. SSE streams).  Here we disable that
+                // algorithm and rely on the guest to buffer if appropriate to avoid
+                // TCP fragmentation.
+                stream.set_nodelay(true)?;
+
+                ClientSocket::Inet { stream }
+            }
+            #[cfg(unix)]
+            SocketServer::Unix(listener) => {
+                let (stream, _) = listener.accept().await?;
+                ClientSocket::Unix { stream }
+            }
+        })
+    }
+}
+
+#[cfg(unix)]
+pin_project! {
+    #[project = ClientSocketProj]
+    enum ClientSocket {
+        Inet {
+            #[pin] stream: TcpStream
+        },
+        Unix {
+             #[pin] stream: UnixStream
+        },
+    }
+}
+
+#[cfg(not(unix))]
+pin_project! {
+    #[project = ClientSocketProj]
+    enum ClientSocket {
+        Inet {
+            #[pin] stream: TcpStream
+        },
+    }
+}
+
+impl AsyncRead for ClientSocket {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut io::ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        match self.project() {
+            ClientSocketProj::Inet { stream } => stream.poll_read(cx, buf),
+            #[cfg(unix)]
+            ClientSocketProj::Unix { stream } => stream.poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncWrite for ClientSocket {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        match self.project() {
+            ClientSocketProj::Inet { stream } => stream.poll_write(cx, buf),
+            #[cfg(unix)]
+            ClientSocketProj::Unix { stream } => stream.poll_write(cx, buf),
+        }
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match self.project() {
+            ClientSocketProj::Inet { stream } => stream.poll_flush(cx),
+            #[cfg(unix)]
+            ClientSocketProj::Unix { stream } => stream.poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match self.project() {
+            ClientSocketProj::Inet { stream } => stream.poll_shutdown(cx),
+            #[cfg(unix)]
+            ClientSocketProj::Unix { stream } => stream.poll_shutdown(cx),
+        }
     }
 }
 
