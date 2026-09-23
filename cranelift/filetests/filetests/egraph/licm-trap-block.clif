@@ -1,0 +1,154 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; We can LICM values before and after a block that always traps inside the
+;; middle of a loop.
+function %licm_after_trap_block(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    jump block1(v2)
+
+block1(v3: i64):
+    ;; v20 is loop invariant, and should be hoisted into `block0`.
+    v20 = load.i64 notrap aligned readonly can_move v0+232
+    v21 = load.i32 notrap aligned v20
+    brif v21, block10, block99
+
+block99:
+    trap user26
+
+block10:
+    ;; v4/v5/v6 are all loop invariant, and should be hoised into `block0`.
+    v4 = load.i64 notrap aligned readonly can_move v0+72
+    v5 = load.i64 notrap aligned readonly can_move v4+8
+    v6 = load.i64 notrap aligned readonly can_move v5+104
+    v7 = iadd v3, v6
+    v8 = icmp ult v7, v1
+    brif v8, block1(v7), block2
+
+block2:
+    return v7
+}
+
+; function %licm_after_trap_block(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 0
+;     v20 = load.i64 notrap aligned readonly can_move v0+232
+;     v4 = load.i64 notrap aligned readonly can_move v0+72
+;     v5 = load.i64 notrap aligned readonly can_move v4+8
+;     v6 = load.i64 notrap aligned readonly can_move v5+104
+;     jump block1(v2)  ; v2 = 0
+;
+; block1(v3: i64):
+;     v21 = load.i32 notrap aligned v20
+;     trapz v21, user26
+;     jump block10
+;
+; block10:
+;     v7 = iadd.i64 v3, v6
+;     v8 = icmp ult v7, v1
+;     brif v8, block1(v7), block2
+;
+; block2:
+;     return v7
+; }
+
+;; Same, but with the layout order of the trapping and non-trapping loop blocks
+;; swapped.
+function %licm_after_trap_block_layout_reordered(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    jump block1(v2)
+
+block1(v3: i64):
+    v20 = load.i64 notrap aligned readonly can_move v0+232
+    v21 = load.i32 notrap aligned v20
+    brif v21, block10, block99
+
+block10:
+    v4 = load.i64 notrap aligned readonly can_move v0+72
+    v5 = load.i64 notrap aligned readonly can_move v4+8
+    v6 = load.i64 notrap aligned readonly can_move v5+104
+    v7 = iadd v3, v6
+    v8 = icmp ult v7, v1
+    brif v8, block1(v7), block2
+
+block99:
+    trap user26
+
+block2:
+    return v7
+}
+
+; function %licm_after_trap_block_layout_reordered(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 0
+;     v20 = load.i64 notrap aligned readonly can_move v0+232
+;     v4 = load.i64 notrap aligned readonly can_move v0+72
+;     v5 = load.i64 notrap aligned readonly can_move v4+8
+;     v6 = load.i64 notrap aligned readonly can_move v5+104
+;     jump block1(v2)  ; v2 = 0
+;
+; block1(v3: i64):
+;     v21 = load.i32 notrap aligned v20
+;     trapz v21, user26
+;     jump block10
+;
+; block10:
+;     v7 = iadd.i64 v3, v6
+;     v8 = icmp ult v7, v1
+;     brif v8, block1(v7), block2
+;
+; block2:
+;     return v7
+; }
+
+;; Same but witht he `brif` successors swapped.
+function %licm_after_trap_block(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    jump block1(v2)
+
+block1(v3: i64):
+    v20 = load.i64 notrap aligned readonly can_move v0+232
+    v21 = load.i32 notrap aligned v20
+    brif v21, block99, block10
+
+block99:
+    trap user26
+
+block10:
+    v4 = load.i64 notrap aligned readonly can_move v0+72
+    v5 = load.i64 notrap aligned readonly can_move v4+8
+    v6 = load.i64 notrap aligned readonly can_move v5+104
+    v7 = iadd v3, v6
+    v8 = icmp ult v7, v1
+    brif v8, block1(v7), block2
+
+block2:
+    return v7
+}
+
+; function %licm_after_trap_block(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 0
+;     v20 = load.i64 notrap aligned readonly can_move v0+232
+;     v4 = load.i64 notrap aligned readonly can_move v0+72
+;     v5 = load.i64 notrap aligned readonly can_move v4+8
+;     v6 = load.i64 notrap aligned readonly can_move v5+104
+;     jump block1(v2)  ; v2 = 0
+;
+; block1(v3: i64):
+;     v21 = load.i32 notrap aligned v20
+;     trapnz v21, user26
+;     jump block10
+;
+; block10:
+;     v7 = iadd.i64 v3, v6
+;     v8 = icmp ult v7, v1
+;     brif v8, block1(v7), block2
+;
+; block2:
+;     return v7
+; }
