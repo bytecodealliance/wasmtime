@@ -1126,8 +1126,8 @@ mod shutdown {
             }
         }
 
-        /// Flags this state as done spawning tasks and returns whether there
-        /// are no more child tasks remaining.
+        /// Flags this state as done spawning tasks and returns a future which
+        /// will resolve when all active tasks have completed, if any.
         pub fn close(&self) -> Option<impl Future<Output = ()> + '_> {
             let mut state = self.state.lock().unwrap();
             state.notify_when_done = true;
