@@ -1,3 +1,12 @@
+## 36.0.16
+
+Released 2026-09-24.
+
+### Fixed
+
+* Fix fuel spend for dynamic record lifting.
+  [GHSA-jqpg-j7w6-42pr](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-jqpg-j7w6-42pr)
+
 ## 36.0.15
 
 Released 2026-09-10
