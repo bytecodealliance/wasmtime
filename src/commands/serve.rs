@@ -17,7 +17,7 @@ use std::task::{Context, Poll};
 use std::{
     path::PathBuf,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{Duration, Instant},
@@ -26,7 +26,7 @@ use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
 #[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
-use tokio::sync::{Notify, Semaphore};
+use tokio::sync::Semaphore;
 use wasmtime::component::{Component, GuestTaskId, Linker};
 use wasmtime::error::Context as _;
 use wasmtime::{
@@ -634,7 +634,7 @@ impl ServeCommand {
             let shutdown = shutdown.clone();
             async move {
                 tokio::signal::ctrl_c().await.unwrap();
-                shutdown.requested.notify_waiters();
+                shutdown.request_shutdown();
             }
         });
         if let Some(addr) = self.shutdown_addr {
@@ -646,7 +646,7 @@ impl ServeCommand {
             let shutdown = shutdown.clone();
             tokio::task::spawn(async move {
                 let _ = listener.accept().await;
-                shutdown.requested.notify_waiters();
+                shutdown.request_shutdown();
             });
         }
 
@@ -789,13 +789,12 @@ impl ServeCommand {
         // processing in child tasks. If there are wait for those to complete
         // before shutting down completely. Also enable short-circuiting this
         // wait with a second ctrl-c signal.
-        if shutdown.close() {
-            return Ok(());
-        }
-        eprintln!("Waiting for child tasks to exit, ctrl-c again to quit sooner...");
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {}
-            _ = shutdown.complete.notified() => {}
+        if let Some(wait_for_remaining) = shutdown.close() {
+            eprintln!("Waiting for child tasks to exit, ctrl-c again to quit sooner...");
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = wait_for_remaining => {}
+            }
         }
 
         Ok(())
@@ -813,7 +812,7 @@ impl ServeCommand {
             // of this loop. Once the graceful shutdown signal is received then
             // this loop exits immediately.
             let (connection_permit, stream) = tokio::select! {
-                _ = shutdown.requested.notified() => break Ok(()),
+                _ = shutdown.requested() => break Ok(()),
                 v = async {
                     let permit = sem_connections.clone().acquire_owned().await?;
                     let stream = server.accept().await?;
@@ -1076,53 +1075,93 @@ impl HandlerState for HostHandlerState {
     }
 }
 
-/// Helper structure to manage graceful shutdown int he accept loop above.
-#[derive(Default)]
-struct GracefulShutdown {
-    /// Async notification that shutdown has been requested.
-    requested: Notify,
-    /// Async notification that shutdown has completed, signaled when
-    /// `notify_when_done` is `true` and `active_tasks` reaches 0.
-    complete: Notify,
-    /// Internal state related to what's in progress when shutdown is requested.
-    state: Mutex<GracefulShutdownState>,
-}
+use shutdown::GracefulShutdown;
+mod shutdown {
+    use std::sync::{Arc, Mutex};
+    use tokio::sync::Notify;
 
-#[derive(Default)]
-struct GracefulShutdownState {
-    active_tasks: u32,
-    notify_when_done: bool,
-}
+    /// Helper structure to manage graceful shutdown int he accept loop above.
+    #[derive(Default)]
+    pub struct GracefulShutdown {
+        /// Async notification that shutdown has been requested.
+        requested: Notify,
+        /// Async notification that shutdown has completed, signaled when
+        /// `notify_when_done` is `true` and `active_tasks` reaches 0.
+        complete: Notify,
+        /// Internal state related to what's in progress when shutdown is requested.
+        state: Mutex<GracefulShutdownState>,
+    }
 
-impl GracefulShutdown {
-    /// Increments the number of active tasks and returns a guard indicating
-    fn increment(self: Arc<Self>) -> impl Drop + Send + Sync {
-        struct Guard(Arc<GracefulShutdown>);
+    #[derive(Default)]
+    struct GracefulShutdownState {
+        shutdown_requested: bool,
+        active_tasks: u32,
+        notify_when_done: bool,
+    }
 
-        let mut state = self.state.lock().unwrap();
-        assert!(!state.notify_when_done);
-        state.active_tasks += 1;
-        drop(state);
+    impl GracefulShutdown {
+        /// Increments the number of active tasks and returns a guard which,
+        /// when dropped, will signal that the task is no longer active.
+        ///
+        /// Live `increment` return values prevent the `close` return value from
+        /// resolving, for example.
+        pub fn increment(self: Arc<Self>) -> impl Drop + Send + Sync {
+            struct Guard(Arc<GracefulShutdown>);
 
-        return Guard(self);
+            let mut state = self.state.lock().unwrap();
+            assert!(!state.notify_when_done);
+            state.active_tasks += 1;
+            drop(state);
 
-        impl Drop for Guard {
-            fn drop(&mut self) {
-                let mut state = self.0.state.lock().unwrap();
-                state.active_tasks -= 1;
-                if state.notify_when_done && state.active_tasks == 0 {
-                    self.0.complete.notify_one();
+            return Guard(self);
+
+            impl Drop for Guard {
+                fn drop(&mut self) {
+                    let mut state = self.0.state.lock().unwrap();
+                    state.active_tasks -= 1;
+                    if state.notify_when_done && state.active_tasks == 0 {
+                        self.0.complete.notify_one();
+                    }
                 }
             }
         }
-    }
 
-    /// Flags this state as done spawning tasks and returns whether there are no
-    /// more child tasks remaining.
-    fn close(&self) -> bool {
-        let mut state = self.state.lock().unwrap();
-        state.notify_when_done = true;
-        state.active_tasks == 0
+        /// Flags this state as done spawning tasks and returns a future which
+        /// will resolve when all active tasks have completed, if any.
+        pub fn close(&self) -> Option<impl Future<Output = ()> + '_> {
+            let mut state = self.state.lock().unwrap();
+            state.notify_when_done = true;
+            if state.active_tasks == 0 {
+                None
+            } else {
+                Some(self.complete.notified())
+            }
+        }
+
+        /// Initiate a graceful shutdown request.
+        ///
+        /// This will cause futures returned by `.requested` to resolve and will
+        /// cause all future calls to `requested` to immediately resolve.
+        pub fn request_shutdown(&self) {
+            self.state.lock().unwrap().shutdown_requested = true;
+            self.requested.notify_waiters();
+        }
+
+        /// Wait for a graceful shutdown request to be received.
+        ///
+        /// This will return a future that resolves immediately if a shutdown
+        /// has already been requested, or otherwise the future will wait for
+        /// such a shutdown request to happen.
+        pub fn requested(&self) -> impl Future<Output = ()> + '_ {
+            let state = self.state.lock().unwrap();
+            let requested = state.shutdown_requested;
+            let notified = self.requested.notified();
+            async move {
+                if !requested {
+                    notified.await;
+                }
+            }
+        }
     }
 }
 
