@@ -426,6 +426,12 @@ async fn p2_udp_send_too_much() {
         "unpermitted: argument exceeds permitted size"
     )
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_file_settime_overflow() {
+    run(P2_FILE_SETTIME_OVERFLOW_COMPONENT, |_| {})
+        .await
+        .unwrap()
+}
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p1_file_truncation_readonly() {
