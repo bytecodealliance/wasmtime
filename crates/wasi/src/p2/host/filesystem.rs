@@ -715,8 +715,18 @@ fn descriptortype_from(ft: crate::filesystem::primitives::FileType) -> types::De
 }
 
 fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, ErrorCode> {
+    // `Duration::new` panics instead of returning an error when the nanoseconds
+    // carry overflows the seconds counter, and the guest controls both halves
+    // of this value. Apply the carry ourselves so out-of-range datetimes are
+    // reported as `Overflow`, the same as any other value that does not fit in
+    // a `SystemTime`.
+    let seconds = t
+        .seconds
+        .checked_add(u64::from(t.nanoseconds / 1_000_000_000))
+        .ok_or(ErrorCode::Overflow)?;
+    let nanoseconds = t.nanoseconds % 1_000_000_000;
     std::time::SystemTime::UNIX_EPOCH
-        .checked_add(core::time::Duration::new(t.seconds, t.nanoseconds))
+        .checked_add(core::time::Duration::new(seconds, nanoseconds))
         .ok_or(ErrorCode::Overflow)
 }
 
@@ -750,6 +760,44 @@ mod test {
             .unwrap();
         let _ = table.get(&ix).unwrap();
         table.delete(ix).unwrap();
+    }
+
+    /// Out-of-range `datetime` values are the guest's to choose, so all of them
+    /// have to come back as `Overflow` rather than panicking. The last two
+    /// cases are the interesting ones: their nanoseconds carry is what pushes
+    /// the seconds counter past `u64::MAX` in the first place.
+    #[test]
+    fn out_of_range_datetimes_report_overflow() {
+        for (seconds, nanoseconds) in [
+            (u64::MAX, 999_999_999),
+            (u64::MAX - 1, 1_000_000_000),
+            (u64::MAX, 1_000_000_000),
+            (u64::MAX, u32::MAX),
+        ] {
+            let t = types::NewTimestamp::Timestamp(wall_clock::Datetime {
+                seconds,
+                nanoseconds,
+            });
+            assert_eq!(
+                systemtimespec_from(t),
+                Err(ErrorCode::Overflow),
+                "seconds={seconds} nanoseconds={nanoseconds}"
+            );
+        }
+    }
+
+    /// A nanoseconds carry that stays in range is still applied.
+    #[test]
+    fn nanosecond_carry_still_applies() {
+        let t = types::NewTimestamp::Timestamp(wall_clock::Datetime {
+            seconds: 0,
+            nanoseconds: 1_000_000_000,
+        });
+        let when = systemtimespec_from(t).unwrap().unwrap();
+        assert_eq!(
+            when.duration_since(SystemTime::UNIX_EPOCH).unwrap(),
+            std::time::Duration::from_secs(1)
+        );
     }
 }
 
