@@ -42,6 +42,8 @@ mod string_pool;
 mod trap_encoding;
 mod tunables;
 mod types;
+#[cfg(all(feature = "component-model", feature = "compile"))]
+mod union_find;
 #[macro_use]
 mod vmctxtypes;
 #[macro_use]
