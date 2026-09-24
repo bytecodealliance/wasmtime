@@ -605,6 +605,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             | Operator::Return
             | Operator::CallIndirect { .. }
             | Operator::Call { .. }
+            | Operator::CallRef { .. }
             | Operator::ReturnCall { .. }
             | Operator::ReturnCallRef { .. }
             | Operator::ReturnCallIndirect { .. }
@@ -670,7 +671,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // After a function call we need to reload our fuel value since the
         // function may have changed it.
         match op {
-            Operator::Call { .. } | Operator::CallIndirect { .. } => {
+            Operator::Call { .. } | Operator::CallIndirect { .. } | Operator::CallRef { .. } => {
                 self.fuel_load_into_var(builder);
             }
             _ => {}
@@ -5276,6 +5277,15 @@ impl FuncEnvironment<'_> {
             self.update_state_slot_stack(validator, builder)?;
         }
         Ok(())
+    }
+
+    /// Hook invoked at the start of a catch block for a `try_table`,
+    /// i.e. the block that control lands in when a `try_call` returns
+    /// along its exceptional edge.
+    pub fn on_catch_block_entry(&mut self, builder: &mut FunctionBuilder) {
+        if self.tunables.consume_fuel {
+            self.fuel_load_into_var(builder);
+        }
     }
 
     pub fn before_unconditionally_trapping_memory_access(&mut self, builder: &mut FunctionBuilder) {
