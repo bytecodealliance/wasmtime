@@ -718,8 +718,16 @@ fn descriptortype_from(ft: crate::filesystem::primitives::FileType) -> types::De
 }
 
 fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, ErrorCode> {
+    // Catch nanoseconds-into-seconds Overflow error explicitly:
+    // unfortunately, Duration::new panics when input overflows
+    let duration = core::time::Duration::new(
+        t.seconds
+            .checked_add(u64::from(t.nanoseconds / 1_000_000_000))
+            .ok_or(ErrorCode::Overflow)?,
+        t.nanoseconds % 1_000_000_000,
+    );
     std::time::SystemTime::UNIX_EPOCH
-        .checked_add(core::time::Duration::new(t.seconds, t.nanoseconds))
+        .checked_add(duration)
         .ok_or(ErrorCode::Overflow)
 }
 
