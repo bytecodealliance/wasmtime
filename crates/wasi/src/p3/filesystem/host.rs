@@ -97,16 +97,28 @@ impl<T> AccessorExt for Accessor<T, WasiFilesystem> {
 }
 
 fn systemtime_from(t: system_clock::Instant) -> Result<std::time::SystemTime, ErrorCode> {
-    if let Ok(seconds) = t.seconds.try_into() {
+    if let Ok(seconds) = <i64 as TryInto<u64>>::try_into(t.seconds) {
+        // Catch nanoseconds-into-seconds Overflow error explicitly:
+        // unfortunately, Duration::new panics when input overflows
+        let duration = core::time::Duration::new(
+            seconds
+                .checked_add(u64::from(t.nanoseconds / 1_000_000_000))
+                .ok_or(ErrorCode::Overflow)?,
+            t.nanoseconds % 1_000_000_000,
+        );
         std::time::SystemTime::UNIX_EPOCH
-            .checked_add(core::time::Duration::new(seconds, t.nanoseconds))
+            .checked_add(duration)
             .ok_or(ErrorCode::Overflow)
     } else {
+        let duration = core::time::Duration::new(
+            t.seconds
+                .unsigned_abs()
+                .checked_add(u64::from(t.nanoseconds / 1_000_000_000))
+                .ok_or(ErrorCode::Overflow)?,
+            t.nanoseconds % 1_000_000_000,
+        );
         std::time::SystemTime::UNIX_EPOCH
-            .checked_sub(core::time::Duration::new(
-                t.seconds.unsigned_abs(),
-                t.nanoseconds,
-            ))
+            .checked_sub(duration)
             .ok_or(ErrorCode::Overflow)
     }
 }
