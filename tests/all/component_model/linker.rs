@@ -167,6 +167,47 @@ fn linker_defines_unknown_imports_as_traps() -> Result<()> {
     Ok(())
 }
 
+/// Resource aliases must follow the real resource regardless of registration order.
+#[test]
+fn linker_defines_unknown_imports_as_traps_with_resource_aliases() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "types" (instance $types
+                (export "r" (type (sub resource)))
+            ))
+            (alias export $types "r" (type $r))
+            (import "uses" (instance
+                (alias outer 1 $r (type $r))
+                (export "r" (type (eq $r)))
+            ))
+        )"#,
+    )?;
+
+    for stub_first in [false, true] {
+        let mut linker = Linker::<()>::new(&engine);
+        linker.allow_shadowing(stub_first);
+
+        if stub_first {
+            linker.define_unknown_imports_as_traps(&component)?;
+        }
+
+        linker
+            .instance("types")?
+            .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+
+        if !stub_first {
+            linker.define_unknown_imports_as_traps(&component)?;
+        }
+
+        let mut store = Store::new(&engine, ());
+        linker.instantiate(&mut store, &component)?;
+    }
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn linker_defines_unknown_async_imports_as_traps() -> Result<()> {
     // `define_unknown_imports_as_traps` used to always stub with `func_new`,
