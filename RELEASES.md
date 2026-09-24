@@ -1,3 +1,18 @@
+## 36.0.16
+
+Released 2026-09-24.
+
+### Fixed
+
+* Fix fuel spend for dynamic record lifting.
+  [GHSA-jqpg-j7w6-42pr](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-jqpg-j7w6-42pr)
+
+* Fix host memory exhaustion on outgoing HTTP body write.
+  [GHSA-c9gc-w9vx-w86p](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-c9gc-w9vx-w86p)
+
+* wasmtime-wasi: Fix panic on out-of-range datetimes in WASI filesystem set-times, set-times-at.
+  [GHSA-j2g9-4prp-pf6h](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-j2g9-4prp-pf6h)
+
 ## 36.0.15
 
 Released 2026-09-10

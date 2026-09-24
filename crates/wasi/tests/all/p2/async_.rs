@@ -428,6 +428,12 @@ async fn preview2_file_read_write() {
         .await
         .unwrap()
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_file_settime_overflow() {
+    run(PREVIEW2_FILE_SETTIME_OVERFLOW_COMPONENT, |_| {})
+        .await
+        .unwrap()
+}
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_file_truncation_readonly() {

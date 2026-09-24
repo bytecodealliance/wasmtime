@@ -2684,3 +2684,26 @@ fn big_table_in_pooling_allocator() -> Result<()> {
     ])?;
     Ok(())
 }
+
+#[test]
+fn hostcall_fuel() -> Result<()> {
+    for func in ["f1()", "f2()", "f3()", "f4()", "f5()", "f6()", "f7()"] {
+        run_wasmtime(&[
+            "--invoke",
+            func,
+            "tests/all/cli_tests/hostcall_fuel.wat",
+            func,
+        ])?;
+        assert!(
+            run_wasmtime(&[
+                "-Shostcall-fuel=1000",
+                "--invoke",
+                func,
+                "tests/all/cli_tests/hostcall_fuel.wat",
+                func,
+            ])
+            .is_err()
+        );
+    }
+    Ok(())
+}

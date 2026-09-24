@@ -345,6 +345,10 @@ fn preview2_adapter_badfd() {
 fn preview2_file_read_write() {
     run(PREVIEW2_FILE_READ_WRITE_COMPONENT, |_| {}).unwrap()
 }
+#[test_log::test]
+fn preview2_file_settime_overflow() {
+    run(PREVIEW2_FILE_SETTIME_OVERFLOW_COMPONENT, |_| {}).unwrap()
+}
 
 #[test_log::test]
 fn preview1_file_truncation_readonly() {
