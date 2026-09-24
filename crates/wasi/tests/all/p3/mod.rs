@@ -189,6 +189,10 @@ async fn p3_file_write_blocking() -> wasmtime::Result<()> {
 async fn p3_file_write_chunked() -> wasmtime::Result<()> {
     run(P3_FILE_WRITE_CHUNKED_COMPONENT).await
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_file_settime_overflow() -> wasmtime::Result<()> {
+    run(P3_FILE_SETTIME_OVERFLOW_COMPONENT).await
+}
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_file_truncation_readonly() -> wasmtime::Result<()> {
