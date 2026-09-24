@@ -366,7 +366,12 @@ impl<T: 'static> Linker<T> {
             parent_instance: Option<&str>,
             types: &ComponentTypes,
         ) -> Result<()> {
-            // Record known resources before the lookup below skips them.
+            // The first definition of a resource needs to be present, but all other future
+            // references to the same resource are aliases of the original resource definition.
+            // Once a resource is visited here all future hits on the same resource shouldn't
+            // do anything else effectively. If item_name is already defined then we'll bail
+            // out in the below matches!, and otherwise a stub will be inserted, so no matter
+            // what the first resource is defined and all others will refer to that.
             if let TypeDef::Resource(ty) = item_def
                 && !resources.insert(types[*ty].unwrap_concrete_ty())?
             {
