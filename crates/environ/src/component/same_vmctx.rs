@@ -429,11 +429,8 @@ fn adapter_vmctx_key(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mutatis::{
-        Mutate,
-        check::{Check, CheckResult},
-        mutators as m,
-    };
+    use crate::property_check;
+    use mutatis::{Mutate, check::CheckResult, mutators as m};
 
     impl SameVmctxPartition {
         /// Are `a` and `b` in the same block of this partition?
@@ -864,7 +861,7 @@ mod tests {
             Ok(())
         });
 
-        Check::new().run_with(mutator, [Vec::new()], |bytes| {
+        property_check().run_with(mutator, [Vec::new()], |bytes| {
             let (a, b, c) = decode3(bytes);
 
             // Commutative.
@@ -932,7 +929,7 @@ mod tests {
             Ok(())
         });
 
-        Check::new().run_with(mutator, [Vec::new()], |bytes| {
+        property_check().run_with(mutator, [Vec::new()], |bytes| {
             let p = decode(bytes);
             for block in p.blocks(N) {
                 let least = *block.first().unwrap();
