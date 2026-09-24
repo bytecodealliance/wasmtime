@@ -398,6 +398,10 @@ fn p2_udp_send_too_much() {
         "unpermitted: argument exceeds permitted size"
     )
 }
+#[test_log::test]
+fn p2_file_settime_overflow() {
+    run(P2_FILE_SETTIME_OVERFLOW_COMPONENT, |_| {}).unwrap()
+}
 
 #[test_log::test]
 fn p1_file_truncation_readonly() {
