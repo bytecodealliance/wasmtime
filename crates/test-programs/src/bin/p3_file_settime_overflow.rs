@@ -36,10 +36,9 @@ impl p3::exports::wasi::cli::run::Guest for Component {
             .await
             .err()
             .expect("expect set_times with overflowing timestamp to error");
-        std::assert_matches!(
-            err,
-            ErrorCode::Overflow,
-            "expect set_times error to be an overflow"
+        assert!(
+            matches!(err, ErrorCode::Overflow,),
+            "expect set_times error to be an overflow",
         );
         Ok(())
     }
