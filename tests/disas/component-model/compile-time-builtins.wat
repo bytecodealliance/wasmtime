@@ -286,7 +286,7 @@
 ;;                                     jump block10
 ;;
 ;;                                 block10:
-;; @0579                               v4 = load.i64 notrap aligned readonly can_move region2 v0+136
+;; @0579                               v4 = load.i64 notrap aligned readonly can_move region2 v0+72
 ;;                                     v23 = load.i64 notrap aligned readonly can_move region3 v4+232
 ;;                                     v24 = load.i32 notrap aligned region4 v23
 ;;                                     trapz v24, user26
@@ -301,7 +301,7 @@
 ;;                                     jump block18
 ;;
 ;;                                 block18:
-;;                                     v30 = load.i64 notrap aligned readonly can_move region2 v4+200
+;;                                     v30 = load.i64 notrap aligned readonly can_move region2 v4+72
 ;;                                     v32 = load.i64 notrap aligned readonly can_move region0 v30+8
 ;;                                     v33 = load.i64 notrap aligned readonly can_move region6 v32+104
 ;;                                     v34 = iconst.i64 8
@@ -332,21 +332,6 @@
 ;;
 ;;                                 block21:
 ;; @0573                               v2 = iconst.i64 0
-;; @058c                               v10 = load.i64 notrap aligned readonly can_move region2 v0+72
-;;                                     v48 = load.i64 notrap aligned readonly can_move region3 v10+232
-;;                                     v50 = load.i64 notrap aligned readonly can_move region3 v10+208
-;;                                     v55 = load.i64 notrap aligned readonly can_move region2 v10+72
-;;                                     v57 = load.i64 notrap aligned readonly can_move region0 v55+8
-;;                                     v58 = load.i64 notrap aligned readonly can_move region6 v57+104
-;;                                     v131 = iconst.i64 8
-;;                                     v132 = iadd v58, v131  ; v131 = 8
-;; @0591                               v14 = load.i64 notrap aligned readonly can_move region2 v0+104
-;;                                     v86 = load.i64 notrap aligned readonly can_move region3 v14+232
-;;                                     v88 = load.i64 notrap aligned readonly can_move region3 v14+208
-;;                                     v95 = load.i64 notrap aligned readonly can_move region2 v14+168
-;;                                     v97 = load.i64 notrap aligned readonly can_move region0 v95+8
-;;                                     v98 = load.i64 notrap aligned readonly can_move region6 v97+104
-;;                                     v133 = iadd v98, v131  ; v131 = 8
 ;;                                     v127 = iconst.i8 1
 ;; @0595                               v15 = iconst.i64 1
 ;; @057d                               jump block2(v2)  ; v2 = 0
@@ -365,12 +350,12 @@
 ;;                                     jump block26
 ;;
 ;;                                 block26:
-;;                                     v49 = load.i32 notrap aligned region4 v48
+;;                                     v49 = load.i32 notrap aligned region4 v23
 ;;                                     trapz v49, user26
 ;;                                     jump block29
 ;;
 ;;                                 block29:
-;;                                     v51 = load.i32 notrap aligned region5 v50
+;;                                     v51 = load.i32 notrap aligned region5 v25
 ;;                                     jump block32
 ;;
 ;;                                 block32:
@@ -380,7 +365,8 @@
 ;;                                     jump block39
 ;;
 ;;                                 block39:
-;;                                     v62 = load.i64 notrap aligned region7 v132
+;;                                     v131 = iadd.i64 v33, v34  ; v34 = 8
+;;                                     v62 = load.i64 notrap aligned region7 v131
 ;;                                     jump block40
 ;;
 ;;                                 block40:
@@ -398,7 +384,7 @@
 ;;                                     jump block43
 ;;
 ;;                                 block43:
-;;                                     v71 = load.i64 notrap aligned region7 v58
+;;                                     v71 = load.i64 notrap aligned region7 v33
 ;;                                     jump block44
 ;;
 ;;                                 block44:
@@ -431,12 +417,12 @@
 ;;                                     jump block51
 ;;
 ;;                                 block51:
-;;                                     v87 = load.i32 notrap aligned region4 v86
+;;                                     v87 = load.i32 notrap aligned region4 v23
 ;;                                     trapz v87, user26
 ;;                                     jump block54
 ;;
 ;;                                 block54:
-;;                                     v89 = load.i32 notrap aligned region5 v88
+;;                                     v89 = load.i32 notrap aligned region5 v25
 ;;                                     jump block57
 ;;
 ;;                                 block57:
@@ -446,15 +432,12 @@
 ;;                                     jump block64
 ;;
 ;;                                 block64:
-;;                                     v102 = load.i64 notrap aligned region7 v133
 ;;                                     jump block65
 ;;
 ;;                                 block65:
 ;;                                     jump block66
 ;;
 ;;                                 block66:
-;;                                     v103 = icmp.i64 ult v6, v102
-;;                                     trapz v103, user12
 ;;                                     jump block61
 ;;
 ;;                                 block61:
@@ -464,17 +447,15 @@
 ;;                                     jump block68
 ;;
 ;;                                 block68:
-;;                                     v111 = load.i64 notrap aligned region7 v98
 ;;                                     jump block69
 ;;
 ;;                                 block69:
 ;;                                     jump block70
 ;;
 ;;                                 block70:
-;;                                     v134 = iconst.i8 1
-;;                                     v135 = iadd.i8 v74, v134  ; v134 = 1
-;;                                     v112 = iadd.i64 v111, v6
-;;                                     store notrap aligned region7 v135, v112
+;;                                     v132 = iconst.i8 1
+;;                                     v133 = iadd.i8 v74, v132  ; v132 = 1
+;;                                     store notrap aligned region7 v133, v72
 ;;                                     jump block58
 ;;
 ;;                                 block58:
@@ -493,7 +474,7 @@
 ;;                                     jump block71
 ;;
 ;;                                 block71:
-;;                                     v136 = iconst.i64 1
-;;                                     v137 = iadd.i64 v6, v136  ; v136 = 1
-;; @059a                               jump block2(v137)
+;;                                     v134 = iconst.i64 1
+;;                                     v135 = iadd.i64 v6, v134  ; v134 = 1
+;; @059a                               jump block2(v135)
 ;; }

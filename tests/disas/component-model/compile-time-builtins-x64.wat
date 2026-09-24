@@ -176,52 +176,37 @@
 ;; wasm[1]::function[3]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    0x88(%rdi), %rax
-;;       movq    0xe8(%rax), %rcx
-;;       movl    (%rcx), %ecx
-;;       testl   %ecx, %ecx
-;;       je      0x1c2
-;;  11c: movq    0xc8(%rax), %rax
-;;       movq    8(%rax), %rax
-;;       movq    0x68(%rax), %rax
-;;       movq    8(%rax), %rax
-;;       xorq    %rcx, %rcx
-;;       movq    0x48(%rdi), %rsi
-;;       movq    0xe8(%rsi), %rdx
-;;       movq    0x48(%rsi), %rsi
-;;       movq    8(%rsi), %rsi
-;;       movq    0x68(%rsi), %rsi
-;;       movq    0x68(%rdi), %r8
-;;       movq    0xe8(%r8), %rdi
-;;       movq    0xa8(%r8), %r8
-;;       movq    8(%r8), %r8
-;;       movq    0x68(%r8), %r8
-;;       cmpq    %rax, %rcx
-;;       jae     0x1bd
-;;  16c: movl    (%rdx), %r9d
+;;       movq    0x48(%rdi), %rcx
+;;       movq    0xe8(%rcx), %rax
+;;       movl    (%rax), %edx
+;;       testl   %edx, %edx
+;;       je      0x179
+;;  119: movq    0x48(%rcx), %rcx
+;;       movq    8(%rcx), %rcx
+;;       movq    0x68(%rcx), %rcx
+;;       movq    8(%rcx), %rdx
+;;       xorq    %rsi, %rsi
+;;       cmpq    %rdx, %rsi
+;;       jae     0x174
+;;  135: movl    (%rax), %edi
+;;       testl   %edi, %edi
+;;       je      0x17b
+;;  13f: movq    8(%rcx), %rdi
+;;       cmpq    %rdi, %rsi
+;;       jae     0x17d
+;;  14c: movq    (%rcx), %rdi
+;;       movzbq  (%rdi, %rsi), %r8
+;;       movl    (%rax), %r9d
 ;;       testl   %r9d, %r9d
-;;       je      0x1c4
-;;  178: movq    8(%rsi), %r9
-;;       cmpq    %r9, %rcx
-;;       jae     0x1c6
-;;  185: movq    (%rsi), %r9
-;;       movzbq  (%r9, %rcx), %r9
-;;       movl    (%rdi), %r10d
-;;       testl   %r10d, %r10d
-;;       je      0x1c8
-;;  199: movq    8(%r8), %r10
-;;       cmpq    %r10, %rcx
-;;       jae     0x1ca
-;;  1a6: movq    (%r8), %r10
-;;       addb    $1, %r9b
-;;       movb    %r9b, (%r10, %rcx)
-;;       addq    $1, %rcx
-;;       jmp     0x163
-;;  1bd: movq    %rbp, %rsp
+;;       je      0x17f
+;;  160: addb    $1, %r8b
+;;       movb    %r8b, (%rdi, %rsi)
+;;       addq    $1, %rsi
+;;       jmp     0x12c
+;;  174: movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  1c2: ud2
-;;  1c4: ud2
-;;  1c6: ud2
-;;  1c8: ud2
-;;  1ca: ud2
+;;  179: ud2
+;;  17b: ud2
+;;  17d: ud2
+;;  17f: ud2
