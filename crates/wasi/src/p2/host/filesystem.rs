@@ -1067,8 +1067,16 @@ fn systemtimespec_from(t: types::NewTimestamp) -> FsResult<Option<std::time::Sys
 
 fn systemtime_from(t: wall_clock::Datetime) -> FsResult<std::time::SystemTime> {
     use std::time::{Duration, SystemTime};
+    // Catch nanoseconds-into-seconds Overflow error explicitly:
+    // unfortunately, Duration::new panics when input overflows
+    let duration = Duration::new(
+        t.seconds
+            .checked_add(u64::from(t.nanoseconds / 1_000_000_000))
+            .ok_or(ErrorCode::Overflow)?,
+        t.nanoseconds % 1_000_000_000,
+    );
     SystemTime::UNIX_EPOCH
-        .checked_add(Duration::new(t.seconds, t.nanoseconds))
+        .checked_add(duration)
         .ok_or_else(|| ErrorCode::Overflow.into())
 }
 
