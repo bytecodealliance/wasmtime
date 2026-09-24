@@ -237,12 +237,9 @@ impl<K: EntityRef + ReservedValue> UnionFind<K> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::property_check;
     use cranelift_entity::entity_impl;
-    use mutatis::{
-        Mutate,
-        check::{Check, CheckResult},
-        mutators as m,
-    };
+    use mutatis::{Mutate, check::CheckResult, mutators as m};
     use std::collections::BTreeSet;
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
@@ -376,20 +373,20 @@ mod tests {
     /// must work for elements far beyond any that were ever unioned.
     #[test]
     fn sparse_keys() {
+        const HIGH: E = E(if cfg!(miri) { 1_000 } else { 1_000_000 });
+        const LOW: E = E(HIGH.0 / 1_000);
+
         let mut uf = UnionFind::new();
-        uf.union(E::from_u32(1_000), E::from_u32(1_000_000));
-        assert!(uf.same_set(E::from_u32(1_000), E::from_u32(1_000_000)));
+        uf.union(LOW, HIGH);
+        assert!(uf.same_set(LOW, HIGH));
         assert_eq!(
-            uf.set_members(E::from_u32(1_000)).collect::<BTreeSet<_>>(),
-            BTreeSet::from([E::from_u32(1_000), E::from_u32(1_000_000)])
+            uf.set_members(LOW).collect::<BTreeSet<_>>(),
+            BTreeSet::from([LOW, HIGH])
         );
-        assert_eq!(uf.set_min(E::from_u32(1_000_000)), E::from_u32(1_000));
-        assert!(!uf.contains(E::from_u32(7)));
-        assert_eq!(
-            uf.set_members(E::from_u32(7)).collect::<Vec<_>>(),
-            vec![E::from_u32(7)]
-        );
-        assert_eq!(uf.set_min(E::from_u32(7)), E::from_u32(7));
+        assert_eq!(uf.set_min(HIGH), LOW);
+        assert!(!uf.contains(E(7)));
+        assert_eq!(uf.set_members(E(7)).collect::<Vec<_>>(), vec![E(7)]);
+        assert_eq!(uf.set_min(E(7)), E(7));
     }
 
     /// Drive random `union` sequences and check every query against the
@@ -405,7 +402,7 @@ mod tests {
             Ok(())
         });
 
-        Check::new().run_with(
+        property_check().run_with(
             mutator,
             [Vec::new()],
             |unions: &Vec<(u8, u8)>| -> Result<(), String> {
