@@ -545,6 +545,9 @@ impl BodyWriteStream {
 impl OutputStream for BodyWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let len = bytes.len();
+        if len > self.write_budget {
+            return Err(StreamError::Trap(format_err!("write exceeded budget")));
+        }
         match self.writer.try_send(bytes) {
             // If the message was sent then it's queued up now in hyper to get
             // received.

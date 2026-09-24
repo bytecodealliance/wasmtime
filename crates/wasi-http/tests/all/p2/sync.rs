@@ -107,8 +107,21 @@ fn p2_http_outbound_request_missing_path_and_query() -> Result<()> {
         &server,
     )
 }
-
 #[test_log::test]
 fn p2_http_named_imports() {
     // named imports are intentionally not implemented for sync at this time
+}
+
+#[test_log::test]
+fn p2_http_outbound_body_write_backpressure() -> Result<()> {
+    let server = Server::http1(0)?;
+    let e = run(P2_HTTP_OUTBOUND_BODY_WRITE_BACKPRESSURE_COMPONENT, &server)
+        .err()
+        .expect("guest execution should trap");
+    let e_debug = format!("{e:?}");
+    assert!(
+        e_debug.contains("write exceeded budget"),
+        "expected trap to contain 'write exceeded budget': {e:?}"
+    );
+    Ok(())
 }
