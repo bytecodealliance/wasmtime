@@ -152,6 +152,74 @@ mod tests {
         config
     }
 
+    /// A module with a memory whose first page carries data from the module,
+    /// so a slot that is reset incorrectly is visible as wrong bytes rather
+    /// than only as a metric.
+    const TEST_MEMORY_MODULE: &str = r#"
+        (module
+            (memory (export "memory") 1)
+            (data (i32.const 0) "usai")
+        )
+    "#;
+
+    /// `linear_memory_keep_resident` trades memory for page faults, and the
+    /// trade is fixed when the `Engine` is built — so an embedder could only
+    /// choose "always keep" or "never keep", never "keep it while the load
+    /// lasts". `Engine::release_idle_pool_memory` is the third choice.
+    ///
+    /// The second half of this test is the one that matters: releasing the
+    /// resident pages must not change what the next instantiation reads.
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn release_idle_pool_memory_frees_unused_slots() -> Result<()> {
+        let mut pool = small_pool_config();
+        pool.linear_memory_keep_resident(1 << 16);
+        let engine = Engine::new(&Config::new().allocation_strategy(pool))?;
+        let metrics = engine.pooling_allocator_metrics().unwrap();
+        let module = Module::new(&engine, TEST_MEMORY_MODULE)?;
+
+        // Dirty a slot and give it back: the pool keeps part of it resident.
+        {
+            let mut store = Store::new(&engine, ());
+            let instance = crate::Instance::new(&mut store, &module, &[])?;
+            let memory = instance.get_memory(&mut store, "memory").unwrap();
+            memory.data_mut(&mut store)[4..8].copy_from_slice(b"soak");
+        }
+
+        // Nothing is resident on platforms whose decommit resets to zero
+        // (`DecommitBehavior::Zero`), where a freed slot keeps nothing. There
+        // is then nothing for this to release, and the rest of the test is
+        // about the half that is portable: the contents.
+        let resident = metrics.unused_memory_bytes_resident();
+        if resident > 0 {
+            let released = engine.release_idle_pool_memory();
+            assert!(
+                released > 0,
+                "{resident} bytes were resident and none were released"
+            );
+            assert_eq!(
+                metrics.unused_memory_bytes_resident(),
+                0,
+                "a released slot still reports resident bytes"
+            );
+            // The slot is allocatable again, not lost.
+            assert_eq!(metrics.unused_warm_memories(), 1);
+        }
+
+        // And the slot still reads as its module says it should: the region
+        // that was released is restored by the mapping, and the write from
+        // the previous instance is gone because the slot was reset when it
+        // was freed — not because it was released.
+        let mut store = Store::new(&engine, ());
+        let instance = crate::Instance::new(&mut store, &module, &[])?;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
+        assert_eq!(&memory.data(&store)[..8], b"usai\0\0\0\0");
+
+        // Releasing with nothing unused is a no-op rather than an error.
+        assert_eq!(engine.release_idle_pool_memory(), 0);
+        Ok(())
+    }
+
     #[test]
     #[cfg_attr(miri, ignore)]
     fn smoke_test() {

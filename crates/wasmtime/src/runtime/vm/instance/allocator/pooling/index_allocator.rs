@@ -584,6 +584,45 @@ impl ModuleAffinityIndexAllocator {
     ///
     /// Note that this acquires a `Mutex` for synchronization at this time to
     /// read the internal counter information.
+    /// See [`super::index_allocator::IndexAllocator::take_resident_warm_slots`].
+    ///
+    /// Each shard is locked in turn rather than all at once: a caller is
+    /// reclaiming memory, not taking a snapshot, and holding every shard's
+    /// lock would stall allocation across the whole pool.
+    pub(crate) fn take_resident_warm_slots(&self) -> Vec<(SlotId, usize)> {
+        let mut taken = Vec::new();
+        for (shard_index, shard) in self.shards.iter().enumerate() {
+            let mut inner = shard.0.lock().unwrap();
+
+            // Walk the warm list first and only then remove, because
+            // `remove` unlinks the very entries this walk is following.
+            let mut resident = Vec::new();
+            let mut next = inner.warm.head;
+            while let Some(slot) = next {
+                let unused = match &inner.slot_state[slot.index()] {
+                    SlotState::UnusedWarm(u) => *u,
+                    // The warm list only contains warm slots.
+                    _ => unreachable!(),
+                };
+                next = unused.unused_list_link.next;
+                if unused.bytes_resident > 0 {
+                    resident.push((slot, unused.bytes_resident));
+                }
+            }
+
+            for (slot, bytes_resident) in resident {
+                inner.remove(slot);
+                inner.unused_bytes_resident -= bytes_resident;
+                inner.slot_state[slot.index()] = SlotState::Used(None);
+                taken.push((
+                    self.global_id(ShardId::from_index(shard_index), slot),
+                    bytes_resident,
+                ));
+            }
+        }
+        taken
+    }
+
     pub fn unused_bytes_resident(&self) -> usize {
         self.shards
             .iter()

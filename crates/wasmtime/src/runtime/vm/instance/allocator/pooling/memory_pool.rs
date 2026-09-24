@@ -61,6 +61,7 @@ use crate::runtime::vm::{
     CompiledModuleId, InstanceAllocationRequest, Memory, MemoryBase, MemoryImageSlot, Mmap,
     MmapOffset, mmap::AlignedLength,
 };
+use crate::vm::sys::vm::{decommit_pages, iovec};
 use crate::{
     Enabled,
     runtime::vm::mpk::{self, ProtectionKey, ProtectionMask},
@@ -576,6 +577,66 @@ impl MemoryPool {
                 }
             }
         }
+    }
+
+    /// Releases the memory this pool is keeping resident for slots that are
+    /// not in use, returning how many bytes were released.
+    ///
+    /// `linear_memory_keep_resident` trades memory for page faults: after a
+    /// slot is freed, up to that much of it is reset in place and left
+    /// resident so the next instantiation does not fault it back in. That is
+    /// the right trade while slots are being reused, and the wrong one for a
+    /// slot nothing has touched in a long time — and because the setting is
+    /// fixed when the `Engine` is built, an embedder has had no way to say
+    /// "keep it while the load lasts".
+    ///
+    /// Nothing unique is lost. The resident region holds exactly what the
+    /// mapping restores on its own: the image for a slot that has one (it was
+    /// written back by the reset) and zeros for a slot that does not. On a
+    /// platform whose `decommit_behavior` is `RestoreOriginalMapping` the
+    /// decommit puts back those same contents at the cost of a fault, which
+    /// is the trade the rest of the slot already makes.
+    ///
+    /// Slots are taken out of the free lists before their memory is released
+    /// and returned afterwards, so nothing can allocate a slot while it is
+    /// being decommitted — the same order `DecommitQueue::flush` uses.
+    pub fn release_resident_unused_memory(&self) -> usize {
+        let mut released = 0;
+        for (stripe_index, stripe) in self.stripes.iter().enumerate() {
+            let taken = stripe.allocator.take_resident_warm_slots();
+            if taken.is_empty() {
+                continue;
+            }
+
+            let mut iov = Vec::with_capacity(taken.len());
+            for (id, bytes_resident) in &taken {
+                let index = StripedAllocationIndex(id.0)
+                    .as_unstriped_slot_index(stripe_index, self.stripes.len());
+                iov.push(iovec {
+                    iov_base: self.get_base(index).as_mut_ptr().cast(),
+                    iov_len: *bytes_resident,
+                });
+            }
+
+            // SAFETY: every region here belongs to a slot this loop has taken
+            // out of the free list, so it is not in use and cannot be handed
+            // out until it is freed below.
+            let decommitted = unsafe { decommit_pages(&iov) }.is_ok();
+
+            // A failed decommit leaves the pages resident with the contents
+            // they had, which is a correct state — the slots go back
+            // reporting the same bytes they did before, and nothing is lost
+            // but the reclaim.
+            for (id, bytes_resident) in taken {
+                if decommitted {
+                    released += bytes_resident;
+                    stripe.allocator.free(id, 0);
+                } else {
+                    stripe.allocator.free(id, bytes_resident);
+                }
+            }
+        }
+        released
     }
 
     fn get_base(&self, allocation_index: MemoryAllocationIndex) -> MmapOffset {

@@ -808,6 +808,51 @@ impl Engine {
         crate::runtime::vm::PoolingAllocatorMetrics::new(self)
     }
 
+    /// Releases memory the pooling allocator is keeping resident for slots
+    /// that are not currently in use, returning how many bytes were released.
+    ///
+    /// `PoolingAllocationConfig::linear_memory_keep_resident` trades memory
+    /// for page faults: after a slot is freed, up to that much of it is reset
+    /// in place and left resident so the next instantiation does not fault it
+    /// back in. That is the right trade while slots are being reused every
+    /// few milliseconds, and the wrong one for a slot nothing has touched in
+    /// a long time — resident memory then follows the peak concurrency a
+    /// process has ever seen rather than its current load. Because the
+    /// setting is fixed when the [`Engine`] is built, an embedder could
+    /// previously only choose "always keep" or "never keep".
+    ///
+    /// This is that third choice, driven by the embedder: an embedder that
+    /// knows when it has gone idle can call this from that path, and nothing
+    /// inside Wasmtime needs a timer. The next instantiation in those slots
+    /// re-faults their pages; nothing else is affected, and the contents are
+    /// unchanged — the resident region holds exactly what the mapping
+    /// restores on its own.
+    ///
+    /// Returns 0 if this engine is not using the pooling allocator, or if
+    /// nothing was resident to release.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use wasmtime::{Config, Engine, InstanceAllocationStrategy};
+    /// # fn main() -> wasmtime::Result<()> {
+    /// let mut config = Config::new();
+    /// config.allocation_strategy(InstanceAllocationStrategy::pooling());
+    /// let engine = Engine::new(&config)?;
+    ///
+    /// // ... once the embedder knows it is idle ...
+    /// let _bytes = engine.release_idle_pool_memory();
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "pooling-allocator")]
+    pub fn release_idle_pool_memory(&self) -> usize {
+        match self.allocator().as_pooling() {
+            Some(pool) => pool.release_resident_unused_memory(),
+            None => 0,
+        }
+    }
+
     pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
         let r: &(dyn crate::runtime::vm::InstanceAllocator + Send + Sync) =
             self.inner.allocator.as_ref();
