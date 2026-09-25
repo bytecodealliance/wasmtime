@@ -43,7 +43,7 @@ function singleBucketCrateName(entry) {
   return typeof entry === "string" ? entry : entry.crate;
 }
 
-const ubuntu = 'ubuntu-24.04';
+const ubuntu = 'ubuntu-26.04';
 const windows = 'windows-2025';
 const macos = 'macos-15';
 
