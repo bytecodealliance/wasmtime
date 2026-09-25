@@ -273,9 +273,16 @@ impl LastStore {
 /// The instructions named here (`regions[r]` and `last_fence`) are *not*
 /// guaranteed to still be in the layout (unlike `mem_values`, this state does
 /// not maintain that invariant). A slot can name a store we already removed
-/// because, e.g., `block_input` snapshots are computed once up front (in
-/// `compute_block_input_states`) and can name a store a later-visited block
-/// deletes.
+/// because `block_input` snapshots are computed once up front (in
+/// `compute_block_input_states`) and can name a dead store that a later-visited
+/// block eliminates.
+///
+/// Note that this is only a hazard when processing blocks that read their state
+/// from the initial snapshot. A block with exactly one reachable predecessor
+/// instead inherits its predecessor's live exit state (see
+/// `AliasAnalysis::push_scope` and `AliasAnalysis::finish_scope`), which names
+/// only stores that are still in the layout; joins are the remaining source of
+/// stale instructions here.
 ///
 /// We tolerate this, rather than enforce the invariant, because enforcing it
 /// would mean repairing a precomputed fixpoint's references across
@@ -793,20 +800,32 @@ pub struct AliasAnalysis<'a> {
     /// its known value.
     mem_values: FxHashMap<MemoryLoc, KnownValue>,
 
-    /// The extent token for each scope currently on the dominator-tree path
-    /// we are walking.
-    ///
-    /// See `MemoryLoc::extent` for details.
-    extents: SmallVec<[u32; 8]>,
+    /// The scopes currently on the dominator-tree path we are walking.
+    scopes: SmallVec<[Scope; 8]>,
 
     /// Counter for minting fresh extent tokens.
     next_extent: u32,
+}
 
-    /// The blocks whose scopes are currently on the stack, so that we can
-    /// assert that `push_scope` and `pop_scope` really are called in
-    /// dominator-tree pre-order.
-    #[cfg(debug_assertions)]
-    scope_blocks: SmallVec<[Block; 8]>,
+/// One block's scope on the dominator-tree path currently being walked.
+struct Scope {
+    /// The block whose scope this is.
+    block: Block,
+
+    /// The extent token for this scope.
+    ///
+    /// See `MemoryLoc::extent` for details.
+    extent: u32,
+
+    /// This block's last-store state on exit, once we have finished walking its
+    /// instructions.
+    ///
+    /// This is `None` between `push_scope` and `finish_scope`, and `Some` from
+    /// `finish_scope` until this scope is popped. Therefore it is always `Some`
+    /// for every scope strictly below the top of the stack, since we always
+    /// finish a block before descending into any of its dominator-tree
+    /// children.
+    exit_state: Option<LastStores>,
 }
 
 impl<'a> AliasAnalysis<'a> {
@@ -821,10 +840,8 @@ impl<'a> AliasAnalysis<'a> {
             observed_stores: FxHashMap::default(),
             block_input: FxHashMap::default(),
             mem_values: FxHashMap::default(),
-            extents: SmallVec::new(),
+            scopes: SmallVec::new(),
             next_extent: 0,
-            #[cfg(debug_assertions)]
-            scope_blocks: SmallVec::new(),
         };
 
         analysis.compute_block_input_states(func);
@@ -1053,48 +1070,94 @@ impl<'a> AliasAnalysis<'a> {
     /// block that this one does not dominate.
     pub fn push_scope(&mut self, cfg: &ControlFlowGraph, block: Block) -> MemoryState {
         debug_assert!(cfg.is_valid());
+        debug_assert_eq!(
+            self.domtree.idom(block),
+            self.scopes.last().map(|s| s.block),
+            "`push_scope` must be called in dominator-tree pre-order",
+        );
 
-        #[cfg(debug_assertions)]
-        {
-            debug_assert_eq!(
-                self.domtree.idom(block),
-                self.scope_blocks.last().copied(),
-                "`push_scope` must be called in dominator-tree pre-order",
-            );
-            self.scope_blocks.push(block);
-        }
+        // A block with exactly one reachable predecessor sees exactly the
+        // memory that its predecessor left behind.
+        let only_pred = self.single_reachable_pred(cfg, block);
 
-        let extent = match self.extents.last() {
-            // A block with exactly one reachable predecessor sees exactly the
-            // memory that its predecessor left behind, and so it continues its
-            // predecessor's extent.
-            Some(parent) if self.single_reachable_pred(cfg, block).is_some() => *parent,
+        let (stores, extent) = match (only_pred, self.scopes.last()) {
+            // With exactly one reachable predecessor, this block's entry state
+            // is exactly that predecessor's exit state, which we just finished
+            // computing and is strictly more precise than the `block_input`
+            // snapshot: that snapshot describes the pre-optimization function,
+            // and so it can still name dead stores we have since eliminated.
+            //
+            // And, because it sees exactly the predecessor's memory state, it
+            // also continues that predecessor's extent.
+            (Some(only_pred), Some(parent)) if parent.block == only_pred => {
+                // A sole predecessor must be this block's immediate dominator.
+                // Since the scope stack is all of our ordered dominators, and
+                // because no other dominator sits between a block and its
+                // immediate dominator, the top of the scope stack is both this
+                // block's sole predecessor and immediate dominator.
+                debug_assert_eq!(self.domtree.idom(block), Some(parent.block));
 
-            // Anything else (e.g. a control-flow join or the entry block)
-            // begins a new extent.
+                let stores = parent
+                    .exit_state
+                    .as_ref()
+                    .expect("`finish_scope` is always called before descending into a child scope")
+                    .clone();
+                (stores, parent.extent)
+            }
+
+            // Anything else (e.g. a control-flow join, the entry block) falls
+            // back to the initial fixpoint's snapshot, and begins a new extent.
             _ => {
                 self.next_extent += 1;
-                self.next_extent
+                (self.block_input_stores(block), self.next_extent)
             }
         };
-        self.extents.push(extent);
+
+        self.scopes.push(Scope {
+            block,
+            extent,
+            exit_state: None,
+        });
 
         MemoryState {
-            stores: self.block_input_stores(block),
+            stores,
             extent,
             #[cfg(debug_assertions)]
             current_block: block,
         }
     }
 
+    /// Record the given block's exit state, so that a successor for which it is
+    /// the sole predecessor can inherit that state.
+    ///
+    /// Callers must call this exactly once per `push_scope`, after walking the
+    /// block's instructions and before visiting any of its dominator-tree
+    /// children.
+    pub fn finish_scope(&mut self, block: Block, state: MemoryState) {
+        let scope = self
+            .scopes
+            .last_mut()
+            .expect("`finish_scope` without a matching `push_scope`");
+
+        debug_assert_eq!(
+            scope.block, block,
+            "`finish_scope` must be called on the block most recently passed to `push_scope`",
+        );
+
+        #[cfg(debug_assertions)]
+        debug_assert_eq!(state.current_block, block);
+
+        debug_assert!(
+            scope.exit_state.is_none(),
+            "`finish_scope` must be called at most once per `push_scope`",
+        );
+
+        scope.exit_state = Some(state.stores);
+    }
+
     /// Leave the scope of the block most recently passed to `push_scope`.
     pub fn pop_scope(&mut self) {
-        #[cfg(debug_assertions)]
-        self.scope_blocks
-            .pop()
-            .expect("`pop_scope` without a matching `push_scope`");
-
-        self.extents
+        self.scopes
             .pop()
             .expect("`pop_scope` without a matching `push_scope`");
     }
@@ -1445,6 +1508,8 @@ impl<'a> AliasAnalysis<'a> {
                     }
                 }
             }
+
+            self.finish_scope(block, state);
 
             let children = SmallVec::<[Block; 8]>::from_iter(domtree.children(block));
             stack.extend(children.into_iter().rev().map(BlockStackEntry::Visit));
