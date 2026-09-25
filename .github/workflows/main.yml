@@ -75,7 +75,7 @@ jobs:
         git ls-files '*.h' '*.c' '*.cpp' '*.hh' '*.cc' | \
           grep -v wasmtime-platform.h | \
           grep -v wasm.h | \
-          xargs clang-format-18 --dry-run --Werror --verbose
+          xargs clang-format-22 --dry-run --Werror --verbose
     # Make sure our `clangformat.sh` helper script keeps running and stays
     # in-sync with the previous check.
     - run: crates/c-api/clangformat.sh

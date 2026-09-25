@@ -52,7 +52,7 @@ __attribute__((weak)) extern void __unw_add_dynamic_fde(uintptr_t);
 #ifndef CFG_TARGET_OS_macos
 __attribute__((weak)) extern void __unw_add_dynamic_eh_frame_section(uintptr_t);
 __attribute__((weak)) extern void
-    __unw_remove_dynamic_eh_frame_section(uintptr_t);
+__unw_remove_dynamic_eh_frame_section(uintptr_t);
 #endif
 
 struct Libunwind VERSIONED_SYMBOL(wasmtime_libunwind)(void) {
