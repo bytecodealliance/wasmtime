@@ -544,6 +544,8 @@ impl<'a, 'data> Translator<'a, 'data> {
 
         self.partition_adapter_modules(&mut component);
 
+        analyze_same_vmctx_imports(&component, &mut self.static_modules);
+
         let translation =
             component.finish(self.types.types_mut_for_inlining(), self.result.types_ref())?;
 

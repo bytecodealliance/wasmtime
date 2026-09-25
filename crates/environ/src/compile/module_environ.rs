@@ -13,7 +13,7 @@ use crate::{
     WasmValType, WasmparserTypeConverter,
 };
 use alloc::borrow::Cow;
-use cranelift_entity::packed_option::ReservedValue;
+use cranelift_entity::packed_option::{PackedOption, ReservedValue};
 use cranelift_entity::{EntitySet, SecondaryMap};
 use std::collections::HashMap;
 use std::mem;
@@ -128,6 +128,19 @@ pub struct ModuleTranslation<'data> {
     /// `FuncKey::DefinedWasmFunction(..)`s, `FuncKey::Intrinsic(..)`s, and
     /// `FuncKey::FactInlineIntrinsic`s.
     pub known_imported_functions: SecondaryMap<FuncIndex, Option<KnownFunc>>,
+
+    /// For each function import, the function import whose `vmctx` this one
+    /// is statically guaranteed to always share, when that is not itself.
+    ///
+    /// Function imports that always resolve to functions from the same
+    /// instance hold the same `vmctx` pointer in their `VMFunctionImport`
+    /// slots, so they can all load the callee `vmctx` from a single slot and
+    /// let GVN collapse what would otherwise be many identical loads into one.
+    ///
+    /// No value means this import must use its own slot.
+    ///
+    /// Only filled in for modules compiled as part of a component.
+    pub imported_func_vmctx_representative: SecondaryMap<FuncIndex, PackedOption<FuncIndex>>,
 
     /// For each imported global, memory, or table, the single statically-known
     /// defined entity that always satisfies that import, if any.
@@ -313,6 +326,7 @@ impl<'data> ModuleTranslation<'data> {
             wasm_module_offset: 0,
             function_body_inputs: PrimaryMap::default(),
             known_imported_functions: SecondaryMap::default(),
+            imported_func_vmctx_representative: SecondaryMap::default(),
             known_imported_globals: SecondaryMap::default(),
             known_imported_memories: SecondaryMap::default(),
             known_imported_tables: SecondaryMap::default(),

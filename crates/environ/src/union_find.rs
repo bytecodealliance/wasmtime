@@ -12,8 +12,6 @@
 //!   `union`. All others are implicit singletons that this structure never
 //!   allocates for or visits.
 
-#![cfg_attr(not(test), expect(unused, reason = "used by following commits"))]
-
 use crate::prelude::*;
 use core::fmt;
 use cranelift_entity::{

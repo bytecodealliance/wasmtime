@@ -69,6 +69,8 @@ mod compiler;
 #[cfg(feature = "compile")]
 pub mod dfg;
 #[cfg(feature = "compile")]
+mod same_vmctx;
+#[cfg(feature = "compile")]
 mod thread_transparency;
 #[cfg(feature = "compile")]
 mod translate;
@@ -76,6 +78,8 @@ mod translate;
 mod types_builder;
 #[cfg(feature = "compile")]
 pub use self::compiler::*;
+#[cfg(feature = "compile")]
+pub use self::same_vmctx::analyze_same_vmctx_imports;
 #[cfg(feature = "compile")]
 pub use self::thread_transparency::transparent_adapters;
 #[cfg(feature = "compile")]
