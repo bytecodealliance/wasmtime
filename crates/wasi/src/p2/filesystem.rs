@@ -280,7 +280,10 @@ const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 impl OutputStream for FileOutputStream {
     fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
         match self.state {
-            OutputState::Ready => {}
+            OutputState::Ready if buf.len() <= FILE_WRITE_CAPACITY => {}
+            OutputState::Ready => {
+                return Err(StreamError::Trap(format_err!("write exceeded budget")));
+            }
             OutputState::Closed => return Err(StreamError::Closed),
             OutputState::Waiting(_) | OutputState::Error(_) => {
                 // a write is pending - this call was not permitted
