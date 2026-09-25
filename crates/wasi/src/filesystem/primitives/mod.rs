@@ -8,6 +8,7 @@
 #![allow(clippy::useless_conversion, reason = "typedefs are platform-specific")]
 
 use std::path::{Component, Path, PathBuf};
+use std::time::SystemTime;
 use std::{fs, io};
 
 mod file_type;
@@ -44,6 +45,27 @@ pub(crate) use sys::open_ambient_dir;
 pub(crate) use sys::read_dir;
 pub(crate) use sys::set_times;
 pub(crate) use sys::set_times_nofollow;
+
+/// Set the timestamps of the file or directory that `fd` itself refers to.
+pub(crate) fn set_times_on_fd(
+    fd: &fs::File,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
+) -> io::Result<()> {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if sys::set_times_fast(fd, atime, mtime)? {
+        return Ok(());
+    }
+
+    let mut times = fs::FileTimes::new();
+    if let Some(atime) = atime {
+        times = times.set_accessed(atime);
+    }
+    if let Some(mtime) = mtime {
+        times = times.set_modified(mtime);
+    }
+    fd.set_times(times)
+}
 
 pub(crate) fn open(start: &fs::File, path: &Path, options: &OpenOptions) -> io::Result<fs::File> {
     #[cfg(any(

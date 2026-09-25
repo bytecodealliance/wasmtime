@@ -114,6 +114,28 @@ unsafe fn test_fd_filestat_set_times(dir_fd: wasip1::Fd, rights: wasip1::Rights)
     wasip1::fd_close(file_fd).expect("failed to close fd");
     wasip1::path_unlink_file(dir_fd, "file").expect("failed to remove file");
 }
+unsafe fn test_fd_filestat_set_times_on_directory(dir_fd: wasip1::Fd) {
+    // Setting times on the directory descriptor itself has to work too,
+    // because preopened directories are held open with `O_PATH`.
+    let stat = wasip1::fd_filestat_get(dir_fd).expect("failed filestat on dir");
+    let new_mtim = Duration::from_nanos(stat.mtim) + Duration::from_secs(100);
+
+    wasip1::fd_filestat_set_times(
+        dir_fd,
+        new_mtim.as_nanos() as u64,
+        new_mtim.as_nanos() as u64,
+        wasip1::FSTFLAGS_MTIM,
+    )
+    .expect("fd_filestat_set_times on a directory");
+
+    let stat = wasip1::fd_filestat_get(dir_fd).expect("failed filestat on dir");
+    assert_fs_time_eq!(
+        Duration::from_nanos(stat.mtim),
+        new_mtim,
+        "dir mtim should change"
+    );
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -148,4 +170,10 @@ fn main() {
         unsafe { test_fd_filestat_set_times(dir_fd, wasip1::RIGHTS_FD_READ) }
     }
     unsafe { test_fd_filestat_set_times(dir_fd, wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE) }
+
+    // Same guard as above: Windows rejects set-times on a directory handle that
+    // was opened read-only, the way it does for read-only files.
+    if test_programs::preview1::config().support_dangling_filesystem() {
+        unsafe { test_fd_filestat_set_times_on_directory(dir_fd) }
+    }
 }
