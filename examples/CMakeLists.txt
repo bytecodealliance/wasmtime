@@ -54,7 +54,7 @@ enable_testing()
 
 # Wasm files required by tests, but only built if tests are actually being run.
 create_rust_wasm(fib-debug wasm32-unknown-unknown)
-create_rust_wasm(tokio wasm32-wasip1)
+create_rust_wasm(tokio wasm32-wasip2)
 create_rust_wasm(wasi wasm32-wasip1)
 create_rust_wasm(wasi wasm32-wasip2)
 create_rust_wasm(component wasm32-unknown-unknown)
@@ -89,6 +89,8 @@ create_target(threads threads.c)
 create_target(threads-cpp threads.cc)
 create_target(wasip1 wasip1/main.c)
 create_target(wasip1-cpp wasip1/main.cc)
+create_target(wasip2 wasip2/main.c)
+create_target(wasip2-cpp wasip2/main.cc)
 
 # Rust examples/tests
 if (BUILD_RUST_EXAMPLES)

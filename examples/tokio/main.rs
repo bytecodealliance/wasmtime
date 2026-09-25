@@ -1,13 +1,14 @@
 use std::sync::Arc;
 use tokio::time::Duration;
-use wasmtime::Error;
-use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::{WasiCtx, p1::WasiP1Ctx};
+use wasmtime::component::{Component, Linker, ResourceTable};
+use wasmtime::{Config, Engine, Error, Store};
+use wasmtime_wasi::p2::bindings::Command;
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     // Create an environment shared by all wasm execution. This contains
-    // the `Engine` and the `Module` we are executing.
+    // the `Engine` and the `Component` we are executing.
     let env = Environment::new()?;
 
     // The inputs to run_wasm are `Send`: we can create them here and send
@@ -35,11 +36,27 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
+/// The per-store host state: a WASI context plus the resource table that
+/// host resources (including WASI) live ni.
+struct ComponentRunStates {
+    wasi_ctx: WasiCtx,
+    resource_table: ResourceTable,
+}
+
+impl WasiView for ComponentRunStates {
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi_ctx,
+            table: &mut self.resource_table,
+        }
+    }
+}
+
 #[derive(Clone)]
 struct Environment {
     engine: Engine,
-    module: Module,
-    linker: Arc<Linker<WasiP1Ctx>>,
+    component: Component,
+    linker: Arc<Linker<ComponentRunStates>>,
 }
 
 impl Environment {
@@ -50,18 +67,19 @@ impl Environment {
         config.consume_fuel(true);
 
         let engine = Engine::new(&config)?;
-        let module = Module::from_file(&engine, "target/wasm32-wasip1/debug/tokio-wasi.wasm")?;
+        let component =
+            Component::from_file(&engine, "target/wasm32-wasip2/debug/tokio-wasi.wasm")?;
 
         // A `Linker` is shared in the environment amongst all stores, and this
-        // linker is used to instantiate the `module` above. This example only
-        // adds WASI functions to the linker, notably the async versions built
-        // on tokio.
+        // linker is used to instantiate the `component` above. This example
+        // only adds WASI functions to the linker, notably the async versions
+        // built on tokio.
         let mut linker = Linker::new(&engine);
-        wasmtime_wasi::p1::add_to_linker_async(&mut linker, |cx| cx)?;
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 
         Ok(Self {
             engine,
-            module,
+            component,
             linker: Arc::new(linker),
         })
     }
@@ -87,8 +105,12 @@ async fn run_wasm(inputs: Inputs) -> Result<(), Error> {
         .inherit_stdout()
         // Set an environment variable so the wasm knows its name.
         .env("NAME", &inputs.name)
-        .build_p1();
-    let mut store = Store::new(&inputs.env.engine, wasi);
+        .build();
+    let state = ComponentRunStates {
+        wasi_ctx: wasi,
+        resource_table: ResourceTable::new(),
+    };
+    let mut store = Store::new(&inputs.env.engine, state);
 
     // Put effectively unlimited fuel so it can run forever.
     store.set_fuel(u64::MAX)?;
@@ -97,16 +119,14 @@ async fn run_wasm(inputs: Inputs) -> Result<(), Error> {
     store.fuel_async_yield_interval(Some(10000))?;
 
     // Instantiate into our own unique store using the shared linker, afterwards
-    // acquiring the `_start` function for the module and executing it.
-    let instance = inputs
-        .env
-        .linker
-        .instantiate_async(&mut store, &inputs.env.module)
-        .await?;
-    instance
-        .get_typed_func::<(), ()>(&mut store, "_start")?
-        .call_async(&mut store, ())
-        .await?;
+    // acquiring the `wasi:cli/run` export of the component and executing it.
+    let command =
+        Command::instantiate_async(&mut store, &inputs.env.component, &inputs.env.linker).await?;
+    command
+        .wasi_cli_run()
+        .call_run(&mut store)
+        .await?
+        .map_err(|()| wasmtime::format_err!("{} exited with an error", inputs.name))?;
 
     Ok(())
 }
