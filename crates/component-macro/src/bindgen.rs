@@ -153,6 +153,7 @@ impl Parse for Config {
                     }
                     Opt::IncludeGeneratedCodeFromFile(i) => include_generated_code_from_file = i,
                     Opt::IncludeComponentType(val) => opts.include_component_type = val,
+                    Opt::CanonicalNames(val) => opts.canonical_names = val,
                     Opt::Imports(config, span) => {
                         if imports_configured {
                             return Err(Error::new(span, "cannot specify imports configuration"));
@@ -271,6 +272,7 @@ mod kw {
     syn::custom_keyword!(store);
     syn::custom_keyword!(trappable);
     syn::custom_keyword!(exact);
+    syn::custom_keyword!(canonical_names);
 }
 
 enum Opt {
@@ -291,6 +293,7 @@ enum Opt {
     IncludeGeneratedCodeFromFile(bool),
     IncludeComponentType(bool),
     Debug(bool),
+    CanonicalNames(bool),
     Imports(FunctionConfig, Span),
     Exports(FunctionConfig, Span),
 }
@@ -439,6 +442,10 @@ impl Parse for Opt {
             Ok(Opt::IncludeComponentType(
                 input.parse::<syn::LitBool>()?.value,
             ))
+        } else if l.peek(kw::canonical_names) {
+            input.parse::<kw::canonical_names>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::CanonicalNames(input.parse::<syn::LitBool>()?.value))
         } else if l.peek(kw::imports) {
             let span = input.parse::<kw::imports>()?.span;
             input.parse::<Token![:]>()?;
