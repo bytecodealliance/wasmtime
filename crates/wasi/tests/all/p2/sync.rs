@@ -399,6 +399,14 @@ fn p2_udp_send_too_much() {
     )
 }
 #[test_log::test]
+fn p2_write_too_much() {
+    let e = run(P2_WRITE_TOO_MUCH_COMPONENT, |_| {}).unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "write exceeded budget"
+    )
+}
+#[test_log::test]
 fn p2_file_settime_overflow() {
     run(P2_FILE_SETTIME_OVERFLOW_COMPONENT, |_| {}).unwrap()
 }
