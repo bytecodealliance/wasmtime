@@ -291,18 +291,19 @@ where
             _marker: _,
         } = self;
         let store = store.as_context_mut();
-
-        let mut tables = HostResourceTables::new_host(store.0)?;
-        let (idx, owned) = match state.get() {
-            ResourceState::Borrow => (tables.host_resource_lower_borrow(rep)?, false),
+        let idx = match state.get() {
+            // A borrow has no host table entry, so it is carried directly in
+            // the `ResourceAny` and lowered into the guest at call time.
+            ResourceState::Borrow => {
+                return Ok(ResourceAny::new_borrow(rep, T::resource_type(ty)));
+            }
             ResourceState::NotInTable => {
-                let idx = tables.host_resource_lower_own(rep, None, None)?;
-                (idx, true)
+                HostResourceTables::new_host(store.0)?.host_resource_lower_own(rep, None, None)?
             }
             ResourceState::Taken => bail!("host resource already consumed"),
-            ResourceState::Index(idx) => (idx, true),
+            ResourceState::Index(idx) => idx,
         };
-        Ok(ResourceAny::new(idx, T::resource_type(ty), owned))
+        Ok(ResourceAny::new(idx, T::resource_type(ty), true))
     }
 }
 
