@@ -1019,7 +1019,7 @@ jobs:
     strategy:
       matrix:
         feature: ["openvino", "onnx-download"]
-        os: ["ubuntu-26.04", "windows-2025"]
+        os: ["ubuntu-24.04", "windows-2025"]
         include:
           - os: windows-2025
             feature: winml
