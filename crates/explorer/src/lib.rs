@@ -13,8 +13,8 @@ use std::{
     path::Path,
     str::FromStr,
 };
-use wasmtime::{Result, ToWasmtimeResult as _};
-use wasmtime_environ::demangle_function_name;
+use wasmtime::{ModuleFunction, Result, ToWasmtimeResult as _};
+use wasmtime_environ::{demangle_function_name, wasmparser};
 
 pub fn generate(
     config: &wasmtime::Config,
@@ -141,16 +141,49 @@ struct AnnotatedInstruction {
     operands: Option<String>,
 }
 
+enum CompilationArtifact {
+    Module(wasmtime::Module),
+    Component(wasmtime::component::Component),
+}
+
+impl CompilationArtifact {
+    fn text(&self) -> &[u8] {
+        match self {
+            CompilationArtifact::Module(module) => module.text(),
+            CompilationArtifact::Component(component) => component.text(),
+        }
+    }
+    fn address_map(&self) -> Option<Box<dyn Iterator<Item = (usize, Option<u32>)> + '_>> {
+        match self {
+            CompilationArtifact::Module(module) => module
+                .address_map()
+                .map(|i| Box::new(i) as Box<dyn Iterator<Item = _>>),
+            CompilationArtifact::Component(component) => component
+                .address_map()
+                .map(|i| Box::new(i) as Box<dyn Iterator<Item = _>>),
+        }
+    }
+    fn functions(&self) -> Box<dyn Iterator<Item = ModuleFunction> + '_> {
+        match self {
+            CompilationArtifact::Module(module) => Box::new(module.functions()),
+            CompilationArtifact::Component(component) => Box::new(component.functions()),
+        }
+    }
+}
 fn annotate_asm(
     config: &wasmtime::Config,
     target: &target_lexicon::Triple,
     wasm: &[u8],
 ) -> Result<AnnotatedAsm> {
     let engine = wasmtime::Engine::new(config)?;
-    let module = wasmtime::Module::new(&engine, wasm)?;
+    let artifact = if wasmparser::Parser::is_component(wasm) {
+        CompilationArtifact::Component(wasmtime::component::Component::new(&engine, wasm)?)
+    } else {
+        CompilationArtifact::Module(wasmtime::Module::new(&engine, wasm)?)
+    };
 
-    let text = module.text();
-    let address_map: Vec<_> = module
+    let text = artifact.text();
+    let address_map: Vec<_> = artifact
         .address_map()
         .ok_or_else(|| wasmtime::format_err!("address maps must be enabled in the config"))?
         .collect();
@@ -174,7 +207,7 @@ fn annotate_asm(
         current_entry.and_then(|entry| entry.1.map(WasmOffset))
     };
 
-    let functions = module
+    let functions = artifact
         .functions()
         .map(|function| {
             let body = &text[function.offset..][..function.len];
