@@ -50,18 +50,17 @@ int main() {
 
   // Load and compile the wasm component.
   auto bytes = read_binary_file("target/wasm32-wasip2/debug/wasi.wasm");
-  auto component =
-      component::Component::compile(engine,
-                                    Span<uint8_t>(bytes.data(), bytes.size()))
-          .unwrap();
+  auto component = component::Component::compile(
+                       engine, Span<uint8_t>(bytes.data(), bytes.size()))
+                       .unwrap();
 
   // Instantiate the component with the imports we've defined in the linker.
   auto instance = linker.instantiate(context, component).unwrap();
 
   // Look up the `run` function in the exported `wasi:cli/run@0.2.0` interface.
   // First look up the interface itself, then the function within it.
-  auto interface_idx = instance.get_export_index(context, nullptr,
-                                                 "wasi:cli/run@0.2.0");
+  auto interface_idx =
+      instance.get_export_index(context, nullptr, "wasi:cli/run@0.2.0");
   if (!interface_idx) {
     std::cerr << "error: cannot find `wasi:cli/run@0.2.0` interface\n";
     return 1;
@@ -77,8 +76,7 @@ int main() {
   // Run it. The `run` function takes no arguments and returns a single
   // `result<(), ()>` value indicating whether the program succeeded.
   auto results = std::array<component::Val, 1>{false};
-  func.call(context, Span<const component::Val>(nullptr, 0), results)
-      .unwrap();
+  func.call(context, Span<const component::Val>(nullptr, 0), results).unwrap();
   if (!results[0].get_result().is_ok()) {
     std::cerr << "error: program returned an error\n";
     return 1;
