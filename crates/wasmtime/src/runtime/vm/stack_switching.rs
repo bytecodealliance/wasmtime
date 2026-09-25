@@ -1,6 +1,7 @@
 //! This module contains the runtime components of the implementation of the
 //! stack switching proposal.
 
+#[cfg(feature = "stack-switching")]
 pub(crate) mod asan;
 mod stack;
 
