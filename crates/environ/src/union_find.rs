@@ -12,7 +12,7 @@
 //!   `union`. All others are implicit singletons that this structure never
 //!   allocates for or visits.
 
-#![expect(unused, reason = "used by following commits")]
+#![cfg_attr(not(test), expect(unused, reason = "used by following commits"))]
 
 use crate::prelude::*;
 use core::fmt;
