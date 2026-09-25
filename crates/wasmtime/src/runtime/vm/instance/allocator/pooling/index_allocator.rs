@@ -611,9 +611,15 @@ impl ModuleAffinityIndexAllocator {
             }
 
             for (slot, bytes_resident) in resident {
+                let affinity = inner.slot_state[slot.index()].unwrap_unused().affinity;
                 inner.remove(slot);
                 inner.unused_bytes_resident -= bytes_resident;
-                inner.slot_state[slot.index()] = SlotState::Used(None);
+                // Keep the affinity. `free` reads it back out of this payload
+                // to re-file the slot on its module's affine list, so writing
+                // `Used(None)` here would quietly un-affine every slot this
+                // touches — turning a call made to reclaim memory into a
+                // regression in image reuse.
+                inner.slot_state[slot.index()] = SlotState::Used(affinity);
                 taken.push((
                     self.global_id(ShardId::from_index(shard_index), slot),
                     bytes_resident,
@@ -794,6 +800,35 @@ mod test {
         }
     }
 
+    /// Taking slots out to release their memory must not cost them their
+    /// affinity. `free` reads the module back out of the `Used` payload to
+    /// re-file the slot on its module's affine list, so a `Used(None)` here
+    /// would un-affine every slot touched — a reclaim call that quietly
+    /// makes the next instantiation remap its image.
+    #[test]
+    fn take_resident_warm_slots_keeps_affinity() {
+        let id = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
+        let state = ModuleAffinityIndexAllocator::new(4, 4).unwrap();
+
+        let index = state.alloc(Some(id)).unwrap();
+        state.free(index, 4096);
+        assert_eq!(state.unused_bytes_resident(), 4096);
+
+        let taken = state.take_resident_warm_slots();
+        assert_eq!(taken, vec![(index, 4096)]);
+        // While taken, the slot is neither warm nor counted as resident.
+        assert_eq!(state.unused_bytes_resident(), 0);
+        assert_eq!(state.unused_warm_slots(), 0);
+
+        state.free(index, 0);
+        assert_eq!(state.unused_bytes_resident(), 0);
+        assert_eq!(state.unused_warm_slots(), 1);
+        assert!(state.testing_module_affinity_list().contains(&id));
+        // And the affinity is real: the same module gets the same slot back.
+        assert_eq!(state.alloc(Some(id)).unwrap(), index);
+    }
+
+    #[test]
     #[test]
     fn test_affinity_allocation_strategy() {
         let id1 = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
