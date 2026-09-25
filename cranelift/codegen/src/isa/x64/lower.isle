@@ -1799,6 +1799,15 @@
 (rule -1 (lower (smax (fits_in_64 ty) x y))
       (cmp_and_choose ty (CC.NL) x y))
 
+(rule 3 (lower (umin $I128 x y))
+      (lower_select (emit_cmp (IntCC.UnsignedLessThan) x y) x y))
+(rule 3 (lower (umax $I128 x y))
+      (lower_select (emit_cmp (IntCC.UnsignedGreaterThan) x y) x y))
+(rule 3 (lower (smin $I128 x y))
+      (lower_select (emit_cmp (IntCC.SignedLessThan) x y) x y))
+(rule 3 (lower (smax $I128 x y))
+      (lower_select (emit_cmp (IntCC.SignedGreaterThan) x y) x y))
+
 ;; SSE helpers for determining if single-instruction lowerings are available.
 
 (decl pure has_pmins (Type) bool)
