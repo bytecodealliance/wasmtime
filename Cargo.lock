@@ -4732,6 +4732,7 @@ dependencies = [
  "hashbrown 0.17.0",
  "indexmap 2.14.0",
  "log",
+ "mutatis",
  "object 0.40.0",
  "postcard",
  "rustc-demangle",

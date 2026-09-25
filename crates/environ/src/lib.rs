@@ -42,6 +42,8 @@ mod string_pool;
 mod trap_encoding;
 mod tunables;
 mod types;
+#[cfg(all(feature = "component-model", feature = "compile"))]
+mod union_find;
 #[macro_use]
 mod vmctxtypes;
 #[macro_use]
@@ -104,3 +106,14 @@ pub use anyhow;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// A `mutatis` check pre-configured with a MIRI-aware number of iterations to
+/// run.
+#[cfg(all(test, feature = "component-model", feature = "compile"))]
+fn property_check() -> mutatis::check::Check {
+    let mut check = mutatis::check::Check::new();
+    if cfg!(miri) {
+        check.iters(2).shrink_iters(0);
+    }
+    check
+}
