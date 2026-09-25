@@ -70,7 +70,10 @@ fn find_tests(path: &Path, adapted_dir: &Arc<TempDir>, trials: &mut Vec<Trial>) 
             format!("wasmtime-wasi - {}", path.display()),
             {
                 let path = path.clone();
-                move || run_test(&path.with_extension("json"), &path, should_fail).map_err(|e| format!("{e:?}").into())
+                move || {
+                    run_test(&path.with_extension("json"), &path, should_fail)
+                        .map_err(|e| format!("{e:?}").into())
+                }
             },
         ));
 
@@ -123,7 +126,9 @@ fn run_test(spec: &Path, wasm: &Path, should_fail: bool) -> Result<()> {
 fn execute(spec_path: &Path, wasm: &Path) -> Result<()> {
     let wasmtime = Path::new(env!("CARGO_BIN_EXE_wasmtime"));
     let target_dir = wasmtime.parent().unwrap().parent().unwrap();
-    let parent_dir = spec_path.parent().ok_or(format_err!("module has no parent?"))?;
+    let parent_dir = spec_path
+        .parent()
+        .ok_or(format_err!("module has no parent?"))?;
     let spec = if let Ok(contents) = fs::read_to_string(spec_path) {
         serde_json::from_str(&contents)?
     } else {
