@@ -184,18 +184,18 @@ struct SameVmctxBuilder {
 
     /// Scratch space for `SameVmctxPartition::from_keys` so that its allocation
     /// is reused across instantiations.
-    first: HashMap<VmctxKey, FuncIndex>,
+    scratch_first: HashMap<VmctxKey, FuncIndex>,
 
     /// Scratch space for `SameVmctxPartition::meet` so that its allocation is
     /// reused across meets.
-    groups: HashMap<(FuncIndex, FuncIndex), FuncIndex>,
+    scratch_groups: HashMap<(FuncIndex, FuncIndex), FuncIndex>,
 }
 
 impl SameVmctxBuilder {
     /// Record an instantiation of `module` in which the definition satisfying
     /// its `i`th function import has `vmctx` key `keys[i]`.
     fn observe_instantiation(&mut self, module: StaticModuleIndex, keys: &[Option<VmctxKey>]) {
-        let partition = SameVmctxPartition::from_keys(&mut self.first, keys);
+        let partition = SameVmctxPartition::from_keys(&mut self.scratch_first, keys);
         self.observe(module, partition);
     }
 
@@ -207,7 +207,7 @@ impl SameVmctxBuilder {
 
     fn observe(&mut self, module: StaticModuleIndex, partition: SameVmctxPartition) {
         let current = mem::take(&mut self.partitions[module]);
-        let met = SameVmctxPartition::meet(&mut self.groups, current, partition);
+        let met = SameVmctxPartition::meet(&mut self.scratch_groups, current, partition);
         self.partitions[module] = met;
     }
 
@@ -416,12 +416,10 @@ fn adapter_vmctx_key(
     let (adapter_module, index) = *dfg.adapter_partitionings.get(id)?;
     let (static_module, _) = dfg.adapter_modules[adapter_module];
 
-    // FACT always defines the adapters it exports, but check rather than
-    // assume: a re-export of one of the adapter module's own imports would
-    // carry that import's context instead.
-    if static_modules[static_module].module.is_imported(index) {
-        return None;
-    }
+    debug_assert!(
+        !static_modules[static_module].module.is_imported(index),
+        "adapter modules always define their exported adapters",
+    );
 
     Some(VmctxKey::AdapterModule(adapter_module))
 }
