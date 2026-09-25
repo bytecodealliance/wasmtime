@@ -1,0 +1,124 @@
+test compile precise-output
+target arm
+
+function %fmin64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fmin v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   vminnm.f64 d3, d0, d1
+;   vadd.f64 d5, d0, d1
+;   vcmp.f64 d0, d1; vmrs
+;   vmov d0, d3; vmovvs d0, d5
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vminnm.f64 d3, d0, d1
+;   vadd.f64 d5, d0, d1
+;   vcmp.f64 d0, d1
+;   vmrs apsr_nzcv, fpscr
+;   vmov.f64 d0, d3
+;   vmovvs.f64 d0, d5
+;   bx lr
+
+function %fmax32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fmax v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   vmaxnm.f32 d3, d0, d1
+;   vadd.f32 d5, d0, d1
+;   vcmp.f32 d0, d1; vmrs
+;   vmov d0, d3; vmovvs d0, d5
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vmaxnm.f32 s6, s0, s2
+;   vadd.f32 s10, s0, s2
+;   vcmp.f32 s0, s2
+;   vmrs apsr_nzcv, fpscr
+;   vmov.f64 d0, d3
+;   vmovvs.f64 d0, d5
+;   bx lr
+
+function %copysign32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fcopysign v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   vmov r3, d0
+;   vmov r0, d1
+;   and r0, r0, #2147483648
+;   bic r1, r3, #2147483648
+;   orr r0, r1, r0
+;   vmov d0, r0
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vmov r3, s0
+;   vmov r0, s2
+;   and r0, r0, #0x80000000
+;   bic r1, r3, #0x80000000
+;   orr r0, r1, r0
+;   vmov s0, r0
+;   bx lr
+
+function %copysign64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fcopysign v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   vmov r3, r0, d0
+;   vmov r2, r1, d1
+;   and r1, r1, #2147483648
+;   bic r0, r0, #2147483648
+;   orr r0, r0, r1
+;   vmov d0, r3, r0
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vmov r3, r0, d0
+;   vmov r2, r1, d1
+;   and r1, r1, #0x80000000
+;   bic r0, r0, #0x80000000
+;   orr r0, r0, r1
+;   vmov d0, r3, r0
+;   bx lr
+
+function %fsel(i32, f64, f64) -> f64 {
+block0(v0: i32, v1: f64, v2: f64):
+    v3 = select v0, v1, v2
+    return v3
+}
+
+; VCode:
+; block0:
+;   vmov.f64 d6, d0
+;   cmp r0, #0
+;   vmov d0, d1; vmovne d0, d6
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vmov.f64 d6, d0
+;   cmp r0, #0
+;   vmov.f64 d0, d1
+;   vmovne.f64 d0, d6
+;   bx lr
+
