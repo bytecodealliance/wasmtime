@@ -1964,8 +1964,17 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // so that we don't have to patch the code at runtime.
 
         // First append the callee vmctx address.
+        //
+        // If the same-`vmctx` analysis proved that this import always shares
+        // its `vmctx` with an earlier import, load it from that import's slot.
+        // The value is identical either way, but funneling a whole set through
+        // one slot lets GVN collapse those loads, and everything downstream of
+        // them, into one.
         let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
-        let import_off = self.env.offsets.imported_functions().at(callee_index);
+        let vmctx_index = self.env.translation.imported_func_vmctx_representative[callee_index]
+            .expand()
+            .unwrap_or(callee_index);
+        let import_off = self.env.offsets.imported_functions().at(vmctx_index);
         let callee_vmctx = self
             .env
             .alias_regions
