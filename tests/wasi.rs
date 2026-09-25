@@ -13,6 +13,7 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
 use std::process::{Child, Stdio};
+use std::sync::{Arc, LazyLock};
 use tempfile::TempDir;
 use wasmtime::error::Context;
 use wasmtime::{Result, format_err};
@@ -23,48 +24,87 @@ const KNOWN_FAILURES: &[&str] = &[
     // "multi-clock-wait",
 ];
 
+const KNOWN_ADAPTER_FAILURES: &[&str] = &[
+    // The adapter maps all nonzero exit codes to 1 as `wasi:cli/exit` can only
+    // signal success or failure.
+    "proc_exit-failure",
+    // The adapter returns success for zero-length writes before validating the
+    // file descriptor.
+    "fd_write-to-invalid-fd",
+    // Not possible to adapt properly - written in AssemblyScript
+    "args_get-multiple-arguments",
+    "environ_get-multiple-variables",
+];
+
 fn main() -> Result<()> {
     env_logger::init();
 
     let mut trials = Vec::new();
     if !cfg!(miri) {
-        find_tests("tests/wasi-testsuite".as_ref(), &mut trials).unwrap();
+        let adapted_dir = Arc::new(TempDir::new()?);
+        find_tests("tests/wasi-testsuite".as_ref(), &adapted_dir, &mut trials).unwrap();
     }
 
     libtest_mimic::run(&Arguments::from_args(), trials).exit()
 }
 
-fn find_tests(path: &Path, trials: &mut Vec<Trial>) -> Result<()> {
+fn find_tests(path: &Path, adapted_dir: &Arc<TempDir>, trials: &mut Vec<Trial>) -> Result<()> {
     for entry in path.read_dir()? {
         let entry = entry?;
         let path = entry.path();
         if entry.file_type()?.is_dir() {
-            find_tests(&path, trials)?;
+            find_tests(&path, adapted_dir, trials)?;
             continue;
         }
         if path.extension().and_then(|s| s.to_str()) != Some("wasm") {
             continue;
         }
 
-        // Test the core wasm itself.
+        let test_name = path.file_stem().unwrap().to_str().unwrap().to_string();
+
+        // Test the wasm itself.
+        let should_fail = KNOWN_FAILURES.contains(&test_name.as_str())
+            || (path.iter().any(|p| p == "wasm32-wasip3")
+                && !cfg!(feature = "component-model-async"));
         trials.push(Trial::test(
             format!("wasmtime-wasi - {}", path.display()),
             {
                 let path = path.clone();
-                move || run_test(&path).map_err(|e| format!("{e:?}").into())
+                move || run_test(&path.with_extension("json"), &path, should_fail).map_err(|e| format!("{e:?}").into())
             },
         ));
+
+        // Additionally test wasip1 modules through the wasip2 adapter.
+        if cfg!(feature = "component-model") && path.iter().any(|p| p == "wasm32-wasip1") {
+            let should_fail = KNOWN_FAILURES.contains(&test_name.as_str())
+                || KNOWN_ADAPTER_FAILURES.contains(&test_name.as_str());
+            trials.push(Trial::test(
+                format!("wasmtime-wasi + adapter - {}", path.display()),
+                {
+                    let path = path.clone();
+                    let adapted_dir = adapted_dir.clone();
+                    move || {
+                        // Required to make unique names
+                        let name = path
+                            .iter()
+                            .map(|c| c.to_string_lossy())
+                            .collect::<Vec<_>>()
+                            .join("_");
+                        let component = adapted_dir.path().join(name);
+                        fs::write(&component, componentize(&path)?)
+                            .map_err(|e| format!("{e:?}"))?;
+                        run_test(&path.with_extension("json"), &component, should_fail)
+                            .map_err(|e| format!("{e:?}").into())
+                    }
+                },
+            ));
+        }
     }
     Ok(())
 }
 
-fn run_test(path: &Path) -> Result<()> {
-    let test_name = path.file_stem().unwrap().to_str().unwrap();
-    let mut should_fail = KNOWN_FAILURES.contains(&test_name);
-    if path.iter().any(|p| p == "wasm32-wasip3") && !cfg!(feature = "component-model-async") {
-        should_fail = true;
-    }
-    match (execute(path), should_fail) {
+fn run_test(spec: &Path, wasm: &Path, should_fail: bool) -> Result<()> {
+    match (execute(spec, wasm), should_fail) {
         // If this test passed and is not a known failure, or if it failed and
         // it's a known failure, then flag this test as "ok".
         (Ok(_), false) | (Err(_), true) => Ok(()),
@@ -80,11 +120,11 @@ fn run_test(path: &Path) -> Result<()> {
     }
 }
 
-fn execute(path: &Path) -> Result<()> {
+fn execute(spec_path: &Path, wasm: &Path) -> Result<()> {
     let wasmtime = Path::new(env!("CARGO_BIN_EXE_wasmtime"));
     let target_dir = wasmtime.parent().unwrap().parent().unwrap();
-    let parent_dir = path.parent().ok_or(format_err!("module has no parent?"))?;
-    let spec = if let Ok(contents) = fs::read_to_string(&path.with_extension("json")) {
+    let parent_dir = spec_path.parent().ok_or(format_err!("module has no parent?"))?;
+    let spec = if let Ok(contents) = fs::read_to_string(spec_path) {
         serde_json::from_str(&contents)?
     } else {
         Spec::default()
@@ -129,7 +169,7 @@ fn execute(path: &Path) -> Result<()> {
                     cmd.arg("--env");
                     cmd.arg(format!("{k}={v}"));
                 }
-                if path.iter().any(|p| p == "wasm32-wasip3") {
+                if spec_path.iter().any(|p| p == "wasm32-wasip3") {
                     cmd.arg("-Sp3").arg("-Wcomponent-model-async");
                 }
                 cmd.arg("-Stcp,udp");
@@ -143,7 +183,7 @@ fn execute(path: &Path) -> Result<()> {
                         }
                     };
                 }
-                cmd.arg(&path);
+                cmd.arg(&wasm);
                 cmd.args(args);
                 cmd.stdout(Stdio::piped());
                 cmd.stderr(Stdio::piped());
@@ -286,6 +326,20 @@ fn execute(path: &Path) -> Result<()> {
     }
     assert!(child.0.is_none());
     Ok(())
+}
+
+fn componentize(path: &Path) -> Result<Vec<u8>> {
+    static ADAPTER: LazyLock<Vec<u8>> = LazyLock::new(|| {
+        fs::read(test_programs_artifacts::ADAPTER_COMMAND).expect("failed to read command adapter")
+    });
+
+    let module = fs::read(path)?;
+    wit_component::ComponentEncoder::default()
+        .module(&module)
+        .and_then(|e| e.validate(true).adapter("wasi_snapshot_preview1", &ADAPTER))
+        .and_then(|e| e.encode())
+        .map_err(wasmtime::Error::from_anyhow)
+        .with_context(|| format!("failed to componentize {}", path.display()))
 }
 
 fn cp_r(path: &Path, dst: &Path) -> Result<()> {
