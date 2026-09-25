@@ -47,11 +47,14 @@ fn emit_stack_switch<'a>(
     let target_csi = asan_target_csi(env, builder);
     let pointer_type = env.pointer_type();
     let pointer_bytes = pointer_type.bytes();
-    let slot = builder.create_sized_stack_slot(ir::StackSlotData::new(
-        ir::StackSlotKind::ExplicitSlot,
-        pointer_bytes,
-        u8::try_from(pointer_bytes.trailing_zeros()).unwrap(),
-    ));
+    let slot = env.get_or_create_asan_fake_stack_slot(
+        builder,
+        ir::StackSlotData::new(
+            ir::StackSlotKind::ExplicitSlot,
+            pointer_bytes,
+            u8::try_from(pointer_bytes.trailing_zeros()).unwrap(),
+        ),
+    );
     let fake_stack_save = builder.ins().stack_addr(pointer_type, slot, 0);
     let region = env.alias_regions.stack_slot_region(builder.func, slot);
     let flags = MemFlagsData::trusted().with_alias_region(Some(region));
@@ -1840,12 +1843,12 @@ fn translate_resume_impl<'a>(
             let handler_count = u32::try_from(resumetable.len()).unwrap();
             // Populate the Array's data ptr with a pointer to a sufficiently
             // large area on this stack.
-            env.stack_switching_handler_list_buffer =
+            env.stack_switching.handler_list_buffer =
                 Some(handler_list.allocate_or_reuse_stack_slot(
                     env,
                     builder,
                     handler_count,
-                    env.stack_switching_handler_list_buffer,
+                    env.stack_switching.handler_list_buffer,
                 ));
 
             let suspend_handler_count = suspend_handlers.len();
@@ -2175,8 +2178,8 @@ pub(crate) fn translate_suspend<'a>(
 
     let needs_gc_ref_markers =
         types_need_gc_ref_markers(suspend_arg_types) || types_need_gc_ref_markers(tag_return_types);
-    let existing_storage = env.stack_switching_values_storage;
-    env.stack_switching_values_storage = Some(values.prepare_stack_storage(
+    let existing_storage = env.stack_switching.values_storage;
+    env.stack_switching.values_storage = Some(values.prepare_stack_storage(
         env,
         builder,
         required_capacity,
@@ -2300,8 +2303,8 @@ pub(crate) fn translate_switch<'a>(
         // reference.
         let values = switcher_contref.values(env, builder);
         let required_capacity = u32::try_from(std::cmp::max(1, return_types.len())).unwrap();
-        let existing_storage = env.stack_switching_values_storage;
-        env.stack_switching_values_storage = Some(values.prepare_stack_storage(
+        let existing_storage = env.stack_switching.values_storage;
+        env.stack_switching.values_storage = Some(values.prepare_stack_storage(
             env,
             builder,
             required_capacity,

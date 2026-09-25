@@ -60,6 +60,23 @@ pub(crate) struct VMPayloadStackSlots {
     pub(crate) gc_ref_markers: Option<ir::StackSlot>,
 }
 
+/// Function-local support used while translating stack-switching
+/// operations.
+#[derive(Default)]
+struct StackSwitchingSupport {
+    /// A stack slot backing the current stack's `handler_list` field.
+    handler_list_buffer: Option<ir::StackSlot>,
+
+    /// Stack slots backing the current continuation's `values` field.
+    values_storage: Option<VMPayloadStackSlots>,
+
+    /// Reusable result storage for the `get_interned_contref` builtin.
+    contref_result_storage: Option<ir::StackSlot>,
+
+    /// Reusable result storage for ASan's fake-stack pointer.
+    asan_fake_stack_storage: Option<ir::StackSlot>,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum Extension {
     Sign,
@@ -225,17 +242,8 @@ pub struct FuncEnvironment<'module_environment> {
     /// into the host to trap when signal handlers are disabled.
     pub(crate) stack_limit_at_function_entry: Option<VmctxLoadChain>,
 
-    /// Used by the stack switching feature. If set, we have a allocated a
-    /// slot on this function's stack to be used for the
-    /// current stack's `handler_list` field.
-    stack_switching_handler_list_buffer: Option<ir::StackSlot>,
-
-    /// Used by the stack switching feature. If set, these are the stack slots
-    /// backing the current continuation's `values` field.
-    stack_switching_values_storage: Option<VMPayloadStackSlots>,
-
-    /// Reusable storage for `get_interned_contref` builtin.
-    stack_switching_cont_ref_result_storage: Option<ir::StackSlot>,
+    /// Function-local support for translating stack-switching operations.
+    stack_switching: StackSwitchingSupport,
 
     /// The stack-slot used for exposing Wasm state via debug
     /// instrumentation, if any, and the builder containing its metadata.
@@ -315,9 +323,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             stack_limit_at_function_entry: None,
 
-            stack_switching_handler_list_buffer: None,
-            stack_switching_values_storage: None,
-            stack_switching_cont_ref_result_storage: None,
+            stack_switching: StackSwitchingSupport::default(),
 
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
@@ -338,7 +344,21 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         data: ir::StackSlotData,
     ) -> ir::StackSlot {
         *self
-            .stack_switching_cont_ref_result_storage
+            .stack_switching
+            .contref_result_storage
+            .get_or_insert_with(|| builder.create_sized_stack_slot(data))
+    }
+
+    /// Returns the cached ASan fake-stack out-parameter slot, creating it with
+    /// `data` if necessary.
+    pub(crate) fn get_or_create_asan_fake_stack_slot(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        data: ir::StackSlotData,
+    ) -> ir::StackSlot {
+        *self
+            .stack_switching
+            .asan_fake_stack_storage
             .get_or_insert_with(|| builder.create_sized_stack_slot(data))
     }
 

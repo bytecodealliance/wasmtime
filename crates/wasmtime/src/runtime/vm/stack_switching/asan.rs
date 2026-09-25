@@ -138,7 +138,8 @@ mod disabled {
     pub unsafe extern "C" fn finish_switch_fiber(_fake_stack: *mut u8) {}
 }
 
+#[cfg(not(asan))]
+#[allow(unused_imports, reason = "Used by ASan builds")]
+pub use disabled::*;
 #[cfg(asan)]
 pub use enabled::*;
-#[cfg(not(asan))]
-pub use disabled::*;

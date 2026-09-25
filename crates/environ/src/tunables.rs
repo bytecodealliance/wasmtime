@@ -155,8 +155,13 @@ define_tunables! {
         /// to signal checksum computation for compiled artifacts.
         pub recording: bool,
 
-        /// Whether stack-switching instructions need AddressSanitizer fiber
-        /// switch hooks around them.
+        /// Whether compiled stack-switching instructions must emit the
+        /// AddressSanitizer fiber-switch handshake expected by this runtime.
+        ///
+        /// This setting is derived from how Wasmtime was built. It
+        /// ensures that the compiled artifact and runtime are ABI
+        /// compatible, e.g. it prevents running a non-ASan artifact
+        /// on an ASan-enabled runtime.
         pub asan_stack_switching: bool,
 
         /// An allocation counter that triggers GC when it reaches zero.

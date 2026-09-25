@@ -192,11 +192,18 @@ impl VMContinuationStack {
     #[cfg(asan)]
     pub fn asan_range(&self) -> Option<Range<usize>> {
         let top = self.top.addr().get();
-        let bottom = match self.allocator {
-            Allocator::Mmap => top - self.len + rustix::param::page_size(),
-            Allocator::Custom => top - self.len,
+        let bottom = top - self.len;
+        let usable_bottom = match self.allocator {
+            Allocator::Mmap =>
+            // The ASan fiber switch API requires the bounds of
+            // the readable and writable stack region, therefore
+            // we disregard the guard page here.
+            {
+                bottom + rustix::param::page_size()
+            }
+            Allocator::Custom => bottom,
         };
-        Some(bottom..top)
+        Some(usable_bottom..top)
     }
 
     pub fn control_context_instruction_pointer(&self) -> usize {
@@ -402,21 +409,27 @@ impl VMContinuationStack {
 }
 
 impl Drop for VMContinuationStack {
+    #[cfg(asan)]
     fn drop(&mut self) {
         unsafe {
             match self.allocator {
                 Allocator::Mmap => {
                     let bottom = self.top.as_ptr().sub(self.len);
-                    #[cfg(asan)]
-                    {
-                        ASAN_STACKS.lock().unwrap().push((bottom.addr(), self.len));
-                        return;
-                    }
+                    ASAN_STACKS.lock().unwrap().push((bottom.addr(), self.len))
+                }
+                Allocator::Custom => {} // It's the creator's responsibility to reclaim the memory.
+            }
+        }
+    }
 
-                    #[cfg(not(asan))]
+    #[cfg(not(asan))]
+    fn drop(&mut self) {
+        unsafe {
+            match self.allocator {
+                Allocator::Mmap => {
+                    let bottom = self.top.as_ptr().sub(self.len);
                     let ret = rustix::mm::munmap(bottom as _, self.len);
-                    #[cfg(not(asan))]
-                    debug_assert!(ret.is_ok());
+                    debug_assert!(ret.is_ok())
                 }
                 Allocator::Custom => {} // It's the creator's responsibility to reclaim the memory.
             }
