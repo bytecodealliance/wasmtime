@@ -829,7 +829,6 @@ mod test {
     }
 
     #[test]
-    #[test]
     fn test_affinity_allocation_strategy() {
         let id1 = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
         let id2 = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
