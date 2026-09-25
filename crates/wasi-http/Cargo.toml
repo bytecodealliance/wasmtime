@@ -20,6 +20,7 @@ default-send-request = ["dep:tokio-rustls", "dep:rustls", "dep:webpki-roots"]
 p2 = ["wasmtime-wasi/p2"]
 p3 = ["wasmtime-wasi/p3", "dep:tokio-util"]
 component-model-async = ["futures/alloc", "wasmtime/component-model-async"]
+task-group-hook = ["wasmtime/task-group-hook"]
 
 [dependencies]
 async-trait = { workspace = true }

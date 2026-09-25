@@ -556,6 +556,7 @@ component-model-async = [
   "dep:futures",
 ]
 rr = ["wasmtime/rr", "component-model", "wasmtime-cli-flags/rr", "run"]
+task-group-hook = ["wasmtime/task-group-hook", "wasmtime-wasi-http/task-group-hook"]
 
 # Enabled in release builds. We cannot enable the built-in gdbstub component in
 # the default build because the published-to-crates.io crates cannot build the

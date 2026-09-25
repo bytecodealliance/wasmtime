@@ -977,17 +977,49 @@ async fn bytes_stream_producer() -> Result<()> {
     Ok(())
 }
 
+#[derive(Copy, Clone)]
+enum TaskGroupHookTestVariant {
+    WithDrop,
+    WithoutDrop,
+    Trap,
+}
+
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn task_group_hook() -> Result<()> {
+async fn task_group_hook_with_drop() -> Result<()> {
+    test_task_group_hook(TaskGroupHookTestVariant::WithDrop).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn task_group_hook_without_drop() -> Result<()> {
+    test_task_group_hook(TaskGroupHookTestVariant::WithoutDrop).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn task_group_hook_trap() -> Result<()> {
+    test_task_group_hook(TaskGroupHookTestVariant::Trap).await
+}
+
+/// Verify that all the expected `TaskGroupHook` events are delivered,
+/// regardless of whether the guest tasks exit normally, leak subtasks, or trap.
+async fn test_task_group_hook(variant: TaskGroupHookTestVariant) -> Result<()> {
     _ = env_logger::try_init();
     let mut config = Config::new();
     config.wasm_component_model_async(true);
     let engine = Engine::new(&config)?;
 
+    let call_drop = if let TaskGroupHookTestVariant::WithDrop = variant {
+        "(call $subtask.drop (local.get $waitable))"
+    } else {
+        ""
+    };
+
     let component = Component::new(
         &engine,
-        r#"
+        format!(
+            r#"
         (component
             (import "a" (func $a async))
             (core func $a (canon lower (func $a) async))
@@ -1012,13 +1044,17 @@ async fn task_group_hook() -> Result<()> {
                     (i32.or (i32.const 2 (; WAIT ;)) (i32.shl (local.get $set) (i32.const 4)))
                 )
 
-                (func (export "a-callback") (param $event_code i32) (param $waitable i32) (param $payload i32) (result i32)
+                (func (export "a-callback")
+                      (param $event_code i32)
+                      (param $waitable i32)
+                      (param $payload i32)
+                      (result i32)
                     (if (i32.ne (local.get $event_code) (i32.const 1 (; SUBTASK ;)))
                         (then unreachable))
                     (if (i32.ne (local.get $payload) (i32.const 2 (; RETURNED ;)))
                         (then unreachable))
                     (call $waitable.join (local.get $waitable) (i32.const 0))
-                    (call $subtask.drop (local.get $waitable))
+                    {call_drop}
                     (call $task.return)
                     (i32.const 0 (; EXIT ;))
                 )
@@ -1038,7 +1074,8 @@ async fn task_group_hook() -> Result<()> {
             ))
             (func (export "a") async (canon lift (core func $a "a") async (callback (core func $a "a-callback"))))
         )
-    "#,
+    "#
+        ),
     )?;
 
     #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -1054,6 +1091,7 @@ async fn task_group_hook() -> Result<()> {
         next_id: usize,
         ids: HashMap<TaskGroupId, usize>,
         entered: Option<usize>,
+        call_count: usize,
     }
 
     #[derive(Clone)]
@@ -1097,8 +1135,10 @@ async fn task_group_hook() -> Result<()> {
         }
     }
 
-    let hook = Hook(Arc::new(Mutex::new(HookInner::default())));
     let yield_count = 5;
+    let call_count = 3;
+
+    let hook = Hook(Arc::new(Mutex::new(HookInner::default())));
 
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap_concurrent("a", {
@@ -1107,7 +1147,7 @@ async fn task_group_hook() -> Result<()> {
             let hook = hook.clone();
             Box::pin(async move {
                 let mut previous_id = None;
-                let mut on_poll = move || {
+                let mut on_poll = || {
                     let mut inner = hook.0.try_lock().unwrap();
                     // We should only ever be polled after a `handle_enter` and
                     // before a `handle_exit` event:
@@ -1130,30 +1170,49 @@ async fn task_group_hook() -> Result<()> {
                     on_poll();
                 }
 
-                Ok(())
+                let mut inner = hook.0.try_lock().unwrap();
+                inner.call_count += 1;
+                if let TaskGroupHookTestVariant::Trap = variant
+                    && inner.call_count == call_count
+                {
+                    Err(wasmtime::format_err!("yikes"))
+                } else {
+                    Ok(())
+                }
             })
         }
     })?;
 
-    let mut store = Store::new(&engine, ());
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
 
-    store.task_group_hook(hook.clone());
+        store.task_group_hook(hook.clone());
 
-    let call_count = 3;
+        // Call the guest export `call_count` times concurrently, recording the
+        // events in `hook`:
+        let result = store
+            .run_concurrent(async |store| {
+                iter::repeat_with(|| func.call_concurrent(store, ()))
+                    .take(call_count)
+                    .collect::<FuturesUnordered<_>>()
+                    .try_collect::<()>()
+                    .await
+            })
+            .await;
 
-    // Call the guest export `call_count` times concurrently, recording the
-    // events in `hook`:
-    store
-        .run_concurrent(async |store| {
-            iter::repeat_with(|| func.call_concurrent(store, ()))
-                .take(call_count)
-                .collect::<FuturesUnordered<_>>()
-                .try_collect::<()>()
-                .await
-        })
-        .await??;
+        match (result, variant) {
+            (
+                Ok(result),
+                TaskGroupHookTestVariant::WithDrop | TaskGroupHookTestVariant::WithoutDrop,
+            ) => result?,
+            (Err(error), TaskGroupHookTestVariant::Trap) => {
+                assert!(error.to_string().contains("yikes"), "{error}");
+            }
+            _ => unreachable!(),
+        }
+    }
 
     // Group the events by task group, preserving order:
     let mut map = HashMap::<_, Vec<_>>::new();

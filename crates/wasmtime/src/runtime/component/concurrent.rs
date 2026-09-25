@@ -86,6 +86,8 @@ use futures::channel::oneshot;
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
 use table::{TableDebug, TableId};
+#[cfg(feature = "task-group-hook")]
+use task_group_hook::TaskGroup;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
@@ -107,6 +109,8 @@ pub use futures_and_streams::{
     StreamProducer, StreamReader, StreamResult, VecBuffer, WriteBuffer,
 };
 pub(crate) use futures_and_streams::{ResourcePair, lower_error_context_to_index};
+#[cfg(feature = "task-group-hook")]
+pub use task_group_hook::{TaskGroupHook, TaskGroupId};
 
 mod abort;
 mod error_contexts;
@@ -114,6 +118,8 @@ mod func;
 mod future_stream_any;
 mod futures_and_streams;
 pub(crate) mod table;
+#[cfg(feature = "task-group-hook")]
+mod task_group_hook;
 pub(crate) mod tls;
 
 /// Constant defined in the Component Model spec to indicate that the async
@@ -657,76 +663,6 @@ where
     }
 }
 
-#[cfg(feature = "task-group-hook")]
-struct TaskGroup {
-    ref_count: usize,
-}
-
-#[cfg(feature = "task-group-hook")]
-impl TableDebug for TaskGroup {
-    fn type_name() -> &'static str {
-        "TaskGroup"
-    }
-}
-
-/// Represents a "task group" containing the "root" task of a host->guest call,
-/// plus any subtasks transitively created by that task.
-///
-/// See [TaskGroupHook] for details.
-#[cfg(feature = "task-group-hook")]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-pub struct TaskGroupId(TableId<TaskGroup>);
-
-/// Trait for being notified by the runtime of activity concerning a "task group".
-///
-/// The Component Model specification has no notion of a "task group", but we
-/// define one here in order to enable embedders to associate guest->host calls
-/// with corresponding host->guest calls in a predictable way.
-///
-/// A `TaskGroupId` is allocated whenever a guest task is created for a
-/// host->guest call, and `handle_start` is called.  That task is considered the
-/// "root" task for the task group, and any subtasks transitively created by it
-/// will also be considered part of that task group.  Whenever the runtime
-/// switches (Component-Model-level) threads, it will call `handle_exit` for the
-/// group to which the old thread belonged, if any, and call `handle_enter` for
-/// the group to which the new thread belongs.  Only once all the threads of all
-/// those tasks have exited (and the guest has dropped any subtask handles
-/// referring to any of those tasks) will the `TaskGroupId` be deallocated, at
-/// which point `handle_finish` will be called.
-///
-/// Note that a given `TaskGroupId` may be reused after `handle_finish` is
-/// called, so implementations of this trait must take care to reset any state
-/// associated with it.
-///
-/// As of this writing, https://github.com/WebAssembly/component-model/pull/730
-/// (which adds `thread.set-task` and related intrinsics) has not yet been
-/// merged.  Once it has, and Wasmtime adds support for that feature, it will be
-/// possible for guest threads to change their task; in that case, the thread
-/// will effectively join whatever group the new task belongs to, which might
-/// not be the same as that of the old task.  In addition, the new
-/// `thread.get-task` intrinsic will give the guest another way (besides subtask
-/// handles) to keep tasks alive beyond the point when all their threads have
-/// exited or switched tasks, in which case the group it belongs to will not be
-/// disposed until all such tasks have been dropped using `task.drop`.
-#[cfg(feature = "task-group-hook")]
-pub trait TaskGroupHook: Send + Sync + 'static {
-    /// Handle notification that a new task group has been created (i.e. a
-    /// host->guest call has been prepared).
-    fn handle_start(&mut self, id: TaskGroupId) -> Result<()>;
-    /// Handle notification that the runtime has switched to a thread belonging to
-    /// the specified task group.
-    fn handle_enter(&mut self, id: TaskGroupId) -> Result<()>;
-    /// Handle notification that the runtime has switched away from a thread
-    /// belonging to the specified task group.
-    fn handle_exit(&mut self, id: TaskGroupId) -> Result<()>;
-    /// Handle notification that the specified task group has been disposed of
-    /// (i.e. the task created for the host->guest call for which the task group
-    /// was created has exited, along with any and all subtasks transitively
-    /// created by that task, and the guest has dropped any and all handles to
-    /// those tasks).
-    fn handle_finish(&mut self, id: TaskGroupId) -> Result<()>;
-}
-
 /// Represents parameter and result metadata for the caller side of a
 /// guest->guest call orchestrated by a fused adapter.
 enum CallerInfo {
@@ -1129,17 +1065,6 @@ impl<T> Store<T> {
     {
         self.as_context_mut().spawn(task)
     }
-
-    /// Set a [TaskGroupHook] for this store.
-    ///
-    /// This will overwrite any hook that was previously set.
-    #[cfg(feature = "task-group-hook")]
-    pub fn task_group_hook(&mut self, hook: impl TaskGroupHook) {
-        self.as_context_mut()
-            .0
-            .concurrent_state_mut_without_forcing_current_thread()
-            .task_group_hook = Some(Box::new(hook));
-    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -1378,11 +1303,17 @@ impl<T> StoreContextMut<'_, T> {
         // SAFETY: We never move `dropper` nor its `value` field.
         let future = unsafe { Pin::new_unchecked(dropper.value.deref_mut()) };
 
-        dropper
+        let result = dropper
             .store
             .as_context_mut()
             .poll_until(future, trap_on_idle)
-            .await
+            .await;
+
+        if result.is_err() {
+            dropper.store.0.set_trapped();
+        }
+
+        result
     }
 
     /// Run this store's event loop.
@@ -1970,20 +1901,6 @@ impl StoreOpaque {
             }
         };
 
-        #[cfg(feature = "task-group-hook")]
-        let group = {
-            let state = self.concurrent_state_mut()?;
-
-            match caller {
-                Caller::Guest { thread } => {
-                    let group = state.get_mut(thread.task)?.group;
-                    state.increment_group_ref_count(group)?;
-                    group
-                }
-                Caller::Host { .. } => state.make_task_group()?,
-            }
-        };
-
         let state = self.concurrent_state_mut()?;
         let guest_thread = GuestTask::new(
             state,
@@ -1999,8 +1916,6 @@ impl StoreOpaque {
             callee,
             callee_async_typed,
             true,
-            #[cfg(feature = "task-group-hook")]
-            group,
         )?;
 
         Instance::from_wasmtime(self, callee.instance).add_guest_thread_to_instance_table(
@@ -2081,13 +1996,6 @@ impl StoreOpaque {
         let caller = self.current_guest_thread()?;
         log::trace!("new deferred host task with caller {caller:?}");
 
-        #[cfg(feature = "task-group-hook")]
-        {
-            let state = self.concurrent_state_mut()?;
-            let group = state.get_mut(caller.task)?.group;
-            state.increment_group_ref_count(group)?;
-        }
-
         self.set_thread(CurrentThread::DeferredHost(caller))?;
         let state = self.concurrent_state_mut()?;
         debug_assert!(state.deferred_host_call_context.is_none());
@@ -2109,13 +2017,6 @@ impl StoreOpaque {
     ) -> Result<()> {
         match original_task {
             Some(caller) => {
-                #[cfg(feature = "task-group-hook")]
-                {
-                    let state = self.concurrent_state_mut()?;
-                    let group = state.get_mut(caller.task)?.group;
-                    state.decrement_group_ref_count(group)?;
-                }
-
                 self.set_thread(caller)?;
                 if materialized_task.is_none() {
                     let state = self.concurrent_state_mut()?;
@@ -2130,7 +2031,7 @@ impl StoreOpaque {
                     "delete host task with caller {original_task:?} and materialized as {materialized_task:?}"
                 );
                 if let Some(task) = materialized_task {
-                    self.concurrent_state_mut()?.delete(task)?;
+                    Waitable::Host(task).delete_from(self)?;
                 }
             }
             None => {
@@ -2153,7 +2054,7 @@ impl StoreOpaque {
     /// This will save off any state necessary for the previous thread, if
     /// applicable, and then it'll additionally update state for `thread` if
     /// needed too.
-    fn set_thread(&mut self, thread: impl Into<CurrentThread>) -> Result<CurrentThread> {
+    pub(crate) fn set_thread(&mut self, thread: impl Into<CurrentThread>) -> Result<CurrentThread> {
         let thread = thread.into();
         let state = self.concurrent_state_mut()?;
         state.debug_assert_deferred_host_invariant();
@@ -2672,7 +2573,7 @@ impl StoreOpaque {
             .table
             .get_mut()
             .iter_mut()
-            .filter_map(|entry| {
+            .filter_map(|(_, entry)| {
                 if let Some(task) = entry.downcast_ref::<GuestTask>() {
                     Some(task.instance)
                 } else {
@@ -3218,14 +3119,6 @@ impl Instance {
         let token = StoreToken::new(store.as_context_mut());
         let old_thread = store.0.current_guest_thread()?;
 
-        #[cfg(feature = "task-group-hook")]
-        let group = {
-            let state = store.0.concurrent_state_mut()?;
-            let group = state.get_mut(old_thread.task)?.group;
-            state.increment_group_ref_count(group)?;
-            group
-        };
-
         let state = store.0.concurrent_state_mut()?;
 
         debug_assert_eq!(
@@ -3339,8 +3232,6 @@ impl Instance {
             // We don't know whether the callee export was lifted sync or async
             // yet, but we'll update this in `start_call`:
             false,
-            #[cfg(feature = "task-group-hook")]
-            group,
         )?;
 
         // Make the new thread the current one so that `Self::start_call` knows
@@ -3955,12 +3846,6 @@ impl Instance {
                 HostTaskState::CalleeStarted | HostTaskState::CalleeFinished(_) => {
                     bail_bug!("invalid state for callee in `subtask.drop`")
                 }
-            }
-
-            #[cfg(feature = "task-group-hook")]
-            {
-                let group = task.group;
-                concurrent_state.decrement_group_ref_count(group)?;
             }
 
             (Waitable::Host(id), true)
@@ -5113,16 +4998,27 @@ enum HostTaskState {
 
 impl HostTask {
     fn new(
+        concurrent_state: &mut ConcurrentState,
         state: HostTaskState,
-        #[cfg(feature = "task-group-hook")] group: TableId<TaskGroup>,
-    ) -> Self {
-        Self {
+        caller: QualifiedThreadId,
+    ) -> Result<Self> {
+        #[cfg(feature = "task-group-hook")]
+        let group = {
+            let group = concurrent_state.get_mut(caller.task)?.group;
+            concurrent_state.increment_group_ref_count(group)?;
+            group
+        };
+
+        #[cfg(not(feature = "task-group-hook"))]
+        let _ = (concurrent_state, caller);
+
+        Ok(Self {
             common: WaitableCommon::default(),
             call_context: CallContext::default(),
             state,
             #[cfg(feature = "task-group-hook")]
             group,
-        }
+        })
     }
 }
 
@@ -5453,7 +5349,6 @@ impl GuestTask {
         instance: RuntimeInstance,
         async_typed: bool,
         async_lifted: bool,
-        #[cfg(feature = "task-group-hook")] group: TableId<TaskGroup>,
     ) -> Result<QualifiedThreadId> {
         let host_future_state = match &caller {
             Caller::Guest { .. } => HostFutureState::NotApplicable,
@@ -5468,6 +5363,17 @@ impl GuestTask {
                 }
             }
         };
+
+        #[cfg(feature = "task-group-hook")]
+        let group = match caller {
+            Caller::Guest { thread } => {
+                let group = state.get_mut(thread.task)?.group;
+                state.increment_group_ref_count(group)?;
+                group
+            }
+            Caller::Host { .. } => state.make_task_group()?,
+        };
+
         let task = state.push(Self {
             common: WaitableCommon::default(),
             lower_params: Some(lower_params),
@@ -5675,7 +5581,14 @@ impl Waitable {
         match self {
             Self::Host(task) => {
                 log::trace!("delete host task {task:?}");
-                store.concurrent_state_mut()?.delete(*task)?;
+                let state = store.concurrent_state_mut()?;
+                let task = state.delete(*task)?;
+
+                #[cfg(feature = "task-group-hook")]
+                state.decrement_group_ref_count(task.group)?;
+
+                #[cfg(not(feature = "task-group-hook"))]
+                let _ = task;
             }
             Self::Guest(task) => {
                 log::trace!("delete guest task {task:?}");
@@ -5801,17 +5714,6 @@ impl CurrentThread {
 
     fn is_none(&self) -> bool {
         matches!(self, Self::None)
-    }
-
-    #[cfg(feature = "task-group-hook")]
-    fn group(&self, state: &mut ConcurrentState) -> Result<Option<TableId<TaskGroup>>> {
-        Ok(match self {
-            Self::Guest(thread) | Self::DeferredHost(thread) => {
-                Some(state.get_mut(thread.task)?.group)
-            }
-            Self::Host(task) => Some(state.get_mut(*task)?.group),
-            Self::None => None,
-        })
     }
 }
 
@@ -5981,7 +5883,7 @@ impl ConcurrentState {
         futures: &mut Vec<FuturesUnordered<HostTaskFuture>>,
     ) {
         let mut items = Vec::new();
-        for entry in self.table.get_mut().iter_mut() {
+        for (_, entry) in self.table.get_mut().iter_mut() {
             if let Some(set) = entry.downcast_mut::<WaitableSet>() {
                 for mode in mem::take(&mut set.waiting).into_values() {
                     match mode {
@@ -6080,7 +5982,7 @@ impl ConcurrentState {
                 task_group_hook: _,
         } = self;
 
-        for entry in table.get_mut().iter_mut() {
+        for (_, entry) in table.get_mut().iter_mut() {
             if let Some(set) = entry.downcast_mut::<WaitableSet>() {
                 for mode in set.waiting.values_mut() {
                     match mode {
@@ -6329,18 +6231,9 @@ impl ConcurrentState {
             thread => return Ok(thread),
         };
 
-        #[cfg(feature = "task-group-hook")]
-        let group = self.get_mut(caller.task)?.group;
-
-        #[cfg(not(feature = "task-group-hook"))]
-        let _ = caller;
-
         // Push first so allocation failure leaves the deferred state intact.
-        let task = self.push(HostTask::new(
-            HostTaskState::CalleeStarted,
-            #[cfg(feature = "task-group-hook")]
-            group,
-        ))?;
+        let task = HostTask::new(self, HostTaskState::CalleeStarted, caller)?;
+        let task = self.push(task)?;
         let call_context = self
             .deferred_host_call_context
             .take()
@@ -6374,39 +6267,6 @@ impl ConcurrentState {
             CurrentThread::Host(id) => Ok(Scope::HostId(id.rep())),
             _ => bail_bug!("current scope is not a deferred host scope"),
         }
-    }
-
-    #[cfg(feature = "task-group-hook")]
-    fn make_task_group(&mut self) -> Result<TableId<TaskGroup>> {
-        let group = self.push(TaskGroup { ref_count: 1 })?;
-        if let Some(hook) = &mut self.task_group_hook {
-            hook.handle_start(TaskGroupId(group))?;
-        }
-        log::trace!("new {group:?}");
-        Ok(group)
-    }
-
-    #[cfg(feature = "task-group-hook")]
-    fn increment_group_ref_count(&mut self, group: TableId<TaskGroup>) -> Result<()> {
-        let count = &mut self.get_mut(group)?.ref_count;
-        *count += 1;
-        log::trace!("increment {group:?} to {count}");
-        Ok(())
-    }
-
-    #[cfg(feature = "task-group-hook")]
-    fn decrement_group_ref_count(&mut self, group: TableId<TaskGroup>) -> Result<()> {
-        let count = &mut self.get_mut(group)?.ref_count;
-        assert!(*count >= 1);
-        *count -= 1;
-        log::trace!("decrement {group:?} to {count}");
-        if *count == 0 {
-            self.delete(group)?;
-            if let Some(hook) = &mut self.task_group_hook {
-                hook.handle_finish(TaskGroupId(group))?;
-            }
-        }
-        Ok(())
     }
 }
 
@@ -6467,17 +6327,6 @@ enum WaitableCheck {
     Wait,
     Poll,
 }
-
-/// An identifier representing a guest task within a component.
-///
-/// This can be acquired by calling [`Func::start_call_concurrent`] or
-/// [`TypedFunc::start_call_concurrent`] and then using the
-/// [`FuncCallConcurrent::task`] accessor, for example. This can then be
-/// reflected on with [`StoreContextMut::async_call_stack`].
-///
-/// [`TypedFunc::start_call_concurrent`]: crate::component::TypedFunc::start_call_concurrent
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct GuestTaskId(TableId<GuestTask>);
 
 /// Represents a guest task called from the host, prepared using `prepare_call`.
 pub(crate) struct PreparedCall<R> {
@@ -6578,9 +6427,6 @@ pub(crate) fn prepare_call<T, R>(
     let caller = store.0.materialize_host_task_id()?;
     let state = store.0.concurrent_state_mut()?;
 
-    #[cfg(feature = "task-group-hook")]
-    let group = state.make_task_group()?;
-
     let (tx, rx) = oneshot::channel();
 
     let instance = handle.instance().runtime_instance(component_instance);
@@ -6615,8 +6461,6 @@ pub(crate) fn prepare_call<T, R>(
         instance,
         async_typed,
         async_lifted,
-        #[cfg(feature = "task-group-hook")]
-        group,
     )?;
 
     Ok(PreparedCall {
@@ -6631,9 +6475,10 @@ pub(crate) fn prepare_call<T, R>(
 
 pub(crate) struct StagedCall<R> {
     store: StoreId,
-    task: TableId<GuestTask>,
     rx: oneshot::Receiver<LiftedResult>,
     _marker: PhantomData<fn() -> R>,
+    #[cfg(feature = "task-group-hook")]
+    group: TableId<TaskGroup>,
 }
 
 impl<R> StagedCall<R> {
@@ -6659,14 +6504,11 @@ impl<R> StagedCall<R> {
 
         Ok(StagedCall {
             store: store.0.id(),
-            task: thread.task,
             rx,
             _marker: PhantomData,
+            #[cfg(feature = "task-group-hook")]
+            group: store.0.concurrent_state_mut()?.get_mut(thread.task)?.group,
         })
-    }
-
-    fn task(&self) -> GuestTaskId {
-        GuestTaskId(self.task)
     }
 }
 

@@ -121,8 +121,8 @@ pub use self::component::{Component, ComponentExportIndex, ExportLookup};
 pub use self::concurrent::{
     Access, Accessor, AccessorTask, AsAccessor, Destination, DirectDestination, DirectSource,
     ErrorContext, FuncCallConcurrent, FutureAny, FutureConsumer, FutureProducer, FutureReader,
-    GuardedFutureReader, GuardedStreamReader, GuestTaskId, JoinHandle, ReadBuffer, Source,
-    StreamAny, StreamConsumer, StreamProducer, StreamReader, StreamResult, TypedFuncCallConcurrent,
+    GuardedFutureReader, GuardedStreamReader, JoinHandle, ReadBuffer, Source, StreamAny,
+    StreamConsumer, StreamProducer, StreamReader, StreamResult, TypedFuncCallConcurrent,
     VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
 #[cfg(feature = "task-group-hook")]

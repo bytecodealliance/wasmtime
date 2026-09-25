@@ -1,5 +1,5 @@
 use crate::component::concurrent::TaskId;
-use crate::component::concurrent::{self, GuestTaskId, PreparedCall};
+use crate::component::concurrent::{self, PreparedCall};
 use crate::component::func::LowerContext;
 use crate::component::{AsAccessor, ComponentNamedList, Func, Lift, Lower, TypedFunc, Val};
 use crate::prelude::*;
@@ -13,7 +13,7 @@ use wasmtime_environ::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESUL
 /// Returned from [`Func::start_call_concurrent`] to represent a
 /// pending-but-not-yet-resolved call into wasm.
 pub struct FuncCallConcurrent<'a, T> {
-    call: concurrent::StagedCall<Vec<Val>>,
+    pub(crate) call: concurrent::StagedCall<Vec<Val>>,
     results: &'a mut [Val],
     _marker: marker::PhantomData<fn(T)>,
 }
@@ -134,6 +134,21 @@ impl Func {
         params: &'a [Val],
         results: &'a mut [Val],
     ) -> Result<FuncCallConcurrent<'a, T>> {
+        let result = self.do_start_call_concurrent(&mut store, params, results);
+
+        if result.is_err() {
+            store.as_context_mut().0.set_trapped();
+        }
+
+        result
+    }
+
+    fn do_start_call_concurrent<'a, T: Send + 'static>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        params: &'a [Val],
+        results: &'a mut [Val],
+    ) -> Result<FuncCallConcurrent<'a, T>> {
         self.check_params_results(store.as_context_mut(), params, results)?;
         let prepared = self.prepare_call_dynamic(store.as_context_mut(), params.to_vec())?;
         let call = concurrent::StagedCall::new(store.as_context_mut(), prepared)?;
@@ -200,20 +215,10 @@ impl Func {
     }
 }
 
-impl<T> FuncCallConcurrent<'_, T> {
-    /// Returns the task that this invocation corresponds to.
-    ///
-    /// This can be later correlated with [`StoreContextMut::async_call_stack`]
-    /// for example.
-    pub fn task(&self) -> GuestTaskId {
-        self.call.task()
-    }
-}
-
 /// Returned from [`TypedFunc::start_call_concurrent`] to represent a
 /// pending-but-not-yet-resolved call into wasm.
 pub struct TypedFuncCallConcurrent<T, P, R> {
-    call: concurrent::StagedCall<R>,
+    pub(crate) call: concurrent::StagedCall<R>,
     _marker: marker::PhantomData<fn(T, P)>,
 }
 
@@ -483,15 +488,5 @@ where
                 Ok(Box::new(result))
             },
         )
-    }
-}
-
-impl<T, P, R> TypedFuncCallConcurrent<T, P, R> {
-    /// Returns the task that this invocation corresponds to.
-    ///
-    /// This can be later correlated with [`StoreContextMut::async_call_stack`]
-    /// for example.
-    pub fn task(&self) -> GuestTaskId {
-        self.call.task()
     }
 }
