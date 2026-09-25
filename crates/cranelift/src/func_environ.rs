@@ -575,6 +575,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.fuel_save_from_var(builder);
     }
 
+    /// Folds any fuel buffered in `self.fuel_consumed` into `self.fuel_var`.
+    ///
+    /// Functions translated from wasm do this as part of their trailing `end`
+    /// operator. A synthesized function has no `end` operator, so it has to call
+    /// this itself before returning; otherwise the charges it buffered would be
+    /// dropped when `fuel_function_exit` saves `self.fuel_var`.
+    pub fn fuel_flush_consumed(&mut self, builder: &mut FunctionBuilder<'_>) {
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+        }
+    }
+
     fn fuel_before_op(
         &mut self,
         op: &Operator<'_>,
