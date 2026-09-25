@@ -130,6 +130,30 @@ fn test_fd_filestat_set_times(dir: &Descriptor, flags: DescriptorFlags) {
     dir.unlink_file_at("file").expect("failed to remove file");
 }
 
+fn test_fd_filestat_set_times_on_directory(dir: &Descriptor) {
+    // Setting times on the directory descriptor itself has to work too,
+    // because preopened directories are held open with `O_PATH`.
+    let stat = dir.stat().expect("failed stat on dir");
+    let new_mtim = to_duration(stat.data_modification_timestamp) + Duration::from_secs(100);
+
+    // Windows rejects set-times on a directory handle that was opened
+    // read-only, the way it does for read-only files, so skip the test in that
+    // case.
+    if dir
+        .set_times(NewTimestamp::NoChange, to_timestamp(new_mtim))
+        .is_err()
+    {
+        return;
+    }
+
+    let stat = dir.stat().expect("failed stat on dir");
+    assert_eq!(
+        to_duration(stat.data_modification_timestamp),
+        new_mtim,
+        "dir mtim should change"
+    );
+}
+
 fn main() {
     let preopens = get_directories();
     let (dir, _name) = &preopens[0];
@@ -144,4 +168,6 @@ fn main() {
     // set or not, not than the open mode.
     test_fd_filestat_set_times(dir, DescriptorFlags::READ);
     test_fd_filestat_set_times(dir, DescriptorFlags::READ | DescriptorFlags::WRITE);
+
+    test_fd_filestat_set_times_on_directory(dir);
 }

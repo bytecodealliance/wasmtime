@@ -740,15 +740,16 @@ mod tests {
         Ok((resp, values))
     }
 
-    /// A path to a fake solver: a shell script that speaks just enough of the
-    /// SMT-LIB2 protocol (with :print-success) to answer a session.
+    /// Configure `builder` to spawn the fake solver on a cache miss.
     #[cfg(unix)]
-    fn fake_solver(dir: &std::path::Path) -> PathBuf {
-        use std::os::unix::fs::PermissionsExt;
-        let path = dir.join("fake-solver.sh");
-        std::fs::write(
-            &path,
-            r#"#!/bin/sh
+    fn fake_solver(builder: &mut ContextBuilder) -> &mut ContextBuilder {
+        builder
+            .solver("/bin/sh")
+            // A fake solver: a shell script that speaks just enough of the
+            // SMT-LIB2 protocol (with :print-success) to answer a session.
+            .solver_args([
+                "-c",
+                r#"
 while IFS= read -r line; do
     case "$line" in
         "(check-sat)") echo "sat" ;;
@@ -758,10 +759,7 @@ while IFS= read -r line; do
     esac
 done
 "#,
-        )
-        .unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        path
+            ])
     }
 
     /// End-to-end: a first session against a (fake) live solver populates the
@@ -779,8 +777,7 @@ done
         ));
 
         // First run: misses; spawns the fake solver.
-        let mut ctx = ContextBuilder::new()
-            .solver(fake_solver(dir.path()))
+        let mut ctx = fake_solver(&mut ContextBuilder::new())
             .cache(cache.clone())
             .build()
             .unwrap();
@@ -793,7 +790,7 @@ done
         // Second run: everything is served from the cache; the "solver" is
         // unspawnable, but must be named like the fake solver so the cache
         // keys match. No solver is launched.
-        let unspawnable = PathBuf::from("/nonexistent/dir/fake-solver.sh");
+        let unspawnable = PathBuf::from("/nonexistent/dir/sh");
         let cache = Arc::new(Cache::open(
             Some(cache_dir),
             None,
@@ -823,8 +820,7 @@ done
             CacheMode::ReadWrite,
         ));
 
-        let mut ctx = ContextBuilder::new()
-            .solver(fake_solver(dir.path()))
+        let mut ctx = fake_solver(&mut ContextBuilder::new())
             .cache(cache.clone())
             .build()
             .unwrap();

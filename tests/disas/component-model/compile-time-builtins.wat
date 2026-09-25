@@ -417,12 +417,9 @@
 ;;                                     jump block51
 ;;
 ;;                                 block51:
-;;                                     v87 = load.i32 notrap aligned region4 v23
-;;                                     trapz v87, user26
 ;;                                     jump block54
 ;;
 ;;                                 block54:
-;;                                     v89 = load.i32 notrap aligned region5 v25
 ;;                                     jump block57
 ;;
 ;;                                 block57:

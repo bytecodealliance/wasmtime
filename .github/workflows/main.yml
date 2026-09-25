@@ -66,7 +66,7 @@ jobs:
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
   clangformat:
     name: Clang format
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
     - uses: actions/checkout@v6
       with:
@@ -75,7 +75,7 @@ jobs:
         git ls-files '*.h' '*.c' '*.cpp' '*.hh' '*.cc' | \
           grep -v wasmtime-platform.h | \
           grep -v wasm.h | \
-          xargs clang-format-18 --dry-run --Werror --verbose
+          xargs clang-format-22 --dry-run --Werror --verbose
     # Make sure our `clangformat.sh` helper script keeps running and stays
     # in-sync with the previous check.
     - run: crates/c-api/clangformat.sh
@@ -804,7 +804,7 @@ jobs:
           # linking, and this is intended to be the "main set of tests".
           #
           # Run this on windows/mac/linux
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             # Only run the "plugins" example on Linux
             flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON -DBUILD_RUST_PLUGINS_EXAMPLE=ON
             name: Linux
@@ -821,12 +821,12 @@ jobs:
           # This tests using static linking for examples but skips building the
           # Rust examples as well as C/C++ tests. Intended to be a faster build
           # which mostly just tests static linking.
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
             name: Linux (static linking)
 
           # Run tests with ASAN for leak checking primarily.
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             flags: -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
             name: Linux (ASAN)
     steps:
@@ -1114,7 +1114,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-dwarf
     name: Test DWARF debugging
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
     - uses: actions/checkout@v6
       with:
@@ -1145,7 +1145,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-dwarf
     name: Test guest debugging
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
     - uses: actions/checkout@v6
       with:
