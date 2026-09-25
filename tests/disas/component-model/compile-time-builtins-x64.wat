@@ -180,33 +180,29 @@
 ;;       movq    0xe8(%rcx), %rax
 ;;       movl    (%rax), %edx
 ;;       testl   %edx, %edx
-;;       je      0x179
+;;       je      0x16d
 ;;  119: movq    0x48(%rcx), %rcx
 ;;       movq    8(%rcx), %rcx
 ;;       movq    0x68(%rcx), %rcx
 ;;       movq    8(%rcx), %rdx
 ;;       xorq    %rsi, %rsi
 ;;       cmpq    %rdx, %rsi
-;;       jae     0x174
+;;       jae     0x168
 ;;  135: movl    (%rax), %edi
 ;;       testl   %edi, %edi
-;;       je      0x17b
+;;       je      0x16f
 ;;  13f: movq    8(%rcx), %rdi
 ;;       cmpq    %rdi, %rsi
-;;       jae     0x17d
+;;       jae     0x171
 ;;  14c: movq    (%rcx), %rdi
 ;;       movzbq  (%rdi, %rsi), %r8
-;;       movl    (%rax), %r9d
-;;       testl   %r9d, %r9d
-;;       je      0x17f
-;;  160: addb    $1, %r8b
+;;       addb    $1, %r8b
 ;;       movb    %r8b, (%rdi, %rsi)
 ;;       addq    $1, %rsi
 ;;       jmp     0x12c
-;;  174: movq    %rbp, %rsp
+;;  168: movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  179: ud2
-;;  17b: ud2
-;;  17d: ud2
-;;  17f: ud2
+;;  16d: ud2
+;;  16f: ud2
+;;  171: ud2
