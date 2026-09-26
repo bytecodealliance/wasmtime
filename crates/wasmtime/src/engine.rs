@@ -811,25 +811,20 @@ impl Engine {
     /// Releases memory the pooling allocator is keeping resident for slots
     /// that are not currently in use, returning how many bytes were released.
     ///
-    /// `PoolingAllocationConfig::linear_memory_keep_resident` trades memory
-    /// for page faults: after a slot is freed, up to that much of it is reset
-    /// in place and left resident so the next instantiation does not fault it
-    /// back in. That is the right trade while slots are being reused every
-    /// few milliseconds, and the wrong one for a slot nothing has touched in
-    /// a long time — resident memory then follows the peak concurrency a
-    /// process has ever seen rather than its current load. Because the
-    /// setting is fixed when the [`Engine`] is built, an embedder could
-    /// previously only choose "always keep" or "never keep".
+    /// [`PoolingAllocationConfig::linear_memory_keep_resident`] keeps memory
+    /// resident after an instance slot is freed, in order to enable faster
+    /// instantiation on the next use of the same module. This increases
+    /// resident memory size. If an embedder knows that load has decreased and
+    /// wishes to free up memory, it might wish to purge these "warm slots".
     ///
-    /// This is that third choice, driven by the embedder: an embedder that
-    /// knows when it has gone idle can call this from that path, and nothing
-    /// inside Wasmtime needs a timer. The next instantiation in those slots
-    /// re-faults their pages; nothing else is affected, and the contents are
-    /// unchanged — the resident region holds exactly what the mapping
-    /// restores on its own.
+    /// This method releases all resident memory held by warm but unused
+    /// slots. The tradeoff is that the next instantiation of any given module
+    /// may be slower, because no cached memory mappings are present anymore.
     ///
     /// Returns 0 if this engine is not using the pooling allocator, or if
     /// nothing was resident to release.
+    ///
+    /// [`PoolingAllocationConfig::linear_memory_keep_resident`]: crate::PoolingAllocationConfig::linear_memory_keep_resident
     ///
     /// # Example
     ///
@@ -840,7 +835,7 @@ impl Engine {
     /// config.allocation_strategy(InstanceAllocationStrategy::pooling());
     /// let engine = Engine::new(&config)?;
     ///
-    /// // ... once the embedder knows it is idle ...
+    /// // ... once the embedder knows load has decreased ...
     /// let _bytes = engine.release_idle_pool_memory();
     /// # Ok(())
     /// # }

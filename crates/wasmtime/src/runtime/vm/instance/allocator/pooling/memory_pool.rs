@@ -579,27 +579,18 @@ impl MemoryPool {
         }
     }
 
-    /// Releases the memory this pool is keeping resident for slots that are
-    /// not in use, returning how many bytes were released.
+    /// Releases the memory this pool is keeping resident for unused-but-warm
+    /// slots.
     ///
-    /// `linear_memory_keep_resident` trades memory for page faults: after a
-    /// slot is freed, up to that much of it is reset in place and left
-    /// resident so the next instantiation does not fault it back in. That is
-    /// the right trade while slots are being reused, and the wrong one for a
-    /// slot nothing has touched in a long time — and because the setting is
-    /// fixed when the `Engine` is built, an embedder has had no way to say
-    /// "keep it while the load lasts".
+    /// Useful when the embedder knows that load has decreased and wishes to
+    /// reduce resident memory usage at the cost of some instantiation time at
+    /// the next instantiation.
     ///
-    /// Nothing unique is lost. The resident region holds exactly what the
-    /// mapping restores on its own: the image for a slot that has one (it was
-    /// written back by the reset) and zeros for a slot that does not. On a
-    /// platform whose `decommit_behavior` is `RestoreOriginalMapping` the
-    /// decommit puts back those same contents at the cost of a fault, which
-    /// is the trade the rest of the slot already makes.
+    /// Returns the number of bytes freed.
     ///
     /// Slots are taken out of the free lists before their memory is released
     /// and returned afterwards, so nothing can allocate a slot while it is
-    /// being decommitted — the same order `DecommitQueue::flush` uses.
+    /// being decommitted, the same order `DecommitQueue::flush` uses.
     pub fn release_resident_unused_memory(&self) -> usize {
         let mut released = 0;
         for (stripe_index, stripe) in self.stripes.iter().enumerate() {
@@ -624,9 +615,8 @@ impl MemoryPool {
             let decommitted = unsafe { decommit_pages(&iov) }.is_ok();
 
             // A failed decommit leaves the pages resident with the contents
-            // they had, which is a correct state — the slots go back
-            // reporting the same bytes they did before, and nothing is lost
-            // but the reclaim.
+            // they had, which is a correct state: the slots go back reporting
+            // the same bytes as before and nothing but the reclaim is lost.
             for (id, bytes_resident) in taken {
                 if decommitted {
                     released += bytes_resident;

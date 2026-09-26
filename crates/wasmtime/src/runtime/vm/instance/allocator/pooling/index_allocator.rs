@@ -579,16 +579,15 @@ impl ModuleAffinityIndexAllocator {
             .sum()
     }
 
-    /// Returns the number of bytes that are resident in previously-used slots
-    /// in this allocator which are not currently in use.
+    /// Takes every warm slot that still has resident memory out of the free
+    /// lists, returning each slot and the number of bytes it has resident.
     ///
-    /// Note that this acquires a `Mutex` for synchronization at this time to
-    /// read the internal counter information.
-    /// See [`super::index_allocator::IndexAllocator::take_resident_warm_slots`].
+    /// The slots are marked used so that nothing can allocate them while
+    /// their memory is being released; the caller frees each one again
+    /// afterwards.
     ///
-    /// Each shard is locked in turn rather than all at once: a caller is
-    /// reclaiming memory, not taking a snapshot, and holding every shard's
-    /// lock would stall allocation across the whole pool.
+    /// Shards are locked one at a time rather than all at once, since this
+    /// is reclaiming memory rather than taking a snapshot.
     pub(crate) fn take_resident_warm_slots(&self) -> Vec<(SlotId, usize)> {
         let mut taken = Vec::new();
         for (shard_index, shard) in self.shards.iter().enumerate() {
@@ -614,11 +613,9 @@ impl ModuleAffinityIndexAllocator {
                 let affinity = inner.slot_state[slot.index()].unwrap_unused().affinity;
                 inner.remove(slot);
                 inner.unused_bytes_resident -= bytes_resident;
-                // Keep the affinity. `free` reads it back out of this payload
-                // to re-file the slot on its module's affine list, so writing
-                // `Used(None)` here would quietly un-affine every slot this
-                // touches — turning a call made to reclaim memory into a
-                // regression in image reuse.
+                // Keep the affinity: `free` reads it back out of this payload
+                // to re-file the slot on its module's affine list, so
+                // `Used(None)` here would un-affine every slot touched.
                 inner.slot_state[slot.index()] = SlotState::Used(affinity);
                 taken.push((
                     self.global_id(ShardId::from_index(shard_index), slot),
@@ -629,6 +626,11 @@ impl ModuleAffinityIndexAllocator {
         taken
     }
 
+    /// Returns the number of bytes that are resident in previously-used slots
+    /// in this allocator which are not currently in use.
+    ///
+    /// Note that this acquires a `Mutex` for synchronization at this time to
+    /// read the internal counter information.
     pub fn unused_bytes_resident(&self) -> usize {
         self.shards
             .iter()
@@ -801,10 +803,8 @@ mod test {
     }
 
     /// Taking slots out to release their memory must not cost them their
-    /// affinity. `free` reads the module back out of the `Used` payload to
-    /// re-file the slot on its module's affine list, so a `Used(None)` here
-    /// would un-affine every slot touched — a reclaim call that quietly
-    /// makes the next instantiation remap its image.
+    /// affinity: `free` reads the module back out of the `Used` payload to
+    /// re-file the slot on its module's affine list.
     #[test]
     fn take_resident_warm_slots_keeps_affinity() {
         let id = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
