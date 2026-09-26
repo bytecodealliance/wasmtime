@@ -268,6 +268,13 @@ impl Drop for PoolingInstanceAllocator {
 }
 
 impl PoolingInstanceAllocator {
+    /// Releases memory kept resident for unused slots, returning the number
+    /// of bytes released. See
+    /// [`MemoryPool::release_resident_unused_memory`].
+    pub fn release_resident_unused_memory(&self) -> usize {
+        self.memories.release_resident_unused_memory()
+    }
+
     /// Creates a new pooling instance allocator with the given strategy and limits.
     pub fn new(config: &PoolingAllocationConfig, tunables: &Tunables) -> Result<Self> {
         Ok(Self {

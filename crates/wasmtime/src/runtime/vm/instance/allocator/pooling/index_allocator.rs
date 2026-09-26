@@ -579,6 +579,53 @@ impl ModuleAffinityIndexAllocator {
             .sum()
     }
 
+    /// Takes every warm slot that still has resident memory out of the free
+    /// lists, returning each slot and the number of bytes it has resident.
+    ///
+    /// The slots are marked used so that nothing can allocate them while
+    /// their memory is being released; the caller frees each one again
+    /// afterwards.
+    ///
+    /// Shards are locked one at a time rather than all at once, since this
+    /// is reclaiming memory rather than taking a snapshot.
+    pub(crate) fn take_resident_warm_slots(&self) -> Vec<(SlotId, usize)> {
+        let mut taken = Vec::new();
+        for (shard_index, shard) in self.shards.iter().enumerate() {
+            let mut inner = shard.0.lock().unwrap();
+
+            // Walk the warm list first and only then remove, because
+            // `remove` unlinks the very entries this walk is following.
+            let mut resident = Vec::new();
+            let mut next = inner.warm.head;
+            while let Some(slot) = next {
+                let unused = match &inner.slot_state[slot.index()] {
+                    SlotState::UnusedWarm(u) => *u,
+                    // The warm list only contains warm slots.
+                    _ => unreachable!(),
+                };
+                next = unused.unused_list_link.next;
+                if unused.bytes_resident > 0 {
+                    resident.push((slot, unused.bytes_resident));
+                }
+            }
+
+            for (slot, bytes_resident) in resident {
+                let affinity = inner.slot_state[slot.index()].unwrap_unused().affinity;
+                inner.remove(slot);
+                inner.unused_bytes_resident -= bytes_resident;
+                // Keep the affinity: `free` reads it back out of this payload
+                // to re-file the slot on its module's affine list, so
+                // `Used(None)` here would un-affine every slot touched.
+                inner.slot_state[slot.index()] = SlotState::Used(affinity);
+                taken.push((
+                    self.global_id(ShardId::from_index(shard_index), slot),
+                    bytes_resident,
+                ));
+            }
+        }
+        taken
+    }
+
     /// Returns the number of bytes that are resident in previously-used slots
     /// in this allocator which are not currently in use.
     ///
@@ -753,6 +800,32 @@ mod test {
             }
             assert!(state.alloc(None).is_none());
         }
+    }
+
+    /// Taking slots out to release their memory must not cost them their
+    /// affinity: `free` reads the module back out of the `Used` payload to
+    /// re-file the slot on its module's affine list.
+    #[test]
+    fn take_resident_warm_slots_keeps_affinity() {
+        let id = MemoryInModule(CompiledModuleId::new(), DefinedMemoryIndex::new(0));
+        let state = ModuleAffinityIndexAllocator::new(4, 4).unwrap();
+
+        let index = state.alloc(Some(id)).unwrap();
+        state.free(index, 4096);
+        assert_eq!(state.unused_bytes_resident(), 4096);
+
+        let taken = state.take_resident_warm_slots();
+        assert_eq!(taken, vec![(index, 4096)]);
+        // While taken, the slot is neither warm nor counted as resident.
+        assert_eq!(state.unused_bytes_resident(), 0);
+        assert_eq!(state.unused_warm_slots(), 0);
+
+        state.free(index, 0);
+        assert_eq!(state.unused_bytes_resident(), 0);
+        assert_eq!(state.unused_warm_slots(), 1);
+        assert!(state.testing_module_affinity_list().contains(&id));
+        // And the affinity is real: the same module gets the same slot back.
+        assert_eq!(state.alloc(Some(id)).unwrap(), index);
     }
 
     #[test]
