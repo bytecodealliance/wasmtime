@@ -1,6 +1,86 @@
 //! Cost functions for egraph representation.
 
-use crate::ir::Opcode;
+use crate::ir::{DataFlowGraph, Inst, Opcode};
+use alloc::vec::Vec;
+use core::cmp::Ordering;
+use cranelift_entity::EntityRef;
+
+/// Cost of an expression as a DAG of instructions.
+///
+/// The total counts each instruction once. A value used twice by the same
+/// expression, as in `iadd x, x`, does not pay for `x` twice. This is the
+/// cold path: it runs only for a function whose scalar costs saturated.
+#[derive(Clone, Debug)]
+pub(crate) struct ExprCost {
+    total: Cost,
+    /// Sorted instruction indices.
+    insts: Vec<u32>,
+}
+
+impl ExprCost {
+    pub(crate) fn zero() -> Self {
+        Self {
+            total: Cost::zero(),
+            insts: Vec::new(),
+        }
+    }
+
+    pub(crate) fn total(&self) -> Cost {
+        self.total
+    }
+
+    pub(crate) fn for_inst(dfg: &DataFlowGraph, inst: Inst) -> Self {
+        Self {
+            total: Cost::of_opcode(dfg.insts[inst].opcode()),
+            insts: vec![u32::try_from(inst.index()).unwrap()],
+        }
+    }
+
+    /// Union `other` into `self`, adding an opcode cost only for instructions
+    /// that were not already required.
+    pub(crate) fn add(&mut self, dfg: &DataFlowGraph, other: &Self) {
+        if other.insts.is_empty() {
+            return;
+        }
+        if self.insts.is_empty() {
+            *self = other.clone();
+            return;
+        }
+        let mut merged = Vec::with_capacity(self.insts.len() + other.insts.len());
+        let mut i = 0;
+        let mut j = 0;
+        while i < self.insts.len() && j < other.insts.len() {
+            match self.insts[i].cmp(&other.insts[j]) {
+                Ordering::Less => {
+                    merged.push(self.insts[i]);
+                    i += 1;
+                }
+                Ordering::Greater => {
+                    let inst = Inst::new(usize::try_from(other.insts[j]).unwrap());
+                    self.total = self.total + Cost::of_opcode(dfg.insts[inst].opcode());
+                    merged.push(other.insts[j]);
+                    j += 1;
+                }
+                Ordering::Equal => {
+                    merged.push(self.insts[i]);
+                    i += 1;
+                    j += 1;
+                }
+            }
+        }
+        while i < self.insts.len() {
+            merged.push(self.insts[i]);
+            i += 1;
+        }
+        while j < other.insts.len() {
+            let inst = Inst::new(usize::try_from(other.insts[j]).unwrap());
+            self.total = self.total + Cost::of_opcode(dfg.insts[inst].opcode());
+            merged.push(other.insts[j]);
+            j += 1;
+        }
+        self.insts = merged;
+    }
+}
 
 /// A cost of computing some value in the program.
 ///
