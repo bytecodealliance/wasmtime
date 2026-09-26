@@ -125,6 +125,8 @@ pub use self::concurrent::{
     StreamAny, StreamConsumer, StreamProducer, StreamReader, StreamResult, TypedFuncCallConcurrent,
     VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
+#[cfg(feature = "task-group-hook")]
+pub use self::concurrent::{TaskGroupHook, TaskGroupId};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
