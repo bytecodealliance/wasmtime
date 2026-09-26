@@ -637,6 +637,17 @@ macro_rules! for_each_vm_type {
 
                 /// The index within `handlers` of the first `switch` handler.
                 pub first_switch_handler_index: u32,
+
+                /// Bottom of the usable stack range reported to ASan,
+                /// or `None` until ASan discovers an initial stack's
+                /// bounds.  Technically only needed by the runtime,
+                /// but we are using `VmPtr` here to avoid introducing
+                /// macro rules for `*mut u8` just for the sake of ASan
+                /// builds.
+                pub asan_stack_bottom: Option<VmPtr<u8>>,
+
+                /// Size of the usable stack range reported to ASan.
+                pub asan_stack_size: usize,
             }
 
             /// A continuation.

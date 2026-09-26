@@ -62,6 +62,8 @@ use core::ptr::NonNull;
 use std::io;
 use std::ops::Range;
 use std::ptr;
+#[cfg(asan)]
+use std::sync::Mutex;
 
 use crate::prelude::*;
 use crate::runtime::vm::{VMContext, VMFuncRef, VMHostArray, VMPayloads, ValRaw, VmPtr};
@@ -71,6 +73,13 @@ pub enum Allocator {
     Mmap,
     Custom,
 }
+
+// ASan retains metadata for addresses that have been used as
+// stacks. We keep continuation mappings alive and reuse them instead
+// to avoid false-positives to arise from the memory subsystem
+// choosing to repurpose previous stack space.
+#[cfg(asan)]
+static ASAN_STACKS: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
 
 #[derive(Debug)]
 #[repr(C)]
@@ -99,6 +108,25 @@ impl VMContinuationStack {
         unsafe {
             // Add in one page for a guard page and then ask for some memory.
             let mmap_len = size + page_size;
+
+            #[cfg(asan)]
+            if let Some((base, len)) = {
+                let mut stacks = ASAN_STACKS.lock().unwrap();
+                stacks
+                    .iter()
+                    .position(|(_, len)| *len == mmap_len)
+                    .map(|index| stacks.swap_remove(index))
+            } {
+                return Ok(Self {
+                    top: VmPtr::from(
+                        NonNull::new((base as *mut u8).add(len))
+                            .expect("a cached continuation stack must have a non-null top"),
+                    ),
+                    len,
+                    allocator: Allocator::Mmap,
+                });
+            }
+
             let mmap = rustix::mm::mmap_anonymous(
                 ptr::null_mut(),
                 mmap_len,
@@ -159,6 +187,23 @@ impl VMContinuationStack {
         let top = self.top.as_ptr();
         let base = unsafe { top.sub(self.len).addr() };
         Some(base..base + self.len)
+    }
+
+    #[cfg(asan)]
+    pub fn asan_range(&self) -> Option<Range<usize>> {
+        let top = self.top.addr().get();
+        let bottom = top - self.len;
+        let usable_bottom = match self.allocator {
+            Allocator::Mmap =>
+            // The ASan fiber switch API requires the bounds of
+            // the readable and writable stack region, therefore
+            // we disregard the guard page here.
+            {
+                bottom + rustix::param::page_size()
+            }
+            Allocator::Custom => bottom,
+        };
+        Some(usable_bottom..top)
     }
 
     pub fn control_context_instruction_pointer(&self) -> usize {
@@ -364,13 +409,27 @@ impl VMContinuationStack {
 }
 
 impl Drop for VMContinuationStack {
+    #[cfg(asan)]
     fn drop(&mut self) {
         unsafe {
             match self.allocator {
                 Allocator::Mmap => {
-                    let top = self.top.as_ptr();
-                    let ret = rustix::mm::munmap(top.sub(self.len) as _, self.len);
-                    debug_assert!(ret.is_ok());
+                    let bottom = self.top.as_ptr().sub(self.len);
+                    ASAN_STACKS.lock().unwrap().push((bottom.addr(), self.len))
+                }
+                Allocator::Custom => {} // It's the creator's responsibility to reclaim the memory.
+            }
+        }
+    }
+
+    #[cfg(not(asan))]
+    fn drop(&mut self) {
+        unsafe {
+            match self.allocator {
+                Allocator::Mmap => {
+                    let bottom = self.top.as_ptr().sub(self.len);
+                    let ret = rustix::mm::munmap(bottom as _, self.len);
+                    debug_assert!(ret.is_ok())
                 }
                 Allocator::Custom => {} // It's the creator's responsibility to reclaim the memory.
             }
@@ -387,6 +446,9 @@ unsafe extern "C" fn fiber_start(
     return_value_count: u32,
 ) -> bool {
     unsafe {
+        #[cfg(asan)]
+        crate::vm::stack_switching::asan::fiber_start_complete(args);
+
         let func_ref = NonNull::new(func_ref).unwrap();
         let caller_vmxtx = NonNull::new_unchecked(caller_vmctx);
         let args = &mut *args;

@@ -2689,6 +2689,12 @@ impl Config {
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
 
+        // Stack switching is emitted inline in compiled Wasm. In
+        // ASan-enabled builds the compiler must arrange the
+        // corresponding fiber switch handshake around every such
+        // instruction.
+        tunables.asan_stack_switching = cfg!(asan);
+
         // By default this is enabled with the Cargo feature, and if the feature
         // is missing this is disabled.
         tunables.concurrency_support = cfg!(feature = "component-model-async");

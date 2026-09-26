@@ -9,8 +9,8 @@ use cranelift_codegen::ir::{Block, BlockCall, InstBuilder, JumpTableData};
 use cranelift_frontend::FunctionBuilder;
 use itertools::{Either, Itertools};
 use wasmtime_environ::{
-    PtrSize, TagIndex, TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmValType,
-    wasm_unsupported,
+    BuiltinFunctionIndex, PtrSize, TagIndex, TypeIndex, WasmHeapType, WasmRefType, WasmResult,
+    WasmValType, wasm_unsupported,
 };
 
 fn control_context_size(triple: &target_lexicon::Triple) -> WasmResult<u8> {
@@ -20,6 +20,63 @@ fn control_context_size(triple: &target_lexicon::Triple) -> WasmResult<u8> {
             "stack switching not supported on {triple}"
         )),
     }
+}
+
+/// Emit a stack switch instruction. On ASan-enabled builds this
+/// function also emits the fiber switch hooks.
+fn emit_stack_switch<'a>(
+    env: &mut crate::func_environ::FuncEnvironment<'a>,
+    builder: &mut FunctionBuilder,
+    store_context_ptr: ir::Value,
+    load_context_ptr: ir::Value,
+    payload: ir::Value,
+    asan_target_csi: impl FnOnce(
+        &mut crate::func_environ::FuncEnvironment<'a>,
+        &mut FunctionBuilder,
+    ) -> ir::Value,
+) -> ir::Value {
+    if !env.compiler.tunables().asan_stack_switching {
+        return builder
+            .ins()
+            .stack_switch(store_context_ptr, load_context_ptr, payload);
+    }
+
+    // ASan-aware stack switching.
+    // The `asan_target_csi` is provided as a function to lazily load
+    // the necessary ASan bookkeeping.
+    let target_csi = asan_target_csi(env, builder);
+    let pointer_type = env.pointer_type();
+    let slot = env.get_or_create_asan_fake_stack_slot(builder);
+    let fake_stack_save = builder.ins().stack_addr(pointer_type, slot, 0);
+    let region = env.alias_regions.stack_slot_region(builder.func, slot);
+    let flags = MemFlagsData::trusted().with_alias_region(Some(region));
+    let null = builder.ins().iconst(pointer_type, 0);
+    builder.ins().store(flags, null, fake_stack_save, 0);
+    let vmctx = env.vmctx_val(&mut builder.cursor());
+
+    let asan_start_switch_fiber = env.builtin_functions.load_builtin(
+        builder.func,
+        BuiltinFunctionIndex::asan_start_switch_fiber(),
+    );
+    builder.ins().call(
+        asan_start_switch_fiber,
+        &[vmctx, fake_stack_save, target_csi],
+    );
+
+    let result = builder
+        .ins()
+        .stack_switch(store_context_ptr, load_context_ptr, payload);
+
+    let fake_stack = builder.ins().load(pointer_type, flags, fake_stack_save, 0);
+    let asan_finish_switch_fiber = env.builtin_functions.load_builtin(
+        builder.func,
+        BuiltinFunctionIndex::asan_finish_switch_fiber(),
+    );
+    builder
+        .ins()
+        .call(asan_finish_switch_fiber, &[vmctx, fake_stack]);
+
+    result
 }
 
 use super::control_effect::ControlEffect;
@@ -1778,12 +1835,12 @@ fn translate_resume_impl<'a>(
             let handler_count = u32::try_from(resumetable.len()).unwrap();
             // Populate the Array's data ptr with a pointer to a sufficiently
             // large area on this stack.
-            env.stack_switching_handler_list_buffer =
+            env.stack_switching.handler_list_buffer =
                 Some(handler_list.allocate_or_reuse_stack_slot(
                     env,
                     builder,
                     handler_count,
-                    env.stack_switching_handler_list_buffer,
+                    env.stack_switching.handler_list_buffer,
                 ));
 
             let suspend_handler_count = suspend_handlers.len();
@@ -1824,10 +1881,14 @@ fn translate_resume_impl<'a>(
         let fiber_stack = last_ancestor.get_fiber_stack(env, builder);
         let control_context_ptr = fiber_stack.load_control_context(env, builder);
 
-        let result =
-            builder
-                .ins()
-                .stack_switch(control_context_ptr, control_context_ptr, resume_payload);
+        let result = emit_stack_switch(
+            env,
+            builder,
+            control_context_ptr,
+            control_context_ptr,
+            resume_payload,
+            |env, builder| last_ancestor.common_stack_information(env, builder).address,
+        );
 
         // At this point we know nothing about the continuation that just
         // suspended or returned. In particular, it does not have to be what we
@@ -2086,7 +2147,7 @@ pub(crate) fn translate_suspend<'a>(
     let vmctx = env.vmctx_val(&mut builder.cursor());
     let active_stack_chain = vmctx_load_stack_chain(env, builder, vmctx);
 
-    let (_, end_of_chain_contref, handler_index) =
+    let (handler_stack_chain, end_of_chain_contref, handler_index) =
         search_handler(env, builder, &active_stack_chain, tag_addr, true);
 
     // If we get here, the search_handler logic succeeded (i.e., did not trap).
@@ -2109,8 +2170,8 @@ pub(crate) fn translate_suspend<'a>(
 
     let needs_gc_ref_markers =
         types_need_gc_ref_markers(suspend_arg_types) || types_need_gc_ref_markers(tag_return_types);
-    let existing_storage = env.stack_switching_values_storage;
-    env.stack_switching_values_storage = Some(values.prepare_stack_storage(
+    let existing_storage = env.stack_switching.values_storage;
+    env.stack_switching.values_storage = Some(values.prepare_stack_storage(
         env,
         builder,
         required_capacity,
@@ -2139,10 +2200,18 @@ pub(crate) fn translate_suspend<'a>(
     let fiber_stack = end_of_chain_contref.get_fiber_stack(env, builder);
     let control_context_ptr = fiber_stack.load_control_context(env, builder);
 
-    let result =
-        builder
-            .ins()
-            .stack_switch(control_context_ptr, control_context_ptr, suspend_payload);
+    let result = emit_stack_switch(
+        env,
+        builder,
+        control_context_ptr,
+        control_context_ptr,
+        suspend_payload,
+        |env, builder| {
+            handler_stack_chain
+                .get_common_stack_information(env, builder)
+                .address
+        },
+    );
 
     // A normal resume supplies the tag's return values. `resume_throw_ref`
     // supplies an exception reference and throws it at this suspension point.
@@ -2226,8 +2295,8 @@ pub(crate) fn translate_switch<'a>(
         // reference.
         let values = switcher_contref.values(env, builder);
         let required_capacity = u32::try_from(std::cmp::max(1, return_types.len())).unwrap();
-        let existing_storage = env.stack_switching_values_storage;
-        env.stack_switching_values_storage = Some(values.prepare_stack_storage(
+        let existing_storage = env.stack_switching.values_storage;
+        env.stack_switching.values_storage = Some(values.prepare_stack_storage(
             env,
             builder,
             required_capacity,
@@ -2408,10 +2477,17 @@ pub(crate) fn translate_switch<'a>(
 
         let switch_payload = ControlEffect::encode_switch(builder).to_u64();
 
-        builder.ins().stack_switch(
+        emit_stack_switch(
+            env,
+            builder,
             switcher_last_ancestor_cc,
             tmp_control_context,
             switch_payload,
+            |env, builder| {
+                switchee_contref_last_ancestor
+                    .common_stack_information(env, builder)
+                    .address
+            },
         )
     };
 
