@@ -2,7 +2,7 @@
 //! in CFG nodes.
 
 use super::Stats;
-use super::cost::Cost;
+use super::cost::{Cost, ExprCost};
 use crate::ctxhash::NullCtx;
 use crate::dominator_tree::DominatorTree;
 use crate::hash_map::Entry as HashEntry;
@@ -14,7 +14,7 @@ use crate::trace;
 use crate::{FxHashMap, FxHashSet};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
-use cranelift_entity::{EntitySet, SecondaryMap, packed_option::ReservedValue};
+use cranelift_entity::{EntityRef, EntitySet, SecondaryMap, packed_option::ReservedValue};
 use smallvec::{SmallVec, smallvec};
 
 pub(crate) struct Elaborator<'a> {
@@ -342,8 +342,9 @@ impl<'a> Elaborator<'a> {
         sorted
     }
 
-    fn compute_best_values(&mut self) {
+    fn compute_best_values(&mut self) -> (bool, bool) {
         let sorted_values = self.topo_sorted_values();
+        let mut saturated = false;
 
         let best = &mut self.value_to_best_value;
 
@@ -416,6 +417,9 @@ impl<'a> Elaborator<'a> {
                         );
                         best[value] = BestEntry(cost, value);
                         trace!(" -> cost of value {} = {:?}", value, cost);
+                        if cost == Cost::infinity() {
+                            saturated = true;
+                        }
                     }
                 }
             };
@@ -447,6 +451,62 @@ impl<'a> Elaborator<'a> {
             // `cranelift/codegen/src/opts/README.md`) it is safe to choose
             // *any* e-node in the e-class. At worst we will produce suboptimal
             // code, but never an incorrectness.
+        }
+        (saturated, use_worst)
+    }
+
+    /// Recompute best values with instruction sets.
+    ///
+    /// Used only after the scalar cost of some value saturated. Paying for
+    /// each instruction once keeps a chain of `iadd x, x` finite, so an
+    /// eclass can still prefer the original value over a saturated identity.
+    fn compute_best_values_with_sharing(&mut self, use_worst: bool) {
+        let sorted_values = self.topo_sorted_values();
+        let n = self.func.dfg.num_values();
+        let mut exprs = vec![ExprCost::zero(); n];
+        trace!("recomputing saturated eclass costs with instruction sets");
+        for value in sorted_values {
+            let index = value.index();
+            match self.func.dfg.value_def(value) {
+                ValueDef::Union(x, y) => {
+                    let x_best = BestEntry(exprs[x.index()].total(), self.value_to_best_value[x].1);
+                    let y_best = BestEntry(exprs[y.index()].total(), self.value_to_best_value[y].1);
+                    let pick_x = if use_worst {
+                        x_best >= y_best
+                    } else {
+                        x_best <= y_best
+                    };
+                    let chosen = if pick_x { x.index() } else { y.index() };
+                    let chosen_expr = exprs[chosen].clone();
+                    exprs[index] = chosen_expr;
+                    self.value_to_best_value[value] = if pick_x { x_best } else { y_best };
+                }
+                ValueDef::Param(_, _) => {
+                    exprs[index] = ExprCost::zero();
+                    self.value_to_best_value[value] = BestEntry(Cost::zero(), value);
+                }
+                ValueDef::Result(inst, _) => {
+                    if self.func.layout.inst_block(inst).is_some() {
+                        exprs[index] = ExprCost::zero();
+                        self.value_to_best_value[value] = BestEntry(Cost::zero(), value);
+                    } else {
+                        let operands: SmallVec<[usize; 8]> = self
+                            .func
+                            .dfg
+                            .inst_values(inst)
+                            .map(|operand| operand.index())
+                            .collect();
+                        let mut cost = ExprCost::for_inst(&self.func.dfg, inst);
+                        for operand in operands {
+                            cost.add(&self.func.dfg, &exprs[operand]);
+                        }
+                        let total = cost.total();
+                        exprs[index] = cost;
+                        self.value_to_best_value[value] = BestEntry(total, value);
+                        trace!(" -> shared cost of value {} = {:?}", value, total);
+                    }
+                }
+            }
         }
     }
 
@@ -925,7 +985,12 @@ impl<'a> Elaborator<'a> {
     pub(crate) fn elaborate(&mut self) {
         self.stats.elaborate_func += 1;
         self.stats.elaborate_func_pre_insts += self.func.dfg.num_insts() as u64;
-        self.compute_best_values();
+        let (saturated, use_worst) = self.compute_best_values();
+        if saturated {
+            // The scalar sum saturated, so it can no longer order eclasses.
+            // Recompute once, counting each instruction a single time.
+            self.compute_best_values_with_sharing(use_worst);
+        }
         self.elaborate_domtree(&self.domtree);
         self.stats.elaborate_func_post_insts += self.func.dfg.num_insts() as u64;
     }

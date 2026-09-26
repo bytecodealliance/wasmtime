@@ -1,0 +1,87 @@
+;; A chain of `iadd x, x` saturates a scalar cost that recounts shared
+;; operands. Extraction must still see through the identity
+;; `(x * 2) - x` once that chain is costed as a DAG.
+
+test optimize precise-output
+set opt_level=speed_and_size
+target x86_64
+
+function %f(i64) -> i64 {
+    block0(v0: i64):
+        v1 = iadd v0, v0
+        v2 = iadd v1, v1
+        v3 = iadd v2, v2
+        v4 = iadd v3, v3
+        v5 = iadd v4, v4
+        v6 = iadd v5, v5
+        v7 = iadd v6, v6
+        v8 = iadd v7, v7
+        v9 = iadd v8, v8
+        v10 = iadd v9, v9
+        v11 = iadd v10, v10
+        v12 = iadd v11, v11
+        v13 = iadd v12, v12
+        v14 = iadd v13, v13
+        v15 = iadd v14, v14
+        v16 = iadd v15, v15
+        v17 = iadd v16, v16
+        v18 = iadd v17, v17
+        v19 = iadd v18, v18
+        v20 = iadd v19, v19
+        v21 = iadd v20, v20
+        v22 = iadd v21, v21
+        v23 = iadd v22, v22
+        v24 = iadd v23, v23
+        v25 = iadd v24, v24
+        v26 = iadd v25, v25
+        v27 = iadd v26, v26
+        v28 = iadd v27, v27
+        v29 = iadd v28, v28
+        v30 = iadd v29, v29
+        v31 = iadd v30, v30
+        v32 = iadd v31, v31
+        v33 = iadd v32, v32
+
+        v34 = iconst.i64 2
+        v35 = imul v33, v34
+        v36 = isub v35, v33
+        return v36
+}
+
+; function %f(i64) -> i64 fast {
+; block0(v0: i64):
+;     v1 = iadd v0, v0
+;     v2 = iadd v1, v1
+;     v3 = iadd v2, v2
+;     v4 = iadd v3, v3
+;     v5 = iadd v4, v4
+;     v6 = iadd v5, v5
+;     v7 = iadd v6, v6
+;     v8 = iadd v7, v7
+;     v9 = iadd v8, v8
+;     v10 = iadd v9, v9
+;     v11 = iadd v10, v10
+;     v12 = iadd v11, v11
+;     v13 = iadd v12, v12
+;     v14 = iadd v13, v13
+;     v15 = iadd v14, v14
+;     v16 = iadd v15, v15
+;     v17 = iadd v16, v16
+;     v18 = iadd v17, v17
+;     v19 = iadd v18, v18
+;     v20 = iadd v19, v19
+;     v21 = iadd v20, v20
+;     v22 = iadd v21, v21
+;     v23 = iadd v22, v22
+;     v24 = iadd v23, v23
+;     v25 = iadd v24, v24
+;     v26 = iadd v25, v25
+;     v27 = iadd v26, v26
+;     v28 = iadd v27, v27
+;     v29 = iadd v28, v28
+;     v30 = iadd v29, v29
+;     v31 = iadd v30, v30
+;     v32 = iadd v31, v31
+;     v33 = iadd v32, v32
+;     return v33
+; }
