@@ -46,15 +46,7 @@ fn emit_stack_switch<'a>(
     // the necessary ASan bookkeeping.
     let target_csi = asan_target_csi(env, builder);
     let pointer_type = env.pointer_type();
-    let pointer_bytes = pointer_type.bytes();
-    let slot = env.get_or_create_asan_fake_stack_slot(
-        builder,
-        ir::StackSlotData::new(
-            ir::StackSlotKind::ExplicitSlot,
-            pointer_bytes,
-            u8::try_from(pointer_bytes.trailing_zeros()).unwrap(),
-        ),
-    );
+    let slot = env.get_or_create_asan_fake_stack_slot(builder);
     let fake_stack_save = builder.ins().stack_addr(pointer_type, slot, 0);
     let region = env.alias_regions.stack_slot_region(builder.func, slot);
     let flags = MemFlagsData::trusted().with_alias_region(Some(region));

@@ -354,12 +354,20 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     pub(crate) fn get_or_create_asan_fake_stack_slot(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        data: ir::StackSlotData,
     ) -> ir::StackSlot {
+        let pointer_type = self.pointer_type();
         *self
             .stack_switching
             .asan_fake_stack_storage
-            .get_or_insert_with(|| builder.create_sized_stack_slot(data))
+            .get_or_insert_with(|| {
+                let pointer_bytes = pointer_type.bytes();
+                let data = ir::StackSlotData::new(
+                    ir::StackSlotKind::ExplicitSlot,
+                    pointer_bytes,
+                    u8::try_from(pointer_bytes.trailing_zeros()).unwrap(),
+                );
+                return builder.create_sized_stack_slot(data);
+            })
     }
 
     /// Consume the branch hint for the instruction at module-relative `offset`
