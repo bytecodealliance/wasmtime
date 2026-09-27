@@ -437,7 +437,7 @@ impl Mutate<GcOps> for GcOpsMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> MutResult<()> {
         m::default::<GcOpsLimits>()
             .map(|_ctx, limits: &mut GcOpsLimits| {
-                limits.fixup();
+                limits.fixup_limits();
                 Ok(())
             })
             .mutate(c, &mut ops.limits)?;

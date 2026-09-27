@@ -55,7 +55,7 @@ impl Default for GcOpsLimits {
 
 impl GcOpsLimits {
     /// Fixup the limits to ensure they are within the valid range.
-    pub(crate) fn fixup(&mut self) {
+    pub(crate) fn fixup_limits(&mut self) {
         let Self {
             num_params,
             num_globals,

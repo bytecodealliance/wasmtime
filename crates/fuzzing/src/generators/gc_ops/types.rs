@@ -1,7 +1,7 @@
 //! Types for the `gc` operations.
 
 use crate::generators::gc_ops::limits::GcOpsLimits;
-use crate::generators::gc_ops::ops::GcOp;
+use crate::generators::gc_ops::ops::WasmEncodingBases;
 use mutatis::Generate;
 use serde::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
@@ -178,7 +178,7 @@ macro_rules! define_field_type_enum {
                     }
                     FieldType::StructRef { nullable: false } => {
                         // `(ref struct)` is satisfied by any struct, so build
-                        // the cheapest one. `fix_uninhabitable` only leaves this
+                        // the cheapest one. `fixup_uninhabitable` only leaves this
                         // field non-nullable when such a struct exists.
                         let tid = ctx.struct_ref_target.expect("non-nullable struct ref must have a target");
                         emit_ref_to(tid, func, ctx);
@@ -210,6 +210,10 @@ pub(crate) struct EmitCtx<'a> {
     pub(crate) protos: &'a BTreeMap<TypeId, u32>,
     /// The Wasm type index assigned to each `TypeId`.
     pub(crate) type_ids_to_index: &'a BTreeMap<TypeId, u32>,
+    /// Where the encoded module keeps its imports, locals, globals and tables.
+    pub(crate) bases: WasmEncodingBases,
+    /// Dense type index -> `TypeId`, the order the concrete types are encoded in.
+    pub(crate) encoding_order: &'a [TypeId],
 }
 
 /// Emit a reference to the given type, constructing a new instance if necessary.
@@ -814,16 +818,38 @@ impl Types {
         }
     }
 
-    /// Fix up the types to ensure they are within the limits.
-    pub fn fixup(
+    /// Make the type graph valid and within `limits`, then compute its encoding order.
+    pub fn fixup_types(
         &mut self,
         limits: &GcOpsLimits,
         encoding_order_grouped: &mut Vec<(RecGroupId, Vec<TypeId>)>,
     ) {
+        self.fixup_counts(limits);
+        self.fixup_orphans();
+        self.fixup_supertypes();
+        self.fixup_field_counts(limits);
+        self.fixup_reference_fields();
+
+        // Make the type graph well-founded before encoding it.
+        self.break_supertype_cycles();
+        let type_to_group = self.type_to_group_map();
+        self.merge_rec_group_cycles(&type_to_group);
+        // Merging changes group membership, so recompute the map for the encoding order.
+        let type_to_group = self.type_to_group_map();
+
+        self.fixup_prefix_compatibility();
+        self.fixup_uninhabitable();
+
+        debug_assert!(self.is_well_formed(limits));
+
+        self.encoding_order_grouped(encoding_order_grouped, &type_to_group);
+    }
+
+    /// Trim types and rec groups to `limits`; drop dangling and duplicate group members.
+    fn fixup_counts(&mut self, limits: &GcOpsLimits) {
         let max_rec_groups = usize::try_from(limits.max_rec_groups).unwrap();
         let max_types = usize::try_from(limits.max_types).unwrap();
 
-        // 1. Trim excess types.
         while self.type_defs.len() > max_types {
             if let Some((tid, _)) = self.type_defs.pop_last() {
                 for members in self.rec_groups.values_mut() {
@@ -832,18 +858,18 @@ impl Types {
             }
         }
 
-        // 2. Drop dangling references and deduplicate across groups.
         let mut seen = BTreeSet::new();
         for members in self.rec_groups.values_mut() {
             members.retain(|tid| self.type_defs.contains_key(tid) && seen.insert(*tid));
         }
 
-        // 3. Trim excess rec groups.
         while self.rec_groups.len() > max_rec_groups {
             self.rec_groups.pop_last();
         }
+    }
 
-        // 4. Find all orphans (from trimmed groups or never in any group).
+    /// House every type that has no rec group in the first group, or drop it if there is none.
+    fn fixup_orphans(&mut self) {
         let housed: BTreeSet<TypeId> = self
             .rec_groups
             .values()
@@ -856,7 +882,6 @@ impl Types {
             .copied()
             .collect();
 
-        // 5. Adopt orphans or drop them.
         if let Some(first_members) = self.rec_groups.values_mut().next() {
             first_members.extend(orphans);
         } else {
@@ -864,25 +889,24 @@ impl Types {
                 self.type_defs.remove(tid);
             }
         }
+    }
 
-        // 6. Repair supertype edges.
-        self.fixup_supertypes();
-
-        // 7. Trim struct fields to max_fields limit (arrays always have exactly
-        //    one element).
+    /// Trim struct fields to `max_fields`; arrays always have exactly one element.
+    fn fixup_field_counts(&mut self, limits: &GcOpsLimits) {
         let max_fields = usize::try_from(limits.max_fields).unwrap();
         for def in self.type_defs.values_mut() {
             if let CompositeType::Struct(ref mut st) = def.composite_type {
                 st.fields.truncate(max_fields);
             }
         }
+    }
 
-        // 8. Normalize reference fields (struct fields and array elements alike).
+    /// Point every concrete reference field (struct fields and array elements alike)
+    /// at a live type. Nullability is left to `fixup_uninhabitable`.
+    fn fixup_reference_fields(&mut self) {
         let valid_type_ids: BTreeSet<TypeId> = self.type_defs.keys().copied().collect();
         for def in self.type_defs.values_mut() {
             for field in def.composite_type.fields_mut() {
-                // Nullability is left alone here; step 11 relaxes only the
-                // non-nullable references that cannot be satisfied.
                 if let FieldType::Ref { type_id, .. } = &mut field.field_type {
                     if !valid_type_ids.contains(type_id) {
                         if let Some(live) = nearest_live_type_id(&valid_type_ids, *type_id, None) {
@@ -897,18 +921,11 @@ impl Types {
                 }
             }
         }
+    }
 
-        // 9. Break supertype cycles and merge rec-group reference cycles, so
-        //     the type graph is well-founded before we encode it.
-        self.break_supertype_cycles();
-        let type_to_group = self.type_to_group_map();
-        self.merge_rec_group_cycles(&type_to_group);
-        // Merging changes group membership, so recompute the reverse map for
-        // the encoding-order computation below.
-        let type_to_group = self.type_to_group_map();
-
-        // 10. Ensure subtype fields are prefix-compatible with supertype fields.
-        //     Process in topological order (supertype before subtype).
+    /// Make every subtype's fields a prefix-compatible extension of its supertype's,
+    /// in topological order (supertype before subtype).
+    fn fixup_prefix_compatibility(&mut self) {
         let mut topo_order = Vec::new();
         self.sort_types_topo(&mut topo_order);
         for tid in &topo_order {
@@ -921,8 +938,8 @@ impl Types {
             let Some(super_def) = self.type_defs.get(&super_id) else {
                 continue;
             };
-            // Step 6 guarantees the subtype and supertype share a composite
-            // kind. so match on the supertype and repair the subtype to match.
+            // `fixup_supertypes` guarantees the subtype and supertype share a
+            // composite kind, so match on the supertype and repair the subtype.
             match &super_def.composite_type {
                 CompositeType::Struct(super_st) => {
                     let super_fields = super_st.fields.clone();
@@ -953,14 +970,6 @@ impl Types {
                 }
             }
         }
-
-        // 11. Relax non-nullable reference fields that cannot be satisfied.
-        self.fix_uninhabitable();
-
-        debug_assert!(self.is_well_formed(limits));
-
-        // 12. Compute encoding order (reuses type_to_group from step 9).
-        self.encoding_order_grouped(encoding_order_grouped, &type_to_group);
     }
 
     /// Whether `field` can be given a value using only the types in `ok`.
@@ -1030,7 +1039,7 @@ impl Types {
     }
 
     /// Relax fields of a struct type to be nullable when uninhabitable, so that it can be constructed.
-    pub(crate) fn fix_uninhabitable(&mut self) {
+    pub(crate) fn fixup_uninhabitable(&mut self) {
         let mut ok = BTreeMap::new();
         loop {
             self.inhabitable(&mut ok);
@@ -1063,7 +1072,7 @@ impl Types {
     /// Relax a field of a struct type to be nullable, and propagate the change to all subtypes.
     fn relax_field(&mut self, tid: TypeId, index: usize) {
         // Walk up to the highest ancestor that still has this field. Supertype
-        // cycles are already broken by step 9, so this terminates.
+        // cycles are already broken by `break_supertype_cycles`, so this terminates.
         let mut root = tid;
         while let Some(sup) = self.type_defs[&root].supertype {
             if self.type_defs[&sup].composite_type.fields().len() <= index {
@@ -1258,7 +1267,7 @@ impl Types {
 
         // Every type must be constructible. A non-nullable reference field has
         // no default value, so a cycle of them leaves types that validate but
-        // can never be instantiated. See `fix_uninhabitable`.
+        // can never be instantiated. See `fixup_uninhabitable`.
         let mut inhabitable = BTreeMap::new();
         self.inhabitable(&mut inhabitable);
         if inhabitable.len() != self.type_defs.len() {
@@ -1271,391 +1280,5 @@ impl Types {
         }
 
         true
-    }
-}
-
-/// Tracks the required operand type on the abstract value stack.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum StackType {
-    /// `externref`.
-    ExternRef,
-    /// `eqref`.
-    Eq,
-    /// `i31ref`.
-    I31,
-    /// `(ref $*)` — optionally with a concrete type index.
-    Struct(Option<u32>),
-    /// `(ref array)` or `(ref $t)` — optionally with a concrete type index.
-    Array(Option<u32>),
-}
-
-impl StackType {
-    /// Ensure the top of `stack` satisfies `req`, emitting fixup ops as needed.
-    pub fn fixup(
-        req: Option<StackType>,
-        stack: &mut Vec<StackType>,
-        out: &mut Vec<GcOp>,
-        num_types: u32,
-        types: &Types,
-        encoding_order: &[TypeId],
-    ) {
-        log::trace!(
-            "[StackType::fixup] enter req={req:?} num_types={num_types} stack_len={} stack={stack:?}",
-            stack.len()
-        );
-        let mut result_types = Vec::new();
-        match req {
-            None => {
-                if stack.is_empty() {
-                    log::trace!("[StackType::fixup] None: empty stack -> emit NullExtern");
-                    Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
-                }
-                let popped = stack.pop();
-                log::trace!("[StackType::fixup] None: pop -> {popped:?} stack={stack:?}");
-            }
-            Some(Self::ExternRef) => match stack.last() {
-                Some(Self::ExternRef) => {
-                    log::trace!("[StackType::fixup] ExternRef: top ok -> pop");
-                    stack.pop();
-                }
-                other => {
-                    log::trace!(
-                        "[StackType::fixup] ExternRef: mismatch top={other:?} -> emit NullExtern+pop"
-                    );
-                    Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
-                    let popped = stack.pop();
-                    log::trace!(
-                        "[StackType::fixup] ExternRef: after emit pop -> {popped:?} stack={stack:?}"
-                    );
-                }
-            },
-            Some(Self::Eq) => match stack.last() {
-                // struct, array, and i31 are all subtypes of eq, so any of them
-                // on the stack satisfies an eqref requirement.
-                Some(Self::Eq) | Some(Self::Struct(_)) | Some(Self::Array(_)) | Some(Self::I31) => {
-                    log::trace!("[StackType::fixup] Eq: top ok -> pop");
-                    stack.pop();
-                }
-                other => {
-                    log::trace!("[StackType::fixup] Eq: mismatch top={other:?} -> emit NullEq+pop");
-                    Self::emit(GcOp::NullEq, stack, out, num_types, &mut result_types);
-                    let popped = stack.pop();
-                    log::trace!(
-                        "[StackType::fixup] Eq: after emit pop -> {popped:?} stack={stack:?}"
-                    );
-                }
-            },
-            Some(Self::I31) => match stack.last() {
-                Some(Self::I31) => {
-                    log::trace!("[StackType::fixup] I31: top ok -> pop");
-                    stack.pop();
-                }
-                other => {
-                    log::trace!(
-                        "[StackType::fixup] I31: mismatch top={other:?} -> emit RefI31+pop"
-                    );
-                    Self::emit(
-                        GcOp::RefI31 { value: 0 },
-                        stack,
-                        out,
-                        num_types,
-                        &mut result_types,
-                    );
-                    let popped = stack.pop();
-                    log::trace!(
-                        "[StackType::fixup] I31: after emit pop -> {popped:?} stack={stack:?}"
-                    );
-                }
-            },
-            Some(Self::Struct(wanted)) => {
-                let ok = match (wanted, stack.last()) {
-                    (Some(wanted), Some(Self::Struct(Some(actual)))) => {
-                        let sub = encoding_order
-                            .get(usize::try_from(*actual).unwrap())
-                            .copied();
-                        let sup = encoding_order
-                            .get(usize::try_from(wanted).unwrap())
-                            .copied();
-                        let st = match (sub, sup) {
-                            (Some(sub), Some(sup)) => types.is_subtype(sub, sup),
-                            _ => false,
-                        };
-                        log::trace!(
-                            "[StackType::fixup] Struct: actual={actual} wanted={wanted} is_subtype={st}"
-                        );
-                        st
-                    }
-                    (None, Some(Self::Struct(_))) => {
-                        log::trace!(
-                            "[StackType::fixup] Struct: abstract wanted, concrete stack -> ok"
-                        );
-                        true
-                    }
-                    _ => {
-                        log::trace!(
-                            "[StackType::fixup] Struct: no match wanted={wanted:?} last={:?} -> ok=false",
-                            stack.last()
-                        );
-                        false
-                    }
-                };
-
-                if ok {
-                    let popped = stack.pop();
-                    log::trace!("[StackType::fixup] Struct: ok -> pop {popped:?} stack={stack:?}");
-                } else {
-                    match wanted {
-                        // When num_types == 0, GcOp::fixup() should have dropped the ops
-                        // that require a concrete type.
-                        // But it keeps the ops that work with abstract types.
-                        // Since our mutator can legally remove all the types,
-                        // StackType::fixup() should insert GcOp::NullStruct()
-                        // to satisfy the undropped ops that work with abstract types.
-                        None => {
-                            log::trace!(
-                                "[StackType::fixup] Struct synthesize NullStruct stack_before={stack:?}"
-                            );
-                            Self::emit(GcOp::NullStruct, stack, out, num_types, &mut result_types);
-                            let popped = stack.pop();
-                            log::trace!(
-                                "[StackType::fixup] NullStruct: after emit pop -> {popped:?} stack={stack:?}"
-                            );
-                        }
-                        Some(t) => {
-                            debug_assert_ne!(
-                                num_types, 0,
-                                "typed struct requirement with num_types == 0; op should have been removed"
-                            );
-                            let t = Self::clamp(t, num_types);
-
-                            log::trace!(
-                                "[StackType::fixup] Struct synthesize StructNew type_index={t} stack_before={stack:?}"
-                            );
-                            Self::emit(
-                                GcOp::StructNew { type_index: t },
-                                stack,
-                                out,
-                                num_types,
-                                &mut result_types,
-                            );
-                            log::trace!(
-                                "[StackType::fixup] StructNew: after emit stack={stack:?} (next: pop operand)"
-                            );
-                            let popped = stack.pop();
-                            log::trace!(
-                                "[StackType::fixup] StructNew: pop -> {popped:?} stack={stack:?}"
-                            );
-                        }
-                    }
-                }
-            }
-            Some(Self::Array(wanted)) => {
-                let ok = match (wanted, stack.last()) {
-                    (Some(wanted), Some(Self::Array(Some(actual)))) => {
-                        let sub = encoding_order
-                            .get(usize::try_from(*actual).unwrap())
-                            .copied();
-                        let sup = encoding_order
-                            .get(usize::try_from(wanted).unwrap())
-                            .copied();
-                        match (sub, sup) {
-                            (Some(sub), Some(sup)) => types.is_subtype(sub, sup),
-                            _ => false,
-                        }
-                    }
-                    // Abstract arrayref requirement accepts any array on the stack.
-                    (None, Some(Self::Array(_))) => true,
-                    _ => false,
-                };
-
-                if ok {
-                    stack.pop();
-                } else {
-                    match wanted {
-                        // Abstract requirement: a null arrayref satisfies it.
-                        None => {
-                            Self::emit(GcOp::NullArray, stack, out, num_types, &mut result_types);
-                            stack.pop();
-                        }
-                        // Concrete requirement: synthesize a fresh array of that type.
-                        Some(t) => {
-                            debug_assert_ne!(
-                                num_types, 0,
-                                "typed array requirement with num_types == 0; op should have been removed"
-                            );
-                            let t = Self::clamp(t, num_types);
-                            Self::emit(
-                                GcOp::ArrayNewDefault { type_index: t },
-                                stack,
-                                out,
-                                num_types,
-                                &mut result_types,
-                            );
-                            stack.pop();
-                        }
-                    }
-                }
-            }
-        }
-        log::trace!(
-            "[StackType::fixup] leave stack_len={} stack={stack:?} out_len={}",
-            stack.len(),
-            out.len()
-        );
-    }
-
-    /// Emit an opcode and update the stack.
-    pub(crate) fn emit(
-        op: GcOp,
-        stack: &mut Vec<Self>,
-        out: &mut Vec<GcOp>,
-        num_types: u32,
-        result_types: &mut Vec<Self>,
-    ) {
-        log::trace!(
-            "[StackType::emit] op={op:?} stack_len_before={} num_types={num_types}",
-            stack.len()
-        );
-        out.push(op);
-        result_types.clear();
-        op.result_types(result_types);
-        for ty in result_types {
-            let clamped_ty = match ty {
-                Self::Struct(Some(t)) => Self::Struct(Some(Self::clamp(*t, num_types))),
-                Self::Array(Some(t)) => Self::Array(Some(Self::clamp(*t, num_types))),
-                other => *other,
-            };
-            log::trace!("[StackType::emit] push result {clamped_ty:?}");
-            stack.push(clamped_ty);
-        }
-        log::trace!("[StackType::emit] leave stack={stack:?}");
-    }
-
-    /// Fixup for cast ops: ensures the sub/super type relationship actually
-    /// holds. Always repairs the op rather than dropping it.
-    ///
-    /// For upcast the operand (sub) is on the stack, so we keep sub fixed
-    /// and adjust super. For downcast the operand (super) is on the stack,
-    /// so we keep super fixed and adjust sub.
-    pub fn fixup_cast(op: GcOp, types: &Types, encoding_order: &[TypeId]) -> GcOp {
-        match op {
-            GcOp::RefCastUpward {
-                sub_type_index,
-                super_type_index,
-            } => {
-                // Operand is sub (on the stack) — keep it, fix super.
-                let super_type_index = Self::find_supertype_of(
-                    sub_type_index,
-                    super_type_index,
-                    types,
-                    encoding_order,
-                );
-                GcOp::RefCastUpward {
-                    sub_type_index,
-                    super_type_index,
-                }
-            }
-            GcOp::RefCastDownward {
-                sub_type_index,
-                super_type_index,
-            } => {
-                // Operand is super (on the stack) — keep it, fix sub.
-                let sub_type_index =
-                    Self::find_subtype_of(super_type_index, sub_type_index, types, encoding_order);
-                GcOp::RefCastDownward {
-                    sub_type_index,
-                    super_type_index,
-                }
-            }
-            // Array casts use the same index repair (subtyping is kind-agnostic).
-            GcOp::ArrayRefCastUpward {
-                sub_type_index,
-                super_type_index,
-            } => {
-                let super_type_index = Self::find_supertype_of(
-                    sub_type_index,
-                    super_type_index,
-                    types,
-                    encoding_order,
-                );
-                GcOp::ArrayRefCastUpward {
-                    sub_type_index,
-                    super_type_index,
-                }
-            }
-            GcOp::ArrayRefCastDownward {
-                sub_type_index,
-                super_type_index,
-            } => {
-                let sub_type_index =
-                    Self::find_subtype_of(super_type_index, sub_type_index, types, encoding_order);
-                GcOp::ArrayRefCastDownward {
-                    sub_type_index,
-                    super_type_index,
-                }
-            }
-            other => other,
-        }
-    }
-
-    /// Given a sub type on the stack, find a valid super_type_index such
-    /// that sub <: super. Keeps sub fixed. Falls back to self-cast.
-    fn find_supertype_of(
-        sub_type_index: u32,
-        super_type_index: u32,
-        types: &Types,
-        encoding_order: &[TypeId],
-    ) -> u32 {
-        if let (Some(&sub_tid), Some(&super_tid)) = (
-            encoding_order.get(usize::try_from(sub_type_index).unwrap()),
-            encoding_order.get(usize::try_from(super_type_index).unwrap()),
-        ) {
-            // Already valid.
-            if types.is_subtype(sub_tid, super_tid) {
-                return super_type_index;
-            }
-            // Try sub's direct supertype.
-            if let Some(actual_super) = types.type_defs.get(&sub_tid).and_then(|d| d.supertype) {
-                if let Some(idx) = encoding_order.iter().position(|&t| t == actual_super) {
-                    return u32::try_from(idx).unwrap();
-                }
-            }
-        }
-        // Self-cast.
-        sub_type_index
-    }
-
-    /// Given a super type on the stack, find a valid sub_type_index such
-    /// that sub <: super. Keeps super fixed. Falls back to self-cast.
-    fn find_subtype_of(
-        super_type_index: u32,
-        sub_type_index: u32,
-        types: &Types,
-        encoding_order: &[TypeId],
-    ) -> u32 {
-        if let (Some(&sub_tid), Some(&super_tid)) = (
-            encoding_order.get(usize::try_from(sub_type_index).unwrap()),
-            encoding_order.get(usize::try_from(super_type_index).unwrap()),
-        ) {
-            // Already valid.
-            if types.is_subtype(sub_tid, super_tid) {
-                return sub_type_index;
-            }
-            // Try to find any direct subtype of super.
-            for (idx, tid) in encoding_order.iter().enumerate() {
-                if let Some(def) = types.type_defs.get(tid) {
-                    if def.supertype == Some(super_tid) {
-                        return u32::try_from(idx).unwrap();
-                    }
-                }
-            }
-        }
-        // Self-cast.
-        super_type_index
-    }
-
-    /// Clamp a type index to the number of types.
-    fn clamp(t: u32, n: u32) -> u32 {
-        if n == 0 { 0 } else { t % n }
     }
 }
