@@ -310,14 +310,13 @@ impl WasmEncodingBases {
         self.struct_type_base + dense
     }
 
-    /// The slots of one root kind, where `index` is the param or global of an `Extern`
-    /// access and unused for the other kinds.
-    fn root_slots(&self, kind: RefKind, index: u32) -> RootSlots {
+    /// The slots of one root kind.
+    fn root_slots(&self, kind: RefKind) -> RootSlots {
         let (l, g, t) = (&self.locals, &self.globals, &self.tables);
         match kind {
-            RefKind::Extern => RootSlots {
-                local: index,
-                global: index,
+            RefKind::Extern { slot } => RootSlots {
+                local: slot,
+                global: slot,
                 table: 0,
                 tmp: l.extern_scratch,
             },
@@ -358,8 +357,8 @@ impl WasmEncodingBases {
 /// The kinds of reference the module keeps roots for, with `Typed` holding a dense type index.
 #[derive(Clone, Copy, Debug)]
 enum RefKind {
-    /// An `externref`.
-    Extern,
+    /// An `externref`, in the parameter or global `slot` (unused for a table access).
+    Extern { slot: u32 },
     /// A `structref`.
     Struct,
     /// An `eqref`.
@@ -372,25 +371,15 @@ enum RefKind {
     Typed(u32),
 }
 
-/// Where a root access reads or writes. The `u32` is the param or global index
-/// for `Extern` (unused for other kinds), or the table element index.
+/// Where a root access reads or writes.
 #[derive(Clone, Copy, Debug)]
 enum Storage {
     /// A local of `run`.
-    Local(u32),
+    Local,
     /// A global.
-    Global(u32),
-    /// An element of a table.
+    Global,
+    /// The element at this index of a table.
     Table(u32),
-}
-
-impl Storage {
-    /// The index carried by the variant.
-    fn index(self) -> u32 {
-        match self {
-            Self::Local(i) | Self::Global(i) | Self::Table(i) => i,
-        }
-    }
 }
 
 /// Whether a root access reads or writes.
@@ -1795,28 +1784,28 @@ impl GcOp {
 
             // Root reads and writes; see `encode_root`.
             Self::LocalGet { local_index } => {
-                encode_root(func, bases, Extern, Local(local_index), Get)
+                encode_root(func, bases, Extern { slot: local_index }, Local, Get)
             }
             Self::LocalSet { local_index } => {
-                encode_root(func, bases, Extern, Local(local_index), Set)
+                encode_root(func, bases, Extern { slot: local_index }, Local, Set)
             }
             Self::GlobalGet { global_index } => {
-                encode_root(func, bases, Extern, Global(global_index), Get)
+                encode_root(func, bases, Extern { slot: global_index }, Global, Get)
             }
             Self::GlobalSet { global_index } => {
-                encode_root(func, bases, Extern, Global(global_index), Set)
+                encode_root(func, bases, Extern { slot: global_index }, Global, Set)
             }
             Self::TableGet { elem_index } => {
-                encode_root(func, bases, Extern, Table(elem_index), Get)
+                encode_root(func, bases, Extern { slot: 0 }, Table(elem_index), Get)
             }
             Self::TableSet { elem_index } => {
-                encode_root(func, bases, Extern, Table(elem_index), Set)
+                encode_root(func, bases, Extern { slot: 0 }, Table(elem_index), Set)
             }
 
-            Self::StructLocalGet => encode_root(func, bases, Struct, Local(0), Get),
-            Self::StructLocalSet => encode_root(func, bases, Struct, Local(0), Set),
-            Self::StructGlobalGet => encode_root(func, bases, Struct, Global(0), Get),
-            Self::StructGlobalSet => encode_root(func, bases, Struct, Global(0), Set),
+            Self::StructLocalGet => encode_root(func, bases, Struct, Local, Get),
+            Self::StructLocalSet => encode_root(func, bases, Struct, Local, Set),
+            Self::StructGlobalGet => encode_root(func, bases, Struct, Global, Get),
+            Self::StructGlobalSet => encode_root(func, bases, Struct, Global, Set),
             Self::StructTableGet { elem_index } => {
                 encode_root(func, bases, Struct, Table(elem_index), Get)
             }
@@ -1824,17 +1813,17 @@ impl GcOp {
                 encode_root(func, bases, Struct, Table(elem_index), Set)
             }
 
-            Self::EqLocalGet => encode_root(func, bases, Eq, Local(0), Get),
-            Self::EqLocalSet => encode_root(func, bases, Eq, Local(0), Set),
-            Self::EqGlobalGet => encode_root(func, bases, Eq, Global(0), Get),
-            Self::EqGlobalSet => encode_root(func, bases, Eq, Global(0), Set),
+            Self::EqLocalGet => encode_root(func, bases, Eq, Local, Get),
+            Self::EqLocalSet => encode_root(func, bases, Eq, Local, Set),
+            Self::EqGlobalGet => encode_root(func, bases, Eq, Global, Get),
+            Self::EqGlobalSet => encode_root(func, bases, Eq, Global, Set),
             Self::EqTableGet { elem_index } => encode_root(func, bases, Eq, Table(elem_index), Get),
             Self::EqTableSet { elem_index } => encode_root(func, bases, Eq, Table(elem_index), Set),
 
-            Self::I31LocalGet => encode_root(func, bases, I31, Local(0), Get),
-            Self::I31LocalSet => encode_root(func, bases, I31, Local(0), Set),
-            Self::I31GlobalGet => encode_root(func, bases, I31, Global(0), Get),
-            Self::I31GlobalSet => encode_root(func, bases, I31, Global(0), Set),
+            Self::I31LocalGet => encode_root(func, bases, I31, Local, Get),
+            Self::I31LocalSet => encode_root(func, bases, I31, Local, Set),
+            Self::I31GlobalGet => encode_root(func, bases, I31, Global, Get),
+            Self::I31GlobalSet => encode_root(func, bases, I31, Global, Set),
             Self::I31TableGet { elem_index } => {
                 encode_root(func, bases, I31, Table(elem_index), Get)
             }
@@ -1842,10 +1831,10 @@ impl GcOp {
                 encode_root(func, bases, I31, Table(elem_index), Set)
             }
 
-            Self::ArrayLocalGet => encode_root(func, bases, Array, Local(0), Get),
-            Self::ArrayLocalSet => encode_root(func, bases, Array, Local(0), Set),
-            Self::ArrayGlobalGet => encode_root(func, bases, Array, Global(0), Get),
-            Self::ArrayGlobalSet => encode_root(func, bases, Array, Global(0), Set),
+            Self::ArrayLocalGet => encode_root(func, bases, Array, Local, Get),
+            Self::ArrayLocalSet => encode_root(func, bases, Array, Local, Set),
+            Self::ArrayGlobalGet => encode_root(func, bases, Array, Global, Get),
+            Self::ArrayGlobalSet => encode_root(func, bases, Array, Global, Set),
             Self::ArrayTableGet { elem_index } => {
                 encode_root(func, bases, Array, Table(elem_index), Get)
             }
@@ -1856,18 +1845,18 @@ impl GcOp {
             // Typed struct and array ops share the typed banks; only their
             // abstract stack type differs.
             Self::TypedStructLocalGet { type_index } | Self::TypedArrayLocalGet { type_index } => {
-                encode_root(func, bases, Typed(type_index), Local(0), Get)
+                encode_root(func, bases, Typed(type_index), Local, Get)
             }
             Self::TypedStructLocalSet { type_index } | Self::TypedArrayLocalSet { type_index } => {
-                encode_root(func, bases, Typed(type_index), Local(0), Set)
+                encode_root(func, bases, Typed(type_index), Local, Set)
             }
             Self::TypedStructGlobalGet { type_index }
             | Self::TypedArrayGlobalGet { type_index } => {
-                encode_root(func, bases, Typed(type_index), Global(0), Get)
+                encode_root(func, bases, Typed(type_index), Global, Get)
             }
             Self::TypedStructGlobalSet { type_index }
             | Self::TypedArrayGlobalSet { type_index } => {
-                encode_root(func, bases, Typed(type_index), Global(0), Set)
+                encode_root(func, bases, Typed(type_index), Global, Set)
             }
             Self::TypedStructTableGet {
                 elem_index,
@@ -1897,25 +1886,23 @@ fn encode_root(
     storage: Storage,
     dir: Dir,
 ) {
-    let slots = bases.root_slots(kind, storage.index());
+    let slots = bases.root_slots(kind);
     match (storage, dir) {
-        (Storage::Local(_), Dir::Get) => {
+        (Storage::Local, Dir::Get) => {
             func.instruction(&Instruction::LocalGet(slots.local));
         }
-        (Storage::Local(_), Dir::Set) => {
+        (Storage::Local, Dir::Set) => {
             func.instruction(&Instruction::LocalSet(slots.local));
         }
-        (Storage::Global(_), Dir::Get) => {
+        (Storage::Global, Dir::Get) => {
             func.instruction(&Instruction::GlobalGet(slots.global));
         }
-        (Storage::Global(_), Dir::Set) => {
+        (Storage::Global, Dir::Set) => {
             func.instruction(&Instruction::GlobalSet(slots.global));
         }
         (Storage::Table(elem), Dir::Get) => table_get(func, elem, slots.table),
-        (Storage::Table(elem), Dir::Set) => {
-            return table_set_via(func, slots.tmp, elem, slots.table);
-        }
-    };
+        (Storage::Table(elem), Dir::Set) => table_set_via(func, slots.tmp, elem, slots.table),
+    }
 }
 
 /// Pass the i31ref and the guest's own `i31.get_s` and `i31.get_u` results to the
