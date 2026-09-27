@@ -14,7 +14,7 @@ use wasm_encoder::{
     Module, RefType, TableSection, TableType, TypeSection, ValType,
 };
 
-/// The abstract `struct` heap type; `wasm_encoder` has no shorthand for it.
+/// The abstract `struct` heap type, which `wasm_encoder` has no shorthand for.
 const STRUCT: HeapType = HeapType::Abstract {
     shared: false,
     ty: AbstractHeapType::Struct,
@@ -98,7 +98,7 @@ fn nullable_table(element_type: RefType, size: u32) -> TableType {
     }
 }
 
-/// Append a mutable `(ref null heap_type)` global initialized to null; returns its index.
+/// Append a mutable null-initialized `(ref null heap_type)` global and return its index.
 fn null_ref_global(globals: &mut GlobalSection, heap_type: HeapType) -> u32 {
     let index = globals.len();
     globals.global(
@@ -130,8 +130,8 @@ fn table_set_via(func: &mut Function, tmp: u32, elem_index: u32, table: u32) {
     func.instruction(&Instruction::TableSet(table));
 }
 
-/// Pop the reference on top of the stack into `tmp` and run `body` only if it
-/// is non-null; `body` reads it back with `local.get tmp`.
+/// Pop the reference on top of the stack into `tmp` and run `body` only if it is
+/// non-null, so `body` reads it back with `local.get tmp`.
 fn if_non_null(func: &mut Function, tmp: u32, body: impl FnOnce(&mut Function)) {
     func.instruction(&Instruction::LocalTee(tmp));
     func.instruction(&Instruction::RefIsNull);
@@ -179,31 +179,47 @@ fn array_get_instruction(
 
 /// Indices of the function types of the host imports and `run`.
 struct HostTypes {
+    /// Type index of `gc`.
     gc: u32,
+    /// Type index of `run`.
     run: u32,
+    /// Type index of `take_refs`.
     take_refs: u32,
+    /// Type index of `make_refs`.
     make_refs: u32,
+    /// Type index of `take_struct`.
     take_struct: u32,
+    /// Type index of `take_eq`.
     take_eq: u32,
+    /// Type index of `take_i31`.
     take_i31: u32,
+    /// Type index of `take_array`.
     take_array: u32,
 }
 
 /// Function indices of the host imports.
 #[derive(Clone, Copy)]
 struct HostFuncs {
+    /// Function index of `gc`.
     gc: u32,
+    /// Function index of `take_refs`.
     take_refs: u32,
+    /// Function index of `make_refs`.
     make_refs: u32,
+    /// Function index of `take_struct`.
     take_struct: u32,
+    /// Function index of `take_eq`.
     take_eq: u32,
+    /// Function index of `take_i31`.
     take_i31: u32,
+    /// Function index of `take_array`.
     take_array: u32,
-    /// Bank of `take_struct_N` / `take_array_N` imports; see `RootBanks`.
+    /// Bank of `take_struct_N` and `take_array_N` imports, one per concrete type.
     typed_base: u32,
 }
 
 impl HostFuncs {
+    /// Function index of the `take_*` import for the concrete type at `dense`.
     fn typed(&self, dense: u32) -> u32 {
         self.typed_base + dense
     }
@@ -213,14 +229,20 @@ impl HostFuncs {
 /// run of consecutive slots, one per concrete type, at `base + dense`.
 #[derive(Clone, Copy)]
 struct RootBanks {
+    /// The `structref` slot.
     structref: u32,
+    /// The `eqref` slot.
     eqref: u32,
+    /// The `i31ref` slot.
     i31ref: u32,
+    /// The `arrayref` slot.
     arrayref: u32,
+    /// First slot of the bank of typed slots.
     typed_base: u32,
 }
 
 impl RootBanks {
+    /// Slot of the concrete type at `dense`.
     fn typed(&self, dense: u32) -> u32 {
         self.typed_base + dense
     }
@@ -231,27 +253,34 @@ impl RootBanks {
 struct LocalBanks {
     /// Temporary for `table.set` on the `externref` table.
     extern_scratch: u32,
+    /// The `structref` root local.
     structref: u32,
+    /// The `eqref` root local.
     eqref: u32,
+    /// The `i31ref` root local.
     i31ref: u32,
+    /// The `arrayref` root local.
     arrayref: u32,
     /// Typed roots, also the temporaries of null-guarded ops on that type.
     typed_base: u32,
     /// Second operand for ops on two values of one type (`array.copy`).
     typed2_base: u32,
-    /// One shared prototype per type; see `Types::prototype_types`.
+    /// One shared prototype per type, chosen by `Types::prototype_types`.
     proto_base: u32,
 }
 
 impl LocalBanks {
+    /// Typed root local of the concrete type at `dense`.
     fn typed(&self, dense: u32) -> u32 {
         self.typed_base + dense
     }
 
+    /// Second operand local of the concrete type at `dense`.
     fn typed2(&self, dense: u32) -> u32 {
         self.typed2_base + dense
     }
 
+    /// Prototype local of the concrete type at `dense`.
     fn proto(&self, dense: u32) -> u32 {
         self.proto_base + dense
     }
@@ -261,23 +290,28 @@ impl LocalBanks {
 /// in the encoding order of the concrete types, which is what `type_index` holds.
 #[derive(Clone, Copy)]
 pub(crate) struct WasmEncodingBases {
+    /// Function indices of the host imports.
     funcs: HostFuncs,
     /// Wasm index of the first concrete type.
     struct_type_base: u32,
+    /// Locals of `run`.
     locals: LocalBanks,
+    /// Globals of the module.
     globals: RootBanks,
+    /// Tables of the module.
     tables: RootBanks,
     /// Length of every array `ArrayNew` / `ArrayNewDefault` creates.
     array_length: u32,
 }
 
 impl WasmEncodingBases {
+    /// Wasm type index of the concrete type at `dense`.
     fn wasm_type(&self, dense: u32) -> u32 {
         self.struct_type_base + dense
     }
 
-    /// The slots of one root kind. `index` is the op's own immediate: the param or
-    /// global of an `Extern` access, unused for the other kinds.
+    /// The slots of one root kind, where `index` is the param or global of an `Extern`
+    /// access and unused for the other kinds.
     fn root_slots(&self, kind: RefKind, index: u32) -> RootSlots {
         let (l, g, t) = (&self.locals, &self.globals, &self.tables);
         match kind {
@@ -321,14 +355,20 @@ impl WasmEncodingBases {
     }
 }
 
-/// The kinds of reference the module keeps roots for; `Typed` is a dense type index.
+/// The kinds of reference the module keeps roots for, with `Typed` holding a dense type index.
 #[derive(Clone, Copy, Debug)]
 enum RefKind {
+    /// An `externref`.
     Extern,
+    /// A `structref`.
     Struct,
+    /// An `eqref`.
     Eq,
+    /// An `i31ref`.
     I31,
+    /// An `arrayref`.
     Array,
+    /// A reference to the concrete type at this dense index.
     Typed(u32),
 }
 
@@ -336,12 +376,16 @@ enum RefKind {
 /// for `Extern` (unused for other kinds), or the table element index.
 #[derive(Clone, Copy, Debug)]
 enum Storage {
+    /// A local of `run`.
     Local(u32),
+    /// A global.
     Global(u32),
+    /// An element of a table.
     Table(u32),
 }
 
 impl Storage {
+    /// The index carried by the variant.
     fn index(self) -> u32 {
         match self {
             Self::Local(i) | Self::Global(i) | Self::Table(i) => i,
@@ -349,28 +393,38 @@ impl Storage {
     }
 }
 
+/// Whether a root access reads or writes.
 #[derive(Clone, Copy, Debug)]
 enum Dir {
+    /// Read the root.
     Get,
+    /// Write the root.
     Set,
 }
 
 /// The local, global, table and `table.set` temporary of one root kind.
 #[derive(Clone, Copy)]
 struct RootSlots {
+    /// The local.
     local: u32,
+    /// The global.
     global: u32,
+    /// The table.
     table: u32,
+    /// The local `table.set` parks its value in.
     tmp: u32,
 }
 
 /// Local declarations of a function, handing out indices in declaration order.
 struct LocalDecls {
+    /// The declarations, one entry per local.
     decls: Vec<(u32, ValType)>,
+    /// Index of the next local to declare.
     next: u32,
 }
 
 impl LocalDecls {
+    /// No locals yet, after `num_params` parameters.
     fn new(num_params: u32) -> Self {
         Self {
             decls: Vec::new(),
@@ -378,6 +432,7 @@ impl LocalDecls {
         }
     }
 
+    /// Declare one local of type `ty` and return its index.
     fn declare(&mut self, ty: ValType) -> u32 {
         let index = self.next;
         self.next += 1;
@@ -385,7 +440,7 @@ impl LocalDecls {
         index
     }
 
-    /// Declare a bank of `count` locals; returns its base index.
+    /// Declare a bank of `count` locals and return its base index.
     fn declare_bank(&mut self, count: u32, ty: impl Fn(u32) -> ValType) -> u32 {
         let base = self.next;
         for i in 0..count {
@@ -452,7 +507,7 @@ fn host_function_types(types: &mut TypeSection, num_params: u32) -> HostTypes {
     }
 }
 
-/// One `(func (param (ref null $t)))` type per concrete type; returns the first's index.
+/// Add one `(func (param (ref null $t)))` type per concrete type and return the first index.
 fn typed_take_types(types: &mut TypeSection, struct_type_base: u32, concrete_count: u32) -> u32 {
     // Not `types.len()`: a rec group is one section entry but `concrete_count` type indices.
     let base = struct_type_base + concrete_count;
@@ -464,7 +519,7 @@ fn typed_take_types(types: &mut TypeSection, struct_type_base: u32, concrete_cou
     base
 }
 
-/// Tables of `table_size`: `externref` (table 0), one per abstract reference type, one per concrete type.
+/// Tables of `table_size` elements, the `externref` one first, then one per abstract kind and one per concrete type.
 fn encode_tables(
     table_size: u32,
     struct_type_base: u32,
@@ -500,7 +555,7 @@ fn encode_tables(
     (tables, banks)
 }
 
-/// Null-initialized globals: `num_globals` `externref`s, one per abstract reference type, one per concrete type.
+/// Null-initialized globals, `num_globals` `externref`s first, then one per abstract kind and one per concrete type.
 fn encode_globals(
     num_globals: u32,
     struct_type_base: u32,
@@ -559,12 +614,16 @@ fn declare_locals(
     };
     (locals, banks)
 }
+
 /// A description of a Wasm module that performs a series of GC operations on
 /// `externref`s, `i31`s, and struct and array objects of its own types.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GcOps {
+    /// Limits controlling the structure of the module.
     pub(crate) limits: GcOpsLimits,
+    /// The operations `run` performs, in order.
     pub(crate) ops: Vec<GcOp>,
+    /// The struct and array types of the module.
     pub(crate) types: Types,
 }
 
@@ -643,7 +702,7 @@ impl GcOps {
         module.finish()
     }
 
-    /// Emit every rec group in encoding order; returns the Wasm type index of each type.
+    /// Emit every rec group in encoding order and return the Wasm type index of each type.
     fn encode_concrete_types(
         &self,
         types: &mut TypeSection,
@@ -705,7 +764,7 @@ impl GcOps {
         type_ids_to_index
     }
 
-    /// The host imports: the fixed ones, then one `take_*` per concrete type.
+    /// The host imports, the fixed ones first and then one `take_*` per concrete type.
     fn encode_imports(
         &self,
         host_types: &HostTypes,
@@ -758,7 +817,7 @@ impl GcOps {
         (imports, funcs)
     }
 
-    /// The body of `run`: an endless loop that refills the prototypes, then runs every op.
+    /// The body of `run`, an endless loop that refills the prototypes and then runs every op.
     fn encode_run_body(
         &self,
         locals: LocalDecls,
@@ -1479,6 +1538,7 @@ macro_rules! define_op_names {
 for_each_gc_op!(define_op_names);
 
 impl GcOp {
+    /// The variant name, for tests.
     #[cfg(test)]
     pub(crate) fn name(&self) -> &'static str {
         macro_rules! define_gc_op_name {
@@ -1498,6 +1558,7 @@ impl GcOp {
         for_each_gc_op!(define_gc_op_name)
     }
 
+    /// The types this op pops, with `None` accepting any.
     pub(crate) fn operand_types(&self, out: &mut Vec<Option<StackType>>) {
         macro_rules! define_gc_op_operand_types {
             (
@@ -1527,6 +1588,7 @@ impl GcOp {
         for_each_gc_op!(define_gc_op_operand_types)
     }
 
+    /// The types this op pushes.
     pub(crate) fn result_types(&self, out: &mut Vec<StackType>) {
         macro_rules! define_gc_op_result_types {
             (
@@ -1605,6 +1667,7 @@ impl GcOp {
         for_each_gc_op!(define_gc_op_fixup)
     }
 
+    /// Emit the Wasm instructions of this op into `func`.
     fn encode(&self, func: &mut Function, cx: EmitCtx<'_>) {
         let bases = cx.bases;
         use Dir::{Get, Set};
@@ -1826,7 +1889,7 @@ impl GcOp {
     }
 }
 
-/// A root read or write: one instruction, or the `table.set` idiom.
+/// A root read or write, one instruction or the `table.set` idiom.
 fn encode_root(
     func: &mut Function,
     bases: WasmEncodingBases,
@@ -1855,8 +1918,8 @@ fn encode_root(
     };
 }
 
-/// Differential check: pass the i31ref plus the guest's inline `i31.get_s` /
-/// `i31.get_u` results to the host, which re-derives and compares them.
+/// Pass the i31ref and the guest's own `i31.get_s` and `i31.get_u` results to the
+/// host, which re-derives and compares them.
 fn encode_take_i31(func: &mut Function, bases: WasmEncodingBases) {
     let i31 = bases.locals.i31ref;
     func.instruction(&Instruction::LocalTee(i31));
@@ -1939,7 +2002,7 @@ fn encode_upcast(func: &mut Function, bases: WasmEncodingBases, super_type_index
     func.instruction(&Instruction::RefCastNullable(heap_type));
 }
 
-/// A downcast that never traps: `ref.test` first, and `ref.null` when it fails.
+/// A downcast that never traps, testing with `ref.test` first and producing `ref.null` on failure.
 fn encode_downcast(
     func: &mut Function,
     bases: WasmEncodingBases,
@@ -1962,7 +2025,7 @@ fn encode_downcast(
     func.instruction(&Instruction::End);
 }
 
-/// Null-guarded `struct.get` of field `field_index % len`; the value is dropped.
+/// Null-guarded `struct.get` of field `field_index % len`, dropping the value.
 fn encode_struct_get(
     func: &mut Function,
     cx: EmitCtx<'_>,
@@ -1990,8 +2053,8 @@ fn encode_struct_get(
     }
 }
 
-/// Null-guarded `struct.set` of a default value into the first mutable field at
-/// or after `field_index`, wrapping around; no mutable field just drops the ref.
+/// Null-guarded `struct.set` of a default value into the first mutable field at or
+/// after `field_index`, wrapping around, or a drop when no field is mutable.
 fn encode_struct_set(func: &mut Function, cx: EmitCtx<'_>, type_index: u32, field_index: u32) {
     let wasm_type = cx.bases.wasm_type(type_index);
     let mutable_field = struct_fields(cx.types, cx.encoding_order, type_index)
@@ -2023,7 +2086,7 @@ fn encode_struct_set(func: &mut Function, cx: EmitCtx<'_>, type_index: u32, fiel
     }
 }
 
-/// Null-guarded `array.get`; the element is dropped. Fixup keeps `index` mostly in bounds.
+/// Null-guarded `array.get`, dropping the element, with `index` kept mostly in bounds by fixup.
 fn encode_array_get(
     func: &mut Function,
     cx: EmitCtx<'_>,
@@ -2050,7 +2113,7 @@ fn encode_array_get(
     }
 }
 
-/// Null-guarded `array.set` of a default value; an immutable element drops the ref.
+/// Null-guarded `array.set` of a default value, or a drop when the element is immutable.
 fn encode_array_set(func: &mut Function, cx: EmitCtx<'_>, type_index: u32, index: u32) {
     let wasm_type = cx.bases.wasm_type(type_index);
     let typed_local = cx.bases.locals.typed(type_index);
@@ -2069,7 +2132,7 @@ fn encode_array_set(func: &mut Function, cx: EmitCtx<'_>, type_index: u32, index
     }
 }
 
-/// Null-guarded `array.fill` with a default value; an immutable element drops the ref.
+/// Null-guarded `array.fill` with a default value, or a drop when the element is immutable.
 fn encode_array_fill(func: &mut Function, cx: EmitCtx<'_>, type_index: u32, offset: u32, len: u32) {
     let wasm_type = cx.bases.wasm_type(type_index);
     let typed_local = cx.bases.locals.typed(type_index);
@@ -2131,7 +2194,7 @@ fn encode_array_copy(
     }
 }
 
-/// Null-guarded `array.len`; the length is dropped.
+/// Null-guarded `array.len`, dropping the length.
 fn encode_array_len(func: &mut Function, bases: WasmEncodingBases) {
     let array_local = bases.locals.arrayref;
     if_non_null(func, array_local, |func| {
@@ -2141,7 +2204,7 @@ fn encode_array_len(func: &mut Function, bases: WasmEncodingBases) {
     });
 }
 
-/// Null-guarded `i31.get_s` / `i31.get_u`; the value is dropped.
+/// Null-guarded `i31.get_s` or `i31.get_u`, dropping the value.
 fn encode_i31_get(func: &mut Function, bases: WasmEncodingBases, signed: bool) {
     let i31_local = bases.locals.i31ref;
     let get = if signed {

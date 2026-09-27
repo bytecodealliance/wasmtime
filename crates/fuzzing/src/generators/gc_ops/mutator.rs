@@ -405,6 +405,7 @@ impl TypesMutator {
 /// Mutator for `GcOps`.
 #[derive(Debug, Default)]
 pub struct GcOpsMutator {
+    /// Mutates the type definitions and rec groups.
     types_mutator: TypesMutator,
 }
 

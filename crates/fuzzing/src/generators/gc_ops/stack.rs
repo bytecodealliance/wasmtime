@@ -12,9 +12,9 @@ pub enum StackType {
     Eq,
     /// `i31ref`.
     I31,
-    /// `(ref $*)` — optionally with a concrete type index.
+    /// `(ref $*)`, optionally with a concrete type index.
     Struct(Option<u32>),
-    /// `(ref array)` or `(ref $t)` — optionally with a concrete type index.
+    /// `(ref array)` or `(ref $t)`, optionally with a concrete type index.
     Array(Option<u32>),
 }
 
@@ -43,7 +43,7 @@ fn satisfies(req: StackType, top: StackType, types: &Types, encoding_order: &[Ty
     }
 }
 
-/// The op that produces a value of type `req` from nothing: a null, or a fresh
+/// The op that produces a value of type `req` from nothing, a null or a fresh
 /// object for a concrete type. Abstract nulls also cover the case of no types at all.
 fn synthesize(req: StackType, num_types: u32) -> GcOp {
     match req {

@@ -318,16 +318,20 @@ impl CompositeType {
 /// A sub-type definition (the per-type payload).
 #[derive(Clone, Debug, Serialize, Deserialize, mutatis::Mutate)]
 pub struct SubType {
+    /// Whether the type may not be used as a supertype.
     #[mutatis(default_mutate)]
     pub(crate) is_final: bool,
+    /// The direct supertype, if any.
     #[mutatis(default_mutate)]
     pub(crate) supertype: Option<TypeId>,
+    /// The struct or array definition.
     #[mutatis(default_mutate)]
     pub(crate) composite_type: CompositeType,
 }
 
 /// Supertype graph: edges go from a type to its supertype.
 struct SupertypeGraph<'a> {
+    /// The type definitions the edges are read from.
     type_defs: &'a BTreeMap<TypeId, SubType>,
 }
 
@@ -357,8 +361,11 @@ impl Graph<TypeId> for SupertypeGraph<'_> {
 /// Rec-group dependency graph: group A depends on group B when a type
 /// in A has a supertype in B.
 struct RecGroupGraph<'a> {
+    /// The type definitions.
     type_defs: &'a BTreeMap<TypeId, SubType>,
+    /// The members of every rec group.
     rec_groups: &'a BTreeMap<RecGroupId, BTreeSet<TypeId>>,
+    /// The rec group of every type.
     type_to_group: &'a BTreeMap<TypeId, RecGroupId>,
 }
 
@@ -422,6 +429,7 @@ entity_impl!(RecGroupNode);
 
 /// A densely-indexed view of the rec-group dependency graph, suitable for
 struct DenseRecGroupGraph {
+    /// Successor nodes of every node.
     adjacency: Vec<Vec<RecGroupNode>>,
 }
 
@@ -845,7 +853,7 @@ impl Types {
         self.encoding_order_grouped(encoding_order_grouped, &type_to_group);
     }
 
-    /// Trim types and rec groups to `limits`; drop dangling and duplicate group members.
+    /// Trim types and rec groups to `limits` and drop dangling and duplicate group members.
     fn fixup_counts(&mut self, limits: &GcOpsLimits) {
         let max_rec_groups = usize::try_from(limits.max_rec_groups).unwrap();
         let max_types = usize::try_from(limits.max_types).unwrap();
@@ -891,7 +899,7 @@ impl Types {
         }
     }
 
-    /// Trim struct fields to `max_fields`; arrays always have exactly one element.
+    /// Trim struct fields to `max_fields`, leaving arrays with their single element.
     fn fixup_field_counts(&mut self, limits: &GcOpsLimits) {
         let max_fields = usize::try_from(limits.max_fields).unwrap();
         for def in self.type_defs.values_mut() {
