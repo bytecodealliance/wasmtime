@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::{
-    Engine, Trap,
+    Engine, Trap, bail_bug,
     prelude::*,
     vm::{
         ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
@@ -95,7 +95,9 @@ impl VMNullArrayHeader {
 #[repr(C)]
 struct VMNullExternRef {
     header: VMGcHeader,
-    host_data: ExternRefHostDataId,
+    // The raw encoding of an `ExternRefHostDataId`; the ID type does not accept
+    // every bit pattern, and heap bytes are untrusted.
+    host_data: u32,
 }
 
 unsafe impl GcHeapObject for VMNullExternRef {
@@ -272,13 +274,16 @@ unsafe impl GcHeap for NullHeap {
             Err(bytes_needed) => return Ok(Err(bytes_needed)),
         };
         self.index_mut::<VMNullExternRef>(gc_ref.as_typed_unchecked())?
-            .host_data = host_data;
+            .host_data = host_data.into_raw();
         Ok(Ok(gc_ref.into_externref_unchecked()))
     }
 
     fn externref_host_data(&self, externref: &VMExternRef) -> Result<ExternRefHostDataId> {
         let typed_ref = VMNullExternRef::typed_ref(self, externref);
-        Ok(self.index(typed_ref)?.host_data)
+        match ExternRefHostDataId::from_raw(self.index(typed_ref)?.host_data) {
+            Some(id) => Ok(id),
+            None => bail_bug!("invalid `ExternRefHostDataId`"),
+        }
     }
 
     fn object_size(&self, gc_ref: &VMGcRef) -> Result<usize> {

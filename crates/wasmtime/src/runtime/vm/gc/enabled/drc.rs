@@ -392,7 +392,11 @@ impl DrcHeap {
                         Some(r) => r,
                         None => bail_bug!("expected externref"),
                     };
-                    let host_data_id = this.index(externref)?.host_data;
+                    let host_data_id =
+                        match ExternRefHostDataId::from_raw(this.index(externref)?.host_data) {
+                            Some(id) => id,
+                            None => bail_bug!("invalid `ExternRefHostDataId`"),
+                        };
                     trace_state.host_data_table.dealloc(host_data_id)?;
                 }
 
@@ -847,7 +851,9 @@ unsafe impl GcHeapObject for VMDrcArrayHeader {
 #[repr(C)]
 struct VMDrcExternRef {
     header: VMDrcHeader,
-    host_data: ExternRefHostDataId,
+    // The raw encoding of an `ExternRefHostDataId`; the ID type does not accept
+    // every bit pattern, and heap bytes are untrusted.
+    host_data: u32,
 }
 
 unsafe impl GcHeapObject for VMDrcExternRef {
@@ -1013,13 +1019,16 @@ unsafe impl GcHeap for DrcHeap {
                 Ok(gc_ref) => gc_ref,
             };
         self.index_mut::<VMDrcExternRef>(gc_ref.as_typed_unchecked())?
-            .host_data = host_data;
+            .host_data = host_data.into_raw();
         Ok(Ok(gc_ref.into_externref_unchecked()))
     }
 
     fn externref_host_data(&self, externref: &VMExternRef) -> Result<ExternRefHostDataId> {
         let typed_ref = externref_to_drc(externref);
-        Ok(self.index(typed_ref)?.host_data)
+        match ExternRefHostDataId::from_raw(self.index(typed_ref)?.host_data) {
+            Some(id) => Ok(id),
+            None => bail_bug!("invalid `ExternRefHostDataId`"),
+        }
     }
 
     fn header(&self, gc_ref: &VMGcRef) -> Result<&VMGcHeader> {

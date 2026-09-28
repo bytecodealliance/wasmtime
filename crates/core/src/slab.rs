@@ -159,11 +159,26 @@ impl Id {
     /// Construct an `Id` from its raw underlying representation.
     ///
     /// `raw` should be a value that was previously created via
-    /// `Id::into_raw`. May panic if given arbitrary values.
+    /// `Id::into_raw`. May panic if given arbitrary values; use
+    /// `Id::try_from_raw` for values that are not known to be well-formed.
     #[inline]
     pub fn from_raw(raw: u32) -> Self {
         let raw = usize::try_from(raw).unwrap();
         Self(EntryIndex::new(raw))
+    }
+
+    /// Construct an `Id` from its raw underlying representation, if that
+    /// representation is well-formed.
+    ///
+    /// A well-formed `Id` is not necessarily one that any slab has handed out;
+    /// lookups are still checked.
+    #[inline]
+    pub fn try_from_raw(raw: u32) -> Option<Self> {
+        let raw = usize::try_from(raw).ok()?;
+        if raw > Slab::<()>::MAX_CAPACITY {
+            return None;
+        }
+        Some(Self(EntryIndex::new(raw)))
     }
 }
 
