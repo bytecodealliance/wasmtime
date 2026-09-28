@@ -283,6 +283,8 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = self.table.get_mut(&request)?;
 
+        let path_with_query = crate::normalize_path_with_query(path_with_query);
+
         if let Some(s) = path_with_query.as_ref() {
             if let Err(_) = http::uri::PathAndQuery::from_str(s) {
                 return Ok(Err(()));

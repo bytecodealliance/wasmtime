@@ -311,6 +311,9 @@ impl HostRequest for WasiHttpCtxView<'_> {
         path_with_query: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = get_request_mut(self.table, &req)?;
+
+        let path_with_query = crate::normalize_path_with_query(path_with_query);
+
         let Some(path_with_query) = path_with_query else {
             req.path_with_query = None;
             return Ok(Ok(()));

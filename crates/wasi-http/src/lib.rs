@@ -56,6 +56,29 @@ fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>
     Ok(Some(v))
 }
 
+/// Normalize the specified `path-with-query` string into a form acceptable to
+/// `http::uri::PathAndQuery::from_str` if possible; otherwise return the
+/// argument unmodified.
+///
+/// https://github.com/hyperium/http/pull/826 changed the behavior of
+/// `http::uri::PathAndQuery::from_str("")` such that it now returns an error
+/// instead of implicitly converting it to "/" as it did before.  However,
+/// https://datatracker.ietf.org/doc/html/rfc3986#section-3.3 says an empty path
+/// is okay:
+///
+/// > If a URI contains an authority component, then the path component must
+/// > either be empty or begin with a slash ("/") character.
+///
+/// Here we convert `Some("")` into `Some("/")` to restore the original behavior
+/// while remaining compatible with newer releases of the `http` crate.
+fn normalize_path_with_query(path_with_query: Option<String>) -> Option<String> {
+    if let Some("") = path_with_query.as_deref() {
+        Some("/".into())
+    } else {
+        path_with_query
+    }
+}
+
 #[cfg(all(test, any(feature = "p2", feature = "p3")))]
 mod content_length_tests {
     use super::get_content_length;
