@@ -76,8 +76,7 @@ use crate::p2::bindings::{
 use crate::p2::{FsError, IsATTY};
 use crate::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 use std::collections::{BTreeMap, BTreeSet, HashSet, btree_map};
-use std::mem::{self, size_of, size_of_val};
-use std::slice;
+use std::mem::{self, size_of};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use wasmtime::component::Resource;
@@ -1997,36 +1996,27 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             let d_namlen: u32 = name.len().try_into().map_err(|_| types::Errno::Overflow)?;
             dir.push((
                 types::Dirent {
-                    d_next: d_next.to_le(),
-                    d_ino: metadata_hash.lower.to_le(),
-                    d_type, // endian-invariant
-                    d_namlen: d_namlen.to_le(),
+                    d_next,
+                    d_ino: metadata_hash.lower,
+                    d_type,
+                    d_namlen,
                 },
                 name,
             ))
         }
 
-        // assume that `types::Dirent` size always fits in `u32`
-        const DIRENT_SIZE: u32 = size_of::<types::Dirent>() as _;
-        assert_eq!(
-            types::Dirent::guest_size(),
-            DIRENT_SIZE,
-            "Dirent guest repr and host repr should match"
-        );
         let mut buf = buf;
         let mut cap = buf_len;
+        let mut dirent = vec![0; types::Dirent::guest_size() as usize];
         for (ref entry, path) in head.into_iter().chain(dir.into_iter()).skip(cookie) {
             let mut path = path.into_bytes();
-            assert_eq!(
-                1,
-                size_of_val(&entry.d_type),
-                "Dirent member d_type should be endian-invariant"
-            );
-            let entry_len = cap.min(DIRENT_SIZE);
-            let entry = entry as *const _ as _;
-            let entry = unsafe { slice::from_raw_parts(entry, entry_len as _) };
+            dirent[0..8].copy_from_slice(entry.d_next.to_le_bytes().as_slice());
+            dirent[8..16].copy_from_slice(entry.d_ino.to_le_bytes().as_slice());
+            dirent[16..20].copy_from_slice(entry.d_namlen.to_le_bytes().as_slice());
+            dirent[20..21].copy_from_slice((entry.d_type as u8).to_le_bytes().as_slice());
+            let entry_len = cap.min(types::Dirent::guest_size());
             cap = cap.checked_sub(entry_len).unwrap();
-            buf = write_bytes(memory, buf, entry)?;
+            buf = write_bytes(memory, buf, &dirent[..entry_len as usize])?;
             if cap == 0 {
                 return Ok(buf_len);
             }
