@@ -1489,7 +1489,20 @@ impl Compiler {
             (params[0], params[1], params[2], params[3])
         };
 
-        // First load the actual arguments out of the array.
+        // Validate `values_vec_len` as a defense-in-depth measure to ensure
+        // it's large enough. This should always be verified dynamically by the
+        // runtime, but should this be mistaken we want to halt ASAP as opposed
+        // to reading or writing beyond host-side buffers.
+        let required_capacity = cmp::max(callee_sig.params().len(), callee_sig.results().len());
+        let required_capacity = u32::try_from(required_capacity).unwrap();
+        let enough_capacity = builder.ins().icmp_imm_u(
+            ir::condcodes::IntCC::UnsignedGreaterThanOrEqual,
+            values_vec_len,
+            i64::from(required_capacity),
+        );
+        builder.ins().trapz(enough_capacity, TRAP_INTERNAL_ASSERT);
+
+        // Load the actual arguments out of the array.
         let mut args = self.load_values_from_array(
             &mut alias_regions,
             callee_sig.params(),
