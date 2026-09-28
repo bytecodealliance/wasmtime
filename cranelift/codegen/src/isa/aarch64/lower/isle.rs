@@ -222,6 +222,15 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         self.backend.isa_flags.has_fp16()
     }
 
+    /// A scalar float type, but only `F16` when FEAT_FP16 is implemented.
+    fn ty_scalar_float_with_fp16(&mut self, ty: Type) -> Option<Type> {
+        if ty == types::F16 && !self.backend.isa_flags.has_fp16() {
+            None
+        } else {
+            self.ty_scalar_float(ty)
+        }
+    }
+
     fn use_csdb(&mut self) -> bool {
         self.backend.isa_flags.use_csdb()
     }

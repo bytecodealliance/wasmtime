@@ -4609,6 +4609,16 @@
 ;; Helper for generating `fcopysign` instruction sequences.
 (attr fcopy_sign (veri chain))
 (decl fcopy_sign (Reg Reg Type) Reg)
+
+;; `fcopysign` on `f16` only moves the sign bit, so do it in integer registers:
+;; exact, and no FEAT_FP16 required.
+(rule 2 (fcopy_sign x y $F16)      (let ((x_bits Reg (mov_from_vec x 0 (ScalarSize.Size16)))
+            (y_bits Reg (mov_from_vec y 0 (ScalarSize.Size16)))
+            (magnitude Reg (and_imm $I32 x_bits (u64_into_imm_logic $I32 0x7fff)))
+            (sign Reg (and_imm $I32 y_bits (u64_into_imm_logic $I32 0x8000)))
+            (result Reg (orr $I32 magnitude sign)))
+        (mov_to_fpu result (ScalarSize.Size16))))
+
 (rule 1 (fcopy_sign x y (ty_scalar_float ty))
       (let ((dst WritableReg (temp_writable_reg $F64))
             (tmp Reg (fpu_rri (fpu_op_ri_ushr (ty_bits ty) (max_shift ty)) y))
