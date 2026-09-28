@@ -66,7 +66,9 @@ use std::ptr;
 use std::sync::Mutex;
 
 use crate::prelude::*;
-use crate::runtime::vm::{VMContext, VMFuncRef, VMHostArray, VMPayloads, ValRaw, VmPtr};
+use crate::runtime::vm::{
+    VMContext, VMFuncRef, VMHostArray, VMPayloads, ValRaw, VmPtr, host_page_size,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Allocator {
@@ -98,7 +100,7 @@ impl VMContinuationStack {
     pub fn new(size: usize) -> io::Result<Self> {
         // Round up our stack size request to the nearest multiple of the
         // page size.
-        let page_size = rustix::param::page_size();
+        let page_size = host_page_size();
         let size = if size == 0 {
             page_size
         } else {
@@ -199,7 +201,7 @@ impl VMContinuationStack {
             // the readable and writable stack region, therefore
             // we disregard the guard page here.
             {
-                bottom + rustix::param::page_size()
+                bottom + host_page_size()
             }
             Allocator::Custom => bottom,
         };
@@ -349,7 +351,7 @@ impl VMContinuationStack {
             // Without subtracting the guard page, a high-arity function
             // type could pass this check but write into the guard page,
             // causing a segfault (see #13703).
-            let page_size = rustix::param::page_size();
+            let page_size = host_page_size();
             let usable_len = match self.allocator {
                 Allocator::Mmap => self.len.saturating_sub(page_size),
                 Allocator::Custom => self.len,
