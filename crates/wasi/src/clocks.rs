@@ -184,6 +184,8 @@ pub fn wall_clock() -> Box<dyn HostWallClock + Send> {
 
 pub(crate) struct Datetime {
     pub seconds: i64,
+    // When seconds are negative, nanos still represent a forward advancement in
+    // time. E.g. -1s and 999_999_999 nanos is -1ns.
     pub nanoseconds: u32,
 }
 
@@ -191,20 +193,37 @@ impl TryFrom<SystemTime> for Datetime {
     type Error = DatetimeError;
 
     fn try_from(time: SystemTime) -> Result<Self, Self::Error> {
-        let epoch = SystemTime::UNIX_EPOCH;
-
-        if time >= epoch {
-            let duration = time.duration_since(epoch)?;
-            Ok(Self {
+        match time.duration_since(SystemTime::UNIX_EPOCH) {
+            Ok(duration) => Ok(Self {
                 seconds: duration.as_secs().try_into()?,
                 nanoseconds: duration.subsec_nanos(),
-            })
-        } else {
-            let duration = epoch.duration_since(time)?;
-            Ok(Self {
-                seconds: -duration.as_secs().try_into()?,
-                nanoseconds: duration.subsec_nanos(),
-            })
+            }),
+            Err(e) => {
+                // If time is before the epoch, the error gives us the duration
+                // from `time` to the epoch.
+                let duration = e.duration();
+                // So both seconds and nanoseconds are negative. We need to
+                // convert it to negative seconds and positive nanos which
+                // matches the WASI spec.
+                let nanoseconds = duration.subsec_nanos();
+                if nanoseconds == 0 {
+                    Ok(Self {
+                        // Negation cannot panic because duration.as_secs returns a
+                        // u64.
+                        seconds: (-i128::from(duration.as_secs())).try_into()?,
+                        nanoseconds: 0,
+                    })
+                } else {
+                    Ok(Self {
+                        // Negation and (- 1) cannot panic because duration.as_secs
+                        // returns a u64.
+                        seconds: (-i128::from(duration.as_secs()) - 1).try_into()?,
+                        // Cannot panic because `subsec_nanos` guarantees the result
+                        // is less than 1_000_000_000.
+                        nanoseconds: 1_000_000_000 - nanoseconds,
+                    })
+                }
+            }
         }
     }
 }
