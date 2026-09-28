@@ -404,6 +404,48 @@ fn continuation_result_gc_ref_on_operand_stack() -> Result<()> {
     Ok(())
 }
 
+/// https://github.com/bytecodealliance/wasmtime/issues/14239.
+///
+/// GC should trace the suspended continuation and entry should
+/// complete normally.
+#[cfg_attr(miri, ignore)]
+#[test]
+fn gc_traces_a_suspended_continuation() -> Result<()> {
+    let wat = r#"
+        (module
+            (type $ft (func))
+            (type $ct (cont $ft))
+            (type $st (struct (field i32)))
+            (tag $t)
+
+            (func $suspend
+                (suspend $t)
+            )
+            (elem declare func $suspend)
+
+            (func (export "entry")
+                (local $continuation (ref null $ct))
+                (local $i i32)
+                (block $handler (result (ref $ct))
+                    (resume $ct
+                        (on $t $handler)
+                        (cont.new $ct (ref.func $suspend)))
+                    (return)
+                )
+                (local.set $continuation)
+                (loop $allocate
+                    (drop (struct.new $st (i32.const 7)))
+                    (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                    (br_if $allocate (i32.lt_u (local.get $i) (i32.const 20000)))
+                )
+                (resume $ct (local.get $continuation))
+            )
+        )
+    "#;
+
+    test_utils::Runner::new().run_test::<()>(wat, &[])
+}
+
 /// Tests interaction with host functions. Note that the interaction with host
 /// functions and traps is covered by the module `traps` further down.
 mod host {
@@ -1450,4 +1492,68 @@ mod traps {
 
         Ok(())
     }
+}
+
+/// Regression test for https://github.com/bytecodealliance/wasmtime/issues/13322
+///
+/// The `CallThreadState` should not be corrupted by calling a host
+/// function on a continuation.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn corruption_of_callthread_state_when_host_function_is_called_on_continuation() -> Result<()> {
+    // This is a regression test sourced from https://github.com/bytecodealliance/wasmtime/issues/13322
+    use wasmtime::*;
+    let mut config = Config::new();
+    config.wasm_stack_switching(true);
+    config.wasm_function_references(true);
+    config.wasm_exceptions(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (type $ft (func))
+          (tag $t (type $ft))
+          (type $ct (cont $ft))
+
+          (import "host" "h" (func $h_import))
+
+          (func (export "inner"))
+
+          (func $callee
+            (call $h_import)
+            (suspend $t)
+          )
+          (elem declare func $callee)
+
+          (func (export "go") (result i32)
+            (block $h (result (ref null $ct))
+              (resume $ct (on $t $h) (cont.new $ct (ref.func $callee)))
+              (return (i32.const 0))
+            )
+            (drop)
+            (i32.const 1)
+          )
+        )
+    "#,
+    )?;
+
+    let h = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| -> Result<()> {
+        let inner = caller
+            .get_export("inner")
+            .and_then(|e| e.into_func())
+            .expect("inner export");
+        let inner = inner.typed::<(), ()>(&caller)?;
+        inner.call(&mut caller, ())?;
+        Ok(())
+    });
+
+    let instance = Instance::new(&mut store, &module, &[h.into()])?;
+    let go = instance.get_typed_func::<(), i32>(&mut store, "go")?;
+
+    let result = go.call(&mut store, ())?;
+    assert_eq!(result, 1);
+    Ok(())
 }
