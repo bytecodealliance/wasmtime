@@ -55,9 +55,9 @@ enum TcpState {
     /// A socket will not transition out of this state.
     Connected {
         stream: Arc<tokio::net::TcpStream>,
-        /// The address returned by `accept`, which may no longer be queried
-        /// from the stream after the peer resets the connection.
-        accepted_peer: Option<SocketAddr>,
+        /// Cached peer address, returned by `accept` or the first successful
+        /// `peer_addr` query. The stream may no longer report it after a reset.
+        peer: Option<SocketAddr>,
         receive_taken: bool,
         send_taken: bool,
     },
@@ -66,10 +66,10 @@ enum TcpState {
     Closed(ErrorCode),
 }
 impl TcpState {
-    fn connected(stream: tokio::net::TcpStream, accepted_peer: Option<SocketAddr>) -> Self {
+    fn connected(stream: tokio::net::TcpStream, peer: Option<SocketAddr>) -> Self {
         TcpState::Connected {
             stream: Arc::new(stream),
-            accepted_peer,
+            peer,
             receive_taken: false,
             send_taken: false,
         }
@@ -383,13 +383,16 @@ impl TcpSocket {
         }
     }
 
-    pub(crate) fn remote_address(&self) -> Result<SocketAddr, ErrorCode> {
-        match &self.tcp_state {
+    pub(crate) fn remote_address(&mut self) -> Result<SocketAddr, ErrorCode> {
+        match &mut self.tcp_state {
             TcpState::Connected {
-                accepted_peer: Some(peer),
-                ..
+                peer: Some(peer), ..
             } => Ok(*peer),
-            TcpState::Connected { stream, .. } => Ok(stream.peer_addr()?),
+            TcpState::Connected { stream, peer, .. } => {
+                let addr = stream.peer_addr()?;
+                *peer = Some(addr);
+                Ok(addr)
+            }
             TcpState::Closed(err) => Err(*err),
             _ => Err(ErrorCode::InvalidState),
         }
@@ -944,5 +947,41 @@ mod tests {
         };
         assert!(stream.peer_addr().is_err());
         assert_eq!(accepted.remote_address().unwrap(), peer);
+    }
+
+    #[tokio::test]
+    async fn connected_remote_address_survives_reset() {
+        let mut ctx = WasiCtxBuilder::new();
+        ctx.inherit_network().allow_tcp(true);
+        let ctx = ctx.build();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let peer = listener.local_addr().unwrap();
+
+        let mut client = TcpSocket::new(&ctx.sockets, SocketAddressFamily::Ipv4).unwrap();
+        client.start_connect(peer).unwrap();
+        poll_fn(|cx| client.poll_finish_connect(cx)).await.unwrap();
+        let (server, _) = listener.accept().await.unwrap();
+
+        // Query the outgoing socket's peer while the connection is healthy.
+        assert_eq!(client.remote_address().unwrap(), peer);
+        server.set_zero_linger().unwrap();
+        drop(server);
+
+        let mut input = client.take_receive_stream().unwrap();
+        let mut byte = [0];
+        let read = tokio::time::timeout(
+            Duration::from_secs(5),
+            poll_fn(|cx| input.poll_read(cx, &mut byte)),
+        )
+        .await
+        .unwrap();
+        assert!(matches!(read, Err(ErrorCode::ConnectionReset)));
+
+        // Subsequent queries must use the previously observed peer address.
+        let TcpState::Connected { stream, .. } = &client.tcp_state else {
+            panic!("expected an outgoing connection");
+        };
+        assert!(stream.peer_addr().is_err());
+        assert_eq!(client.remote_address().unwrap(), peer);
     }
 }
