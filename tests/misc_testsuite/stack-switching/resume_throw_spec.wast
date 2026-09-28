@@ -1,6 +1,5 @@
 ;;! bulk_memory = true
 ;;! function_references = true
-;;! spec_test = true
 ;;! stack_switching = true
 
 ;; Spec tests for resume_throw and resume_throw_ref
