@@ -55,6 +55,9 @@ enum TcpState {
     /// A socket will not transition out of this state.
     Connected {
         stream: Arc<tokio::net::TcpStream>,
+        /// The address returned by `accept`, which may no longer be queried
+        /// from the stream after the peer resets the connection.
+        accepted_peer: Option<SocketAddr>,
         receive_taken: bool,
         send_taken: bool,
     },
@@ -63,9 +66,10 @@ enum TcpState {
     Closed(ErrorCode),
 }
 impl TcpState {
-    fn connected(stream: tokio::net::TcpStream) -> Self {
+    fn connected(stream: tokio::net::TcpStream, accepted_peer: Option<SocketAddr>) -> Self {
         TcpState::Connected {
             stream: Arc::new(stream),
+            accepted_peer,
             receive_taken: false,
             send_taken: false,
         }
@@ -236,7 +240,7 @@ impl TcpSocket {
 
         match connect.unwrap_ready() {
             Ok(stream) => {
-                self.tcp_state = TcpState::connected(stream);
+                self.tcp_state = TcpState::connected(stream, None);
                 Poll::Ready(Ok(()))
             }
             Err(err) => {
@@ -381,6 +385,10 @@ impl TcpSocket {
 
     pub(crate) fn remote_address(&self) -> Result<SocketAddr, ErrorCode> {
         match &self.tcp_state {
+            TcpState::Connected {
+                accepted_peer: Some(peer),
+                ..
+            } => Ok(*peer),
             TcpState::Connected { stream, .. } => Ok(stream.peer_addr()?),
             TcpState::Closed(err) => Err(*err),
             _ => Err(ErrorCode::InvalidState),
@@ -542,7 +550,7 @@ pub(crate) struct TcpListenStream {
     family: SocketAddressFamily,
     listener_options: NonInheritedOptions,
     permissions: SocketAddrCheck,
-    pending_accept: Option<MaybeReady<Result<tokio::net::TcpStream, ErrorCode>>>,
+    pending_accept: Option<MaybeReady<Result<(tokio::net::TcpStream, SocketAddr), ErrorCode>>>,
 }
 impl TcpListenStream {
     pub(crate) fn poll_accept(&mut self, cx: &mut std::task::Context<'_>) -> Poll<TcpSocket> {
@@ -550,9 +558,9 @@ impl TcpListenStream {
         let result = self.pending_accept.take().unwrap().unwrap_ready();
         Poll::Ready(TcpSocket {
             tcp_state: match result {
-                Ok(client) => {
+                Ok((client, peer)) => {
                     self.listener_options.apply(self.family, &client);
-                    TcpState::connected(client)
+                    TcpState::connected(client, Some(peer))
                 }
                 Err(err) => TcpState::Closed(err),
             },
@@ -578,7 +586,7 @@ impl TcpListenStream {
                                 .await
                                 .is_ok()
                             {
-                                return Ok(client);
+                                return Ok((client, addr));
                             } else {
                                 reset(client);
                                 continue;
@@ -892,4 +900,49 @@ fn clamp_keep_alive_count(value: u32) -> u32 {
     const MAX_CNT: u32 = i8::MAX as u32;
 
     value.clamp(MIN_CNT, MAX_CNT)
+}
+
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+mod tests {
+    use super::*;
+    use crate::WasiCtxBuilder;
+
+    #[tokio::test]
+    async fn accepted_remote_address_survives_reset() {
+        let mut ctx = WasiCtxBuilder::new();
+        ctx.inherit_network().allow_tcp(true);
+        let ctx = ctx.build();
+        let mut socket = TcpSocket::new(&ctx.sockets, SocketAddressFamily::Ipv4).unwrap();
+        socket.bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+        let mut listener = socket.listen().await.unwrap();
+
+        let client = tokio::net::TcpStream::connect(socket.local_address().unwrap())
+            .await
+            .unwrap();
+        let peer = client.local_addr().unwrap();
+
+        // Complete the OS accept, but leave the result pending for poll_accept.
+        poll_fn(|cx| listener.poll_ready(cx)).await;
+        client.set_zero_linger().unwrap();
+        drop(client);
+
+        let mut accepted = poll_fn(|cx| listener.poll_accept(cx)).await;
+        let mut input = accepted.take_receive_stream().unwrap();
+        let mut byte = [0];
+        let read = tokio::time::timeout(
+            Duration::from_secs(5),
+            poll_fn(|cx| input.poll_read(cx, &mut byte)),
+        )
+        .await
+        .unwrap();
+        assert!(matches!(read, Err(ErrorCode::ConnectionReset)));
+
+        // The OS no longer answers getpeername, but accept already had the
+        // address and the accepted socket must still report it.
+        let TcpState::Connected { stream, .. } = &accepted.tcp_state else {
+            panic!("expected an accepted connection");
+        };
+        assert!(stream.peer_addr().is_err());
+        assert_eq!(accepted.remote_address().unwrap(), peer);
+    }
 }

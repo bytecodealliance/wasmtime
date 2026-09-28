@@ -755,7 +755,7 @@ jobs:
     - uses: ./.github/actions/cargo-install
       with:
         crate: cargo-fuzz
-        version: 0.13.1
+        version: 0.13.2
     - uses: ./.github/actions/apt-get-install
       with:
         packages: ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
