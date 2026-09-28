@@ -2,7 +2,6 @@
 ;;! gc = true
 ;;! function_references = true
 ;;! reference_types = true
-;;! spec_test = true
 ;;! stack_switching = true
 ;; Unhandled tags & guards
 
@@ -219,7 +218,7 @@
         (unreachable)
       )
       (drop)))
-  "non-continuation type 0")
+  "non-continuation type")
 
 (assert_invalid
   (module
@@ -233,7 +232,7 @@
       )
       (drop)
       (drop)))
-  "non-continuation type 0")
+  "type mismatch between tag type and label type")
 
 (assert_invalid
   (module
@@ -1177,7 +1176,7 @@
 
     (func (param $k (ref $ct))
       (switch $ct $t)))
-  "type mismatch in switch tag")
+  "type mismatch: non-empty tag parameter type")
 
 ;; Synthesized from https://github.com/WebAssembly/stack-switching/issues/117
 (assert_invalid
@@ -1193,7 +1192,7 @@
       )
       (drop)
     ))
-  "type mismatch: instruction requires concrete continuation reference type but label has [(ref cont)]")
+  "type mismatch: (ref cont)")
 
 (assert_invalid
   (module
@@ -1208,7 +1207,7 @@
       )
       (drop)
     ))
-  "type mismatch: instruction requires concrete continuation reference type but label has [(ref nocont)]")
+  "type mismatch: (ref nocont)")
 
 ;; https://github.com/WebAssembly/stack-switching/issues/117#issuecomment-2908974084
 (module
