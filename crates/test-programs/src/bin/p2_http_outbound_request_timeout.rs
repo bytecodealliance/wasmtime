@@ -30,4 +30,42 @@ fn main() {
         ),
         "expected connection timeout: {err:?}"
     );
+
+    let addr = std::env::var("HTTP_SERVER").unwrap();
+
+    // zero timeouts are accepted and shouldn't panic anything on the host, but
+    // they're a bit finnicky so don't assert the result
+    let _ = test_programs::http::request(
+        Method::Post,
+        Scheme::Http,
+        &addr,
+        "/post",
+        Some(b"{\"foo\": \"bar\"}"),
+        None,
+        Some(0),
+        None,
+        None,
+    );
+    let _ = test_programs::http::request(
+        Method::Post,
+        Scheme::Http,
+        &addr,
+        "/post",
+        Some(b"{\"foo\": \"bar\"}"),
+        None,
+        None,
+        Some(0),
+        None,
+    );
+    let _ = test_programs::http::request(
+        Method::Post,
+        Scheme::Http,
+        &addr,
+        "/post",
+        Some(b"{\"foo\": \"bar\"}"),
+        None,
+        None,
+        None,
+        Some(0),
+    );
 }

@@ -26,7 +26,7 @@ async fn p2_http_outbound_request_get() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_http_outbound_request_timeout() -> Result<()> {
-    let server = Server::http1(1)?;
+    let server = Server::http1(3)?;
     run(P2_HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server).await
 }
 
