@@ -24,3 +24,48 @@ pub(crate) fn to_timespec(ft: Option<SystemTime>) -> io::Result<Timespec> {
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn before_unix_epoch() {
+        let epoch = SystemTime::UNIX_EPOCH;
+        let cases = [
+            (
+                epoch.checked_sub(Duration::from_secs(1)),
+                Timespec {
+                    tv_sec: -1,
+                    tv_nsec: 0,
+                },
+            ),
+            (
+                epoch.checked_sub(Duration::from_millis(500)),
+                Timespec {
+                    tv_sec: -1,
+                    tv_nsec: 500_000_000,
+                },
+            ),
+            (
+                epoch.checked_sub(Duration::from_nanos(1)),
+                Timespec {
+                    tv_sec: -1,
+                    tv_nsec: 999_999_999,
+                },
+            ),
+            (
+                epoch.checked_add(Duration::from_millis(500)),
+                Timespec {
+                    tv_sec: 0,
+                    tv_nsec: 500_000_000,
+                },
+            ),
+        ];
+
+        for (time, expected) in cases {
+            assert_eq!(to_timespec(time).unwrap(), expected);
+        }
+    }
+}
