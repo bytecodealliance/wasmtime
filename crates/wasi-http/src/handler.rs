@@ -30,9 +30,7 @@ use std::sync::{
 use std::task::{Context, Poll};
 use std::time::Instant;
 use tokio::sync::Notify;
-#[cfg(feature = "task-group-hook")]
-use wasmtime::component::TaskGroupId;
-use wasmtime::component::{Accessor, Resource, TypedFuncCallConcurrent};
+use wasmtime::component::{Accessor, Resource, TaskGroupId, TypedFuncCallConcurrent};
 #[cfg(feature = "p2")]
 use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, Result, Store, StoreContextMut, format_err};
@@ -220,7 +218,7 @@ pub trait WorkerState: 'static + Send + Sync {
         &self,
         store: StoreContextMut<'_, Self::StoreData>,
         data: Self::RequestData,
-        #[cfg(feature = "task-group-hook")] task_group: TaskGroupId,
+        task_group: TaskGroupId,
     ) -> Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>;
 
     /// Dispose of the store belonging to the now-exited worker.
@@ -511,7 +509,6 @@ where
                             let expiration = dropper.state.on_request_start(
                                 store.as_context_mut(),
                                 request_data,
-                                #[cfg(feature = "task-group-hook")]
                                 prepared.group(),
                             );
                             Ok((prepared, expiration))
@@ -1047,7 +1044,6 @@ impl<'a, T: Send> Prepared<'a, T> {
         }
     }
 
-    #[cfg(feature = "task-group-hook")]
     fn group(&self) -> TaskGroupId {
         match self {
             #[cfg(feature = "p3")]

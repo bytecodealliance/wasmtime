@@ -1,13 +1,12 @@
 use crate::component::concurrent::table::{TableDebug, TableId};
 use crate::component::concurrent::{ConcurrentState, CurrentThread};
-use crate::component::{FuncCallConcurrent, TypedFuncCallConcurrent};
 use crate::error::Result;
 use crate::store::StoreOpaque;
 use crate::{AsContextMut as _, Store, StoreContextMut};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-pub(super) struct TaskGroup {
+struct TaskGroup {
     ref_count: usize,
 }
 
@@ -22,7 +21,7 @@ impl TableDebug for TaskGroup {
 ///
 /// See [TaskGroupHook] for details.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-pub struct TaskGroupId(pub(super) TableId<TaskGroup>);
+pub struct TaskGroupId(TableId<TaskGroup>);
 
 /// Trait for being notified by the runtime of activity concerning a "task group".
 ///
@@ -86,24 +85,6 @@ pub trait TaskGroupHook: Send + Sync + 'static {
     fn handle_finish(&mut self, id: TaskGroupId) -> Result<()>;
 }
 
-impl<T> FuncCallConcurrent<'_, T> {
-    /// Returns the task group that this invocation corresponds to.
-    ///
-    /// This can be later correlated with calls to [`TaskGroupHook`].
-    pub fn group(&self) -> TaskGroupId {
-        TaskGroupId(self.call.group)
-    }
-}
-
-impl<T, P, R> TypedFuncCallConcurrent<T, P, R> {
-    /// Returns the task group that this invocation corresponds to.
-    ///
-    /// This can be later correlated with calls to [`TaskGroupHook`].
-    pub fn group(&self) -> TaskGroupId {
-        TaskGroupId(self.call.group)
-    }
-}
-
 impl<T> Store<T> {
     /// Convenience wrapper for [`StoreContextMut::task_group_hook`]
     pub fn task_group_hook(&mut self, hook: impl TaskGroupHook) {
@@ -137,7 +118,7 @@ impl StoreOpaque {
         if let Some(mut hook) = state.task_group_hook.take() {
             let thread = state.unforced_current_thread;
             if let Ok(Some(group)) = thread.group(state) {
-                _ = hook.handle_exit(TaskGroupId(group));
+                _ = hook.handle_exit(group);
             }
 
             let groups = state
@@ -164,7 +145,7 @@ impl StoreOpaque {
 }
 
 impl CurrentThread {
-    pub(super) fn group(&self, state: &mut ConcurrentState) -> Result<Option<TableId<TaskGroup>>> {
+    fn group(&self, state: &mut ConcurrentState) -> Result<Option<TaskGroupId>> {
         Ok(match self {
             Self::Guest(thread) | Self::DeferredHost(thread) => {
                 Some(state.get_mut(thread.task)?.group)
@@ -176,31 +157,46 @@ impl CurrentThread {
 }
 
 impl ConcurrentState {
-    pub(super) fn make_task_group(&mut self) -> Result<TableId<TaskGroup>> {
-        let group = self.push(TaskGroup { ref_count: 1 })?;
+    pub(super) fn switch_threads(&mut self, old: CurrentThread, new: CurrentThread) -> Result<()> {
+        let old_group = old.group(self)?;
+        let new_group = new.group(self)?;
+        if let (true, Some(hook)) = ((old_group != new_group), &mut self.task_group_hook) {
+            if let Some(group) = old_group {
+                hook.handle_exit(group)?;
+            }
+
+            if let Some(group) = new_group {
+                hook.handle_enter(group)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn make_task_group(&mut self) -> Result<TaskGroupId> {
+        let group = TaskGroupId(self.push(TaskGroup { ref_count: 1 })?);
         if let Some(hook) = &mut self.task_group_hook {
-            hook.handle_start(TaskGroupId(group))?;
+            hook.handle_start(group)?;
         }
         log::trace!("new {group:?}");
         Ok(group)
     }
 
-    pub(super) fn increment_group_ref_count(&mut self, group: TableId<TaskGroup>) -> Result<()> {
-        let count = &mut self.get_mut(group)?.ref_count;
+    pub(super) fn increment_group_ref_count(&mut self, group: TaskGroupId) -> Result<()> {
+        let count = &mut self.get_mut(group.0)?.ref_count;
         *count += 1;
         log::trace!("increment {group:?} to {count}");
         Ok(())
     }
 
-    pub(super) fn decrement_group_ref_count(&mut self, group: TableId<TaskGroup>) -> Result<()> {
-        let count = &mut self.get_mut(group)?.ref_count;
+    pub(super) fn decrement_group_ref_count(&mut self, group: TaskGroupId) -> Result<()> {
+        let count = &mut self.get_mut(group.0)?.ref_count;
         assert!(*count >= 1);
         *count -= 1;
         log::trace!("decrement {group:?} to {count}");
         if *count == 0 {
-            self.delete(group)?;
+            self.delete(group.0)?;
             if let Some(hook) = &mut self.task_group_hook {
-                hook.handle_finish(TaskGroupId(group))?;
+                hook.handle_finish(group)?;
             }
         }
         Ok(())

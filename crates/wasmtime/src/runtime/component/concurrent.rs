@@ -86,8 +86,8 @@ use futures::channel::oneshot;
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
 use table::{TableDebug, TableId};
-#[cfg(feature = "task-group-hook")]
-use task_group_hook::TaskGroup;
+#[cfg(not(feature = "task-group-hook"))]
+use task_group_hook_disabled as task_group_hook;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
@@ -110,7 +110,8 @@ pub use futures_and_streams::{
 };
 pub(crate) use futures_and_streams::{ResourcePair, lower_error_context_to_index};
 #[cfg(feature = "task-group-hook")]
-pub use task_group_hook::{TaskGroupHook, TaskGroupId};
+pub use task_group_hook::TaskGroupHook;
+pub use task_group_hook::TaskGroupId;
 
 mod abort;
 mod error_contexts;
@@ -120,6 +121,8 @@ mod futures_and_streams;
 pub(crate) mod table;
 #[cfg(feature = "task-group-hook")]
 mod task_group_hook;
+#[cfg(not(feature = "task-group-hook"))]
+mod task_group_hook_disabled;
 pub(crate) mod tls;
 
 /// Constant defined in the Component Model spec to indicate that the async
@@ -2060,20 +2063,7 @@ impl StoreOpaque {
         state.debug_assert_deferred_host_invariant();
         let old_thread = mem::replace(&mut state.unforced_current_thread, thread);
 
-        #[cfg(feature = "task-group-hook")]
-        {
-            let old_group = old_thread.group(state)?;
-            let new_group = thread.group(state)?;
-            if let (true, Some(hook)) = ((old_group != new_group), &mut state.task_group_hook) {
-                if let Some(group) = old_group {
-                    hook.handle_exit(TaskGroupId(group))?;
-                }
-
-                if let Some(group) = new_group {
-                    hook.handle_enter(TaskGroupId(group))?;
-                }
-            }
-        }
+        state.switch_threads(old_thread, thread)?;
 
         // First thing to do after swapping threads is updating the context
         // slots for this thread within the store. This restores the behavior of
@@ -4969,8 +4959,7 @@ pub(crate) struct HostTask {
 
     state: HostTaskState,
 
-    #[cfg(feature = "task-group-hook")]
-    group: TableId<TaskGroup>,
+    group: TaskGroupId,
 }
 
 enum HostTaskState {
@@ -5002,21 +4991,13 @@ impl HostTask {
         state: HostTaskState,
         caller: QualifiedThreadId,
     ) -> Result<Self> {
-        #[cfg(feature = "task-group-hook")]
-        let group = {
-            let group = concurrent_state.get_mut(caller.task)?.group;
-            concurrent_state.increment_group_ref_count(group)?;
-            group
-        };
-
-        #[cfg(not(feature = "task-group-hook"))]
-        let _ = (concurrent_state, caller);
+        let group = concurrent_state.get_mut(caller.task)?.group;
+        concurrent_state.increment_group_ref_count(group)?;
 
         Ok(Self {
             common: WaitableCommon::default(),
             call_context: CallContext::default(),
             state,
-            #[cfg(feature = "task-group-hook")]
             group,
         })
     }
@@ -5302,8 +5283,7 @@ pub(crate) struct GuestTask {
 
     decremented_interesting_task_count: bool,
 
-    #[cfg(feature = "task-group-hook")]
-    group: TableId<TaskGroup>,
+    group: TaskGroupId,
 }
 
 impl GuestTask {
@@ -5364,7 +5344,6 @@ impl GuestTask {
             }
         };
 
-        #[cfg(feature = "task-group-hook")]
         let group = match caller {
             Caller::Guest { thread } => {
                 let group = state.get_mut(thread.task)?.group;
@@ -5393,7 +5372,6 @@ impl GuestTask {
             async_typed,
             async_lifted,
             decremented_interesting_task_count: false,
-            #[cfg(feature = "task-group-hook")]
             group,
         })?;
         let new_thread = GuestThread::new_implicit(state, task)?;
@@ -5584,18 +5562,13 @@ impl Waitable {
                 let state = store.concurrent_state_mut()?;
                 let task = state.delete(*task)?;
 
-                #[cfg(feature = "task-group-hook")]
                 state.decrement_group_ref_count(task.group)?;
-
-                #[cfg(not(feature = "task-group-hook"))]
-                let _ = task;
             }
             Self::Guest(task) => {
                 log::trace!("delete guest task {task:?}");
                 let state = store.concurrent_state_mut()?;
                 let task = state.delete(*task)?;
 
-                #[cfg(feature = "task-group-hook")]
                 state.decrement_group_ref_count(task.group)?;
 
                 // When a guest task is created it increments the
@@ -5977,7 +5950,6 @@ impl ConcurrentState {
             interesting_tasks_empty_waker: _,
             ready_for_concurrent_call_waker: _,
             event_loop_running: _,
-
             #[cfg(feature = "task-group-hook")]
                 task_group_hook: _,
         } = self;
@@ -6477,8 +6449,7 @@ pub(crate) struct StagedCall<R> {
     store: StoreId,
     rx: oneshot::Receiver<LiftedResult>,
     _marker: PhantomData<fn() -> R>,
-    #[cfg(feature = "task-group-hook")]
-    group: TableId<TaskGroup>,
+    group: TaskGroupId,
 }
 
 impl<R> StagedCall<R> {
@@ -6506,7 +6477,6 @@ impl<R> StagedCall<R> {
             store: store.0.id(),
             rx,
             _marker: PhantomData,
-            #[cfg(feature = "task-group-hook")]
             group: store.0.concurrent_state_mut()?.get_mut(thread.task)?.group,
         })
     }

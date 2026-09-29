@@ -117,6 +117,9 @@ pub(crate) mod store;
 pub mod types;
 mod values;
 pub use self::component::{Component, ComponentExportIndex, ExportLookup};
+#[cfg(feature = "task-group-hook")]
+pub use self::concurrent::TaskGroupHook;
+pub use self::concurrent::TaskGroupId;
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
     Access, Accessor, AccessorTask, AsAccessor, Destination, DirectDestination, DirectSource,
@@ -125,8 +128,6 @@ pub use self::concurrent::{
     StreamConsumer, StreamProducer, StreamReader, StreamResult, TypedFuncCallConcurrent,
     VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
-#[cfg(feature = "task-group-hook")]
-pub use self::concurrent::{TaskGroupHook, TaskGroupId};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };

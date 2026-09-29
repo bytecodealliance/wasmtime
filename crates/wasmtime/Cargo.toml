@@ -432,4 +432,7 @@ rr = [
   "wasmtime-environ/rr"
 ]
 
+# Enable support for the `Store::task_group_hook` function which registers a
+# hook to be notified when host->guest task "groups" are created, entered,
+# exited, and disposed of.
 task-group-hook = [ "component-model", "component-model-async" ]

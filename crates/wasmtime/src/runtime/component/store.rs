@@ -291,7 +291,6 @@ impl StoreOpaque {
 
     pub(crate) fn set_trapped(&mut self) {
         self.store_data_mut().components.trapped = true;
-        #[cfg(feature = "task-group-hook")]
         self.clean_up_task_groups();
     }
 

@@ -1,5 +1,4 @@
-use crate::component::concurrent::TaskId;
-use crate::component::concurrent::{self, PreparedCall};
+use crate::component::concurrent::{self, PreparedCall, TaskGroupId, TaskId};
 use crate::component::func::LowerContext;
 use crate::component::{AsAccessor, ComponentNamedList, Func, Lift, Lower, TypedFunc, Val};
 use crate::prelude::*;
@@ -488,5 +487,23 @@ where
                 Ok(Box::new(result))
             },
         )
+    }
+}
+
+impl<T> FuncCallConcurrent<'_, T> {
+    /// Returns the task group that this invocation corresponds to.
+    ///
+    /// This can be later correlated with calls to [`TaskGroupHook`].
+    pub fn group(&self) -> TaskGroupId {
+        self.call.group
+    }
+}
+
+impl<T, P, R> TypedFuncCallConcurrent<T, P, R> {
+    /// Returns the task group that this invocation corresponds to.
+    ///
+    /// This can be later correlated with calls to [`TaskGroupHook`].
+    pub fn group(&self) -> TaskGroupId {
+        self.call.group
     }
 }
