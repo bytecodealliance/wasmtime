@@ -24,18 +24,18 @@ The emoji legend is:
 | [`nontrapping-fptoint`]  | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`multi-value`]          | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`bulk-memory`]          | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`reference-types`]      | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`reference-types`]      | ✅      | ✅    | ✅[^4]   | ✅     | ✅  | ✅    |
 | [`simd`]                 | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`component-model`]      | ❌[^1]  | ✅    | ✅       | 🚧[^2] | ✅  | 🚧[^3]|
-| [`relaxed-simd`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`relaxed-simd`]         | ✅      | ✅    | ✅[^4]   | ✅     | ✅  | ✅    |
 | [`multi-memory`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`tail-call`]            | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`tail-call`]            | ✅      | ✅    | ✅[^4]   | ✅     | ✅  | ✅    |
 | [`extended-const`]       | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`memory64`]             | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`function-references`]  | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`gc`]                   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`exception-handling`]   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`wide-arithmetic`]      | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`function-references`]  | ✅      | ✅    | ✅[^4]   | ✅     | ✅  | ✅    |
+| [`gc`]                   | ✅      | ✅    | ✅[^4]   | ✅     | ✅  | ✅    |
+| [`exception-handling`]   | ✅      | ✅    | ✅[^4]   | ✅     | ✅  | ✅    |
+| [`wide-arithmetic`]      | ✅      | ✅    | ✅[^4]   | ✅     | ✅  | ✅    |
 
 [^1]: The `component-model` proposal is not at phase 4 in the standardization
     process but it is still enabled-by-default in Wasmtime.
@@ -43,6 +43,7 @@ The emoji legend is:
     lines of `wasm-smith` are not implemented for components.
 [^3]: The component model is mostly supported in the C API but [gaps
     remain][cm-capi-gaps].
+[^4]: Winch does not yet support this proposal at Tier 1.
 
 [cm-capi-gaps]: https://github.com/bytecodealliance/wasmtime/issues?q=is%3Aissue%20state%3Aopen%20label%3Awasm-proposal%3Acomponent-model%20label%3Awasmtime%3Ac-api
 
