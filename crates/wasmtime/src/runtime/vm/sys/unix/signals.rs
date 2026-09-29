@@ -539,23 +539,6 @@ unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
     );
 }
 
-/// Returns the program counter recorded in a signal's `ucontext`.
-#[cfg(has_mmu_interruption)]
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "has_mmu_interruption implies a 64-bit usize"
-)]
-fn ucontext_pc(ucontext: &libc::ucontext_t) -> usize {
-    cfg_select! {
-        target_arch = "x86_64" => {
-            ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] as usize
-        }
-        target_arch = "aarch64" => {
-            ucontext.uc_mcontext.pc as usize
-        }
-    }
-}
-
 /// Arranges for the `ucontext` of an MMU-interrupt segfault to resume at
 /// `task_switch_trampoline` rather than at the original `return_address`.
 ///
@@ -605,8 +588,7 @@ unsafe extern "C" fn trap_handler(
         if signum == libc::SIGSEGV && unsafe { (*siginfo).si_code } == SEGV_ACCERR {
             // See whether the faulting PC is recorded in the trap table as an
             // MMU-interrupt check.
-            let ucontext = unsafe { &mut *(context as *mut libc::ucontext_t) };
-            let pc = ucontext_pc(ucontext);
+            let pc = unsafe { get_trap_registers(context, 0) }.pc;
             // Now things get expensive: we call lookup_code(), which takes a global lock.
             if let Some((code_memory, offset_within_code)) = lookup_code(pc)
                 && let Some(CompiledTrap::MmuInterrupt) =
@@ -614,7 +596,10 @@ unsafe extern "C" fn trap_handler(
             {
                 // It is an interrupt check. Arrange to resume at the asm
                 // trampoline after the signal handler exits.
-                resume_into_task_switch_trampoline(ucontext, pc as *const ());
+                resume_into_task_switch_trampoline(
+                    unsafe { &mut *(context as *mut libc::ucontext_t) },
+                    pc as *const (),
+                );
                 return true;
             }
             // Else it is an ordinary trap; continue on.
