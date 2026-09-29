@@ -1,6 +1,6 @@
 ;;! target = "aarch64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=null"
+;;! flags = "-W exceptions,gc-support -C collector=null"
 
 ;; A `catch_ref` landing pad appends the exception reference after the tag's
 ;; payload fields before branching to its target.

@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=null"
+;;! flags = "-W exceptions,gc-support -C collector=null"
 
 ;; Calls made while the `try_table` handler is active carry exception metadata.
 ;; Its landing pad loads the exception's payload and branches to `$h`.
