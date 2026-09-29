@@ -27,6 +27,9 @@ impl Tag {
     ///
     /// # Errors
     ///
+    /// Returns an error if `ty` was not created with the same
+    /// [`Engine`](crate::Engine) as `store`.
+    ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.

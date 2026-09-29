@@ -164,9 +164,6 @@ pub struct AdapterOptions {
     /// The Wasmtime-assigned component instance index where the options were
     /// originally specified.
     pub instance: RuntimeComponentInstanceIndex,
-    /// The ancestors (i.e. chain of instantiating instances) of the instance
-    /// specified in the `instance` field.
-    pub ancestors: Vec<RuntimeComponentInstanceIndex>,
     /// How strings are encoded.
     pub string_encoding: StringEncoding,
     /// The async callback function used by these options, if specified.
@@ -175,9 +172,6 @@ pub struct AdapterOptions {
     pub post_return: Option<dfg::CoreDef>,
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
-    /// Whether or not this intrinsic can consume a task cancellation
-    /// notification.
-    pub cancellable: bool,
     /// The core function type that is being lifted from / lowered to.
     pub core_type: ModuleInternedTypeIndex,
     /// The data model used by this adapter: linear memory or GC objects.
@@ -214,7 +208,7 @@ impl<'data> Translator<'_, 'data> {
             let mut names = Vec::with_capacity(adapter_module.adapters.len());
             for adapter in adapter_module.adapters.iter() {
                 let name = format!("adapter{}", adapter.as_u32());
-                module.adapt(&name, &component.adapters[*adapter]);
+                module.adapt(&name, component, *adapter);
                 names.push(name);
             }
             let wasm = module.encode();
@@ -348,9 +342,12 @@ fn fact_import_to_core_def(
         fact::Import::ErrorContextTransfer => {
             simple_intrinsic(dfg::Trampoline::ErrorContextTransfer)
         }
-        fact::Import::Trap => simple_intrinsic(dfg::Trampoline::Trap),
+        fact::Import::Trap(trap) => simple_intrinsic(dfg::Trampoline::Trap(*trap)),
         fact::Import::EnterSyncCall => simple_intrinsic(dfg::Trampoline::EnterSyncCall),
         fact::Import::ExitSyncCall => simple_intrinsic(dfg::Trampoline::ExitSyncCall),
+        fact::Import::UnsafeIntrinsic(intrinsic) => {
+            dfg::CoreDef::UnsafeIntrinsic(ty.unwrap_func().unwrap_module_type_index(), *intrinsic)
+        }
     }
 }
 
@@ -452,8 +449,7 @@ impl PartitionAdapterModules {
             // These items can't transitively depend on an adapter
             dfg::CoreDef::Trampoline(_)
             | dfg::CoreDef::InstanceFlags(_)
-            | dfg::CoreDef::UnsafeIntrinsic(..)
-            | dfg::CoreDef::TaskMayBlock => {}
+            | dfg::CoreDef::UnsafeIntrinsic(..) => {}
         }
     }
 

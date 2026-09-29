@@ -94,6 +94,8 @@ block0(v0: f64x2):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, %al
+;   .byte 0xff, 0xff, 0xff, 0xdf, 0x41, 0x00, 0x00, 0xc0
+;   .byte 0xff, 0xff, 0xff, 0xdf, 0x41
 
 function %f4(i16x8, i16x8) -> i8x16 {
 block0(v0: i16x8, v1: i16x8):

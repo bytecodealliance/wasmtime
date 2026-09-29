@@ -49,20 +49,24 @@ fn empty_mmap() -> SendSyncPtr<[u8]> {
     SendSyncPtr::from(empty)
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(miri)] {
+cfg_select! {
+    miri => {
         mod miri;
         pub use miri::*;
-    } else if #[cfg(not(feature = "std"))] {
+    }
+    not(feature = "std") => {
         mod custom;
         pub use custom::*;
-    } else if #[cfg(windows)] {
+    }
+    windows => {
         mod windows;
         pub use windows::*;
-    } else if #[cfg(unix)] {
+    }
+    unix => {
         mod unix;
         pub use unix::*;
-    } else {
+    }
+    _ => {
         mod custom;
         pub use custom::*;
     }

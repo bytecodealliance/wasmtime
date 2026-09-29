@@ -11,7 +11,7 @@
     )
     (core instance $i (instantiate $m))
     (func (export "recv") (param "a" string)
-      (canon lift (core func $i "recv") (realloc (func $i "realloc")) (memory $i "memory")
+      (canon lift (core func $i "recv") (realloc (core func $i "realloc")) (memory (core memory $i "memory"))
         string-encoding=latin1+utf16)
     )
   )
@@ -26,7 +26,7 @@
     )
     (core instance $libc (instantiate $libc))
     ;; canon lower with utf16 — the source side of the mismatch.
-    (core func $recv_lowered (canon lower (func $recv) string-encoding=utf16 (memory $libc "memory")))
+    (core func $recv_lowered (canon lower (func $recv) string-encoding=utf16 (memory (core memory $libc "memory"))))
     (core module $m
       (import "" "" (func $recv (param i32 i32)))
       (import "libc" "memory" (memory 0))

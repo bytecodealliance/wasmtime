@@ -1,8 +1,9 @@
 //! Interface to compiling GC-related things.
 
 use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
+use crate::alias_region::GcAccess;
 use crate::bounds_checks::BoundsCheck;
-use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
+use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment, stack_switching::fatpointer};
 use crate::translate::{
     Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment, VmctxLoadChain,
 };
@@ -18,7 +19,7 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::{SmallVec, smallvec};
 use wasmtime_environ::{
     Collector, GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, I31_DISCRIMINANT,
-    ModuleInternedTypeIndex, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
+    ModuleInternedTypeIndex, PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
     WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
     wasm_unsupported,
 };
@@ -179,6 +180,7 @@ pub trait GcCompiler {
         builder: &mut FunctionBuilder,
         ty: WasmStorageType,
         addr: ir::Value,
+        access: GcAccess,
         val: ir::Value,
     ) -> WasmResult<()>;
 }
@@ -288,7 +290,9 @@ fn emit_gc_kind_assert(
             object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
         },
     );
-    let flags = func_env.gc_memflags(&mut builder.func).with_readonly();
+    let flags = func_env
+        .gc_memflags(&mut builder.func, GcAccess::HeaderKind)
+        .with_readonly();
     let kind_and_reserved_bits = builder.ins().load(ir::types::I32, flags, kind_addr, 0);
     let kind_mask = builder
         .ins()
@@ -316,6 +320,7 @@ pub fn read_field_at_addr(
     builder: &mut FunctionBuilder<'_>,
     ty: WasmStorageType,
     addr: ir::Value,
+    access: GcAccess,
     extension: Option<Extension>,
 ) -> WasmResult<ir::Value> {
     assert_eq!(extension.is_none(), matches!(ty, WasmStorageType::Val(_)));
@@ -326,7 +331,7 @@ pub fn read_field_at_addr(
 
     // Data inside GC objects is always little endian.
     let flags = func_env
-        .gc_memflags(&mut builder.func)
+        .gc_memflags(&mut builder.func, access)
         .with_endianness(ir::Endianness::Little);
 
     let value = match ty {
@@ -377,10 +382,7 @@ pub fn read_field_at_addr(
                         .call(get_interned_func_ref, &[vmctx, func_ref_id, expected_ty]);
                     builder.func.dfg.first_result(call_inst)
                 }
-                WasmHeapTopType::Cont => {
-                    // TODO(#10248) GC integration for stack switching
-                    return stack_switching_unsupported();
-                }
+                WasmHeapTopType::Cont => read_cont_ref_at_addr(func_env, builder, addr, flags)?,
             },
         },
     };
@@ -431,6 +433,92 @@ pub fn intern_func_ref(
     Ok(builder.ins().ireduce(ir::types::I32, func_ref_id))
 }
 
+fn intern_cont_ref(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    ref_type: WasmRefType,
+    contobj: ir::Value,
+) -> ir::Value {
+    assert_eq!(ref_type.heap_type.top(), WasmHeapTopType::Cont);
+
+    if ref_type.heap_type == WasmHeapType::NoCont {
+        let zero = builder.ins().iconst(ir::types::I32, 0);
+
+        if !ref_type.nullable {
+            builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
+        }
+
+        return zero;
+    }
+
+    let (revision, contref) = fatpointer::deconstruct(func_env, &mut builder.cursor(), contobj);
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+    let intern = func_env
+        .builtin_functions
+        .intern_contref_for_gc_heap(builder.func);
+    let call = builder.ins().call(intern, &[vmctx, contref, revision]);
+    let id = builder.func.dfg.first_result(call);
+    builder.ins().ireduce(ir::types::I32, id)
+}
+
+fn read_cont_ref_at_addr(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    addr: ir::Value,
+    flags: ir::MemFlagsData,
+) -> WasmResult<ir::Value> {
+    let id = builder.ins().load(ir::types::I32, flags, addr, 0);
+
+    // We either create or fetch an existing stack slot to hold the raw
+    // continuation object, and pass its address as the out parameter to the
+    // builtin.
+    let pointer_type = func_env.pointer_type();
+    let layout = func_env.offsets.ptr.vm_raw_cont_obj();
+    let slot_size = u32::from(layout.size());
+    let slot_align = u8::try_from(layout.align().trailing_zeros()).unwrap();
+    let contref_offset = layout.contref();
+    let revision_offset = layout.revision();
+
+    let slot = func_env.get_or_create_contref_stack_slot(
+        builder,
+        ir::StackSlotData::new(ir::StackSlotKind::ExplicitSlot, slot_size, slot_align),
+    );
+    let out_result = builder.ins().stack_addr(pointer_type, slot, 0);
+
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+    let get = func_env
+        .builtin_functions
+        .get_interned_contref(builder.func);
+    builder.ins().call(get, &[vmctx, id, out_result]);
+
+    let region = func_env.alias_regions.stack_slot_region(builder.func, slot);
+    let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
+    let contref = builder
+        .ins()
+        .load(pointer_type, flags, out_result, contref_offset);
+    let revision = builder
+        .ins()
+        .load(pointer_type, flags, out_result, revision_offset);
+    Ok(fatpointer::construct(
+        func_env,
+        &mut builder.cursor(),
+        revision,
+        contref,
+    ))
+}
+
+fn write_cont_ref_at_addr(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    ref_type: WasmRefType,
+    flags: ir::MemFlagsData,
+    field_addr: ir::Value,
+    contobj: ir::Value,
+) {
+    let id = intern_cont_ref(func_env, builder, ref_type, contobj);
+    builder.ins().store(flags, id, field_addr, 0);
+}
+
 fn write_func_ref_at_addr(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
@@ -454,9 +542,10 @@ pub fn init_field_at_addr(
     builder: &mut FunctionBuilder<'_>,
     field_ty: WasmStorageType,
     field_addr: ir::Value,
+    access: GcAccess,
     new_val: ir::Value,
 ) -> WasmResult<()> {
-    gc_compiler(func_env)?.init_field(func_env, builder, field_ty, field_addr, new_val)
+    gc_compiler(func_env)?.init_field(func_env, builder, field_ty, field_addr, access, new_val)
 }
 
 pub fn write_field_at_addr(
@@ -464,11 +553,12 @@ pub fn write_field_at_addr(
     builder: &mut FunctionBuilder<'_>,
     field_ty: WasmStorageType,
     field_addr: ir::Value,
+    access: GcAccess,
     new_val: ir::Value,
 ) -> WasmResult<()> {
     // Data inside GC objects is always little endian.
     let flags = func_env
-        .gc_memflags(&mut builder.func)
+        .gc_memflags(&mut builder.func, access)
         .with_endianness(ir::Endianness::Little);
 
     match field_ty {
@@ -487,7 +577,9 @@ pub fn write_field_at_addr(
                     func_env, builder, r, field_addr, new_val, flags,
                 )?;
             }
-            WasmHeapTopType::Cont => return stack_switching_unsupported(),
+            WasmHeapTopType::Cont => {
+                write_cont_ref_at_addr(func_env, builder, r, flags, field_addr, new_val)
+            }
         },
         WasmStorageType::Val(_) => {
             assert_eq!(
@@ -527,6 +619,10 @@ fn default_value(
             }
             WasmValType::Ref(r) => {
                 assert!(r.nullable);
+                if r.heap_type.top() == WasmHeapTopType::Cont {
+                    let zero = cursor.ins().iconst(func_env.pointer_type(), 0);
+                    return fatpointer::construct(func_env, cursor, zero, zero);
+                }
                 let (ty, needs_stack_map) = func_env.reference_type(r.heap_type);
 
                 // NB: The collector doesn't need to know about null references.
@@ -598,6 +694,10 @@ pub fn translate_struct_get(
         builder,
         field_ty.element_type,
         field_addr,
+        GcAccess::StructField {
+            ty: interned_type_index,
+            field: u32::try_from(field_index).unwrap(),
+        },
         extension,
     );
     log::trace!("translate_struct_get(..) -> {result:?}");
@@ -647,6 +747,10 @@ pub fn translate_struct_set(
         builder,
         field_ty.element_type,
         field_addr,
+        GcAccess::StructField {
+            ty: interned_type_index,
+            field: u32::try_from(field_index).unwrap(),
+        },
         new_val,
     )?;
 
@@ -679,12 +783,21 @@ pub fn translate_exn_unbox(
     // `func_env`, which we later mutate below via
     // `prepare_gc_ref_access()`.
     let mut accesses: SmallVec<[_; 4]> = smallvec![];
-    for (field_ty, field_layout) in exception_ty.fields.iter().zip(exn_layout.fields.iter()) {
-        accesses.push((field_layout.offset, field_ty.element_type));
+    for (i, (field_ty, field_layout)) in exception_ty
+        .fields
+        .iter()
+        .zip(exn_layout.fields.iter())
+        .enumerate()
+    {
+        accesses.push((
+            u32::try_from(i).unwrap(),
+            field_layout.offset,
+            field_ty.element_type,
+        ));
     }
 
     let mut result = smallvec![];
-    for (field_offset, field_ty) in accesses {
+    for (field_index, field_offset, field_ty) in accesses {
         let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty);
         assert!(field_offset + field_size <= exn_size);
         let field_addr = func_env.prepare_gc_ref_access(
@@ -697,7 +810,17 @@ pub fn translate_exn_unbox(
             },
         );
 
-        let value = read_field_at_addr(func_env, builder, field_ty, field_addr, None)?;
+        let value = read_field_at_addr(
+            func_env,
+            builder,
+            field_ty,
+            field_addr,
+            GcAccess::ExnPayload {
+                exn_ty: exception_ty_idx,
+                field: field_index,
+            },
+            None,
+        )?;
         result.push(value);
     }
 
@@ -711,16 +834,25 @@ pub fn translate_exn_throw(
     tag_index: TagIndex,
     args: &[ir::Value],
 ) -> WasmResult<()> {
+    let exnref = translate_exn_new(func_env, builder, tag_index, args)?;
+    translate_exn_throw_ref(func_env, builder, exnref)
+}
+
+pub fn translate_exn_new(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    tag_index: TagIndex,
+    args: &[ir::Value],
+) -> WasmResult<ir::Value> {
     let (instance_id, defined_tag_id) = func_env.get_instance_and_tag(builder, tag_index);
-    let exnref = gc_compiler(func_env)?.alloc_exn(
+    gc_compiler(func_env)?.alloc_exn(
         func_env,
         builder,
         tag_index,
         args,
         instance_id,
         defined_tag_id,
-    )?;
-    translate_exn_throw_ref(func_env, builder, exnref)
+    )
 }
 
 pub fn translate_exn_throw_ref(
@@ -729,15 +861,36 @@ pub fn translate_exn_throw_ref(
     exnref: ir::Value,
 ) -> WasmResult<()> {
     let builtin = func_env.builtin_functions.throw_ref(builder.func);
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+    translate_throwing_builtin(func_env, builder, builtin, &[vmctx, exnref])
+}
+
+/// Re-raise the exception currently pending in the VM context.
+///
+/// Continuation stacks catch native unwinding at their array-call boundary.
+/// When control returns to a parent continuation, this emits a new throwing
+/// callsite with that parent's Wasm exception handlers attached.
+pub fn translate_raise(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+) -> WasmResult<()> {
+    let builtin = func_env.builtin_functions.raise(builder.func);
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+    translate_throwing_builtin(func_env, builder, builtin, &[vmctx])
+}
+
+fn translate_throwing_builtin(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    builtin: ir::FuncRef,
+    args: &[ir::Value],
+) -> WasmResult<()> {
     let sig = builder.func.dfg.ext_funcs[builtin].signature;
     let vmctx = func_env.vmctx_val(&mut builder.cursor());
 
-    // Generate a `try_call` with handlers from the current
-    // stack. This libcall is unique among libcall implementations of
-    // opcodes: we know the others will not throw, but `throw_ref`'s
-    // entire purpose is to throw. So if there are any handlers in the
-    // local function body, we need to attach them to this callsite
-    // like any other.
+    // Generate a `try_call` with handlers from the current stack. Both
+    // `throw_ref` and `raise` deliberately throw, so local Wasm handlers must
+    // be attached to these callsites like they are to ordinary throwing calls.
     let continuation = builder.create_block();
     let current_block = builder.current_block().unwrap();
     builder.insert_block_after(continuation, current_block);
@@ -756,7 +909,7 @@ pub fn translate_exn_throw_ref(
     let etd = ExceptionTableData::new(sig, continuation_call, table_items);
     let et = builder.func.dfg.exception_tables.push(etd);
 
-    builder.ins().try_call(builtin, &[vmctx, exnref], et);
+    builder.ins().try_call(builtin, args, et);
 
     builder.switch_to_block(continuation);
     builder.seal_block(continuation);
@@ -773,6 +926,13 @@ pub fn translate_array_new(
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new({array_type_index:?}, {elem:?}, {len:?})");
+    let cost = func_env
+        .tunables
+        .operator_cost
+        .variable()
+        .array_new_per_element;
+    let fuel = func_env.pre_translate_bulk_op(builder, len, cost);
+
     let result =
         gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
     let zero = builder.ins().iconst(ir::types::I32, 0);
@@ -788,6 +948,7 @@ pub fn translate_array_new(
         elem,
         len,
     )?;
+    func_env.post_translate_bulk_op(builder, fuel)?;
     log::trace!("translate_array_new(..) -> {result:?}");
     Ok(result)
 }
@@ -799,6 +960,12 @@ pub fn translate_array_new_default(
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new_default({array_type_index:?}, {len:?})");
+    let cost = func_env
+        .tunables
+        .operator_cost
+        .variable()
+        .array_new_default_per_element;
+    let fuel = func_env.pre_translate_bulk_op(builder, len, cost);
 
     let interned_ty = func_env.module.types[array_type_index].unwrap_module_type_index();
     let array_ty = func_env.types.unwrap_array(interned_ty)?;
@@ -818,6 +985,7 @@ pub fn translate_array_new_default(
         elem,
         len,
     )?;
+    func_env.post_translate_bulk_op(builder, fuel)?;
     Ok(result)
 }
 
@@ -847,6 +1015,7 @@ pub fn translate_array_new_fixed(
             builder,
             array_ty.0.element_type,
             addr,
+            GcAccess::ArrayElements { ty },
             *elem,
         )?;
     }
@@ -873,7 +1042,9 @@ pub fn translate_array_len(
             access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
         },
     );
-    let flags = func_env.gc_memflags(&mut builder.func).with_readonly();
+    let flags = func_env
+        .gc_memflags(&mut builder.func, GcAccess::ArrayLength)
+        .with_readonly();
     let result = builder.ins().load(ir::types::I32, flags, len_field, 0);
     log::trace!("translate_array_len(..) -> {result:?}");
     Ok(result)
@@ -1023,7 +1194,16 @@ pub fn translate_array_get(
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
-    let result = read_field_at_addr(func_env, builder, elem_ty, elem_addr, extension)?;
+    let result = read_field_at_addr(
+        func_env,
+        builder,
+        elem_ty,
+        elem_addr,
+        GcAccess::ArrayElements {
+            ty: array_type_index,
+        },
+        extension,
+    )?;
     log::trace!("translate_array_get(..) -> {result:?}");
     Ok(result)
 }
@@ -1046,7 +1226,16 @@ pub fn translate_array_set(
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
-    write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)?;
+    write_field_at_addr(
+        func_env,
+        builder,
+        elem_ty,
+        elem_addr,
+        GcAccess::ArrayElements {
+            ty: array_type_index,
+        },
+        value,
+    )?;
 
     log::trace!("translate_array_set: finished");
     Ok(())
@@ -1185,11 +1374,10 @@ pub fn translate_ref_test(
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
             },
         );
-        let gc_memflags = func_env.gc_memflags(&mut builder.func);
-        let actual_kind =
-            builder
-                .ins()
-                .load(ir::types::I32, gc_memflags.with_readonly(), kind_addr, 0);
+        let kind_flags = func_env
+            .gc_memflags(&mut builder.func, GcAccess::HeaderKind)
+            .with_readonly();
+        let actual_kind = builder.ins().load(ir::types::I32, kind_flags, kind_addr, 0);
         let expected_kind = builder
             .ins()
             .iconst(ir::types::I32, i64::from(expected_kind.as_u32()));
@@ -1229,6 +1417,32 @@ pub fn translate_ref_test(
         WasmHeapType::ConcreteArray(ty)
         | WasmHeapType::ConcreteStruct(ty)
         | WasmHeapType::ConcreteExn(ty) => {
+            // An `anyref` can be a host `externref` internalized by
+            // `any.convert_extern`, and such an object's header holds the
+            // reserved type index rather than a real one, so check the object's
+            // kind before reading it.
+            if val_ty.heap_type == WasmHeapType::Any {
+                let expected_kind = match test_ty.heap_type {
+                    WasmHeapType::ConcreteArray(_) => VMGcKind::ArrayRef,
+                    WasmHeapType::ConcreteStruct(_) => VMGcKind::StructRef,
+                    _ => unreachable!(
+                        "checked all of the `any` hierarchy (top, bottom, and i31ref further above)"
+                    ),
+                };
+                let kind_matches = check_header_kind(func_env, builder, val, expected_kind);
+                let kind_matches_block = builder.create_block();
+                let zero = builder.ins().iconst(ir::types::I32, 0);
+                builder.ins().brif(
+                    kind_matches,
+                    kind_matches_block,
+                    &[],
+                    continue_block,
+                    &[zero.into()],
+                );
+                builder.seal_block(kind_matches_block);
+                builder.switch_to_block(kind_matches_block);
+            }
+
             let expected_interned_ty = ty.unwrap_module_type_index();
             let expected_shared_ty =
                 func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
@@ -1241,11 +1455,10 @@ pub fn translate_ref_test(
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
             );
-            let gc_memflags = func_env.gc_memflags(&mut builder.func);
-            let actual_shared_ty =
-                builder
-                    .ins()
-                    .load(ir::types::I32, gc_memflags.with_readonly(), ty_addr, 0);
+            let ty_flags = func_env
+                .gc_memflags(&mut builder.func, GcAccess::HeaderTypeIndex)
+                .with_readonly();
+            let actual_shared_ty = builder.ins().load(ir::types::I32, ty_flags, ty_addr, 0);
 
             func_env.is_subtype(
                 builder,
@@ -1263,11 +1476,11 @@ pub fn translate_ref_test(
             let expected_shared_ty =
                 func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
 
-            let actual_shared_ty = func_env.alias_regions.vmfuncref_type_index(
-                &mut builder.cursor(),
-                ir::MemFlagsData::trusted().with_readonly(),
-                val,
-            );
+            let actual_shared_ty = func_env
+                .alias_regions
+                .vm_func_ref()
+                .type_index()
+                .load(&mut builder.cursor(), val);
 
             func_env.is_subtype(
                 builder,
@@ -1369,36 +1582,63 @@ fn initialize_struct_fields(
     assert_eq!(field_offsets.len(), field_values.len());
 
     assert!(!func_env.types[struct_ty].composite_type.shared);
-    let fields = match &func_env.types[struct_ty].composite_type.inner {
-        WasmCompositeInnerType::Struct(s) => &s.fields,
-        WasmCompositeInnerType::Exn(e) => &e.fields,
+    // Struct and exception payloads use different alias region keys.
+    let (fields, is_exn) = match &func_env.types[struct_ty].composite_type.inner {
+        WasmCompositeInnerType::Struct(s) => (&s.fields, false),
+        WasmCompositeInnerType::Exn(e) => (&e.fields, true),
         _ => panic!("Not a struct or exception type"),
     };
 
     let field_types: SmallVec<[_; 8]> = fields.iter().cloned().collect();
     assert_eq!(field_types.len(), field_values.len());
 
-    for ((ty, val), offset) in field_types.into_iter().zip(field_values).zip(field_offsets) {
+    for (i, ((ty, val), offset)) in field_types
+        .into_iter()
+        .zip(field_values)
+        .zip(field_offsets)
+        .enumerate()
+    {
         let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
         assert!(offset + size_of_access <= struct_size);
         let field_addr = builder
             .ins()
             .iadd_imm_s(raw_ptr_to_struct, i64::from(offset));
-        gc_compiler(func_env)?.init_field(func_env, builder, ty.element_type, field_addr, *val)?;
+        let field = u32::try_from(i).unwrap();
+        let access = if is_exn {
+            GcAccess::ExnPayload {
+                exn_ty: struct_ty,
+                field,
+            }
+        } else {
+            GcAccess::StructField {
+                ty: struct_ty,
+                field,
+            }
+        };
+        gc_compiler(func_env)?.init_field(
+            func_env,
+            builder,
+            ty.element_type,
+            field_addr,
+            access,
+            *val,
+        )?;
     }
 
     Ok(())
 }
 
 impl FuncEnvironment<'_> {
-    /// Flags to use for general-purpose GC loads/stores.
+    /// Flags to use for a memory access of the given part of a GC object.
     ///
-    /// This is used for accesses to the GC heap which aren't expected to trap, but
-    /// retain internal assertion metadata to report if such a trap happens. This
-    /// is here to ensure that in the face of heap corruption that there's no
-    /// possible UB within Cranelift and/or the runtime.
-    fn gc_memflags(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
-        let region = self.alias_regions.gc_heap_region(func);
+    /// These accesses aren't expected to trap, but retain internal assertion
+    /// metadata to report if such a trap happens. This is here to ensure that
+    /// in the face of GC heap corruption that there's no possible UB within
+    /// Cranelift and/or the runtime.
+    fn gc_memflags(&mut self, func: &mut ir::Function, access: GcAccess) -> ir::MemFlagsData {
+        let region = self
+            .alias_regions
+            .gc_access_region(func, self.types, access);
         ir::MemFlagsData::new()
             .with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT))
             .with_alias_region(Some(region))
@@ -1481,7 +1721,11 @@ impl FuncEnvironment<'_> {
             return heap;
         }
 
-        let store_ctx = self.alias_regions.vmctx_store_context_load(func);
+        let store_ctx = self
+            .alias_regions
+            .vmctx()
+            .store_context()
+            .to_deferred_load(func);
 
         // The base pointer's load is `can_move` and `readonly` when the GC
         // heap's base can never move.
@@ -1720,7 +1964,10 @@ pub fn translate_array_new_entity(
     entity: CheckedEntity,
     entity_offset: ir::Value,
     len: ir::Value,
+    cost_per_unit: u8,
 ) -> WasmResult<ir::Value> {
+    let fuel = env.pre_translate_bulk_op(builder, len, cost_per_unit);
+
     // Before actually allocating this array first do a bounds-check on the
     // passive entity itself.
     let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
@@ -1741,5 +1988,6 @@ pub fn translate_array_new_entity(
         len,
     )?;
 
+    env.post_translate_bulk_op(builder, fuel)?;
     Ok(array)
 }

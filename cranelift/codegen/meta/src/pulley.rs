@@ -103,11 +103,11 @@ impl Inst<'_> {
     }
 }
 
-pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
-    let mut rust = String::new();
-
-    // Generate a pretty-printing method for debugging.
-    rust.push_str("pub fn print(inst: &RawInst) -> String {\n");
+/// Generates a pretty-printing method for debugging.
+pub fn generate_raw_inst_display(rust: &mut String) -> Result<(), Error> {
+    rust.push_str("impl<'a> std::fmt::Display for RawInstDisplay<'a> {\n");
+    rust.push_str("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n");
+    rust.push_str("let inst = self.0;\n");
     rust.push_str("match inst {\n");
     for inst @ Inst { name, .. } in OPS.iter().chain(EXTENDED_OPS) {
         if inst.skip() {
@@ -140,9 +140,11 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     format_string.push_str("}");
                     if ty.contains("Reg") {
                         if matches!(op, Operand::Writable { .. }) {
-                            locals.push_str(&format!("let {name} = reg_name(*{name}.to_reg());\n"));
+                            locals.push_str(&format!(
+                                "let {name} = RegNameDisplay(*{name}.to_reg());\n"
+                            ));
                         } else {
-                            locals.push_str(&format!("let {name} = reg_name(**{name});\n"));
+                            locals.push_str(&format!("let {name} = RegNameDisplay(**{name});\n"));
                         }
                     }
                 }
@@ -154,10 +156,10 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                 Operand::Binop { src2, .. } => {
                     pat.push_str("dst, src1, src2,");
                     format_string.push_str(" {dst}, {src1}, {src2}");
-                    locals.push_str(&format!("let dst = reg_name(*dst.to_reg());\n"));
-                    locals.push_str(&format!("let src1 = reg_name(**src1);\n"));
+                    locals.push_str(&format!("let dst = RegNameDisplay(*dst.to_reg());\n"));
+                    locals.push_str(&format!("let src1 = RegNameDisplay(**src1);\n"));
                     if src2.contains("Reg") {
-                        locals.push_str(&format!("let src2 = reg_name(**src2);\n"));
+                        locals.push_str(&format!("let src2 = RegNameDisplay(**src2);\n"));
                     }
                 }
             }
@@ -167,13 +169,23 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
             "
         RawInst::{name} {{ {pat} }} => {{
             {locals}
-            format!(\"{format_string}\")
+            write!(f, \"{format_string}\")
         }}
         "
         ));
     }
     rust.push_str("}\n");
     rust.push_str("}\n");
+    rust.push_str("}\n");
+
+    Ok(())
+}
+
+pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
+    let mut rust = String::new();
+
+    // Generate a pretty-printing method for debugging.
+    generate_raw_inst_display(&mut rust)?;
 
     // Generate `get_operands` to feed information to regalloc
     rust.push_str(

@@ -204,7 +204,7 @@ impl core::fmt::Display for Amode {
                 }
             }
             Amode::RegOffset { base, offset } => {
-                let name = reg_name(**base);
+                let name = RegNameDisplay(**base);
                 if *offset >= 0 {
                     write!(f, "{name}+{offset}")
                 } else {
@@ -463,103 +463,163 @@ impl Cond {
 impl fmt::Display for Cond {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Cond::If32 { reg } => write!(f, "if32 {}", reg_name(**reg)),
-            Cond::IfNot32 { reg } => write!(f, "if_not32 {}", reg_name(**reg)),
+            Cond::If32 { reg } => write!(f, "if32 {}", RegNameDisplay(**reg)),
+            Cond::IfNot32 { reg } => write!(f, "if_not32 {}", RegNameDisplay(**reg)),
             Cond::IfXeq32 { src1, src2 } => {
-                write!(f, "if_xeq32 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xeq32 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXneq32 { src1, src2 } => {
-                write!(f, "if_xneq32 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xneq32 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXslt32 { src1, src2 } => {
-                write!(f, "if_xslt32 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xslt32 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXslteq32 { src1, src2 } => {
-                write!(f, "if_xslteq32 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xslteq32 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXult32 { src1, src2 } => {
-                write!(f, "if_xult32 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xult32 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXulteq32 { src1, src2 } => {
-                write!(f, "if_xulteq32 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xulteq32 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXeq64 { src1, src2 } => {
-                write!(f, "if_xeq64 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xeq64 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXneq64 { src1, src2 } => {
-                write!(f, "if_xneq64 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xneq64 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXslt64 { src1, src2 } => {
-                write!(f, "if_xslt64 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xslt64 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXslteq64 { src1, src2 } => {
-                write!(f, "if_xslteq64 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xslteq64 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXult64 { src1, src2 } => {
-                write!(f, "if_xult64 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xult64 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXulteq64 { src1, src2 } => {
-                write!(f, "if_xulteq64 {}, {}", reg_name(**src1), reg_name(**src2))
+                write!(
+                    f,
+                    "if_xulteq64 {}, {}",
+                    RegNameDisplay(**src1),
+                    RegNameDisplay(**src2)
+                )
             }
             Cond::IfXeq32I32 { src1, src2 } => {
-                write!(f, "if_xeq32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xeq32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXneq32I32 { src1, src2 } => {
-                write!(f, "if_xneq32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xneq32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXslt32I32 { src1, src2 } => {
-                write!(f, "if_xslt32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xslt32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXslteq32I32 { src1, src2 } => {
-                write!(f, "if_xslteq32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xslteq32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXsgt32I32 { src1, src2 } => {
-                write!(f, "if_xsgt32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xsgt32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXsgteq32I32 { src1, src2 } => {
-                write!(f, "if_xsgteq32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xsgteq32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXult32I32 { src1, src2 } => {
-                write!(f, "if_xult32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xult32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXulteq32I32 { src1, src2 } => {
-                write!(f, "if_xulteq32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xulteq32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXugt32I32 { src1, src2 } => {
-                write!(f, "if_xugt32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xugt32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXugteq32I32 { src1, src2 } => {
-                write!(f, "if_xugteq32_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xugteq32_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXeq64I32 { src1, src2 } => {
-                write!(f, "if_xeq64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xeq64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXneq64I32 { src1, src2 } => {
-                write!(f, "if_xneq64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xneq64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXslt64I32 { src1, src2 } => {
-                write!(f, "if_xslt64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xslt64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXslteq64I32 { src1, src2 } => {
-                write!(f, "if_xslteq64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xslteq64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXsgt64I32 { src1, src2 } => {
-                write!(f, "if_xsgt64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xsgt64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXsgteq64I32 { src1, src2 } => {
-                write!(f, "if_xsgteq64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xsgteq64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXult64I32 { src1, src2 } => {
-                write!(f, "if_xult64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xult64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXulteq64I32 { src1, src2 } => {
-                write!(f, "if_xulteq64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xulteq64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXugt64I32 { src1, src2 } => {
-                write!(f, "if_xugt64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xugt64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
             Cond::IfXugteq64I32 { src1, src2 } => {
-                write!(f, "if_xugteq64_i32 {}, {src2}", reg_name(**src1))
+                write!(f, "if_xugteq64_i32 {}, {src2}", RegNameDisplay(**src1))
             }
         }
     }
@@ -607,7 +667,7 @@ impl fmt::Display for AddrO32 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AddrO32::Base { addr, offset } => {
-                let addr = reg_name(**addr);
+                let addr = RegNameDisplay(**addr);
                 write!(f, "{addr}, {offset}")
             }
         }
@@ -644,7 +704,7 @@ impl fmt::Display for AddrZ {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AddrZ::Base { addr, offset } => {
-                let addr = reg_name(**addr);
+                let addr = RegNameDisplay(**addr);
                 write!(f, "{addr}, {offset}")
             }
         }
@@ -700,9 +760,9 @@ impl fmt::Display for AddrG32 {
                 wasm_addr,
                 offset,
             } => {
-                let host_heap_base = reg_name(**host_heap_base);
-                let host_heap_bound = reg_name(**host_heap_bound);
-                let wasm_addr = reg_name(**wasm_addr);
+                let host_heap_base = RegNameDisplay(**host_heap_base);
+                let host_heap_bound = RegNameDisplay(**host_heap_bound);
+                let wasm_addr = RegNameDisplay(**wasm_addr);
                 write!(
                     f,
                     "{host_heap_base}, {host_heap_bound}, {wasm_addr}, {offset}",
@@ -765,9 +825,9 @@ impl fmt::Display for AddrG32Bne {
                 wasm_addr,
                 offset,
             } => {
-                let host_heap_base = reg_name(**host_heap_base);
-                let host_heap_bound_addr = reg_name(**host_heap_bound_addr);
-                let wasm_addr = reg_name(**wasm_addr);
+                let host_heap_base = RegNameDisplay(**host_heap_base);
+                let host_heap_bound_addr = RegNameDisplay(**host_heap_bound_addr);
+                let wasm_addr = RegNameDisplay(**wasm_addr);
                 write!(
                     f,
                     "{host_heap_base}, \

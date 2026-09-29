@@ -8,7 +8,6 @@ license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm", "computer-vision"]
 keywords = ["webassembly", "wasm", "neural-network"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 
@@ -36,7 +35,7 @@ ort = { version = "2.0.0-rc.10", default-features = false, features = [
 tch = { version = "0.17.0", default-features = false, optional = true}
 
 [target.'cfg(target_pointer_width = "64")'.dependencies]
-openvino = { version = "0.9.0", features = [
+openvino = { version = "0.11.0", features = [
     "runtime-linking",
 ], optional = true }
 
@@ -55,7 +54,6 @@ optional = true
 walkdir = { workspace = true }
 
 [dev-dependencies]
-cap-std = { workspace = true }
 libtest-mimic = { workspace = true }
 test-programs-artifacts = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["p1"] }

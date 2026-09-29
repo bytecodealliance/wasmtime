@@ -377,6 +377,13 @@ impl Location {
         }
     }
 
+    /// Return `true` if this operand is always memory (i.e., not a `r/m` that
+    /// may hold a register).
+    #[must_use]
+    pub fn is_memory_only(&self) -> bool {
+        matches!(self.kind(), OperandKind::Mem(_))
+    }
+
     /// Return `true` if any of the operands accepts a register (i.e., not an
     /// immediate); return `false` otherwise.
     #[must_use]

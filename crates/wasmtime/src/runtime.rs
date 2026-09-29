@@ -68,16 +68,20 @@ pub(crate) mod vm;
 #[cfg(feature = "component-model")]
 pub mod component;
 
-cfg_if::cfg_if! {
-    if #[cfg(miri)] {
+cfg_select! {
+    miri => {
         // no extensions on miri
-    } else if #[cfg(not(feature = "std"))] {
+    }
+    not(feature = "std") => {
         // no extensions on no-std
-    } else if #[cfg(unix)] {
+    }
+    unix => {
         pub mod unix;
-    } else if #[cfg(windows)] {
+    }
+    windows => {
         pub mod windows;
-    } else {
+    }
+    _ => {
         // ... unknown os!
     }
 }
@@ -101,7 +105,8 @@ pub use resources::*;
 #[cfg(all(feature = "async", feature = "call-hook"))]
 pub use store::CallHookHandler;
 pub use store::{
-    AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut, UpdateDeadline,
+    AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut, StoreHookState,
+    UpdateDeadline,
 };
 pub use trap::*;
 pub use types::*;

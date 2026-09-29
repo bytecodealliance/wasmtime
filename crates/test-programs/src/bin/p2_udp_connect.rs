@@ -35,6 +35,19 @@ fn test_udp_connect_disconnect_reconnect(net: &Network, family: IpAddressFamily)
     assert_eq!(client.remote_address(), Ok(remote1));
 }
 
+// `stream(None)` should keep the socket bound.
+fn test_udp_disconnect_local_address(net: &Network, family: IpAddressFamily) {
+    let unspecified_addr = IpSocketAddress::new(IpAddress::new_unspecified(family), 0);
+    let some_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 4321);
+
+    let client = UdpSocket::new(family).unwrap();
+    client.blocking_bind(&net, unspecified_addr).unwrap();
+
+    _ = client.stream(Some(some_addr)).unwrap();
+    _ = client.stream(None).unwrap();
+    assert!(client.local_address().is_ok());
+}
+
 /// `0.0.0.0` / `::` is not a valid remote address in WASI.
 fn test_udp_connect_unspec(net: &Network, family: IpAddressFamily) {
     let addr = IpSocketAddress::new(IpAddress::new_unspecified(family), SOME_PORT);
@@ -141,11 +154,38 @@ fn test_udp_connect_and_send(net: &Network, family: IpAddressFamily) {
     ));
 }
 
+fn test_udp_reconnect_after_pending_receive(net: &Network, family: IpAddressFamily) {
+    let unspecified_addr = IpSocketAddress::new(IpAddress::new_unspecified(family), 0);
+    let remote = IpSocketAddress::new(IpAddress::new_loopback(family), 4321);
+
+    let client = UdpSocket::new(family).unwrap();
+    client.blocking_bind(&net, unspecified_addr).unwrap();
+
+    // Connect/reconnect in a loop, and this should always succeed...
+    for _ in 0..100 {
+        {
+            let (rx, _tx) = client.stream(None).unwrap();
+            assert!(rx.receive(1).unwrap().is_empty());
+        }
+        {
+            let (rx, _tx) = client.stream(Some(remote)).unwrap();
+            assert_eq!(client.remote_address(), Ok(remote));
+            assert!(rx.receive(1).unwrap().is_empty());
+        }
+    }
+}
+
 fn main() {
     let net = Network::default();
 
     test_udp_connect_disconnect_reconnect(&net, IpAddressFamily::Ipv4);
     test_udp_connect_disconnect_reconnect(&net, IpAddressFamily::Ipv6);
+
+    test_udp_reconnect_after_pending_receive(&net, IpAddressFamily::Ipv4);
+    test_udp_reconnect_after_pending_receive(&net, IpAddressFamily::Ipv6);
+
+    test_udp_disconnect_local_address(&net, IpAddressFamily::Ipv4);
+    test_udp_disconnect_local_address(&net, IpAddressFamily::Ipv6);
 
     test_udp_connect_unspec(&net, IpAddressFamily::Ipv4);
     test_udp_connect_unspec(&net, IpAddressFamily::Ipv6);

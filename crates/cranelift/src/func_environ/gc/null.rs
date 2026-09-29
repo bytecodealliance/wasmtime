@@ -72,10 +72,14 @@ impl NullCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         let ptr_to_next = func_env
             .alias_regions
-            .vmctx_gc_heap_data(&mut builder.cursor(), vmctx);
+            .vmctx()
+            .gc_heap_data()
+            .load(&mut builder.cursor(), vmctx);
         let next = func_env
             .alias_regions
-            .vmnull_heap_data_bump_finger(&mut builder.cursor(), ptr_to_next);
+            .vm_null_heap_data()
+            .next()
+            .load(&mut builder.cursor(), ptr_to_next);
 
         // Increment the bump "pointer" to the requested alignment:
         //
@@ -153,20 +157,21 @@ impl NullCompiler {
                 i64::from(VMSharedTypeIndex::reserved_value().as_bits()),
             ),
         };
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let kind_flags = func_env.gc_memflags(&mut builder.func, GcAccess::HeaderKind);
         builder.ins().store(
-            flags,
+            kind_flags,
             kind_and_size,
             ptr_to_object,
             i32::try_from(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET).unwrap(),
         );
+        let ty_flags = func_env.gc_memflags(&mut builder.func, GcAccess::HeaderTypeIndex);
         builder.ins().store(
-            flags,
+            ty_flags,
             ty,
             ptr_to_object,
             i32::try_from(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET).unwrap(),
         );
-        func_env.alias_regions.store_vmnull_heap_data_bump_finger(
+        func_env.alias_regions.vm_null_heap_data().next().store(
             &mut builder.cursor(),
             ptr_to_next,
             end_of_object,
@@ -224,7 +229,7 @@ impl GcCompiler for NullCompiler {
         let len_addr = builder
             .ins()
             .iadd_imm_s(ptr_to_object, i64::from(len_offset));
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_memflags(&mut builder.func, GcAccess::ArrayLength);
         builder.ins().store(flags, len, len_addr, 0);
 
         Ok(gc_ref)
@@ -333,6 +338,7 @@ impl GcCompiler for NullCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             instance_id_addr,
+            GcAccess::ExnTagInstance,
             instance_id,
         )?;
         let tag_addr = builder
@@ -343,6 +349,7 @@ impl GcCompiler for NullCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             tag_addr,
+            GcAccess::ExnTagDefined,
             tag,
         )?;
 
@@ -392,8 +399,9 @@ impl GcCompiler for NullCompiler {
         builder: &mut FunctionBuilder<'_>,
         ty: WasmStorageType,
         field_addr: ir::Value,
+        access: GcAccess,
         val: ir::Value,
     ) -> WasmResult<()> {
-        write_field_at_addr(func_env, builder, ty, field_addr, val)
+        write_field_at_addr(func_env, builder, ty, field_addr, access, val)
     }
 }

@@ -464,7 +464,7 @@ fn alu_rrr_shift_size_case(alu_op: ALUOp, size: OperandSize, op: ShiftOp) -> Res
         OperandSize::Size32 => 5,
         OperandSize::Size64 => 6,
     };
-    let amt_var = format!("amt{}", amt_width);
+    let amt_var = format!("amt{amt_width}");
 
     // Setup scope with shift amount variable.
     let amt_target = Target::Var(amt_var.clone());
@@ -628,10 +628,9 @@ fn define_bit_rr() -> SpecConfig {
         BitOp::Cls,
         BitOp::RBit,
         BitOp::Clz,
-        // --------------
-        // BitOp::Rev16,
-        // BitOp::Rev32,
-        // BitOp::Rev64,
+        BitOp::Rev16,
+        BitOp::Rev32,
+        BitOp::Rev64,
     ];
 
     // OperandSize
@@ -644,8 +643,18 @@ fn define_bit_rr() -> SpecConfig {
             enumerate   (op, bit_ops);
             register    (rd, write, gp, 4);
             register    (rn, read,  gp64, 5);
+            filter      (is_bit_op_size_supported(op, size));
             instruction ();
         }
+    }
+}
+
+fn is_bit_op_size_supported(bit_op: BitOp, size: OperandSize) -> bool {
+    match bit_op {
+        // `Rev64` emits `opc = 0b11` (see `enc_bit_rr`), which is unallocated
+        // when `sf = 0`: the 32-bit byte reversal is `Rev32`'s `opc = 0b10`.
+        BitOp::Rev64 => size == OperandSize::Size64,
+        _ => true,
     }
 }
 
@@ -2067,9 +2076,18 @@ fn define_mov_from_vec() -> SpecConfig {
         aarch64::gpreg(4),
         Mapping::require(spec_var("rd".to_string())),
     );
+    // The source is a 128-bit vector register, but the ISLE `rn` field is
+    // declared `Reg`, which is modelled as `(bv 64)`. Qualifying it as 128 bits
+    // contradicts that model, so the spec cannot be type checked; widening it
+    // instead would need a distinct vector register type, as x64 has for `Xmm`.
+    //
+    // Until then this specification covers only the lanes lying within the low
+    // 64 bits of the register. That is incomplete rather than unsound: reads of
+    // a higher lane are excluded by the `require` clause, so a lowering that
+    // needs one will fail to verify.
     mappings.reads.insert(
         aarch64::vreg(5),
-        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 128)),
+        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 64)),
     );
 
     SpecConfig {
@@ -2082,7 +2100,8 @@ fn define_mov_from_vec() -> SpecConfig {
                 .iter()
                 .rev()
                 .map(|size| {
-                    let lanes = 128 / size.ty().bits();
+                    // Lanes within the low 64 bits only; see above.
+                    let lanes = 64 / size.ty().bits();
                     Arm {
                         variant: format!("{size:?}"),
                         args: Vec::new(),

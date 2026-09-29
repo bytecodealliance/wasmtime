@@ -310,6 +310,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        regalloc_ctx: &mut regalloc2::Ctx,
         want_disasm: bool,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil>;

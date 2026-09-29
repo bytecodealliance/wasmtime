@@ -115,6 +115,11 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn opportunistic_def(&mut self, val: Value, regs: ValueRegs) {
+            self.lower_ctx.opportunistic_def(val, regs);
+        }
+
+        #[inline]
         fn put_in_reg(&mut self, val: Value) -> Reg {
             self.put_in_regs(val).only_reg().unwrap()
         }
@@ -195,6 +200,37 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn first_result(&mut self, inst: Inst) -> Option<Value> {
             self.lower_ctx.dfg().inst_results(inst).first().copied()
+        }
+
+        #[inline]
+        fn second_result(&mut self, inst: Inst) -> Option<Value> {
+            self.lower_ctx
+                .dfg()
+                .inst_results(inst)
+                .iter()
+                .skip(1)
+                .next()
+                .copied()
+        }
+
+        #[inline]
+        fn is_second_result(&mut self, val: Value) -> Option<Value> {
+            let inst = self.def_inst(val)?;
+            let is_match = self
+                .lower_ctx
+                .dfg()
+                .inst_results(inst)
+                .iter()
+                .skip(1)
+                .next()
+                == Some(&val);
+            if is_match { Some(val) } else { None }
+        }
+
+        #[inline]
+        fn second_result_used(&mut self, inst: Inst) -> bool {
+            let second_result = self.lower_ctx.dfg().inst_results(inst).get(1).copied();
+            second_result.is_some_and(|value| self.lower_ctx.value_lowered_used(value))
         }
 
         #[inline]
@@ -776,6 +812,10 @@ macro_rules! isle_lower_prelude_methods {
 
         fn value_is_unused(&mut self, val: Value) -> bool {
             self.lower_ctx.value_is_unused(val)
+        }
+
+        fn value_used(&mut self, val: Value) -> bool {
+            self.lower_ctx.value_lowered_used(val)
         }
 
         fn block_exn_successor_label(&mut self, block: &Block, exn_succ: u64) -> MachLabel {

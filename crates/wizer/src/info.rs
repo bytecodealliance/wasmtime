@@ -6,7 +6,7 @@ use std::ops::Range;
 ///
 /// These are created during our `parse` pass and then used throughout
 /// our later passes.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ModuleContext<'a> {
     /// The raw sections from the original Wasm input.
     raw_sections: Vec<wasm_encoder::RawSection<'a>>,
@@ -62,10 +62,10 @@ pub struct ModuleContext<'a> {
 
 impl<'a> ModuleContext<'a> {
     /// Add a new raw section to this module info during parsing.
-    pub(crate) fn add_raw_section(&mut self, id: u8, range: Range<usize>, full_wasm: &'a [u8]) {
+    pub(crate) fn add_raw_section(&mut self, id: u8, range: Range<u64>, full_wasm: &'a [u8]) {
         self.raw_sections.push(wasm_encoder::RawSection {
             id,
-            data: &full_wasm[range.start..range.end],
+            data: &full_wasm[range.start as usize..range.end as usize],
         })
     }
 

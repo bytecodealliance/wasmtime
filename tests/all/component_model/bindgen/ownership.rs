@@ -52,8 +52,8 @@ fn component() -> String {
             (func $f_foo
                 (param "a" (list (list string)))
                 (result (list (list string)))
-                (canon lift (core func $i "core_foo_export") (memory $libc "memory")
-                    (realloc (func $libc "realloc"))
+                (canon lift (core func $i "core_foo_export") (memory (core memory $libc "memory"))
+                    (realloc (core func $libc "realloc"))
                 )
             )
 
@@ -61,16 +61,16 @@ fn component() -> String {
 
             (func $f_bar
                 (param "a" $thing)
-                (canon lift (core func $i "core_bar_export") (memory $libc "memory")
-                    (realloc (func $libc "realloc"))
+                (canon lift (core func $i "core_bar_export") (memory (core memory $libc "memory"))
+                    (realloc (core func $libc "realloc"))
                 )
             )
 
             (func $f_baz
                 (param "a" $thing)
                 (result $thing)
-                (canon lift (core func $i "core_baz_export") (memory $libc "memory")
-                    (realloc (func $libc "realloc"))
+                (canon lift (core func $i "core_baz_export") (memory (core memory $libc "memory"))
+                    (realloc (core func $libc "realloc"))
                 )
             )
 

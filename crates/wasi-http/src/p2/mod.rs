@@ -226,8 +226,9 @@
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
 //! [`default_hooks`]: crate::default_hooks
 
-use crate::{WasiHttp, WasiHttpView};
-use wasmtime::component::Linker;
+use crate::{WasiHttp, WasiHttpNamed, WasiHttpNamedView, WasiHttpView};
+use wasmtime::component::{Component, Linker};
+use wasmtime_wasi::{NamedId, WasiCtxNamedView};
 
 mod error;
 mod http_impl;
@@ -317,6 +318,140 @@ where
     bindings::http::outgoing_handler::add_to_linker::<_, WasiHttp>(l, T::http)?;
     bindings::http::types::add_to_linker::<_, WasiHttp>(l, &options.into(), T::http)?;
 
+    Ok(())
+}
+
+/// Interfaces that are added via [`add_named_to_linker_async`].
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Interface {
+    /// `wasi:http/outgoing-handler`
+    HttpOutgoingHandler,
+    /// `wasi:http/types`
+    HttpTypes,
+}
+
+/// Add all `wasi:http` interfaces from this crate into the `linker` provided
+/// for any named imports that a component has.
+///
+/// This function is similar to [`add_only_http_to_linker_async`] except that
+/// it's specifically designed to work with named imports of `wasi:http`
+/// interfaces that components may have. This requires a [`Component`] parameter
+/// to be passed in when populating the [`Linker`] provided to see what the
+/// [`Component`] actually imports.
+///
+/// Like [`add_only_http_to_linker_async`] this only adds `wasi:http`
+/// interfaces, so [`wasmtime_wasi::p2::add_named_to_linker_async`] should
+/// additionally be used to bind named imports of the rest of WASI. If this
+/// isn't low level enough you can invoke the bindgen-generated `add_to_linker`
+/// functions within the [`named_imports`] module directly instead.
+///
+/// [`wasmtime_wasi::p2::add_named_to_linker_async`]: wasmtime_wasi::p2::add_named_to_linker_async
+/// [`named_imports`]: crate::p2::bindings::named_imports
+///
+/// The `lookup` function provided here is invoked for every named import found
+/// for a particular interface. The [`Interface`] given is what's being bound,
+/// and the `&str` argument is the name that the component imports it as. The
+/// embedder can then decide how it would like to allocate a [`NamedId`] for
+/// this import. If `Ok` is returned then the linker is populated with this
+/// name, and imported functions will pass the [`NamedId`] later to the
+/// implementation of [`WasiHttpNamedView`] on `T` when invoked. If `Err` is
+/// returned then the error will cause this entire function to fail and this
+/// function call will return the same error.
+///
+/// # Example
+///
+/// ```
+/// use std::collections::HashMap;
+/// use wasmtime::component::{Component, Linker, ResourceTable};
+/// use wasmtime::{Engine, Result, Store};
+/// use wasmtime_wasi::NamedId;
+/// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpCtxView, WasiHttpNamedView};
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///     let component = Component::new(&engine, "(component)")?;
+///
+///     let mut linker = Linker::<MyState>::new(&engine);
+///
+///     // ... add default functionality to `linker` as needed ...
+///
+///     // and then additionally fill in any specific named imports `component`
+///     // might have for `wasi:http` interfaces.
+///     let mut name_map = HashMap::new();
+///     wasmtime_wasi_http::p2::add_named_to_linker_async(&mut linker, &component, |_i, name| {
+///         let len = name_map.len();
+///         Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///     })?;
+///
+///     // Here a `WasiHttpCtx` is allocated per-named-import and will then be
+///     // referred to internally by the [`NamedId`] allocated above. You could
+///     // also use `name_map` to configure each context differently.
+///     let mut my_state = MyState::default();
+///     for _ in 0..name_map.len() {
+///         my_state.contexts.push(WasiHttpCtx::default());
+///     }
+///     let mut store = Store::new(&engine, my_state);
+///
+///     // ... use `linker` to instantiate within `store` ...
+///
+///     Ok(())
+/// }
+///
+/// #[derive(Default)]
+/// struct MyState {
+///     table: ResourceTable,
+///     contexts: Vec<WasiHttpCtx>,
+/// }
+///
+/// impl WasiHttpNamedView for MyState {
+///     fn http(&mut self, id: NamedId) -> WasiHttpCtxView<'_> {
+///         WasiHttpCtxView {
+///             ctx: &mut self.contexts[id.0],
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
+///     }
+/// }
+/// ```
+pub fn add_named_to_linker_async<T>(
+    linker: &mut Linker<T>,
+    component: &Component,
+    lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiHttpNamedView,
+{
+    let options = bindings::LinkOptions::default(); // FIXME: Thread through to the CLI options.
+    add_named_to_linker_with_options_async(linker, &options, component, lookup)
+}
+
+/// Same as [`add_named_to_linker_async`] except [`bindings::LinkOptions`] can
+/// be specified to configure interfaces that are added.
+pub fn add_named_to_linker_with_options_async<T>(
+    linker: &mut Linker<T>,
+    options: &bindings::LinkOptions,
+    component: &Component,
+    mut lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiHttpNamedView,
+{
+    use crate::p2::bindings::named_imports::wasi::http::{outgoing_handler, types};
+
+    let l = linker;
+    outgoing_handler::add_to_linker::<_, WasiHttpNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::HttpOutgoingHandler, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    types::add_to_linker::<_, WasiHttpNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::HttpTypes, name),
+        &options.into(),
+        |x| WasiCtxNamedView(x),
+    )?;
     Ok(())
 }
 

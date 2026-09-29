@@ -22,7 +22,7 @@
   (core instance $libc (instantiate $libc))
 
   (core func $new (canon future.new $f))
-  (core func $write (canon future.write $f async (memory $libc "mem")))
+  (core func $write (canon future.write $f async (memory (core memory $libc "mem"))))
   (core func $cancel (canon future.cancel-write $f))
   (core func $ws-new (canon waitable-set.new))
   (core func $join (canon waitable.join))
@@ -75,7 +75,7 @@
   (core instance $libc (instantiate $libc))
 
   (core func $new (canon future.new $f))
-  (core func $read (canon future.read $f async (memory $libc "mem")))
+  (core func $read (canon future.read $f async (memory (core memory $libc "mem"))))
   (core func $cancel (canon future.cancel-read $f))
   (core func $ws-new (canon waitable-set.new))
   (core func $join (canon waitable.join))
@@ -128,7 +128,7 @@
   (core instance $libc (instantiate $libc))
 
   (core func $new (canon stream.new $s))
-  (core func $write (canon stream.write $s async (memory $libc "mem")))
+  (core func $write (canon stream.write $s async (memory (core memory $libc "mem"))))
   (core func $cancel (canon stream.cancel-write $s))
   (core func $ws-new (canon waitable-set.new))
   (core func $join (canon waitable.join))
@@ -181,7 +181,7 @@
   (core instance $libc (instantiate $libc))
 
   (core func $new (canon stream.new $s))
-  (core func $read (canon stream.read $s async (memory $libc "mem")))
+  (core func $read (canon stream.read $s async (memory (core memory $libc "mem"))))
   (core func $cancel (canon stream.cancel-read $s))
   (core func $ws-new (canon waitable-set.new))
   (core func $join (canon waitable.join))

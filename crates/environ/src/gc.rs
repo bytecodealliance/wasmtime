@@ -29,6 +29,19 @@ use core::alloc::Layout;
 /// enabled.
 pub const POISON: u8 = 0b00001111;
 
+/// The bit within a `VMDrcHeader`'s reserved bits that is the mark
+/// bit. Collectively, this bit in all the heap's objects' headers implements
+/// the precise-stack-roots set.
+pub const DRC_HEADER_MARK_BIT: u32 = 1 << 0;
+
+/// The bit within a `VMDrcHeader`'s reserved bits that is the
+/// in-the-over-approximated-stack-roots list bit.
+pub const DRC_HEADER_IN_OVER_APPROX_LIST_BIT: u32 = 1 << 1;
+
+/// The minimum length the over-approximated-stack-roots list must reach
+/// before a read barrier considers forcing a GC.
+pub const DRC_MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD: i64 = 1024;
+
 /// Assert a condition, but only when `gc_zeal` is enabled.
 #[macro_export]
 macro_rules! gc_assert {

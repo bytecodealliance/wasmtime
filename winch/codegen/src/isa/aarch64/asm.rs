@@ -15,10 +15,11 @@ use crate::{
 use cranelift_codegen::isa::aarch64;
 use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
 use cranelift_codegen::isa::aarch64::inst::{
-    ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5,
+    ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5, VecALUModOp, VecExtendOp, VecRRLongOp,
+    VecRRNarrowOp, VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmOp,
 };
 use cranelift_codegen::{
-    Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
+    MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
     Writable,
     ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
@@ -26,7 +27,7 @@ use cranelift_codegen::{
         FPULeftShiftImm, FPUOp1, FPUOp2,
         FPUOpRI::{self, UShr32, UShr64},
         FPUOpRIMod, FPURightShiftImm, FpuRoundMode, Imm12, ImmLogic, ImmShift, Inst, IntToFpuOp,
-        PairAMode, ScalarSize, VecLanesOp, VecMisc2, VectorSize,
+        PairAMode, ReturnCallInfo, ScalarSize, VecALUOp, VecLanesOp, VecMisc2, VectorSize,
         emit::{EmitInfo, EmitState},
     },
     settings,
@@ -125,11 +126,12 @@ impl Assembler {
 
 impl Assembler {
     /// Return the emitted code.
-    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
-        let stencil = self
+    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized {
+        let mut buffer = self
             .buffer
             .finish(&self.pool.constants(), self.emit_state.ctrl_plane_mut());
-        stencil.apply_base_srcloc(loc.unwrap_or_default())
+        buffer.apply_base_srcloc(loc.unwrap_or_default());
+        buffer
     }
 
     fn emit(&mut self, inst: Inst) {
@@ -313,7 +315,11 @@ impl Assembler {
                     .for_each(|i| self.emit(i));
             }
             RegClass::Float => {
-                match ASIMDFPModImm::maybe_from_u64(imm.unwrap_as_u64(), size.into()) {
+                let modimm = match imm {
+                    Imm::V128(_) => None,
+                    _ => ASIMDFPModImm::maybe_from_u64(imm.unwrap_as_u64(), size.into()),
+                };
+                match modimm {
                     Some(imm) => {
                         self.emit(Inst::FpuMoveFPImm {
                             rd: rd.map(Into::into),
@@ -351,6 +357,10 @@ impl Assembler {
                 rn: rn.into(),
             },
             OperandSize::S64 => Inst::FpuMove64 {
+                rd: writable,
+                rn: rn.into(),
+            },
+            OperandSize::S128 => Inst::FpuMove128 {
                 rd: writable,
                 rn: rn.into(),
             },
@@ -415,6 +425,322 @@ impl Assembler {
         self.alu_rrr(ALUOp::Adc, rm, rn, rd, size);
     }
 
+    /// Vector extend: widen the low or high half's lanes to `lane_size`.
+    pub fn vec_extend(
+        &mut self,
+        t: VecExtendOp,
+        rn: Reg,
+        rd: WritableReg,
+        high_half: bool,
+        lane_size: ScalarSize,
+    ) {
+        self.emit(Inst::VecExtend {
+            t,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            high_half,
+            lane_size,
+        });
+    }
+
+    /// Vector narrow: saturate `rn`'s lanes to `lane_size` into the low or
+    /// high half of `rd`; the high-half form preserves `rd`'s other lanes.
+    pub fn vec_narrow(
+        &mut self,
+        op: VecRRNarrowOp,
+        rn: Reg,
+        rd: WritableReg,
+        high_half: bool,
+        lane_size: ScalarSize,
+    ) {
+        if high_half {
+            self.emit(Inst::VecRRNarrowHigh {
+                op,
+                rd: rd.map(Into::into),
+                ri: rd.to_reg().into(),
+                rn: rn.into(),
+                lane_size,
+            });
+        } else {
+            self.emit(Inst::VecRRNarrowLow {
+                op,
+                rd: rd.map(Into::into),
+                rn: rn.into(),
+                lane_size,
+            });
+        }
+    }
+    /// Duplicate a general-purpose register's value into every lane of a
+    /// vector register.
+    pub fn vec_dup(&mut self, rn: Reg, rd: WritableReg, size: VectorSize) {
+        self.emit(Inst::VecDup {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+        });
+    }
+
+    /// Signed move from a vector element to a GPR.
+    pub fn mov_from_vec_signed(
+        &mut self,
+        rn: Reg,
+        rd: WritableReg,
+        idx: u8,
+        size: VectorSize,
+        scalar_size: OperandSize,
+    ) {
+        self.emit(Inst::MovFromVecSigned {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            idx,
+            size,
+            scalar_size: scalar_size.into(),
+        });
+    }
+
+    /// Move from a vector element to a scalar float register.
+    pub fn fpu_move_from_vec(&mut self, rn: Reg, rd: WritableReg, idx: u8, size: VectorSize) {
+        self.emit(Inst::FpuMoveFromVec {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            idx,
+            size,
+        });
+    }
+
+    /// Move a GPR into a vector element, preserving the other lanes.
+    pub fn mov_to_vec(&mut self, rn: Reg, rd: WritableReg, idx: u8, size: VectorSize) {
+        self.emit(Inst::MovToVec {
+            rd: rd.map(Into::into),
+            ri: rd.to_reg().into(),
+            rn: rn.into(),
+            idx,
+            size,
+        });
+    }
+
+    /// Move a vector element into a vector element, preserving the other
+    /// lanes.
+    pub fn vec_mov_element(
+        &mut self,
+        rn: Reg,
+        rd: WritableReg,
+        dest_idx: u8,
+        src_idx: u8,
+        size: VectorSize,
+    ) {
+        self.emit(Inst::VecMovElement {
+            rd: rd.map(Into::into),
+            ri: rd.to_reg().into(),
+            rn: rn.into(),
+            dest_idx,
+            src_idx,
+            size,
+        });
+    }
+
+    /// Duplicate one lane of a vector register into every lane of a vector
+    /// register.
+    pub fn vec_dup_elem(&mut self, rn: Reg, rd: WritableReg, size: VectorSize, lane: u8) {
+        self.emit(Inst::VecDupFromFpu {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+            lane,
+        });
+    }
+
+    /// Vector widening multiply: multiply the low or high halves of `rn` and
+    /// `rm` into lanes of twice the source lane width.
+    pub fn vec_rrr_long(
+        &mut self,
+        alu_op: VecRRRLongOp,
+        rn: Reg,
+        rm: Reg,
+        rd: WritableReg,
+        high_half: bool,
+    ) {
+        self.emit(Inst::VecRRRLong {
+            alu_op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            rm: rm.into(),
+            high_half,
+        });
+    }
+
+    /// Vector widening multiply accumulate: multiply the low or high halves of
+    /// `rn` and `rm`, adding the result to lanes of twice the source lane width.
+    pub fn vec_rrrr_long(
+        &mut self,
+        alu_op: VecRRRLongModOp,
+        rn: Reg,
+        rm: Reg,
+        rd: WritableReg,
+        high_half: bool,
+    ) {
+        self.emit(Inst::VecRRRLongMod {
+            alu_op,
+            rd: rd.map(Into::into),
+            ri: rd.to_reg().into(),
+            rn: rn.into(),
+            rm: rm.into(),
+            high_half,
+        });
+    }
+
+    /// Vector pairwise widening add: sum adjacent lane pairs of `rn` into
+    /// lanes of twice the source lane width.
+    pub fn vec_rr_pair_long(&mut self, op: VecRRPairLongOp, rn: Reg, rd: WritableReg) {
+        self.emit(Inst::VecRRPairLong {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+        });
+    }
+
+    /// Vector lengthening operation: widen the low or high half's lanes.
+    pub fn vec_rr_long(&mut self, op: VecRRLongOp, rn: Reg, rd: WritableReg, high_half: bool) {
+        self.emit(Inst::VecRRLong {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            high_half,
+        });
+    }
+
+    /// Vector three-register ALU operation whose destination is also an input
+    pub fn vec_rrr_mod(
+        &mut self,
+        alu_op: VecALUModOp,
+        rn: Reg,
+        rm: Reg,
+        rd: WritableReg,
+        size: VectorSize,
+    ) {
+        self.emit(Inst::VecRRRMod {
+            alu_op,
+            rd: rd.map(Into::into),
+            ri: rd.to_reg().into(),
+            rn: rn.into(),
+            rm: rm.into(),
+            size,
+        });
+    }
+
+    /// Vector two register miscellaneous instruction.
+    pub fn vec_misc(&mut self, op: VecMisc2, rn: Reg, rd: WritableReg, size: VectorSize) {
+        self.emit(Inst::VecMisc {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+        });
+    }
+
+    /// Vector table lookup: index `rn`'s bytes by `rm`, zeroing out of range
+    /// lanes.
+    pub fn vec_tbl(&mut self, rn: Reg, rm: Reg, rd: WritableReg) {
+        self.emit(Inst::VecTbl {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            rm: rm.into(),
+        });
+    }
+
+    /// Vector table lookup, leaving out of range lanes of `rd` unmodified.
+    pub fn vec_tbl_ext(&mut self, rn: Reg, rm: Reg, rd: WritableReg) {
+        self.emit(Inst::VecTblExt {
+            rd: rd.map(Into::into),
+            ri: rd.to_reg().into(),
+            rn: rn.into(),
+            rm: rm.into(),
+        });
+    }
+
+    /// Vector shift by immediate.
+    pub fn vec_shift_imm(
+        &mut self,
+        op: VecShiftImmOp,
+        imm: u8,
+        rn: Reg,
+        rd: WritableReg,
+        size: VectorSize,
+    ) {
+        self.emit(Inst::VecShiftImm {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+            imm,
+        });
+    }
+
+    /// Extract a vector from a pair of vectors, starting at byte `imm4`.
+    pub fn vec_extract(&mut self, rn: Reg, rm: Reg, rd: WritableReg, imm4: u8) {
+        self.emit(Inst::VecExtract {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            rm: rm.into(),
+            imm4,
+        });
+    }
+
+    /// Load a 128-bit constant into a vector register.
+    pub fn vec_load_const(&mut self, constant: &[u8; 16], rd: WritableReg) {
+        let handle = self.add_constant(constant);
+        self.uload(
+            AMode::Const { addr: handle },
+            rd,
+            OperandSize::S128,
+            TRUSTED_FLAGS,
+        );
+    }
+
+    /// Vector reduction across lanes
+    pub fn vec_lanes(&mut self, op: VecLanesOp, rn: Reg, rd: WritableReg, size: VectorSize) {
+        self.emit(Inst::VecLanes {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+        });
+    }
+
+    /// Load a scalar and replicate it into all vector lanes.
+    pub fn vec_load_replicate(
+        &mut self,
+        rn: Reg,
+        rd: WritableReg,
+        size: VectorSize,
+        flags: MemFlagsData,
+    ) {
+        self.emit(Inst::VecLoadReplicate {
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            size,
+            flags,
+        });
+    }
+
+    /// Vector ALU op
+    pub fn vec_rrr(
+        &mut self,
+        alu_op: VecALUOp,
+        rn: Reg,
+        rm: Reg,
+        rd: WritableReg,
+        size: VectorSize,
+    ) {
+        self.emit(Inst::VecRRR {
+            alu_op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+            rm: rm.into(),
+            size,
+        });
+    }
+
     /// Add across Vector.
     pub fn addv(&mut self, rn: Reg, rd: WritableReg, size: VectorSize) {
         self.emit(Inst::VecLanes {
@@ -438,6 +764,11 @@ impl Assembler {
     /// Subtract with three registers.
     pub fn sub_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
         self.alu_rrr_extend(ALUOp::Sub, rm, rn, rd, size, ExtendOp::UXTX);
+    }
+
+    /// Negate a general-purpose register.
+    pub fn neg_rr(&mut self, rn: Reg, rd: WritableReg, size: OperandSize) {
+        self.alu_rrr(ALUOp::Sub, rn, zero(), rd, size);
     }
 
     /// Subtract with three registers, setting flags.
@@ -919,6 +1250,14 @@ impl Assembler {
                     cond,
                 });
             }
+            OperandSize::S128 => {
+                self.emit(Inst::VecCSel {
+                    rd: rd.map(Into::into),
+                    rn: rn.into(),
+                    rm: rm.into(),
+                    cond,
+                });
+            }
             _ => todo!(),
         }
     }
@@ -1151,6 +1490,36 @@ impl Assembler {
                 callee.into(),
                 call_conv.into(),
             )),
+        })
+    }
+
+    /// Emit a direct tail jump to a named target.
+    pub fn tail_jump_with_name(&mut self, name: UserExternalNameRef) {
+        // Winch has already replaced the frame, so the generic Cranelift
+        // return-call sequence must see a zero-sized default frame here.
+        self.emit(Inst::ReturnCall {
+            info: Box::new(ReturnCallInfo {
+                dest: ExternalName::user(name),
+                uses: Default::default(),
+                new_stack_arg_size: 0,
+                key: None,
+                sign_return_address_all: false,
+            }),
+        })
+    }
+
+    /// Emit an indirect tail jump to the address in `callee`.
+    pub fn tail_jump_with_reg(&mut self, callee: Reg) {
+        // Winch has already replaced the frame, so the generic Cranelift
+        // return-call sequence must see a zero-sized default frame here.
+        self.emit(Inst::ReturnCallInd {
+            info: Box::new(ReturnCallInfo {
+                dest: callee.into(),
+                uses: Default::default(),
+                new_stack_arg_size: 0,
+                key: None,
+                sign_return_address_all: false,
+            }),
         })
     }
 

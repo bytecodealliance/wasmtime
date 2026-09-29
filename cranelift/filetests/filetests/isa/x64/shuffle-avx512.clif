@@ -40,6 +40,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
+;   .byte 0x11
 
 function %f3(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -75,4 +76,5 @@ block0(v0: i8x16, v1: i8x16):
 ;   addb %bl, (%rdi)
 ;   sbbb (%rsi, %rax), %al
 ;   orb $0xb, %al
+;   .byte 0x17, 0x0d, 0x18, 0x04, 0x02, 0x0f, 0x11, 0x05
 

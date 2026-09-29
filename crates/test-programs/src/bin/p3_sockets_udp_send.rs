@@ -1,3 +1,6 @@
+use futures::future::{self, Either};
+use std::pin::pin;
+use test_programs::p3::wasi::clocks::monotonic_clock;
 use test_programs::p3::wasi::sockets::types::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, UdpSocket,
 };
@@ -32,6 +35,29 @@ async fn test_unspecified_remote_addr(family: IpAddressFamily) {
     assert!(matches!(result, Err(ErrorCode::InvalidArgument)));
 }
 
+async fn test_send_to_closed_receiver(family: IpAddressFamily) {
+    let unspecified_port = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
+
+    let sender = UdpSocket::create(family).unwrap();
+    sender.bind(unspecified_port).unwrap();
+
+    let receiver = UdpSocket::create(family).unwrap();
+    receiver.bind(unspecified_port).unwrap();
+
+    let receiver_address = receiver.get_local_address().unwrap();
+    drop(receiver);
+    sender.connect(receiver_address).unwrap();
+    sender.send(b"hello".to_vec(), None).await.unwrap();
+
+    let received = pin!(sender.receive());
+    let timeout = pin!(monotonic_clock::wait_for(5_000_000_000));
+    match future::select(received, timeout).await {
+        Either::Left((Err(ErrorCode::ConnectionRefused | ErrorCode::ConnectionReset), _)) => {}
+        Either::Left((received, _)) => panic!("unexpected result: {received:?}"),
+        Either::Right(_) => panic!("receive timed out instead of returning an error"),
+    }
+}
+
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         test_udp_send_without_bind_or_connect(IpAddressFamily::Ipv4).await;
@@ -42,6 +68,9 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
 
         test_unspecified_remote_addr(IpAddressFamily::Ipv4).await;
         test_unspecified_remote_addr(IpAddressFamily::Ipv6).await;
+
+        test_send_to_closed_receiver(IpAddressFamily::Ipv4).await;
+        test_send_to_closed_receiver(IpAddressFamily::Ipv6).await;
 
         Ok(())
     }

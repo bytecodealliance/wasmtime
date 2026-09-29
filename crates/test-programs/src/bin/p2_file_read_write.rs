@@ -5,6 +5,11 @@ fn main() {
     let preopens = wasi::filesystem::preopens::get_directories();
     let (dir, _) = &preopens[0];
 
+    assert_eq!(
+        dir.read_via_stream(0).err(),
+        Some(wasi::filesystem::types::ErrorCode::IsDirectory)
+    );
+
     let filename = "test.txt";
     let file = dir
         .open_at(

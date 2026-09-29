@@ -387,7 +387,8 @@
 
 (spec (RegMemImm.Imm simm32) (provide
       (= result
-            (bvor (bvshl #b10 62)(zero_ext 64 simm32)))))
+            (bvor
+                  #x8000000000000000 (zero_ext 64 simm32)))))
 
 (spec (RegMemImm.Mem addr) (provide
       (= result
@@ -1319,6 +1320,12 @@
 (decl pure use_fma () bool)
 (extern constructor use_fma use_fma)
 
+(decl pure use_avx_vnni () bool)
+(extern constructor use_avx_vnni use_avx_vnni)
+
+(decl pure use_avx512vnni () bool)
+(extern constructor use_avx512vnni use_avx512vnni)
+
 (decl pure has_sse3 () bool)
 (extern constructor has_sse3 has_sse3)
 
@@ -1336,6 +1343,9 @@
 
 (decl pure use_avx2 () bool)
 (extern constructor use_avx2 use_avx2)
+
+(decl pure use_apx () bool)
+(extern constructor use_apx use_apx)
 
 (decl pure has_cmpxchg16b () bool)
 (extern constructor has_cmpxchg16b has_cmpxchg16b)
@@ -2953,6 +2963,16 @@
 (decl x64_pmaddubsw (Xmm XmmMem128) Xmm)
 (rule (x64_pmaddubsw src1 src2) (x64_pmaddubsw_a_or_avx src1 src2))
 
+;; AVX-VNNI `vpdpbusd acc, uns, sgn`: acc += dot(u8 lanes of `uns`, i8 lanes of
+;; `sgn`) grouped 16->4. `acc` is the read-write accumulator.
+(decl x64_vpdpbusd (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vpdpbusd acc uns sgn) (x64_vpdpbusd_a acc uns sgn))
+
+;; EVEX AVX512-VNNI form of the same op, for hosts with AVX512VNNI+AVX512VL but
+;; not the VEX AVX-VNNI (e.g. Ice Lake, Cascade Lake).
+(decl x64_vpdpbusd_evex (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vpdpbusd_evex acc uns sgn) (x64_vpdpbusd_b acc uns sgn))
+
 ;; Helper for creating `insertps` instructions.
 (decl x64_insertps (Xmm XmmMem32 u8) Xmm)
 (rule 0 (x64_insertps src1 src2 lane) (x64_insertps_a_or_avx src1 src2 lane))
@@ -3866,6 +3886,57 @@
 (rule 2 (is_nonzero (band _ a @ (value_type (ty_int (fits_in_64 ty))) b))
       (is_nonzero_band ty a b))
 
+;; Using the flags output of `uadd_overflow` can produce a `CC` and give an
+;; opportunistic def of the other output.
+(rule 3
+      (is_nonzero
+       (is_second_result uadd @ (uadd_overflow (fits_in_64 ty) x y)))
+      (if-let (first_result sum_value) uadd)
+      (let ((producer ProducesFlags (x64_add_with_flags_paired ty x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer sum_value)
+         (CC.B))))
+
+;; Using the flags output of `umul_overflow`/`smul_overflow` can produce a
+;; `CC` and give an opportunistic def of the other output. The multiply
+;; itself sets the overflow flag (OF for `imul`; OF==CF for the unsigned
+;; `mul` of narrow types), so no extra compare is needed.
+(rule 4
+      (is_nonzero
+       (is_second_result umul @ (umul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty)))))
+      (if-let (first_result prod_value) umul)
+      (let ((producer ProducesFlags (x64_mul_lo_with_flags_paired ty false x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer prod_value)
+         (CC.O))))
+
+(rule 5
+      (is_nonzero
+       (is_second_result umul @ (umul_overflow _ x y @ (value_type $I8))))
+      (if-let (first_result prod_value) umul)
+      (let ((producer ProducesFlags (x64_mul8_with_flags_paired false x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer prod_value)
+         (CC.O))))
+
+(rule 6
+      (is_nonzero
+       (is_second_result smul @ (smul_overflow _ x y @ (value_type (ty_int_ref_16_to_64 ty)))))
+      (if-let (first_result prod_value) smul)
+      (let ((producer ProducesFlags (x64_mul_lo_with_flags_paired ty true x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer prod_value)
+         (CC.O))))
+
+(rule 7
+      (is_nonzero
+       (is_second_result smul @ (smul_overflow _ x y @ (value_type $I8))))
+      (if-let (first_result prod_value) smul)
+      (let ((producer ProducesFlags (x64_mul8_with_flags_paired true x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer prod_value)
+         (CC.O))))
+
 ;; Like `is_nonzero` but with additional specializations for compare
 ;; operators. We break this out from `is_nonzero` because we want to
 ;; avoid unbounded recursion.
@@ -4222,6 +4293,11 @@
 ;; This rule zeroes out the upper bits of the XMM register; we need this to
 ;; avoid undefined bits in scaler_to_vector.
 (decl bitcast_gpr_to_xmm (u8 Gpr) Xmm)
+(rule 1 (bitcast_gpr_to_xmm 8 src)
+      (if-let true (has_sse41))
+      (x64_pinsrb (xmm_zero $I8X16) src 0))
+(rule 0 (bitcast_gpr_to_xmm 8 src)
+      (x64_pinsrw (xmm_zero $I16X8) (x64_movzbl_rm src) 0))
 (rule (bitcast_gpr_to_xmm 16 src)
       (x64_pinsrw (xmm_zero $I16X8) src 0))
 (rule (bitcast_gpr_to_xmm 32 src)

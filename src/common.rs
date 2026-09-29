@@ -4,7 +4,7 @@ use clap::Parser;
 use std::net::TcpListener;
 use std::{fs::File, path::Path, time::Duration};
 use wasmtime::{
-    Engine, Module, Precompiled, Result, StoreLimits, StoreLimitsBuilder, bail,
+    Engine, Module, Precompiled, Result, Store, StoreLimits, StoreLimitsBuilder, bail,
     error::Context as _, format_err,
 };
 use wasmtime_cli_flags::{CommonOptions, opt::WasmtimeOptionValue};
@@ -285,6 +285,7 @@ impl RunCommon {
             None => {
                 let mut code = wasmtime::CodeBuilder::new(engine);
                 code.wasm_binary_or_text(bytes, Some(path))?;
+                crate::code_builder::configure_code_builder(&self.common, &mut code)?;
                 match code.hint() {
                     Some(wasmtime::CodeHint::Component) => {
                         #[cfg(feature = "component-model")]
@@ -323,7 +324,13 @@ impl RunCommon {
         builder.allow_blocking_current_thread(self.common.wasm.timeout.is_none());
 
         if self.common.wasi.inherit_env == Some(true) {
-            for (k, v) in std::env::vars() {
+            for (k, v) in std::env::vars_os() {
+                let k = k.to_str().ok_or_else(|| {
+                    format_err!("environment variable name {k:?} not valid utf-8")
+                })?;
+                let v = v.to_str().ok_or_else(|| {
+                    format_err!("environment variable {k:?} value {v:?} not valid utf-8")
+                })?;
                 builder.env(&k, &v);
             }
         }
@@ -344,26 +351,21 @@ impl RunCommon {
         }
 
         for (host, guest) in self.dirs.iter() {
-            builder.preopened_dir(
-                host,
-                guest,
-                wasmtime_wasi::DirPerms::all(),
-                wasmtime_wasi::FilePerms::all(),
-            )?;
+            builder.preopened_dir(host, guest, wasmtime_wasi::FsPerms::ReadWrite)?;
         }
         if let Some(cwd) = &self.common.wasi.cwd {
             builder.initial_cwd(cwd);
         }
 
-        if self.common.wasi.listenfd == Some(true) {
-            bail!("components do not support --listenfd");
-        }
         for _ in self.compute_preopen_sockets()? {
             bail!("components do not support --tcplisten");
         }
 
         if self.common.wasi.inherit_network == Some(true) {
             builder.inherit_network();
+            // Implicitly enable TCP/UDP if the entire network is being
+            // inherited to avoid the need to also pass `-Stcp,udp`.
+            builder.allow_tcp(true).allow_udp(true);
         }
         if let Some(enable) = self.common.wasi.allow_ip_name_lookup {
             builder.allow_ip_name_lookup(enable);
@@ -474,6 +476,38 @@ impl RunCommon {
                 .context("failed to link `wasi:cli@0.3.x`")?;
         }
 
+        Ok(())
+    }
+
+    pub fn configure_store<T>(
+        &self,
+        store: &mut Store<T>,
+        limits: fn(&mut T) -> &mut StoreLimits,
+    ) -> Result<()>
+    where
+        T: wasmtime_wasi::WasiView,
+    {
+        if let Some(max) = self.common.wasi.max_resources {
+            if self.common.wasi.cli != Some(false) {
+                store.data_mut().ctx().table.set_max_capacity(max);
+            }
+            #[cfg(feature = "component-model-async")]
+            if let Some(table) = store.concurrent_resource_table() {
+                table.set_max_capacity(max);
+            }
+        }
+        if let Some(fuel) = self.common.wasi.hostcall_fuel {
+            store.set_hostcall_fuel(fuel);
+        }
+
+        *limits(store.data_mut()) = self.store_limits();
+        store.limiter(move |t| limits(t));
+
+        // If fuel has been configured, we want to add the configured
+        // fuel amount to this store.
+        if let Some(fuel) = self.common.wasm.fuel {
+            store.set_fuel(fuel)?;
+        }
         Ok(())
     }
 }

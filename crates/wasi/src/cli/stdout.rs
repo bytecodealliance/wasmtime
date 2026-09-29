@@ -1,4 +1,4 @@
-use crate::cli::{IsTerminal, StdoutStream};
+use crate::cli::{IsTerminal, StdoutStream, stream_error_from};
 use crate::p2;
 use bytes::Bytes;
 use std::io::{self, Write};
@@ -72,13 +72,22 @@ enum StdioOutputStream {
     Stderr,
 }
 
+/// The number of bytes a single `write` is permitted to carry, as reported by
+/// `check_write`.
+const WRITE_BUDGET: usize = 1024 * 1024;
+
 impl OutputStream for StdioOutputStream {
     fn write(&mut self, bytes: Bytes) -> p2::StreamResult<()> {
+        if bytes.len() > WRITE_BUDGET {
+            return Err(p2::StreamError::Trap(wasmtime::format_err!(
+                "write exceeded budget"
+            )));
+        }
         match self {
             StdioOutputStream::Stdout => std::io::stdout().write_all(&bytes),
             StdioOutputStream::Stderr => std::io::stderr().write_all(&bytes),
         }
-        .map_err(|e| p2::StreamError::LastOperationFailed(wasmtime::format_err!(e)))
+        .map_err(|e| stream_error_from(e))
     }
 
     fn flush(&mut self) -> p2::StreamResult<()> {
@@ -86,11 +95,27 @@ impl OutputStream for StdioOutputStream {
             StdioOutputStream::Stdout => std::io::stdout().flush(),
             StdioOutputStream::Stderr => std::io::stderr().flush(),
         }
-        .map_err(|e| p2::StreamError::LastOperationFailed(wasmtime::format_err!(e)))
+        .map_err(|e| stream_error_from(e))
     }
 
     fn check_write(&mut self) -> p2::StreamResult<usize> {
-        Ok(1024 * 1024)
+        Ok(WRITE_BUDGET)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A write larger than the budget `check_write` reports has to trap instead
+    /// of being written out.
+    #[test]
+    fn write_larger_than_budget_traps() {
+        let mut stream = StdioOutputStream::Stdout;
+        let err = stream
+            .write(Bytes::from(vec![0; WRITE_BUDGET + 1]))
+            .unwrap_err();
+        assert!(matches!(err, p2::StreamError::Trap(_)), "{err:?}");
     }
 }
 

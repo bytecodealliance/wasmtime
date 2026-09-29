@@ -7,7 +7,6 @@ struct Component;
 
 p3::export!(Component);
 
-const RW_ALIAS_FILENAME: &str = "alias.txt";
 const RO_TEST_FILENAME: &str = "test.txt";
 const RO_EXPECTED_CONTENTS: &[u8] = b"read only test file\n";
 
@@ -39,25 +38,12 @@ async fn test_file_rename_across_perms(rw_dir: &Descriptor, ro_dir: &Descriptor)
     // Check test preconditions.
     test_ro_file_has_expected_contents(ro_dir).await;
 
-    // Create a hardlink inside the file ro dir so there are two files pointing to
-    // the read-only file.
-    ro_dir
-        .link_at(
-            PathFlags::empty(),
-            RO_TEST_FILENAME.to_owned(),
-            ro_dir,
-            RW_ALIAS_FILENAME.to_owned(),
-        )
-        .await
-        .expect("should be possible to create link inside ro file domain");
-
-    // Renaming that file into the file rw dir should fail with permissions
-    // error, otherwise it would permit opening the ro file as rw
+    // Renaming the ro dir file into the rw dir should fail with permissions error
     let err = ro_dir
         .rename_at(
-            RW_ALIAS_FILENAME.to_owned(),
+            RO_TEST_FILENAME.to_owned(),
             rw_dir,
-            RW_ALIAS_FILENAME.to_owned(),
+            RO_TEST_FILENAME.to_owned(),
         )
         .await;
     assert!(

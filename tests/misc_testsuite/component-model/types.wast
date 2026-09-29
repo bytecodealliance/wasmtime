@@ -368,7 +368,7 @@
   )
   (core instance $m (instantiate $m))
   (func (export "f") (param "a" u32) (result $t)
-    (canon lift (core func $m "f") (memory $m "m"))
+    (canon lift (core func $m "f") (memory (core memory $m "m")))
   )
 )
 

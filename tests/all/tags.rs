@@ -201,6 +201,13 @@ fn stack_switching_disallows_inlining() -> Result<()> {
 fn issue_13474_create_tag_without_gc_runtime_configured() -> Result<()> {
     let mut config = Config::new();
     config.strategy(Strategy::Winch);
+    // Disable the GC runtime explicitly, along with the proposals that
+    // require it, to exercise creating a tag without a GC runtime; this
+    // previously relied on Winch stripping these features by default.
+    config.gc_support(false);
+    config.wasm_exceptions(false);
+    config.wasm_gc(false);
+    config.wasm_function_references(false);
     // Ignore targets that don't have support for Winch just yet
     let Ok(engine) = Engine::new(&config) else {
         return Ok(());

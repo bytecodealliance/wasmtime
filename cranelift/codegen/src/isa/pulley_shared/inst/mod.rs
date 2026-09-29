@@ -40,6 +40,8 @@ mod generated {
     use super::*;
     use crate::isa::pulley_shared::lower::isle::generated_code::RawInst;
 
+    pub struct RawInstDisplay<'a>(pub &'a RawInst);
+
     include!(concat!(env!("OUT_DIR"), "/pulley_inst_gen.rs"));
 }
 
@@ -545,14 +547,10 @@ where
         vec![bytes]
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
-        match ty {
-            I8 => Ok((&[RegClass::Int], &[I8])),
-            I16 => Ok((&[RegClass::Int], &[I16])),
-            I32 => Ok((&[RegClass::Int], &[I32])),
-            I64 => Ok((&[RegClass::Int], &[I64])),
-            F32 => Ok((&[RegClass::Float], &[F32])),
-            F64 => Ok((&[RegClass::Float], &[F64])),
+    fn rc_for_type(ty: &Type) -> CodegenResult<(&[RegClass], &[Type])> {
+        match *ty {
+            I8 | I16 | I32 | I64 => Ok((&[RegClass::Int], core::slice::from_ref(ty))),
+            F32 | F64 => Ok((&[RegClass::Float], core::slice::from_ref(ty))),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
             _ if ty.is_vector() => {
                 debug_assert!(ty.bits() <= 512);
@@ -599,10 +597,6 @@ where
         32
     }
 
-    fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
-        RegClass::Int
-    }
-
     fn function_alignment() -> FunctionAlignment {
         FunctionAlignment {
             minimum: 1,
@@ -627,24 +621,29 @@ fn test_trap_encoding() {
 //=============================================================================
 // Pretty-printing of instructions.
 
-pub fn reg_name(reg: Reg) -> String {
-    match reg.to_real_reg() {
-        Some(real) => {
-            let n = real.hw_enc();
-            match (real.class(), n) {
-                (RegClass::Int, 63) => format!("sp"),
-                (RegClass::Int, 62) => format!("lr"),
-                (RegClass::Int, 61) => format!("fp"),
-                (RegClass::Int, 60) => format!("tmp0"),
-                (RegClass::Int, 59) => format!("tmp1"),
+pub struct RegNameDisplay(Reg);
 
-                (RegClass::Int, _) => format!("x{n}"),
-                (RegClass::Float, _) => format!("f{n}"),
-                (RegClass::Vector, _) => format!("v{n}"),
+impl std::fmt::Display for RegNameDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let reg = self.0;
+        match reg.to_real_reg() {
+            Some(real) => {
+                let n = real.hw_enc();
+                match (real.class(), n) {
+                    (RegClass::Int, 63) => f.write_str("sp"),
+                    (RegClass::Int, 62) => f.write_str("lr"),
+                    (RegClass::Int, 61) => f.write_str("fp"),
+                    (RegClass::Int, 60) => f.write_str("tmp0"),
+                    (RegClass::Int, 59) => f.write_str("tmp1"),
+
+                    (RegClass::Int, _) => write!(f, "x{n}"),
+                    (RegClass::Float, _) => write!(f, "f{n}"),
+                    (RegClass::Vector, _) => write!(f, "v{n}"),
+                }
             }
-        }
-        None => {
-            format!("{reg:?}")
+            None => {
+                write!(f, "{reg:?}")
+            }
         }
     }
 }
@@ -664,14 +663,12 @@ impl Inst {
     {
         use core::fmt::Write;
 
-        let format_reg = |reg: Reg| -> String { reg_name(reg) };
-
         match self {
             Inst::Args { args } => {
                 let mut s = "args".to_string();
                 for arg in args {
-                    let preg = format_reg(arg.preg);
-                    let def = format_reg(arg.vreg.to_reg());
+                    let preg = RegNameDisplay(arg.preg);
+                    let def = RegNameDisplay(arg.vreg.to_reg());
                     write!(&mut s, " {def}={preg}").unwrap();
                 }
                 s
@@ -679,15 +676,15 @@ impl Inst {
             Inst::Rets { rets } => {
                 let mut s = "rets".to_string();
                 for ret in rets {
-                    let preg = format_reg(ret.preg);
-                    let vreg = format_reg(ret.vreg);
+                    let preg = RegNameDisplay(ret.preg);
+                    let vreg = RegNameDisplay(ret.vreg);
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
             }
 
             Inst::DummyUse { reg } => {
-                let reg = format_reg(*reg);
+                let reg = RegNameDisplay(*reg);
                 format!("dummy_use {reg}")
             }
 
@@ -698,18 +695,18 @@ impl Inst {
             Inst::Nop => format!("nop"),
 
             Inst::GetSpecial { dst, reg } => {
-                let dst = format_reg(*dst.to_reg());
-                let reg = format_reg(**reg);
+                let dst = RegNameDisplay(*dst.to_reg());
+                let reg = RegNameDisplay(**reg);
                 format!("xmov {dst}, {reg}")
             }
 
             Inst::LoadExtNameNear { dst, name, offset } => {
-                let dst = format_reg(*dst.to_reg());
+                let dst = RegNameDisplay(*dst.to_reg());
                 format!("{dst} = load_ext_name_near {name:?}, {offset}")
             }
 
             Inst::LoadExtNameFar { dst, name, offset } => {
-                let dst = format_reg(*dst.to_reg());
+                let dst = RegNameDisplay(*dst.to_reg());
                 format!("{dst} = load_ext_name_far {name:?}, {offset}")
             }
 
@@ -723,7 +720,7 @@ impl Inst {
             }
 
             Inst::IndirectCall { info } => {
-                let callee = format_reg(*info.dest);
+                let callee = RegNameDisplay(*info.dest);
                 let try_call = info
                     .try_call_info
                     .as_ref()
@@ -737,7 +734,7 @@ impl Inst {
             }
 
             Inst::ReturnIndirectCall { info } => {
-                let callee = format_reg(*info.dest);
+                let callee = RegNameDisplay(*info.dest);
                 format!("return_indirect_call {callee}, {info:?}")
             }
 
@@ -763,7 +760,7 @@ impl Inst {
             }
 
             Inst::LoadAddr { dst, mem } => {
-                let dst = format_reg(*dst.to_reg());
+                let dst = RegNameDisplay(*dst.to_reg());
                 let mem = mem.to_string();
                 format!("{dst} = load_addr {mem}")
             }
@@ -774,7 +771,7 @@ impl Inst {
                 ty,
                 flags,
             } => {
-                let dst = format_reg(*dst.to_reg());
+                let dst = RegNameDisplay(*dst.to_reg());
                 let ty = ty.bits();
                 let mem = mem.to_string();
                 format!("{dst} = xload{ty} {mem} // flags ={flags}")
@@ -788,7 +785,7 @@ impl Inst {
             } => {
                 let ty = ty.bits();
                 let mem = mem.to_string();
-                let src = format_reg(**src);
+                let src = RegNameDisplay(**src);
                 format!("xstore{ty} {mem}, {src} // flags = {flags}")
             }
 
@@ -798,7 +795,7 @@ impl Inst {
                 ty,
                 flags,
             } => {
-                let dst = format_reg(*dst.to_reg());
+                let dst = RegNameDisplay(*dst.to_reg());
                 let ty = ty.bits();
                 let mem = mem.to_string();
                 format!("{dst} = fload{ty} {mem} // flags ={flags}")
@@ -812,7 +809,7 @@ impl Inst {
             } => {
                 let ty = ty.bits();
                 let mem = mem.to_string();
-                let src = format_reg(**src);
+                let src = RegNameDisplay(**src);
                 format!("fstore{ty} {mem}, {src} // flags = {flags}")
             }
 
@@ -822,7 +819,7 @@ impl Inst {
                 ty,
                 flags,
             } => {
-                let dst = format_reg(*dst.to_reg());
+                let dst = RegNameDisplay(*dst.to_reg());
                 let ty = ty.bits();
                 let mem = mem.to_string();
                 format!("{dst} = vload{ty} {mem} // flags ={flags}")
@@ -836,7 +833,7 @@ impl Inst {
             } => {
                 let ty = ty.bits();
                 let mem = mem.to_string();
-                let src = format_reg(**src);
+                let src = RegNameDisplay(**src);
                 format!("vstore{ty} {mem}, {src} // flags = {flags}")
             }
 
@@ -845,15 +842,15 @@ impl Inst {
                 default,
                 targets,
             } => {
-                let idx = format_reg(**idx);
+                let idx = RegNameDisplay(**idx);
                 format!("br_table {idx} {default:?} {targets:?}")
             }
-            Inst::Raw { raw } => generated::print(raw),
+            Inst::Raw { raw } => format!("{}", generated::RawInstDisplay(raw)),
 
             Inst::EmitIsland { space_needed } => format!("emit_island {space_needed}"),
 
             Inst::LabelAddress { dst, label } => {
-                let dst = format_reg(dst.to_reg().to_reg());
+                let dst = RegNameDisplay(dst.to_reg().to_reg());
                 format!("label_address {dst}, {label:?}")
             }
 

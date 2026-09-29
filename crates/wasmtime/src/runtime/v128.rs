@@ -74,8 +74,6 @@ impl Ord for V128 {
     }
 }
 
-// Note that this trait is conditionally implemented which is intentional. See
-// the documentation above in the `cfg_if!` for why this is conditional.
 unsafe impl WasmTy for V128 {
     #[inline]
     fn valtype() -> ValType {

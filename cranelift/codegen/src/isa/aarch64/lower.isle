@@ -412,6 +412,23 @@
                         c))))
       (sdot c a b))
 
+;; With FEAT_I8MM, fold the same tree in its mixed unsigned-by-signed form
+;; into a single `usdot`. This is the shape quantized inference produces —
+;; unsigned activations against signed weights — and it differs from the
+;; `sdot` case above only in that one operand widens unsigned.
+(rule 9 (lower (and (use_i8mm)
+                    (has_type $I32X4
+                      (iadd _
+                        (iadd_pairwise _
+                          (iadd_pairwise _
+                            (swiden_low _ lo @ (imul _ (uwiden_low _ a) (swiden_low _ b)))
+                            (swiden_high _ lo))
+                          (iadd_pairwise _
+                            (swiden_low _ hi @ (imul _ (uwiden_high _ a) (swiden_high _ b)))
+                            (swiden_high _ hi)))
+                        c))))
+      (usdot c a b))
+
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (iabs ty @ (multi_lane _ _) x))
@@ -1200,35 +1217,16 @@
 
 ;;; Rules for integer min/max: umin, smin, umax, smax ;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; `i64` and smaller.
+;; Scalar integers.
 
-;; cmp     $x, $y
-;; csel    .., $x, $y, $cc
-(attr cmp_and_choose (veri chain))
-(decl cmp_and_choose (Type Cond bool Value Value) ValueRegs)
-(rule (cmp_and_choose (fits_in_64 ty) cc _ x y)
-      (let ((x Reg (put_in_reg x))
-            (y Reg (put_in_reg y)))
-       (with_flags_reg (cmp (operand_size ty) x y)
-                       (csel cc x y))))
-
-;; `i16` and `i8` min/max require sign extension as
-;; the comparison operates on (at least) 32 bits.
-(attr rule cmp_and_choose_8_16 (veri priority))
-(rule cmp_and_choose_8_16 1 (cmp_and_choose (fits_in_16 ty) cc signed x y)
-      (let ((x Reg (extend (put_in_reg x) signed (ty_bits ty) 32))
-            (y Reg (extend (put_in_reg y) signed (ty_bits ty) 32)))
-      (with_flags_reg (cmp (operand_size ty) x y)
-                      (csel cc x y))))
-
-(rule umin 2 (lower (umin (and (fits_in_64 ty) (ty_int _)) x y))
-      (cmp_and_choose ty (Cond.Lo) false x y))
-(rule smin 2 (lower (smin (and (fits_in_64 ty) (ty_int _)) x y))
-      (cmp_and_choose ty (Cond.Lt) true x y))
-(rule umax 2 (lower (umax (and (fits_in_64 ty) (ty_int _)) x y))
-      (cmp_and_choose ty (Cond.Hi) false x y))
-(rule smax 2 (lower (smax (and (fits_in_64 ty) (ty_int _)) x y))
-      (cmp_and_choose ty (Cond.Gt) true x y))
+(rule umin 2 (lower (umin (ty_int ty) x y))
+      (lower_select ty (emit_icmp (IntCC.UnsignedLessThan) x y) x y))
+(rule smin 2 (lower (smin (ty_int ty) x y))
+      (lower_select ty (emit_icmp (IntCC.SignedLessThan) x y) x y))
+(rule umax 2 (lower (umax (ty_int ty) x y))
+      (lower_select ty (emit_icmp (IntCC.UnsignedGreaterThan) x y) x y))
+(rule smax 2 (lower (smax (ty_int ty) x y))
+      (lower_select ty (emit_icmp (IntCC.SignedGreaterThan) x y) x y))
 
 ;; Vector types.
 
@@ -1274,6 +1272,16 @@
 (rule 1 (lower (uextend (fits_in_64 out) x @ (and (value_type in) (atomic_load _ (little_or_native_endian flags) _))))
       (if-let mem_op (is_sinkable_inst x))
       (load_acquire in flags (sink_atomic_load mem_op)))
+
+;; Lower scalar comparisons here so we know their upper bits are clear and can
+;; skip the extension.
+;;
+;; This does not hold true for vector comparisons, which instead produce a
+;; per-lane mask of either all ones or zeroes. rather than 0 or 1.
+(rule 1 (lower (uextend (fits_in_64 _) (icmp _ cond x @ (value_type (ty_int _)) y)))
+      (lower_cond_result_bool (emit_icmp cond x y)))
+(rule 1 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type (ty_scalar_float _)) y)))
+      (lower_cond_result_bool (emit_fcmp cond x y)))
 
 ;; Conversion to 128-bit needs a zero-extension of the lower bits and the upper
 ;; bits are all zero.
@@ -1436,6 +1444,11 @@
 (rule 8 (lower (band (ty_vec128 ty) (bnot _ y) x))
       (bic_vec x y (vector_size ty)))
 
+(rule 9 (lower (band (fits_in_64 (ty_scalar_float ty)) x (bnot _ y)))
+      (bic_vec x y (float_vector_size_in_64 ty)))
+(rule 10 (lower (band (fits_in_64 (ty_scalar_float ty)) (bnot _ y) x))
+      (bic_vec x y (float_vector_size_in_64 ty)))
+
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule bor_fits_in_64 -4 (lower (bor (fits_in_64 (ty_int ty)) x y))
@@ -1574,7 +1587,7 @@
 ;; Shift for vector types.
 (rule -3 (lower (ishl (ty_vec128 ty) x y))
       (let ((size VectorSize (vector_size ty))
-            (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
+            (masked_shift_amt Reg (and_imm $I32 (lo_reg y) (shift_mask ty)))
             (shift Reg (vec_dup masked_shift_amt size)))
         (sshl x shift size)))
 (rule -2 (lower (ishl (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
@@ -1645,7 +1658,7 @@
 ;; the input anyway.
 (rule -4 (lower (ushr (ty_vec128 ty) x y))
       (let ((size VectorSize (vector_size ty))
-            (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
+            (masked_shift_amt Reg (and_imm $I32 (lo_reg y) (shift_mask ty)))
             (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (ushl x shift size)))
 (rule -3 (lower (ushr (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
@@ -1691,6 +1704,23 @@
 (rule sshr_64 (lower (sshr $I64 x y))
       (do_shift (ALUOp.Asr) $I64 (put_in_reg_sext64 x) y))
 
+;; Specialized lowerings to generate a single `ubfm`/`sbfm` instruction from
+;; an appropriate pair of `ishl` and `ushr`/`sshr` operations.
+(rule sbfm 1 (lower
+  (sshr (ty_32_or_64 ty) (ishl _ x (u64_from_iconst a)) (u64_from_iconst b)))
+  (bitfield_move ty (BfmOp.SBfm) x (bfm_immr ty a b) (bfm_imms ty a b)))
+(rule ubfm 1 (lower
+  (ushr (ty_32_or_64 ty) (ishl _ x (u64_from_iconst a)) (u64_from_iconst b)))
+  (bitfield_move ty (BfmOp.UBfm) x (bfm_immr ty a b) (bfm_imms ty a b)))
+
+;; Helper methods for constructing the correct `immr` and `imms` immediates.
+(spec (bfm_immr ty a b) (provide true))
+(decl bfm_immr (Type u64 u64) UImm6)
+(extern constructor bfm_immr bfm_immr)
+(spec (bfm_imms ty a b) (provide true))
+(decl bfm_imms (Type u64 u64) UImm6)
+(extern constructor bfm_imms bfm_imms)
+
 ;; Shift for i128.
 (rule (lower (sshr $I128 x y))
       (lower_sshr128 x (value_regs_get y 0)))
@@ -1703,7 +1733,7 @@
 ;; input anyway.
 (rule -3 (lower (sshr (ty_vec128 ty) x y))
       (let ((size VectorSize (vector_size ty))
-            (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
+            (masked_shift_amt Reg (and_imm $I32 (lo_reg y) (shift_mask ty)))
             (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (sshl x shift size)))
 (rule -2 (lower (sshr (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
@@ -2091,6 +2121,25 @@
             (tmp2 Reg (bic ty y c)))
         (orr ty tmp1 tmp2)))
 
+(attr rule bitselect_i128 (tag i128))
+(rule bitselect_i128 2 (lower (bitselect $I128 c x y))
+      (let ((c ValueRegs (put_in_regs c))
+            (x ValueRegs (put_in_regs x))
+            (y ValueRegs (put_in_regs y))
+            (c_lo Reg (value_regs_get c 0))
+            (c_hi Reg (value_regs_get c 1))
+            (x_lo Reg (value_regs_get x 0))
+            (x_hi Reg (value_regs_get x 1))
+            (y_lo Reg (value_regs_get y 0))
+            (y_hi Reg (value_regs_get y 1))
+            (tmp1_lo Reg (and_reg $I64 x_lo c_lo))
+            (tmp1_hi Reg (and_reg $I64 x_hi c_hi))
+            (tmp2_lo Reg (bic $I64 y_lo c_lo))
+            (tmp2_hi Reg (bic $I64 y_hi c_hi))
+            (res_lo Reg (orr $I64 tmp1_lo tmp2_lo))
+            (res_hi Reg (orr $I64 tmp1_hi tmp2_hi)))
+        (value_regs res_lo res_hi)))
+
 (rule 1 (lower (bitselect (ty_vec128 ty) c x y))
         (bsl ty c x y))
 
@@ -2129,7 +2178,7 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero_swap cond rn vec_size))))
 
-(rule 0 (lower (fcmp _ cond x @ (value_type (ty_scalar_float in_ty)) y))
+(rule 0 (lower (fcmp _ cond x @ (value_type (ty_scalar_float _)) y))
   (lower_cond_result_bool (emit_fcmp cond x y)))
 
 (rule -1 (lower (fcmp _ cond x @ (value_type in_ty) y))
@@ -2168,10 +2217,12 @@
         (rm Reg (put_in_reg y)))
    (vec_cmp rn rm in_ty cond)))
 
-(rule -2 (lower (icmp _ cond x @ (value_type (ty_int ty)) y))
+(rule -2 (lower (icmp _ cond x @ (value_type (ty_int _)) y))
   (lower_cond_result_bool (emit_icmp cond x y)))
 
 ;; Helper to put a `CondResult` into a general register.
+;;
+;; Upper bits of the result register are zeroed.
 (decl lower_cond_result_bool (CondResult) Reg)
 (rule (lower_cond_result_bool (CondResult.Zero reg size))
   (value_regs_get (with_flags (cmp_imm size reg (u8_into_imm12 0)) (cset (Cond.Eq))) 0))
@@ -2335,6 +2386,11 @@
 (rule 1 (lower (and (use_lse)
                   (atomic_cas (valid_atomic_transaction ty) (little_or_native_endian flags) addr src1 src2)))
       (lse_atomic_cas addr src1 src2 ty flags))
+
+(attr rule lse_atomic_cas_i128 (tag atomics))
+(rule lse_atomic_cas_i128 2 (lower (and (use_lse)
+                  (atomic_cas $I128 (little_or_native_endian flags) addr expect replace)))
+      (lse_atomic_cas_128 addr expect replace flags))
 
 (rule (lower (and (atomic_cas (valid_atomic_transaction ty) (little_or_native_endian flags) addr src1 src2)))
       (atomic_cas_loop addr src1 src2 ty flags))
@@ -2823,7 +2879,7 @@
 ;; in https://github.com/bytecodealliance/wasmtime/issues/2296,
 ;; although they are not used here.
 
-(rule (lower (vhigh_bits _ vec @ (value_type $I8X16)))
+(rule (lower (vhigh_bits _ vec @ (value_type (multi_lane 8 16))))
       (let (
             ;; Replicate the MSB of each of the 16 byte lanes across
             ;; the whole lane (sshr is an arithmetic right shift).
@@ -2847,7 +2903,7 @@
             (result Reg (addv zipped (VectorSize.Size16x8))))
         (mov_from_vec result 0 (ScalarSize.Size16))))
 
-(rule (lower (vhigh_bits _ vec @ (value_type $I16X8)))
+(rule (lower (vhigh_bits _ vec @ (value_type (multi_lane 16 8))))
       (let (
             ;; Replicate the MSB of each of the 8 16-bit lanes across
             ;; the whole lane (sshr is an arithmetic right shift).
@@ -2860,7 +2916,7 @@
             (result Reg (addv anded (VectorSize.Size16x8))))
         (mov_from_vec result 0 (ScalarSize.Size16))))
 
-(rule (lower (vhigh_bits _ vec @ (value_type $I32X4)))
+(rule (lower (vhigh_bits _ vec @ (value_type (multi_lane 32 4))))
       (let (
             ;; Replicate the MSB of each of the 4 32-bit lanes across
             ;; the whole lane (sshr is an arithmetic right shift).
@@ -2873,7 +2929,7 @@
             (result Reg (addv anded (VectorSize.Size32x4))))
         (mov_from_vec result 0 (ScalarSize.Size32))))
 
-(rule (lower (vhigh_bits _ vec @ (value_type $I64X2)))
+(rule (lower (vhigh_bits _ vec @ (value_type (multi_lane 64 2))))
       (let (
             ;; Grab the MSB out of each of the lanes, right-shift to
             ;; LSB, and add with a left-shift of upper lane's MSB back
@@ -2965,6 +3021,13 @@
 
 ;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; The flags output of a `uadd_overflow` that is not demanded as a materialized
+;; bool (i.e., its only use(s) were folded into consumers such as a `brif` that
+;; consume the flags directly) does not need a `cset`; emit just the `adds`.
+(rule 3 (lower i @ (uadd_overflow (ty_32_or_64 ty) x y))
+        (if-let false (second_result_used i))
+        (output_pair (add ty x y) (value_regs_invalid)))
+
 ;; For values smaller than a register, we do a normal `add` with both arguments
 ;; zero extended. We then check if the output is the same as itself zero extended.
 (rule 1 (lower (uadd_overflow (fits_in_16 ty) a b))
@@ -3040,6 +3103,24 @@
 
 ;;;; Rules for `umul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; The flags output of a `umul_overflow` that is not demanded as a
+;; materialized bool (i.e., its only use(s) were folded into consumers such
+;; as a `brif` that consume the flags directly) does not need the
+;; `cmp`/`cset`; emit just the multiply.
+(rule 5 (lower i @ (umul_overflow (fits_in_16 ty) a b))
+        (if-let false (second_result_used i))
+        (let ((a_uext Reg (put_in_reg_zext32 a))
+              (b_uext Reg (put_in_reg_zext32 b)))
+          (output_pair (madd ty a_uext b_uext (zero_reg)) (value_regs_invalid))))
+
+(rule 4 (lower i @ (umul_overflow $I32 a b))
+        (if-let false (second_result_used i))
+        (output_pair (umaddl a b (zero_reg)) (value_regs_invalid)))
+
+(rule 3 (lower i @ (umul_overflow $I64 a b))
+        (if-let false (second_result_used i))
+        (output_pair (madd $I64 a b (zero_reg)) (value_regs_invalid)))
+
 ;; uxt{b,h} a_ext, a
 ;; uxt{b,h} b_ext, b
 ;; mul out, a_ext, b_ext
@@ -3087,6 +3168,22 @@
              (value_reg out_of))))
 
 ;;;; Rules for `smul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; As for `umul_overflow` above: when the flags output is only consumed
+;; folded (e.g., by a `brif`), emit just the multiply.
+(rule 5 (lower i @ (smul_overflow (fits_in_16 ty) a b))
+        (if-let false (second_result_used i))
+        (let ((a_sext Reg (put_in_reg_sext32 a))
+              (b_sext Reg (put_in_reg_sext32 b)))
+          (output_pair (madd ty a_sext b_sext (zero_reg)) (value_regs_invalid))))
+
+(rule 4 (lower i @ (smul_overflow $I32 a b))
+        (if-let false (second_result_used i))
+        (output_pair (smaddl a b (zero_reg)) (value_regs_invalid)))
+
+(rule 3 (lower i @ (smul_overflow $I64 a b))
+        (if-let false (second_result_used i))
+        (output_pair (madd $I64 a b (zero_reg)) (value_regs_invalid)))
 
 ;; sxt{b,h} a_ext, a
 ;; sxt{b,h} b_ext, b

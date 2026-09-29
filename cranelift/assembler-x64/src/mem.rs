@@ -104,21 +104,24 @@ impl From<i32> for AmodeOffset {
 impl core::fmt::LowerHex for AmodeOffset {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         // This rather complex implementation is necessary to match how
-        // `capstone` pretty-prints memory immediates.
+        // `capstone` pretty-prints memory immediates; XED (the alternate form)
+        // always uses hexadecimal.
         if self.0 == 0 {
             return Ok(());
         }
         if self.0 < 0 {
             write!(f, "-")?;
         }
-        if self.0 > 9 || self.0 < -9 {
+        if f.alternate() || self.0 > 9 || self.0 < -9 {
             write!(f, "0x")?;
         }
         let abs = match self.0.checked_abs() {
             Some(i) => i,
             None => -2_147_483_648,
         };
-        core::fmt::LowerHex::fmt(&abs, f)
+        // Not `LowerHex::fmt(&abs, f)`: `f` may carry the alternate flag, which
+        // would make the integer emit a second `0x`.
+        write!(f, "{abs:x}")
     }
 }
 
@@ -177,12 +180,18 @@ pub enum DeferredTarget {
 impl<R: AsReg> core::fmt::Display for Amode<R> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let pointer_width = Size::Quadword;
+        // XED prints no space after the commas and always states the scale.
+        let xed = f.alternate();
         match self {
             Amode::ImmReg { simm32, base, .. } => {
                 // Note: size is always 8; the address is 64 bits,
                 // even if the addressed operand is smaller.
                 let base = base.to_string(Some(pointer_width));
-                write!(f, "{simm32:x}({base})")
+                if xed {
+                    write!(f, "{simm32:#x}({base})")
+                } else {
+                    write!(f, "{simm32:x}({base})")
+                }
             }
             Amode::ImmRegRegShift {
                 simm32,
@@ -194,7 +203,9 @@ impl<R: AsReg> core::fmt::Display for Amode<R> {
                 let base = base.to_string(Some(pointer_width));
                 let index = index.to_string(pointer_width);
                 let shift = scale.shift();
-                if shift > 1 {
+                if xed {
+                    write!(f, "{simm32:#x}({base},{index},{shift})")
+                } else if shift > 1 {
                     write!(f, "{simm32:x}({base}, {index}, {shift})")
                 } else {
                     write!(f, "{simm32:x}({base}, {index})")
@@ -265,11 +276,25 @@ pub enum GprMem<R: AsReg, M: AsReg> {
 }
 
 impl<R: AsReg, M: AsReg> GprMem<R, M> {
+    /// Whether this operand is a memory reference.
+    #[must_use]
+    pub fn is_memory(&self) -> bool {
+        matches!(self, GprMem::Mem(_))
+    }
+
     /// Pretty-print the operand.
     pub fn to_string(&self, size: Size) -> String {
         match self {
             GprMem::Gpr(gpr) => gpr.to_string(Some(size)),
             GprMem::Mem(amode) => amode.to_string(),
+        }
+    }
+
+    /// Pretty-print the operand in XED's dialect; see [`Amode`]'s `Display`.
+    pub fn to_string_xed(&self, size: Size) -> String {
+        match self {
+            GprMem::Gpr(gpr) => gpr.to_string(Some(size)),
+            GprMem::Mem(amode) => alloc::format!("{amode:#}"),
         }
     }
 
@@ -334,11 +359,25 @@ pub enum XmmMem<R: AsReg, M: AsReg> {
 }
 
 impl<R: AsReg, M: AsReg> XmmMem<R, M> {
+    /// Whether this operand is a memory reference.
+    #[must_use]
+    pub fn is_memory(&self) -> bool {
+        matches!(self, XmmMem::Mem(_))
+    }
+
     /// Pretty-print the operand.
     pub fn to_string(&self) -> String {
         match self {
             XmmMem::Xmm(xmm) => xmm.to_string(None),
             XmmMem::Mem(amode) => amode.to_string(),
+        }
+    }
+
+    /// Pretty-print the operand in XED's dialect; see [`Amode`]'s `Display`.
+    pub fn to_string_xed(&self) -> String {
+        match self {
+            XmmMem::Xmm(xmm) => xmm.to_string(None),
+            XmmMem::Mem(amode) => alloc::format!("{amode:#}"),
         }
     }
 

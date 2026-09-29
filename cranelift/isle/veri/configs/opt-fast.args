@@ -1,0 +1,12 @@
+# Default mid-end verification run.
+#
+# Verifies the `simplify` rewrites while skipping the default set of tags that
+# are not yet well supported (vector, atomics, spectre, narrowfloat,
+# amode_const, i128, wasm_category_stack) or are slow to verify (slow).
+#
+# Note that `slow` also gates instantiation sets, not just expansions: the
+# shift and rotate terms instantiate a reduced set of operand/amount width
+# combinations here. See `opt.args` for the exhaustive cross product.
+--name opt
+--only-root simplify
+--default-excludes

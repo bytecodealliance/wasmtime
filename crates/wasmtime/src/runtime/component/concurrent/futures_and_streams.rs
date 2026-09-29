@@ -6,8 +6,8 @@ use crate::component::matching::InstanceType;
 use crate::component::types;
 use crate::component::values::ErrorContextAny;
 use crate::component::{
-    AsAccessor, ComponentInstanceId, ComponentType, FutureAny, Instance, Lift, Lower, StreamAny,
-    Val, WasmList,
+    AsAccessor, ComponentInstanceId, ComponentType, FutureAny, Instance, Lift, Lower,
+    RuntimeInstance, StreamAny, Val, WasmList,
 };
 use crate::prelude::*;
 use crate::store::{StoreOpaque, StoreToken};
@@ -2303,6 +2303,60 @@ fn return_code(kind: TransmitKind, state: StreamResult, count: ItemCount) -> Res
     })
 }
 
+fn settle_host_read(
+    transmit: &mut TransmitState,
+    kind: TransmitKind,
+    state: StreamResult,
+) -> Result<ReturnCode> {
+    let ReadState::HostReady {
+        consume,
+        guest_offset,
+        ..
+    } = mem::replace(&mut transmit.read, ReadState::Open)
+    else {
+        bail_bug!("expected ReadState::HostReady")
+    };
+    let code = return_code(kind, state, guest_offset)?;
+    transmit.read = match state {
+        StreamResult::Dropped => ReadState::Dropped,
+        StreamResult::Completed | StreamResult::Cancelled => ReadState::HostReady {
+            consume,
+            guest_offset: ItemCount::ZERO,
+            cancel: false,
+            cancel_waker: None,
+        },
+    };
+    Ok(code)
+}
+
+fn settle_host_write(
+    transmit: &mut TransmitState,
+    kind: TransmitKind,
+    state: StreamResult,
+) -> Result<ReturnCode> {
+    let WriteState::HostReady {
+        produce,
+        try_into,
+        guest_offset,
+        ..
+    } = mem::replace(&mut transmit.write, WriteState::Open)
+    else {
+        bail_bug!("expected WriteState::HostReady")
+    };
+    let code = return_code(kind, state, guest_offset)?;
+    transmit.write = match state {
+        StreamResult::Dropped => WriteState::Dropped,
+        StreamResult::Completed | StreamResult::Cancelled => WriteState::HostReady {
+            produce,
+            try_into,
+            guest_offset: ItemCount::ZERO,
+            cancel: false,
+            cancel_waker: None,
+        },
+    };
+    Ok(code)
+}
+
 impl StoreOpaque {
     fn pipe_from_guest(
         &mut self,
@@ -2315,24 +2369,7 @@ impl StoreOpaque {
             tls::get(|store| {
                 let state = store.concurrent_state_mut()?;
                 let transmit = state.get_mut(id)?;
-                let ReadState::HostReady {
-                    consume,
-                    guest_offset,
-                    ..
-                } = mem::replace(&mut transmit.read, ReadState::Open)
-                else {
-                    bail_bug!("expected ReadState::HostReady")
-                };
-                let code = return_code(kind, stream_state, guest_offset)?;
-                transmit.read = match stream_state {
-                    StreamResult::Dropped => ReadState::Dropped,
-                    StreamResult::Completed | StreamResult::Cancelled => ReadState::HostReady {
-                        consume,
-                        guest_offset: ItemCount::ZERO,
-                        cancel: false,
-                        cancel_waker: None,
-                    },
-                };
+                let code = settle_host_read(transmit, kind, stream_state)?;
                 let WriteState::GuestReady { ty, handle, .. } =
                     mem::replace(&mut transmit.write, WriteState::Open)
                 else {
@@ -2358,26 +2395,7 @@ impl StoreOpaque {
             tls::get(|store| {
                 let state = store.concurrent_state_mut()?;
                 let transmit = state.get_mut(id)?;
-                let WriteState::HostReady {
-                    produce,
-                    try_into,
-                    guest_offset,
-                    ..
-                } = mem::replace(&mut transmit.write, WriteState::Open)
-                else {
-                    bail_bug!("expected WriteState::HostReady")
-                };
-                let code = return_code(kind, stream_state, guest_offset)?;
-                transmit.write = match stream_state {
-                    StreamResult::Dropped => WriteState::Dropped,
-                    StreamResult::Completed | StreamResult::Cancelled => WriteState::HostReady {
-                        produce,
-                        try_into,
-                        guest_offset: ItemCount::ZERO,
-                        cancel: false,
-                        cancel_waker: None,
-                    },
-                };
+                let code = settle_host_write(transmit, kind, stream_state)?;
                 let ReadState::GuestReady { ty, handle, .. } =
                     mem::replace(&mut transmit.read, ReadState::Open)
                 else {
@@ -2478,7 +2496,7 @@ impl StoreOpaque {
             .get_mut(transmit_id)
             .with_context(|| format!("error closing writer {transmit_id:?}"))?;
         log::trace!(
-            "host_drop_writer state {transmit_id:?}; write state {:?} read state {:?}",
+            "host_drop_writer state {transmit_id:?}; read state {:?} writer state {:?}",
             transmit.read,
             transmit.write
         );
@@ -3159,10 +3177,7 @@ impl Instance {
         Ok(match poll {
             Poll::Ready(state) => {
                 let transmit = store.concurrent_state_mut()?.get_mut(transmit_id)?;
-                let ReadState::HostReady { guest_offset, .. } = &mut transmit.read else {
-                    bail_bug!("expected ReadState::HostReady")
-                };
-                let code = return_code(kind, state?, mem::replace(guest_offset, ItemCount::ZERO))?;
+                let code = settle_host_read(transmit, kind, state?)?;
                 transmit.write = WriteState::Open;
                 code
             }
@@ -3202,10 +3217,7 @@ impl Instance {
         Ok(match poll {
             Poll::Ready(state) => {
                 let transmit = store.concurrent_state_mut()?.get_mut(transmit_id)?;
-                let WriteState::HostReady { guest_offset, .. } = &mut transmit.write else {
-                    bail_bug!("expected WriteState::HostReady")
-                };
-                let code = return_code(kind, state?, mem::replace(guest_offset, ItemCount::ZERO))?;
+                let code = settle_host_write(transmit, kind, state?)?;
                 transmit.read = ReadState::Open;
                 code
             }
@@ -3224,9 +3236,9 @@ impl Instance {
         writer: u32,
     ) -> Result<()> {
         let table = self.id().get_mut(store).table_for_transmit(ty);
-        let transmit_rep = match ty {
+        let (transmit_rep, is_done) = match ty {
             TransmitIndex::Future(ty) => table.future_remove_writable(ty, writer)?,
-            TransmitIndex::Stream(ty) => table.stream_remove_writable(ty, writer)?,
+            TransmitIndex::Stream(ty) => (table.stream_remove_writable(ty, writer)?, false),
         };
 
         let id = TableId::<TransmitHandle>::new(transmit_rep);
@@ -3235,11 +3247,15 @@ impl Instance {
             TransmitIndex::Stream(_) => store.host_drop_writer(id, None),
             TransmitIndex::Future(_) => store.host_drop_writer(
                 id,
-                Some(|| {
-                    Err(format_err!(
-                        "cannot drop future write end without first writing a value"
-                    ))
-                }),
+                if is_done {
+                    None
+                } else {
+                    Some(|| {
+                        Err(format_err!(
+                            "cannot drop future write end without first writing a value"
+                        ))
+                    })
+                },
             ),
         }
     }
@@ -3249,13 +3265,11 @@ impl Instance {
     fn copy<T: 'static>(
         store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
-        write_instance: Instance,
-        write_caller_instance: RuntimeComponentInstanceIndex,
+        write_runtime_instance: RuntimeInstance,
         write_ty: TransmitIndex,
         write_options: OptionsIndex,
         write_address: usize,
-        read_instance: Instance,
-        read_caller_instance: RuntimeComponentInstanceIndex,
+        read_runtime_instance: RuntimeInstance,
         read_caller_thread: QualifiedThreadId,
         read_ty: TransmitIndex,
         read_options: OptionsIndex,
@@ -3263,6 +3277,8 @@ impl Instance {
         count: ItemCount,
         rep: u32,
     ) -> Result<()> {
+        let write_instance = Instance::from_runtime_instance(store.0, write_runtime_instance);
+        let read_instance = Instance::from_runtime_instance(store.0, read_runtime_instance);
         let (write_component, store) = write_instance.component_and_store_mut(store.0);
         let (read_component, mut store) = read_instance.component_and_store_mut(store);
         let write_types = write_component.types();
@@ -3311,7 +3327,7 @@ impl Instance {
                 .ok_or_else(|| crate::format_err!("read pointer out of bounds"))?;
         }
 
-        if write_caller_instance == read_caller_instance
+        if write_runtime_instance == read_runtime_instance
             && !allow_intra_component_read_write(write_payload_ty)
         {
             bail!(
@@ -3486,23 +3502,12 @@ impl Instance {
     ) -> Result<ReturnCode> {
         let count = ItemCount::new(count)?;
 
-        if !self.options(store.0, options).async_ {
-            // The caller may only sync call `{stream,future}.write` from an
-            // async task (i.e. a task created via a call to an async export).
-            // Otherwise, we'll trap.
-            store.0.check_blocking()?;
-        }
-
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Write { done } = *state else {
             bail!(Trap::ConcurrentFutureStreamOp);
         };
-
-        if done {
-            bail!("cannot write after being notified that the readable end dropped");
-        }
 
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
@@ -3514,8 +3519,11 @@ impl Instance {
             transmit.read
         );
 
-        if transmit.done {
-            bail!("cannot write to future after previous write succeeded or readable end dropped");
+        if done || transmit.done {
+            bail!(match ty {
+                TransmitIndex::Future(_) => Trap::WriteToDroppedFuture,
+                TransmitIndex::Stream(_) => Trap::WriteToDroppedStream,
+            });
         }
 
         let new_state = if let ReadState::Dropped = &transmit.read {
@@ -3583,6 +3591,7 @@ impl Instance {
                 // read).
                 // ```
 
+                let write_count = count;
                 let write_complete = count == 0 || read_count > 0;
                 let read_complete = count > 0;
                 let read_buffer_remaining = count < read_count;
@@ -3594,13 +3603,11 @@ impl Instance {
                 Instance::copy(
                     store.as_context_mut(),
                     flat_abi,
-                    self,
-                    caller,
+                    self.runtime_instance(caller),
                     ty,
                     options,
                     address,
-                    read_instance,
-                    read_caller_instance,
+                    read_instance.runtime_instance(read_caller_instance),
                     read_caller_thread,
                     read_ty,
                     read_options,
@@ -3638,7 +3645,7 @@ impl Instance {
                 // zero-length rendezvous case this specifically won't execute
                 // the `read_complete` logic above, which is intentional, as the
                 // reader remains blocked.
-                if read_buffer_remaining || (count == 0 && read_count == 0) {
+                if read_buffer_remaining || (write_count == 0 && read_count == 0) {
                     let transmit = concurrent_state.get_mut(transmit_id)?;
                     transmit.read = ReadState::GuestReady {
                         ty: read_ty,
@@ -3704,12 +3711,26 @@ impl Instance {
                     transmit.done = true;
                 }
 
+                match Waitable::Transmit(transmit_handle).take_event(concurrent_state)? {
+                    Some(
+                        Event::StreamWrite {
+                            code: ReturnCode::Dropped(ItemCount::ZERO),
+                            ..
+                        }
+                        | Event::FutureWrite {
+                            code: ReturnCode::Dropped(ItemCount::ZERO),
+                            ..
+                        },
+                    ) => {}
+                    event => bail_bug!("expected pending dropped event for writer; got {event:?}"),
+                }
+
                 ReturnCode::Dropped(ItemCount::ZERO)
             }
         };
 
         if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
-            result = self.wait_for_write(store.0, transmit_handle)?;
+            result = self.wait_for_write(store.0, caller, transmit_handle)?;
         }
 
         if result != ReturnCode::Blocked {
@@ -3740,23 +3761,12 @@ impl Instance {
     ) -> Result<ReturnCode> {
         let count = ItemCount::new(count)?;
 
-        if !self.options(store.0, options).async_ {
-            // The caller may only sync call `{stream,future}.read` from an
-            // async task (i.e. a task created via a call to an async export).
-            // Otherwise, we'll trap.
-            store.0.check_blocking()?;
-        }
-
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Read { done } = *state else {
             bail!(Trap::ConcurrentFutureStreamOp);
         };
-
-        if done {
-            bail!("cannot read after being notified that the writable end dropped");
-        }
 
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
@@ -3769,8 +3779,13 @@ impl Instance {
             transmit.write
         );
 
-        if transmit.done {
-            bail!("cannot read from future after previous read succeeded");
+        if done || transmit.done {
+            match ty {
+                TransmitIndex::Future(_) => {
+                    bail!("cannot read from future after previous read succeeded")
+                }
+                TransmitIndex::Stream(_) => bail!(Trap::ReadFromDroppedStream),
+            }
         }
 
         let new_state = if let WriteState::Dropped = &transmit.write {
@@ -3832,13 +3847,11 @@ impl Instance {
                 Instance::copy(
                     store.as_context_mut(),
                     flat_abi,
-                    write_instance,
-                    write_caller,
+                    write_instance.runtime_instance(write_caller),
                     write_ty,
                     write_options,
                     write_address,
-                    self,
-                    caller_instance,
+                    self.runtime_instance(caller_instance),
                     caller_thread,
                     ty,
                     options,
@@ -3939,11 +3952,27 @@ impl Instance {
                 ReturnCode::Blocked
             }
 
-            WriteState::Dropped => ReturnCode::Dropped(ItemCount::ZERO),
+            WriteState::Dropped => {
+                if let TransmitIndex::Future(_) = ty {
+                    bail_bug!(
+                        "should not be possible to read from a future whose write end was dropped"
+                    );
+                }
+
+                match Waitable::Transmit(transmit_handle).take_event(concurrent_state)? {
+                    Some(Event::StreamRead {
+                        code: ReturnCode::Dropped(ItemCount::ZERO),
+                        ..
+                    }) => {}
+                    event => bail_bug!("expected pending dropped event for reader; got {event:?}"),
+                }
+
+                ReturnCode::Dropped(ItemCount::ZERO)
+            }
         };
 
         if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
-            result = self.wait_for_read(store.0, transmit_handle)?;
+            result = self.wait_for_read(store.0, caller_instance, transmit_handle)?;
         }
 
         if result != ReturnCode::Blocked {
@@ -3966,10 +3995,11 @@ impl Instance {
     fn wait_for_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         handle: TableId<TransmitHandle>,
     ) -> Result<ReturnCode> {
         let waitable = Waitable::Transmit(handle);
-        store.wait_for_event(waitable)?;
+        store.wait_for_event(self.runtime_instance(caller), waitable)?;
         let event = waitable.take_event(store.concurrent_state_mut()?)?;
         if let Some(event @ (Event::StreamWrite { code, .. } | Event::FutureWrite { code, .. })) =
             event
@@ -3985,6 +4015,7 @@ impl Instance {
     fn cancel_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         transmit_id: TableId<TransmitState>,
         async_: bool,
     ) -> Result<ReturnCode> {
@@ -4031,7 +4062,7 @@ impl Instance {
                     .concurrent_state_mut()?
                     .get_mut(transmit_id)?
                     .write_handle;
-                self.wait_for_write(store, handle)?
+                self.wait_for_write(store, caller, handle)?
             }
         } else {
             ReturnCode::Cancelled(ItemCount::ZERO)
@@ -4057,10 +4088,11 @@ impl Instance {
     fn wait_for_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         handle: TableId<TransmitHandle>,
     ) -> Result<ReturnCode> {
         let waitable = Waitable::Transmit(handle);
-        store.wait_for_event(waitable)?;
+        store.wait_for_event(self.runtime_instance(caller), waitable)?;
         let event = waitable.take_event(store.concurrent_state_mut()?)?;
         if let Some(event @ (Event::StreamRead { code, .. } | Event::FutureRead { code, .. })) =
             event
@@ -4076,6 +4108,7 @@ impl Instance {
     fn cancel_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         transmit_id: TableId<TransmitState>,
         async_: bool,
     ) -> Result<ReturnCode> {
@@ -4123,7 +4156,7 @@ impl Instance {
                     .concurrent_state_mut()?
                     .get_mut(transmit_id)?
                     .read_handle;
-                self.wait_for_read(store, handle)?
+                self.wait_for_read(store, caller, handle)?
             }
         } else {
             ReturnCode::Cancelled(ItemCount::ZERO)
@@ -4152,17 +4185,11 @@ impl Instance {
     fn guest_cancel_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TransmitIndex,
         async_: bool,
         writer: u32,
     ) -> Result<ReturnCode> {
-        if !async_ {
-            // The caller may only sync call `{stream,future}.cancel-write` from
-            // an async task (i.e. a task created via a call to an async
-            // export).  Otherwise, we'll trap.
-            store.check_blocking()?;
-        }
-
         let (rep, state) =
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?;
         let id = TableId::<TransmitHandle>::new(rep);
@@ -4177,7 +4204,7 @@ impl Instance {
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
-        let code = self.cancel_write(store, transmit_id, async_)?;
+        let code = self.cancel_write(store, caller, transmit_id, async_)?;
         if !matches!(code, ReturnCode::Blocked) {
             let state =
                 get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?
@@ -4193,17 +4220,11 @@ impl Instance {
     fn guest_cancel_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TransmitIndex,
         async_: bool,
         reader: u32,
     ) -> Result<ReturnCode> {
-        if !async_ {
-            // The caller may only sync call `{stream,future}.cancel-read` from
-            // an async task (i.e. a task created via a call to an async
-            // export).  Otherwise, we'll trap.
-            store.check_blocking()?;
-        }
-
         let (rep, state) =
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?;
         let id = TableId::<TransmitHandle>::new(rep);
@@ -4218,7 +4239,7 @@ impl Instance {
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
-        let code = self.cancel_read(store, transmit_id, async_)?;
+        let code = self.cancel_read(store, caller, transmit_id, async_)?;
         if !matches!(code, ReturnCode::Blocked) {
             let state =
                 get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?
@@ -4340,11 +4361,12 @@ impl Instance {
     pub(crate) fn future_cancel_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
         reader: u32,
     ) -> Result<u32> {
-        self.guest_cancel_read(store, TransmitIndex::Future(ty), async_, reader)
+        self.guest_cancel_read(store, caller, TransmitIndex::Future(ty), async_, reader)
             .map(|v| v.encode())
     }
 
@@ -4352,11 +4374,12 @@ impl Instance {
     pub(crate) fn future_cancel_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         async_: bool,
         writer: u32,
     ) -> Result<u32> {
-        self.guest_cancel_write(store, TransmitIndex::Future(ty), async_, writer)
+        self.guest_cancel_write(store, caller, TransmitIndex::Future(ty), async_, writer)
             .map(|v| v.encode())
     }
 
@@ -4364,11 +4387,12 @@ impl Instance {
     pub(crate) fn stream_cancel_read(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
         reader: u32,
     ) -> Result<u32> {
-        self.guest_cancel_read(store, TransmitIndex::Stream(ty), async_, reader)
+        self.guest_cancel_read(store, caller, TransmitIndex::Stream(ty), async_, reader)
             .map(|v| v.encode())
     }
 
@@ -4376,11 +4400,12 @@ impl Instance {
     pub(crate) fn stream_cancel_write(
         self,
         store: &mut StoreOpaque,
+        caller: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
         async_: bool,
         writer: u32,
     ) -> Result<u32> {
-        self.guest_cancel_write(store, TransmitIndex::Stream(ty), async_, writer)
+        self.guest_cancel_write(store, caller, TransmitIndex::Stream(ty), async_, writer)
             .map(|v| v.encode())
     }
 
@@ -4627,7 +4652,10 @@ fn lift_index_to_transmit(
 
     let state = future.state;
     if concurrent_state.get_mut(state)?.done {
-        bail!("cannot lift {desc} after previous read succeeded");
+        match ty {
+            TransmitIndex::Future(_) => bail!("cannot lift {desc} after previous read succeeded"),
+            TransmitIndex::Stream(_) => bail!(Trap::LiftDroppedStream),
+        };
     }
 
     Ok(id)
@@ -4843,6 +4871,31 @@ impl Waitable {
         instance: Instance,
         event: Event,
     ) -> Result<()> {
+        if let Event::FutureRead {
+            code: ReturnCode::Dropped(_),
+            ..
+        }
+        | Event::FutureWrite {
+            code: ReturnCode::Dropped(_),
+            ..
+        }
+        | Event::StreamRead {
+            code: ReturnCode::Dropped(_),
+            ..
+        }
+        | Event::StreamWrite {
+            code: ReturnCode::Dropped(_),
+            ..
+        } = event
+        {
+            let Waitable::Transmit(transmit_handle) = self else {
+                bail_bug!("unexpected `{event:?}` for `{self:?}`");
+            };
+            let state = store.concurrent_state_mut()?;
+            let transmit_id = state.get_mut(*transmit_handle)?.state;
+            state.get_mut(transmit_id)?.done = true;
+        }
+
         let instance = instance.id().get_mut(store);
         let (rep, state, code) = match event {
             Event::FutureRead {

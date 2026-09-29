@@ -235,7 +235,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 );
             }
 
-            let (rcs, reg_types) = Inst::rc_for_type(param.value_type)?;
+            let (rcs, reg_types) = Inst::rc_for_type(&param.value_type)?;
 
             if let ir::ArgumentPurpose::StructReturn = param.purpose {
                 assert!(
@@ -713,10 +713,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
             });
         }
 
-        if call_conv == isa::CallConv::Tail && frame_layout.tail_args_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.tail_args_size.try_into().unwrap(),
-            ));
+        let callee_pop_size = match call_conv {
+            isa::CallConv::Tail => frame_layout.tail_args_size,
+            isa::CallConv::Winch => frame_layout.incoming_args_size,
+            _ => 0,
+        };
+        if callee_pop_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(callee_pop_size.try_into().unwrap()));
         }
 
         insts
@@ -1210,8 +1213,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn get_ext_mode(
         call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
+        location: ABIArgLocation,
     ) -> ir::ArgumentExtension {
-        if call_conv == isa::CallConv::AppleAarch64 {
+        // Apple's AArch64 ABI only requires the caller to sign/zero-extend
+        // arguments in registers; stack-passed arguments use their natural
+        // (possibly sub-word) size and are not extended. See "Pass arguments
+        // to functions correctly" in:
+        // https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms
+        if call_conv == isa::CallConv::AppleAarch64 && location == ABIArgLocation::Reg {
             specified
         } else {
             ir::ArgumentExtension::None

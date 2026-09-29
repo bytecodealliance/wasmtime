@@ -7,7 +7,7 @@ pub struct wasm_limits_t {
 
 impl wasm_limits_t {
     pub(crate) fn max(&self) -> Option<u32> {
-        if self.max == u32::max_value() {
+        if self.max == u32::MAX {
             None
         } else {
             Some(self.max)

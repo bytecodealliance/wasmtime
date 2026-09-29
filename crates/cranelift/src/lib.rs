@@ -15,7 +15,7 @@
 #![warn(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use cranelift_codegen::{
-    FinalizedMachReloc, FinalizedRelocTarget, MachTrap, binemit,
+    MachReloc, MachTrap, RelocTarget, binemit,
     cursor::FuncCursor,
     ir::{self, AbiParam, ArgumentPurpose, ExternalName, InstBuilder, Signature, TrapCode},
     isa::{CallConv, TargetIsa},
@@ -41,6 +41,7 @@ mod alias_region;
 mod bounds_checks;
 mod builder;
 mod compiler;
+mod component_sync_call;
 mod debug;
 mod func_environ;
 mod translate;
@@ -49,7 +50,7 @@ mod trap;
 use self::compiler::Compiler;
 
 const TRAP_INTERNAL_ASSERT: TrapCode = TrapCode::unwrap_user(1);
-const TRAP_GC_HEAP_CORRUPT: TrapCode = TrapCode::unwrap_user(2);
+pub const TRAP_GC_HEAP_CORRUPT: TrapCode = TrapCode::unwrap_user(2);
 const TRAP_MMU_INTERRUPT: TrapCode = TrapCode::unwrap_user(3);
 const TRAP_OFFSET: u8 = 4;
 pub const TRAP_CANNOT_LEAVE_COMPONENT: TrapCode =
@@ -78,6 +79,16 @@ pub const TRAP_CAST_FAILURE: TrapCode =
     TrapCode::unwrap_user(Trap::CastFailure as u8 + TRAP_OFFSET);
 pub const TRAP_UNCAUGHT_EXCEPTION: TrapCode =
     TrapCode::unwrap_user(Trap::UncaughtException as u8 + TRAP_OFFSET);
+
+/// The CLIF trap code for a Wasmtime trap code.
+///
+/// This is the inverse of `clif_trap_to_env_trap`'s fallback arm, and is what
+/// all of the `TRAP_*` constants above compute for their particular trap. Use
+/// it for traps that don't have a constant above, e.g. the trap named by a
+/// fused adapter's `trap` intrinsic.
+const fn env_trap_to_clif_trap(trap: Trap) -> TrapCode {
+    TrapCode::unwrap_user(trap as u8 + TRAP_OFFSET)
+}
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the
 /// given calling convention.
@@ -298,21 +309,21 @@ fn clif_trap_to_env_trap(trap: ir::TrapCode, tunables: &Tunables) -> Option<Comp
 /// Converts machine relocations to relocation information
 /// to perform.
 fn mach_reloc_to_reloc(
-    reloc: &FinalizedMachReloc,
+    reloc: &MachReloc,
     name_map: &PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
 ) -> Relocation {
-    let &FinalizedMachReloc {
+    let &MachReloc {
         offset,
         kind,
         ref target,
         addend,
     } = reloc;
     let reloc_target = match *target {
-        FinalizedRelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
+        RelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
             let name = &name_map[user_func_ref];
             FuncKey::from_raw_parts(name.namespace, name.index)
         }
-        FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
+        RelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
             // We should have avoided any code that needs this style of libcalls
             // in the Wasm-to-Cranelift translator.
             panic!("unexpected libcall {libcall:?}");

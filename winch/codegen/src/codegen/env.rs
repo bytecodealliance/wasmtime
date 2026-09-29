@@ -13,8 +13,9 @@ use std::mem;
 use wasmparser::BlockType;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedFuncIndex, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
-    MemoryIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, Table, TableIndex,
-    TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType, collections::TryClone as _,
+    MemoryIndex, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap,
+    PtrSize, Table, TableIndex, TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType,
+    collections::TryClone as _,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -177,6 +178,14 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         self.ptr_type
     }
 
+    /// Returns the byte offset of `index` in the module's shared type-ID array.
+    pub(crate) fn shared_type_index_offset(&self, index: ModuleInternedTypeIndex) -> u32 {
+        index
+            .as_u32()
+            .checked_mul(u32::from(self.vmoffsets.size_of_vmshared_type_index()))
+            .unwrap()
+    }
+
     /// Resolves a [`Callee::FuncRef`] from a type index.
     pub(crate) fn funcref(&mut self, idx: TypeIndex) -> Callee {
         Callee::FuncRef(idx)
@@ -210,17 +219,23 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         })
     }
 
+    /// Converts a parser heap type into its canonicalized Wasmtime type.
+    pub(crate) fn convert_heap_type(&self, ty: wasmparser::HeapType) -> Result<WasmHeapType> {
+        Ok(TypeConverter::new(self.translation, self.types).convert_heap_type(ty)?)
+    }
+
     /// Resolves `GlobalData` of a global at the given index.
     pub fn resolve_global(&mut self, index: GlobalIndex) -> GlobalData {
         let ty = self.translation.module.globals[index].wasm_ty;
         let val = || match self.translation.module.defined_global_index(index) {
             Some(defined_index) => GlobalData {
-                offset: self.vmoffsets.vmctx_vmglobal_definition(defined_index),
+                offset: self.vmoffsets.globals().at(defined_index),
                 imported: false,
                 ty,
             },
             None => GlobalData {
-                offset: self.vmoffsets.vmctx_vmglobal_import_from(index),
+                offset: self.vmoffsets.imported_globals().at(index)
+                    + u32::from(self.vmoffsets.ptr.vm_global_import().from()),
                 imported: true,
                 ty,
             },
@@ -238,14 +253,24 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     match self.translation.module.defined_table_index(index) {
                         Some(defined) => (
                             None,
-                            self.vmoffsets.vmctx_vmtable_definition_base(defined),
-                            self.vmoffsets
-                                .vmctx_vmtable_definition_current_elements(defined),
+                            self.vmoffsets.tables().at(defined)
+                                + u32::from(self.vmoffsets.ptr.vm_table_definition().base()),
+                            self.vmoffsets.tables().at(defined)
+                                + u32::from(
+                                    self.vmoffsets.ptr.vm_table_definition().current_elements(),
+                                ),
                         ),
                         None => (
-                            Some(self.vmoffsets.vmctx_vmtable_from(index)),
-                            self.vmoffsets.vmtable_definition_base().into(),
-                            self.vmoffsets.vmtable_definition_current_elements().into(),
+                            Some(
+                                self.vmoffsets.imported_tables().at(index)
+                                    + u32::from(self.vmoffsets.ptr.vm_table_import().from()),
+                            ),
+                            self.vmoffsets.ptr.vm_table_definition().base().into(),
+                            self.vmoffsets
+                                .ptr
+                                .vm_table_definition()
+                                .current_elements()
+                                .into(),
                         ),
                     };
 
@@ -270,37 +295,48 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         match self.resolved_heaps.entry(index) {
             Occupied(entry) => *entry.get(),
             Vacant(entry) => {
-                let (import_from, base_offset, current_length_offset) =
-                    match self.translation.module.defined_memory_index(index) {
-                        Some(defined) => {
-                            if is_shared {
-                                (
-                                    Some(self.vmoffsets.vmctx_vmmemory_pointer(defined)),
-                                    self.vmoffsets.ptr.vmmemory_definition_base().into(),
-                                    self.vmoffsets
-                                        .ptr
-                                        .vmmemory_definition_current_length()
-                                        .into(),
-                                )
-                            } else {
-                                let owned = self.translation.module.owned_memory_index(defined);
-                                (
-                                    None,
-                                    self.vmoffsets.vmctx_vmmemory_definition_base(owned),
-                                    self.vmoffsets
-                                        .vmctx_vmmemory_definition_current_length(owned),
-                                )
-                            }
+                let (import_from, base_offset, current_length_offset) = match self
+                    .translation
+                    .module
+                    .defined_memory_index(index)
+                {
+                    Some(defined) => {
+                        if is_shared {
+                            (
+                                Some(self.vmoffsets.memories().at(defined)),
+                                self.vmoffsets.ptr.vm_memory_definition().base().into(),
+                                self.vmoffsets
+                                    .ptr
+                                    .vm_memory_definition()
+                                    .current_length()
+                                    .into(),
+                            )
+                        } else {
+                            let owned = self.translation.module.owned_memory_index(defined);
+                            (
+                                None,
+                                self.vmoffsets.owned_memories().at(owned)
+                                    + u32::from(self.vmoffsets.ptr.vm_memory_definition().base()),
+                                self.vmoffsets.owned_memories().at(owned)
+                                    + u32::from(
+                                        self.vmoffsets.ptr.vm_memory_definition().current_length(),
+                                    ),
+                            )
                         }
-                        None => (
-                            Some(self.vmoffsets.vmctx_vmmemory_import_from(index)),
-                            self.vmoffsets.ptr.vmmemory_definition_base().into(),
-                            self.vmoffsets
-                                .ptr
-                                .vmmemory_definition_current_length()
-                                .into(),
+                    }
+                    None => (
+                        Some(
+                            self.vmoffsets.imported_memories().at(index)
+                                + u32::from(self.vmoffsets.ptr.vm_memory_import().from()),
                         ),
-                    };
+                        self.vmoffsets.ptr.vm_memory_definition().base().into(),
+                        self.vmoffsets
+                            .ptr
+                            .vm_memory_definition()
+                            .current_length()
+                            .into(),
+                    ),
+                };
 
                 let memory = &self.translation.module.memories[index];
 

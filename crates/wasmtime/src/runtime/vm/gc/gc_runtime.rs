@@ -3,7 +3,7 @@
 use crate::bail_bug;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    ExternRefHostDataId, ExternRefHostDataTable, GcHeapObject, SendSyncPtr, TypedGcRef, VMArrayRef,
+    ExternRefHostDataId, GcHeapObject, GcStoreTraceState, SendSyncPtr, TypedGcRef, VMArrayRef,
     VMExternRef, VMGcHeader, VMGcObjectData, VMGcRef, ValRaw,
 };
 use crate::store::Asyncness;
@@ -110,18 +110,6 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// any virtual memory mappings.
     fn detach(&mut self) -> crate::vm::Memory;
 
-    /// Eagerly ensure that tracing information is registered for the given GC
-    /// type.
-    ///
-    /// This is called during module instantiation for every GC type in the
-    /// module's type collection, and during `StructRefPre` and `ArrayRefPre`
-    /// construction for host-allocated types.
-    ///
-    /// The default implementation is a no-op, which is appropriate for
-    /// collectors that do not need per-type tracing info (e.g. the null
-    /// collector).
-    fn ensure_trace_info(&mut self, _ty: VMSharedTypeIndex) {}
-
     ////////////////////////////////////////////////////////////////////////////
     // `Any` methods
 
@@ -169,7 +157,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// failures such as panics or incorrect results.
     ///
     /// The given `gc_ref` should not be used again.
-    fn drop_gc_ref(&mut self, host_data_table: &mut ExternRefHostDataTable, gc_ref: VMGcRef) {
+    fn drop_gc_ref(&mut self, gc_ref: VMGcRef) {
         let mut dest = Some(gc_ref);
 
         // Similar to `clone_gc_ref` not being fallible this method,
@@ -178,7 +166,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
         // corrupted at this point it'll get a ltitle more corrupted from this
         // operation, but that's the tradeoff we're making ignoring the error
         // here.
-        if let Err(e) = self.write_gc_ref(host_data_table, &mut dest, None) {
+        if let Err(e) = self.write_gc_ref(&mut dest, None) {
             if cfg!(debug_assertions) {
                 panic!("heap corruption detected: {e}");
             }
@@ -199,7 +187,6 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// but may result in general failures such as panics or incorrect results.
     fn write_gc_ref(
         &mut self,
-        host_data_table: &mut ExternRefHostDataTable,
         destination: &mut Option<VMGcRef>,
         source: Option<&VMGcRef>,
     ) -> Result<()>;
@@ -397,11 +384,13 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// incorrect results.
     ///
     /// This method should panic if we are in a no-GC scope.
-    fn gc<'a>(
+    fn gc<'a, 'b>(
         &'a mut self,
         roots: GcRootsIter<'a>,
-        host_data_table: &'a mut ExternRefHostDataTable,
-    ) -> Box<dyn GarbageCollection<'a> + 'a>;
+        trace_state: &'a mut GcStoreTraceState<'b>,
+    ) -> Box<dyn GarbageCollection + 'a>
+    where
+        'b: 'a;
 
     ////////////////////////////////////////////////////////////////////////////
     // JIT-Code Interaction Methods
@@ -784,7 +773,7 @@ impl GcRoot<'_> {
 /// When using fuel and/or epochs, consumers can also use `collect_increment`
 /// directly and choose to abandon further execution in this GC's heap's whole
 /// store if the GC is taking too long to complete.
-pub trait GarbageCollection<'a>: Send + Sync {
+pub trait GarbageCollection: Send + Sync {
     /// Perform an incremental slice of this garbage collection process.
     ///
     /// Upon completion of the slice, a `GcProgress` is returned which informs
@@ -820,8 +809,8 @@ pub enum GcProgress {
 
 /// Asynchronously run the given garbage collection process to completion,
 /// cooperatively yielding back to the event loop after each increment of work.
-pub async fn collect_async<'a>(
-    mut collection: Box<dyn GarbageCollection<'a> + 'a>,
+pub async fn collect_async(
+    mut collection: Box<dyn GarbageCollection + '_>,
     asyncness: Asyncness,
     yield_fn: impl AsyncFn(),
 ) -> Result<()> {
@@ -851,7 +840,7 @@ mod collect_async_tests {
     fn is_send_and_sync() {
         fn _assert_send_sync<T: Send + Sync>(_: T) {}
 
-        fn _foo<'a>(collection: Box<dyn GarbageCollection<'a>>) {
+        fn _foo(collection: Box<dyn GarbageCollection>) {
             _assert_send_sync(collect_async(collection, Asyncness::Yes, async || ()));
         }
     }

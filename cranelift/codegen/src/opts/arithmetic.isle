@@ -5,18 +5,18 @@
 ;; the right, and thus only simplify patterns like `x+0`, not `0+x`.
 
 ;; x+0 == x.
-(rule (simplify (iadd ty
+(rule iadd_x_plus_zero (simplify (iadd ty
                       x
-                      (iconst_u ty 0)))
+                      (all_zero ty)))
       (subsume x))
 ;; x-0 == x.
 (rule (simplify (isub ty
                       x
-                      (iconst_u ty 0)))
+                      (all_zero ty)))
       (subsume x))
 ;; 0-x == (ineg x).
 (rule (simplify (isub ty
-                      (iconst_u ty 0)
+                      (all_zero ty)
                       x))
       (ineg ty x))
 
@@ -47,7 +47,7 @@
       (subsume inner))
 
 ;; x-x == 0.
-(rule (simplify (isub ty x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (isub ty x x)) (subsume (all_zero ty)))
 
 ;; x*1 == x.
 (rule (simplify (imul ty
@@ -58,7 +58,7 @@
 ;; x*0 == 0.
 (rule (simplify (imul ty
                       _
-                      zero @ (iconst_u ty 0)))
+                      zero @ (all_zero ty)))
       (subsume zero))
 
 ;; x*-1 == ineg(x).
@@ -127,9 +127,9 @@
       (apply_div_const_magic_s64 (Opcode.Sdiv) x d))
 
 ;; x % 1 == 0
-(rule (simplify_skeleton (urem x (iconst_u ty 1))) (iconst_u ty 0))
-(rule (simplify_skeleton (srem x (iconst_u ty 1))) (iconst_u ty 0))
-(rule (simplify_skeleton (srem x (iconst_s ty -1))) (iconst_u ty 0))
+(rule (simplify_skeleton (urem x (iconst_u ty 1))) (all_zero ty))
+(rule (simplify_skeleton (srem x (iconst_u ty 1))) (all_zero ty))
+(rule (simplify_skeleton (srem x (iconst_s ty -1))) (all_zero ty))
 
 ;; Unsigned `x % d == x & ((1 << ilog2(d)) - 1)` when `d` is a power of two.
 (rule (simplify_skeleton (urem x (iconst_u ty (u64_extract_power_of_two d))))
@@ -191,7 +191,7 @@
 
 ;; If both of the multiplied arguments to an `fmul` are negated then remove
 ;; both of them since they cancel out.
-(rule (simplify (fmul ty (fneg ty x) (fneg ty y)))
+(rule fmul_fneg_fneg (simplify (fmul ty (fneg ty x) (fneg ty y)))
       (fmul ty x y))
 
 ;; Detect people open-coding `mulhi`: (x as big * y as big) >> bits
@@ -303,6 +303,10 @@
 (rule (simplify (isub ty (bor ty y x) (band ty x y))) (bxor ty x y))
 (rule (simplify (isub ty (bor ty y x) (band ty y x))) (bxor ty x y))
 
+;; (x & y) - (x | y) --> -(x ^ y)
+(rule (simplify (isub ty (band ty x y) (bor ty x y))) (ineg ty (bxor ty x y)))
+(rule (simplify (isub ty (band ty y x) (bor ty x y))) (ineg ty (bxor ty x y)))
+
 ;; (x + y) - (x & y)  ==>  (x | y)
 (rule (simplify (isub ty (iadd ty x y) (band ty x y))) (bor ty x y))
 (rule (simplify (isub ty (iadd ty x y) (band ty y x))) (bor ty x y))
@@ -315,6 +319,16 @@
 (rule (simplify (isub ty (bor ty y x) (bxor ty x y))) (band ty x y))
 (rule (simplify (isub ty (bor ty y x) (bxor ty y x))) (band ty x y))
 
+;; (x ^ y) - (x | y) --> -(x & y)
+(rule (simplify (isub ty (bxor ty x y) (bor ty x y))) (ineg ty (band ty x y)))
+(rule (simplify (isub ty (bxor ty x y) (bor ty y x))) (ineg ty (band ty x y)))
+
+;; (x ^ y) + 2 * (x & y) --> x + y
+(rule (simplify (iadd ty (bxor ty x y) (ishl ty (band ty x y) (iconst_u ty 1)))) (iadd ty x y))
+(rule (simplify (iadd ty (bxor ty x y) (ishl ty (band ty y x) (iconst_u ty 1)))) (iadd ty x y))
+(rule (simplify (iadd ty (ishl ty (band ty x y) (iconst_u ty 1)) (bxor ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (ishl ty (band ty x y) (iconst_u ty 1)) (bxor ty y x))) (iadd ty x y))
+
 ;; (~x) + x == -1
 (rule (simplify (iadd ty (bnot ty x) x)) (iconst_s ty -1))
 (rule (simplify (iadd ty x (bnot ty x))) (iconst_s ty -1))
@@ -324,6 +338,9 @@
 (rule (simplify (isub ty (iadd ty x y) (iadd ty z x))) (isub ty y z))
 (rule (simplify (isub ty (iadd ty y x) (iadd ty x z))) (isub ty y z))
 (rule (simplify (isub ty (iadd ty y x) (iadd ty z x))) (isub ty y z))
+
+;; (x - y) + (y - x) --> 0
+(rule (simplify (iadd ty (isub ty x y) (isub ty y x))) (subsume (all_zero ty)))
 
 ;; ((x - z) - (y - z)) --> (x - y)
 (rule (simplify (isub ty (isub ty x z) (isub ty y z))) (isub ty x y))
@@ -375,7 +392,7 @@
 
 ;; Helper to create a "true" value for a comparison. For scalar integers this is
 ;; a value of 1 but for vectors this is -1 since each lane is filled with all
-;; 1s. We use `(iconst_u ty 0)` for falses for both integers and vector. This is
+;; 1s. We use `(all_zero ty)` for falses for both integers and vectors. This is
 ;; because of the Cranelift semantics:
 ;; When comparing scalars, the result is 1 if the condition holds, or 0 otherwise.
 ;; When comparing vectors, the result is -1 (all-ones) if the condition holds, or 0 otherwise.
@@ -390,18 +407,18 @@
 (rule (simplify (eq ty (iadd cty y x) (iadd cty y x))) (cmp_true ty))
 
 ;; (x - y) != x --> y != 0
-(rule (simplify (ne cty (isub ty x y) x)) (ne cty y (iconst_u ty 0)))
-(rule (simplify (ne cty x (isub ty x y))) (ne cty y (iconst_u ty 0)))
+(rule (simplify (ne cty (isub ty x y) x)) (ne cty y (all_zero ty)))
+(rule (simplify (ne cty x (isub ty x y))) (ne cty y (all_zero ty)))
 
 ;; (x - y) == x --> y == 0
-(rule (simplify (eq cty (isub ty x y) x)) (eq cty y (iconst_u ty 0)))
-(rule (simplify (eq cty x (isub ty x y))) (eq cty y (iconst_u ty 0)))
+(rule (simplify (eq cty (isub ty x y) x)) (eq cty y (all_zero ty)))
+(rule (simplify (eq cty x (isub ty x y))) (eq cty y (all_zero ty)))
 
 ;; (x + y) == y --> x == 0
-(rule (simplify (eq cty (iadd ty x y) y)) (eq cty x (iconst_u ty 0)))
-(rule (simplify (eq cty (iadd ty y x) y)) (eq cty x (iconst_u ty 0)))
-(rule (simplify (eq cty y (iadd ty x y))) (eq cty x (iconst_u ty 0)))
-(rule (simplify (eq cty y (iadd ty y x))) (eq cty x (iconst_u ty 0)))
+(rule (simplify (eq cty (iadd ty x y) y)) (eq cty x (all_zero ty)))
+(rule (simplify (eq cty (iadd ty y x) y)) (eq cty x (all_zero ty)))
+(rule (simplify (eq cty y (iadd ty x y))) (eq cty x (all_zero ty)))
+(rule (simplify (eq cty y (iadd ty y x))) (eq cty x (all_zero ty)))
 
 ;; -x == -y --> x == y
 (rule (simplify (eq ty (ineg ty x) (ineg ty y))) (eq ty x y))
@@ -557,14 +574,57 @@
 (rule (simplify (umax ty (umin ty x y) (umax ty y x))) (umax ty x y))
 
 ;; x > max(x, y) --> 0
-(rule (simplify (sgt ty x (smax ty x y))) (iconst_u ty 0))
-(rule (simplify (sgt ty x (smax ty y x))) (iconst_u ty 0))
-(rule (simplify (slt ty (smax ty x y) x)) (iconst_u ty 0))
-(rule (simplify (slt ty (smax ty y x) x)) (iconst_u ty 0))
-(rule (simplify (ugt ty x (umax ty x y))) (iconst_u ty 0))
-(rule (simplify (ugt ty x (umax ty y x))) (iconst_u ty 0))
-(rule (simplify (ult ty (umax ty x y) x)) (iconst_u ty 0))
-(rule (simplify (ult ty (umax ty y x) x)) (iconst_u ty 0))
+(rule (simplify (sgt ty x (smax ty x y))) (all_zero ty))
+(rule (simplify (sgt ty x (smax ty y x))) (all_zero ty))
+(rule (simplify (slt ty (smax ty x y) x)) (all_zero ty))
+(rule (simplify (slt ty (smax ty y x) x)) (all_zero ty))
+(rule (simplify (ugt ty x (umax ty x y))) (all_zero ty))
+(rule (simplify (ugt ty x (umax ty y x))) (all_zero ty))
+(rule (simplify (ult ty (umax ty x y) x)) (all_zero ty))
+(rule (simplify (ult ty (umax ty y x) x)) (all_zero ty))
 
 ;; (-X) * C = X * (-C)
-(rule (simplify (imul (fits_in_64 ty) (ineg ty x) (iconst ty y))) (imul ty x (iconst ty (imm64_neg ty y))))
+(rule imul_ineg_const (simplify (imul (fits_in_64 ty) (ineg ty x) (iconst ty y))) (imul ty x (iconst ty (imm64_neg ty y))))
+
+;; -(~x) --> x + 1
+(rule (simplify (ineg ty (bnot ty x))) (iadd ty x (iconst_u ty 1)))
+
+;; ~(-x) --> x - 1.
+(rule (simplify (bnot ty (ineg ty x))) (isub ty x (iconst_u ty 1)))
+
+;; -1 - x --> ~x
+(rule (simplify (isub ty (iconst_s ty -1) x)) (bnot ty x))
+
+;; Negate integer constants at compile time.
+(rule (simplify (ineg (fits_in_64 ty) (iconst ty x)))
+      (iconst ty (imm64_neg ty x)))
+
+;; -(X * C) = X * (-C)
+(rule (simplify (ineg (fits_in_64 ty) (imul ty x (iconst ty c))))
+      (imul ty x (iconst ty (imm64_neg ty c))))
+
+;; x - (-y << z) = x + (y << z)
+(rule (simplify (isub ty x (ishl ty (ineg ty y) z))) (iadd ty x (ishl ty y z)))
+
+;; (x << y) | (z << y) = (x | z) << y, and variants
+(rule (simplify (bxor ty (ishl ty x y) (ishl ty z y))) (ishl ty (bxor ty x z) y))
+(rule (simplify (bxor ty (sshr ty x y) (sshr ty z y))) (sshr ty (bxor ty x z) y))
+(rule (simplify (bxor ty (ushr ty x y) (ushr ty z y))) (ushr ty (bxor ty x z) y))
+
+;; (max (-x) x) * (max (-x) x) = x * x
+(rule (simplify (imul ty (smax ty (ineg ty x) x) (smax ty (ineg ty x) x))) (imul ty x x))
+(rule (simplify (imul ty (smax ty (ineg ty x) x) (smax ty x (ineg ty x)))) (imul ty x x))
+(rule (simplify (imul ty (smax ty x (ineg ty x)) (smax ty (ineg ty x) x))) (imul ty x x))
+(rule (simplify (imul ty (smax ty x (ineg ty x)) (smax ty x (ineg ty x)))) (imul ty x x))
+(rule (simplify (imul ty (umax ty (ineg ty x) x) (umax ty (ineg ty x) x))) (imul ty x x))
+(rule (simplify (imul ty (umax ty (ineg ty x) x) (umax ty x (ineg ty x)))) (imul ty x x))
+(rule (simplify (imul ty (umax ty x (ineg ty x)) (umax ty (ineg ty x) x))) (imul ty x x))
+(rule (simplify (imul ty (umax ty x (ineg ty x)) (umax ty x (ineg ty x)))) (imul ty x x))
+
+;; x /u (1 << y) --> x >>u y
+(rule (simplify_skeleton (udiv x (ishl ty (iconst_u ty 1) y)))
+      (ushr ty x y))
+
+;; x %u (1 << k) --> x & ((1 << k) - 1).
+(rule (simplify_skeleton (urem x divisor @ (ishl ty (iconst_u ty 1) k)))
+      (band ty x (isub ty divisor (iconst_u ty 1))))

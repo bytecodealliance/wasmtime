@@ -7,29 +7,29 @@ use core::fmt;
 ///
 /// This is just a constant that seems reasonable in the sense it's unlikely to
 /// clash with others.
-pub const ELFOSABI_WASMTIME: u8 = 200;
+pub const ELFOSABI_WASMTIME: object::elf::OsAbi = object::elf::OsAbi(200);
 
 /// Flag for the `e_flags` field in the ELF header indicating a compiled
 /// module.
-pub const EF_WASMTIME_MODULE: u32 = 1 << 0;
+pub const EF_WASMTIME_MODULE: object::elf::FileFlags = object::elf::FileFlags(1 << 0);
 
 /// Flag for the `e_flags` field in the ELF header indicating a compiled
 /// component.
-pub const EF_WASMTIME_COMPONENT: u32 = 1 << 1;
+pub const EF_WASMTIME_COMPONENT: object::elf::FileFlags = object::elf::FileFlags(1 << 1);
 
 /// Flag for the `e_flags` field in the ELF header indicating compiled code for
 /// pulley32
-pub const EF_WASMTIME_PULLEY32: u32 = 1 << 2;
+pub const EF_WASMTIME_PULLEY32: object::elf::FileFlags = object::elf::FileFlags(1 << 2);
 
 /// Flag for the `e_flags` field in the ELF header indicating compiled code for
 /// pulley64
-pub const EF_WASMTIME_PULLEY64: u32 = 1 << 3;
+pub const EF_WASMTIME_PULLEY64: object::elf::FileFlags = object::elf::FileFlags(1 << 3);
 
 /// Flag for the `sh_flags` field in the ELF text section that indicates that
 /// the text section does not itself need to be executable. This is used for the
 /// Pulley target, for example, to indicate that it does not need to be made
 /// natively executable as it does not contain actual native code.
-pub const SH_WASMTIME_NOT_EXECUTED: u64 = 1 << 0;
+pub const SH_WASMTIME_NOT_EXECUTED: object::elf::SectionFlags = object::elf::SectionFlags(1 << 0);
 
 /// A custom Wasmtime-specific section of our compilation image which stores
 /// mapping data from offsets in the image to offset in the original wasm

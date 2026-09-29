@@ -30,20 +30,20 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
       //
       // Note that this order for saving is important since we use CFI directives
       // below to point to where all the saved registers are.
-      sw ra, -0x4(sp)
-      sw fp, -0x8(sp) // fp is s0
-      sw s1, -0xc(sp)
-      sw s2, -0x10(sp)
-      sw s3, -0x14(sp)
-      sw s4, -0x18(sp)
-      sw s5, -0x1c(sp)
-      sw s6, -0x20(sp)
-      sw s7, -0x24(sp)
-      sw s8, -0x28(sp)
-      sw s9, -0x2c(sp)
-      sw s10, -0x30(sp)
-      sw s11, -0x34(sp)
       addi sp, sp, -0x40 // Choose 0x40 to be 16-byte aligned
+      sw ra, 0x3c(sp)
+      sw fp, 0x38(sp) // fp is s0
+      sw s1, 0x34(sp)
+      sw s2, 0x30(sp)
+      sw s3, 0x2c(sp)
+      sw s4, 0x28(sp)
+      sw s5, 0x24(sp)
+      sw s6, 0x20(sp)
+      sw s7, 0x1c(sp)
+      sw s8, 0x18(sp)
+      sw s9, 0x14(sp)
+      sw s10, 0x10(sp)
+      sw s11, 0xc(sp)
 
       lw t0, -0x8(a0)
       sw sp, -0x8(a0)

@@ -16,7 +16,6 @@ use core::fmt;
 use core::iter;
 use core::mem;
 use core::ops::{Index, IndexMut};
-use core::u16;
 
 use alloc::collections::BTreeMap;
 #[cfg(feature = "enable-serde")]

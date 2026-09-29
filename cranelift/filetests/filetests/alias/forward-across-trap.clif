@@ -1,0 +1,42 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; A pure trap does not modify memory, so a redundant load after it can still be
+;; forwarded from an identical load before it.
+function %forward_load_across_trap(i64, i32) -> i64, i64 {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32):
+    v2 = load.i64 notrap aligned region0 v0
+    trapz v1, user42
+    v3 = load.i64 notrap aligned region0 v0
+    return v2, v3
+}
+
+; function %forward_load_across_trap(i64, i32) -> i64, i64 fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32):
+;     v2 = load.i64 notrap aligned region0 v0
+;     trapz v1, user42
+;     return v2, v2
+; }
+
+;; A stored value can likewise be forwarded to a later load across a pure trap.
+function %forward_store_across_trap(i64, i32, i64) -> i64 {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i64):
+    store notrap aligned region0 v2, v0
+    trapz v1, user42
+    v3 = load.i64 notrap aligned region0 v0
+    return v3
+}
+
+; function %forward_store_across_trap(i64, i32, i64) -> i64 fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i64):
+;     store notrap aligned region0 v2, v0
+;     trapz v1, user42
+;     return v2
+; }

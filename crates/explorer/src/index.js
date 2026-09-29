@@ -226,11 +226,13 @@ if (clifElem) {
 
     const funcHeader = document.createElement("h3");
     let func_name =
-      func.name === null ? `function[${func.func_index}]` : func.name;
+      func.name === null
+        ? `wasm[${func.module_index}]::function[${func.func_index}]`
+        : func.name;
     let demangled_name =
       func.demangled_name !== null ? func.demangled_name : func_name;
     funcHeader.textContent = `Intermediate Representation of function <${demangled_name}>:`;
-    funcHeader.title = `Function ${func.func_index}: ${func_name}`;
+    funcHeader.title = `Module ${func.module_index}, function ${func.func_index}: ${func_name}`;
     funcElem.appendChild(funcHeader);
 
     for (const inst of func.instructions) {
@@ -255,11 +257,13 @@ for (const func of state.asm.functions) {
 
   const funcHeader = document.createElement("h3");
   let functionName =
-    func.name === null ? `function[${func.func_index}]` : func.name;
+    func.name === null
+      ? `wasm[${func.module_index}]::function[${func.func_index}]`
+      : func.name;
   let demangledName =
     func.demangled_name !== null ? func.demangled_name : functionName;
   funcHeader.textContent = `Disassembly of function <${demangledName}>:`;
-  funcHeader.title = `Function ${func.func_index}: ${functionName}`;
+  funcHeader.title = `Module ${func.module_index}, function ${func.func_index}: ${functionName}`;
   funcElem.appendChild(funcHeader);
 
   let currentBlock = createDivForCode();

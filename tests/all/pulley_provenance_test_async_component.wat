@@ -9,7 +9,7 @@
 
     (core func $task_return (canon task.return))
     (core func $waitable_set_new (canon waitable-set.new))
-    (core func $waitable_set_wait (canon waitable-set.wait (memory $libc "memory")))
+    (core func $waitable_set_wait (canon waitable-set.wait (memory (core memory $libc "memory"))))
     (core func $waitable_join (canon waitable.join))
 
     (canon lower (func $run_stackless) async (core func $run_stackless))
@@ -92,7 +92,7 @@
         (export "run-stackless" (func $run_stackless))
         (export "run-stackful" (func $run_stackful))))))
 
-    (func (export "run-stackless") async (canon lift (core func $i "run-stackless") async (callback (func $i "cb"))))
+    (func (export "run-stackless") async (canon lift (core func $i "run-stackless") async (callback (core func $i "cb"))))
     (func (export "run-stackful") async (canon lift (core func $i "run-stackful") async))
   )
 
@@ -176,13 +176,13 @@
   )
   (type $s (stream u8))
   (core func $stream.new (canon stream.new $s))
-  (core func $stream.read (canon stream.read $s async (memory $libc "mem")))
-  (core func $stream.write (canon stream.write $s async (memory $libc "mem")))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "mem"))))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "mem"))))
   (core func $stream.drop-readable (canon stream.drop-readable $s))
   (core func $stream.drop-writable (canon stream.drop-writable $s))
   (core func $waitable-set.new (canon waitable-set.new))
   (core func $waitable.join (canon waitable.join))
-  (core func $waitable-set.wait (canon waitable-set.wait (memory $libc "mem")))
+  (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $libc "mem"))))
   (core func $waitable-set.drop (canon waitable-set.drop))
   (core instance $ics (instantiate $ics
     (with "" (instance

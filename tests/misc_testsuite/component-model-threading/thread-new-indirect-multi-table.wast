@@ -37,9 +37,9 @@
     (alias core export $libc "t1" (core table $t1))
 
     (core func $thread-new-indirect-t0
-        (canon thread.new-indirect $start-func-ty (table $t0)))
+        (canon thread.new-indirect $start-func-ty (core table $t0)))
     (core func $thread-new-indirect-t1
-        (canon thread.new-indirect $start-func-ty (table $t1)))
+        (canon thread.new-indirect $start-func-ty (core table $t1)))
     (core func $thread-index (canon thread.index))
 
     (core instance $i (instantiate $m

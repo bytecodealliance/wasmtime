@@ -11,15 +11,20 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108896 "VMStoreContext+0x20"
-;;     region2 = 32 "VMContext+0x20"
-;;     region3 = 872415232 "VMCopyingHeapData+0x0"
-;;     region4 = 872415236 "VMCopyingHeapData+0x4"
-;;     region5 = 40 "VMContext+0x28"
-;;     region6 = 1677721600 "TypeIdsArray+0x0"
-;;     region7 = 67108904 "VMStoreContext+0x28"
-;;     region8 = 536870912 "GcHeap"
+;;     region0 = 123 ""
+;;     region1 = 196 ""
+;;     region2 = 65 ""
+;;     region3 = 177 ""
+;;     region4 = 98 ""
+;;     region5 = 130 ""
+;;     region6 = 6 ""
+;;     region7 = 206 ""
+;;     region8 = 239 ""
+;;     region9 = 134 ""
+;;     region10 = 90 ""
+;;     region11 = 147 ""
+;;     region12 = 225 ""
+;;     region13 = 152 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+32
@@ -49,9 +54,9 @@
 ;; @0021                               store user2 region8 v60, v31  ; v60 = -1342177246
 ;;                                     v63 = load.i64 notrap aligned readonly can_move region5 v0+40
 ;;                                     v64 = load.i32 notrap aligned readonly can_move region6 v63
-;; @0021                               store user2 region8 v64, v31+4
+;; @0021                               store user2 region9 v64, v31+4
 ;;                                     v65 = iconst.i64 32
-;; @0021                               istore32 user2 region8 v65, v31+8  ; v65 = 32
+;; @0021                               istore32 user2 region10 v65, v31+8  ; v65 = 32
 ;; @0021                               jump block4(v7, v31)
 ;;
 ;;                                 block3 cold:
@@ -71,14 +76,14 @@
 ;; @0021                               v2 = f32const 0.0
 ;; @0021                               v37 = iconst.i64 16
 ;; @0021                               v38 = iadd v36, v37  ; v37 = 16
-;; @0021                               store user2 little region8 v2, v38  ; v2 = 0.0
+;; @0021                               store user2 little region11 v2, v38  ; v2 = 0.0
 ;; @0021                               v3 = iconst.i32 0
 ;; @0021                               v39 = iconst.i64 20
 ;; @0021                               v40 = iadd v36, v39  ; v39 = 20
-;; @0021                               istore8 user2 little region8 v3, v40  ; v3 = 0
+;; @0021                               istore8 user2 little region12 v3, v40  ; v3 = 0
 ;; @0021                               v41 = iconst.i64 24
 ;; @0021                               v42 = iadd v36, v41  ; v41 = 24
-;; @0021                               store user2 little region8 v3, v42  ; v3 = 0
+;; @0021                               store user2 little region13 v3, v42  ; v3 = 0
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:

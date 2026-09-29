@@ -4,7 +4,7 @@ use std::path::Path;
 use wasmtime::Result;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::p1::WasiP1Ctx;
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
+use wasmtime_wasi::{FsPerms, WasiCtxBuilder};
 use wasmtime_wasi_nn::{Backend, InMemoryRegistry, witx::WasiNnCtx};
 
 /// Run a wasi-nn test program. This is modeled after
@@ -36,8 +36,7 @@ impl Ctx {
         builder.inherit_stdio().preopened_dir(
             preopen_dir,
             PREOPENED_DIR_NAME,
-            DirPerms::READ,
-            FilePerms::READ,
+            FsPerms::ReadOnly,
         )?;
         let wasi = builder.build_p1();
 

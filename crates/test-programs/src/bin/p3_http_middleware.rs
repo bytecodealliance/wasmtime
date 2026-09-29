@@ -67,7 +67,7 @@ impl exports::wasi::http::handler::Guest for Component {
             }
             _ => true,
         });
-        let (_, result_rx) = wit_future::new(|| Ok(()));
+        let (result_tx, result_rx) = wit_future::new(|| Ok(()));
         let (mut body, trailers) = Request::consume_body(request, result_rx);
 
         let (body, trailers) = if content_deflated {
@@ -107,7 +107,7 @@ impl exports::wasi::http::handler::Guest for Component {
 
         // While the above task (if any) is running, synthesize a request from the parts collected above and pass
         // it to the imported `wasi:http/handler`.
-        let (my_request, _request_complete) = Request::new(
+        let (my_request, request_complete) = Request::new(
             Headers::from_list(&headers).unwrap(),
             Some(body),
             trailers,
@@ -120,6 +120,11 @@ impl exports::wasi::http::handler::Guest for Component {
             .unwrap();
         my_request.set_authority(authority.as_deref()).unwrap();
 
+        // Forward completion or transmission error back to the caller.
+        wit_bindgen::spawn_local(async move {
+            _ = result_tx.write(request_complete.await).await;
+        });
+
         let response = handler::handle(my_request).await?;
 
         // Now that we have the response, extract the parts, adding an extra header if we'll be encoding the body.
@@ -129,7 +134,7 @@ impl exports::wasi::http::handler::Guest for Component {
             headers.push(("content-encoding".into(), b"deflate".into()));
         }
 
-        let (_, result_rx) = wit_future::new(|| Ok(()));
+        let (result_tx, result_rx) = wit_future::new(|| Ok(()));
         let (mut body, trailers) = Response::consume_body(response, result_rx);
         let (body, trailers) = if accept_deflated {
             headers.retain(|(name, _value)| name != "content-length");
@@ -171,9 +176,16 @@ impl exports::wasi::http::handler::Guest for Component {
 
         // While the above tasks (if any) are running, synthesize a response from the parts collected above and
         // return it.
-        let (my_response, _response_complete) =
+        let (my_response, response_complete) =
             Response::new(Headers::from_list(&headers).unwrap(), Some(body), trailers);
         my_response.set_status_code(status_code).unwrap();
+
+        // Mirror the request path: forward the transmission result of the response we
+        // created into the response we consumed above, so response-body errors also
+        // propagate back toward their producer.
+        wit_bindgen::spawn_local(async move {
+            _ = result_tx.write(response_complete.await).await;
+        });
 
         Ok(my_response)
     }

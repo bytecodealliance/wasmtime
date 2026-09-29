@@ -44,12 +44,25 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
             },
         });
 
-        let scheme = match req.scheme.unwrap_or(Scheme::Https) {
-            Scheme::Http => http::uri::Scheme::HTTP,
-            Scheme::Https => http::uri::Scheme::HTTPS,
-
-            // We can only support http/https
-            Scheme::Other(_) => return Err(types::ErrorCode::HttpProtocolError.into()),
+        let scheme = match req.scheme {
+            Some(scheme) => {
+                let scheme = match scheme {
+                    Scheme::Http => http::uri::Scheme::HTTP,
+                    Scheme::Https => http::uri::Scheme::HTTPS,
+                    Scheme::Other(scheme) => http::uri::Scheme::try_from(scheme.as_str())
+                        .map_err(|_| types::ErrorCode::HttpProtocolError)?,
+                };
+                if !self.hooks.is_supported_scheme(&scheme) {
+                    return Err(types::ErrorCode::HttpProtocolError.into());
+                }
+                scheme
+            }
+            // Note that a hook returning `None` here means that guests are
+            // required to specify a scheme themselves.
+            None => self
+                .hooks
+                .default_scheme()
+                .ok_or(types::ErrorCode::HttpProtocolError)?,
         };
 
         let authority = req.authority.unwrap_or_else(String::new);
@@ -63,6 +76,10 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
         }
 
         builder = builder.uri(uri.build().map_err(http_request_error)?);
+
+        if self.hooks.set_host_header() {
+            builder = builder.header(http::header::HOST, authority.as_str());
+        }
 
         for (k, v) in req.headers.iter() {
             builder = builder.header(k, v);
@@ -99,5 +116,33 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
         Ok(self
             .table
             .push(HostFutureIncomingResponse::Pending(future))?)
+    }
+}
+
+mod named {
+    use crate::WasiHttpNamedView;
+    use crate::p2::bindings::http::types;
+    use crate::p2::bindings::named_imports::wasi::http::outgoing_handler;
+    use crate::p2::types::{HostFutureIncomingResponse, HostOutgoingRequest};
+    use crate::p2::{HttpError, HttpResult};
+    use wasmtime::component::Resource;
+    use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+
+    impl<T> outgoing_handler::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiHttpNamedView,
+    {
+        fn handle(
+            &mut self,
+            id: NamedId,
+            request_id: Resource<HostOutgoingRequest>,
+            options: Option<Resource<types::RequestOptions>>,
+        ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
+            super::outgoing_handler::Host::handle(&mut self.0.http(id), request_id, options)
+        }
+
+        fn convert_error_code(&mut self, err: HttpError) -> wasmtime::Result<types::ErrorCode> {
+            err.downcast()
+        }
     }
 }

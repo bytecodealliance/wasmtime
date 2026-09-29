@@ -7,7 +7,6 @@ license = "Apache-2.0 WITH LLVM-exception"
 categories = ["development-tools::debugging"]
 keywords = ["gdb", "jit"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 

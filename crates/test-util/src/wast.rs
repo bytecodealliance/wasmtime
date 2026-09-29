@@ -148,19 +148,91 @@ fn spec_test_config(test: &Path) -> TestConfig {
         Some("custom-descriptors") => {
             ret.custom_descriptors = Some(true);
         }
-        Some(proposal) => panic!("unsupported proposal {proposal:?}"),
-        None => {
+        Some("compact-import-section") => {
+            ret.compact_imports = Some(true);
             ret.reference_types = Some(true);
-            ret.simd = Some(true);
-            ret.simd = Some(true);
-            ret.relaxed_simd = Some(true);
             ret.multi_memory = Some(true);
-            ret.gc = Some(true);
-            ret.reference_types = Some(true);
-            ret.memory64 = Some(true);
-            ret.tail_call = Some(true);
-            ret.extended_const = Some(true);
             ret.exceptions = Some(true);
+        }
+        Some("extended-name-section") => {
+            ret.gc = Some(true);
+            ret.exceptions = Some(true);
+        }
+        Some(proposal) => panic!("unsupported proposal {proposal:?}"),
+
+        // The rough goal here is to enable a minimal set of features for the
+        // spec test in question. The fewer features required the more
+        // configurations this can run on. For example Winch doesn't currently
+        // support GC but it can still run all the simd tests which don't use
+        // GC. In general the upstream spec tests are not silo'd by feature
+        // meaning that one test probably requires a whole bunch of proposals.
+        // The tests are also quite large meaning the entire test may not need
+        // a particular feature, but there's not much we can do about that.
+        //
+        // What follows is a coarse algorithm of guessing, based on a test's
+        // name, what features are needed. The upstream spec test suite is a
+        // frozen commit in a git submodule within this repo meaning that this
+        // should work but will need updates when new tests are added or
+        // preexisting tests are changed.
+        None => {
+            let test_name = test.file_name().unwrap().to_str().unwrap();
+            ret.reference_types = Some(true);
+            ret.multi_memory = Some(true);
+            if test_name.contains("simd") {
+                ret.simd = Some(true);
+            }
+            if test_name.contains("relaxed") {
+                ret.relaxed_simd = Some(true);
+            }
+            if test_name.contains("64") || test_name.contains("mixed") {
+                ret.memory64 = Some(true);
+            }
+            if test_name.contains("ref")
+                || test_name.contains("array")
+                || test_name.contains("struct")
+                || test_name.contains("table")
+                || test_name.contains("type")
+                || test_name.contains("tag")
+                || test_name.contains("extern")
+                || test_name.contains("br_on_")
+                || test_name.contains("linking")
+                || test_name.contains("instance")
+                || test_name.contains("local_init")
+                || test_name.contains("elem")
+                || test_name.contains("global")
+                || test_name.contains("i31")
+                || test_name.contains("unreached-valid")
+                || test_name.contains("select")
+                || test_name.contains("data")
+            {
+                ret.gc = Some(true);
+            }
+            if test_name == "throw_ref.wast" {
+                // This test only uses exception references, which do not
+                // require enabling the GC proposal.
+                ret.gc = Some(false);
+            }
+            if test_name.contains("return_") || test_name.contains("try_table") {
+                ret.tail_call = Some(true);
+            }
+            if test_name == "return_call.wast" || test_name == "return_call_indirect.wast" {
+                ret.function_references = Some(true);
+            }
+            if test_name.contains("tag")
+                || test_name.contains("try_table")
+                || test_name.contains("throw")
+                || test_name.contains("ref")
+                || test_name.contains("instance")
+                || test_name.contains("imports")
+            {
+                ret.exceptions = Some(true);
+            }
+            if test_name.contains("global")
+                || test_name.contains("elem")
+                || test_name.contains("data")
+            {
+                ret.extended_const = Some(true);
+            }
 
             if test.parent().unwrap().ends_with("legacy") {
                 ret.legacy_exceptions = Some(true);
@@ -193,22 +265,22 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.reference_types = Some(true);
     ret.multi_memory = Some(true);
     ret.component_model_implements = Some(true);
+    ret.component_model_canonical_names = Some(true);
+    ret.bulk_memory = Some(true);
+    ret.component_model_async = Some(true);
+    ret.component_model_more_async_builtins = Some(true);
+    ret.component_model_async_stackful = Some(true);
+    ret.component_model_threading = Some(true);
+    ret.gc = Some(true);
+    ret.exceptions = Some(true);
+    ret.component_model_map = Some(true);
+    ret.component_model_fixed_length_lists = Some(true);
+
+    if test.ends_with("memory64.wast") {
+        ret.component_model_memory64 = Some(true);
+    }
 
     if let Some(parent) = test.parent() {
-        if parent.ends_with("async")
-            || [
-                "trap-in-post-return.wast",
-                "resources.wast",
-                "multiple-resources.wast",
-            ]
-            .into_iter()
-            .any(|name| Some(name) == test.file_name().and_then(|s| s.to_str()))
-        {
-            ret.component_model_async = Some(true);
-            ret.component_model_async_stackful = Some(true);
-            ret.component_model_more_async_builtins = Some(true);
-            ret.component_model_threading = Some(true);
-        }
         if parent.ends_with("wasm-tools") {
             ret.memory64 = Some(true);
             ret.threads = Some(true);
@@ -277,6 +349,7 @@ macro_rules! foreach_config_option {
             extended_const
             wide_arithmetic
             branch_hinting
+            compact_imports
             hogs_memory
             nan_canonicalization
             component_model_async
@@ -286,8 +359,10 @@ macro_rules! foreach_config_option {
             component_model_error_context
             component_model_gc
             component_model_map
+            component_model_memory64
             component_model_fixed_length_lists
             component_model_implements
+            component_model_canonical_names
             simd
             gc_types
             exceptions
@@ -401,21 +476,16 @@ impl Compiler {
 
             Compiler::Winch => {
                 if config.gc()
-                    || config.tail_call()
                     || config.function_references()
-                    || config.gc()
                     || config.relaxed_simd()
-                    || config.gc_types()
-                    || config.exceptions()
                     || config.legacy_exceptions()
                     || config.stack_switching()
-                    || config.legacy_exceptions()
                 {
                     return true;
                 }
 
                 if cfg!(target_arch = "aarch64") {
-                    return (config.simd() && !config.spec_test()) || config.threads();
+                    return config.threads();
                 }
 
                 !cfg!(target_arch = "x86_64")
@@ -470,15 +540,6 @@ impl WastTest {
             return true;
         }
 
-        let unsupported = [
-            // Wasmtime doesn't expose the component-model `cm64` feature toggle
-            // yet, so this parser-only test can't be enabled here.
-            "test/wasm-tools/memory64.wast",
-        ];
-        if unsupported.iter().any(|part| self.path.ends_with(part)) {
-            return true;
-        }
-
         // Some tests are known to fail with the pooling allocator
         if config.pooling {
             // allocates too much memory for the pooling configuration here
@@ -489,6 +550,7 @@ impl WastTest {
                 // shared memories + pooling allocator aren't supported yet
                 "misc_testsuite/memory-combos.wast",
                 "misc_testsuite/threads/atomics-end-of-memory.wast",
+                "misc_testsuite/threads/atomic_wait_endianness.wast",
                 "misc_testsuite/threads/LB.wast",
                 "misc_testsuite/threads/LB_atomic.wast",
                 "misc_testsuite/threads/MP.wast",
@@ -515,120 +577,32 @@ impl WastTest {
             return true;
         }
 
+        // Waiting for bytecodealliance/wasm-tools#2664 zero-length compact imports,
+        // as well as the Extended Name Section Proposal.
+        let unsupported = [
+            "spec_testsuite/proposals/compact-import-section/imports-compact.wast",
+            "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
+            "spec_testsuite/proposals/extended-name-section/custom/name.wast",
+            "spec_testsuite/type-subtyping.wast",
+        ];
+        if unsupported.iter().any(|part| self.path.ends_with(part)) {
+            return true;
+        }
+
         // Disable spec tests per target for proposals that Winch does not implement yet.
         if config.compiler == Compiler::Winch {
             // Common list for tests that fail in all targets supported by Winch.
             let unsupported = [
                 "extended-const/elem.wast",
                 "extended-const/global.wast",
-                "misc_testsuite/component-model/modules.wast",
-                "misc_testsuite/externref-id-function.wast",
-                "misc_testsuite/externref-segment.wast",
                 "misc_testsuite/externref-segments.wast",
                 "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
-                "misc_testsuite/linking-errors.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
-                "misc_testsuite/mutable_externref_globals.wast",
-                "misc_testsuite/no-mixup-stack-maps.wast",
                 "misc_testsuite/no-panic.wast",
-                "misc_testsuite/simple_ref_is_null.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
                 return true;
-            }
-
-            #[cfg(target_arch = "aarch64")]
-            {
-                let unsupported = [
-                    "misc_testsuite/int-to-float-splat.wast",
-                    "misc_testsuite/issue6562.wast",
-                    "misc_testsuite/memory64/simd.wast",
-                    "misc_testsuite/simd/almost-extmul.wast",
-                    "misc_testsuite/simd/canonicalize-nan.wast",
-                    "misc_testsuite/simd/cvt-from-uint.wast",
-                    "misc_testsuite/simd/edge-of-memory.wast",
-                    "misc_testsuite/simd/interesting-float-splat.wast",
-                    "misc_testsuite/simd/issue4807.wast",
-                    "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
-                    "misc_testsuite/simd/issue_3173_select_v128.wast",
-                    "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
-                    "misc_testsuite/simd/load_splat_out_of_bounds.wast",
-                    "misc_testsuite/simd/replace-lane-preserve.wast",
-                    "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
-                    "misc_testsuite/simd/sse-cannot-fold-unaligned-loads.wast",
-                    "misc_testsuite/simd/unaligned-load.wast",
-                    "misc_testsuite/simd/v128-select.wast",
-                    "misc_testsuite/winch/issue-10331.wast",
-                    "misc_testsuite/winch/issue-10357.wast",
-                    "misc_testsuite/winch/issue-10460.wast",
-                    "misc_testsuite/winch/replace_lane.wast",
-                    "misc_testsuite/winch/simd_multivalue.wast",
-                    "misc_testsuite/winch/v128_load_lane_invalid_address.wast",
-                    "spec_testsuite/proposals/annotations/simd_lane.wast",
-                    "spec_testsuite/proposals/multi-memory/simd_memory-multi.wast",
-                    "spec_testsuite/simd_address.wast",
-                    "spec_testsuite/simd_align.wast",
-                    "spec_testsuite/simd_bit_shift.wast",
-                    "spec_testsuite/simd_bitwise.wast",
-                    "spec_testsuite/simd_boolean.wast",
-                    "spec_testsuite/simd_const.wast",
-                    "spec_testsuite/simd_conversions.wast",
-                    "spec_testsuite/simd_f32x4.wast",
-                    "spec_testsuite/simd_f32x4_arith.wast",
-                    "spec_testsuite/simd_f32x4_cmp.wast",
-                    "spec_testsuite/simd_f32x4_pmin_pmax.wast",
-                    "spec_testsuite/simd_f32x4_rounding.wast",
-                    "spec_testsuite/simd_f64x2.wast",
-                    "spec_testsuite/simd_f64x2_arith.wast",
-                    "spec_testsuite/simd_f64x2_cmp.wast",
-                    "spec_testsuite/simd_f64x2_pmin_pmax.wast",
-                    "spec_testsuite/simd_f64x2_rounding.wast",
-                    "spec_testsuite/simd_i16x8_arith.wast",
-                    "spec_testsuite/simd_i16x8_arith2.wast",
-                    "spec_testsuite/simd_i16x8_cmp.wast",
-                    "spec_testsuite/simd_i16x8_extadd_pairwise_i8x16.wast",
-                    "spec_testsuite/simd_i16x8_extmul_i8x16.wast",
-                    "spec_testsuite/simd_i16x8_q15mulr_sat_s.wast",
-                    "spec_testsuite/simd_i16x8_sat_arith.wast",
-                    "spec_testsuite/simd_i32x4_arith.wast",
-                    "spec_testsuite/simd_i32x4_arith2.wast",
-                    "spec_testsuite/simd_i32x4_cmp.wast",
-                    "spec_testsuite/simd_i32x4_dot_i16x8.wast",
-                    "spec_testsuite/simd_i32x4_extadd_pairwise_i16x8.wast",
-                    "spec_testsuite/simd_i32x4_extmul_i16x8.wast",
-                    "spec_testsuite/simd_i32x4_trunc_sat_f32x4.wast",
-                    "spec_testsuite/simd_i32x4_trunc_sat_f64x2.wast",
-                    "spec_testsuite/simd_i64x2_arith.wast",
-                    "spec_testsuite/simd_i64x2_arith2.wast",
-                    "spec_testsuite/simd_i64x2_cmp.wast",
-                    "spec_testsuite/simd_i64x2_extmul_i32x4.wast",
-                    "spec_testsuite/simd_i8x16_arith.wast",
-                    "spec_testsuite/simd_i8x16_arith2.wast",
-                    "spec_testsuite/simd_i8x16_cmp.wast",
-                    "spec_testsuite/simd_i8x16_sat_arith.wast",
-                    "spec_testsuite/simd_int_to_int_extend.wast",
-                    "spec_testsuite/simd_lane.wast",
-                    "spec_testsuite/simd_load.wast",
-                    "spec_testsuite/simd_load16_lane.wast",
-                    "spec_testsuite/simd_load32_lane.wast",
-                    "spec_testsuite/simd_load64_lane.wast",
-                    "spec_testsuite/simd_load8_lane.wast",
-                    "spec_testsuite/simd_load_extend.wast",
-                    "spec_testsuite/simd_load_splat.wast",
-                    "spec_testsuite/simd_load_zero.wast",
-                    "spec_testsuite/simd_select.wast",
-                    "spec_testsuite/simd_splat.wast",
-                    "spec_testsuite/simd_store.wast",
-                    "spec_testsuite/simd_store16_lane.wast",
-                    "spec_testsuite/simd_store32_lane.wast",
-                    "spec_testsuite/simd_store64_lane.wast",
-                    "spec_testsuite/simd_store8_lane.wast",
-                ];
-
-                if unsupported.iter().any(|part| self.path.ends_with(part)) {
-                    return true;
-                }
             }
 
             #[cfg(target_arch = "x86_64")]
@@ -652,9 +626,14 @@ impl WastTest {
                         "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                         "misc_testsuite/simd/sse-cannot-fold-unaligned-loads.wast",
                         "misc_testsuite/winch/issue-10331.wast",
+                        "misc_testsuite/int-to-float-splat.wast",
+                        "misc_testsuite/simd/cvt-from-uint.wast",
                         "misc_testsuite/winch/replace_lane.wast",
                         "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
                         "misc_testsuite/simd/v128-equal.wast",
+                        "misc_testsuite/winch/issue-10331.wast",
+                        "misc_testsuite/int-to-float-splat.wast",
+                        "misc_testsuite/simd/cvt-from-uint.wast",
                         "spec_testsuite/simd_align.wast",
                         "spec_testsuite/simd_boolean.wast",
                         "spec_testsuite/simd_conversions.wast",
@@ -691,7 +670,14 @@ impl WastTest {
                         "spec_testsuite/simd_bitwise.wast",
                         "misc_testsuite/simd/load_splat_out_of_bounds.wast",
                         "misc_testsuite/simd/unaligned-load.wast",
-                        "multi-memory/simd_memory-multi.wast",
+                        "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
+                        "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
+                        "misc_testsuite/winch/replace_lane.wast",
+                        "misc_testsuite/simd/v128-equal.wast",
+                        "misc_testsuite/winch/issue-10331.wast",
+                        "misc_testsuite/int-to-float-splat.wast",
+                        "misc_testsuite/simd/cvt-from-uint.wast",
+                        "spec_testsuite/simd_memory-multi.wast",
                         "misc_testsuite/simd/issue4807.wast",
                         "spec_testsuite/simd_const.wast",
                         "spec_testsuite/simd_i8x16_sat_arith.wast",
@@ -730,6 +716,28 @@ impl WastTest {
             if happens_to_work.iter().any(|part| self.path.ends_with(part)) {
                 return false;
             }
+            return true;
+        }
+
+        // `stream.forward` not yet implemented:
+        let uses_stream_forward = [
+            "component-model/test/values/post-return.wast",
+            "component-model/test/async/big-interleaving-test.wast",
+            "component-model/test/async/forward.wast",
+        ];
+
+        if uses_stream_forward
+            .iter()
+            .any(|part| self.path.ends_with(part))
+        {
+            return true;
+        }
+
+        // Obsolete test to be removed in https://github.com/WebAssembly/component-model/pull/726
+        if self
+            .path
+            .ends_with("component-model/test/async/cancel-instance-wide-resume.wast")
+        {
             return true;
         }
 

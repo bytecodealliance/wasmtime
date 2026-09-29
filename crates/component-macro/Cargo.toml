@@ -36,8 +36,9 @@ tracing = { workspace = true }
 # For use with the custom attributes test
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-prettyplease = "0.2.31"
+prettyplease = "0.3.0"
 similar = { workspace = true }
+wit-parser = { workspace = true, features = ["decoding"] }
 
 [features]
 async = ['wasmtime-wit-bindgen/async']

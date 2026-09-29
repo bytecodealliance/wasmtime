@@ -1,13 +1,12 @@
 [package]
 name = "cranelift-module"
-version = "0.135.0"
+version = "0.137.0-dev"
 authors = ["The Cranelift Project Developers"]
 description = "Support for linking functions and data with Cranelift"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/cranelift-module"
 categories = ["no-std"]
 license = "Apache-2.0 WITH LLVM-exception"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 
@@ -17,7 +16,7 @@ workspace = true
 [dependencies]
 cranelift-codegen = { workspace = true }
 cranelift-control = { workspace = true }
-hashbrown = { workspace = true, optional = true }
+hashbrown = { workspace = true }
 anyhow = { workspace = true, features = ['std'] }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
@@ -25,7 +24,9 @@ serde_derive = { workspace = true, optional = true }
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std"]
-core = ["hashbrown", "cranelift-codegen/core"]
+# The "core" feature no longer does anything here either: hashbrown is now an
+# unconditional dependency. Kept, empty, for backward compatibility.
+core = []
 
 # For dependent crates that want to serialize some parts of cranelift
 enable-serde = ["serde", "serde_derive", "cranelift-codegen/enable-serde"]

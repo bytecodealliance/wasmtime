@@ -60,7 +60,7 @@
 ;;       movk    x17, #0x28
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x74
+;;       b.lo    #0x78
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x28
 ;;       mov     sp, x28
@@ -78,5 +78,6 @@
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
+;;       add     sp, sp, #0xc50
 ;;       ret
-;;   74: udf     #0xc11f
+;;   78: udf     #0xc11f

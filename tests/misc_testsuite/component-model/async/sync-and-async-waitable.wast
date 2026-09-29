@@ -49,9 +49,9 @@
     )
     (canon waitable.join (core func $waitable.join))
     (canon waitable-set.new (core func $waitable-set.new))
-    (canon waitable-set.wait (memory $memory "mem") (core func $waitable-set.wait))
+    (canon waitable-set.wait (memory (core memory $memory "mem")) (core func $waitable-set.wait))
     (canon future.new $FT (core func $future.new))
-    (canon future.write $FT (memory $memory "mem") (core func $future.write-sync))
+    (canon future.write $FT (memory (core memory $memory "mem")) (core func $future.write-sync))
     (core instance $cm (instantiate $CM (with "" (instance
       (export "mem" (memory $memory "mem"))
       (export "waitable.join" (func $waitable.join))
@@ -102,9 +102,9 @@
         (call $acknowledge-future-write)
       )
     )
-    (canon future.read $FT async (memory $memory "mem") (core func $future.read))
+    (canon future.read $FT async (memory (core memory $memory "mem")) (core func $future.read))
     (canon lower (func $c "start-future") (core func $start-future'))
-    (canon lower (func $c "future-write-sync") async (memory $memory "mem") (core func $future-write-sync.async))
+    (canon lower (func $c "future-write-sync") async (memory (core memory $memory "mem")) (core func $future-write-sync.async))
     (canon lower (func $c "acknowledge-future-write") (core func $acknowledge-future-write'))
     (core instance $core (instantiate $Core (with "" (instance
       (export "mem" (memory $memory "mem"))

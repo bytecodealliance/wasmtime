@@ -1,0 +1,152 @@
+test interpret
+test run
+target x86_64
+target s390x
+target aarch64
+target riscv64
+target pulley64
+target pulley64be
+
+;; A comparison's result is 0 or 1, so extending it must produce exactly 0 or 1
+;; in the wider type -- a backend that skips the extend because its comparison
+;; already wrote the whole register must leave no other bits set.
+
+function %uext_icmp_eq_32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = uextend.i32 v2
+    return v3
+}
+; run: %uext_icmp_eq_32(0, 0) == 1
+; run: %uext_icmp_eq_32(1, 0) == 0
+; run: %uext_icmp_eq_32(-1, -1) == 1
+; run: %uext_icmp_eq_32(-1, 0x7fffffff) == 0
+
+function %uext_icmp_slt_64(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %uext_icmp_slt_64(-1, 0) == 1
+; run: %uext_icmp_slt_64(0, -1) == 0
+; run: %uext_icmp_slt_64(0x80000000, 0x7fffffff) == 1
+; run: %uext_icmp_slt_64(0, 0) == 0
+
+function %uext_icmp_ult_64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = icmp ult v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %uext_icmp_ult_64(0, -1) == 1
+; run: %uext_icmp_ult_64(-1, 0) == 0
+; run: %uext_icmp_ult_64(-1, -1) == 0
+
+;; A narrow output width, and one narrower than the comparison's operands.
+function %uext_icmp_16(i64, i64) -> i16 {
+block0(v0: i64, v1: i64):
+    v2 = icmp ugt v0, v1
+    v3 = uextend.i16 v2
+    return v3
+}
+; run: %uext_icmp_16(1, 0) == 1
+; run: %uext_icmp_16(0, 1) == 0
+
+;; Narrow comparison operands: the `i8` inputs must not leak their upper bits
+;; into the result.
+function %uext_icmp_i8_operands(i8, i8) -> i64 {
+block0(v0: i8, v1: i8):
+    v2 = icmp eq v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %uext_icmp_i8_operands(-1, -1) == 1
+; run: %uext_icmp_i8_operands(-1, 0xff) == 1
+; run: %uext_icmp_i8_operands(0x7f, 0x80) == 0
+
+;; The extended value has to be usable as an integer, not just compared against
+;; 0 or 1: an `imul` by it exposes any stray upper bit.
+function %uext_icmp_arith(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = uextend.i64 v2
+    v4 = iconst.i64 0x1234_5678_9abc_def0
+    v5 = imul v3, v4
+    return v5
+}
+; run: %uext_icmp_arith(0, 0) == 0x123456789abcdef0
+; run: %uext_icmp_arith(0, 1) == 0
+
+;; Several extends of one comparison.
+function %uext_icmp_multi_use(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = uextend.i64 v2
+    v4 = uextend.i64 v2
+    v5 = iadd v3, v4
+    return v5
+}
+; run: %uext_icmp_multi_use(7, 7) == 2
+; run: %uext_icmp_multi_use(7, 8) == 0
+
+;; Sign-extending a comparison is the same as zero-extending it, which is a
+;; mid-end rewrite; check it still holds end to end.
+function %sext_icmp(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_icmp(5, 5) == 1
+; run: %sext_icmp(5, 6) == 0
+
+;; Floating point, where the unordered cases are what a 0-or-1 assumption is
+;; most likely to get wrong.
+function %uext_fcmp_lt(f64, f64) -> i64 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp lt v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %uext_fcmp_lt(0x0.0, 0x1.0) == 1
+; run: %uext_fcmp_lt(0x1.0, 0x0.0) == 0
+; run: %uext_fcmp_lt(-0x0.0, 0x0.0) == 0
+; run: %uext_fcmp_lt(+NaN, 0x0.0) == 0
+; run: %uext_fcmp_lt(0x0.0, +NaN) == 0
+
+;; `ne` is true for NaN.
+function %uext_fcmp_ne(f32, f32) -> i64 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ne v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %uext_fcmp_ne(0x1.0, 0x1.0) == 0
+; run: %uext_fcmp_ne(0x1.0, 0x2.0) == 1
+; run: %uext_fcmp_ne(+NaN, +NaN) == 1
+; run: %uext_fcmp_ne(-0x0.0, 0x0.0) == 0
+
+;; `one` and `ueq` are the two conditions aarch64 builds from a pair of `cset`s
+;; combined with `orr`.
+function %uext_fcmp_one(f32, f32) -> i64 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp one v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %uext_fcmp_one(0x1.0, 0x2.0) == 1
+; run: %uext_fcmp_one(0x1.0, 0x1.0) == 0
+; run: %uext_fcmp_one(+NaN, 0x1.0) == 0
+; run: %uext_fcmp_one(+NaN, +NaN) == 0
+
+function %uext_fcmp_ueq(f64, f64) -> i64 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp ueq v0, v1
+    v3 = uextend.i64 v2
+    return v3
+}
+; run: %uext_fcmp_ueq(0x1.0, 0x1.0) == 1
+; run: %uext_fcmp_ueq(0x1.0, 0x2.0) == 0
+; run: %uext_fcmp_ueq(+NaN, 0x1.0) == 1
+; run: %uext_fcmp_ueq(-0x0.0, 0x0.0) == 1

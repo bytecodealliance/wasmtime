@@ -4,7 +4,7 @@ use crate::{
     wasmtime_component_valtype_t, wasmtime_module_type_t,
 };
 use std::mem::{ManuallyDrop, MaybeUninit};
-use wasmtime::component::types::{Component, ComponentItem};
+use wasmtime::component::types::{Component, ComponentExtern, ComponentItem};
 
 type_wrapper! {
     pub struct wasmtime_component_type_t {
@@ -24,20 +24,20 @@ pub extern "C" fn wasmtime_component_type_import_count(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_type_import_get(
-    ty: &wasmtime_component_type_t,
-    engine: &wasm_engine_t,
+pub unsafe extern "C" fn wasmtime_component_type_import_get<'a>(
+    ty: &'a wasmtime_component_type_t,
+    engine: &'a wasm_engine_t,
     name: *const u8,
     name_len: usize,
-    ret: &mut MaybeUninit<wasmtime_component_item_t>,
+    ret: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
 ) -> bool {
     let name = unsafe { std::slice::from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return false;
     };
     match ty.ty.get_import(&engine.engine, name) {
-        Some(item) => {
-            ret.write(item.ty.into());
+        Some(e) => {
+            ret.write(Box::new(e.into()));
             true
         }
         None => false,
@@ -45,20 +45,20 @@ pub unsafe extern "C" fn wasmtime_component_type_import_get(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_component_type_import_nth(
-    ty: &wasmtime_component_type_t,
-    engine: &wasm_engine_t,
+pub extern "C" fn wasmtime_component_type_import_nth<'a>(
+    ty: &'a wasmtime_component_type_t,
+    engine: &'a wasm_engine_t,
     nth: usize,
     name_ret: &mut MaybeUninit<*const u8>,
     name_len_ret: &mut MaybeUninit<usize>,
-    type_ret: &mut MaybeUninit<wasmtime_component_item_t>,
+    ret: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
 ) -> bool {
     match ty.ty.imports(&engine.engine).nth(nth) {
-        Some((name, item)) => {
+        Some((name, e)) => {
             let name: &str = name;
             name_ret.write(name.as_ptr());
             name_len_ret.write(name.len());
-            type_ret.write(item.ty.into());
+            ret.write(Box::new(e.into()));
             true
         }
         None => false,
@@ -74,20 +74,20 @@ pub extern "C" fn wasmtime_component_type_export_count(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_type_export_get(
-    ty: &wasmtime_component_type_t,
-    engine: &wasm_engine_t,
+pub unsafe extern "C" fn wasmtime_component_type_export_get<'a>(
+    ty: &'a wasmtime_component_type_t,
+    engine: &'a wasm_engine_t,
     name: *const u8,
     name_len: usize,
-    ret: &mut MaybeUninit<wasmtime_component_item_t>,
+    ret: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
 ) -> bool {
     let name = unsafe { std::slice::from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return false;
     };
     match ty.ty.get_export(&engine.engine, name) {
-        Some(item) => {
-            ret.write(item.ty.into());
+        Some(e) => {
+            ret.write(Box::new(e.into()));
             true
         }
         None => false,
@@ -95,20 +95,20 @@ pub unsafe extern "C" fn wasmtime_component_type_export_get(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_component_type_export_nth(
-    ty: &wasmtime_component_type_t,
-    engine: &wasm_engine_t,
+pub extern "C" fn wasmtime_component_type_export_nth<'a>(
+    ty: &'a wasmtime_component_type_t,
+    engine: &'a wasm_engine_t,
     nth: usize,
     name_ret: &mut MaybeUninit<*const u8>,
     name_len_ret: &mut MaybeUninit<usize>,
-    type_ret: &mut MaybeUninit<wasmtime_component_item_t>,
+    ret: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
 ) -> bool {
     match ty.ty.exports(&engine.engine).nth(nth) {
-        Some((name, item)) => {
+        Some((name, e)) => {
             let name: &str = name;
             name_ret.write(name.as_ptr());
             name_len_ret.write(name.len());
-            type_ret.write(item.ty.into());
+            ret.write(Box::new(e.into()));
             true
         }
         None => false,
@@ -164,4 +164,77 @@ pub extern "C" fn wasmtime_component_item_delete(
     unsafe {
         ManuallyDrop::drop(item);
     }
+}
+
+pub struct wasmtime_component_extern_t<'a> {
+    e: ComponentExtern<'a>,
+}
+
+impl<'a> From<ComponentExtern<'a>> for wasmtime_component_extern_t<'a> {
+    fn from(e: ComponentExtern<'a>) -> Self {
+        wasmtime_component_extern_t { e }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_extern_clone<'a>(
+    e: &wasmtime_component_extern_t<'a>,
+) -> Box<wasmtime_component_extern_t<'a>> {
+    Box::new(wasmtime_component_extern_t { e: e.e.clone() })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_extern_type(
+    e: &wasmtime_component_extern_t<'_>,
+    ret: &mut MaybeUninit<wasmtime_component_item_t>,
+) {
+    ret.write(e.e.ty.clone().into());
+}
+
+fn optional_str(s: Option<&str>, len: &mut MaybeUninit<usize>) -> *const u8 {
+    match s {
+        Some(s) => {
+            len.write(s.len());
+            s.as_ptr()
+        }
+        None => {
+            len.write(0);
+            std::ptr::null()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_extern_implements(
+    e: &wasmtime_component_extern_t<'_>,
+    len: &mut MaybeUninit<usize>,
+) -> *const u8 {
+    optional_str(e.e.implements, len)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_extern_is_implements(
+    e: &wasmtime_component_extern_t<'_>,
+    name: *const u8,
+    len: usize,
+) -> bool {
+    let name = unsafe { crate::slice_from_raw_parts(name, len) };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return false;
+    };
+    e.e.is_implements(name)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_extern_external_id(
+    e: &wasmtime_component_extern_t<'_>,
+    len: &mut MaybeUninit<usize>,
+) -> *const u8 {
+    optional_str(e.e.external_id, len)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_component_extern_delete(
+    _e: Option<Box<wasmtime_component_extern_t<'_>>>,
+) {
 }

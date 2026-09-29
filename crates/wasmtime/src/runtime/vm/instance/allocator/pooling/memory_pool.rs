@@ -61,6 +61,7 @@ use crate::runtime::vm::{
     CompiledModuleId, InstanceAllocationRequest, Memory, MemoryBase, MemoryImageSlot, Mmap,
     MmapOffset, mmap::AlignedLength,
 };
+use crate::vm::sys::vm::{decommit_pages, iovec};
 use crate::{
     Enabled,
     runtime::vm::mpk::{self, ProtectionKey, ProtectionMask},
@@ -578,6 +579,56 @@ impl MemoryPool {
         }
     }
 
+    /// Releases the memory this pool is keeping resident for unused-but-warm
+    /// slots.
+    ///
+    /// Useful when the embedder knows that load has decreased and wishes to
+    /// reduce resident memory usage at the cost of some instantiation time at
+    /// the next instantiation.
+    ///
+    /// Returns the number of bytes freed.
+    ///
+    /// Slots are taken out of the free lists before their memory is released
+    /// and returned afterwards, so nothing can allocate a slot while it is
+    /// being decommitted, the same order `DecommitQueue::flush` uses.
+    pub fn release_resident_unused_memory(&self) -> usize {
+        let mut released = 0;
+        for (stripe_index, stripe) in self.stripes.iter().enumerate() {
+            let taken = stripe.allocator.take_resident_warm_slots();
+            if taken.is_empty() {
+                continue;
+            }
+
+            let mut iov = Vec::with_capacity(taken.len());
+            for (id, bytes_resident) in &taken {
+                let index = StripedAllocationIndex(id.0)
+                    .as_unstriped_slot_index(stripe_index, self.stripes.len());
+                iov.push(iovec {
+                    iov_base: self.get_base(index).as_mut_ptr().cast(),
+                    iov_len: *bytes_resident,
+                });
+            }
+
+            // SAFETY: every region here belongs to a slot this loop has taken
+            // out of the free list, so it is not in use and cannot be handed
+            // out until it is freed below.
+            let decommitted = unsafe { decommit_pages(&iov) }.is_ok();
+
+            // A failed decommit leaves the pages resident with the contents
+            // they had, which is a correct state: the slots go back reporting
+            // the same bytes as before and nothing but the reclaim is lost.
+            for (id, bytes_resident) in taken {
+                if decommitted {
+                    released += bytes_resident;
+                    stripe.allocator.free(id, 0);
+                } else {
+                    stripe.allocator.free(id, bytes_resident);
+                }
+            }
+        }
+        released
+    }
+
     fn get_base(&self, allocation_index: MemoryAllocationIndex) -> MmapOffset {
         assert!(allocation_index.index() < self.layout.num_slots);
         let offset = self
@@ -587,6 +638,19 @@ impl MemoryPool {
             .and_then(|c| c.checked_add(self.layout.pre_slab_guard_bytes))
             .expect("slot_bytes * index + pre_slab_guard_bytes overflows");
         self.mapping.offset(offset).expect("offset is in bounds")
+    }
+
+    /// Return the protection key that this slot's memory was striped with when
+    /// the pool was created, if any.
+    ///
+    /// This mirrors the striping performed in `new`: memory is only colored
+    /// when there are at least two stripes, and slot `i` is colored with the
+    /// `i % num_stripes`th key.
+    fn pkey_for_slot(&self, allocation_index: MemoryAllocationIndex) -> Option<ProtectionKey> {
+        if self.stripes.len() < 2 {
+            return None;
+        }
+        self.stripes[allocation_index.index() % self.stripes.len()].pkey
     }
 
     /// Take ownership of the given image slot.
@@ -620,6 +684,7 @@ impl MemoryPool {
                 self.get_base(allocation_index),
                 HostAlignedByteCount::ZERO,
                 self.layout.max_memory_bytes.byte_count(),
+                self.pkey_for_slot(allocation_index),
             )
         });
 

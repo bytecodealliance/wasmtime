@@ -1,0 +1,164 @@
+test compile precise-output
+set opt_level=speed
+target aarch64
+
+function %umin_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umin v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   uxtb w3, w0
+;   subs wzr, w3, w1, UXTB
+;   csel x0, x0, x1, lo
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxtb w3, w0
+;   cmp w3, w1, uxtb
+;   csel x0, x0, x1, lo
+;   ret
+
+function %smin_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = smin v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sxtb w3, w0
+;   subs wzr, w3, w1, SXTB
+;   csel x0, x0, x1, lt
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sxtb w3, w0
+;   cmp w3, w1, sxtb
+;   csel x0, x0, x1, lt
+;   ret
+
+function %umax_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = umax v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   uxth w3, w0
+;   subs wzr, w3, w1, UXTH
+;   csel x0, x0, x1, hi
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   uxth w3, w0
+;   cmp w3, w1, uxth
+;   csel x0, x0, x1, hi
+;   ret
+
+function %smax_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = smax v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sxth w3, w0
+;   subs wzr, w3, w1, SXTH
+;   csel x0, x0, x1, gt
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sxth w3, w0
+;   cmp w3, w1, sxth
+;   csel x0, x0, x1, gt
+;   ret
+
+function %umin_i8_imm(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 100
+    v2 = umin v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   movz w4, #100
+;   uxtb w3, w0
+;   subs wzr, w3, #100
+;   csel x0, x0, x4, lo
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w4, #0x64
+;   uxtb w3, w0
+;   cmp w3, #0x64
+;   csel x0, x0, x4, lo
+;   ret
+
+function %umin_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   subs wzr, w0, w1
+;   csel x0, x0, x1, lo
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp w0, w1
+;   csel x0, x0, x1, lo
+;   ret
+
+function %smax_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = smax v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, x1
+;   csel x0, x0, x1, gt
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x1
+;   csel x0, x0, x1, gt
+;   ret
+
+function %smax_i64_imm(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 5
+    v2 = smax v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   movz x3, #5
+;   subs xzr, x0, #5
+;   csel x0, x0, x3, gt
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x3, #5
+;   cmp x0, #5
+;   csel x0, x0, x3, gt
+;   ret
+

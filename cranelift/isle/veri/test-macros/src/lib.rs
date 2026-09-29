@@ -1,5 +1,3 @@
-extern crate proc_macro;
-
 use std::{env, ffi::OsStr, fs, path::PathBuf, str::FromStr};
 
 use proc_macro::TokenStream;

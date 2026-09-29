@@ -43,7 +43,7 @@
     (core instance $libc (instantiate $libc))
     (core type $start-func-ty (func (param i32)))
     (alias core export $libc "table" (core table $table))
-    (core func $thread.new-indirect (canon thread.new-indirect $start-func-ty (table $table)))
+    (core func $thread.new-indirect (canon thread.new-indirect $start-func-ty (core table $table)))
     (core func $task.return (canon task.return))
     (core func $thread.yield (canon thread.yield))
     (core instance $m (instantiate $m (with "" (instance
@@ -52,7 +52,7 @@
       (export "thread.yield" (func $thread.yield))
       (export "table" (table $table))
     ))))
-    (func (export "do-work") async (canon lift (core func $m "do-work") async (callback (func $m "callback"))))
+    (func (export "do-work") async (canon lift (core func $m "do-work") async (callback (core func $m "callback"))))
   )
 
   ;; Outer component (caller)
@@ -112,7 +112,7 @@
       (export "waitable-set.wait" (func $waitable-set.wait))
       (export "memory" (memory $memory))
     ))))
-    (func (export "run") async (canon lift (core func $m "run") async (callback (func $m "callback"))))
+    (func (export "run") async (canon lift (core func $m "run") async (callback (core func $m "callback"))))
   )
 
   (instance $callee (instantiate $callee))

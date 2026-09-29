@@ -1,0 +1,38 @@
+test optimize precise-output
+set opt_level=speed_and_size
+target x86_64
+
+;; Regression test for https://github.com/bytecodealliance/wasmtime/issues/14131
+;;
+;; The first store has no alias region, so it is treated as a fence and becomes
+;; the `last_fence`, while `region0`'s last-store slot stays empty. The second
+;; store is then a dead store, overwritten by the third. When dead-store
+;; elimination unwinds the last-store state past the store it just removed, it
+;; must not materialize the `last_fence` fallback into `region0`'s slot:
+;; reprocessing the overwriting store would then "observe" the regionless store,
+;; an observation that the up-front observed-stores analysis never made, which
+;; leads to an assertion failure.
+
+function %f(i64, i64) system_v {
+    region0 = 1 "table"
+
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 0
+    store notrap v2, v1
+    store notrap region0 v2, v0
+    store notrap region0 v2, v0
+    fence
+    return
+}
+
+; function %f(i64, i64) system_v {
+;     region0 = 1 "table"
+;
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i32 0
+;     store notrap v2, v1  ; v2 = 0
+;     store notrap region0 v2, v0  ; v2 = 0
+;     fence 
+;     return
+; }
+

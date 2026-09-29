@@ -34,7 +34,9 @@ impl CopyingCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         func_env
             .alias_regions
-            .vmctx_gc_heap_data(&mut builder.cursor(), vmctx)
+            .vmctx()
+            .gc_heap_data()
+            .load(&mut builder.cursor(), vmctx)
     }
 
     /// Load the current bump pointer and active-space end from a `*mut
@@ -48,10 +50,14 @@ impl CopyingCompiler {
     ) -> (ir::Value, ir::Value) {
         let bump_ptr = func_env
             .alias_regions
-            .vmcopying_heap_data_bump_ptr(&mut builder.cursor(), ptr_to_heap_data);
+            .vm_copying_heap_data()
+            .bump_ptr()
+            .load(&mut builder.cursor(), ptr_to_heap_data);
         let active_space_end = func_env
             .alias_regions
-            .vmcopying_heap_data_active_space_end(&mut builder.cursor(), ptr_to_heap_data);
+            .vm_copying_heap_data()
+            .active_space_end()
+            .load(&mut builder.cursor(), ptr_to_heap_data);
         (bump_ptr, active_space_end)
     }
 
@@ -62,11 +68,11 @@ impl CopyingCompiler {
         heap_data_ptr: ir::Value,
         end_of_object: ir::Value,
     ) {
-        func_env.alias_regions.store_vmcopying_heap_data_bump_ptr(
-            &mut builder.cursor(),
-            heap_data_ptr,
-            end_of_object,
-        );
+        func_env
+            .alias_regions
+            .vm_copying_heap_data()
+            .bump_ptr()
+            .store(&mut builder.cursor(), heap_data_ptr, end_of_object);
     }
 
     /// Round `size` (an `i32`) up to `ALIGN`, returning the result as an `i64`.
@@ -164,33 +170,32 @@ impl CopyingCompiler {
             let heap_offset = uextend_i32_to_pointer_type(builder, pointer_type, gc_ref);
             let obj_ptr = builder.ins().iadd(base, heap_offset);
 
-            // These header writes target the GC heap, so tag them with the
-            // GC-heap region (like the null collector does).
-            let header_flags = func_env.gc_memflags(&mut builder.func);
-
             // Write `VMGcHeader::kind` with inline trace info bits included.
+            let kind_flags = func_env.gc_memflags(&mut builder.func, GcAccess::HeaderKind);
             let kind_val = builder
                 .ins()
                 .iconst(ir::types::I32, i64::from(kind.as_u32() | reserved_bits));
             builder.ins().store(
-                header_flags,
+                kind_flags,
                 kind_val,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET).unwrap(),
             );
 
             // Write `VMGcHeader::type_index`.
+            let ty_flags = func_env.gc_memflags(&mut builder.func, GcAccess::HeaderTypeIndex);
             let shared_ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
             builder.ins().store(
-                header_flags,
+                ty_flags,
                 shared_ty,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET).unwrap(),
             );
 
             // Write `VMCopyingHeader::object_size`.
+            let size_flags = func_env.gc_memflags(&mut builder.func, GcAccess::CopyingObjectSize);
             builder.ins().istore32(
-                header_flags,
+                size_flags,
                 aligned_size_64,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_SIZE).unwrap(),
@@ -249,7 +254,7 @@ impl GcCompiler for CopyingCompiler {
             reserved_bits,
         )?;
         let len_addr = builder.ins().iadd_imm_s(object_addr, i64::from(len_offset));
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_memflags(&mut builder.func, GcAccess::ArrayLength);
         builder.ins().store(flags, len, len_addr, 0);
 
         Ok(array_ref)
@@ -338,6 +343,7 @@ impl GcCompiler for CopyingCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             instance_id_addr,
+            GcAccess::ExnTagInstance,
             instance_id,
         )?;
         let tag_addr = builder
@@ -348,6 +354,7 @@ impl GcCompiler for CopyingCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             tag_addr,
+            GcAccess::ExnTagDefined,
             tag,
         )?;
 
@@ -421,11 +428,12 @@ impl GcCompiler for CopyingCompiler {
         builder: &mut FunctionBuilder<'_>,
         ty: WasmStorageType,
         field_addr: ir::Value,
+        access: GcAccess,
         val: ir::Value,
     ) -> WasmResult<()> {
         // Data inside GC objects is always little endian.
         let flags = func_env
-            .gc_memflags(&mut builder.func)
+            .gc_memflags(&mut builder.func, access)
             .with_endianness(ir::Endianness::Little);
 
         match ty {
@@ -438,7 +446,9 @@ impl GcCompiler for CopyingCompiler {
                     // store the reference directly.
                     unbarriered_store_gc_ref(builder, r.heap_type, field_addr, val, flags)?;
                 }
-                WasmHeapTopType::Cont => return super::stack_switching_unsupported(),
+                WasmHeapTopType::Cont => {
+                    write_field_at_addr(func_env, builder, ty, field_addr, access, val)?
+                }
             },
             WasmStorageType::I8 => {
                 assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);

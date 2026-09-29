@@ -7,7 +7,6 @@ use core::mem;
 use core::ops::Range;
 use core::pin::Pin;
 use core::ptr::{self, NonNull};
-#[cfg(has_mmu_interruption)]
 use core::task::{Context, Poll};
 use wasmtime_fiber::{Fiber, FiberStack, Suspend};
 #[cfg(all(feature = "component-model-async", feature = "gc"))]
@@ -894,19 +893,6 @@ where
         id,
         fiber: Some(RawFiber(fiber).into()),
     })
-}
-
-/// Safe wrapper around [`make_fiber_unchecked`] which requires that `S` is
-/// `Send`.
-#[cfg(feature = "component-model-async")]
-pub(crate) fn make_fiber<'a, S>(
-    store: &mut S,
-    fun: impl FnOnce(&mut S) -> Result<()> + Send + Sync + 'a,
-) -> Result<StoreFiber<'a>>
-where
-    S: AsStoreOpaque + Send + ?Sized + 'a,
-{
-    unsafe { make_fiber_unchecked(store, fun) }
 }
 
 /// Run the specified function on a newly-created fiber and `.await` its

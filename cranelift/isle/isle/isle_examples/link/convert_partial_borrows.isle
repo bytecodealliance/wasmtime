@@ -1,0 +1,17 @@
+;; ISLE only passes primitives by value, enums are passed by reference.
+(type A (enum (B) (C)))
+(type W (enum (X) (Y)))
+
+(decl pure partial a_to_w (A) W)
+(extern constructor a_to_w a_to_w)
+(convert A W a_to_w)
+
+(decl build (W) u32)
+(extern constructor build build)
+
+;; The rule below passes an `A` where a `W` is expected, so ISLE inserts the
+;; partial converter `a_to_w`. Because `build` takes its `W` by reference, ISLE
+;; emits `let v = &a_to_w(...); let w = v?;` -- applying `?` to `&Option<W>`,
+;; which does not compile.
+(decl partial entry (A) u32)
+(rule (entry a) (build a))

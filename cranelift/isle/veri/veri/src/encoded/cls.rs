@@ -1,5 +1,5 @@
 // Adapted from https://stackoverflow.com/questions/23856596/how-to-count-leading-zeros-in-a-32-bit-unsigned-integer
-use easy_smt::*;
+use cranelift_isle_veri_caching::*;
 
 fn declare(smt: &mut Context, name: String, val: SExpr) -> SExpr {
     smt.declare_const(name.clone(), val).unwrap();
@@ -11,7 +11,7 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // total zeros counter
     let zret0 = declare(
         smt,
-        format!("zret0_{id}", id = id),
+        format!("zret0_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(
@@ -21,17 +21,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 1
     let zret1 = declare(
         smt,
-        format!("zret1_{id}", id = id),
+        format!("zret1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zy32 = declare(
         smt,
-        format!("zy32_{id}", id = id),
+        format!("zy32_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zx32 = declare(
         smt,
-        format!("zx32_{id}", id = id),
+        format!("zx32_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(zy32, smt.bvlshr(x, smt.atom("#x0000000000000020"))));
@@ -69,17 +69,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 2
     let zret2 = declare(
         smt,
-        format!("zret2_{id}", id = id),
+        format!("zret2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zy16 = declare(
         smt,
-        format!("zy16_{id}", id = id),
+        format!("zy16_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zx16 = declare(
         smt,
-        format!("zx16_{id}", id = id),
+        format!("zx16_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(zy16, smt.bvlshr(zx32, smt.atom("#x0000000000000010"))));
@@ -117,17 +117,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 3
     let zret3 = declare(
         smt,
-        format!("zret3_{id}", id = id),
+        format!("zret3_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zy8 = declare(
         smt,
-        format!("zy8_{id}", id = id),
+        format!("zy8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zx8 = declare(
         smt,
-        format!("zx8_{id}", id = id),
+        format!("zx8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(zy8, smt.bvlshr(zx16, smt.atom("#x0000000000000008"))));
@@ -165,17 +165,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 4
     let zret4 = declare(
         smt,
-        format!("zret4_{id}", id = id),
+        format!("zret4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zy4 = declare(
         smt,
-        format!("zy4_{id}", id = id),
+        format!("zy4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zx4 = declare(
         smt,
-        format!("zx4_{id}", id = id),
+        format!("zx4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(zy4, smt.bvlshr(zx8, smt.atom("#x0000000000000004"))));
@@ -213,17 +213,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 5
     let zret5 = declare(
         smt,
-        format!("zret5_{id}", id = id),
+        format!("zret5_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zy2 = declare(
         smt,
-        format!("zy2_{id}", id = id),
+        format!("zy2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zx2 = declare(
         smt,
-        format!("zx2_{id}", id = id),
+        format!("zx2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(zy2, smt.bvlshr(zx4, smt.atom("#x0000000000000002"))));
@@ -261,17 +261,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 6
     let zret6 = declare(
         smt,
-        format!("zret6_{id}", id = id),
+        format!("zret6_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zy1 = declare(
         smt,
-        format!("zy1_{id}", id = id),
+        format!("zy1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let zx1 = declare(
         smt,
-        format!("zx1_{id}", id = id),
+        format!("zx1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(zy1, smt.bvlshr(zx2, smt.atom("#x0000000000000001"))));
@@ -309,7 +309,7 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // last round
     let zret7 = declare(
         smt,
-        format!("zret7_{id}", id = id),
+        format!("zret7_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -333,7 +333,7 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let clzret = declare(
         smt,
-        format!("clzret_{id}", id = id),
+        format!("clzret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -355,7 +355,7 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // total zeros counter
     let sret0 = declare(
         smt,
-        format!("sret0_{id}", id = id),
+        format!("sret0_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(
@@ -365,17 +365,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 1
     let sret1 = declare(
         smt,
-        format!("sret1_{id}", id = id),
+        format!("sret1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sy32 = declare(
         smt,
-        format!("sy32_{id}", id = id),
+        format!("sy32_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sx32 = declare(
         smt,
-        format!("sx32_{id}", id = id),
+        format!("sx32_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(sy32, smt.bvashr(x, smt.atom("#x0000000000000020"))));
@@ -421,17 +421,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 2
     let sret2 = declare(
         smt,
-        format!("sret2_{id}", id = id),
+        format!("sret2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sy16 = declare(
         smt,
-        format!("sy16_{id}", id = id),
+        format!("sy16_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sx16 = declare(
         smt,
-        format!("sx16_{id}", id = id),
+        format!("sx16_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(sy16, smt.bvashr(sx32, smt.atom("#x0000000000000010"))));
@@ -477,17 +477,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 3
     let sret3 = declare(
         smt,
-        format!("sret3_{id}", id = id),
+        format!("sret3_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sy8 = declare(
         smt,
-        format!("sy8_{id}", id = id),
+        format!("sy8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sx8 = declare(
         smt,
-        format!("sx8_{id}", id = id),
+        format!("sx8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(sy8, smt.bvashr(sx16, smt.atom("#x0000000000000008"))));
@@ -533,17 +533,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 4
     let sret4 = declare(
         smt,
-        format!("sret4_{id}", id = id),
+        format!("sret4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sy4 = declare(
         smt,
-        format!("sy4_{id}", id = id),
+        format!("sy4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sx4 = declare(
         smt,
-        format!("sx4_{id}", id = id),
+        format!("sx4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(sy4, smt.bvashr(sx8, smt.atom("#x0000000000000004"))));
@@ -589,17 +589,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 5
     let sret5 = declare(
         smt,
-        format!("sret5_{id}", id = id),
+        format!("sret5_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sy2 = declare(
         smt,
-        format!("sy2_{id}", id = id),
+        format!("sy2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sx2 = declare(
         smt,
-        format!("sx2_{id}", id = id),
+        format!("sx2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(sy2, smt.bvashr(sx4, smt.atom("#x0000000000000002"))));
@@ -645,17 +645,17 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 6
     let sret6 = declare(
         smt,
-        format!("sret6_{id}", id = id),
+        format!("sret6_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sy1 = declare(
         smt,
-        format!("sy1_{id}", id = id),
+        format!("sy1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let sx1 = declare(
         smt,
-        format!("sx1_{id}", id = id),
+        format!("sx1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(sy1, smt.bvashr(sx2, smt.atom("#x0000000000000001"))));
@@ -701,7 +701,7 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // last round
     let sret7 = declare(
         smt,
-        format!("sret7_{id}", id = id),
+        format!("sret7_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -729,7 +729,7 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let clsret = declare(
         smt,
-        format!("clsret_{id}", id = id),
+        format!("clsret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -750,7 +750,7 @@ pub fn cls64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let cls64ret = declare(
         smt,
-        format!("cls64ret_{id}", id = id),
+        format!("cls64ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -774,7 +774,7 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // total zeros counter
     let zret0 = declare(
         smt,
-        format!("zret0_{id}", id = id),
+        format!("zret0_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(
@@ -784,17 +784,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 1
     let zret2 = declare(
         smt,
-        format!("zret2_{id}", id = id),
+        format!("zret2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zy16 = declare(
         smt,
-        format!("zy16_{id}", id = id),
+        format!("zy16_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zx16 = declare(
         smt,
-        format!("zx16_{id}", id = id),
+        format!("zx16_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(zy16, smt.bvlshr(x, smt.atom("#x00000010"))));
@@ -832,17 +832,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 2
     let zret3 = declare(
         smt,
-        format!("zret3_{id}", id = id),
+        format!("zret3_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zy8 = declare(
         smt,
-        format!("zy8_{id}", id = id),
+        format!("zy8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zx8 = declare(
         smt,
-        format!("zx8_{id}", id = id),
+        format!("zx8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(zy8, smt.bvlshr(zx16, smt.atom("#x00000008"))));
@@ -880,17 +880,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 3
     let zret4 = declare(
         smt,
-        format!("zret4_{id}", id = id),
+        format!("zret4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zy4 = declare(
         smt,
-        format!("zy4_{id}", id = id),
+        format!("zy4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zx4 = declare(
         smt,
-        format!("zx4_{id}", id = id),
+        format!("zx4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(zy4, smt.bvlshr(zx8, smt.atom("#x00000004"))));
@@ -928,17 +928,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 4
     let zret5 = declare(
         smt,
-        format!("zret5_{id}", id = id),
+        format!("zret5_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zy2 = declare(
         smt,
-        format!("zy2_{id}", id = id),
+        format!("zy2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zx2 = declare(
         smt,
-        format!("zx2_{id}", id = id),
+        format!("zx2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(zy2, smt.bvlshr(zx4, smt.atom("#x00000002"))));
@@ -976,17 +976,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 5
     let zret6 = declare(
         smt,
-        format!("zret6_{id}", id = id),
+        format!("zret6_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zy1 = declare(
         smt,
-        format!("zy1_{id}", id = id),
+        format!("zy1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let zx1 = declare(
         smt,
-        format!("zx1_{id}", id = id),
+        format!("zx1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(zy1, smt.bvlshr(zx2, smt.atom("#x00000001"))));
@@ -1024,7 +1024,7 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // last round
     let zret7 = declare(
         smt,
-        format!("zret7_{id}", id = id),
+        format!("zret7_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1048,7 +1048,7 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let clzret = declare(
         smt,
-        format!("clzret_{id}", id = id),
+        format!("clzret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1070,7 +1070,7 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // total zeros counter
     let sret0 = declare(
         smt,
-        format!("sret0_{id}", id = id),
+        format!("sret0_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(
@@ -1080,17 +1080,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 1
     let sret2 = declare(
         smt,
-        format!("sret2_{id}", id = id),
+        format!("sret2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sy16 = declare(
         smt,
-        format!("sy16_{id}", id = id),
+        format!("sy16_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sx16 = declare(
         smt,
-        format!("sx16_{id}", id = id),
+        format!("sx16_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(sy16, smt.bvashr(x, smt.atom("#x00000010"))));
@@ -1136,17 +1136,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 2
     let sret3 = declare(
         smt,
-        format!("sret3_{id}", id = id),
+        format!("sret3_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sy8 = declare(
         smt,
-        format!("sy8_{id}", id = id),
+        format!("sy8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sx8 = declare(
         smt,
-        format!("sx8_{id}", id = id),
+        format!("sx8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(sy8, smt.bvashr(sx16, smt.atom("#x00000008"))));
@@ -1192,17 +1192,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 3
     let sret4 = declare(
         smt,
-        format!("sret4_{id}", id = id),
+        format!("sret4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sy4 = declare(
         smt,
-        format!("sy4_{id}", id = id),
+        format!("sy4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sx4 = declare(
         smt,
-        format!("sx4_{id}", id = id),
+        format!("sx4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(sy4, smt.bvashr(sx8, smt.atom("#x00000004"))));
@@ -1248,17 +1248,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 4
     let sret5 = declare(
         smt,
-        format!("sret5_{id}", id = id),
+        format!("sret5_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sy2 = declare(
         smt,
-        format!("sy2_{id}", id = id),
+        format!("sy2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sx2 = declare(
         smt,
-        format!("sx2_{id}", id = id),
+        format!("sx2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(sy2, smt.bvashr(sx4, smt.atom("#x00000002"))));
@@ -1304,17 +1304,17 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 5
     let sret6 = declare(
         smt,
-        format!("sret6_{id}", id = id),
+        format!("sret6_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sy1 = declare(
         smt,
-        format!("sy1_{id}", id = id),
+        format!("sy1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let sx1 = declare(
         smt,
-        format!("sx1_{id}", id = id),
+        format!("sx1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(sy1, smt.bvashr(sx2, smt.atom("#x00000001"))));
@@ -1360,7 +1360,7 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // last round
     let sret7 = declare(
         smt,
-        format!("sret7_{id}", id = id),
+        format!("sret7_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1388,7 +1388,7 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let clsret = declare(
         smt,
-        format!("clsret_{id}", id = id),
+        format!("clsret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1409,7 +1409,7 @@ pub fn cls32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let cls32ret = declare(
         smt,
-        format!("cls32ret_{id}", id = id),
+        format!("cls32ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1433,7 +1433,7 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // total zeros counter
     let zret0 = declare(
         smt,
-        format!("zret0_{id}", id = id),
+        format!("zret0_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(
@@ -1443,17 +1443,17 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 1
     let zret3 = declare(
         smt,
-        format!("zret3_{id}", id = id),
+        format!("zret3_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let zy8 = declare(
         smt,
-        format!("zy8_{id}", id = id),
+        format!("zy8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let zx8 = declare(
         smt,
-        format!("zx8_{id}", id = id),
+        format!("zx8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(zy8, smt.bvlshr(x, smt.atom("#x0008"))));
@@ -1491,17 +1491,17 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 2
     let zret4 = declare(
         smt,
-        format!("zret4_{id}", id = id),
+        format!("zret4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let zy4 = declare(
         smt,
-        format!("zy4_{id}", id = id),
+        format!("zy4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let zx4 = declare(
         smt,
-        format!("zx4_{id}", id = id),
+        format!("zx4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(zy4, smt.bvlshr(zx8, smt.atom("#x0004"))));
@@ -1539,17 +1539,17 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 3
     let zret5 = declare(
         smt,
-        format!("zret5_{id}", id = id),
+        format!("zret5_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let zy2 = declare(
         smt,
-        format!("zy2_{id}", id = id),
+        format!("zy2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let zx2 = declare(
         smt,
-        format!("zx2_{id}", id = id),
+        format!("zx2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(zy2, smt.bvlshr(zx4, smt.atom("#x0002"))));
@@ -1587,17 +1587,17 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 4
     let zret6 = declare(
         smt,
-        format!("zret6_{id}", id = id),
+        format!("zret6_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let zy1 = declare(
         smt,
-        format!("zy1_{id}", id = id),
+        format!("zy1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let zx1 = declare(
         smt,
-        format!("zx1_{id}", id = id),
+        format!("zx1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(zy1, smt.bvlshr(zx2, smt.atom("#x0001"))));
@@ -1635,7 +1635,7 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // last round
     let zret7 = declare(
         smt,
-        format!("zret7_{id}", id = id),
+        format!("zret7_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1659,7 +1659,7 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let clzret = declare(
         smt,
-        format!("clzret_{id}", id = id),
+        format!("clzret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1681,7 +1681,7 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // total zeros counter
     let sret0 = declare(
         smt,
-        format!("sret0_{id}", id = id),
+        format!("sret0_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(
@@ -1691,17 +1691,17 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 1
     let sret3 = declare(
         smt,
-        format!("sret3_{id}", id = id),
+        format!("sret3_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let sy8 = declare(
         smt,
-        format!("sy8_{id}", id = id),
+        format!("sy8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let sx8 = declare(
         smt,
-        format!("sx8_{id}", id = id),
+        format!("sx8_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(sy8, smt.bvashr(x, smt.atom("#x0008"))));
@@ -1739,17 +1739,17 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 2
     let sret4 = declare(
         smt,
-        format!("sret4_{id}", id = id),
+        format!("sret4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let sy4 = declare(
         smt,
-        format!("sy4_{id}", id = id),
+        format!("sy4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let sx4 = declare(
         smt,
-        format!("sx4_{id}", id = id),
+        format!("sx4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(sy4, smt.bvashr(sx8, smt.atom("#x0004"))));
@@ -1787,17 +1787,17 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 3
     let sret5 = declare(
         smt,
-        format!("sret5_{id}", id = id),
+        format!("sret5_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let sy2 = declare(
         smt,
-        format!("sy2_{id}", id = id),
+        format!("sy2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let sx2 = declare(
         smt,
-        format!("sx2_{id}", id = id),
+        format!("sx2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(sy2, smt.bvashr(sx4, smt.atom("#x0002"))));
@@ -1835,17 +1835,17 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 4
     let sret6 = declare(
         smt,
-        format!("sret6_{id}", id = id),
+        format!("sret6_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let sy1 = declare(
         smt,
-        format!("sy1_{id}", id = id),
+        format!("sy1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let sx1 = declare(
         smt,
-        format!("sx1_{id}", id = id),
+        format!("sx1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(sy1, smt.bvashr(sx2, smt.atom("#x0001"))));
@@ -1883,7 +1883,7 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // last round
     let sret7 = declare(
         smt,
-        format!("sret7_{id}", id = id),
+        format!("sret7_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1907,7 +1907,7 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let clsret = declare(
         smt,
-        format!("clsret_{id}", id = id),
+        format!("clsret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1928,7 +1928,7 @@ pub fn cls16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let cls16ret = declare(
         smt,
-        format!("cls16ret_{id}", id = id),
+        format!("cls16ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -1952,7 +1952,7 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // total zeros counter
     let zret0 = declare(
         smt,
-        format!("zret0_{id}", id = id),
+        format!("zret0_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(
@@ -1962,17 +1962,17 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 1
     let zret4 = declare(
         smt,
-        format!("zret4_{id}", id = id),
+        format!("zret4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let zy4 = declare(
         smt,
-        format!("zy4_{id}", id = id),
+        format!("zy4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let zx4 = declare(
         smt,
-        format!("zx4_{id}", id = id),
+        format!("zx4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(zy4, smt.bvlshr(x, smt.atom("#x04"))));
@@ -2010,17 +2010,17 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 2
     let zret5 = declare(
         smt,
-        format!("zret5_{id}", id = id),
+        format!("zret5_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let zy2 = declare(
         smt,
-        format!("zy2_{id}", id = id),
+        format!("zy2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let zx2 = declare(
         smt,
-        format!("zx2_{id}", id = id),
+        format!("zx2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(zy2, smt.bvlshr(zx4, smt.atom("#x02"))));
@@ -2058,17 +2058,17 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 3
     let zret6 = declare(
         smt,
-        format!("zret6_{id}", id = id),
+        format!("zret6_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let zy1 = declare(
         smt,
-        format!("zy1_{id}", id = id),
+        format!("zy1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let zx1 = declare(
         smt,
-        format!("zx1_{id}", id = id),
+        format!("zx1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(zy1, smt.bvlshr(zx2, smt.atom("#x01"))));
@@ -2106,7 +2106,7 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // last round
     let zret7 = declare(
         smt,
-        format!("zret7_{id}", id = id),
+        format!("zret7_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -2130,7 +2130,7 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let clzret = declare(
         smt,
-        format!("clzret_{id}", id = id),
+        format!("clzret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -2152,7 +2152,7 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // total zeros counter
     let sret0 = declare(
         smt,
-        format!("sret0_{id}", id = id),
+        format!("sret0_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(
@@ -2162,17 +2162,17 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 1
     let sret4 = declare(
         smt,
-        format!("sret4_{id}", id = id),
+        format!("sret4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let sy4 = declare(
         smt,
-        format!("sy4_{id}", id = id),
+        format!("sy4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let sx4 = declare(
         smt,
-        format!("sx4_{id}", id = id),
+        format!("sx4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(sy4, smt.bvashr(x, smt.atom("#x04"))));
@@ -2210,17 +2210,17 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 2
     let sret5 = declare(
         smt,
-        format!("sret5_{id}", id = id),
+        format!("sret5_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let sy2 = declare(
         smt,
-        format!("sy2_{id}", id = id),
+        format!("sy2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let sx2 = declare(
         smt,
-        format!("sx2_{id}", id = id),
+        format!("sx2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(sy2, smt.bvashr(sx4, smt.atom("#x02"))));
@@ -2258,17 +2258,17 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // round 3
     let sret6 = declare(
         smt,
-        format!("sret6_{id}", id = id),
+        format!("sret6_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let sy1 = declare(
         smt,
-        format!("sy1_{id}", id = id),
+        format!("sy1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let sx1 = declare(
         smt,
-        format!("sx1_{id}", id = id),
+        format!("sx1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(sy1, smt.bvashr(sx2, smt.atom("#x01"))));
@@ -2306,7 +2306,7 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // last round
     let sret7 = declare(
         smt,
-        format!("sret7_{id}", id = id),
+        format!("sret7_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -2330,7 +2330,7 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let clsret = declare(
         smt,
-        format!("clsret_{id}", id = id),
+        format!("clsret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -2351,7 +2351,7 @@ pub fn cls8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ]));
     let cls8ret = declare(
         smt,
-        format!("cls8ret_{id}", id = id),
+        format!("cls8ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.list(vec![
@@ -2372,7 +2372,7 @@ pub fn cls1(smt: &mut Context, id: usize) -> SExpr {
     // Generated code.
     let cls1ret = declare(
         smt,
-        format!("cls1ret_{id}", id = id),
+        format!("cls1ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(1)]),
     );
     let _ = smt.assert(smt.eq(

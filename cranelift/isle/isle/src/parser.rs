@@ -979,21 +979,38 @@ impl<'a> Parser<'a> {
         let term = self.parse_ident()?;
         // Instantiation either has an explicit signatures list, which would
         // open with a left paren. Or it has an identifier referencing a
-        // predefined set of signatures.
+        // predefined set of signatures, optionally followed by `(tag <name>)`
+        // attributes gating when that set applies.
         if self.is_lparen() {
             let signatures = self.parse_signatures()?;
             Ok(Instantiation {
                 term,
                 form: None,
                 signatures,
+                tags: vec![],
                 pos,
             })
         } else {
             let form = self.parse_ident()?;
+            let mut tags = Vec::new();
+            while self.is_lparen() {
+                self.expect_lparen()?;
+                let attr_pos = self.pos();
+                match &self.expect_symbol()?[..] {
+                    "tag" => tags.push(self.parse_ident()?),
+                    x => {
+                        return Err(
+                            self.error(attr_pos, format!("Not a valid instantiate attribute: {x}"))
+                        );
+                    }
+                }
+                self.expect_rparen()?;
+            }
             Ok(Instantiation {
                 term,
                 form: Some(form),
                 signatures: vec![],
+                tags,
                 pos,
             })
         }

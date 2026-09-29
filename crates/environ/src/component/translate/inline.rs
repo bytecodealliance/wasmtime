@@ -1092,10 +1092,12 @@ impl<'a> Inliner<'a> {
                     .push((*func, dfg::CoreDef::UnsafeIntrinsic(*func, intrinsic)));
             }
             ThreadIndex { func } => {
-                let index = self
-                    .result
-                    .trampolines
-                    .push((*func, dfg::Trampoline::ThreadIndex));
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ThreadIndex {
+                        instance: frame.instance,
+                    },
+                ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             ThreadNewIndirect {
@@ -1130,62 +1132,56 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSuspend { func, cancellable } => {
+            ThreadSuspend { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadSuspend {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYield { func, cancellable } => {
+            ThreadYield { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadYield {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSuspendThenResume { func, cancellable } => {
+            ThreadSuspendThenResume { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadSuspendThenResume {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYieldThenResume { func, cancellable } => {
+            ThreadYieldThenResume { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadYieldThenResume {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadSuspendThenPromote { func, cancellable } => {
+            ThreadSuspendThenPromote { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadSuspendThenPromote {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ThreadYieldThenPromote { func, cancellable } => {
+            ThreadYieldThenPromote { func } => {
                 let index = self.result.trampolines.push((
                     *func,
                     dfg::Trampoline::ThreadYieldThenPromote {
                         instance: frame.instance,
-                        cancellable: *cancellable,
                     },
                 ));
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
@@ -1581,17 +1577,10 @@ impl<'a> Inliner<'a> {
         let post_return = options.post_return.map(|i| frame.funcs[i].1.clone());
         AdapterOptions {
             instance: frame.instance,
-            ancestors: frames
-                .iter()
-                .rev()
-                .skip(1)
-                .map(|(frame, _)| frame.instance)
-                .collect(),
             string_encoding: options.string_encoding,
             callback,
             post_return,
             async_: options.async_,
-            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         }
@@ -1621,7 +1610,6 @@ impl<'a> Inliner<'a> {
             callback,
             post_return,
             async_: options.async_,
-            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         })
@@ -1971,6 +1959,7 @@ impl ComponentExternData {
     fn new(data: wasmparser::ComponentExternName<'_>) -> Self {
         ComponentExternData {
             implements: data.implements.map(|s| s.to_string()),
+            external_id: data.external_id.map(|s| s.to_string()),
         }
     }
 }

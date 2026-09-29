@@ -6,8 +6,8 @@
 
 use crate::abi::RetArea;
 use crate::codegen::{
-    Callee, CodeGen, CodeGenError, ConditionalBranch, ControlStackFrame, Emission, FnCall,
-    UnconditionalBranch, control_index,
+    Callee, CatchInfo, CodeGen, CodeGenError, ConditionalBranch, ControlStackFrame, Emission,
+    FnCall, TryTableInfo, UnconditionalBranch, control_index,
 };
 use crate::masm::{
     AtomicWaitKind, DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind,
@@ -20,16 +20,17 @@ use crate::masm::{
 use crate::reg::{Reg, writable};
 use crate::stack::{TypedReg, Val};
 use crate::{Result, bail, format_err};
+use cranelift_codegen::ir::ExceptionTag;
 use regalloc2::RegClass;
 use smallvec::{SmallVec, smallvec};
 use wasmparser::{
-    BlockType, BrTable, HeapType, Ieee32, Ieee64, MemArg, V128, ValType, VisitOperator,
+    BlockType, BrTable, HeapType, Ieee32, Ieee64, MemArg, TryTable, V128, ValType, VisitOperator,
     VisitSimdOperator,
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
-    WasmValType,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeIndex,
+    WasmCompositeInnerType, WasmHeapType, WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -190,12 +191,16 @@ macro_rules! def_unsupported {
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
+    (emit ReturnCall $($rest:tt)*) => {};
     (emit End $($rest:tt)*) => {};
     (emit Nop $($rest:tt)*) => {};
     (emit If $($rest:tt)*) => {};
     (emit Else $($rest:tt)*) => {};
     (emit Block $($rest:tt)*) => {};
     (emit Loop $($rest:tt)*) => {};
+    (emit TryTable $($rest:tt)*) => {};
+    (emit Throw $($rest:tt)*) => {};
+    (emit ThrowRef $($rest:tt)*) => {};
     (emit Br $($rest:tt)*) => {};
     (emit BrIf $($rest:tt)*) => {};
     (emit Return $($rest:tt)*) => {};
@@ -211,6 +216,7 @@ macro_rules! def_unsupported {
     (emit Drop $($rest:tt)*) => {};
     (emit BrTable $($rest:tt)*) => {};
     (emit CallIndirect $($rest:tt)*) => {};
+    (emit ReturnCallIndirect $($rest:tt)*) => {};
     (emit TableInit $($rest:tt)*) => {};
     (emit TableCopy $($rest:tt)*) => {};
     (emit TableGet $($rest:tt)*) => {};
@@ -1508,7 +1514,11 @@ where
             self.handle_unreachable_end()
         } else {
             let mut control = self.pop_control_frame()?;
-            control.emit_end(self.masm, &mut self.context)
+            if let Some(info) = control.take_try_table_info() {
+                self.emit_try_table_end(control, info)
+            } else {
+                control.emit_end(self.masm, &mut self.context)
+            }
         }
     }
 
@@ -1663,7 +1673,11 @@ where
         match slot.ty {
             I32 | I64 | F32 | F64 | V128 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func => context.stack.push(Val::local(index, slot.ty)),
+                WasmHeapType::Func
+                | WasmHeapType::Extern
+                | WasmHeapType::Exn
+                | WasmHeapType::ConcreteExn(_)
+                | WasmHeapType::NoExn => context.stack.push(Val::local(index, slot.ty)),
                 _ => bail!(CodeGenError::unsupported_wasm_type()),
             },
         }
@@ -1680,6 +1694,19 @@ where
     fn visit_call(&mut self, index: u32) -> Self::Output {
         let callee = self.env.callee_from_index(FuncIndex::from_u32(index));
         FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)?;
+        Ok(())
+    }
+
+    fn visit_return_call(&mut self, index: u32) -> Self::Output {
+        let callee = self.env.callee_from_index(FuncIndex::from_u32(index));
+        FnCall::emit_return::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            self.sig.params_stack_size(),
+            callee,
+        )?;
+        self.context.reachable = false;
         Ok(())
     }
 
@@ -1712,6 +1739,38 @@ where
 
         let callee = self.env.funcref(type_index);
         FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)?;
+        Ok(())
+    }
+
+    fn visit_return_call_indirect(&mut self, type_index: u32, table_index: u32) -> Self::Output {
+        // As with a normal indirect call, spill before table lookup because
+        // lazy funcref initialization can itself make a call.
+        self.context.spill(self.masm)?;
+
+        let type_index = TypeIndex::from_u32(type_index);
+        let table_index = TableIndex::from_u32(table_index);
+
+        self.emit_table_get(table_index)?;
+
+        let funcref_ptr = self
+            .context
+            .stack
+            .peek()
+            .map(|v| v.unwrap_reg())
+            .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
+        self.masm
+            .trapz(funcref_ptr.into(), TRAP_INDIRECT_CALL_TO_NULL)?;
+        self.emit_typecheck_funcref(funcref_ptr.into(), type_index)?;
+
+        let callee = self.env.funcref(type_index);
+        FnCall::emit_return::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            self.sig.params_stack_size(),
+            callee,
+        )?;
+        self.context.reachable = false;
         Ok(())
     }
 
@@ -1843,12 +1902,116 @@ where
         Ok(())
     }
 
+    // Record the handlers that apply to calls within this `try_table`. Their
+    // landing pads are emitted when the control frame ends.
+    fn visit_try_table(&mut self, try_table: TryTable) -> Self::Output {
+        // When this `try_table` is unreachable at entry, its handlers cannot run.
+        // Use a plain block to match its `end`, without registering catches.
+        // Unreachable blocks do not record the machine-stack state needed to
+        // emit landing pads.
+        if !self.context.reachable {
+            return self.visit_block(try_table.ty);
+        }
+
+        let checkpoint = self.context.exception_handlers.take_checkpoint();
+        let mut catches = Vec::with_capacity(try_table.catches.len());
+
+        for catch in try_table.catches.iter().rev() {
+            let (is_ref, tag, target_depth) = match catch {
+                wasmparser::Catch::One { tag, label } => {
+                    (false, Some(TagIndex::from_u32(*tag)), *label)
+                }
+                wasmparser::Catch::OneRef { tag, label } => {
+                    (true, Some(TagIndex::from_u32(*tag)), *label)
+                }
+                wasmparser::Catch::All { label } => (false, None, *label),
+                wasmparser::Catch::AllRef { label } => (true, None, *label),
+            };
+
+            let landing_pad = self.masm.get_label()?;
+
+            let target = control_index(target_depth, self.control_frames.len())?;
+            self.control_frames[target].set_as_target();
+
+            let exception_tag = tag.map(|tag| ExceptionTag::from_u32(tag.as_u32()));
+            self.context
+                .exception_handlers
+                .add_handler(exception_tag, landing_pad);
+
+            catches.push(CatchInfo {
+                is_ref,
+                tag,
+                target_depth,
+                landing_pad,
+            });
+        }
+        let info = TryTableInfo {
+            checkpoint,
+            catches,
+        };
+        self.control_frames.push(ControlStackFrame::try_table(
+            self.env.resolve_block_sig(try_table.ty)?,
+            info,
+            self.masm,
+            &mut self.context,
+        )?);
+
+        Ok(())
+    }
+
+    fn visit_throw(&mut self, tag_index: u32) -> Self::Output {
+        let tag_index = TagIndex::from_u32(tag_index);
+        let interned = self.env.translation.module.tags[tag_index]
+            .exception
+            .unwrap_module_type_index();
+        let types = self.env.types;
+        let exn_ty = match &types[interned].composite_type.inner {
+            WasmCompositeInnerType::Exn(exn_ty) => exn_ty,
+            _ => return Err(format_err!(CodeGenError::unsupported_wasm_type())),
+        };
+        let layouts = self.require_gc_codegen_config().layouts();
+
+        let layout = layouts
+            .exn_layout(exn_ty)
+            .map_err(|_| format_err!(CodeGenError::unsupported_wasm_type()))?;
+
+        let (gc_ref, object_addr) =
+            self.emit_exception_alloc(tag_index, interned, &layout, layouts)?;
+        let gc_ref =
+            self.emit_store_exception_payload_fields(exn_ty, &layout, gc_ref, object_addr)?;
+        self.context.stack.push(gc_ref.into());
+        self.visit_throw_ref()
+    }
+
+    // The exception reference is on top of the value stack. Forward it to the
+    // runtime, then mark the remaining Wasm code unreachable because throwing
+    // does not return to this function.
+    fn visit_throw_ref(&mut self) -> Self::Output {
+        let throw_ref = self.env.builtins.throw_ref::<M::ABI>()?;
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(throw_ref),
+        )?;
+        self.context.reachable = false;
+        let outermost = &mut self.control_frames[0];
+        outermost.set_as_target();
+        Ok(())
+    }
+
     fn visit_loop(&mut self, blockty: BlockType) -> Self::Output {
         self.control_frames.push(ControlStackFrame::r#loop(
             self.env.resolve_block_sig(blockty)?,
             self.masm,
             &mut self.context,
         )?);
+
+        // Unreachable loops still need a control frame, but must not emit
+        // runtime-limit checks against a potentially unwound stack frame.
+        if !self.context.reachable {
+            return Ok(());
+        }
 
         self.maybe_emit_epoch_check()?;
         self.maybe_emit_fuel_check()
@@ -2064,11 +2227,15 @@ where
         let index = GlobalIndex::from_u32(global_index);
         let (ty, base, offset) = self.emit_get_global_addr(index)?;
         let addr = self.masm.address_at_reg(base, offset)?;
-        let dst = self.context.reg_for_type(ty, self.masm)?;
-        self.masm.load(addr, writable!(dst), ty.try_into()?)?;
-        self.context.stack.push(Val::reg(dst, ty));
-
+        let gc_ref = self.context.reg_for_type(ty, self.masm)?;
+        self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
         self.context.free_reg(base);
+
+        if self.gc_barrier_needed(&ty) {
+            self.emit_drc_read_barrier(ty, gc_ref)?;
+        } else {
+            self.context.stack.push(Val::reg(gc_ref, ty));
+        }
 
         Ok(())
     }
@@ -2078,11 +2245,15 @@ where
         let (ty, base, offset) = self.emit_get_global_addr(index)?;
         let addr = self.masm.address_at_reg(base, offset)?;
 
-        let typed_reg = self.context.pop_to_reg(self.masm, None)?;
-        self.masm
-            .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
-        self.context.free_reg(typed_reg.reg);
-        self.context.free_reg(base);
+        if self.gc_barrier_needed(&ty) {
+            self.emit_drc_write_barrier(ty, base, addr)?;
+        } else {
+            let typed_reg = self.context.pop_to_reg(self.masm, None)?;
+            self.masm
+                .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
+            self.context.free_reg(typed_reg.reg);
+            self.context.free_reg(base);
+        }
 
         Ok(())
     }
@@ -2120,14 +2291,21 @@ where
     }
 
     fn visit_ref_null(&mut self, hty: HeapType) -> Self::Output {
-        match hty {
-            HeapType::FUNC => {
+        match self.env.convert_heap_type(hty)? {
+            WasmHeapType::Func => {
                 let ptr_type = self.env.ptr_type();
                 match ptr_type {
                     WasmValType::I64 => self.context.stack.push(Val::i64(0)),
                     WasmValType::I32 => self.context.stack.push(Val::i32(0)),
                     _ => bail!(CodeGenError::unsupported_wasm_type()),
                 }
+                Ok(())
+            }
+            WasmHeapType::Extern
+            | WasmHeapType::Exn
+            | WasmHeapType::ConcreteExn(_)
+            | WasmHeapType::NoExn => {
+                self.context.stack.push(Val::i32(0));
                 Ok(())
             }
             _ => Err(format_err!(CodeGenError::unsupported_wasm_type())),
@@ -4620,7 +4798,10 @@ impl TryFrom<WasmValType> for OperandSize {
                     // to be updated in such a way that the calculation of the
                     // OperandSize will depend on the target's  pointer size.
                     WasmHeapType::Func => OperandSize::S64,
-                    WasmHeapType::Extern => OperandSize::S64,
+                    WasmHeapType::Extern
+                    | WasmHeapType::Exn
+                    | WasmHeapType::ConcreteExn(_)
+                    | WasmHeapType::NoExn => OperandSize::S32,
                     _ => bail!(CodeGenError::unsupported_wasm_type()),
                 }
             }

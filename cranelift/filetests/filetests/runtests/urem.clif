@@ -10,6 +10,17 @@ target pulley32be
 target pulley64
 target pulley64be
 
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
 function %urem_i64(i64, i64) -> i64 {
 block0(v0: i64,v1: i64):
     v2 = urem v0, v1
@@ -153,3 +164,74 @@ block0:
 }
 
 ; run: %constant_inputs() == 0
+
+function %urem_shifted_1_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+; run: %urem_shifted_1_i8(0, 0) == 0x0
+; run: %urem_shifted_1_i8(-1, 0) == 0x0
+; run: %urem_shifted_1_i8(-1, 7) == 0x7f
+; run: %urem_shifted_1_i8(-1, 8) == 0x0
+; run: %urem_shifted_1_i8(-1, 9) == 0x1
+; run: %urem_shifted_1_i8(-1, 255) == 0x7f
+; run: %urem_shifted_1_i8(-128, 7) == 0x0
+
+function %urem_shifted_1_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = iconst.i16 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+; run: %urem_shifted_1_i16(0, 0) == 0x0
+; run: %urem_shifted_1_i16(-1, 0) == 0x0
+; run: %urem_shifted_1_i16(-1, 15) == 0x7fff
+; run: %urem_shifted_1_i16(-1, 16) == 0x0
+; run: %urem_shifted_1_i16(-1, 17) == 0x1
+; run: %urem_shifted_1_i16(-1, 65535) == 0x7fff
+; run: %urem_shifted_1_i16(-32768, 15) == 0x0
+
+function %urem_shifted_1_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+; run: %urem_shifted_1_i32(0, 0) == 0x0
+; run: %urem_shifted_1_i32(-1, 0) == 0x0
+; run: %urem_shifted_1_i32(-1, 31) == 0x7fffffff
+; run: %urem_shifted_1_i32(-1, 32) == 0x0
+; run: %urem_shifted_1_i32(-1, 33) == 0x1
+; run: %urem_shifted_1_i32(-1, 4294967295) == 0x7fffffff
+; run: %urem_shifted_1_i32(-2147483648, 31) == 0x0
+
+function %urem_shifted_1_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+; run: %urem_shifted_1_i64(0, 0) == 0x0
+; run: %urem_shifted_1_i64(-1, 0) == 0x0
+; run: %urem_shifted_1_i64(-1, 63) == 0x7fffffffffffffff
+; run: %urem_shifted_1_i64(-1, 64) == 0x0
+; run: %urem_shifted_1_i64(-1, 65) == 0x1
+; run: %urem_shifted_1_i64(-1, 18446744073709551615) == 0x7fffffffffffffff
+; run: %urem_shifted_1_i64(-9223372036854775808, 63) == 0x0
+
+function %urem_shifted_2_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 2
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+; run: %urem_shifted_2_i32(17, 0) == 0x1
+; run: %urem_shifted_2_i32(17, 3) == 0x1
+; run: %urem_shifted_2_i32(-1, 30) == 0x7fffffff

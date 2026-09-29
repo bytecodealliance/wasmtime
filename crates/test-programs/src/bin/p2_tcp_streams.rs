@@ -110,6 +110,45 @@ fn test_tcp_shutdown_should_not_lose_data(net: &Network, family: IpAddressFamily
     });
 }
 
+// Once a stream is writable it should in theory always be writable...
+fn test_tcp_check_write_should_not_be_rate_limited(net: &Network, family: IpAddressFamily) {
+    setup(net, family, |_server, client| {
+        client.output.subscribe().block();
+        assert!(client.output.check_write().unwrap() > 0);
+
+        for i in 0..1000 {
+            let permit = client.output.check_write().unwrap();
+            assert!(
+                permit > 0,
+                "check-write reported 0 bytes on an idle stream after {i} calls"
+            );
+        }
+    });
+}
+
+// Assert that repeated small writes are sent to the kernel's buffer, and the
+// 300 writes here should surely be much larger than any kernel buffer...
+fn test_tcp_nonblocking_write_loop(net: &Network, family: IpAddressFamily) {
+    setup(net, family, |server, client| {
+        client.output.subscribe().block();
+
+        const COUNT: usize = 300;
+        for i in 0..COUNT {
+            let permit = client.output.check_write().unwrap();
+            assert!(
+                permit > 0,
+                "check-write reported 0 bytes after {i} nonblocking writes"
+            );
+            client.output.write(b"x").unwrap();
+        }
+
+        // Everything written above must arrive at the peer.
+        client.socket.shutdown(ShutdownType::Send).unwrap();
+        let received = server.input.blocking_read_to_end().unwrap();
+        assert_eq!(received.len(), COUNT);
+    });
+}
+
 fn main() {
     let net = Network::default();
 
@@ -117,12 +156,16 @@ fn main() {
     test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
     test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
     test_tcp_shutdown_should_not_lose_data(&net, IpAddressFamily::Ipv4);
+    test_tcp_check_write_should_not_be_rate_limited(&net, IpAddressFamily::Ipv4);
+    test_tcp_nonblocking_write_loop(&net, IpAddressFamily::Ipv4);
 
     if supports_ipv6() {
         test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv6);
         test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
         test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
         test_tcp_shutdown_should_not_lose_data(&net, IpAddressFamily::Ipv6);
+        test_tcp_check_write_should_not_be_rate_limited(&net, IpAddressFamily::Ipv6);
+        test_tcp_nonblocking_write_loop(&net, IpAddressFamily::Ipv6);
     }
 }
 

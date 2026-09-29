@@ -1347,7 +1347,8 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 ident: Some(format_ident!("__inner{}", index)),
                 colon_token: None,
                 ty: ty.clone(),
-                mutability: syn::FieldMutability::None,
+                modifiers: syn::FieldModifiers::default(),
+                default: None,
             })
             .collect::<Vec<_>>()
     };

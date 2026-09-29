@@ -3,7 +3,7 @@ use crate::runtime::vm::{self, GcStore, TableElementType, VMFuncRef, VMGcRef, VM
 use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_table_export;
 use crate::{
-    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapType, Ref, RefType,
+    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapTopType, Ref, RefType,
     StoreContextMut, TableType, Trap,
 };
 use core::iter;
@@ -56,6 +56,9 @@ impl Table {
     /// Returns an error if `init` does not match the element type of the table,
     /// or if `init` does not belong to the `store` provided.
     ///
+    /// Returns an error if the element type of `ty` was not created with the
+    /// same [`Engine`](crate::Engine) as `store`.
+    ///
     /// This function will also return an error when used with a
     /// [`Store`](`crate::Store`) which has a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
@@ -106,6 +109,9 @@ impl Table {
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
     /// # Errors
+    ///
+    /// Returns an error if the element type of `ty` was not created with the
+    /// same [`Engine`](crate::Engine) as `store`.
     ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
@@ -213,16 +219,16 @@ impl Table {
                     .map(|r| r.unchecked_copy())
                     .map(|r| store.clone_gc_ref(&r));
                 Some(match self.ty_(&store).element().heap_type().top() {
-                    HeapType::Extern => {
+                    HeapTopType::Extern => {
                         Ref::Extern(gc_ref.map(|r| ExternRef::from_cloned_gc_ref(&mut store, r)))
                     }
-                    HeapType::Any => {
+                    HeapTopType::Any => {
                         Ref::Any(gc_ref.map(|r| AnyRef::from_cloned_gc_ref(&mut store, r)))
                     }
-                    HeapType::Exn => {
+                    HeapTopType::Exn => {
                         Ref::Exn(gc_ref.map(|r| ExnRef::from_cloned_gc_ref(&mut store, r)))
                     }
-                    _ => unreachable!(),
+                    HeapTopType::Func | HeapTopType::Cont => unreachable!("not GC refs"),
                 })
             }
             // TODO(#10248) Required to support stack switching in the embedder
@@ -557,10 +563,9 @@ impl Table {
 
 fn element_type(ty: &TableType) -> TableElementType {
     match ty.element().heap_type().top() {
-        HeapType::Func => TableElementType::Func,
-        HeapType::Exn | HeapType::Extern | HeapType::Any => TableElementType::GcRef,
-        HeapType::Cont => TableElementType::Cont,
-        _ => unreachable!(),
+        HeapTopType::Func => TableElementType::Func,
+        HeapTopType::Exn | HeapTopType::Extern | HeapTopType::Any => TableElementType::GcRef,
+        HeapTopType::Cont => TableElementType::Cont,
     }
 }
 
@@ -574,11 +579,11 @@ impl Ref {
             .context("type mismatch: value does not match table element type")?;
 
         match (self, ty.heap_type().top()) {
-            (Ref::Func(None), HeapType::Func) => {
+            (Ref::Func(None), HeapTopType::Func) => {
                 assert!(ty.is_nullable());
                 Ok(None)
             }
-            (Ref::Func(Some(f)), HeapType::Func) => {
+            (Ref::Func(Some(f)), HeapTopType::Func) => {
                 debug_assert!(
                     f.comes_from_same_store(store),
                     "checked in `ensure_matches_ty`"
@@ -599,7 +604,7 @@ impl Ref {
             .context("type mismatch: value does not match table element type")?;
 
         match (self, ty.heap_type().top()) {
-            (Ref::Extern(e), HeapType::Extern) => match e {
+            (Ref::Extern(e), HeapTopType::Extern) => match e {
                 None => {
                     assert!(ty.is_nullable());
                     Ok(None)
@@ -607,7 +612,7 @@ impl Ref {
                 Some(e) => Ok(Some(e.try_gc_ref(store)?)),
             },
 
-            (Ref::Any(a), HeapType::Any) => match a {
+            (Ref::Any(a), HeapTopType::Any) => match a {
                 None => {
                     assert!(ty.is_nullable());
                     Ok(None)
@@ -615,7 +620,7 @@ impl Ref {
                 Some(a) => Ok(Some(a.try_gc_ref(store)?)),
             },
 
-            (Ref::Exn(e), HeapType::Exn) => match e {
+            (Ref::Exn(e), HeapTopType::Exn) => match e {
                 None => {
                     assert!(ty.is_nullable());
                     Ok(None)

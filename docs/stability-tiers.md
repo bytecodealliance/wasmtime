@@ -43,6 +43,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`function-references`]                    |
 | WebAssembly Proposal | [`gc`]                                     |
 | WebAssembly Proposal | [`exception-handling`]                     |
+| WebAssembly Proposal | [`wide-arithmetic`]                        |
 | WASI Proposal        | [`wasi-io`]                                |
 | WASI Proposal        | [`wasi-clocks`]                            |
 | WASI Proposal        | [`wasi-filesystem`]                        |
@@ -89,7 +90,6 @@ For explanations of what each tier means see below.
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
 | WebAssembly Proposal | [`custom-page-sizes`]      | Unstable wasm proposal      |
 | WebAssembly Proposal | [`threads`]                | fuzzing, API quality        |
-| WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
 | Embedding API        | C++                        | Full-time maintainer        |
 
@@ -225,14 +225,14 @@ here is:
 | [`relaxed-simd`]                        | ✅        | ❌     |
 | [`multi-memory`]                        | ✅        | ✅     |
 | [`threads`]                             | ✅        | ✅     |
-| [`tail-call`]                           | ✅        | ❌     |
+| [`tail-call`]                           | ✅        | ✅     |
 | [`extended-const`]                      | ✅        | ✅     |
 | [`memory64`]                            | ✅        | ✅     |
 | [`function-references`]                 | ✅        | ❌     |
 | [`gc`]                                  | ✅        | ❌     |
 | [`wide-arithmetic`]                     | ✅        | ✅     |
 | [`custom-page-sizes`]                   | ✅        | ✅     |
-| [`exception-handling`]                  | ✅        | ❌     |
+| [`exception-handling`]                  | ✅        | ✅     |
 | [`stack-switching`]                     | 🚧        | ❌     |
 
 ##### aarch64
@@ -245,19 +245,19 @@ here is:
 | [`multi-value`]                         | ✅        | ✅        |
 | [`bulk-memory`]                         | ✅        | ✅        |
 | [`reference-types`]                     | ✅        | ❌[^a]    |
-| [`simd`]                                | ✅        | ❌        |
+| [`simd`]                                | ✅        | ✅        |
 | [`component-model`]                     | ✅        | ✅        |
 | [`relaxed-simd`]                        | ✅        | ❌        |
 | [`multi-memory`]                        | ✅        | ✅        |
 | [`threads`]                             | ✅        | ❌        |
-| [`tail-call`]                           | ✅        | ❌        |
+| [`tail-call`]                           | ✅        | ✅        |
 | [`extended-const`]                      | ✅        | ✅        |
 | [`memory64`]                            | ✅        | ✅        |
 | [`function-references`]                 | ✅        | ❌        |
 | [`gc`]                                  | ✅        | ❌        |
 | [`wide-arithmetic`]                     | ✅        | ❌        |
 | [`custom-page-sizes`]                   | ✅        | ✅        |
-| [`exception-handling`]                  | ✅        | ❌        |
+| [`exception-handling`]                  | ✅        | ✅        |
 | [`stack-switching`]                     | ❌        | ❌        |
 
 ##### s390x
@@ -340,10 +340,11 @@ emitting Pulley bytecode.
 | [`exception-handling`]                  | ✅        | ❌     |
 | [`stack-switching`]                     | ❌        | ❌     |
 
-[^a]: Winch supports some features of the [`reference-types`] proposal such as
-  the change to support multiple tables and LEB-encoding table indices in
-  instructions, but it does not support GC types such as `externref` or the
-  new table opcodes in the [`reference-types`] proposal.
+[^a]: Winch supports GC reference values such as `externref` through parameters,
+  results, locals, globals, and calls, including the required stack maps and
+  collector barriers. It also supports multiple tables and LEB-encoded table
+  indices, but does not yet support every table and element-segment case in the
+  [`reference-types`] proposal.
 [^b]: Pulley does not support the [`threads`] proposal because there is no known
   safe way to implement this with Rust's memory model.
 [^c]: Winch's support for aarch64 is complete for Core Wasm.

@@ -33,7 +33,7 @@ fn make_env<T: 'static>(engine: &Engine) -> Linker<T> {
 
 enum InterruptMode {
     Trap,
-    Callback(fn(StoreContextMut<usize>) -> Result<UpdateDeadline>),
+    Callback(fn(StoreHookState<usize>) -> Result<UpdateDeadline>),
     Yield(u64),
 }
 

@@ -200,7 +200,6 @@ where
 mod tests {
     use super::*;
     use alloc::{format, vec::Vec};
-    use core::u32;
 
     // `EntityRef` impl for testing.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

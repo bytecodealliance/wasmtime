@@ -433,6 +433,14 @@ class Config {
     wasmtime_config_wasm_custom_page_sizes_set(ptr.get(), enable);
   }
 
+  /// \brief Configures whether the WebAssembly compact imports proposal will be
+  /// enabled
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_compact_imports
+  void wasm_compact_imports(bool enable) {
+    wasmtime_config_wasm_compact_imports_set(ptr.get(), enable);
+  }
+
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
   /// \brief Configures whether the WebAssembly component model proposal will be
   /// enabled
@@ -448,6 +456,14 @@ class Config {
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_map
   void wasm_component_model_map(bool enable) {
     wasmtime_config_wasm_component_model_map_set(ptr.get(), enable);
+  }
+
+  /// \brief Configures whether the WebAssembly component model `(implements
+  /// "...")` and `(external-id "...")` annotations will be enabled
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_implements
+  void wasm_component_model_implements(bool enable) {
+    wasmtime_config_wasm_component_model_implements_set(ptr.get(), enable);
   }
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 

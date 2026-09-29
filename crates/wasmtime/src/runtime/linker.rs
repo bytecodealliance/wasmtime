@@ -75,9 +75,10 @@ use wasmtime_environ::{Atom, PanicOnOom, StringPool};
 /// The [`Linker`] type is not compatible with usage between multiple [`Engine`]
 /// values. An [`Engine`] is provided when a [`Linker`] is created and only
 /// stores and items which originate from that [`Engine`] can be used with this
-/// [`Linker`]. If more than one [`Engine`] is used with a [`Linker`] then that
-/// may cause a panic at runtime, similar to how if a [`Func`] is used with the
-/// wrong [`Store`] that can also panic at runtime.
+/// [`Linker`]. Instantiating a [`Module`] from another [`Engine`] returns an
+/// error, and mixing engines in other ways may cause a panic at runtime,
+/// similar to how if a [`Func`] is used with the wrong [`Store`] that can also
+/// panic at runtime.
 ///
 /// [`Store`]: crate::Store
 /// [`Global`]: crate::Global
@@ -112,7 +113,7 @@ impl<T> Clone for Linker<T> {
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 struct ImportKey {
     module: Atom,
-    name: Option<Atom>,
+    name: Atom,
 }
 
 impl TryClone for ImportKey {
@@ -124,7 +125,13 @@ impl TryClone for ImportKey {
 
 #[derive(Clone)]
 pub(crate) enum Definition {
-    Extern(Extern, DefinitionType),
+    Extern {
+        item: Extern,
+        ty: DefinitionType,
+        /// The engine of the store that `item` was taken from, which is the
+        /// engine that assigned any type indices within `ty`.
+        engine: Engine,
+    },
     HostFunc(Arc<HostFunc>),
 }
 
@@ -370,34 +377,7 @@ impl<T> Linker<T> {
         T: 'static,
     {
         let store = store.as_context();
-        let key = self.import_key(module, Some(name))?;
-        self.insert(key, Definition::new(store.0, item.into()))?;
-        Ok(self)
-    }
-
-    /// Same as [`Linker::define`], except only the name of the import is
-    /// provided, not a module name as well.
-    ///
-    /// This is only relevant when working with the module linking proposal
-    /// where one-level names are allowed (in addition to two-level names).
-    /// Otherwise this method need not be used.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
-    /// memory allocation fails. See the `OutOfMemory` type's documentation for
-    /// details on Wasmtime's out-of-memory handling.
-    pub fn define_name(
-        &mut self,
-        store: impl AsContext<Data = T>,
-        name: &str,
-        item: impl Into<Extern>,
-    ) -> Result<&mut Self>
-    where
-        T: 'static,
-    {
-        let store = store.as_context();
-        let key = self.import_key(name, None)?;
+        let key = self.import_key(module, name)?;
         self.insert(key, Definition::new(store.0, item.into()))?;
         Ok(self)
     }
@@ -406,7 +386,7 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        let key = self.import_key(module, Some(name))?;
+        let key = self.import_key(module, name)?;
         self.insert(key, Definition::HostFunc(try_new(func)?))?;
         Ok(self)
     }
@@ -659,12 +639,7 @@ impl<T> Linker<T> {
         let mut store = store.as_context_mut();
         let exports: TryVec<_> = instance
             .exports(&mut store)
-            .map(|e| {
-                Ok((
-                    self.import_key(module_name, Some(e.name()))?,
-                    e.into_extern(),
-                ))
-            })
+            .map(|e| Ok((self.import_key(module_name, e.name())?, e.into_extern())))
             .try_collect::<_, Error>()?;
         for (key, export) in exports {
             self.insert(key, Definition::new(store.0, export))?;
@@ -943,7 +918,7 @@ impl<T> Linker<T> {
                 let instance_pre = self.instantiate_pre(module)?;
                 let export_name = export.name().to_owned();
                 let func = mk_func(&mut store, func_ty, export_name, instance_pre);
-                let key = self.import_key(module_name, Some(export.name()))?;
+                let key = self.import_key(module_name, export.name())?;
                 self.insert(key, Definition::new(store.0, func.into()))?;
             } else if export.name() == "memory" && export.ty().memory().is_some() {
                 // Allow an exported "memory" memory for now.
@@ -1001,8 +976,8 @@ impl<T> Linker<T> {
         as_module: &str,
         as_name: &str,
     ) -> Result<&mut Self> {
-        let src = self.import_key(module, Some(name))?;
-        let dst = self.import_key(as_module, Some(as_name))?;
+        let src = self.import_key(module, name)?;
+        let dst = self.import_key(as_module, as_name)?;
         match self.map.get(&src).cloned() {
             Some(item) => self.insert(dst, item)?,
             None => bail!("no item named `{module}::{name}` defined"),
@@ -1047,20 +1022,18 @@ impl<T> Linker<T> {
     fn insert(&mut self, key: ImportKey, item: Definition) -> Result<()> {
         if !self.allow_shadowing && self.map.contains_key(&key) {
             let module = &self.pool[key.module];
-            match key.name.and_then(|n| self.pool.get(n)) {
-                Some(name) => bail!("import of `{module}::{name}` defined twice"),
-                None => bail!("import of `{module}` defined twice"),
-            }
+            let name = &self.pool[key.name];
+            bail!("import of `{module}::{name}` defined twice");
         }
 
         self.map.insert(key, item)?;
         Ok(())
     }
 
-    fn import_key(&mut self, module: &str, name: Option<&str>) -> Result<ImportKey, OutOfMemory> {
+    fn import_key(&mut self, module: &str, name: &str) -> Result<ImportKey, OutOfMemory> {
         Ok(ImportKey {
             module: self.pool.insert(module)?,
-            name: name.map(|name| self.pool.insert(name)).transpose()?,
+            name: self.pool.insert(name)?,
         })
     }
 
@@ -1225,6 +1198,10 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
+        ensure!(
+            Engine::same(&self.engine, module.engine()),
+            "cross-`Engine` instantiation is not currently supported"
+        );
         let mut imports: TryVec<_> = module
             .imports()
             .map(|import| Ok(self._get_by_import(&import)?))
@@ -1234,7 +1211,7 @@ impl<T> Linker<T> {
                 import.update_size(store);
             }
         }
-        unsafe { InstancePre::new(module, imports) }
+        unsafe { InstancePre::new(&self.engine, module, imports) }
     }
 
     /// Returns an iterator over all items defined in this `Linker`, in
@@ -1262,7 +1239,7 @@ impl<T> Linker<T> {
             let store = store.as_context_mut();
             (
                 &self.pool[key.module],
-                &self.pool[key.name.unwrap()],
+                &self.pool[key.name],
                 // Should be safe since `T` is connecting the linker and store
                 unsafe { item.to_extern(store.0).panic_on_oom() },
             )
@@ -1305,7 +1282,7 @@ impl<T> Linker<T> {
     fn _get(&self, module: &str, name: &str) -> Option<&Definition> {
         let key = ImportKey {
             module: self.pool.get_atom(module)?,
-            name: Some(self.pool.get_atom(name)?),
+            name: self.pool.get_atom(name)?,
         };
         self.map.get(&key)
     }
@@ -1427,13 +1404,26 @@ impl<T: 'static> Default for Linker<T> {
 impl Definition {
     fn new(store: &StoreOpaque, item: Extern) -> Definition {
         let ty = DefinitionType::from(store, &item);
-        Definition::Extern(item, ty)
+        Definition::Extern {
+            item,
+            ty,
+            engine: store.engine().clone(),
+        }
     }
 
     pub(crate) fn ty(&self) -> DefinitionType {
         match self {
-            Definition::Extern(_, ty) => *ty,
+            Definition::Extern { ty, .. } => *ty,
             Definition::HostFunc(func) => DefinitionType::Func(func.sig_index()),
+        }
+    }
+
+    /// The engine that assigned the type indices within this definition's
+    /// [`Definition::ty`].
+    pub(crate) fn engine(&self) -> &Engine {
+        match self {
+            Definition::Extern { engine, .. } => engine,
+            Definition::HostFunc(func) => func.engine(),
         }
     }
 
@@ -1446,7 +1436,7 @@ impl Definition {
     /// `HostFunc` matches the `T` on the store.
     pub(crate) unsafe fn to_extern(&self, store: &mut StoreOpaque) -> Result<Extern, OutOfMemory> {
         match self {
-            Definition::Extern(e, _) => Ok(e.clone()),
+            Definition::Extern { item, .. } => Ok(item.clone()),
             // SAFETY: the contract of this function is the same as what's
             // required of `to_func`, that `T` of the store matches the `T` of
             // this original definition.
@@ -1456,20 +1446,32 @@ impl Definition {
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
-            Definition::Extern(e, _) => e.comes_from_same_store(store),
+            Definition::Extern { item, .. } => item.comes_from_same_store(store),
             Definition::HostFunc(_func) => true,
         }
     }
 
     fn update_size(&mut self, store: &StoreOpaque) {
         match self {
-            Definition::Extern(Extern::Memory(m), DefinitionType::Memory(_, size)) => {
+            Definition::Extern {
+                item: Extern::Memory(m),
+                ty: DefinitionType::Memory(_, size),
+                ..
+            } => {
                 *size = m.internal_size(store);
             }
-            Definition::Extern(Extern::SharedMemory(m), DefinitionType::Memory(_, size)) => {
+            Definition::Extern {
+                item: Extern::SharedMemory(m),
+                ty: DefinitionType::Memory(_, size),
+                ..
+            } => {
                 *size = m.size();
             }
-            Definition::Extern(Extern::Table(m), DefinitionType::Table(_, size)) => {
+            Definition::Extern {
+                item: Extern::Table(m),
+                ty: DefinitionType::Table(_, size),
+                ..
+            } => {
                 *size = m.size_(store);
             }
             _ => {}

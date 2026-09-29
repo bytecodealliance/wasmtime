@@ -5,7 +5,7 @@ use crate::ir::{ExternalName, MemFlagsData, Type, types};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-use crate::{CodegenError, CodegenResult, settings};
+use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -1224,17 +1224,14 @@ impl MachInst for Inst {
         vec![vec![0x07, 0x07]]
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
-        match ty {
-            types::I8 => Ok((&[RegClass::Int], &[types::I8])),
-            types::I16 => Ok((&[RegClass::Int], &[types::I16])),
-            types::I32 => Ok((&[RegClass::Int], &[types::I32])),
-            types::I64 => Ok((&[RegClass::Int], &[types::I64])),
-            types::F16 => Ok((&[RegClass::Float], &[types::F16])),
-            types::F32 => Ok((&[RegClass::Float], &[types::F32])),
-            types::F64 => Ok((&[RegClass::Float], &[types::F64])),
-            types::F128 => Ok((&[RegClass::Float], &[types::F128])),
-            types::I128 => Ok((&[RegClass::Float], &[types::I128])),
+    fn rc_for_type(ty: &Type) -> CodegenResult<(&[RegClass], &[Type])> {
+        match *ty {
+            types::I8 | types::I16 | types::I32 | types::I64 => {
+                Ok((&[RegClass::Int], core::slice::from_ref(ty)))
+            }
+            types::F16 | types::F32 | types::F64 | types::F128 | types::I128 => {
+                Ok((&[RegClass::Float], core::slice::from_ref(ty)))
+            }
             _ if ty.is_vector() && ty.bits() == 128 => Ok((&[RegClass::Float], &[types::I8X16])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {ty}"
@@ -1267,10 +1264,6 @@ impl MachInst for Inst {
 
     fn worst_case_island_growth() -> CodeOffset {
         0
-    }
-
-    fn ref_type_regclass(_: &settings::Flags) -> RegClass {
-        RegClass::Int
     }
 
     fn gen_dummy_use(reg: Reg) -> Inst {

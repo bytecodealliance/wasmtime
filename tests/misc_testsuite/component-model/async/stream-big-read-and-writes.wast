@@ -71,7 +71,7 @@
   )
 
   (core func $stream.new (canon stream.new $s))
-  (core func $stream.write (canon stream.write $s async (memory $libc "memory")))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "memory"))))
 
   (core instance $m (instantiate $m
     (with "libc" (instance $libc))
@@ -82,6 +82,6 @@
   ))
 
   (func (export "run") async
-    (canon lift (core func $m "run") async (callback (func $m "cb"))))
+    (canon lift (core func $m "run") async (callback (core func $m "cb"))))
 )
 (assert_trap (invoke "run") "out of bounds")

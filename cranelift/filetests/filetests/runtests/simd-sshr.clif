@@ -54,7 +54,48 @@ block0(v0:i64x2, v1:i32):
 ; run: %sshr_i64x2([0x80000000_00000000 0x7FFFFFFF_FFFFFFFF], 63) == [0xFFFFFFFF_FFFFFFFF 0]
 ; run: %sshr_i64x2([2 -2], 65) == [1 -1]
 
+function %sshr_i8x16_i128(i8x16, i64, i64) -> i8x16 {
+block0(v0: i8x16, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = sshr v0, v3
+    return v4
+}
+; run: %sshr_i8x16_i128([0 0xff 2 0xfd 4 0xfb 6 0xf9 8 0xf7 10 0xf5 12 0xf3 14 0xf1], 1, 0) == [0 0xff 1 0xfe 2 0xfd 3 0xfc 4 0xfb 5 0xfa 6 0xf9 7 0xf8]
+; run: %sshr_i8x16_i128([0 0xff 2 0xfd 4 0xfb 6 0xf9 8 0xf7 10 0xf5 12 0xf3 14 0xf1], 9, 0) == [0 0xff 1 0xfe 2 0xfd 3 0xfc 4 0xfb 5 0xfa 6 0xf9 7 0xf8]
+; run: %sshr_i8x16_i128([0 0xff 2 0xfd 4 0xfb 6 0xf9 8 0xf7 10 0xf5 12 0xf3 14 0xf1], 9, 0xffffffff_ffffffff) == [0 0xff 1 0xfe 2 0xfd 3 0xfc 4 0xfb 5 0xfa 6 0xf9 7 0xf8]
 
+function %sshr_i16x8_i128(i16x8, i64, i64) -> i16x8 {
+block0(v0: i16x8, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = sshr v0, v3
+    return v4
+}
+; run: %sshr_i16x8_i128([-1 2 4 8 -16 32 64 128], 1, 0) == [-1 1 2 4 -8 16 32 64]
+; run: %sshr_i16x8_i128([-1 2 4 8 -16 32 64 128], 17, 0) == [-1 1 2 4 -8 16 32 64]
+; run: %sshr_i16x8_i128([-1 2 4 8 -16 32 64 128], 17, 0xffffffff_ffffffff) == [-1 1 2 4 -8 16 32 64]
+
+function %sshr_i32x4_i128(i32x4, i64, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = sshr v0, v3
+    return v4
+}
+; run: %sshr_i32x4_i128([1 2 4 -8], 1, 0) == [0 1 2 -4]
+; run: %sshr_i32x4_i128([1 2 4 -8], 33, 0) == [0 1 2 -4]
+; run: %sshr_i32x4_i128([1 2 4 -8], 33, 0xffffffff_ffffffff) == [0 1 2 -4]
+
+function %sshr_i64x2_i128(i64x2, i64, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = sshr v0, v3
+    return v4
+}
+; run: %sshr_i64x2_i128([1 -1], 0, 0) == [1 -1]
+; run: %sshr_i64x2_i128([1 -1], 1, 0) == [0 -1] ; note the -1 shift result
+; run: %sshr_i64x2_i128([2 -2], 1, 0) == [1 -1]
+; run: %sshr_i64x2_i128([0x80000000_00000000 0x7FFFFFFF_FFFFFFFF], 63, 0) == [0xFFFFFFFF_FFFFFFFF 0]
+; run: %sshr_i64x2_i128([2 -2], 65, 0) == [1 -1]
+; run: %sshr_i64x2_i128([2 -2], 65, 0xffffffff_ffffffff) == [1 -1]
 
 function %sshr_imm_i32x4(i32x4) -> i32x4 {
 block0(v0: i32x4):

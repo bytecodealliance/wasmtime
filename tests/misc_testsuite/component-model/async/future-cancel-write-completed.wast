@@ -10,7 +10,7 @@
 
     (core module $libc (memory (export "mem") 1))
     (core instance $libc (instantiate $libc))
-    (core func $read (canon future.read $f async (memory $libc "mem")))
+    (core func $read (canon future.read $f async (memory (core memory $libc "mem"))))
     (core func $drop-read (canon future.drop-readable $f))
     (core module $inner
       (import "" "read" (func $read (param i32 i32) (result i32)))
@@ -50,7 +50,7 @@
     (core func $new (canon future.new $f))
     (core module $libc (memory (export "mem") 1))
     (core instance $libc (instantiate $libc))
-    (core func $write (canon future.write $f async (memory $libc "mem")))
+    (core func $write (canon future.write $f async (memory (core memory $libc "mem"))))
     (core func $cancel (canon future.cancel-write $f))
     (core func $drain (canon lower (func $c "f")))
     (core module $m

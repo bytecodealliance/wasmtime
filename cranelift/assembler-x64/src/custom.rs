@@ -190,7 +190,8 @@ pub mod mnemonic {
 
 pub mod display {
     use crate::inst;
-    use crate::{Amode, Gpr, GprMem, Registers, Size};
+    use crate::{Amode, AsReg, Gpr, GprMem, Registers, Size, XmmMem};
+    use alloc::string::String;
     use alloc::string::ToString;
     use core::fmt;
 
@@ -201,6 +202,10 @@ pub mod display {
 
     pub fn callq_m<R: Registers>(f: &mut fmt::Formatter, inst: &inst::callq_m<R>) -> fmt::Result {
         let inst::callq_m { rm64 } = inst;
+        // XED writes the target plainly, without the indirect `*`.
+        if f.alternate() {
+            return write!(f, "callq {}", rm64.to_string_xed(Size::Quadword));
+        }
         let op = rm64.to_string(Size::Quadword);
         write!(f, "callq *{op}")
     }
@@ -221,52 +226,54 @@ pub mod display {
         }
     }
 
-    pub fn cmpss_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpss_a<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm_m32 = inst.xmm_m32.to_string();
-        let pred = inst.imm8.value();
-        if pred > 7 {
-            let imm8 = inst.imm8.to_string();
-            write!(f, "cmpss {imm8}, {xmm_m32}, {xmm1}")
+    /// Render a possibly-memory XMM operand in the dialect `f` asks for.
+    fn xmm_mem<X: AsReg, M: AsReg>(f: &fmt::Formatter, op: &XmmMem<X, M>) -> String {
+        if f.alternate() {
+            op.to_string_xed()
         } else {
-            write!(f, "cmp{}ss {xmm_m32}, {xmm1}", pred_as_str(pred))
+            op.to_string()
         }
     }
 
-    pub fn cmpsd_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpsd_a<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm_m64 = inst.xmm_m64.to_string();
-        let pred = inst.imm8.value();
-        if pred > 7 {
-            let imm8 = inst.imm8.to_string();
-            write!(f, "cmpsd {imm8}, {xmm_m64}, {xmm1}")
+    /// XED appends a width marker to the generic `cmp*` form when the operand
+    /// is memory; see `dsl::Inst::xed_mnemonics`.
+    fn marker<X: AsReg, M: AsReg>(
+        f: &fmt::Formatter,
+        op: &XmmMem<X, M>,
+        marker: &'static str,
+    ) -> &'static str {
+        if f.alternate() && op.is_memory() {
+            marker
         } else {
-            write!(f, "cmp{}sd {xmm_m64}, {xmm1}", pred_as_str(pred))
+            ""
         }
     }
 
-    pub fn cmpps_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpps_a<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm_m128 = inst.xmm_m128.to_string();
-        let pred = inst.imm8.value();
-        if pred > 7 {
-            let imm8 = inst.imm8.to_string();
-            write!(f, "cmpps {imm8}, {xmm_m128}, {xmm1}")
-        } else {
-            write!(f, "cmp{}ps {xmm_m128}, {xmm1}", pred_as_str(pred))
-        }
+    /// The compare pseudo-ops: we name the predicate in the mnemonic
+    /// (`cmpeqss`), while XED always writes the generic form with an explicit
+    /// predicate immediate.
+    macro_rules! cmp {
+        ($($name:ident($sfx:tt, $op:ident, $mark:tt);)*) => ($(
+            pub fn $name<R: Registers>(f: &mut fmt::Formatter, inst: &inst::$name<R>) -> fmt::Result {
+                let xmm1 = inst.xmm1.to_string();
+                let op = xmm_mem(f, &inst.$op);
+                let pred = inst.imm8.value();
+                if f.alternate() || pred > 7 {
+                    let m = marker(f, &inst.$op, $mark);
+                    let imm8 = inst.imm8.to_string();
+                    write!(f, concat!("cmp", $sfx, "{} {}, {}, {}"), m, imm8, op, xmm1)
+                } else {
+                    write!(f, concat!("cmp{}", $sfx, " {}, {}"), pred_as_str(pred), op, xmm1)
+                }
+            }
+        )*)
     }
 
-    pub fn cmppd_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmppd_a<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm_m128 = inst.xmm_m128.to_string();
-        let pred = inst.imm8.value();
-        if pred > 7 {
-            let imm8 = inst.imm8.to_string();
-            write!(f, "cmppd {imm8}, {xmm_m128}, {xmm1}")
-        } else {
-            write!(f, "cmp{}pd {xmm_m128}, {xmm1}", pred_as_str(pred))
-        }
+    cmp! {
+        cmpss_a("ss", xmm_m32, "l");
+        cmpsd_a("sd", xmm_m64, "q");
+        cmpps_a("ps", xmm_m128, "x");
+        cmppd_a("pd", xmm_m128, "x");
     }
 
     /// Return the predicate string used for the immediate of a `vcmp*`
@@ -309,72 +316,31 @@ pub mod display {
         }
     }
 
-    pub fn vcmpss_b<R: Registers>(f: &mut fmt::Formatter, inst: &inst::vcmpss_b<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm2 = inst.xmm2.to_string();
-        let xmm_m32 = inst.xmm_m32.to_string();
-        let pred = inst.imm8.value();
-        if pred > 0x1f {
-            let imm8 = inst.imm8.to_string();
-            write!(f, "vcmpss {imm8}, {xmm_m32}, {xmm2}, {xmm1}")
-        } else {
-            write!(
-                f,
-                "vcmp{}ss {xmm_m32}, {xmm2}, {xmm1}",
-                vex_pred_as_str(pred)
-            )
-        }
+    /// The VEX compare pseudo-ops; see the `cmp!` macro above.
+    macro_rules! vcmp {
+        ($($name:ident($sfx:tt, $op:ident, $mark:tt);)*) => ($(
+            pub fn $name<R: Registers>(f: &mut fmt::Formatter, inst: &inst::$name<R>) -> fmt::Result {
+                let xmm1 = inst.xmm1.to_string();
+                let xmm2 = inst.xmm2.to_string();
+                let op = xmm_mem(f, &inst.$op);
+                let pred = inst.imm8.value();
+                if f.alternate() || pred > 0x1f {
+                    let m = marker(f, &inst.$op, $mark);
+                    let imm8 = inst.imm8.to_string();
+                    write!(f, concat!("vcmp", $sfx, "{} {}, {}, {}, {}"), m, imm8, op, xmm2, xmm1)
+                } else {
+                    let p = vex_pred_as_str(pred);
+                    write!(f, concat!("vcmp{}", $sfx, " {}, {}, {}"), p, op, xmm2, xmm1)
+                }
+            }
+        )*)
     }
 
-    pub fn vcmpsd_b<R: Registers>(f: &mut fmt::Formatter, inst: &inst::vcmpsd_b<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm2 = inst.xmm2.to_string();
-        let xmm_m64 = inst.xmm_m64.to_string();
-        let pred = inst.imm8.value();
-        if pred > 0x1f {
-            let imm8 = inst.imm8.to_string();
-            write!(f, "vcmpsd {imm8}, {xmm_m64}, {xmm2}, {xmm1}")
-        } else {
-            write!(
-                f,
-                "vcmp{}sd {xmm_m64}, {xmm2}, {xmm1}",
-                vex_pred_as_str(pred)
-            )
-        }
-    }
-
-    pub fn vcmpps_b<R: Registers>(f: &mut fmt::Formatter, inst: &inst::vcmpps_b<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm2 = inst.xmm2.to_string();
-        let xmm_m128 = inst.xmm_m128.to_string();
-        let pred = inst.imm8.value();
-        if pred > 0x1f {
-            let imm8 = inst.imm8.to_string();
-            write!(f, "vcmpps {imm8}, {xmm_m128}, {xmm2}, {xmm1}")
-        } else {
-            write!(
-                f,
-                "vcmp{}ps {xmm_m128}, {xmm2}, {xmm1}",
-                vex_pred_as_str(pred)
-            )
-        }
-    }
-
-    pub fn vcmppd_b<R: Registers>(f: &mut fmt::Formatter, inst: &inst::vcmppd_b<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm2 = inst.xmm2.to_string();
-        let xmm_m128 = inst.xmm_m128.to_string();
-        let pred = inst.imm8.value();
-        if pred > 0x1f {
-            let imm8 = inst.imm8.to_string();
-            write!(f, "vcmppd {imm8}, {xmm_m128}, {xmm2}, {xmm1}")
-        } else {
-            write!(
-                f,
-                "vcmp{}pd {xmm_m128}, {xmm2}, {xmm1}",
-                vex_pred_as_str(pred)
-            )
-        }
+    vcmp! {
+        vcmpss_b("ss", xmm_m32, "l");
+        vcmpsd_b("sd", xmm_m64, "q");
+        vcmpps_b("ps", xmm_m128, "x");
+        vcmppd_b("pd", xmm_m128, "x");
     }
 
     pub fn nop_1b(f: &mut fmt::Formatter, _: &inst::nop_1b) -> fmt::Result {
@@ -382,7 +348,12 @@ pub mod display {
     }
 
     pub fn nop_2b(f: &mut fmt::Formatter, _: &inst::nop_2b) -> fmt::Result {
-        write!(f, "nop")
+        // XED spells the operand-size prefix out for the two-byte form.
+        if f.alternate() {
+            write!(f, "data16 nop")
+        } else {
+            write!(f, "nop")
+        }
     }
 
     pub fn nop_3b(f: &mut fmt::Formatter, _: &inst::nop_3b) -> fmt::Result {
@@ -394,11 +365,19 @@ pub mod display {
     }
 
     pub fn nop_5b(f: &mut fmt::Formatter, _: &inst::nop_5b) -> fmt::Result {
-        write!(f, "nopl (%rax, %rax)")
+        if f.alternate() {
+            write!(f, "nopl (%rax,%rax,1)")
+        } else {
+            write!(f, "nopl (%rax, %rax)")
+        }
     }
 
     pub fn nop_6b(f: &mut fmt::Formatter, _: &inst::nop_6b) -> fmt::Result {
-        write!(f, "nopw (%rax, %rax)")
+        if f.alternate() {
+            write!(f, "nopw (%rax,%rax,1)")
+        } else {
+            write!(f, "nopw (%rax, %rax)")
+        }
     }
 
     pub fn nop_7b(f: &mut fmt::Formatter, _: &inst::nop_7b) -> fmt::Result {
@@ -406,11 +385,19 @@ pub mod display {
     }
 
     pub fn nop_8b(f: &mut fmt::Formatter, _: &inst::nop_8b) -> fmt::Result {
-        write!(f, "nopl (%rax, %rax)")
+        if f.alternate() {
+            write!(f, "nopl (%rax,%rax,1)")
+        } else {
+            write!(f, "nopl (%rax, %rax)")
+        }
     }
 
     pub fn nop_9b(f: &mut fmt::Formatter, _: &inst::nop_9b) -> fmt::Result {
-        write!(f, "nopw (%rax, %rax)")
+        if f.alternate() {
+            write!(f, "nopw (%rax,%rax,1)")
+        } else {
+            write!(f, "nopw (%rax, %rax)")
+        }
     }
 
     pub fn xchgb_rm<R: Registers>(
@@ -453,7 +440,11 @@ pub mod display {
         size: Size,
     ) -> fmt::Result {
         let reg = reg.to_string(size);
-        let mem = mem.to_string();
+        let mem = if f.alternate() {
+            alloc::format!("{mem:#}")
+        } else {
+            mem.to_string()
+        };
         let suffix = match size {
             Size::Byte => "b",
             Size::Word => "w",
@@ -570,6 +561,18 @@ pub mod display {
         size: Size,
     ) -> fmt::Result {
         let reg = rm.to_string(size);
+        // XED always states the implicit shift count, and drops the AT&T size
+        // suffix when the operand is a register.
+        if f.alternate() {
+            let op = rm.to_string_xed(size);
+            let name = match rm {
+                GprMem::Gpr(_) => mnemonic
+                    .strip_suffix(['b', 'w', 'l', 'q'])
+                    .unwrap_or(mnemonic),
+                GprMem::Mem(_) => mnemonic,
+            };
+            return write!(f, "{name} $0x1, {op}");
+        }
         match rm {
             GprMem::Gpr(_) => write!(f, "{mnemonic} $1, {reg}"),
             GprMem::Mem(_) => write!(f, "{mnemonic} {reg}"),
@@ -578,8 +581,15 @@ pub mod display {
 
     pub fn jmpq_m<R: Registers>(f: &mut fmt::Formatter<'_>, jmp: &inst::jmpq_m<R>) -> fmt::Result {
         let inst::jmpq_m { rm64 } = jmp;
-        let rm64 = rm64.to_string(Size::Quadword);
-        write!(f, "jmpq *{rm64}")
+        // XED writes the target plainly, without the indirect `*`, and names a
+        // register target `jmp` rather than `jmpq`.
+        if f.alternate() {
+            let op = rm64.to_string_xed(Size::Quadword);
+            let name = if rm64.is_memory() { "jmpq" } else { "jmp" };
+            return write!(f, "{name} {op}");
+        }
+        let op = rm64.to_string(Size::Quadword);
+        write!(f, "jmpq *{op}")
     }
 
     pub fn jmp_d8(f: &mut fmt::Formatter<'_>, jmp: &inst::jmp_d8) -> fmt::Result {
@@ -596,12 +606,14 @@ pub mod display {
         ($($mnemonic:tt = $j8:ident / $j32:ident;)*) => ($(
             pub fn $j8(f: &mut fmt::Formatter<'_>, jmp: &inst::$j8) -> fmt::Result {
                 let inst::$j8 { imm8 } = jmp;
-                display_displacement(f, $mnemonic, i64::from(imm8.value()) + 2)
+                let name = if f.alternate() { jmp.xed_mnemonic() } else { $mnemonic.into() };
+                display_displacement(f, &name, i64::from(imm8.value()) + 2)
             }
 
             pub fn $j32(f: &mut fmt::Formatter<'_>, jmp: &inst::$j32) -> fmt::Result {
                 let inst::$j32 { imm32 } = jmp;
-                display_displacement(f, $mnemonic, i64::from(imm32.value()) + 6)
+                let name = if f.alternate() { jmp.xed_mnemonic() } else { $mnemonic.into() };
+                display_displacement(f, &name, i64::from(imm32.value()) + 6)
             }
         )*)
     }
@@ -630,7 +642,8 @@ pub mod display {
         mnemonic: &str,
         displacement: i64,
     ) -> fmt::Result {
-        if displacement >= 0 && displacement < 10 {
+        // XED always writes the target in hexadecimal.
+        if !f.alternate() && displacement >= 0 && displacement < 10 {
             write!(f, "{mnemonic} {displacement}")
         } else {
             write!(f, "{mnemonic} {displacement:#x}")

@@ -138,6 +138,11 @@ impl FuncTranslator {
         builder.ensure_inserted_block();
         environ.before_translate_function(&mut builder)?;
         environ.translate_module_startup(&mut builder)?;
+        // This function is synthesized rather than translated, so it has no
+        // trailing `end` operator to fold buffered fuel charges into
+        // `self.fuel_var`. Flush them here so they are not dropped when
+        // `fuel_function_exit` saves the fuel var below.
+        environ.fuel_flush_consumed(&mut builder);
         environ.after_translate_function(&mut builder)?;
         builder.ins().return_(&[]);
         builder.finalize(environ.target_config());
@@ -344,7 +349,7 @@ fn validate_op_and_get_operand_types<'a>(
     environ: &mut FuncEnvironment<'_>,
     operand_types: &'a mut Vec<wasmtime_environ::WasmValType>,
     op: &wasmparser::Operator<'_>,
-    pos: usize,
+    pos: u64,
 ) -> WasmResult<Option<&'a [wasmtime_environ::WasmValType]>> {
     // Get the operand types for this operator.
     //

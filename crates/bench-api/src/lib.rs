@@ -145,7 +145,7 @@ use wasmtime::{
 };
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wasi::cli::{InputFile, OutputFile};
-use wasmtime_wasi::{DirPerms, FilePerms, I32Exit, WasiCtx, WasiCtxView, WasiView, p1::WasiP1Ctx};
+use wasmtime_wasi::{FsPerms, I32Exit, WasiCtx, WasiCtxView, WasiView, p1::WasiP1Ctx};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
@@ -310,7 +310,7 @@ pub extern "C" fn wasm_bench_create(
 
                 // Allow access to the working directory so that the benchmark can read
                 // its input workload(s).
-                cx.preopened_dir(working_dir.clone(), ".", DirPerms::READ, FilePerms::READ)?;
+                cx.preopened_dir(working_dir.clone(), ".", FsPerms::ReadOnly)?;
 
                 // Pass this env var along so that the benchmark program can use smaller
                 // input workload(s) if it has them and that has been requested.

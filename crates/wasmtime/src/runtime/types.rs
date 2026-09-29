@@ -838,6 +838,60 @@ pub enum HeapType {
     NoExn,
 }
 
+/// A top heap type.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum HeapTopType {
+    /// The common supertype of all external references.
+    Extern,
+    /// The common supertype of all internal references.
+    Any,
+    /// The common supertype of all function references.
+    Func,
+    /// The common supertype of all exception references.
+    Exn,
+    /// The common supertype of all continuation references.
+    Cont,
+}
+
+/// A bottom heap type.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum HeapBottomType {
+    /// The common subtype of all external references.
+    NoExtern,
+    /// The common subtype of all internal references.
+    None,
+    /// The common subtype of all function references.
+    NoFunc,
+    /// The common subtype of all exception references.
+    NoExn,
+    /// The common subtype of all continuation references.
+    NoCont,
+}
+
+impl From<HeapTopType> for HeapType {
+    fn from(value: HeapTopType) -> Self {
+        match value {
+            HeapTopType::Extern => Self::Extern,
+            HeapTopType::Any => Self::Any,
+            HeapTopType::Func => Self::Func,
+            HeapTopType::Exn => Self::Exn,
+            HeapTopType::Cont => Self::Cont,
+        }
+    }
+}
+
+impl From<HeapBottomType> for HeapType {
+    fn from(value: HeapBottomType) -> Self {
+        match value {
+            HeapBottomType::NoExtern => Self::NoExtern,
+            HeapBottomType::None => Self::None,
+            HeapBottomType::NoFunc => Self::NoFunc,
+            HeapBottomType::NoExn => Self::NoExn,
+            HeapBottomType::NoCont => Self::NoCont,
+        }
+    }
+}
+
 impl Display for HeapType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -1068,14 +1122,14 @@ impl HeapType {
 
     /// Get the top type of this heap type's type hierarchy.
     ///
-    /// The returned heap type is a supertype of all types in this heap type's
-    /// type hierarchy.
+    /// The returned type represents a supertype of all types in this heap
+    /// type's type hierarchy.
     #[inline]
-    pub fn top(&self) -> HeapType {
+    pub fn top(&self) -> HeapTopType {
         match self {
-            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapType::Func,
+            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapTopType::Func,
 
-            HeapType::Extern | HeapType::NoExtern => HeapType::Extern,
+            HeapType::Extern | HeapType::NoExtern => HeapTopType::Extern,
 
             HeapType::Any
             | HeapType::Eq
@@ -1084,11 +1138,11 @@ impl HeapType {
             | HeapType::ConcreteArray(_)
             | HeapType::Struct
             | HeapType::ConcreteStruct(_)
-            | HeapType::None => HeapType::Any,
+            | HeapType::None => HeapTopType::Any,
 
-            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapType::Cont,
+            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapTopType::Cont,
 
-            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapType::Exn,
+            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapTopType::Exn,
         }
     }
 
@@ -1105,14 +1159,14 @@ impl HeapType {
 
     /// Get the bottom type of this heap type's type hierarchy.
     ///
-    /// The returned heap type is a subtype of all types in this heap type's
+    /// The returned type represents a subtype of all types in this heap type's
     /// type hierarchy.
     #[inline]
-    pub fn bottom(&self) -> HeapType {
+    pub fn bottom(&self) -> HeapBottomType {
         match self {
-            HeapType::Extern | HeapType::NoExtern => HeapType::NoExtern,
+            HeapType::Extern | HeapType::NoExtern => HeapBottomType::NoExtern,
 
-            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapType::NoFunc,
+            HeapType::Func | HeapType::ConcreteFunc(_) | HeapType::NoFunc => HeapBottomType::NoFunc,
 
             HeapType::Any
             | HeapType::Eq
@@ -1121,11 +1175,11 @@ impl HeapType {
             | HeapType::ConcreteArray(_)
             | HeapType::Struct
             | HeapType::ConcreteStruct(_)
-            | HeapType::None => HeapType::None,
+            | HeapType::None => HeapBottomType::None,
 
-            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapType::NoCont,
+            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapBottomType::NoCont,
 
-            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapType::NoExn,
+            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapBottomType::NoExn,
         }
     }
 
@@ -1402,10 +1456,8 @@ impl HeapType {
     #[inline]
     pub(crate) fn is_vmgcref_type(&self) -> bool {
         match self.top() {
-            Self::Any | Self::Extern | Self::Exn => true,
-            Self::Func => false,
-            Self::Cont => false,
-            ty => unreachable!("not a top type: {ty:?}"),
+            HeapTopType::Any | HeapTopType::Extern | HeapTopType::Exn => true,
+            HeapTopType::Func | HeapTopType::Cont => false,
         }
     }
 

@@ -285,17 +285,27 @@ pub fn translate_operator(
             environ.stacks.popn(params.len());
             builder.switch_to_block(loop_body);
             push_block_params(environ, builder, loop_body);
-            environ.translate_loop_header(builder)?;
+            environ.translate_loop_header(builder);
         }
         Operator::If { blockty } => {
             // Read the hint before `environ` is borrowed mutably below.
-            let branch_hint = environ.take_branch_hint(builder.srcloc().bits() as usize);
+            let branch_hint = environ.take_branch_hint(builder.srcloc().bits().into());
 
             let val = environ.stacks.pop1();
 
             let next_block = builder.create_block();
             let (params, results) = blocktype_params_results(validator, *blockty)?;
-            let (destination, else_data) = if params.clone().eq(results.clone()) {
+
+            // We don't need an `else` if every parameter is a subtype of the
+            // result.
+            let resources = validator.resources();
+            let else_is_optional = params.len() == results.len()
+                && params
+                    .clone()
+                    .zip(results.clone())
+                    .all(|(param, result)| resources.is_subtype(param, result));
+
+            let (destination, else_data) = if else_is_optional {
                 // It is possible there is no `else` block, so we will only
                 // allocate a block for it if/when we find the `else`. For now,
                 // we if the condition isn't true, then we jump directly to the
@@ -715,13 +725,16 @@ pub fn translate_operator(
             let mut args = environ.stacks.peekn(num_args).to_vec();
             bitcast_wasm_params(environ, sig_ref, &mut args, builder);
 
-            let inst_results = environ.translate_call(
-                builder,
-                environ.next_srcloc,
-                function_index,
-                sig_ref,
-                &args,
-            )?;
+            let inst_results = unwrap_or_return_unreachable_state!(
+                environ,
+                environ.translate_call(
+                    builder,
+                    environ.next_srcloc,
+                    function_index,
+                    sig_ref,
+                    &args,
+                )?
+            );
 
             debug_assert_eq!(
                 inst_results.len(),
@@ -3155,25 +3168,14 @@ pub fn translate_operator(
             let arg_count = src_types.len() - dst_arity;
 
             let arg_types = &src_types[0..arg_count];
-            for arg_type in arg_types {
-                // We can't bind GC objects using cont.bind at the moment: We
-                // don't have the necessary infrastructure to traverse the
-                // buffers used by cont.bind when looking for GC roots. Thus,
-                // this crude check ensures that these buffers can never contain
-                // GC roots to begin with.
-                if arg_type.is_vmgcref_type_and_not_i31() {
-                    return Err(wasmtime_environ::WasmError::Unsupported(
-                        "cont.bind does not support GC types at the moment".into(),
-                    ));
-                }
-            }
-
             let (original_contobj, args) =
                 environ.stacks.peekn(arg_count + 1).split_last().unwrap();
             let original_contobj = *original_contobj;
             let args = args.to_vec();
 
-            let new_contobj = environ.translate_cont_bind(builder, original_contobj, &args);
+            let arg_types = arg_types.to_vec();
+            let new_contobj =
+                environ.translate_cont_bind(builder, original_contobj, &args, &arg_types);
 
             environ.stacks.popn(arg_count + 1);
             environ.stacks.push1(new_contobj);
@@ -3181,17 +3183,18 @@ pub fn translate_operator(
         Operator::Suspend { tag_index } => {
             let tag_index = TagIndex::from_u32(*tag_index);
             let param_types = environ.tag_params(tag_index).to_vec();
-            let return_types: SmallVec<[_; 8]> = environ
-                .tag_returns(tag_index)
-                .iter()
-                .map(|ty| crate::value_type(environ.isa(), *ty))
-                .collect();
+            let return_types = environ.tag_returns(tag_index).to_vec();
 
             let params = environ.stacks.peekn(param_types.len()).to_vec();
             let param_count = params.len();
 
-            let return_values =
-                environ.translate_suspend(builder, tag_index.as_u32(), &params, &return_types);
+            let return_values = environ.translate_suspend(
+                builder,
+                tag_index.as_u32(),
+                &params,
+                &param_types,
+                &return_types,
+            )?;
 
             environ.stacks.popn(param_count);
             environ.stacks.pushn(&return_values);
@@ -3235,59 +3238,121 @@ pub fn translate_operator(
             environ.stacks.pushn(&cont_return_vals);
         }
         Operator::ResumeThrow {
-            cont_type_index: _,
-            tag_index: _,
-            resume_table: _,
+            cont_type_index,
+            tag_index,
+            resume_table: wasm_resume_table,
         } => {
-            // TODO(10248) This depends on exception handling
-            return Err(wasmtime_environ::WasmError::Unsupported(
-                "resume.throw instructions not supported, yet".to_string(),
-            ));
+            let mut clif_resume_table = vec![];
+            for handle in &wasm_resume_table.handlers {
+                match handle {
+                    wasmparser::Handle::OnLabel { tag, label } => {
+                        let i = environ.stacks.control_stack.len() - 1 - (*label as usize);
+                        let frame = &mut environ.stacks.control_stack[i];
+                        frame.set_branched_to_exit();
+                        clif_resume_table.push((*tag, Some(frame.br_destination())));
+                    }
+                    wasmparser::Handle::OnSwitch { tag } => {
+                        clif_resume_table.push((*tag, None));
+                    }
+                }
+            }
+
+            let cont_type_index = TypeIndex::from_u32(*cont_type_index);
+            let tag_index = TagIndex::from_u32(*tag_index);
+            let arity = environ.tag_params(tag_index).len();
+            let (contobj, exception_args) = environ.stacks.peekn(arity + 1).split_last().unwrap();
+            let contobj = *contobj;
+            let exception_args = exception_args.to_vec();
+            let cont_return_vals = environ.translate_resume_throw(
+                builder,
+                cont_type_index.as_u32(),
+                tag_index,
+                &exception_args,
+                contobj,
+                &clif_resume_table,
+            )?;
+
+            environ.stacks.popn(arity + 1);
+            environ.stacks.pushn(&cont_return_vals);
+        }
+        Operator::ResumeThrowRef {
+            cont_type_index,
+            resume_table: wasm_resume_table,
+        } => {
+            let mut clif_resume_table = vec![];
+            for handle in &wasm_resume_table.handlers {
+                match handle {
+                    wasmparser::Handle::OnLabel { tag, label } => {
+                        let i = environ.stacks.control_stack.len() - 1 - (*label as usize);
+                        let frame = &mut environ.stacks.control_stack[i];
+                        frame.set_branched_to_exit();
+                        clif_resume_table.push((*tag, Some(frame.br_destination())));
+                    }
+                    wasmparser::Handle::OnSwitch { tag } => {
+                        clif_resume_table.push((*tag, None));
+                    }
+                }
+            }
+
+            let cont_type_index = TypeIndex::from_u32(*cont_type_index);
+            // The validator leaves the continuation on top of the exception
+            // reference.
+            let operands = environ.stacks.peekn(2);
+            let exnref = operands[0];
+            let contobj = operands[1];
+            let cont_return_vals = environ.translate_resume_throw_ref(
+                builder,
+                cont_type_index.as_u32(),
+                exnref,
+                contobj,
+                &clif_resume_table,
+            )?;
+
+            environ.stacks.popn(2);
+            environ.stacks.pushn(&cont_return_vals);
         }
         Operator::Switch {
             cont_type_index,
             tag_index,
         } => {
             // Arguments of the continuation we are going to switch to
-            let continuation_argument_types: SmallVec<[_; 8]> = environ
+            let switch_arg_types: SmallVec<[_; 8]> = environ
                 .continuation_arguments(TypeIndex::from_u32(*cont_type_index))
                 .to_smallvec();
             // Arity includes the continuation argument
-            let arity = continuation_argument_types.len();
+            let arity = switch_arg_types.len();
             let (contobj, switch_args) = environ.stacks.peekn(arity).split_last().unwrap();
             let contobj = *contobj;
             let switch_args = switch_args.to_vec();
 
             // Type of the continuation we are going to create by suspending the
             // currently running stack
-            let current_continuation_type = continuation_argument_types.last().unwrap();
+            let current_continuation_type = switch_arg_types.last().unwrap();
             let current_continuation_type = current_continuation_type.unwrap_ref_type();
 
             // Argument types of current_continuation_type. These will in turn
             // be the types of the arguments we receive when someone switches
             // back to this switch instruction
-            let current_continuation_arg_types: SmallVec<[_; 8]> =
-                match current_continuation_type.heap_type {
-                    WasmHeapType::ConcreteCont(index) => {
-                        let mti = index
-                            .as_module_type_index()
-                            .expect("Only supporting module type indices on switch for now");
+            let return_types: SmallVec<[_; 8]> = match current_continuation_type.heap_type {
+                WasmHeapType::ConcreteCont(index) => {
+                    let mti = index
+                        .as_module_type_index()
+                        .expect("expected module-local type index");
 
-                        environ
-                            .continuation_arguments(TypeIndex::from_u32(mti.as_u32()))
-                            .iter()
-                            .map(|ty| crate::value_type(environ.isa(), *ty))
-                            .collect()
-                    }
-                    _ => panic!("Invalid type on switch"),
-                };
+                    environ
+                        .continuation_arguments_from_interned(mti)
+                        .to_smallvec()
+                }
+                _ => panic!("Invalid type on switch"),
+            };
 
             let switch_return_values = environ.translate_switch(
                 builder,
                 *tag_index,
                 contobj,
                 &switch_args,
-                &current_continuation_arg_types,
+                &switch_arg_types,
+                &return_types,
             )?;
 
             environ.stacks.popn(arity);
@@ -4041,7 +4106,7 @@ fn translate_br_if(
     env: &mut FuncEnvironment<'_>,
 ) {
     // Read the hint before `env` is borrowed mutably below.
-    let branch_hint = env.take_branch_hint(builder.srcloc().bits() as usize);
+    let branch_hint = env.take_branch_hint(builder.srcloc().bits().into());
 
     let val = env.stacks.pop1();
     let (br_destination, inputs) = translate_br_if_args(relative_depth, env);
@@ -4566,6 +4631,7 @@ fn create_catch_block(
     let block = builder.create_block();
     let exn_ref = builder.append_block_param(block, exn_payload_ty);
     builder.switch_to_block(block);
+    environ.on_catch_block_entry(builder);
     debug_assert!(exn_ref_ty.bits() <= exn_payload_ty.bits());
     let exn_ref = if exn_ref_ty.bits() < exn_payload_ty.bits() {
         builder.ins().ireduce(exn_ref_ty, exn_ref)

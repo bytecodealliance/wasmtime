@@ -522,6 +522,19 @@ pub(crate) use self::store::ComponentStoreData;
 ///     //
 ///     // This option defaults to false.
 ///     include_generated_code_from_file: false,
+///
+///     // Whether to generate a `COMPONENT_TYPE` constant containing a
+///     // binary-encoded description of the WIT world that bindings
+///     // were generated for.
+///     //
+///     // This can be decoded with the `wit_parser::decoding::decode_world`
+///     // function to recover the WIT `Resolve` and `WorldId` used to
+///     // generate the bindings, for example to type-check components
+///     // against the world without keeping the original WIT files around.
+///     //
+///     // This option defaults to false as the encoded world adds a
+///     // nontrivial amount of data to the generated code.
+///     include_component_type: false,
 /// });
 /// ```
 pub use wasmtime_component_macro::bindgen;

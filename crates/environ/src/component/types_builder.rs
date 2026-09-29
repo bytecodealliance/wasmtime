@@ -22,15 +22,6 @@ use wasmtime_component_util::FlagsSize;
 mod resources;
 pub use resources::ResourcesBuilder;
 
-/// Maximum nesting depth of a type allowed in Wasmtime.
-///
-/// This constant isn't chosen via any scientific means and its main purpose is
-/// to enable most of Wasmtime to handle types via recursion without worrying
-/// about stack overflow.
-///
-/// Some more information about this can be found in #4814
-const MAX_TYPE_DEPTH: u32 = 100;
-
 /// Structure used to build a [`ComponentTypes`] during translation.
 ///
 /// This contains tables to intern any component types found as well as
@@ -258,6 +249,7 @@ impl ComponentTypesBuilder {
             ty: self.convert_component_entity_type(types, ty.ty)?,
             data: ComponentExternData {
                 implements: ty.implements.clone(),
+                external_id: ty.external_id.clone(),
             },
         })
     }
@@ -429,42 +421,43 @@ impl ComponentTypesBuilder {
         id: ComponentDefinedTypeId,
     ) -> Result<InterfaceType> {
         assert_eq!(types.id(), self.module_types.validator_id());
-        let ret = match &types[id] {
+        Ok(match &types[id] {
             ComponentDefinedType::Primitive(ty) => self.primitive_type(ty)?,
             ComponentDefinedType::Record(e) => InterfaceType::Record(self.record_type(types, e)?),
             ComponentDefinedType::Variant(e) => {
                 InterfaceType::Variant(self.variant_type(types, e)?)
             }
-            ComponentDefinedType::List(e) => InterfaceType::List(self.list_type(types, e)?),
-            ComponentDefinedType::Map(key, value) => {
+            ComponentDefinedType::List { element, .. } => {
+                InterfaceType::List(self.list_type(types, element)?)
+            }
+            ComponentDefinedType::Map { key, value, .. } => {
                 InterfaceType::Map(self.map_type(types, key, value)?)
             }
             ComponentDefinedType::Tuple(e) => InterfaceType::Tuple(self.tuple_type(types, e)?),
             ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
             ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
-            ComponentDefinedType::Option(e) => InterfaceType::Option(self.option_type(types, e)?),
-            ComponentDefinedType::Result { ok, err } => {
+            ComponentDefinedType::Option { ty, .. } => {
+                InterfaceType::Option(self.option_type(types, ty)?)
+            }
+            ComponentDefinedType::Result { ok, err, .. } => {
                 InterfaceType::Result(self.result_type(types, ok, err)?)
             }
             ComponentDefinedType::Own(r) => InterfaceType::Own(self.resource_id(r.resource())),
             ComponentDefinedType::Borrow(r) => {
                 InterfaceType::Borrow(self.resource_id(r.resource()))
             }
-            ComponentDefinedType::Future(ty) => {
+            ComponentDefinedType::Future { ty, .. } => {
                 InterfaceType::Future(self.future_table_type(types, ty)?)
             }
-            ComponentDefinedType::Stream(ty) => {
+            ComponentDefinedType::Stream { ty, .. } => {
                 InterfaceType::Stream(self.stream_table_type(types, ty)?)
             }
-            ComponentDefinedType::FixedLengthList(ty, size) => {
-                InterfaceType::FixedLengthList(self.fixed_length_list_type(types, ty, *size)?)
-            }
-        };
-        let info = self.type_information(&ret);
-        if info.depth > MAX_TYPE_DEPTH {
-            bail!("type nesting is too deep");
-        }
-        Ok(ret)
+            ComponentDefinedType::FixedLengthList {
+                element, length, ..
+            } => InterfaceType::FixedLengthList(
+                self.fixed_length_list_type(types, element, *length)?,
+            ),
+        })
     }
 
     /// Retrieve Wasmtime's type representation of the `error-context` type.
@@ -832,7 +825,25 @@ impl ComponentTypesBuilder {
     /// Returns whether the type specified contains any borrowed resources
     /// within it.
     pub fn ty_contains_borrow_resource(&self, ty: &InterfaceType) -> bool {
-        self.type_information(ty).has_borrow
+        self.type_information(ty).handles.has_borrow()
+    }
+
+    /// Returns whether the type specified contains any handle within it, where
+    /// "handle" means `own`, `borrow`, `future`, `stream`, or `error-context`.
+    fn ty_contains_any_handle(&self, ty: &InterfaceType) -> bool {
+        self.type_information(ty).handles.has_any()
+    }
+
+    /// Returns whether the signature of `ty` mentions any handle, in either its
+    /// parameters or its results.
+    pub fn func_contains_any_handle(&self, ty: TypeFuncIndex) -> bool {
+        let ty = &self[ty];
+        let params = &self[ty.params].types;
+        let results = &self[ty.results].types;
+        params
+            .iter()
+            .chain(results.iter())
+            .any(|ty| self.ty_contains_any_handle(ty))
     }
 
     fn type_information(&self, ty: &InterfaceType) -> &TypeInformation {
@@ -844,18 +855,25 @@ impl ComponentTypesBuilder {
             | InterfaceType::S16
             | InterfaceType::U32
             | InterfaceType::S32
-            | InterfaceType::Char
-            | InterfaceType::Own(_)
+            | InterfaceType::Char => {
+                static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
+                &INFO
+            }
+            InterfaceType::Own(_)
             | InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => {
-                static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
+                static INFO: TypeInformation = {
+                    let mut info = TypeInformation::primitive(FlatType::I32);
+                    info.handles = Handles::NoBorrow;
+                    info
+                };
                 &INFO
             }
             InterfaceType::Borrow(_) => {
                 static INFO: TypeInformation = {
                     let mut info = TypeInformation::primitive(FlatType::I32);
-                    info.has_borrow = true;
+                    info.handles = Handles::Borrow;
                     info
                 };
                 &INFO
@@ -1000,24 +1018,59 @@ struct TypeInformationCache {
     fixed_length_lists: PrimaryMap<TypeFixedLengthListIndex, TypeInformation>,
 }
 
+/// What kind of handles a type transitively contains.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum Handles {
+    /// This type contains no handles at all.
+    None,
+
+    /// This type contains at least one handle, but none of them are `borrow`s.
+    ///
+    /// That is, it contains an `own`, `future`, `stream`, or `error-context`.
+    NoBorrow,
+
+    /// This type contains at least one `borrow` handle.
+    Borrow,
+}
+
+impl Handles {
+    /// Does this type contain any handle at all?
+    const fn has_any(self) -> bool {
+        !matches!(self, Handles::None)
+    }
+
+    /// Does this type contain a `borrow` handle?
+    const fn has_borrow(self) -> bool {
+        matches!(self, Handles::Borrow)
+    }
+
+    /// Join two facts together.
+    const fn join(a: Self, b: Self) -> Handles {
+        match (a, b) {
+            (Handles::Borrow, _) | (_, Handles::Borrow) => Handles::Borrow,
+            (Handles::NoBorrow, _) | (_, Handles::NoBorrow) => Handles::NoBorrow,
+            (Handles::None, Handles::None) => Handles::None,
+        }
+    }
+}
+
 struct TypeInformation {
-    depth: u32,
     flat: FlatTypesStorage,
-    has_borrow: bool,
+
+    /// Which handles this type transitively contains, if any.
+    handles: Handles,
 }
 
 impl TypeInformation {
     const fn new() -> TypeInformation {
         TypeInformation {
-            depth: 0,
             flat: FlatTypesStorage::new(),
-            has_borrow: false,
+            handles: Handles::None,
         }
     }
 
     const fn primitive(flat: FlatType) -> TypeInformation {
         let mut info = TypeInformation::new();
-        info.depth = 1;
         info.flat.memory32[0] = flat;
         info.flat.memory64[0] = flat;
         info.flat.len = 1;
@@ -1026,7 +1079,6 @@ impl TypeInformation {
 
     const fn string() -> TypeInformation {
         let mut info = TypeInformation::new();
-        info.depth = 1;
         info.flat.memory32[0] = FlatType::I32;
         info.flat.memory32[1] = FlatType::I32;
         info.flat.memory64[0] = FlatType::I64;
@@ -1038,10 +1090,8 @@ impl TypeInformation {
     /// Builds up all flat types internally using the specified representation
     /// for all of the component fields of the record.
     fn build_record<'a>(&mut self, types: impl Iterator<Item = &'a TypeInformation>) {
-        self.depth = 1;
         for info in types {
-            self.depth = self.depth.max(1 + info.depth);
-            self.has_borrow = self.has_borrow || info.has_borrow;
+            self.handles = Handles::join(self.handles, info.handles);
             match info.flat.as_flat_types() {
                 Some(types) => {
                     for (t32, t64) in types.memory32.iter().zip(types.memory64) {
@@ -1074,17 +1124,15 @@ impl TypeInformation {
     {
         let cases = cases.into_iter();
         self.flat.push(FlatType::I32, FlatType::I32);
-        self.depth = 1;
 
         for info in cases {
             let info = match info {
                 Some(info) => info,
                 // If this case doesn't have a payload then it doesn't change
-                // the depth/flat representation
+                // the flat representation
                 None => continue,
             };
-            self.depth = self.depth.max(1 + info.depth);
-            self.has_borrow = self.has_borrow || info.has_borrow;
+            self.handles = Handles::join(self.handles, info.handles);
 
             // If this variant is already unrepresentable in a flat
             // representation then this can be skipped.
@@ -1149,8 +1197,7 @@ impl TypeInformation {
 
     fn fixed_length_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedLengthList) {
         let element_info = types.type_information(&ty.element);
-        self.depth = 1 + element_info.depth;
-        self.has_borrow = element_info.has_borrow;
+        self.handles = element_info.handles;
         match element_info.flat.as_flat_types() {
             Some(types) => {
                 'outer: for _ in 0..ty.size {
@@ -1166,12 +1213,10 @@ impl TypeInformation {
     }
 
     fn enums(&mut self, _types: &ComponentTypesBuilder, _ty: &TypeEnum) {
-        self.depth = 1;
         self.flat.push(FlatType::I32, FlatType::I32);
     }
 
     fn flags(&mut self, _types: &ComponentTypesBuilder, ty: &TypeFlags) {
-        self.depth = 1;
         match FlagsSize::from_count(ty.names.len()) {
             FlagsSize::Size0 => {}
             FlagsSize::Size1 | FlagsSize::Size2 => {
@@ -1207,18 +1252,15 @@ impl TypeInformation {
     fn lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeList) {
         *self = TypeInformation::string();
         let info = types.type_information(&ty.element);
-        self.depth += info.depth;
-        self.has_borrow = info.has_borrow;
+        self.handles = info.handles;
     }
 
     fn maps(&mut self, types: &ComponentTypesBuilder, ty: &TypeMap) {
         // Maps are represented as list<tuple<k, v>> in canonical ABI
-        // So we use POINTER_PAIR like lists, and calculate depth/borrow from key and value
+        // So we use POINTER_PAIR like lists, and calculate borrow from key and value
         *self = TypeInformation::string();
         let key_info = types.type_information(&ty.key);
         let value_info = types.type_information(&ty.value);
-        // Depth is max of key/value depths, plus 1 for the extra map layer.
-        self.depth = key_info.depth.max(value_info.depth) + 1;
-        self.has_borrow = key_info.has_borrow || value_info.has_borrow;
+        self.handles = Handles::join(key_info.handles, value_info.handles);
     }
 }

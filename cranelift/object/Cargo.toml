@@ -1,12 +1,11 @@
 [package]
 name = "cranelift-object"
-version = "0.135.0"
+version = "0.137.0-dev"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/cranelift-object"
 license = "Apache-2.0 WITH LLVM-exception"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 

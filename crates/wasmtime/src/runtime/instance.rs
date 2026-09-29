@@ -219,7 +219,7 @@ impl Instance {
             }
         }
 
-        typecheck(module, imports, |cx, ty, item| {
+        typecheck(store.engine(), module, imports, |cx, ty, item| {
             let item = DefinitionType::from(store, item);
             cx.definition(ty, &item)
         })?;
@@ -254,7 +254,7 @@ impl Instance {
         imports: Imports<'_>,
         asyncness: Asyncness,
     ) -> Result<Instance> {
-        let instance = {
+        let (instance, needs_startup) = {
             let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
             // SAFETY: the safety contract of `new_raw` is the same as this
             // function.
@@ -267,7 +267,7 @@ impl Instance {
         // function itself, but it's finalization of initialization of this
         // instance, for example for complicated global initialization
         // expressions.
-        if instance.id.get_mut(store.0).needs_startup() {
+        if needs_startup {
             if asyncness == Asyncness::No {
                 instance.start_raw(store)?;
             } else {
@@ -285,24 +285,17 @@ impl Instance {
     /// Internal function to create an instance which doesn't have its `start`
     /// function run yet.
     ///
-    /// This is not intended to be exposed from Wasmtime, it's intended to
-    /// refactor out common code from `new_started` and `new_started_async`.
-    ///
-    /// Note that this step needs to be run on a fiber in async mode even
-    /// though it doesn't do any blocking work because an async resource
-    /// limiter may need to yield.
-    ///
     /// # Unsafety
     ///
     /// This method is unsafe because it does not type-check the `imports`
     /// provided. The `imports` provided must be suitable for the module
     /// provided as well.
-    async unsafe fn new_raw(
+    pub(crate) async unsafe fn new_raw(
         store: &mut StoreOpaque,
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         module: &Module,
         imports: Imports<'_>,
-    ) -> Result<Instance> {
+    ) -> Result<(Instance, bool)> {
         if !Engine::same(store.engine(), module.engine()) {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
@@ -311,13 +304,6 @@ impl Instance {
         // Allocate the GC heap, if necessary.
         if module.env_module().needs_gc_heap {
             store.ensure_gc_store(limiter.as_deref_mut()).await?;
-
-            // Eagerly register trace info for all types in this module.
-            if let Some(gc_store) = store.optional_gc_store_mut() {
-                for (_, ty) in module.signatures().as_module_map().iter() {
-                    gc_store.ensure_trace_info(*ty);
-                }
-            }
         }
 
         // Register the module just before instantiation to ensure we keep the module
@@ -342,12 +328,16 @@ impl Instance {
                 .await?
         };
 
+        let instance = Instance::from_wasmtime(id, store);
+
+        let needs_startup = instance.id.get_mut(store).needs_startup();
+
         // At this point the instance is created and stored within the store,
         // but it's also not quite usable just yet. Initialization hasn't
         // completed (e.g. active data/element segments) and the `start`
         // function additionally has not yet been invoked. That's the
         // responsibility of the caller to handle, however.
-        Ok(Instance::from_wasmtime(id, store))
+        Ok((instance, needs_startup))
     }
 
     pub(crate) fn from_wasmtime(id: InstanceId, store: &mut StoreOpaque) -> Instance {
@@ -356,7 +346,7 @@ impl Instance {
         }
     }
 
-    fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+    pub(crate) fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let store_id = store.0.id();
@@ -822,20 +812,32 @@ impl<T: 'static> InstancePre<T> {
     /// Creates a new `InstancePre` which type-checks the `items` provided and
     /// on success is ready to instantiate a new instance.
     ///
+    /// `engine` is the engine that `items` belong to, and this returns an error
+    /// if that is not also `module`'s engine. This also returns an error if an
+    /// individual item within `items` reports an engine of its own that is not
+    /// `engine`, which happens when that item was taken from a store belonging
+    /// to a different engine than the linker it was defined in.
+    ///
     /// # Unsafety
     ///
     /// This method is unsafe as the `T` of the `InstancePre<T>` is not
     /// guaranteed to be the same as the `T` within the `Store`, the caller must
     /// verify that.
-    pub(crate) unsafe fn new(module: &Module, items: TryVec<Definition>) -> Result<InstancePre<T>> {
-        typecheck(module, &items, |cx, ty, item| cx.definition(ty, &item.ty()))?;
+    pub(crate) unsafe fn new(
+        engine: &Engine,
+        module: &Module,
+        items: TryVec<Definition>,
+    ) -> Result<InstancePre<T>> {
+        typecheck(engine, module, &items, |cx, ty, item| {
+            cx.definition(ty, &item.ty())
+        })?;
 
         let mut func_refs = TryVec::with_capacity(items.len())?;
         let mut host_funcs = 0;
         let mut asyncness = Asyncness::No;
         for item in &items {
             match item {
-                Definition::Extern(_, _) => {}
+                Definition::Extern { .. } => {}
                 Definition::HostFunc(f) => {
                     host_funcs += 1;
                     if f.func_ref().wasm_call.is_none() {
@@ -1002,7 +1004,7 @@ fn pre_instantiate_raw(
         // `T` of the store. Additionally the rooting necessary has happened
         // above.
         let item = match import {
-            Definition::Extern(e, _) => e.clone(),
+            Definition::Extern { item, .. } => item.clone(),
             Definition::HostFunc(func) => unsafe {
                 func.to_func_store_rooted(
                     store,
@@ -1021,11 +1023,62 @@ fn pre_instantiate_raw(
     Ok(imports)
 }
 
+/// An item that can be supplied as an import argument during instantiation.
+///
+/// # Safety
+///
+/// Implementations must return an associated engine if they own a handle to
+/// one. Failure to do so may allow cross-`Engine` type confusion.
+///
+/// (Items that are just identifiers indexing into a store, for example
+/// `Extern::Global(wasmtime::Global)`, do not have their own handle to an
+/// engine. Their engine is the engine of the store they belong to, and it is
+/// the store, not them, that holds an owning handle to the engine.)
+unsafe trait ImportArg {
+    fn engine(&self) -> Option<&Engine>;
+}
+
+// SAFETY: `Extern::SharedMemory` is the only variant with an `Engine` handle.
+unsafe impl ImportArg for Extern {
+    fn engine(&self) -> Option<&Engine> {
+        match self {
+            Extern::SharedMemory(m) => Some(m.engine()),
+            Extern::Func(_)
+            | Extern::Global(_)
+            | Extern::Table(_)
+            | Extern::Memory(_)
+            | Extern::Tag(_) => None,
+        }
+    }
+}
+
+// SAFETY: `Definition::engine` is complete.
+unsafe impl ImportArg for Definition {
+    fn engine(&self) -> Option<&Engine> {
+        Some(Definition::engine(self))
+    }
+}
+
+/// Type check the `import_args` against the imports that `module` declares.
+///
+/// `engine` is the engine that the `import_args` belong to. It must be the same
+/// engine as `module`'s: entity types are compared by `VMSharedTypeIndex`, which
+/// only means anything within the engine that assigned it, so checking one
+/// engine's items against another engine's module would compare unrelated types
+/// and consider them equal.
 fn typecheck<I>(
+    engine: &Engine,
     module: &Module,
     import_args: &[I],
     check: impl Fn(&matching::MatchCx<'_>, &EntityType, &I) -> Result<()>,
-) -> Result<()> {
+) -> Result<()>
+where
+    I: ImportArg,
+{
+    ensure!(
+        Engine::same(engine, module.engine()),
+        "cross-`Engine` instantiation is not currently supported"
+    );
     let env_module = module.compiled_module().module();
     let expected_len = env_module.imports().count();
     let actual_len = import_args.len();
@@ -1035,6 +1088,14 @@ fn typecheck<I>(
     let cx = matching::MatchCx::new(module.engine());
     for ((name, field, expected_ty), actual) in env_module.imports().zip(import_args) {
         debug_assert!(expected_ty.is_canonicalized_for_runtime_usage());
+        if let Some(actual_engine) = actual.engine() {
+            ensure!(
+                Engine::same(actual_engine, engine),
+                "cross-`Engine` instantiation is not currently supported: \
+                 the item provided for `{name}::{field}` belongs to a \
+                 different engine than the module being instantiated"
+            );
+        }
         check(&cx, &expected_ty, actual)
             .with_context(|| format!("incompatible import type for `{name}::{field}`"))?;
     }

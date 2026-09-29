@@ -567,10 +567,37 @@ impl InstructionData {
         }
     }
 
+    /// If this is a load/store instruction, return its memory flags.
+    pub fn memflags_mut(&mut self) -> Option<&mut MemFlags> {
+        match self {
+            InstructionData::Load { flags, .. }
+            | InstructionData::LoadNoOffset { flags, .. }
+            | InstructionData::Store { flags, .. }
+            | InstructionData::StoreNoOffset { flags, .. }
+            | InstructionData::AtomicCas { flags, .. }
+            | InstructionData::AtomicRmw { flags, .. } => Some(flags),
+            _ => None,
+        }
+    }
+
     /// If this is a load/store instruction, resolve its memory flags to data
     /// through the DFG.
     pub fn memflags_data(&self, dfg: &super::dfg::DataFlowGraph) -> Option<super::MemFlagsData> {
         self.memflags().map(|f| dfg.mem_flags[f])
+    }
+
+    /// Get this load/store instruction's trap code, if any.
+    ///
+    /// Returns `None` when this is not a load/store instruction, or if it is a
+    /// load/store instruction but does not have a trap code.
+    pub fn memflags_trap_code(&self, dfg: &super::dfg::DataFlowGraph) -> Option<TrapCode> {
+        self.memflags_data(dfg)?.trap_code()
+    }
+
+    /// If this is a load/store instruction, get its alias region.
+    pub fn alias_region(&self, dfg: &super::dfg::DataFlowGraph) -> Option<super::AliasRegion> {
+        let flags = self.memflags_data(dfg)?;
+        flags.alias_region()
     }
 
     /// If this instruction references a stack slot, return it

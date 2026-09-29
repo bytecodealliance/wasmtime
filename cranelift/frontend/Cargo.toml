@@ -1,13 +1,12 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-frontend"
-version = "0.135.0"
+version = "0.137.0-dev"
 description = "Cranelift IR builder helper"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-frontend"
 categories = ["no-std"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 

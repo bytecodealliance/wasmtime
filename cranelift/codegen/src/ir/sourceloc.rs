@@ -9,11 +9,12 @@ use serde_derive::{Deserialize, Serialize};
 
 /// A source location.
 ///
-/// This is an opaque 32-bit number attached to each Cranelift IR instruction. Cranelift does not
+/// This is an opaque 31-bit number attached to each Cranelift IR instruction. Cranelift does not
 /// interpret source locations in any way, they are simply preserved from the input to the output.
 ///
-/// The default source location uses the all-ones bit pattern `!0`. It is used for instructions
-/// that can't be given a real source location.
+/// The default source location uses the bit pattern `0x7fff_ffff`. It is used for instructions
+/// that can't be given a real source location. The high bit is reserved for
+/// distinguishing relative and absolute locations in [`MaybeRelSourceLoc`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct SourceLoc(u32);
@@ -37,7 +38,7 @@ impl SourceLoc {
 
 impl Default for SourceLoc {
     fn default() -> Self {
-        Self(!0)
+        Self(0x7fff_ffff)
     }
 }
 
@@ -67,7 +68,9 @@ impl RelSourceLoc {
         if base.is_default() || offset.is_default() {
             Self::default()
         } else {
-            Self(offset.bits().wrapping_sub(base.bits()))
+            // Wrap within the 31-bit source-location range, reserving the
+            // high bit for MaybeRelSourceLoc's relative/absolute tag.
+            Self(offset.bits().wrapping_sub(base.bits()) & MaybeRelSourceLoc::MASK)
         }
     }
 
@@ -76,7 +79,7 @@ impl RelSourceLoc {
         if self.is_default() || base.is_default() {
             Default::default()
         } else {
-            SourceLoc::new(self.0.wrapping_add(base.bits()))
+            SourceLoc::new(self.0.wrapping_add(base.bits()) & MaybeRelSourceLoc::MASK)
         }
     }
 
@@ -88,7 +91,7 @@ impl RelSourceLoc {
 
 impl Default for RelSourceLoc {
     fn default() -> Self {
-        Self(!0)
+        Self(0x7fff_ffff)
     }
 }
 
@@ -99,6 +102,84 @@ impl fmt::Display for RelSourceLoc {
         } else {
             write!(f, "@+{:04x}", self.0)
         }
+    }
+}
+
+/// A source location that is either a `RelSourceLoc` or `SourceLoc`.
+///
+/// This is used to represent a source location in the `MachBuffer`
+/// that is initially relative to some base and is later relocated. We
+/// do this to permit better code caching during incremental
+/// compilation: the MachBuffer records the first SourceLoc it is
+/// given as a base, and if the same function IR is later compiled but
+/// with a different starting SourceLoc, we can reuse the cached
+/// compilation result and just relocate (offset) the SourceLocs.
+///
+/// This relocation is an in-place update pass, so we want a "union"
+/// type, essentially, but we don't want to pay the overhead of a true
+/// `enum` (8 bytes rather than 4 in a large array), so we bitpack
+/// this representation.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct MaybeRelSourceLoc(u32);
+
+impl MaybeRelSourceLoc {
+    const REL_BIT: u32 = 0x8000_0000;
+    const MASK: u32 = !Self::REL_BIT;
+
+    /// Create a relative SourceLoc.
+    pub fn rel(loc: RelSourceLoc) -> Self {
+        debug_assert!(loc.0 & Self::MASK == loc.0);
+        MaybeRelSourceLoc(loc.0 | Self::REL_BIT)
+    }
+
+    /// Create an absolute SourceLoc.
+    pub fn abs(loc: SourceLoc) -> Self {
+        debug_assert!(loc.0 & Self::MASK == loc.0);
+        MaybeRelSourceLoc(loc.0)
+    }
+
+    /// Is this a relative SourceLoc?
+    pub fn is_rel(&self) -> bool {
+        self.0 & Self::REL_BIT != 0
+    }
+
+    /// Is this an absolute SourceLoc?
+    pub fn is_abs(&self) -> bool {
+        self.0 & Self::REL_BIT == 0
+    }
+
+    /// Unwrap a relative SourceLoc.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a relative SourceLoc.
+    pub fn as_rel(&self) -> RelSourceLoc {
+        assert!(self.is_rel());
+        RelSourceLoc(self.0 & Self::MASK)
+    }
+
+    /// Unwrap an absolute SourceLoc.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not an absolute SourceLoc.
+    pub fn as_abs(&self) -> SourceLoc {
+        assert!(self.is_abs());
+        SourceLoc(self.0)
+    }
+
+    /// Map a relative to an absolute SourceLoc, given another
+    /// absolute SourceLoc as a base.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is not a relative SourceLoc.
+    pub fn relocate(&self, base: SourceLoc) -> SourceLoc {
+        self.as_rel().expand(base)
     }
 }
 

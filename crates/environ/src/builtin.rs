@@ -154,7 +154,7 @@ macro_rules! foreach_builtin_function {
 
             // Creates a new continuation from a funcref.
             #[cfg(feature = "stack-switching")]
-            cont_new(vmctx: vmctx, r: pointer, param_count: u32, result_count: u32) -> pointer;
+            cont_new(vmctx: vmctx, r: pointer, param_count: u32, result_count: u32, gc_refs: u32) -> pointer;
 
             // Return the instance ID for a given vmctx.
             #[cfg(feature = "gc")]
@@ -170,6 +170,30 @@ macro_rules! foreach_builtin_function {
 
             // Process a debug breakpoint.
             breakpoint(vmctx: vmctx) -> bool;
+
+            // Intern a continuation reference into the GC heap's side table.
+            #[cfg(all(feature = "gc", feature = "stack-switching"))]
+            intern_contref_for_gc_heap(
+                vmctx: vmctx,
+                contref: pointer,
+                revision: pointer
+            ) -> u64;
+
+            // Resolve an interned continuation-reference ID and write its
+            // pointer and revision witness to `result`.
+            #[cfg(all(feature = "gc", feature = "stack-switching"))]
+            get_interned_contref(
+                vmctx: vmctx,
+                contref_id: u32,
+                result: pointer
+            ) -> bool;
+
+            // Helpers used around stack switch instructions in
+            // ASan-instrumented builds.
+            #[cfg(feature = "stack-switching")]
+            asan_start_switch_fiber(vmctx: vmctx, fake_stack_save: pointer, target_csi: pointer);
+            #[cfg(feature = "stack-switching")]
+            asan_finish_switch_fiber(vmctx: vmctx, fake_stack: pointer);
         }
     };
 }
@@ -210,6 +234,15 @@ macro_rules! declare_builtin_index {
             $for_each_builtin!(define_ctor_name);
 
             $for_each_builtin!(declare_builtin_index_constructors);
+        }
+
+        // Builtins are reached by indexing the array of function pointers that
+        // a vmctx points at.
+        impl $crate::VmctxArrayIndex for $index_name {
+            #[inline]
+            fn vmctx_array_index(self) -> u32 {
+                self.index()
+            }
         }
 
         #[cfg(test)]
@@ -378,6 +411,7 @@ impl BuiltinFunctionIndex {
             (@get ref_func pointer) => (return None);
             (@get table_get_lazy_init_func_ref pointer) => (return None);
             (@get intern_func_ref_for_gc_heap u64) => (return None);
+            (@get intern_contref_for_gc_heap u64) => (return None);
             (@get is_subtype u32) => (return None);
             (@get ceil_f32 f32) => (return None);
             (@get ceil_f64 f64) => (return None);

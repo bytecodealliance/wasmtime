@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, Linker, Val};
 use wasmtime::{Config, Engine, Result, Store};
 
 #[test]
@@ -203,5 +203,125 @@ package test:fixed-length-lists {
         .call_nested_roundtrip(&mut store, inputa, inputb)
         .expect("no trap");
     assert_eq!(result, ([[1, 2], [3, 4]], [[-1, -2], [-3, -4]]));
+    Ok(())
+}
+
+#[test]
+fn dynamic_fixed_length_list_nested_in_tuple() -> Result<()> {
+    let wat = r#"
+(component
+  (type $l (list u32 4))
+  (type $t (tuple u32 $l))
+  (import "f" (func $f (result $t)))
+  (core module $mem (memory (export "memory") 1))
+  (core instance $memi (instantiate $mem))
+  (core func $f2 (canon lower (func $f) (memory (core memory $memi "memory"))))
+  (core module $m
+    (import "" "f" (func $f (param i32)))
+    (import "mem" "memory" (memory 1))
+    (func (export "run") (result i32)
+      (call $f (i32.const 0))
+      (i32.load (i32.const 0)))
+  )
+  (core instance $ci (export "f" (func $f2)))
+  (core instance $mi (instantiate $m (with "" (instance $ci)) (with "mem" (instance $memi))))
+  (func (export "run") (result u32) (canon lift (core func $mi "run") (memory (core memory $memi "memory"))))
+)
+"#;
+
+    let mut config = Config::new();
+    config.wasm_component_model_fixed_length_lists(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, wat)?;
+    let mut linker = Linker::new(&engine);
+    linker.root().func_new("f", |_, _, _params, results| {
+        results[0] = Val::Tuple(vec![
+            Val::U32(0xaaaaaaaa),
+            Val::FixedLengthList(vec![
+                Val::U32(0x11111111),
+                Val::U32(0x22222222),
+                Val::U32(0x33333333),
+                Val::U32(0x44444444),
+            ]),
+        ]);
+        Ok(())
+    })?;
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), (u32,)>(&mut store, "run")?;
+    assert_eq!(run.call(&mut store, ())?, (0xaaaaaaaa,));
+    Ok(())
+}
+
+#[test]
+fn fixed_length_list_length_mismatch_rejected() -> Result<()> {
+    let wat = r#"
+(component
+  (core module $m
+    (func (export "run")
+      (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)
+      (result i32)
+      local.get 15)
+    (memory (export "memory") 1)
+  )
+  (core instance $i (instantiate $m))
+  (type $lst (list u32 16))
+  (type $ft (func (param "x" $lst) (result u32)))
+  (alias core export $i "run" (core func $run))
+  (func (export "run") (type $ft)
+    (canon lift (core func $run) (memory (core memory $i "memory"))))
+)
+"#;
+    let mut config = Config::new();
+    config.wasm_component_model_fixed_length_lists(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+
+    assert!(
+        instance
+            .get_typed_func::<([u32; 2],), (u32,)>(&mut store, "run")
+            .is_err()
+    );
+    assert!(
+        instance
+            .get_typed_func::<([u32; 32],), (u32,)>(&mut store, "run")
+            .is_err(),
+    );
+
+    let func = instance.get_typed_func::<([u32; 16],), (u32,)>(&mut store, "run")?;
+    let mut input = [0u32; 16];
+    input[15] = 0x1234_5678;
+    let (out,) = func.call(&mut store, (input,))?;
+    assert_eq!(out, 0x1234_5678);
+    Ok(())
+}
+
+#[test]
+fn fixed_length_list_wave() -> Result<()> {
+    let wat = r#"
+(component
+  (core module $m
+    (func (export "f") (result i32) (i32.const 7))
+  )
+  (core instance $i (instantiate $m))
+  (func (export "f") (result (list u32 1)) (canon lift (core func $i "f")))
+)
+"#;
+
+    let mut config = Config::new();
+    config.wasm_component_model_fixed_length_lists(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "f").unwrap();
+    let mut results = [Val::Bool(false)];
+
+    func.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0].to_wave()?, "[7]");
+
     Ok(())
 }

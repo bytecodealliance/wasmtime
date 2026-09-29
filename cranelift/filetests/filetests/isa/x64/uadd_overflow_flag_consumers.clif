@@ -1,0 +1,160 @@
+test compile precise-output
+set opt_level=speed
+target x86_64
+
+function %uadd_flags_trapz(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = uadd_overflow v0, v1
+  trapz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq %rsi, %rdi
+;   jnb #trap=user1
+;   leaq (%rdi, %rdx), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addq %rsi, %rdi
+;   jae 0x16
+;   leaq (%rdi, %rdx), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %uadd_flags_trapz_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v3, v4 = uadd_overflow v0, v1
+  trapz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addl %esi, %edi
+;   jnb #trap=user1
+;   leal (%rdi, %rdx), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addl %esi, %edi
+;   jae 0x14
+;   leal (%rdi, %rdx), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %uadd_flags_trapnz(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = uadd_overflow v0, v1
+  trapnz v4, user1
+  v5 = iadd v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq %rsi, %rdi
+;   jb #trap=user1
+;   leaq (%rdi, %rdx), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addq %rsi, %rdi
+;   jb 0x16
+;   leaq (%rdi, %rdx), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %uadd_flags_select(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = uadd_overflow v0, v1
+  v5 = select v4, v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq %rsi, %rdi
+;   movq %rdx, %rax
+;   cmovbq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addq %rsi, %rdi
+;   movq %rdx, %rax
+;   cmovbq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %uadd_flags_select_spectre_guard(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3, v4 = uadd_overflow v0, v1
+  v5 = select_spectre_guard v4, v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq %rsi, %rdi
+;   movq %rdx, %rax
+;   cmovbq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   addq %rsi, %rdi
+;   movq %rdx, %rax
+;   cmovbq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

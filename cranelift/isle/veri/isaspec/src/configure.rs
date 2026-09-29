@@ -222,11 +222,7 @@ where
         let opcode = aarch64::opcode(&inst);
         let got = concrete.eval()?;
         if got != opcode {
-            bail!(
-                "template mismatch: opcode {:#x}, template {:#x}",
-                opcode,
-                got,
-            );
+            bail!("template mismatch: opcode {opcode:#x}, template {got:#x}");
         }
     }
     Ok(())

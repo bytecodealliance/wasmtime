@@ -1,9 +1,11 @@
 use crate::p2;
+use crate::{NamedId, WasiCtxNamedView};
+use std::marker;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite, empty};
 use wasmtime::component::{HasData, ResourceTable};
-use wasmtime_wasi_io::streams::{InputStream, OutputStream};
+use wasmtime_wasi_io::streams::{InputStream, OutputStream, StreamError};
 
 mod empty;
 mod file;
@@ -14,6 +16,27 @@ mod worker_thread_stdin;
 
 pub use self::file::{InputFile, OutputFile};
 pub use self::locked_async::{AsyncStdinStream, AsyncStdoutStream};
+
+/// Convert a host `io::Error` into a `StreamError`, matching the error-code
+/// recovery that wasip1 performs via `filesystem::ErrorCode::from`.
+///
+/// * `BrokenPipe` is mapped to `StreamError::Closed` so that downstream
+///   consumers (e.g. wasi-libc) can recover `EPIPE` rather than falling back
+///   to a generic `EIO`.
+///
+/// * All other errors (including `IsADirectory`, permission errors, etc.) are
+///   preserved as `LastOperationFailed` with the original `std::io::Error`
+///   intact. This allows guests to recover the specific error code via the
+///   `wasi:filesystem/types#filesystem-error-code` function, which downcasts
+///   the error back to `std::io::Error` and maps it through
+///   `ErrorCode::from`.
+fn stream_error_from(e: std::io::Error) -> StreamError {
+    if e.kind() == std::io::ErrorKind::BrokenPipe {
+        StreamError::Closed
+    } else {
+        StreamError::LastOperationFailed(e.into())
+    }
+}
 
 // Convenience reexport for stdio types so tokio doesn't have to be imported
 // itself.
@@ -262,6 +285,163 @@ impl<T: ?Sized + StdoutStream + Sync> StdoutStream for Arc<T> {
     }
 }
 
+/// A helper struct which implements [`HasData`] for the `wasi:cli` APIs when
+/// used in combination with named imports.
+///
+/// This structure is similar in purpose to [`WasiCli`] and is used
+/// when using the [`named_imports`] module for `wasi:cli`. This structure
+/// serves as the `D` type parameter for `add_to_linker` functions.
+///
+/// [`named_imports`]: crate::p3::bindings::named_imports::wasi::cli
+///
+/// # Meaning of the `T` parameter
+///
+/// Here the `T` must be something that implements [`WasiCliNamedView`]. The
+/// corresponding `Data` for this type is [`WasiCtxNamedView`] which internally
+/// will contain `&mut T`.
+///
+/// Effectively you're going to implement [`WasiCliNamedView`] for something in
+/// your embedding, and that's the `T` you'll fill in here.
+///
+/// # Examples
+///
+/// ```
+/// use wasmtime::component::{Linker, Component, ResourceTable};
+/// use wasmtime::{Engine, Result};
+/// use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+/// use wasmtime_wasi::cli::*;
+/// use wasmtime_wasi::p2::bindings::named_imports;
+/// use std::collections::HashMap;
+///
+/// struct MyStoreState {
+///     table: ResourceTable,
+///     states: HashMap<NamedId, WasiCliCtx>,
+/// }
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///     let mut linker = Linker::new(&engine);
+///     let component = Component::new(&engine, "(component)")?;
+///     let mut name_map = HashMap::new();
+///
+///     named_imports::wasi::cli::environment::add_to_linker::<MyStoreState, WasiCliNamed<MyStoreState>>(
+///         &mut linker,
+///         &component,
+///         |name| {
+///             let len = name_map.len();
+///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///         },
+///         |state| WasiCtxNamedView(state),
+///     )?;
+///     Ok(())
+/// }
+///
+/// impl WasiCliNamedView for MyStoreState {
+///     fn cli(&mut self, id: NamedId) -> WasiCliCtxView<'_> {
+///         let ctx = self.states.get_mut(&id).expect("state for id");
+///         WasiCliCtxView {
+///             table: &mut self.table,
+///             ctx,
+///         }
+///     }
+/// }
+/// ```
+pub struct WasiCliNamed<T>(marker::PhantomData<fn() -> T>);
+
+impl<T> HasData for WasiCliNamed<T>
+where
+    T: WasiCliNamedView,
+{
+    type Data<'a> = WasiCtxNamedView<'a, T>;
+}
+
+/// A trait used to look up a specific `wasi:cli` context for a named import.
+///
+/// This trait is used in conjunction with the [`named_imports`] bindings
+/// generated for all WASI interfaces. The purpose of this trait is for
+/// embedders to define how a [`NamedId`] maps to a particular `wasi:cli`
+/// context, here returned as [`WasiCliCtxView`]. Embedders are responsible
+/// for assigning meaning to [`NamedId`] values themselves. These IDs are
+/// assigned when [`add_named_to_linker`] is called, for example, as the
+/// `lookup` argument to that function.
+///
+/// When using [`add_named_to_linker`] it's sufficient to implement this trait
+/// for the `T` in `Store<T>`. You can also instead implement the
+/// [`WasiNamedView`] trait for `T` which implies an implementation of this
+/// trait.
+///
+/// When using `add_to_linker` in the generated `bindings::named_imports`
+/// module then values implementing this live within the `T` of `Store<T>`, and
+/// be temporarily referenced in [`WasiCtxNamedView`] where internally that'll
+/// hold `WasiCtxNamedView(&mut your_type)`.
+///
+/// [`named_imports`]: crate::p3::bindings::named_imports
+/// [`add_named_to_linker`]: crate::p3::cli::add_named_to_linker
+/// [`WasiNamedView`]: crate::WasiNamedView
+///
+/// # Examples
+///
+/// ```
+/// use wasmtime::component::{Linker, Component, ResourceTable};
+/// use wasmtime::{Engine, Result};
+/// use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+/// use wasmtime_wasi::cli::*;
+/// use wasmtime_wasi::p2::bindings::named_imports;
+/// use std::collections::HashMap;
+///
+/// struct MyStoreState {
+///     table: ResourceTable,
+///     states: HashMap<NamedId, WasiCliCtx>,
+/// }
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///     let mut linker = Linker::new(&engine);
+///     let component = Component::new(&engine, "(component)")?;
+///     let mut name_map = HashMap::new();
+///
+///     wasmtime_wasi::p3::cli::add_named_to_linker::<MyStoreState>(
+///         &mut linker,
+///         &component,
+///         |_, name| {
+///             let len = name_map.len();
+///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///         },
+///     )?;
+///     Ok(())
+/// }
+///
+/// impl WasiCliNamedView for MyStoreState {
+///     fn cli(&mut self, id: NamedId) -> WasiCliCtxView<'_> {
+///         let ctx = self.states.get_mut(&id).expect("state for id");
+///         WasiCliCtxView {
+///             table: &mut self.table,
+///             ctx,
+///         }
+///     }
+/// }
+/// ```
+pub trait WasiCliNamedView: Send + 'static {
+    /// Looks up the [`WasiCliCtxView`] for the given [`NamedId`].
+    ///
+    /// This method will resolve the `id` specified to a specific CLI context
+    /// that is available to be used. Note that this method is specifically
+    /// infallible meaning that a CLI context must be returned and this cannot
+    /// generate a trap or panic or similar.
+    ///
+    /// Embedders are responsible for allocating [`NamedId`] and assigning
+    /// meaning to ids. When a `Linker` is populated embedders will have the
+    /// ability to generate a `NamedId` for all imports found, and then that
+    /// embedder-allocated id is then passed back here when the corresponding
+    /// imported function is invoked.
+    ///
+    /// Note that the [`ResourceTable`] referenced in the returned
+    /// [`WasiCliCtxView`] need not be unique. It's ok to use the same
+    /// [`ResourceTable`] for all imports. This is not a guest-visible
+    /// abstraction and just helps the host allocate and manage state.
+    fn cli(&mut self, id: NamedId) -> WasiCliCtxView<'_>;
+}
+
 #[cfg(test)]
 mod test {
     use crate::cli::{AsyncStdoutStream, StdinStream, StdoutStream};
@@ -365,5 +545,67 @@ mod test {
         s.flush()?;
         s.write_ready().await?;
         Ok(())
+    }
+
+    // Verify that the stdio OutputStream implementation reports a usable
+    // write permit and can successfully write + flush (exercises the full
+    // trait impl including the error conversion path).
+    #[test]
+    fn stdio_output_stream_write_flush() {
+        let mut stream: Box<dyn wasmtime_wasi_io::streams::OutputStream> =
+            StdoutStream::p2_stream(&std::io::stderr());
+
+        let permit = stream.check_write().expect("check_write");
+        assert!(permit > 0, "permit should be nonzero");
+
+        // Writing empty bytes must succeed.
+        stream
+            .write(Bytes::new())
+            .expect("writing empty bytes should succeed");
+
+        // Flushing must succeed.
+        stream.flush().expect("flush should succeed");
+    }
+
+    #[test]
+    fn stream_error_from_broken_pipe_maps_to_closed() {
+        use std::io;
+        use wasmtime_wasi_io::streams::StreamError;
+
+        let err = super::stream_error_from(io::Error::from(io::ErrorKind::BrokenPipe));
+        assert!(matches!(err, StreamError::Closed));
+    }
+
+    #[test]
+    fn stream_error_from_preserves_io_error() {
+        use std::io;
+        use wasmtime_wasi_io::streams::StreamError;
+
+        let err = super::stream_error_from(io::Error::from(io::ErrorKind::IsADirectory));
+        match err {
+            StreamError::LastOperationFailed(e) => {
+                let io_err = e.downcast::<io::Error>().expect("should downcast");
+                assert_eq!(io_err.kind(), io::ErrorKind::IsADirectory);
+            }
+            other => panic!("expected LastOperationFailed, got: {other:?}"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stream_error_from_raw_os_eisdir() {
+        use rustix::io::Errno;
+        use std::io;
+        use wasmtime_wasi_io::streams::StreamError;
+
+        let err =
+            super::stream_error_from(io::Error::from_raw_os_error(Errno::ISDIR.raw_os_error()));
+        match err {
+            StreamError::LastOperationFailed(e) => {
+                let io_err = e.downcast::<io::Error>().expect("should downcast");
+                assert_eq!(io_err.raw_os_error(), Some(Errno::ISDIR.raw_os_error()));
+            }
+            other => panic!("expected LastOperationFailed, got: {other:?}"),
+        }
     }
 }

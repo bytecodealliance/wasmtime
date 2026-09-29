@@ -1,0 +1,38 @@
+test run
+target riscv64 has_zfhmin
+
+function %fpromote_f16_f32(f16) -> f32 {
+block0(v0: f16):
+  v1 = fpromote.f32 v0
+  return v1
+}
+
+; run: %fpromote_f16_f32(0x1.554p-2) == 0x1.554p-2
+; run: %fpromote_f16_f32(-0x0.0) == -0x0.0
+
+function %fdemote_f32_f16(f32) -> f16 {
+block0(v0: f32):
+  v1 = fdemote.f16 v0
+  return v1
+}
+
+; run: %fdemote_f32_f16(0x1.003p0) == 0x1.004p0
+; run: %fdemote_f32_f16(-Inf) == -Inf
+
+function %fpromote_f16_f64(f16) -> f64 {
+block0(v0: f16):
+  v1 = fpromote.f64 v0
+  return v1
+}
+
+; run: %fpromote_f16_f64(0x1.554p-2) == 0x1.554p-2
+; run: %fpromote_f16_f64(-0x0.0) == -0x0.0
+
+function %fdemote_f64_f16(f64) -> f16 {
+block0(v0: f64):
+  v1 = fdemote.f16 v0
+  return v1
+}
+
+; run: %fdemote_f64_f16(0x1.003p0) == 0x1.004p0
+; run: %fdemote_f64_f16(-Inf) == -Inf

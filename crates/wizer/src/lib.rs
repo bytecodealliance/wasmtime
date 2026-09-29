@@ -232,14 +232,14 @@ impl Wizer {
     /// pre-initialized.
     pub async fn snapshot(
         &self,
-        mut cx: ModuleContext<'_>,
+        cx: &ModuleContext<'_>,
         instance: &mut impl InstanceState,
     ) -> Result<Vec<u8>> {
         // Parse rename spec.
         let renames = FuncRenames::parse(&self.func_renames)?;
 
-        let snapshot = snapshot::snapshot(&cx, instance).await;
-        let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames, true);
+        let snapshot = snapshot::snapshot(cx, instance).await;
+        let rewritten_wasm = self.rewrite(cx, &snapshot, &renames, true);
 
         self.debug_assert_valid_wasm(&rewritten_wasm, "rewritten module");
 

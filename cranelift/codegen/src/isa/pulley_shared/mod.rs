@@ -12,7 +12,7 @@ use crate::{
     dominator_tree::DominatorTree,
     ir,
     isa::{self, IsaFlagsHashKey, OwnedTargetIsa, TargetIsa},
-    machinst::{self, CompiledCodeStencil, MachInst, SigSet, VCode},
+    machinst::{self, CompiledCode, CompiledCodeStencil, MachInst, SigSet, VCode},
     result::CodegenResult,
     settings::{self as shared_settings, Flags},
 };
@@ -122,8 +122,9 @@ where
         &self,
         func: &ir::Function,
         domtree: &DominatorTree,
+        regalloc_ctx: &mut regalloc2::Ctx,
         ctrl_plane: &mut ControlPlane,
-    ) -> CodegenResult<(VCode<inst::InstAndKind<P>>, regalloc2::Output)> {
+    ) -> CodegenResult<VCode<inst::InstAndKind<P>>> {
         let emit_info = EmitInfo::new(
             func.signature.call_conv,
             self.flags.clone(),
@@ -131,7 +132,16 @@ where
         );
         let sigs = SigSet::new::<abi::PulleyMachineDeps<P>>(func, &self.flags)?;
         let abi = abi::PulleyCallee::new(func, self, &self.isa_flags, &sigs)?;
-        machinst::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
+        machinst::compile::<Self>(
+            func,
+            domtree,
+            regalloc_ctx,
+            self,
+            abi,
+            emit_info,
+            sigs,
+            ctrl_plane,
+        )
     }
 }
 
@@ -172,14 +182,15 @@ where
         &self,
         func: &ir::Function,
         domtree: &DominatorTree,
+        regalloc_ctx: &mut regalloc2::Ctx,
         want_disasm: bool,
         ctrl_plane: &mut cranelift_control::ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let (vcode, regalloc_result) = self.compile_vcode(func, domtree, ctrl_plane)?;
+        let vcode = self.compile_vcode(func, domtree, regalloc_ctx, ctrl_plane)?;
 
         let want_disasm =
             want_disasm || (cfg!(feature = "trace-log") && log::log_enabled!(log::Level::Debug));
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, &self.flags, ctrl_plane);
+        let emit_result = vcode.emit(&regalloc_ctx.output, want_disasm, &self.flags, ctrl_plane)?;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer;
 
@@ -187,13 +198,13 @@ where
             log::debug!("disassembly:\n{disasm}");
         }
 
-        Ok(CompiledCodeStencil {
+        Ok(CompiledCodeStencil(CompiledCode {
             buffer,
             vcode: emit_result.disasm,
             value_labels_ranges,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
-        })
+        }))
     }
 
     fn emit_unwind_info(

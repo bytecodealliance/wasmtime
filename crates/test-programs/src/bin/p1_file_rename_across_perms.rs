@@ -4,7 +4,6 @@ use std::env;
 use std::process;
 use test_programs::preview1::open_scratch_directory;
 
-const RW_ALIAS_FILENAME: &str = "alias.txt";
 const RO_TEST_FILENAME: &str = "test.txt";
 const RO_EXPECTED_CONTENTS: &[u8] = b"read only test file\n";
 
@@ -39,22 +38,11 @@ unsafe fn test_file_rename_across_perms(rw_dir_fd: wasip1::Fd, ro_dir_fd: wasip1
     // Check test preconditions.
     test_ro_file_has_expected_contents(ro_dir_fd);
 
-    // Create a hardlink inside the file ro dir so there are two files pointing to
-    // the read-only file.
-    match wasip1::path_link(ro_dir_fd, 0, RO_TEST_FILENAME, ro_dir_fd, RW_ALIAS_FILENAME) {
-        // The readonly dir isnt recreated fresh per test mode in the p2
-        // runner, so just allow this to fail with exists because its very
-        // tedious to restructure everything to fix this properly
-        Ok(()) | Err(wasip1::ERRNO_EXIST) => {}
-        _ => panic!("should be possible to create link inside ro file domain"),
-    }
-
-    // Renaming that file into the file rw dir should fail with permissions
-    // error, otherwise it would permit opening the ro file as rw
-    let err = wasip1::path_rename(ro_dir_fd, RW_ALIAS_FILENAME, rw_dir_fd, RW_ALIAS_FILENAME);
+    // Renaming the ro dir file into the rw dir should fail with permissions error
+    let err = wasip1::path_rename(ro_dir_fd, RO_TEST_FILENAME, rw_dir_fd, RO_TEST_FILENAME);
     assert!(
         err.is_err(),
-        "path_rename should fail because link source readonly, dest is readwrite"
+        "path_rename should fail because source dir is readonly, dest dir is readwrite"
     );
     assert_eq!(
         err.err().unwrap(),

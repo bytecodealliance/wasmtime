@@ -172,10 +172,9 @@ pub trait WorkerState: 'static + Send + Sync {
     /// The type of the associated data for [`Store`] belonging to this worker.
     type StoreData: Send;
 
-    /// An opaque unique identifier that hosts can assigned to requests which is
-    /// threaded from [`ProxyHandler::handle`] into
-    /// [`WorkerState::on_request_start`]
-    type RequestId: Send + Sync;
+    /// Opaque data that hosts can attach to requests which is threaded from
+    /// [`ProxyHandler::handle`] into [`WorkerState::on_request_start`].
+    type RequestData: Send + Sync;
 
     /// Indicate whether the worker should accept another request given the
     /// current number it is already handling concurrently and the total it has
@@ -217,7 +216,7 @@ pub trait WorkerState: 'static + Send + Sync {
     fn on_request_start(
         &self,
         store: StoreContextMut<'_, Self::StoreData>,
-        id: Self::RequestId,
+        data: Self::RequestData,
         task: GuestTaskId,
     ) -> Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>;
 
@@ -320,7 +319,7 @@ impl StartTimes {
 }
 
 type WorkerRequest<S> = (
-    <<S as HandlerState>::WorkerState as WorkerState>::RequestId,
+    <<S as HandlerState>::WorkerState as WorkerState>::RequestData,
     Request,
     oneshot::Sender<Result<Response, wasmtime::Error>>,
 );
@@ -377,9 +376,9 @@ where
 
             Err(error) => {
                 let error = Arc::new(error);
-                if let Some((request_id, request, tx)) = request {
+                if let Some((request_data, request, tx)) = request {
                     _ = tx.send(Err(InstantiationError {
-                        request_id,
+                        request_data,
                         request: Mutex::new(request),
                         error,
                     }
@@ -388,7 +387,7 @@ where
                     // In this case, the worker was spawned to handle any queued
                     // requests.  Since we can't handle those requests, we send
                     // them all an instantiation error.
-                    for (request_id, request, tx) in mem::take(
+                    for (request_data, request, tx) in mem::take(
                         self.handler
                             .0
                             .request_queue
@@ -398,7 +397,7 @@ where
                             .deref_mut(),
                     ) {
                         _ = tx.send(Err(InstantiationError {
-                            request_id,
+                            request_data,
                             request: Mutex::new(request),
                             error: error.clone(),
                         }
@@ -479,7 +478,7 @@ where
             let mut futures = FuturesUnordered::new();
             let mut start_times = StartTimes::default();
 
-            let accept_request = |(request_id, request, tx): WorkerRequest<S>,
+            let accept_request = |(request_data, request, tx): WorkerRequest<S>,
                                   futures: &mut FuturesUnordered<_>,
                                   start_times: &mut StartTimes,
                                   reuse_count: &mut usize| {
@@ -508,7 +507,7 @@ where
                             // eventually exit the worker.
                             let expiration = dropper.state.on_request_start(
                                 store.as_context_mut(),
-                                request_id,
+                                request_data,
                                 prepared.task(),
                             );
                             Ok((prepared, expiration))
@@ -773,8 +772,8 @@ impl<S: HandlerState> Clone for ProxyHandler<S> {
 /// existing instances to be dropped and/or freeing memory used by caches,
 /// etc.).  Otherwise, it will probably need to return an HTTP 500 error.
 pub struct InstantiationError<T> {
-    /// The ID of the request which was originally configured,
-    pub request_id: T,
+    /// The host data originally passed with the request.
+    pub request_data: T,
     /// The original request passed to `ProxyHandler::handle`.
     ///
     /// This is wrapped in a `Mutex` to satisfy the `Send + Sync` bounds
@@ -886,11 +885,11 @@ where
     /// to limit the number of concurrent requests that are being processed.
     pub async fn handle(
         &self,
-        id: <S::WorkerState as WorkerState>::RequestId,
+        data: <S::WorkerState as WorkerState>::RequestData,
         request: Request,
     ) -> Result<Response, wasmtime::Error> {
         let (tx, rx) = oneshot::channel();
-        let req = (id, request, tx);
+        let req = (data, request, tx);
         if self.0.worker_count.load(Relaxed) == 0 {
             // There are no available workers; skip the queue and pass
             // the request directly to the worker, which improves

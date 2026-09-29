@@ -267,7 +267,7 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
     let mut symbol_table = Vec::new();
     symbol_table.extend_from_slice(bytes_of(&U32::new(BigEndian, syms.len() as u32)));
     for _ in syms.iter() {
-        symbol_table.extend_from_slice(bytes_of(&U32::new(BigEndian, 0)));
+        symbol_table.extend_from_slice(bytes_of(&U32::new(BigEndian, 0u32)));
     }
     for s in syms.iter() {
         symbol_table.extend_from_slice(&std::ffi::CString::new(*s).unwrap().into_bytes_with_nul());
@@ -295,13 +295,11 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
 
     // Now that we have the starting offset of the `intrinsics.o` file go back
     // and fill in the offset within the symbol table generated earlier.
-    let member_offset = archive.len();
+    let member_offset = u32::try_from(archive.len()).unwrap();
     for (index, _) in syms.iter().enumerate() {
         let index = index + 1;
-        archive[symtab_offset + (index * 4)..][..4].copy_from_slice(bytes_of(&U32::new(
-            BigEndian,
-            member_offset.try_into().unwrap(),
-        )));
+        archive[symtab_offset + (index * 4)..][..4]
+            .copy_from_slice(bytes_of(&U32::new(BigEndian, member_offset)));
     }
 
     archive.extend_from_slice(object::bytes_of(&object::archive::Header {

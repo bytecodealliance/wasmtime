@@ -1,0 +1,26 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; A trapping load to region1 sits between two region0 stores. The load can
+;; observe region0 via its trap, so the first store is not dead.
+function %trapping_load_between(i64, i64, i32, i32) -> i32 {
+    region0 = 0 "R0"
+    region1 = 1 "R1"
+block0(v0: i64, v1: i64, v2: i32, v3: i32):
+    store aligned region0 user10 v2, v0
+    v4 = load.i32 aligned region1 user11 v1
+    store aligned region0 user10 v3, v0
+    return v4
+}
+
+; function %trapping_load_between(i64, i64, i32, i32) -> i32 fast {
+;     region0 = 0 "R0"
+;     region1 = 1 "R1"
+;
+; block0(v0: i64, v1: i64, v2: i32, v3: i32):
+;     store user10 aligned region0 v2, v0
+;     v4 = load.i32 user11 aligned region1 v1
+;     store user10 aligned region0 v3, v0
+;     return v4
+; }

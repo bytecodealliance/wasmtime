@@ -1,7 +1,7 @@
 use wasmtime::Result;
 use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, Linker, ResourceType};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Config, Engine, Module, Store};
 
 #[test]
 fn old_import_importing_new_item() -> Result<()> {
@@ -167,6 +167,47 @@ fn linker_defines_unknown_imports_as_traps() -> Result<()> {
     Ok(())
 }
 
+/// Resource aliases must follow the real resource regardless of registration order.
+#[test]
+fn linker_defines_unknown_imports_as_traps_with_resource_aliases() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "types" (instance $types
+                (export "r" (type (sub resource)))
+            ))
+            (alias export $types "r" (type $r))
+            (import "uses" (instance
+                (alias outer 1 $r (type $r))
+                (export "r" (type (eq $r)))
+            ))
+        )"#,
+    )?;
+
+    for stub_first in [false, true] {
+        let mut linker = Linker::<()>::new(&engine);
+        linker.allow_shadowing(stub_first);
+
+        if stub_first {
+            linker.define_unknown_imports_as_traps(&component)?;
+        }
+
+        linker
+            .instance("types")?
+            .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+
+        if !stub_first {
+            linker.define_unknown_imports_as_traps(&component)?;
+        }
+
+        let mut store = Store::new(&engine, ());
+        linker.instantiate(&mut store, &component)?;
+    }
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn linker_defines_unknown_async_imports_as_traps() -> Result<()> {
     // `define_unknown_imports_as_traps` used to always stub with `func_new`,
@@ -208,6 +249,23 @@ fn linker_fails_to_define_unknown_core_module_imports_as_traps() -> Result<()> {
         )"#,
     )?;
     assert!(linker.define_unknown_imports_as_traps(&component).is_err());
+
+    Ok(())
+}
+
+#[test]
+fn open_instance_twice() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    let module = Module::new(&engine, "(module)")?;
+    linker.instance("foo")?.module("a", &module)?;
+    linker.instance("foo")?.module("b", &module)?;
+    assert!(linker.instance("foo")?.module("a", &module).is_err());
+    assert!(linker.instance("foo")?.module("b", &module).is_err());
+    linker.instance("foo")?.module("c", &module)?;
+    assert!(linker.root().module("foo", &module).is_err());
+    linker.instance("foo")?.module("d", &module)?;
 
     Ok(())
 }

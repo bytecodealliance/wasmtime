@@ -8,11 +8,11 @@ use crate::runtime::vm::stack_switching::VMContObj;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VmPtr};
 use core::alloc::Layout;
+use core::cmp;
 use core::mem;
 use core::ops::Range;
 use core::ptr::NonNull;
 use core::slice;
-use core::{cmp, usize};
 use wasmtime_environ::{
     FUNCREF_INIT_BIT, FUNCREF_MASK, IndexType, Trap, Tunables, WasmHeapTopType, WasmRefType,
 };
@@ -632,7 +632,10 @@ impl Table {
         if delta == 0 {
             return Ok(Some(old_size));
         }
-        let delta = usize::try_from(delta).map_err(|_| Trap::TableOutOfBounds)?;
+
+        // Clamp to maximum usize, the system won't be able to allocate this
+        // anyway and we'll go to the normal failure path.
+        let delta = usize::try_from(delta).unwrap_or(usize::MAX);
 
         let new_size = match old_size.checked_add(delta) {
             Some(s) => s,

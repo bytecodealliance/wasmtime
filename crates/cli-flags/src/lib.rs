@@ -47,6 +47,7 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 }
 
 wasmtime_option_group! {
+    #[env = "OPTIMIZE"]
     pub struct OptimizeOptions {
         /// Optimization level of generated code (0-2, s; default: 2)
         #[serde(default)]
@@ -234,6 +235,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "CODEGEN"]
     pub struct CodegenOptions {
         /// Either `cranelift` or `winch`.
         ///
@@ -283,6 +285,55 @@ wasmtime_option_group! {
         /// corruption in compiled code.
         pub metadata_for_gc_heap_corruption: Option<bool>,
 
+        /// Expose Wasmtime's unsafe intrinsics to the Wasm being compiled under
+        /// the given instance import name, which defaults to
+        /// `unsafe-intrinsics` when the name is omitted.
+        ///
+        /// The unsafe intrinsics are a set of raw, unchecked load and store
+        /// operations on the host's address space, along with the address of
+        /// the store's data. They may only be used with components, not core
+        /// Wasm modules.
+        ///
+        /// This is wildly unsafe: the Wasm is given the ability to read and
+        /// write arbitrary host memory. Only use this with Wasm that you trust
+        /// as much as you trust the CLI itself.
+        ///
+        /// When `-C compile-time-builtin` is also given, the intrinsics are
+        /// exposed only to the compile-time builtins and not to the main Wasm
+        /// program.
+        ///
+        /// See the API documentation for
+        /// `CodeBuilder::expose_unsafe_intrinsics` for more details.
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::deserialize_cli_parse_wrapper")]
+        #[serde(serialize_with = "crate::opt::serialize_cli_parse_wrapper")]
+        pub unsafe_intrinsics: Option<UnsafeIntrinsicsImport>,
+
+        /// Define a compile-time builtin: satisfy the `<name>` instance import
+        /// of the main component with the component at `<path>` at compile
+        /// time, rather than with a host-defined import at instantiation time.
+        ///
+        /// May be specified multiple times, once per builtin. Compile-time
+        /// builtins may only be used with components, not core Wasm modules,
+        /// and require `-C unsafe-intrinsics`.
+        ///
+        /// The `<name>=` prefix may be omitted, in which case `<name>` defaults
+        /// to the file name of `<path>` without its extension. For example
+        /// `-C compile-time-builtin=path/to/my-host-api.wat` satisfies the
+        /// `my-host-api` import. Note that a `<path>` which itself contains an
+        /// `=` is interpreted as the `<name>=<path>` form; pass the explicit
+        /// form to disambiguate.
+        ///
+        /// Compile-time builtins are part of your trusted compute base: they
+        /// are given access to the unsafe intrinsics described above. Calls
+        /// into them become direct calls, so pass `-C inlining=y` to let them
+        /// be inlined into their callers.
+        ///
+        /// See the API documentation for
+        /// `CodeBuilder::compile_time_builtin_binary` for more details.
+        #[serde(skip)]
+        pub compile_time_builtin: Vec<CompileTimeBuiltin>,
+
         #[prefixed = "cranelift"]
         #[serde(default)]
         /// Set a cranelift-specific option. Use `wasmtime settings` to see
@@ -296,6 +347,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "DEBUG"]
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
         pub debug_info: Option<bool>,
@@ -337,6 +389,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "WASM"]
     pub struct WasmOptions {
         /// Enable canonicalization of all NaN values.
         pub nan_canonicalization: Option<bool>,
@@ -453,6 +506,9 @@ wasmtime_option_group! {
         pub component_model_gc: Option<bool>,
         /// Map support in the component model.
         pub component_model_map: Option<bool>,
+        /// Component model support for `memory64`: this corresponds
+        /// to the 🐘 emoji in the component model specification.
+        pub component_model_memory64: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the stack-switching proposal.
@@ -465,6 +521,8 @@ wasmtime_option_group! {
         pub wide_arithmetic: Option<bool>,
         /// Configure support for the branch-hinting proposal.
         pub branch_hinting: Option<bool>,
+        /// Configure support for compact imports.
+        pub compact_imports: Option<bool>,
         /// Configure support for the extended-const proposal.
         pub extended_const: Option<bool>,
         /// Configure support for the exceptions proposal.
@@ -477,6 +535,9 @@ wasmtime_option_group! {
         /// Component model support for `(implements ...)`, corresponds to the
         /// 🏷️ emoji in the upstream spec.
         pub component_model_implements: Option<bool>,
+        /// Component model support for canonical names, corresponds to the
+        /// 🔗 emoji in the upstream spec.
+        pub component_model_canonical_names: Option<bool>,
         /// Whether or not any concurrency infrastructure in Wasmtime is
         /// enabled or not.
         pub concurrency_support: Option<bool>,
@@ -488,6 +549,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "WASI"]
     pub struct WasiOptions {
         /// Enable support for WASI CLI APIs, including filesystems, sockets, clocks, and random.
         pub cli: Option<bool>,
@@ -512,10 +574,6 @@ wasmtime_option_group! {
         pub config: Option<bool>,
         /// Enable support for WASI key-value imports (experimental)
         pub keyvalue: Option<bool>,
-        /// Inherit environment variables and file descriptors following the
-        /// systemd listen fd specification (UNIX only) (legacy wasip1
-        /// implementation only)
-        pub listenfd: Option<bool>,
         /// Grant access to the given TCP listen socket (experimental, legacy
         /// wasip1 implementation only)
         #[serde(default)]
@@ -588,6 +646,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[env = "RECORD"]
     pub struct RecordOptions {
         /// Filename for the recorded execution trace (or empty string to skip writing a file).
         pub path: Option<String>,
@@ -614,6 +673,20 @@ pub struct WasiNnGraph {
 pub struct KeyValuePair {
     pub key: String,
     pub value: String,
+}
+
+/// The instance import name under which Wasmtime's unsafe intrinsics are
+/// exposed to the Wasm being compiled.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnsafeIntrinsicsImport(pub String);
+
+/// A compile-time builtin.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompileTimeBuiltin {
+    /// The instance import name that this satisfies in the main component.
+    pub name: String,
+    /// The path to the component that implements this builtin.
+    pub path: PathBuf,
 }
 
 /// Common options for commands that translate WebAssembly modules
@@ -802,12 +875,12 @@ impl CommonOptions {
                 );
             }
         }
-        self.opts.configure_with(&self.opts_raw);
-        self.codegen.configure_with(&self.codegen_raw);
-        self.debug.configure_with(&self.debug_raw);
-        self.wasm.configure_with(&self.wasm_raw);
-        self.wasi.configure_with(&self.wasi_raw);
-        self.record.configure_with(&self.record_raw);
+        self.opts.configure_with(&self.opts_raw)?;
+        self.codegen.configure_with(&self.codegen_raw)?;
+        self.debug.configure_with(&self.debug_raw)?;
+        self.wasm.configure_with(&self.wasm_raw)?;
+        self.wasi.configure_with(&self.wasi_raw)?;
+        self.record.configure_with(&self.record_raw)?;
         Ok(())
     }
 
@@ -1260,6 +1333,10 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.branch_hinting {
             config.wasm_branch_hinting(enable);
         }
+        // Not included in `all_proposals`: off by default until fuzzed.
+        if let Some(enable) = self.wasm.compact_imports {
+            config.wasm_compact_imports(enable);
+        }
         if let Some(enable) = self.wasm.extended_const.or(all) {
             config.wasm_extended_const(enable);
         }
@@ -1287,6 +1364,8 @@ impl CommonOptions {
             ("component-model", component_model_map, wasm_component_model_map)
             ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
             ("component-model", component_model_implements, wasm_component_model_implements)
+            ("component-model", component_model_canonical_names, wasm_component_model_canonical_names)
+            ("component-model", component_model_memory64, wasm_component_model_memory64)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
@@ -1416,6 +1495,11 @@ impl CommonOptions {
                 // arbitrary code-defined caches.
                 cache: None,
                 cache_config: None,
+
+                // These are configured per-`CodeBuilder`, so they cannot be
+                // recovered here.
+                unsafe_intrinsics: None,
+                compile_time_builtin: Vec::new(),
             },
             debug: DebugOptions {
                 address_map: Some(engine.get_generate_address_map()),
@@ -1441,6 +1525,7 @@ impl CommonOptions {
                 async_stack_size: Some(engine.get_async_stack_size()),
                 async_stack_zeroing: Some(engine.get_async_stack_zeroing()),
                 branch_hinting: Some(engine.get_wasm_branch_hinting()),
+                compact_imports: Some(features.contains(WasmFeatures::COMPACT_IMPORTS)),
                 bulk_memory: Some(features.contains(WasmFeatures::BULK_MEMORY)),
                 component_model: Some(features.contains(WasmFeatures::COMPONENT_MODEL)),
                 component_model_async: Some(features.contains(WasmFeatures::CM_ASYNC)),
@@ -1455,7 +1540,11 @@ impl CommonOptions {
                     features.contains(WasmFeatures::CM_FIXED_LENGTH_LISTS),
                 ),
                 component_model_implements: Some(features.contains(WasmFeatures::CM_IMPLEMENTS)),
+                component_model_canonical_names: Some(
+                    features.contains(WasmFeatures::CM_CANON_NAMES),
+                ),
                 component_model_map: Some(features.contains(WasmFeatures::CM_MAP)),
+                component_model_memory64: Some(features.contains(WasmFeatures::CM64)),
                 component_model_more_async_builtins: Some(
                     features.contains(WasmFeatures::CM_MORE_ASYNC_BUILTINS),
                 ),

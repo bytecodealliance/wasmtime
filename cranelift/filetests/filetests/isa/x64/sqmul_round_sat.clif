@@ -34,4 +34,5 @@ block0(v0: i16x8, v1: i16x8):
 ;   addb %al, (%rax)
 ;   addb %al, -0x7fff8000(%rax)
 ;   addb %al, -0x7fff8000(%rax)
+;   .byte 0x00, 0x80, 0x00, 0x80
 

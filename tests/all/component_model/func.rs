@@ -66,22 +66,22 @@ fn typecheck() -> Result<()> {
                 (canon lift (core func $i "thunk"))
             )
             (func (export "take-string") (param "a" string)
-                (canon lift (core func $i "take-string") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "take-string") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "take-two-args") (param "a" s32) (param "b" (list u8))
-                (canon lift (core func $i "two-args") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "two-args") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "ret-tuple") (result (tuple u8 s8))
-                (canon lift (core func $i "ret-one") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "ret-one") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "ret-tuple1") (result (tuple u32))
-                (canon lift (core func $i "ret-one") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "ret-one") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "ret-string") (result string)
-                (canon lift (core func $i "ret-one") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "ret-one") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "ret-list-u8") (result (list u8))
-                (canon lift (core func $i "ret-one") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "ret-one") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
         )
     "#;
@@ -592,44 +592,63 @@ fn chars() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let u32_to_char = instance.get_typed_func::<(u32,), (char,)>(&mut store, "u32-to-char")?;
-    let char_to_u32 = instance.get_typed_func::<(char,), (u32,)>(&mut store, "char-to-u32")?;
 
-    let mut roundtrip = |x: char| -> Result<()> {
-        assert_eq!(char_to_u32.call(&mut store, (x,))?, (x as u32,));
-        assert_eq!(u32_to_char.call(&mut store, (x as u32,))?, (x,));
-        Ok(())
-    };
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+        let u32_to_char = instance.get_typed_func::<(u32,), (char,)>(&mut store, "u32-to-char")?;
+        let char_to_u32 = instance.get_typed_func::<(char,), (u32,)>(&mut store, "char-to-u32")?;
 
-    roundtrip('x')?;
-    roundtrip('a')?;
-    roundtrip('\0')?;
-    roundtrip('\n')?;
-    roundtrip('💝')?;
+        let mut roundtrip = |x: char| -> Result<()> {
+            assert_eq!(char_to_u32.call(&mut store, (x,))?, (x as u32,));
+            assert_eq!(u32_to_char.call(&mut store, (x as u32,))?, (x,));
+            Ok(())
+        };
+
+        roundtrip('x')?;
+        roundtrip('a')?;
+        roundtrip('\0')?;
+        roundtrip('\n')?;
+        roundtrip('💝')?;
+    }
 
     let u32_to_char = |store: &mut Store<()>| {
         Linker::new(&engine)
             .instantiate(&mut *store, &component)?
             .get_typed_func::<(u32,), (char,)>(&mut *store, "u32-to-char")
     };
-    let err = u32_to_char(&mut store)?
-        .call(&mut store, (0xd800,))
-        .unwrap_err();
-    assert!(err.to_string().contains("integer out of range"), "{}", err);
-    let err = u32_to_char(&mut store)?
-        .call(&mut store, (0xdfff,))
-        .unwrap_err();
-    assert!(err.to_string().contains("integer out of range"), "{}", err);
-    let err = u32_to_char(&mut store)?
-        .call(&mut store, (0x110000,))
-        .unwrap_err();
-    assert!(err.to_string().contains("integer out of range"), "{}", err);
-    let err = u32_to_char(&mut store)?
-        .call(&mut store, (u32::MAX,))
-        .unwrap_err();
-    assert!(err.to_string().contains("integer out of range"), "{}", err);
+
+    {
+        let mut store = Store::new(&engine, ());
+        let err = u32_to_char(&mut store)?
+            .call(&mut store, (0xd800,))
+            .unwrap_err();
+        assert!(err.to_string().contains("integer out of range"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let err = u32_to_char(&mut store)?
+            .call(&mut store, (0xdfff,))
+            .unwrap_err();
+        assert!(err.to_string().contains("integer out of range"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let err = u32_to_char(&mut store)?
+            .call(&mut store, (0x110000,))
+            .unwrap_err();
+        assert!(err.to_string().contains("integer out of range"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let err = u32_to_char(&mut store)?
+            .call(&mut store, (u32::MAX,))
+            .unwrap_err();
+        assert!(err.to_string().contains("integer out of range"), "{}", err);
+    }
 
     Ok(())
 }
@@ -659,10 +678,10 @@ fn tuple_result() -> Result<()> {
             (type $result (tuple s8 u16 float32 float64))
             (func (export "tuple")
                 (param "a" s8) (param "b" u16) (param "c" float32) (param "d" float64) (result $result)
-                (canon lift (core func $i "foo") (memory $i "memory"))
+                (canon lift (core func $i "foo") (memory (core memory $i "memory")))
             )
             (func (export "invalid") (result $result)
-                (canon lift (core func $i "invalid") (memory $i "memory"))
+                (canon lift (core func $i "invalid") (memory (core memory $i "memory")))
             )
         )
     "#;
@@ -720,31 +739,31 @@ fn strings() -> Result<()> {
             (func (export "list8-to-str") (param "a" (list u8)) (result string)
                 (canon lift
                     (core func $i "roundtrip")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "str-to-list8") (param "a" string) (result (list u8))
                 (canon lift
                     (core func $i "roundtrip")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "list16-to-str") (param "a" (list u16)) (result string)
                 (canon lift
                     (core func $i "roundtrip")
                     string-encoding=utf16
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "str-to-list16") (param "a" string) (result (list u16))
                 (canon lift
                     (core func $i "roundtrip")
                     string-encoding=utf16
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -849,7 +868,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
 
                     (i32.const 0)
             "#,
-            r#"async (callback (func $i "callback"))"#,
+            r#"async (callback (core func $i "callback"))"#,
         )
     } else {
         (
@@ -906,7 +925,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
             (type $tuple (tuple (list u8) u32))
             (core func $task-return (canon task.return
                 (result $tuple)
-                (memory $libc "memory")
+                (memory (core memory $libc "memory"))
             ))
             (core instance $i (instantiate $m
                 (with "" (instance (export "task.return" (func $task-return))))
@@ -933,8 +952,8 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
             (func (export "many-param") (type $t)
                 (canon lift
                     (core func $i "foo")
-                    (memory $libc "memory")
-                    (realloc (func $libc "realloc"))
+                    (memory (core memory $libc "memory"))
+                    (realloc (core func $libc "realloc"))
                     {async_opts}
                 )
             )
@@ -1126,7 +1145,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
                    call $task-return
                    i32.const 0
             "#,
-            r#"async (callback (func $i "callback"))"#,
+            r#"async (callback (core func $i "callback"))"#,
         )
     } else {
         ("", "")
@@ -1377,7 +1396,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
             ))
             (core func $task-return (canon task.return
                 (result $tuple)
-                (memory $libc "memory")
+                (memory (core memory $libc "memory"))
             ))
             (core instance $i (instantiate $m
                 (with "" (instance (export "task.return" (func $task-return))))
@@ -1388,8 +1407,8 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
             (func (export "many-results") (type $t)
                 (canon lift
                     (core func $i "foo")
-                    (memory $libc "memory")
-                    (realloc (func $libc "realloc"))
+                    (memory (core memory $libc "memory"))
+                    (realloc (core func $libc "realloc"))
                     {async_opts}
                 )
             )
@@ -1562,10 +1581,10 @@ fn some_traps() -> Result<()> {
             (core instance $i (instantiate $m))
 
             (func (export "take-list-unreachable") (param "a" (list u8))
-                (canon lift (core func $i "take-list") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "take-list") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
             (func (export "take-string-unreachable") (param "a" string)
-                (canon lift (core func $i "take-list") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "take-list") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
 
             (type $t (func
@@ -1581,7 +1600,7 @@ fn some_traps() -> Result<()> {
                 (param "s10" string)
             ))
             (func (export "take-many-unreachable") (type $t)
-                (canon lift (core func $i "take-many") (memory $i "memory") (realloc (func $i "realloc")))
+                (canon lift (core func $i "take-many") (memory (core memory $i "memory")) (realloc (core func $i "realloc")))
             )
 
             (core module $m2
@@ -1595,13 +1614,13 @@ fn some_traps() -> Result<()> {
             (core instance $i2 (instantiate $m2))
 
             (func (export "take-list-base-oob") (param "a" (list u8))
-                (canon lift (core func $i2 "take-list") (memory $i2 "memory") (realloc (func $i2 "realloc")))
+                (canon lift (core func $i2 "take-list") (memory (core memory $i2 "memory")) (realloc (core func $i2 "realloc")))
             )
             (func (export "take-string-base-oob") (param "a" string)
-                (canon lift (core func $i2 "take-list") (memory $i2 "memory") (realloc (func $i2 "realloc")))
+                (canon lift (core func $i2 "take-list") (memory (core memory $i2 "memory")) (realloc (core func $i2 "realloc")))
             )
             (func (export "take-many-base-oob") (type $t)
-                (canon lift (core func $i2 "take-many") (memory $i2 "memory") (realloc (func $i2 "realloc")))
+                (canon lift (core func $i2 "take-many") (memory (core memory $i2 "memory")) (realloc (core func $i2 "realloc")))
             )
 
             (core module $m3
@@ -1615,13 +1634,13 @@ fn some_traps() -> Result<()> {
             (core instance $i3 (instantiate $m3))
 
             (func (export "take-list-end-oob") (param "a" (list u8))
-                (canon lift (core func $i3 "take-list") (memory $i3 "memory") (realloc (func $i3 "realloc")))
+                (canon lift (core func $i3 "take-list") (memory (core memory $i3 "memory")) (realloc (core func $i3 "realloc")))
             )
             (func (export "take-string-end-oob") (param "a" string)
-                (canon lift (core func $i3 "take-list") (memory $i3 "memory") (realloc (func $i3 "realloc")))
+                (canon lift (core func $i3 "take-list") (memory (core memory $i3 "memory")) (realloc (core func $i3 "realloc")))
             )
             (func (export "take-many-end-oob") (type $t)
-                (canon lift (core func $i3 "take-many") (memory $i3 "memory") (realloc (func $i3 "realloc")))
+                (canon lift (core func $i3 "take-many") (memory (core memory $i3 "memory")) (realloc (core func $i3 "realloc")))
             )
 
             (core module $m4
@@ -1643,7 +1662,7 @@ fn some_traps() -> Result<()> {
             (core instance $i4 (instantiate $m4))
 
             (func (export "take-many-second-oob") (type $t)
-                (canon lift (core func $i4 "take-many") (memory $i4 "memory") (realloc (func $i4 "realloc")))
+                (canon lift (core func $i4 "take-many") (memory (core memory $i4 "memory")) (realloc (core func $i4 "realloc")))
             )
         )"#
     );
@@ -1848,8 +1867,8 @@ fn char_bool_memory() -> Result<()> {
 
             (func (export "ret-tuple") (param "a" u32) (param "b" u32) (result (tuple bool char))
                 (canon lift (core func $i "ret-tuple")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc")))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc")))
             )
         )"#
     );
@@ -1907,14 +1926,14 @@ fn string_list_oob() -> Result<()> {
 
             (func (export "ret-list-u8") (result (list u8))
                 (canon lift (core func $i "ret-list")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "ret-string") (result string)
                 (canon lift (core func $i "ret-list")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -1922,19 +1941,26 @@ fn string_list_oob() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let ret_list_u8 = Linker::new(&engine)
-        .instantiate(&mut store, &component)?
-        .get_typed_func::<(), (WasmList<u8>,)>(&mut store, "ret-list-u8")?;
-    let ret_string = Linker::new(&engine)
-        .instantiate(&mut store, &component)?
-        .get_typed_func::<(), (WasmStr,)>(&mut store, "ret-string")?;
 
-    let err = ret_list_u8.call(&mut store, ()).err().unwrap();
-    assert!(err.to_string().contains("out of bounds"), "{}", err);
+    {
+        let mut store = Store::new(&engine, ());
+        let ret_list_u8 = Linker::new(&engine)
+            .instantiate(&mut store, &component)?
+            .get_typed_func::<(), (WasmList<u8>,)>(&mut store, "ret-list-u8")?;
 
-    let err = ret_string.call(&mut store, ()).err().unwrap();
-    assert!(err.to_string().contains("out of bounds"), "{}", err);
+        let err = ret_list_u8.call(&mut store, ()).err().unwrap();
+        assert!(err.to_string().contains("out of bounds"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let ret_string = Linker::new(&engine)
+            .instantiate(&mut store, &component)?
+            .get_typed_func::<(), (WasmStr,)>(&mut store, "ret-string")?;
+
+        let err = ret_string.call(&mut store, ()).err().unwrap();
+        assert!(err.to_string().contains("out of bounds"), "{}", err);
+    }
 
     Ok(())
 }
@@ -2039,32 +2065,32 @@ fn option() -> Result<()> {
             (core instance $i (instantiate $m))
 
             (func (export "option-u8-to-tuple") (param "a" (option u8)) (result (tuple u32 u32))
-                (canon lift (core func $i "pass1") (memory $i "memory"))
+                (canon lift (core func $i "pass1") (memory (core memory $i "memory")))
             )
             (func (export "option-u32-to-tuple") (param "a" (option u32)) (result (tuple u32 u32))
-                (canon lift (core func $i "pass1") (memory $i "memory"))
+                (canon lift (core func $i "pass1") (memory (core memory $i "memory")))
             )
             (func (export "option-string-to-tuple") (param "a" (option string)) (result (tuple u32 string))
                 (canon lift
                     (core func $i "pass2")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "to-option-u8") (param "a" u32) (param "b" u32) (result (option u8))
-                (canon lift (core func $i "pass1") (memory $i "memory"))
+                (canon lift (core func $i "pass1") (memory (core memory $i "memory")))
             )
             (func (export "to-option-u32") (param "a" u32) (param "b" u32) (result (option u32))
                 (canon lift
                     (core func $i "pass1")
-                    (memory $i "memory")
+                    (memory (core memory $i "memory"))
                 )
             )
             (func (export "to-option-string") (param "a" u32) (param "b" string) (result (option string))
                 (canon lift
                     (core func $i "pass2")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -2072,71 +2098,81 @@ fn option() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
 
-    let option_u8_to_tuple = instance
-        .get_typed_func::<(Option<u8>,), ((u32, u32),)>(&mut store, "option-u8-to-tuple")?;
-    assert_eq!(option_u8_to_tuple.call(&mut store, (None,))?, ((0, 0),));
-    assert_eq!(option_u8_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
-    assert_eq!(
-        option_u8_to_tuple.call(&mut store, (Some(100),))?,
-        ((1, 100),)
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
 
-    let option_u32_to_tuple = instance
-        .get_typed_func::<(Option<u32>,), ((u32, u32),)>(&mut store, "option-u32-to-tuple")?;
-    assert_eq!(option_u32_to_tuple.call(&mut store, (None,))?, ((0, 0),));
-    assert_eq!(option_u32_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
-    assert_eq!(
-        option_u32_to_tuple.call(&mut store, (Some(100),))?,
-        ((1, 100),)
-    );
+        let option_u8_to_tuple = instance
+            .get_typed_func::<(Option<u8>,), ((u32, u32),)>(&mut store, "option-u8-to-tuple")?;
+        assert_eq!(option_u8_to_tuple.call(&mut store, (None,))?, ((0, 0),));
+        assert_eq!(option_u8_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
+        assert_eq!(
+            option_u8_to_tuple.call(&mut store, (Some(100),))?,
+            ((1, 100),)
+        );
 
-    let option_string_to_tuple = instance.get_typed_func::<(Option<&str>,), ((u32, WasmStr),)>(
-        &mut store,
-        "option-string-to-tuple",
-    )?;
-    let ((a, b),) = option_string_to_tuple.call(&mut store, (None,))?;
-    assert_eq!(a, 0);
-    assert_eq!(b.to_str(&store)?, "");
-    let ((a, b),) = option_string_to_tuple.call(&mut store, (Some(""),))?;
-    assert_eq!(a, 1);
-    assert_eq!(b.to_str(&store)?, "");
-    let ((a, b),) = option_string_to_tuple.call(&mut store, (Some("hello"),))?;
-    assert_eq!(a, 1);
-    assert_eq!(b.to_str(&store)?, "hello");
+        let option_u32_to_tuple = instance
+            .get_typed_func::<(Option<u32>,), ((u32, u32),)>(&mut store, "option-u32-to-tuple")?;
+        assert_eq!(option_u32_to_tuple.call(&mut store, (None,))?, ((0, 0),));
+        assert_eq!(option_u32_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
+        assert_eq!(
+            option_u32_to_tuple.call(&mut store, (Some(100),))?,
+            ((1, 100),)
+        );
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_option_u8 =
-        instance.get_typed_func::<(u32, u32), (Option<u8>,)>(&mut store, "to-option-u8")?;
-    assert_eq!(to_option_u8.call(&mut store, (0x00_00, 0))?, (None,));
-    assert_eq!(to_option_u8.call(&mut store, (0x00_01, 0))?, (Some(0),));
-    assert_eq!(to_option_u8.call(&mut store, (0xfd_01, 0))?, (Some(0xfd),));
-    assert!(to_option_u8.call(&mut store, (0x00_02, 0)).is_err());
+        let option_string_to_tuple = instance
+            .get_typed_func::<(Option<&str>,), ((u32, WasmStr),)>(
+                &mut store,
+                "option-string-to-tuple",
+            )?;
+        let ((a, b),) = option_string_to_tuple.call(&mut store, (None,))?;
+        assert_eq!(a, 0);
+        assert_eq!(b.to_str(&store)?, "");
+        let ((a, b),) = option_string_to_tuple.call(&mut store, (Some(""),))?;
+        assert_eq!(a, 1);
+        assert_eq!(b.to_str(&store)?, "");
+        let ((a, b),) = option_string_to_tuple.call(&mut store, (Some("hello"),))?;
+        assert_eq!(a, 1);
+        assert_eq!(b.to_str(&store)?, "hello");
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_option_u32 =
-        instance.get_typed_func::<(u32, u32), (Option<u32>,)>(&mut store, "to-option-u32")?;
-    assert_eq!(to_option_u32.call(&mut store, (0, 0))?, (None,));
-    assert_eq!(to_option_u32.call(&mut store, (1, 0))?, (Some(0),));
-    assert_eq!(
-        to_option_u32.call(&mut store, (1, 0x1234fead))?,
-        (Some(0x1234fead),)
-    );
-    assert!(to_option_u32.call(&mut store, (2, 0)).is_err());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_option_u8 =
+            instance.get_typed_func::<(u32, u32), (Option<u8>,)>(&mut store, "to-option-u8")?;
+        assert_eq!(to_option_u8.call(&mut store, (0x00_00, 0))?, (None,));
+        assert_eq!(to_option_u8.call(&mut store, (0x00_01, 0))?, (Some(0),));
+        assert_eq!(to_option_u8.call(&mut store, (0xfd_01, 0))?, (Some(0xfd),));
+        assert!(to_option_u8.call(&mut store, (0x00_02, 0)).is_err());
+    }
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_option_string = instance
-        .get_typed_func::<(u32, &str), (Option<WasmStr>,)>(&mut store, "to-option-string")?;
-    let ret = to_option_string.call(&mut store, (0, ""))?.0;
-    assert!(ret.is_none());
-    let ret = to_option_string.call(&mut store, (1, ""))?.0;
-    assert_eq!(ret.unwrap().to_str(&store)?, "");
-    let ret = to_option_string.call(&mut store, (1, "cheesecake"))?.0;
-    assert_eq!(ret.unwrap().to_str(&store)?, "cheesecake");
-    assert!(to_option_string.call(&mut store, (2, "")).is_err());
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_option_u32 =
+            instance.get_typed_func::<(u32, u32), (Option<u32>,)>(&mut store, "to-option-u32")?;
+        assert_eq!(to_option_u32.call(&mut store, (0, 0))?, (None,));
+        assert_eq!(to_option_u32.call(&mut store, (1, 0))?, (Some(0),));
+        assert_eq!(
+            to_option_u32.call(&mut store, (1, 0x1234fead))?,
+            (Some(0x1234fead),)
+        );
+        assert!(to_option_u32.call(&mut store, (2, 0)).is_err());
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_option_string = instance
+            .get_typed_func::<(u32, &str), (Option<WasmStr>,)>(&mut store, "to-option-string")?;
+        let ret = to_option_string.call(&mut store, (0, ""))?.0;
+        assert!(ret.is_none());
+        let ret = to_option_string.call(&mut store, (1, ""))?.0;
+        assert_eq!(ret.unwrap().to_str(&store)?, "");
+        let ret = to_option_string.call(&mut store, (1, "cheesecake"))?.0;
+        assert_eq!(ret.unwrap().to_str(&store)?, "cheesecake");
+        assert!(to_option_string.call(&mut store, (2, "")).is_err());
+    }
 
     Ok(())
 }
@@ -2198,14 +2234,14 @@ fn expected() -> Result<()> {
                 (canon lift (core func $i "pass0"))
             )
             (func (export "take-expected-u8-f32") (param "a" (result u8 (error float32))) (result (tuple u32 u32))
-                (canon lift (core func $i "pass1") (memory $i "memory"))
+                (canon lift (core func $i "pass1") (memory (core memory $i "memory")))
             )
             (type $list (list u8))
             (func (export "take-expected-string") (param "a" (result string (error $list))) (result (tuple u32 string))
                 (canon lift
                     (core func $i "pass2")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "to-expected-unit") (param "a" u32) (result (result))
@@ -2214,8 +2250,8 @@ fn expected() -> Result<()> {
             (func (export "to-expected-s16-f32") (param "a" u32) (param "b" u32) (result (result s16 (error float32)))
                 (canon lift
                     (core func $i "pass1")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -2223,56 +2259,64 @@ fn expected() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
-    let take_expected_unit =
-        instance.get_typed_func::<(Result<(), ()>,), (u32,)>(&mut store, "take-expected-unit")?;
-    assert_eq!(take_expected_unit.call(&mut store, (Ok(()),))?, (0,));
-    assert_eq!(take_expected_unit.call(&mut store, (Err(()),))?, (1,));
 
-    let take_expected_u8_f32 = instance
-        .get_typed_func::<(Result<u8, f32>,), ((u32, u32),)>(&mut store, "take-expected-u8-f32")?;
-    assert_eq!(take_expected_u8_f32.call(&mut store, (Ok(1),))?, ((0, 1),));
-    assert_eq!(
-        take_expected_u8_f32.call(&mut store, (Err(2.0),))?,
-        ((1, 2.0f32.to_bits()),)
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let take_expected_unit = instance
+            .get_typed_func::<(Result<(), ()>,), (u32,)>(&mut store, "take-expected-unit")?;
+        assert_eq!(take_expected_unit.call(&mut store, (Ok(()),))?, (0,));
+        assert_eq!(take_expected_unit.call(&mut store, (Err(()),))?, (1,));
 
-    let take_expected_string = instance
-        .get_typed_func::<(Result<&str, &[u8]>,), ((u32, WasmStr),)>(
+        let take_expected_u8_f32 = instance.get_typed_func::<(Result<u8, f32>,), ((u32, u32),)>(
             &mut store,
-            "take-expected-string",
+            "take-expected-u8-f32",
         )?;
-    let ((a, b),) = take_expected_string.call(&mut store, (Ok("hello"),))?;
-    assert_eq!(a, 0);
-    assert_eq!(b.to_str(&store)?, "hello");
-    let ((a, b),) = take_expected_string.call(&mut store, (Err(b"goodbye"),))?;
-    assert_eq!(a, 1);
-    assert_eq!(b.to_str(&store)?, "goodbye");
+        assert_eq!(take_expected_u8_f32.call(&mut store, (Ok(1),))?, ((0, 1),));
+        assert_eq!(
+            take_expected_u8_f32.call(&mut store, (Err(2.0),))?,
+            ((1, 2.0f32.to_bits()),)
+        );
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_expected_unit =
-        instance.get_typed_func::<(u32,), (Result<(), ()>,)>(&mut store, "to-expected-unit")?;
-    assert_eq!(to_expected_unit.call(&mut store, (0,))?, (Ok(()),));
-    assert_eq!(to_expected_unit.call(&mut store, (1,))?, (Err(()),));
-    let err = to_expected_unit.call(&mut store, (2,)).unwrap_err();
-    assert!(err.to_string().contains("invalid expected"), "{}", err);
+        let take_expected_string = instance
+            .get_typed_func::<(Result<&str, &[u8]>,), ((u32, WasmStr),)>(
+                &mut store,
+                "take-expected-string",
+            )?;
+        let ((a, b),) = take_expected_string.call(&mut store, (Ok("hello"),))?;
+        assert_eq!(a, 0);
+        assert_eq!(b.to_str(&store)?, "hello");
+        let ((a, b),) = take_expected_string.call(&mut store, (Err(b"goodbye"),))?;
+        assert_eq!(a, 1);
+        assert_eq!(b.to_str(&store)?, "goodbye");
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_expected_s16_f32 = instance
-        .get_typed_func::<(u32, u32), (Result<i16, f32>,)>(&mut store, "to-expected-s16-f32")?;
-    assert_eq!(to_expected_s16_f32.call(&mut store, (0, 0))?, (Ok(0),));
-    assert_eq!(to_expected_s16_f32.call(&mut store, (0, 100))?, (Ok(100),));
-    assert_eq!(
-        to_expected_s16_f32.call(&mut store, (1, 1.0f32.to_bits()))?,
-        (Err(1.0),)
-    );
-    let ret = to_expected_s16_f32
-        .call(&mut store, (1, CANON_32BIT_NAN | 1))?
-        .0;
-    assert_eq!(ret.unwrap_err().to_bits(), CANON_32BIT_NAN | 1);
-    assert!(to_expected_s16_f32.call(&mut store, (2, 0)).is_err());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_expected_unit =
+            instance.get_typed_func::<(u32,), (Result<(), ()>,)>(&mut store, "to-expected-unit")?;
+        assert_eq!(to_expected_unit.call(&mut store, (0,))?, (Ok(()),));
+        assert_eq!(to_expected_unit.call(&mut store, (1,))?, (Err(()),));
+        let err = to_expected_unit.call(&mut store, (2,)).unwrap_err();
+        assert!(err.to_string().contains("invalid expected"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_expected_s16_f32 = instance
+            .get_typed_func::<(u32, u32), (Result<i16, f32>,)>(&mut store, "to-expected-s16-f32")?;
+        assert_eq!(to_expected_s16_f32.call(&mut store, (0, 0))?, (Ok(0),));
+        assert_eq!(to_expected_s16_f32.call(&mut store, (0, 100))?, (Ok(100),));
+        assert_eq!(
+            to_expected_s16_f32.call(&mut store, (1, 1.0f32.to_bits()))?,
+            (Err(1.0),)
+        );
+        let ret = to_expected_s16_f32
+            .call(&mut store, (1, CANON_32BIT_NAN | 1))?
+            .0;
+        assert_eq!(ret.unwrap_err().to_bits(), CANON_32BIT_NAN | 1);
+        assert!(to_expected_s16_f32.call(&mut store, (2, 0)).is_err());
+    }
 
     Ok(())
 }
@@ -2322,8 +2366,8 @@ fn fancy_list() -> Result<()> {
                 (result (tuple u32 u32 (list u8)))
                 (canon lift
                     (core func $i "take")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -2426,22 +2470,22 @@ fn invalid_alignment() -> Result<()> {
                 (param "s9" string) (param "s10" string) (param "s11" string) (param "s12" string)
                 (canon lift
                     (core func $i "take-i32")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "string-ret") (result string)
                 (canon lift
                     (core func $i "ret-1")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
             (func (export "list-u32-ret") (result (list u32))
                 (canon lift
                     (core func $i "ret-unaligned-list")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#
@@ -2449,54 +2493,62 @@ fn invalid_alignment() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
     let instance = |store: &mut Store<()>| Linker::new(&engine).instantiate(store, &component);
 
-    let err = instance(&mut store)?
-        .get_typed_func::<(
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-        ), ()>(&mut store, "many-params")?
-        .call(&mut store, ("", "", "", "", "", "", "", "", "", "", "", ""))
-        .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("realloc return: result not aligned"),
-        "{}",
-        err
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let err = instance(&mut store)?
+            .get_typed_func::<(
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+            ), ()>(&mut store, "many-params")?
+            .call(&mut store, ("", "", "", "", "", "", "", "", "", "", "", ""))
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("realloc return: result not aligned"),
+            "{}",
+            err
+        );
+    }
 
-    let err = instance(&mut store)?
-        .get_typed_func::<(), (WasmStr,)>(&mut store, "string-ret")?
-        .call(&mut store, ())
-        .err()
-        .unwrap();
-    assert!(
-        err.to_string().contains("return pointer not aligned"),
-        "{}",
-        err
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let err = instance(&mut store)?
+            .get_typed_func::<(), (WasmStr,)>(&mut store, "string-ret")?
+            .call(&mut store, ())
+            .err()
+            .unwrap();
+        assert!(
+            err.to_string().contains("return pointer not aligned"),
+            "{}",
+            err
+        );
+    }
 
-    let err = instance(&mut store)?
-        .get_typed_func::<(), (WasmList<u32>,)>(&mut store, "list-u32-ret")?
-        .call(&mut store, ())
-        .err()
-        .unwrap();
-    assert!(
-        err.to_string().contains("list pointer is not aligned"),
-        "{}",
-        err
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let err = instance(&mut store)?
+            .get_typed_func::<(), (WasmList<u32>,)>(&mut store, "list-u32-ret")?
+            .call(&mut store, ())
+            .err()
+            .unwrap();
+        assert!(
+            err.to_string().contains("list pointer is not aligned"),
+            "{}",
+            err
+        );
+    }
 
     Ok(())
 }
@@ -2587,28 +2639,28 @@ fn raw_slice_of_various_types() -> Result<()> {
             )
             (core instance $i (instantiate $m))
             (func (export "list-u8") (result (list u8))
-                (canon lift (core func $i "list8") (memory $i "memory"))
+                (canon lift (core func $i "list8") (memory (core memory $i "memory")))
             )
             (func (export "list-i8") (result (list s8))
-                (canon lift (core func $i "list8") (memory $i "memory"))
+                (canon lift (core func $i "list8") (memory (core memory $i "memory")))
             )
             (func (export "list-u16") (result (list u16))
-                (canon lift (core func $i "list16") (memory $i "memory"))
+                (canon lift (core func $i "list16") (memory (core memory $i "memory")))
             )
             (func (export "list-i16") (result (list s16))
-                (canon lift (core func $i "list16") (memory $i "memory"))
+                (canon lift (core func $i "list16") (memory (core memory $i "memory")))
             )
             (func (export "list-u32") (result (list u32))
-                (canon lift (core func $i "list32") (memory $i "memory"))
+                (canon lift (core func $i "list32") (memory (core memory $i "memory")))
             )
             (func (export "list-i32") (result (list s32))
-                (canon lift (core func $i "list32") (memory $i "memory"))
+                (canon lift (core func $i "list32") (memory (core memory $i "memory")))
             )
             (func (export "list-u64") (result (list u64))
-                (canon lift (core func $i "list64") (memory $i "memory"))
+                (canon lift (core func $i "list64") (memory (core memory $i "memory")))
             )
             (func (export "list-i64") (result (list s64))
-                (canon lift (core func $i "list64") (memory $i "memory"))
+                (canon lift (core func $i "list64") (memory (core memory $i "memory")))
             )
         )
     "#;
@@ -2770,12 +2822,12 @@ fn lower_then_lift() -> Result<()> {
   (core instance $libc (instantiate $libc))
 
   (core func $f_lower
-    (canon lower (func $f) (memory $libc "memory"))
+    (canon lower (func $f) (memory (core memory $libc "memory")))
   )
   (func $f2 (param "a" string)
     (canon lift (core func $f_lower)
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
     )
   )
   (export "f" (func $f2))
@@ -2810,12 +2862,12 @@ fn lower_then_lift() -> Result<()> {
   (core instance $libc (instantiate $libc))
 
   (core func $f_lower
-    (canon lower (func $f) (memory $libc "memory"))
+    (canon lower (func $f) (memory (core memory $libc "memory")))
   )
   (func $f2 (param "a" string) (result string)
     (canon lift (core func $f_lower)
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
     )
   )
   (export "f" (func $f2))
@@ -2864,7 +2916,7 @@ fn errors_that_poison_instance() -> Result<()> {
   )
   (core instance $m2 (instantiate $m2))
   (func (export "f3") (param "a" string)
-    (canon lift (core func $m2 "f") (realloc (func $m2 "r")) (memory $m2 "m"))
+    (canon lift (core func $m2 "f") (realloc (core func $m2 "r")) (memory (core memory $m2 "m")))
   )
 
   (core module $m3
@@ -2873,7 +2925,7 @@ fn errors_that_poison_instance() -> Result<()> {
   )
   (core instance $m3 (instantiate $m3))
   (func (export "f4") (result string)
-    (canon lift (core func $m3 "f") (memory $m3 "m"))
+    (canon lift (core func $m3 "f") (memory (core memory $m3 "m")))
   )
 )
     "#
@@ -2997,26 +3049,18 @@ enum RecurseKind {
 }
 
 #[test]
-fn recurse() -> Result<()> {
+fn recurse_a_then_b() -> Result<()> {
     test_recurse(RecurseKind::AThenB)
 }
 
 #[test]
-fn recurse_trap() -> Result<()> {
-    let error = test_recurse(RecurseKind::AThenA).unwrap_err();
-
-    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
-
-    Ok(())
+fn recurse_a_then_a() -> Result<()> {
+    test_recurse(RecurseKind::AThenA)
 }
 
 #[test]
-fn recurse_more_trap() -> Result<()> {
-    let error = test_recurse(RecurseKind::AThenBThenA).unwrap_err();
-
-    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
-
-    Ok(())
+fn recurse_a_then_b_then_a() -> Result<()> {
+    test_recurse(RecurseKind::AThenBThenA)
 }
 
 fn test_recurse(kind: RecurseKind) -> Result<()> {
@@ -3151,110 +3195,6 @@ async fn thread_index_via_call(style: ApiStyle) -> Result<()> {
 }
 
 #[tokio::test]
-async fn thread_index_via_post_return_sync() -> Result<()> {
-    thread_index_via_post_return(ApiStyle::Sync).await
-}
-
-#[tokio::test]
-async fn thread_index_via_post_return_async() -> Result<()> {
-    thread_index_via_post_return(ApiStyle::Async).await
-}
-
-#[tokio::test]
-async fn thread_index_via_post_return_concurrent() -> Result<()> {
-    thread_index_via_post_return(ApiStyle::Concurrent).await
-}
-
-async fn thread_index_via_post_return(style: ApiStyle) -> Result<()> {
-    let component = r#"
-(component
-  (core module $m
-    (import "" "thread.index" (func $thread-index (result i32)))
-    (global $index (mut i32) (i32.const 0))
-    (func (export "run")
-       (global.set $index (call $thread-index))
-       (if (i32.eqz (global.get $index)) (then unreachable))
-    )
-    (func (export "run-post-return")
-       (local $index i32)
-       (local.set $index (call $thread-index))
-       (if (i32.eqz (local.get $index)) (then unreachable))
-       (if (i32.ne (local.get $index) (global.get $index)) (then unreachable))
-    )
-  )
-  (core func $thread-index (canon thread.index))
-  (core instance $m (instantiate $m (with "" (instance
-    (export "thread.index" (func $thread-index))
-  ))))
-  (func (export "run") (canon lift (core func $m "run") (post-return (func $m "run-post-return"))))
-)
-"#;
-    let engine = Engine::new(&style.config())?;
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = style.instantiate(&mut store, &linker, &component).await?;
-    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-    style.call(&mut store, run, ()).await?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn thread_index_via_cabi_realloc_sync() -> Result<()> {
-    thread_index_via_cabi_realloc(ApiStyle::Sync).await
-}
-
-#[tokio::test]
-async fn thread_index_via_cabi_realloc_async() -> Result<()> {
-    thread_index_via_cabi_realloc(ApiStyle::Async).await
-}
-
-#[tokio::test]
-async fn thread_index_via_cabi_realloc_concurrent() -> Result<()> {
-    thread_index_via_cabi_realloc(ApiStyle::Concurrent).await
-}
-
-async fn thread_index_via_cabi_realloc(style: ApiStyle) -> Result<()> {
-    let component = r#"
-(component
-  (core module $m
-    (import "" "thread.index" (func $thread-index (result i32)))
-    (global $index (mut i32) (i32.const 0))
-    (memory (export "memory") 1)
-    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
-       (global.set $index (call $thread-index))
-       (if (i32.eqz (global.get $index)) (then unreachable))
-       (i32.const 100)
-    )
-    (func (export "run") (param i32 i32)
-       (local $index i32)
-       (local.set $index (call $thread-index))
-       (if (i32.eqz (local.get $index)) (then unreachable))
-       (if (i32.ne (local.get $index) (global.get $index)) (then unreachable))
-    )
-  )
-  (core func $thread-index (canon thread.index))
-  (core instance $m (instantiate $m (with "" (instance
-    (export "thread.index" (func $thread-index))
-  ))))
-  (func (export "run") (param "s" string) (canon lift
-    (core func $m "run")
-    (memory $m "memory")
-    (realloc (func $m "realloc"))
-  ))
-)
-"#;
-    let engine = Engine::new(&style.config())?;
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = style.instantiate(&mut store, &linker, &component).await?;
-    let run = instance.get_typed_func::<(String,), ()>(&mut store, "run")?;
-    style.call(&mut store, run, ("hola".to_string(),)).await?;
-    Ok(())
-}
-
-#[tokio::test]
 async fn thread_index_via_resource_drop_sync() -> Result<()> {
     thread_index_via_resource_drop(ApiStyle::Sync).await
 }
@@ -3269,8 +3209,9 @@ async fn thread_index_via_resource_drop_concurrent() -> Result<()> {
     thread_index_via_resource_drop(ApiStyle::Concurrent).await
 }
 
-async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
-    let component = r#"
+/// A component exporting a resource whose destructor traps unless it runs on a
+/// non-zero `thread.index`, i.e. within a guest thread context.
+const THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT: &str = r#"
 (component
   (core module $m
     (import "" "thread.index" (func $thread-index (result i32)))
@@ -3282,7 +3223,7 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
   (core instance $m (instantiate $m (with "" (instance
     (export "thread.index" (func $thread-index))
   ))))
-  (type $r (resource (rep i32) (dtor (func $m "dtor"))))
+  (type $r (resource (rep i32) (dtor (core func $m "dtor"))))
   (core func $new (canon resource.new $r))
   (core module $m2
     (import "" "new" (func $new (param i32) (result i32)))
@@ -3307,8 +3248,10 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
   (export "i" (instance $c))
 )
 "#;
+
+async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     let engine = Engine::new(&style.config())?;
-    let component = Component::new(&engine, component)?;
+    let component = Component::new(&engine, THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
     let instance = style.instantiate(&mut store, &linker, &component).await?;
@@ -3319,6 +3262,33 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
     let (resource,) = style.call(&mut store, run, ()).await?;
     style.resource_drop(&mut store, resource).await?;
+    Ok(())
+}
+
+/// Test that a guest-exported `ResourceAny` can be dropped with
+/// `resource_drop_concurrent` inside the same `Store::run_concurrent` call
+/// that produced it, i.e. while the store's event loop is already running.
+/// This is the scenario from issue #14291.
+#[tokio::test]
+async fn resource_drop_concurrent_in_run_concurrent() -> Result<()> {
+    let style = ApiStyle::Concurrent;
+    let engine = Engine::new(&style.config())?;
+    let component = Component::new(&engine, THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
+    let instance_index = instance.get_export_index(&mut store, None, "i").unwrap();
+    let func_index = instance
+        .get_export_index(&mut store, Some(&instance_index), "new")
+        .unwrap();
+    let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
+    store
+        .run_concurrent(async |accessor| {
+            let (resource,) = run.call_concurrent(accessor, ()).await?;
+            resource.resource_drop_concurrent(accessor).await
+        })
+        .await??;
+    store.assert_concurrent_state_empty();
     Ok(())
 }
 
@@ -3554,8 +3524,8 @@ fn map_trampoline_alignment() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3564,8 +3534,8 @@ fn map_trampoline_alignment() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u64)) (result (map u8 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3592,8 +3562,8 @@ fn map_trampoline_alignment() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3602,8 +3572,8 @@ fn map_trampoline_alignment() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u64)) (result (map u8 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3690,8 +3660,8 @@ fn map_trampoline_alignment_u32_u64() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3700,8 +3670,8 @@ fn map_trampoline_alignment_u32_u64() -> Result<()> {
         (func (export "echo2") (param "m" (map u32 u64)) (result (map u32 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3727,8 +3697,8 @@ fn map_trampoline_alignment_u32_u64() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3737,8 +3707,8 @@ fn map_trampoline_alignment_u32_u64() -> Result<()> {
         (func (export "echo2") (param "m" (map u32 u64)) (result (map u32 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3821,8 +3791,8 @@ fn map_trampoline_alignment_u8_u32() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3831,8 +3801,8 @@ fn map_trampoline_alignment_u8_u32() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u32)) (result (map u8 u32))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3858,8 +3828,8 @@ fn map_trampoline_alignment_u8_u32() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3868,8 +3838,8 @@ fn map_trampoline_alignment_u8_u32() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u32)) (result (map u8 u32))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3952,8 +3922,8 @@ fn map_trampoline_alignment_u16_u64() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3962,8 +3932,8 @@ fn map_trampoline_alignment_u16_u64() -> Result<()> {
         (func (export "echo2") (param "m" (map u16 u64)) (result (map u16 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -3989,8 +3959,8 @@ fn map_trampoline_alignment_u16_u64() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -3999,8 +3969,8 @@ fn map_trampoline_alignment_u16_u64() -> Result<()> {
         (func (export "echo2") (param "m" (map u16 u64)) (result (map u16 u64))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -4083,8 +4053,8 @@ fn map_trampoline_alignment_u8_u16() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -4093,8 +4063,8 @@ fn map_trampoline_alignment_u8_u16() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u16)) (result (map u8 u16))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -4120,8 +4090,8 @@ fn map_trampoline_alignment_u8_u16() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -4130,8 +4100,8 @@ fn map_trampoline_alignment_u8_u16() -> Result<()> {
         (func (export "echo2") (param "m" (map u8 u16)) (result (map u8 u16))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -4214,8 +4184,8 @@ fn map_trampoline_alignment_u64_u8() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -4224,8 +4194,8 @@ fn map_trampoline_alignment_u64_u8() -> Result<()> {
         (func (export "echo2") (param "m" (map u64 u8)) (result (map u64 u8))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )
@@ -4251,8 +4221,8 @@ fn map_trampoline_alignment_u64_u8() -> Result<()> {
         )
         (core instance $libc (instantiate $libc))
         (core func $echo_lower (canon lower (func $echo)
-            (memory $libc "memory")
-            (realloc (func $libc "realloc"))
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
         ))
         (core instance $echo_inst (instantiate $echo_mod
             (with "libc" (instance $libc))
@@ -4261,8 +4231,8 @@ fn map_trampoline_alignment_u64_u8() -> Result<()> {
         (func (export "echo2") (param "m" (map u64 u8)) (result (map u64 u8))
             (canon lift
                 (core func $echo_inst "echo")
-                (memory $libc "memory")
-                (realloc (func $libc "realloc"))
+                (memory (core memory $libc "memory"))
+                (realloc (core func $libc "realloc"))
             )
         )
     )

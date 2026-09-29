@@ -213,7 +213,7 @@ unsafe fn handler_thread() {
         let kret = unsafe {
             mach_msg(
                 &mut request.body.Head,
-                MACH_RCV_MSG | MACH_RCV_INTERRUPT,
+                MACH_RCV_MSG,
                 0,
                 mem::size_of_val(&request) as u32,
                 WASMTIME_PORT,
@@ -311,8 +311,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     //   parameters as the first two arguments.
     // * `thread_state` - a fresh instance of `ThreadState` to read into
     // * `thread_state_count` - the size to pass to `mach_msg`.
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "x86_64")] {
+    cfg_select! {
+        target_arch = "x86_64" => {
             use mach2::structs::x86_thread_state64_t;
             use mach2::thread_status::x86_THREAD_STATE64;
 
@@ -359,7 +359,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__r8 = trap.as_u8().into();
             };
             let mut thread_state = ThreadState::new();
-        } else if #[cfg(target_arch = "aarch64")] {
+        }
+        target_arch = "aarch64" => {
             type ThreadState = mach2::structs::arm_thread_state64_t;
 
             let thread_state_flavor = ARM_THREAD_STATE64;
@@ -386,7 +387,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__pc = (unwind as *const ()).addr() as u64;
             };
             let mut thread_state = unsafe { mem::zeroed::<ThreadState>() };
-        } else {
+        }
+        _ => {
             compile_error!("unsupported target architecture");
         }
     }

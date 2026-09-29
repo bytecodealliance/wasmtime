@@ -501,8 +501,12 @@ impl FpuOPRR {
             Self::FmvXFmt => format!("fmv.x.{fmv_width}"),
             Self::FmvFmtX => format!("fmv.{fmv_width}.x"),
 
+            Self::FcvtSH => "fcvt.s.h".to_string(),
+            Self::FcvtHS => "fcvt.h.s".to_string(),
             Self::FcvtSD => "fcvt.s.d".to_string(),
             Self::FcvtDS => "fcvt.d.s".to_string(),
+            Self::FcvtDH => "fcvt.d.h".to_string(),
+            Self::FcvtHD => "fcvt.h.d".to_string(),
         }
     }
 
@@ -540,8 +544,12 @@ impl FpuOPRR {
             Self::FcvtFmtLu => 0b00011,
             Self::FmvXFmt => 0b00000,
             Self::FmvFmtX => 0b00000,
+            Self::FcvtSH => 0b00010,
+            Self::FcvtHS => 0b00000,
             Self::FcvtSD => 0b00001,
             Self::FcvtDS => 0b00000,
+            Self::FcvtDH => 0b00010,
+            Self::FcvtHD => 0b00001,
         }
     }
 
@@ -560,8 +568,12 @@ impl FpuOPRR {
             Self::FcvtFmtLu => 0b11010,
             Self::FmvXFmt => 0b11100,
             Self::FmvFmtX => 0b11110,
-            Self::FcvtSD => 0b01000,
-            Self::FcvtDS => 0b01000,
+            Self::FcvtSH
+            | Self::FcvtHS
+            | Self::FcvtSD
+            | Self::FcvtDS
+            | Self::FcvtDH
+            | Self::FcvtHD => 0b01000,
         }
     }
 

@@ -228,7 +228,7 @@ where
         // safety requirements of `Lift` and `Lower` on `Params` and `Return` in
         // combination with checking the various possible branches here and
         // dispatching to appropriately typed functions.
-        let (result, post_return_arg) = unsafe {
+        let result = unsafe {
             // This type is used as `LowerParams` for `call_raw` which is either
             // `Params::Lower` or `ValRaw` representing it's either on the stack
             // or it's on the heap. This allocates 1 extra `ValRaw` on the stack
@@ -260,11 +260,13 @@ where
                     Self::lift_heap_result,
                 )
             }
-        }?;
+        };
 
-        self.func.post_return_impl(store, post_return_arg)?;
+        if result.is_err() {
+            store.0.set_trapped();
+        }
 
-        Ok(result)
+        result
     }
 
     /// Lower parameters directly onto the stack specified by the `dst`
@@ -2980,16 +2982,19 @@ where
 {
     type Lower = [T::Lower; N];
 
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "there is no fallible const conversion, yet"
-    )]
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::fixed_length_list_static(&T::ABI, N);
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
         match ty {
-            InterfaceType::FixedLengthList(t) => T::typecheck(&types.types[*t].element, types),
-            other => bail!("expected `list<_, N>` found `{}`", desc(other)),
+            InterfaceType::FixedLengthList(t) => {
+                let list = &types.types[*t];
+                match usize::try_from(list.size) {
+                    Ok(n) if n == N => {}
+                    _ => bail!("expected `list<_, {}>` found `list<_, {N}>`", list.size),
+                }
+                T::typecheck(&list.element, types)
+            }
+            other => bail!("expected `list<_, {N}>` found `{}`", desc(other)),
         }
     }
 }

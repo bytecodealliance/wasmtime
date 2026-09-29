@@ -60,7 +60,7 @@
     (core func $waitable-set.drop (canon waitable-set.drop))
 
     (core instance $libc (instantiate $libc))
-    (core func $waitable-set.wait (canon waitable-set.wait (memory $libc "m")))
+    (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $libc "m"))))
 
     (core instance $i (instantiate $m
       (with "libc" (instance $libc))
@@ -174,7 +174,7 @@
     (core func $subtask.drop (canon subtask.drop))
 
     (core instance $libc (instantiate $libc))
-    (core func $waitable-set.wait (canon waitable-set.wait (memory $libc "m")))
+    (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $libc "m"))))
 
     (core instance $i (instantiate $m
       (with "libc" (instance $libc))

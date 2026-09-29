@@ -1767,9 +1767,9 @@ fn return_call_indirect_to_imported_function(config: &mut Config) -> Result<()> 
     Ok(())
 }
 
-#[test]
-fn return_call_to_aborting_wasm_function_with_stack_adjustments() -> Result<()> {
-    let engine = Engine::default();
+#[wasmtime_test(wasm_features(tail_call))]
+fn return_call_to_aborting_wasm_function_with_stack_adjustments(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
     let module = Module::new(
         &engine,
         r#"

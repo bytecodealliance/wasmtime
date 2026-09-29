@@ -355,6 +355,7 @@ impl ToSExpr for Instantiation {
             term,
             form,
             signatures,
+            tags,
             pos: _,
         } = self;
         let mut parts = vec![SExpr::atom("instantiate"), term.to_sexpr()];
@@ -363,6 +364,10 @@ impl ToSExpr for Instantiation {
         } else {
             parts.extend(signatures.iter().map(ToSExpr::to_sexpr));
         }
+        parts.extend(
+            tags.iter()
+                .map(|tag| SExpr::List(vec![SExpr::atom("tag"), tag.to_sexpr()])),
+        );
         SExpr::List(parts)
     }
 }

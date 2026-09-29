@@ -129,7 +129,7 @@ impl WizerCommand {
             (WizerInfo::Core(cx), CliInstance::Core(instance)) => {
                 self.wizer
                     .snapshot(
-                        cx,
+                        &cx,
                         &mut wasmtime_wizer::WasmtimeWizer {
                             store: &mut store,
                             instance,
@@ -142,7 +142,7 @@ impl WizerCommand {
             (WizerInfo::Component(cx), CliInstance::Component(instance)) => {
                 self.wizer
                     .snapshot_component(
-                        cx,
+                        &cx,
                         &mut wasmtime_wizer::WasmtimeWizerComponent {
                             store: &mut store,
                             instance,

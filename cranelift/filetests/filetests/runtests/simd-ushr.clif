@@ -2,6 +2,7 @@ test interpret
 test run
 target aarch64
 target s390x
+target x86_64
 target x86_64 skylake
 set enable_multi_ret_implicit_sret
 target riscv64 has_v
@@ -45,6 +46,46 @@ block0(v0: i64x2, v1: i32):
 ; run: %ushr_i64x2([1 2], 1) == [0 1]
 ; run: %ushr_i64x2([1 2], 65) == [0 1]
 
+function %ushr_i8x16_i128(i8x16, i64, i64) -> i8x16 {
+block0(v0: i8x16, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ushr v0, v3
+    return v4
+}
+; run: %ushr_i8x16_i128([0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15], 1, 0) == [0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7]
+; run: %ushr_i8x16_i128([0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15], 9, 0) == [0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7]
+; run: %ushr_i8x16_i128([0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15], 9, 0xffffffff_ffffffff) == [0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7]
+
+function %ushr_i16x8_i128(i16x8, i64, i64) -> i16x8 {
+block0(v0: i16x8, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ushr v0, v3
+    return v4
+}
+; run: %ushr_i16x8_i128([0 1 2 3 4 5 6 7], 1, 0) == [0 0 1 1 2 2 3 3]
+; run: %ushr_i16x8_i128([0 1 2 3 4 5 6 7], 17, 0) == [0 0 1 1 2 2 3 3]
+; run: %ushr_i16x8_i128([1 2 4 -8 0 0 0 0], 1, 0) == [0 1 2 32764 0 0 0 0]
+; run: %ushr_i16x8_i128([1 2 4 -8 0 0 0 0], 1, 0xffffffff_ffffffff) == [0 1 2 32764 0 0 0 0]
+
+function %ushr_i32x4_i128(i32x4, i64, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ushr v0, v3
+    return v4
+}
+; run: %ushr_i32x4_i128([1 2 4 8], 1, 0) == [0 1 2 4]
+; run: %ushr_i32x4_i128([1 2 4 8], 33, 0) == [0 1 2 4]
+; run: %ushr_i32x4_i128([1 2 4 8], 33, 0xffffffff_ffffffff) == [0 1 2 4]
+
+function %ushr_i64x2_i128(i64x2, i64, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ushr v0, v3
+    return v4
+}
+; run: %ushr_i64x2_i128([1 2], 1, 0) == [0 1]
+; run: %ushr_i64x2_i128([1 2], 65, 0) == [0 1]
+; run: %ushr_i64x2_i128([1 2], 65, 0xffffffff_ffffffff) == [0 1]
 
 function %ushr_imm_i16x8() -> i16x8 {
 block0:

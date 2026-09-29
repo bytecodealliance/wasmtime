@@ -9,6 +9,9 @@ rust-version.workspace = true
 [package.metadata]
 cargo-fuzz = true
 
+[lints]
+workspace = true
+
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
 env_logger = { workspace = true }

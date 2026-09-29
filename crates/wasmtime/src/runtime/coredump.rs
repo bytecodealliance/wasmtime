@@ -1,7 +1,7 @@
 use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{
-    AsContextMut, FrameInfo, Global, HeapType, Instance, Memory, Module, StoreContextMut, Val,
+    AsContextMut, FrameInfo, Global, HeapTopType, Instance, Memory, Module, StoreContextMut, Val,
     ValType, WasmBacktrace, store::StoreOpaque,
 };
 use std::fmt;
@@ -39,7 +39,11 @@ pub struct WasmCoreDump {
 
 impl WasmCoreDump {
     pub(crate) fn new(store: &mut StoreOpaque, backtrace: WasmBacktrace) -> WasmCoreDump {
-        let modules: Vec<_> = store.modules().all_modules().cloned().collect();
+        let modules = store
+            .modules()
+            .all_modules()
+            .map(|(_, m)| m.clone())
+            .collect::<Vec<_>>();
         let instances: Vec<Instance> = store.all_instances().collect();
         let store_memories: Vec<Memory> =
             store.all_memories().filter_map(|m| m.unshared()).collect();
@@ -181,13 +185,21 @@ impl WasmCoreDump {
                     // what a concrete type reference's index is in the local
                     // core dump index space.
                     ValType::Ref(r) => match r.heap_type().top() {
-                        HeapType::Extern => wasm_encoder::ValType::EXTERNREF,
-
-                        HeapType::Func => wasm_encoder::ValType::FUNCREF,
-
-                        HeapType::Any => wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF),
-
-                        ty => unreachable!("not a top type: {ty:?}"),
+                        HeapTopType::Extern => wasm_encoder::ValType::EXTERNREF,
+                        HeapTopType::Func => wasm_encoder::ValType::FUNCREF,
+                        HeapTopType::Any => {
+                            wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)
+                        }
+                        HeapTopType::Exn => {
+                            wasm_encoder::ValType::Ref(wasm_encoder::RefType::EXNREF)
+                        }
+                        HeapTopType::Cont => {
+                            wasm_encoder::ValType::Ref(wasm_encoder::RefType::new_abstract(
+                                wasm_encoder::AbstractHeapType::Cont,
+                                true,
+                                false,
+                            ))
+                        }
                     },
                 };
                 let init = match g.get(&mut store) {
@@ -265,6 +277,11 @@ impl WasmCoreDump {
 
                 let module_index = module_to_index[&module.id()];
 
+                // Core dumps are best-effort and may not capture every memory
+                // referenced by an instance. In particular, shared memories
+                // are intentionally omitted because their data cannot be
+                // safely read through `Memory`. Use an invalid index for any
+                // absent memory instead of panicking while serializing.
                 let memories = instance
                     .all_memories(store.0)
                     .filter_map(|(_, m)| m.unshared())
@@ -276,11 +293,22 @@ impl WasmCoreDump {
                     })
                     .collect::<Vec<_>>();
 
+                // Component adapter modules can import runtime-managed globals,
+                // such as component instance flags, whose definitions are not
+                // enumerated by `StoreOpaque::for_each_global`. These globals
+                // are visible through `Instance::all_globals` but absent from
+                // the dump's globals section, so use an invalid index rather
+                // than panicking while serializing.
                 let globals = instance
                     .all_globals(store.0)
                     .collect::<Vec<_>>()
                     .into_iter()
-                    .map(|(_i, global)| global_to_idx[&global.hash_key(&store.0)])
+                    .map(|(_i, global)| {
+                        global_to_idx
+                            .get(&global.hash_key(&store.0))
+                            .copied()
+                            .unwrap_or(u32::MAX)
+                    })
                     .collect::<Vec<_>>();
 
                 instances.instance(module_index, memories, globals);

@@ -1,0 +1,16 @@
+[package]
+name = "wasmtime-publish"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+semver = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+toml_edit = "0.25.13"
+
+[lints]
+workspace = true

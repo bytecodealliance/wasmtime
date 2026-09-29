@@ -8,10 +8,12 @@ with plugins for arithmetic operations.
 """
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-wasmtime = { workspace = true, features = ['std', 'cranelift'] }
-wasmtime-wasi = { workspace = true }
+wasmtime = { workspace = true, features = ['default'] }
 
 [features]
 build-plugins = []

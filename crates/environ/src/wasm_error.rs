@@ -16,7 +16,7 @@ pub enum WasmError {
         /// A string describing the validation error.
         message: String,
         /// The bytecode offset where the error occurred.
-        offset: usize,
+        offset: u64,
     },
 
     /// A feature used by the WebAssembly code is not supported by the embedding environment.

@@ -1,5 +1,5 @@
-cfg_if::cfg_if! {
-    if #[cfg(not(has_native_signals))] {
+cfg_select! {
+    not(has_native_signals) => {
         // If signals-based traps are disabled statically then there's no
         // platform signal handler and no per-thread init, so stub these both
         // out.
@@ -7,7 +7,8 @@ cfg_if::cfg_if! {
 
         #[inline]
         pub fn lazy_per_thread_init() {}
-    } else if #[cfg(target_vendor = "apple")] {
+    }
+    target_vendor = "apple" => {
         // On macOS a dynamic decision is made to use mach ports or signals at
         // process initialization time.
 
@@ -51,7 +52,8 @@ cfg_if::cfg_if! {
                 }
             }
         }
-    } else {
+    }
+    _ => {
         // Otherwise unix platforms use the signals-based implementation of
         // these functions.
         pub use super::signals::{TrapHandler, SignalHandler, lazy_per_thread_init};

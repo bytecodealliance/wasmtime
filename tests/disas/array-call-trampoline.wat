@@ -9,12 +9,12 @@
   )
 )
 ;; function u268435456:0(i64 vmctx, i64, i64, i64) -> i8 system_v {
-;;     region0 = 2013265920 "HostValRaw+0x0"
-;;     region1 = 8 "VMContext+0x8"
-;;     region2 = 67108944 "VMStoreContext+0x50"
-;;     region3 = 67108936 "VMStoreContext+0x48"
-;;     region4 = 67108952 "VMStoreContext+0x58"
-;;     region5 = 67109008 "VMStoreContext+0x90"
+;;     region0 = 21 ""
+;;     region1 = 123 ""
+;;     region2 = 209 ""
+;;     region3 = 231 ""
+;;     region4 = 106 ""
+;;     region5 = 34 ""
 ;;     sig0 = (i64 vmctx, i64, i32, i64) -> i32, i64 tail
 ;;     fn0 = colocated u0:0 sig0
 ;;

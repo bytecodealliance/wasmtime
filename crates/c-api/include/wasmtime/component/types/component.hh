@@ -22,6 +22,7 @@ namespace wasmtime {
 namespace component {
 
 class ComponentItem;
+class ComponentExtern;
 
 /**
  * \brief Represents the type of a WebAssembly component.
@@ -35,11 +36,17 @@ class ComponentType {
   }
 
   /// Retrieves the import with the specified name.
-  std::optional<ComponentItem> import_get(const Engine &engine,
-                                          std::string_view name) const;
+  ///
+  /// The returned `ComponentExtern` borrows from this type and the engine and
+  /// must not outlive either of them.
+  std::optional<ComponentExtern> import_get(const Engine &engine,
+                                            std::string_view name) const;
 
   /// Retrieves the nth import.
-  std::optional<std::pair<std::string_view, ComponentItem>>
+  ///
+  /// The returned `ComponentExtern` borrows from this type and the engine and
+  /// must not outlive either of them.
+  std::optional<std::pair<std::string_view, ComponentExtern>>
   import_nth(const Engine &engine, size_t nth) const;
 
   /// Returns the number of exports of this component type.
@@ -48,11 +55,17 @@ class ComponentType {
   }
 
   /// Retrieves the export with the specified name.
-  std::optional<ComponentItem> export_get(const Engine &engine,
-                                          std::string_view name) const;
+  ///
+  /// The returned `ComponentExtern` borrows from this type and the engine and
+  /// must not outlive either of them.
+  std::optional<ComponentExtern> export_get(const Engine &engine,
+                                            std::string_view name) const;
 
   /// Retrieves the nth export.
-  std::optional<std::pair<std::string_view, ComponentItem>>
+  ///
+  /// The returned `ComponentExtern` borrows from this type and the engine and
+  /// must not outlive either of them.
+  std::optional<std::pair<std::string_view, ComponentExtern>>
   export_nth(const Engine &engine, size_t nth) const;
 };
 
@@ -170,6 +183,59 @@ public:
   const ValType &type() const;
 };
 
+/**
+ * \brief Full description of a single import or export of a component or a
+ * component instance.
+ *
+ * This carries the type of the item being imported or exported along with any
+ * `(implements "...")` or `(external-id "...")` annotations attached to it.
+ *
+ * Note that this borrows string data from the `ComponentType` or
+ * `ComponentInstanceType` it was acquired from (and the `Engine` used to
+ * acquire it), so it must not outlive either of those. Copies of this class
+ * share the same borrow and are subject to the same restriction.
+ */
+class ComponentExtern {
+  WASMTIME_CLONE_WRAPPER(ComponentExtern, wasmtime_component_extern);
+
+  /// Returns the type of the item that this import/export refers to.
+  ComponentItem type() const;
+
+  /// Returns the `(implements "...")` annotation of this import/export, if
+  /// present.
+  std::optional<std::string_view> implements() const {
+    size_t len = 0;
+    const char *ptr = wasmtime_component_extern_implements(capi(), &len);
+    if (ptr == nullptr) {
+      return std::nullopt;
+    }
+    return std::string_view(ptr, len);
+  }
+
+  /// Returns whether this import/export has an `(implements "...")`
+  /// annotation which is compatible with `name`.
+  ///
+  /// This returns `false` if there is no `implements` annotation. Otherwise
+  /// this returns `true` if the annotation is exactly `name` or a
+  /// semver-compatible version of it, for example `a:b/c@1.1.0` matches
+  /// `a:b/c@1.0.0` and `a:b/c@1.2.0`.
+  bool is_implements(std::string_view name) const {
+    return wasmtime_component_extern_is_implements(capi(), name.data(),
+                                                   name.size());
+  }
+
+  /// Returns the `(external-id "...")` annotation of this import/export, if
+  /// present.
+  std::optional<std::string_view> external_id() const {
+    size_t len = 0;
+    const char *ptr = wasmtime_component_extern_external_id(capi(), &len);
+    if (ptr == nullptr) {
+      return std::nullopt;
+    }
+    return std::string_view(ptr, len);
+  }
+};
+
 } // namespace component
 } // namespace wasmtime
 
@@ -178,60 +244,67 @@ public:
 #include <wasmtime/component/types/module.hh>
 #include <wasmtime/component/types/val.hh>
 
-inline std::optional<wasmtime::component::ComponentItem>
+inline wasmtime::component::ComponentItem
+wasmtime::component::ComponentExtern::type() const {
+  wasmtime_component_item_t item;
+  wasmtime_component_extern_type(capi(), &item);
+  return wasmtime::component::ComponentItem(std::move(item));
+}
+
+inline std::optional<wasmtime::component::ComponentExtern>
 wasmtime::component::ComponentType::import_get(const wasmtime::Engine &engine,
                                                std::string_view name) const {
-  wasmtime_component_item_t item;
-  bool found = wasmtime_component_type_import_get(
-      capi(), engine.capi(), name.data(), name.size(), &item);
+  wasmtime_component_extern_t *e;
+  bool found = wasmtime_component_type_import_get(capi(), engine.capi(),
+                                                  name.data(), name.size(), &e);
   if (!found) {
     return std::nullopt;
   }
-  return wasmtime::component::ComponentItem(std::move(item));
+  return wasmtime::component::ComponentExtern(e);
 }
 
 inline std::optional<
-    std::pair<std::string_view, wasmtime::component::ComponentItem>>
+    std::pair<std::string_view, wasmtime::component::ComponentExtern>>
 wasmtime::component::ComponentType::import_nth(const wasmtime::Engine &engine,
                                                size_t nth) const {
-  wasmtime_component_item_t item;
+  wasmtime_component_extern_t *e;
   const char *name_data;
   size_t name_size;
-  bool found = wasmtime_component_type_import_nth(
-      capi(), engine.capi(), nth, &name_data, &name_size, &item);
+  bool found = wasmtime_component_type_import_nth(capi(), engine.capi(), nth,
+                                                  &name_data, &name_size, &e);
   if (!found) {
     return std::nullopt;
   }
   return std::make_pair(std::string_view(name_data, name_size),
-                        wasmtime::component::ComponentItem(std::move(item)));
+                        wasmtime::component::ComponentExtern(e));
 }
 
-inline std::optional<wasmtime::component::ComponentItem>
+inline std::optional<wasmtime::component::ComponentExtern>
 wasmtime::component::ComponentType::export_get(const wasmtime::Engine &engine,
                                                std::string_view name) const {
-  wasmtime_component_item_t item;
-  bool found = wasmtime_component_type_export_get(
-      capi(), engine.capi(), name.data(), name.size(), &item);
+  wasmtime_component_extern_t *e;
+  bool found = wasmtime_component_type_export_get(capi(), engine.capi(),
+                                                  name.data(), name.size(), &e);
   if (!found) {
     return std::nullopt;
   }
-  return wasmtime::component::ComponentItem(std::move(item));
+  return wasmtime::component::ComponentExtern(e);
 }
 
 inline std::optional<
-    std::pair<std::string_view, wasmtime::component::ComponentItem>>
+    std::pair<std::string_view, wasmtime::component::ComponentExtern>>
 wasmtime::component::ComponentType::export_nth(const wasmtime::Engine &engine,
                                                size_t nth) const {
-  wasmtime_component_item_t item;
+  wasmtime_component_extern_t *e;
   const char *name_data;
   size_t name_size;
-  bool found = wasmtime_component_type_export_nth(
-      capi(), engine.capi(), nth, &name_data, &name_size, &item);
+  bool found = wasmtime_component_type_export_nth(capi(), engine.capi(), nth,
+                                                  &name_data, &name_size, &e);
   if (!found) {
     return std::nullopt;
   }
   return std::make_pair(std::string_view(name_data, name_size),
-                        wasmtime::component::ComponentItem(std::move(item)));
+                        wasmtime::component::ComponentExtern(e));
 }
 
 inline const wasmtime::component::ComponentInstanceType &

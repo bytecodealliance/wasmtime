@@ -127,7 +127,7 @@ impl StoreLimits {
         if self
             .0
             .remaining_copy_allowance
-            .fetch_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(prev_size))
+            .try_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(prev_size))
             .is_err()
         {
             self.0.oom.store(true, SeqCst);
@@ -140,7 +140,7 @@ impl StoreLimits {
         match self
             .0
             .remaining_memory
-            .fetch_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(amt))
+            .try_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(amt))
         {
             Ok(_) => true,
             Err(_) => {
@@ -620,6 +620,12 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 
     let test = &test.test;
 
+    // FIXME(#14222) stack-switching and asan aren't integrated yet, so skip
+    // stack-switching tests when asan is enabled.
+    if cfg!(asan) && test.config.stack_switching == Some(true) {
+        return Err(arbitrary::Error::IncorrectFormat);
+    }
+
     if test.config.component_model_async() || u.arbitrary()? {
         fuzz_config.enable_async(u)?;
     }
@@ -862,6 +868,21 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
         linker.define(&store, "", "take_eq", func).unwrap();
 
+        let func_ty = FuncType::new(
+            store.engine(),
+            vec![ValType::Ref(RefType::new(true, HeapType::Array))],
+            vec![],
+        );
+
+        let func = Func::new(&mut store, func_ty, {
+            move |_caller: Caller<'_, StoreLimits>, _params, _results| {
+                log::info!("gc_ops: take_array(<ref null array>)");
+                Ok(())
+            }
+        });
+
+        linker.define(&store, "", "take_array", func).unwrap();
+
         // `take_i31` receives an `i31ref` along with the guest's inline
         // `i31.get_s` and `i31.get_u` results, and asserts that the host's own
         // view of the i31 matches the values the Wasm instructions produced.
@@ -893,12 +914,12 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
         for imp in module.imports() {
             if imp.module() == "" {
                 let name = imp.name();
-                if name.starts_with("take_struct_") {
+                if name.starts_with("take_struct_") || name.starts_with("take_array_") {
                     if let wasmtime::ExternType::Func(ft) = imp.ty() {
                         let imp_name = name.to_string();
                         let func =
                             Func::new(&mut store, ft.clone(), move |_caller, _params, _results| {
-                                log::info!("gc_ops: {imp_name}(<typed structref>)");
+                                log::info!("gc_ops: {imp_name}(<typed ref>)");
                                 Ok(())
                             });
                         linker.define(&store, "", name, func).unwrap();
@@ -930,10 +951,11 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
                 ops.limits.num_globals
             );
 
-            // The generated function should always return a trap. The only two
-            // valid traps are table-out-of-bounds which happens through `table.get`
-            // and `table.set` generated or an out-of-fuel trap. Otherwise any other
-            // error is unexpected and should fail fuzzing.
+            // The generated function should always return a trap. The valid
+            // traps are table-out-of-bounds (through `table.get`/`table.set`),
+            // array-out-of-bounds (through `array.get`/`array.set`), or an
+            // out-of-fuel trap. Otherwise any other error is unexpected and
+            // should fail fuzzing.
             log::info!("gc_ops: calling into Wasm `run` function");
             let err = run.call(&mut scope, &args, &mut []).unwrap_err();
             if err.is::<GcHeapOutOfMemory<CountDrops>>() || err.is::<GcHeapOutOfMemory<()>>() {
@@ -943,7 +965,10 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
                     .downcast::<Trap>()
                     .expect("if not GC oom, error should be a Wasm trap");
                 match trap {
-                    Trap::TableOutOfBounds | Trap::OutOfFuel | Trap::AllocationTooLarge => {}
+                    Trap::TableOutOfBounds
+                    | Trap::ArrayOutOfBounds
+                    | Trap::OutOfFuel
+                    | Trap::AllocationTooLarge => {}
                     _ => panic!("unexpected trap: {trap}"),
                 }
             }
@@ -979,17 +1004,9 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
 /// Execute a series of exception-related operations.
 pub fn exception_ops(mut fuzz_config: generators::Config, mut ops: ExceptionOps) -> Result<()> {
-    match fuzz_config.wasmtime.compiler_strategy {
-        // Winch doesn't support exceptions; force to Cranelift.
-        CompilerStrategy::Winch => {
-            fuzz_config.wasmtime.compiler_strategy = CompilerStrategy::CraneliftNative;
-        }
-        CompilerStrategy::CraneliftNative | CompilerStrategy::CraneliftPulley => {}
-    }
-
     let module_cfg = &mut fuzz_config.module_config.config;
-    // Force exceptions + GC on (exceptions require GC).
-    module_cfg.gc_enabled = true;
+    // Force exceptions, but don't force Wasm GC on: Winch doesn't support it,
+    // and Cranelift should use its generated GC setting.
     module_cfg.exceptions_enabled = true;
     module_cfg.reference_types_enabled = true;
 
@@ -1323,6 +1340,7 @@ mod tests {
             | WasmFeatures::FUNCTION_REFERENCES
             | WasmFeatures::GC
             | WasmFeatures::GC_TYPES
+            | WasmFeatures::COMPACT_IMPORTS
             | WasmFeatures::CUSTOM_PAGE_SIZES
             | WasmFeatures::EXTENDED_CONST
             | WasmFeatures::EXCEPTIONS;

@@ -1,4 +1,4 @@
-use easy_smt::*;
+use cranelift_isle_veri_caching::*;
 
 fn declare(smt: &mut Context, name: String, val: SExpr) -> SExpr {
     smt.declare_const(name.clone(), val).unwrap();

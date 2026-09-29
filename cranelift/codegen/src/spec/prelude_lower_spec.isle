@@ -1,0 +1,11 @@
+;; Specs for terms declared in `prelude_lower.isle`.
+
+;; `maybe_uextend` "sees through" a `uextend`: given the outer value `result`,
+;; it yields the inner value `value`. When `result` is defined by a `uextend`,
+;; `value` is that uextend's argument; otherwise `value` is `result` itself. In
+;; both cases the inner value is the low bits of the outer value, i.e. the outer
+;; value is the zero-extension of the inner one to the outer width (in the
+;; fall-through case the two widths are equal, so this is the identity). The
+;; extractor is total (it always matches), so no `match` clause is needed.
+(spec (maybe_uextend value)
+    (provide (= result (zero_ext (widthof result) value))))

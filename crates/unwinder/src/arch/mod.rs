@@ -7,32 +7,36 @@
 //! All architectures have the same interface when exposed to the rest of the
 //! crate.
 
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "x86_64")] {
+cfg_select! {
+    target_arch = "x86_64" => {
         mod x86;
         use x86 as imp;
-    } else if #[cfg(target_arch = "aarch64")] {
+    }
+    target_arch = "aarch64" => {
         mod aarch64;
         use aarch64 as imp;
-    } else if #[cfg(target_arch = "s390x")] {
+    }
+    target_arch = "s390x" => {
         mod s390x;
         use s390x as imp;
-    } else if #[cfg(target_arch = "riscv64")] {
+    }
+    target_arch = "riscv64" => {
         mod riscv64;
         use riscv64 as imp;
     }
+    _ => {}
 }
 
 // Re re-export functions from the `imp` module with one set of `pub
 // use` declarations here so we can share doc-comments.
 
-cfg_if::cfg_if! {
-    if #[cfg(any(
+cfg_select! {
+    any(
         target_arch = "x86_64",
         target_arch = "aarch64",
         target_arch = "s390x",
-        target_arch = "riscv64"
-    ))] {
+        target_arch = "riscv64",
+    ) => {
         /// Get the current stack pointer (at the time this function is
         /// executing). This may be used to check, e.g., approximate space
         /// remaining on a stack, but cannot be relied upon for anything exact
@@ -140,4 +144,5 @@ cfg_if::cfg_if! {
             }
         }
     }
+    _ => {}
 }

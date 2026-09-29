@@ -1027,7 +1027,19 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
             }
             &Binding::MatchSome { source } => {
                 self.emit_expr(ctx, source)?;
-                write!(ctx.out, "?")
+                // When isle uses an implicit `convert` from A to B and the conversion declaration is `partial`,
+                // it emits:
+                // ```
+                // let v1: &Option<B> = &C::a_to_b(ctx, arg0);
+                // let v2: &B = v1?;
+                // ```
+                // This fails to compile since you can't `?` a `&Option<T>`, only on an `Option` itself.
+                // So add a `.as_ref()` to convert it to `Option<&T>` before `?`.
+                if ctx.is_ref.contains(&source) {
+                    write!(ctx.out, ".as_ref()?")
+                } else {
+                    write!(ctx.out, "?")
+                }
             }
             &Binding::MatchTuple { source, field } => {
                 self.emit_expr(ctx, source)?;

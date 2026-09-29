@@ -550,6 +550,8 @@ pub(crate) fn emit(
             in_payload0,
             out_payload0,
         } => {
+            let stack_map = state.take_stack_map();
+
             // Note that we do not emit anything for preserving and restoring
             // ordinary registers here: That's taken care of by regalloc for us,
             // since we marked this instruction as clobbering all registers.
@@ -643,6 +645,9 @@ pub(crate) fn emit(
             asm::inst::jmpq_m::new(tmp1.to_reg()).emit(sink, info, state);
 
             sink.bind_label(resume, state.ctrl_plane_mut());
+            if let Some(s) = stack_map {
+                sink.push_user_stack_map(state, sink.cur_offset(), s);
+            }
         }
 
         Inst::DeadLoadWithContext {
@@ -1148,7 +1153,7 @@ pub(crate) fn emit(
                         inst.emit(sink, info, state);
                     }
                     OperandSize::Size64 => {
-                        // An f64 can represent `i32::min_value() - 1` exactly with precision to spare,
+                        // An f64 can represent `i32::MIN - 1` exactly with precision to spare,
                         // so there are values less than -2^(N-1) that convert correctly to INT_MIN.
                         let cst = if output_bits < 64 {
                             no_overflow_cc = CC::NBE; // >
@@ -1380,9 +1385,9 @@ pub(crate) fn emit(
                 let inst = Inst::imm(
                     OperandSize::Size64,
                     if *dst_size == OperandSize::Size64 {
-                        u64::max_value()
+                        u64::MAX
                     } else {
-                        u32::max_value() as u64
+                        u64::from(u32::MAX)
                     },
                     dst,
                 );
@@ -1436,9 +1441,16 @@ pub(crate) fn emit(
                 // If we know the distance to the name is within 2GB (e.g., a
                 // module-local function), we can generate a RIP-relative
                 // address, with a relocation.
+                //
+                // Note that this is `X86PCRel4` rather than `X86CallPCRel4`:
+                // the latter is reserved for the displacement of `call`/`jmp`
+                // instructions, which relocation consumers may redirect through
+                // a veneer if the target turns out to be out of range. This `lea`
+                // computes the address of the symbol itself, so no such
+                // redirection is possible.
                 asm::inst::leaq_rm::new(*dst, riprel).emit(sink, info, state);
                 let cur = sink.cur_offset();
-                sink.add_reloc_at_offset(cur - 4, Reloc::X86CallPCRel4, name, *offset - 4);
+                sink.add_reloc_at_offset(cur - 4, Reloc::X86PCRel4, name, *offset - 4);
             } else {
                 // The full address can be encoded in the register, with a
                 // relocation.

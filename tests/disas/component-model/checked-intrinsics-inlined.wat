@@ -49,11 +49,11 @@
     )
 )
 ;; function u0:0(i64 vmctx, i64, i64, i64) tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108896 "VMStoreContext+0x20"
-;;     region2 = 1207959576 "VMFunctionImport+0x18"
-;;     region3 = 67108976 "VMStoreContext+0x70"
-;;     region4 = 1946157056 "UnsafeIntrinsicMemory"
+;;     region0 = 123 ""
+;;     region1 = 196 ""
+;;     region2 = 25 ""
+;;     region3 = 173 ""
+;;     region4 = 113 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+32

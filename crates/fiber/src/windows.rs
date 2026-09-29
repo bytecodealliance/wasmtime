@@ -178,7 +178,19 @@ impl Fiber {
 impl Drop for Fiber {
     fn drop(&mut self) {
         unsafe {
+            let is_fiber = IsThreadAFiber() != 0;
+            if !is_fiber {
+                // DeleteFiber runs FLS destructors. Make those destructors
+                // observe a fiber so Rust does not run thread-local cleanup
+                // for the live thread.
+                let fiber = ConvertThreadToFiber(ptr::null_mut());
+                assert!(!fiber.is_null(), "failed to make current thread a fiber");
+            }
             DeleteFiber(self.fiber);
+            if !is_fiber {
+                let res = ConvertFiberToThread();
+                assert!(res != 0, "failed to convert main thread back");
+            }
         }
     }
 }

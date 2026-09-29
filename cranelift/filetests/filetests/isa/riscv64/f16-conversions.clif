@@ -1,0 +1,99 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zfhmin
+
+function %fpromote_f16_f32(f16) -> f32 {
+block0(v0: f16):
+  v1 = fpromote.f32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.s.h fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x25, 0x40
+;   ret
+
+function %fdemote_f32_f16(f32) -> f16 {
+block0(v0: f32):
+  v1 = fdemote.f16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.h.s fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x05, 0x44
+;   ret
+
+function %fpromote_f16_f64(f16) -> f64 {
+block0(v0: f16):
+  v1 = fpromote.f64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.d.h fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x25, 0x42
+;   ret
+
+function %fdemote_f64_f16(f64) -> f16 {
+block0(v0: f64):
+  v1 = fdemote.f16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.h.d fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x15, 0x44
+;   ret
+
+function %fpromote_f32_f64(f32) -> f64 {
+block0(v0: f32):
+  v1 = fpromote.f64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.d.s fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.d.s fa0, fa0
+;   ret
+
+function %fdemote_f64_f32(f64) -> f32 {
+block0(v0: f64):
+  v1 = fdemote.f32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   fcvt.s.d fa0,fa0,rne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcvt.s.d fa0, fa0, rne
+;   ret

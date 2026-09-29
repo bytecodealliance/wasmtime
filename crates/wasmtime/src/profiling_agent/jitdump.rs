@@ -34,14 +34,14 @@ pub fn new() -> Result<Box<dyn ProfilingAgent>> {
     if jitdump_file.is_none() {
         let filename = format!("./jit-{}.dump", process::id());
         let e_machine = match target_lexicon::HOST.architecture {
-            Architecture::X86_64 => elf::EM_X86_64 as u32,
-            Architecture::X86_32(_) => elf::EM_386 as u32,
-            Architecture::Arm(_) => elf::EM_ARM as u32,
-            Architecture::Aarch64(_) => elf::EM_AARCH64 as u32,
-            Architecture::S390x => elf::EM_S390 as u32,
+            Architecture::X86_64 => elf::EM_X86_64,
+            Architecture::X86_32(_) => elf::EM_386,
+            Architecture::Arm(_) => elf::EM_ARM,
+            Architecture::Aarch64(_) => elf::EM_AARCH64,
+            Architecture::S390x => elf::EM_S390,
             _ => unimplemented!("unrecognized architecture"),
         };
-        *jitdump_file = Some(JitDumpFile::new(filename, e_machine)?);
+        *jitdump_file = Some(JitDumpFile::new(filename, e_machine.0 as u32)?);
     }
 
     Ok(Box::new(JitDumpAgent {

@@ -201,6 +201,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   addb %al, (%rax)
 ;   incl (%rax)
 ;   addb %al, (%rax)
+;   .byte 0xff, 0xff, 0xff, 0x00, 0xff, 0xff
 
 function %bad_const_mask(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -250,4 +251,5 @@ block0(v0: i8x16, v1: i8x16):
 ;   addb %bh, %bh
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
+;   .byte 0xff
 

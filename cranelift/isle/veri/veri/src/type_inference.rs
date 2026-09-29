@@ -467,7 +467,11 @@ impl<'a> SystemBuilder<'a> {
                 self.bit_vector(*y);
                 self.bit_vector(x);
                 self.width_of(x, *w);
-                self.width_of(*y, *w);
+                // The source bit-vector width is deliberately left unconstrained:
+                // SMT-LIB's `to_fp`/`to_fp_unsigned` convert a bit-vector of any
+                // width to the destination float, so tying the source width to
+                // the destination would rule out conversions such as `u64` to
+                // `f32`.
             }
             Expr::FPToUBV(w, y) | Expr::FPToSBV(w, y) => {
                 self.integer(*w);

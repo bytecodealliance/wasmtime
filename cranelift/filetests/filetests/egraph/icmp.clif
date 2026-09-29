@@ -202,6 +202,34 @@ block0(v0: i32, v1: i32):
 ;     return v5
 ; }
 
+;; `~x == x` to false.
+function %simplify_icmp_eq_bnot_x_x(i32) -> i8 fast {
+block0(v0: i32):
+    v1 = bnot v0
+    v2 = icmp eq v1, v0
+    return v2
+}
+
+; function %simplify_icmp_eq_bnot_x_x(i32) -> i8 fast {
+; block0(v0: i32):
+;     v3 = iconst.i8 0
+;     return v3  ; v3 = 0
+; }
+
+;; `~x != x` to true.
+function %simplify_icmp_ne_bnot_x_x(i32) -> i8 fast {
+block0(v0: i32):
+    v1 = bnot v0
+    v2 = icmp ne v1, v0
+    return v2
+}
+
+; function %simplify_icmp_ne_bnot_x_x(i32) -> i8 fast {
+; block0(v0: i32):
+;     v3 = iconst.i8 1
+;     return v3  ; v3 = 1
+; }
+
 function %issue_10929_no_crash_on_icmp_vectors() -> i32x4 {
   const0 = 0x40ad3fb47cb16076c8cb1fdd8189d40f
 
@@ -250,6 +278,105 @@ block0(v0: i32, v1: i32):
 ; block0(v0: i32, v1: i32):
 ;     v4 = icmp ule v1, v0
 ;     return v4
+; }
+
+;; x >=_u (x - y) --> x >=_u y
+function %uge_x_isub_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp uge v0, v2
+    return v3
+}
+
+; function %uge_x_isub_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = icmp uge v0, v1
+;     return v4
+; }
+
+;; x <_u (x - y) --> x <_u y
+function %ult_x_isub_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ult v0, v2
+    return v3
+}
+
+; function %ult_x_isub_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = icmp ult v0, v1
+;     return v4
+; }
+
+;; x >=_u (x >>_u y) --> true
+function %uge_x_ushr_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp uge v0, v2
+    return v3
+}
+
+; function %uge_x_ushr_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i8 1
+;     return v4  ; v4 = 1
+; }
+
+;; (x >>_u y) <=_u x --> true
+function %ule_ushr_x_y_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp ule v2, v0
+    return v3
+}
+
+; function %ule_ushr_x_y_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i8 1
+;     return v4  ; v4 = 1
+; }
+
+;; (x >>_u y) >_u x --> false
+function %ugt_ushr_x_y_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp ugt v2, v0
+    return v3
+}
+
+; function %ugt_ushr_x_y_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i8 0
+;     return v4  ; v4 = 0
+; }
+
+;; x <_u (x >>_u y) --> false
+function %ult_x_ushr_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp ult v0, v2
+    return v3
+}
+
+; function %ult_x_ushr_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i8 0
+;     return v4  ; v4 = 0
+; }
+
+function %ugt_ushr_x_y_x_i32x2(i32x2, i32) -> i32x2 fast {
+block0(v0: i32x2, v1: i32):
+    v2 = ushr v0, v1
+    v3 = icmp ugt v2, v0
+    return v3
+}
+
+; function %ugt_ushr_x_y_x_i32x2(i32x2, i32) -> i32x2 fast {
+;     const0 = 0x0000000000000000
+;
+; block0(v0: i32x2, v1: i32):
+;     v4 = vconst.i32x2 const0
+;     return v4  ; v4 = const0
 ; }
 
 ;; (ne cty (select ty (slt cty x y) x y) x) -> (sgt cty x y)
@@ -420,4 +547,742 @@ block0(v0: i32, v1: i32):
 ; block0(v0: i32, v1: i32):
 ;     v6 = icmp ult v0, v1
 ;     return v6
+; }
+
+function %smin_sgt_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin.i32 v0, v1
+    v3 = smax.i32 v0, v1
+    v4 = icmp sgt v2, v3
+    return v4
+}
+
+; function %smin_sgt_smax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 0
+;     return v5  ; v5 = 0
+; }
+
+function %umin_ugt_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin.i32 v0, v1
+    v3 = umax.i32 v0, v1
+    v4 = icmp ugt v2, v3
+    return v4
+}
+
+; function %umin_ugt_umax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 0
+;     return v5  ; v5 = 0
+; }
+
+function %smin_sle_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin.i32 v0, v1
+    v3 = smax.i32 v0, v1
+    v4 = icmp sle v2, v3
+    return v4
+}
+
+; function %smin_sle_smax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 1
+;     return v5  ; v5 = 1
+; }
+
+function %umin_ule_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin.i32 v0, v1
+    v3 = umax.i32 v0, v1
+    v4 = icmp ule v2, v3
+    return v4
+}
+
+; function %umin_ule_umax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 1
+;     return v5  ; v5 = 1
+; }
+
+function %smin_eq_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin.i32 v0, v1
+    v3 = smax.i32 v0, v1
+    v4 = icmp.i8 eq v2, v3
+    return v4
+}
+
+; function %smin_eq_smax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %smin_ne_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin.i32 v0, v1
+    v3 = smax.i32 v0, v1
+    v4 = icmp.i8 ne v2, v3
+    return v4
+}
+
+; function %smin_ne_smax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+;; select(c, ~x, ~y) --> ~select(c, x, y)
+function %select_bnot_bnot(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = icmp.i8 eq v0, v1
+    v5 = bnot.i32 v2
+    v6 = bnot.i32 v3
+    v7 = select.i32 v4, v5, v6
+    return v7
+}
+
+; function %select_bnot_bnot(i32, i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32, v3: i32):
+;     v4 = icmp eq v0, v1
+;     v8 = select v4, v2, v3
+;     v9 = bnot v8
+;     return v9
+; }
+
+;; select(c, -x, -y) --> -select(c, x, y)
+function %select_ineg_ineg(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = icmp eq v0, v1
+    v5 = ineg v2
+    v6 = ineg v3
+    v7 = select v4, v5, v6
+    return v7
+}
+
+; function %select_ineg_ineg(i32, i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32, v3: i32):
+;     v4 = icmp eq v0, v1
+;     v8 = select v4, v2, v3
+;     v9 = ineg v8
+;     return v9
+; }
+
+;; (x - y) == 0 --> x == y
+function %eq_isub_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %eq_isub_zero(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+;; (x - y) != 0 --> x != y
+function %ne_isub_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %ne_isub_zero(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+;; (x ^ y) == 0 --> x == y
+function %eq_bxor_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %eq_bxor_zero(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+;; (x ^ y) != 0 --> x != y
+function %ne_bxor_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %ne_bxor_zero(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+;; (x ^ y) == x --> y == 0
+function %eq_bxor_x(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %eq_bxor_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp eq v1, v4  ; v4 = 0
+;     return v5
+; }
+
+;; (x + y) != x --> y != 0
+function %ne_iadd_x(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = icmp ne v2, v0
+    return v3
+}
+
+; function %ne_iadd_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp ne v1, v4  ; v4 = 0
+;     return v5
+; }
+
+;; -x != -y --> x != y
+function %ne_ineg(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = ineg v0
+    v3 = ineg v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %ne_ineg(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %shift_nonnegative_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = sshr v0, v1
+    v3 = iconst.i32 -1
+    v4 = icmp sgt v2, v3
+    return v4
+}
+
+; function %shift_nonnegative_i32(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i32 0
+;     v6 = icmp sge v0, v5  ; v5 = 0
+;     return v6
+; }
+
+function %eq_rotl_i32(i32, i32, i32) -> i8 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = rotl v0, v2
+    v4 = rotl v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; function %eq_rotl_i32(i32, i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = icmp eq v0, v1
+;     return v6
+; }
+
+function %shift_nonnegative_zero(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = sshr v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp sge v2, v3
+    return v4
+}
+
+; function %shift_nonnegative_zero(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v3 = iconst.i32 0
+;     v5 = icmp sge v0, v3  ; v3 = 0
+;     return v5
+; }
+
+function %eq_rotl_distinct_counts(i32, i32, i32, i32) -> i8 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = rotl v0, v2
+    v5 = rotl v1, v3
+    v6 = icmp eq v4, v5
+    return v6
+}
+
+; function %eq_rotl_distinct_counts(i32, i32, i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32, v2: i32, v3: i32):
+;     v4 = rotl v0, v2
+;     v5 = rotl v1, v3
+;     v6 = icmp eq v4, v5
+;     return v6
+; }
+
+function %shift_nonnegative_zero_vector(i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32):
+    v2 = sshr v0, v1
+    v3 = vconst.i32x4 0x00000000000000000000000000000000
+    v4 = icmp sge v2, v3
+    return v4
+}
+
+; function %shift_nonnegative_zero_vector(i32x4, i32) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4, v1: i32):
+;     v3 = vconst.i32x4 const0
+;     v5 = icmp sge v0, v3  ; v3 = const0
+;     return v5
+; }
+
+function %ult_zero_vector(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = icmp ult v0, v1
+    return v2
+}
+
+; function %ult_zero_vector(i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4):
+;     v1 = vconst.i32x4 const0
+;     return v1  ; v1 = const0
+; }
+
+function %uge_zero_vector(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = icmp uge v0, v1
+    return v2
+}
+
+; function %uge_zero_vector(i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;     const1 = 0xffffffffffffffffffffffffffffffff
+;
+; block0(v0: i32x4):
+;     v5 = vconst.i32x4 const1
+;     return v5  ; v5 = const1
+; }
+
+function %signed_bounds_i8_limit100(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = iconst.i8 100
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i8_limit100(i8) -> i8 fast {
+; block0(v0: i8):
+;     v2 = iconst.i8 100
+;     v6 = icmp ult v0, v2  ; v2 = 100
+;     return v6
+; }
+
+function %signed_bounds_i32_limit100(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 100
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i32_limit100(i32) -> i8 fast {
+; block0(v0: i32):
+;     v2 = iconst.i32 100
+;     v6 = icmp ult v0, v2  ; v2 = 100
+;     return v6
+; }
+
+function %signed_bounds_i64_limit100(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = iconst.i64 100
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v4, v3
+    return v5
+}
+
+; function %signed_bounds_i64_limit100(i64) -> i8 fast {
+; block0(v0: i64):
+;     v2 = iconst.i64 100
+;     v6 = icmp ult v0, v2  ; v2 = 100
+;     return v6
+; }
+
+function %signed_bounds_i32_limitneg1(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 -1
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i32_limitneg1(i32) -> i8 fast {
+; block0(v0: i32):
+;     v1 = iconst.i32 0
+;     v3 = icmp sge v0, v1  ; v1 = 0
+;     v2 = iconst.i32 -1
+;     v4 = icmp slt v0, v2  ; v2 = -1
+;     v5 = band v3, v4
+;     return v5
+; }
+
+function %signed_bounds_i8_limit128(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = iconst.i8 128
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i8_limit128(i8) -> i8 fast {
+; block0(v0: i8):
+;     v1 = iconst.i8 0
+;     return v1  ; v1 = 0
+; }
+
+function %signed_bounds_i32_limit0(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 0
+    v3 = icmp sge v0, v1
+    v4 = icmp slt v0, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_i32_limit0(i32) -> i8 fast {
+; block0(v0: i32):
+;     v6 = iconst.i8 0
+;     return v6  ; v6 = 0
+; }
+
+function %signed_bounds_variable_limit(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp sge v0, v2
+    v4 = icmp slt v0, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; function %signed_bounds_variable_limit(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 0
+;     v3 = icmp sge v0, v2  ; v2 = 0
+;     v4 = icmp slt v0, v1
+;     v5 = band v3, v4
+;     return v5
+; }
+
+function %srem_zero_i8_divisor8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 8
+    v2 = srem v0, v1
+    v3 = iconst.i8 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i8_divisor8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v14 = iconst.i8 7
+;     v15 = band v0, v14  ; v14 = 7
+;     v3 = iconst.i8 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v16
+; }
+
+function %srem_zero_i16_divisor8(i16) -> i8 {
+block0(v0: i16):
+    v1 = iconst.i16 8
+    v2 = srem v0, v1
+    v3 = iconst.i16 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i16_divisor8(i16) -> i8 fast {
+; block0(v0: i16):
+;     v14 = iconst.i16 7
+;     v15 = band v0, v14  ; v14 = 7
+;     v3 = iconst.i16 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v16
+; }
+
+function %srem_zero_i32_divisor2(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i32_divisor2(i32) -> i8 fast {
+; block0(v0: i32):
+;     v14 = iconst.i32 1
+;     v15 = band v0, v14  ; v14 = 1
+;     v5 = iconst.i32 0
+;     v16 = icmp eq v15, v5  ; v5 = 0
+;     return v16
+; }
+
+function %srem_zero_i32_divisor8(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i32_divisor8(i32) -> i8 fast {
+; block0(v0: i32):
+;     v14 = iconst.i32 7
+;     v15 = band v0, v14  ; v14 = 7
+;     v3 = iconst.i32 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v16
+; }
+
+function %srem_zero_i64_divisor64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 64
+    v2 = srem v0, v1
+    v3 = iconst.i64 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i64_divisor64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v14 = iconst.i64 63
+;     v15 = band v0, v14  ; v14 = 63
+;     v3 = iconst.i64 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v16
+; }
+
+function %srem_zero_i32_divisorneg8(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 -8
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i32_divisorneg8(i32) -> i8 fast {
+; block0(v0: i32):
+;     v13 = iconst.i32 7
+;     v14 = band v0, v13  ; v13 = 7
+;     v3 = iconst.i32 0
+;     v15 = icmp eq v14, v3  ; v3 = 0
+;     return v15
+; }
+
+function %srem_zero_i32_divisor7(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 7
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %srem_zero_i32_divisor7(i32) -> i8 fast {
+; block0(v0: i32):
+;     v5 = iconst.i32 -1840700269
+;     v6 = smulhi v0, v5  ; v5 = -1840700269
+;     v7 = iadd v6, v0
+;     v8 = iconst.i32 2
+;     v9 = sshr v7, v8  ; v8 = 2
+;     v10 = iconst.i32 31
+;     v11 = ushr v9, v10  ; v10 = 31
+;     v12 = iadd v9, v11
+;     v1 = iconst.i32 7
+;     v13 = imul v12, v1  ; v1 = 7
+;     v15 = icmp eq v0, v13
+;     return v15
+; }
+
+function %srem_zero_shared_remainder(i32) -> i32, i8 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v2, v4
+}
+
+; function %srem_zero_shared_remainder(i32) -> i32, i8 fast {
+; block0(v0: i32):
+;     v5 = iconst.i32 2
+;     v6 = sshr v0, v5  ; v5 = 2
+;     v7 = iconst.i32 29
+;     v8 = ushr v6, v7  ; v7 = 29
+;     v9 = iadd v0, v8
+;     v10 = iconst.i32 -8
+;     v11 = band v9, v10  ; v10 = -8
+;     v12 = isub v0, v11
+;     v2 -> v12
+;     v14 = iconst.i32 7
+;     v15 = band v0, v14  ; v14 = 7
+;     v3 = iconst.i32 0
+;     v16 = icmp eq v15, v3  ; v3 = 0
+;     return v12, v16
+; }
+
+function %rounding_eq_add0_eq0_shift29_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+
+; function %rounding_eq_add0_eq0_shift29_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v8 = iconst.i32 7
+;     v9 = band v0, v8  ; v8 = 7
+;     v10 = iconst.i32 0
+;     v11 = icmp eq v9, v10  ; v10 = 0
+;     return v11
+; }
+
+function %rounding_eq_add1_eq0_shift29_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v3, v0
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+
+; function %rounding_eq_add1_eq0_shift29_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v8 = iconst.i32 7
+;     v9 = band v0, v8  ; v8 = 7
+;     v10 = iconst.i32 0
+;     v11 = icmp eq v9, v10  ; v10 = 0
+;     return v11
+; }
+
+function %rounding_eq_add0_eq1_shift29_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v6, v0
+    return v7
+}
+
+; function %rounding_eq_add0_eq1_shift29_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v8 = iconst.i32 7
+;     v9 = band v0, v8  ; v8 = 7
+;     v10 = iconst.i32 0
+;     v11 = icmp eq v9, v10  ; v10 = 0
+;     return v11
+; }
+
+function %rounding_eq_add1_eq1_shift61_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 61
+    v3 = ushr v1, v2
+    v4 = iadd v3, v0
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v6, v0
+    return v7
+}
+
+; function %rounding_eq_add1_eq1_shift61_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v11 = iconst.i32 7
+;     v12 = band v0, v11  ; v11 = 7
+;     v13 = iconst.i32 0
+;     v14 = icmp eq v12, v13  ; v13 = 0
+;     return v14
+; }
+
+function %rounding_eq_add0_eq0_shift28_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 28
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+
+; function %rounding_eq_add0_eq0_shift28_mask8(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 28
+;     v3 = ushr v1, v2  ; v2 = 28
+;     v4 = iadd v0, v3
+;     v5 = iconst.i32 -8
+;     v6 = band v4, v5  ; v5 = -8
+;     v7 = icmp eq v0, v6
+;     return v7
+; }
+
+function %rounding_eq_add0_eq0_shift29_mask12(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -12
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+
+; function %rounding_eq_add0_eq0_shift29_mask12(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 29
+;     v3 = ushr v1, v2  ; v2 = 29
+;     v4 = iadd v0, v3
+;     v5 = iconst.i32 -12
+;     v6 = band v4, v5  ; v5 = -12
+;     v7 = icmp eq v0, v6
+;     return v7
 ; }

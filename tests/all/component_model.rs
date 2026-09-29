@@ -23,6 +23,7 @@ mod missing_async;
 mod nested;
 mod post_return;
 mod resources;
+mod stream_sync_dropped;
 mod strings;
 mod sync_call_inline;
 
@@ -90,8 +91,16 @@ impl ApiStyle {
     ) -> Result<()> {
         match self {
             ApiStyle::Sync => resource.resource_drop(store),
-            ApiStyle::Async | ApiStyle::AsyncNotConcurrent | ApiStyle::Concurrent => {
+            ApiStyle::Async | ApiStyle::AsyncNotConcurrent => {
                 resource.resource_drop_async(store).await
+            }
+            ApiStyle::Concurrent => {
+                store
+                    .run_concurrent(async |accessor| {
+                        resource.resource_drop_concurrent(accessor).await
+                    })
+                    .await??;
+                Ok(())
             }
         }
     }
@@ -283,8 +292,8 @@ fn make_echo_component_with_params(type_definition: &str, params: &[Param]) -> S
             (func (export "echo") (param "a" $Foo) (result $Foo)
                 (canon lift
                     (core func $i "echo")
-                    (memory $i "memory")
-                    (realloc (func $i "realloc"))
+                    (memory (core memory $i "memory"))
+                    (realloc (core func $i "realloc"))
                 )
             )
         )"#

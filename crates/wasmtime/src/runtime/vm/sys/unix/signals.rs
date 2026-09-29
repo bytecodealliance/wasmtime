@@ -546,10 +546,11 @@ unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
     reason = "has_mmu_interruption implies a 64-bit usize"
 )]
 fn ucontext_pc(ucontext: &libc::ucontext_t) -> usize {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "x86_64")] {
+    cfg_select! {
+        target_arch = "x86_64" => {
             ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] as usize
-        } else if #[cfg(target_arch = "aarch64")] {
+        }
+        target_arch = "aarch64" => {
             ucontext.uc_mcontext.pc as usize
         }
     }
@@ -565,12 +566,13 @@ fn ucontext_pc(ucontext: &libc::ucontext_t) -> usize {
 /// `dead_load_with_context`, so the trampoline needs no help finding it.
 #[cfg(has_mmu_interruption)]
 fn resume_into_task_switch_trampoline(ucontext: &mut libc::ucontext_t, return_address: *const ()) {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "x86_64")] {
+    cfg_select! {
+        target_arch = "x86_64" => {
             ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] =
                 task_switch_trampoline as *const () as i64;
             ucontext.uc_mcontext.gregs[libc::REG_R10 as usize] = return_address as i64;
-        } else if #[cfg(target_arch = "aarch64")] {
+        }
+        target_arch = "aarch64" => {
             ucontext.uc_mcontext.pc = task_switch_trampoline as *const () as u64;
             ucontext.uc_mcontext.regs[9] = return_address as u64;
         }
@@ -708,26 +710,29 @@ pub fn abort_stack_overflow() -> ! {
     reason = "too fiddly to handle and wouldn't help much anyway"
 )]
 unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> TrapRegisters {
-    cfg_if::cfg_if! {
-        if #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64"))] {
+    cfg_select! {
+        all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64") => {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_RIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize,
             }
-        } else if #[cfg(all(target_os = "linux", target_arch = "x86"))] {
+        }
+        all(target_os = "linux", target_arch = "x86") => {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_EIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_EBP as usize] as usize,
             }
-        } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
+        }
+        all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64") => {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.pc as usize,
                 fp: cx.uc_mcontext.regs[29] as usize,
             }
-        } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
+        }
+        all(target_os = "linux", target_arch = "s390x") => {
             // On s390x, SIGILL and SIGFPE are delivered with the PSW address
             // pointing *after* the faulting instruction, while SIGSEGV and
             // SIGBUS are delivered with the PSW address pointing *to* the
@@ -749,7 +754,8 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                     fp: *(cx.uc_mcontext.gregs[15] as *const usize),
                 }
             }
-        } else if #[cfg(all(target_vendor = "apple", target_arch = "x86_64"))] {
+        }
+        all(target_vendor = "apple", target_arch = "x86_64") => {
             unsafe {
                 let cx = &*(cx as *const libc::ucontext_t);
                 TrapRegisters {
@@ -757,7 +763,8 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                     fp: (*cx.uc_mcontext).__ss.__rbp as usize,
                 }
             }
-        } else if #[cfg(all(target_vendor = "apple", target_arch = "aarch64"))] {
+        }
+        all(target_vendor = "apple", target_arch = "aarch64") => {
             unsafe {
                 let cx = &*(cx as *const libc::ucontext_t);
                 TrapRegisters {
@@ -765,37 +772,43 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                     fp: (*cx.uc_mcontext).__ss.__fp as usize,
                 }
             }
-        } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
+        }
+        all(target_os = "freebsd", target_arch = "x86_64") => {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.mc_rip as usize,
                 fp: cx.uc_mcontext.mc_rbp as usize,
             }
-        } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
+        }
+        all(target_os = "linux", target_arch = "riscv64") => {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.__gregs[libc::REG_PC] as usize,
                 fp: cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
             }
-        } else if #[cfg(all(target_os = "freebsd", target_arch = "aarch64"))] {
+        }
+        all(target_os = "freebsd", target_arch = "aarch64") => {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.mc_gpregs.gp_elr as usize,
                 fp: cx.uc_mcontext.mc_gpregs.gp_x[29] as usize,
             }
-        } else if #[cfg(all(target_os = "openbsd", target_arch = "x86_64"))] {
+        }
+        all(target_os = "openbsd", target_arch = "x86_64") => {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.sc_rip as usize,
                 fp: cx.sc_rbp as usize,
             }
-        } else if #[cfg(all(target_os = "linux", target_arch = "arm"))] {
+        }
+        all(target_os = "linux", target_arch = "arm") => {
             let cx = unsafe { &*(cx as *const libc::ucontext_t) };
             TrapRegisters {
                 pc: cx.uc_mcontext.arm_pc as usize,
                 fp: cx.uc_mcontext.arm_fp as usize,
             }
-        } else {
+        }
+        _ => {
             compile_error!("unsupported platform");
             panic!();
         }
@@ -805,28 +818,31 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
 /// Updates the siginfo context stored in `cx` to resume to `handler` upon
 /// resumption while returning from the signal handler.
 unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
-    cfg_if::cfg_if! {
-        if #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64"))] {
+    cfg_select! {
+        all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64") => {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.gregs[libc::REG_RIP as usize] = handler.pc as _;
             cx.uc_mcontext.gregs[libc::REG_RSP as usize] = handler.sp as _;
             cx.uc_mcontext.gregs[libc::REG_RBP as usize] = handler.fp as _;
             cx.uc_mcontext.gregs[libc::REG_RAX as usize] = 0;
             cx.uc_mcontext.gregs[libc::REG_RDX as usize] = 0;
-        } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
+        }
+        all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64") => {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.pc = handler.pc as _;
             cx.uc_mcontext.sp = handler.sp as _;
             cx.uc_mcontext.regs[29] = handler.fp as _;
             cx.uc_mcontext.regs[0] = 0;
             cx.uc_mcontext.regs[1] = 0;
-        } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
+        }
+        all(target_os = "linux", target_arch = "s390x") => {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.psw.addr = handler.pc as _;
             cx.uc_mcontext.gregs[15] = handler.sp as _;
             cx.uc_mcontext.gregs[6] = 0;
             cx.uc_mcontext.gregs[7] = 0;
-        } else if #[cfg(all(target_vendor = "apple", target_arch = "x86_64"))] {
+        }
+        all(target_vendor = "apple", target_arch = "x86_64") => {
             unsafe {
                 let cx = cx.cast::<libc::ucontext_t>().as_mut().unwrap();
                 let cx = cx.uc_mcontext.as_mut().unwrap();
@@ -836,7 +852,8 @@ unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
                 cx.__ss.__rax = 0;
                 cx.__ss.__rdx = 0;
             }
-        } else if #[cfg(all(target_vendor = "apple", target_arch = "aarch64"))] {
+        }
+        all(target_vendor = "apple", target_arch = "aarch64") => {
             unsafe {
                 let cx = cx.cast::<libc::ucontext_t>().as_mut().unwrap();
                 let cx = cx.uc_mcontext.as_mut().unwrap();
@@ -846,35 +863,40 @@ unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
                 cx.__ss.__x[0] = 0;
                 cx.__ss.__x[1] = 0;
             }
-        } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
+        }
+        all(target_os = "freebsd", target_arch = "x86_64") => {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.mc_rip = handler.pc as _;
             cx.uc_mcontext.mc_rbp = handler.fp as _;
             cx.uc_mcontext.mc_rsp = handler.sp as _;
             cx.uc_mcontext.mc_rax = 0;
             cx.uc_mcontext.mc_rdx = 0;
-        } else if #[cfg(all(target_os = "freebsd", target_arch = "aarch64"))] {
+        }
+        all(target_os = "freebsd", target_arch = "aarch64") => {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.mc_gpregs.gp_elr = handler.pc as _;
             cx.uc_mcontext.mc_gpregs.gp_sp = handler.sp as _;
             cx.uc_mcontext.mc_gpregs.gp_x[29] = handler.fp as _;
             cx.uc_mcontext.mc_gpregs.gp_x[0] = 0;
             cx.uc_mcontext.mc_gpregs.gp_x[1] = 0;
-        } else if #[cfg(all(target_os = "openbsd", target_arch = "x86_64"))] {
+        }
+        all(target_os = "openbsd", target_arch = "x86_64") => {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.sc_rip = handler.pc as _;
             cx.sc_rbp = handler.fp as _;
             cx.sc_rsp = handler.sp as _;
             cx.sc_rax = 0;
             cx.sc_rdx = 0;
-        } else if #[cfg(all(target_os = "linux", target_arch = "riscv64"))] {
+        }
+        all(target_os = "linux", target_arch = "riscv64") => {
             let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
             cx.uc_mcontext.__gregs[libc::REG_PC] = handler.pc as _;
             cx.uc_mcontext.__gregs[libc::REG_S0] = handler.fp as _;
             cx.uc_mcontext.__gregs[libc::REG_SP] = handler.sp as _;
             cx.uc_mcontext.__gregs[libc::REG_A0] = 0;
             cx.uc_mcontext.__gregs[libc::REG_A0 + 1] = 0;
-        } else {
+        }
+        _ => {
             compile_error!("unsupported platform");
             panic!();
         }
@@ -1033,7 +1055,28 @@ pub fn lazy_per_thread_init() {
     impl Drop for Stack {
         fn drop(&mut self) {
             unsafe {
-                // Deallocate the stack memory.
+                // Before unmapping our memory make sure that it's no longer
+                // listed as our sigaltstack. While it's pretty unlikely we'll
+                // fault during thread teardown we don't want to make things
+                // worse by then additionally using an unmapped stack.
+                //
+                // Also this seems to help with pre-LLVM-23 asan configuration,
+                // see #13857 for some more details.
+                let new_stack = libc::stack_t {
+                    ss_sp: ptr::null_mut(),
+                    ss_flags: libc::SS_DISABLE,
+                    ss_size: MIN_STACK_SIZE,
+                };
+                let r = libc::sigaltstack(&new_stack, ptr::null_mut());
+                debug_assert_eq!(
+                    r,
+                    0,
+                    "registering new sigaltstack failed: {}",
+                    io::Error::last_os_error()
+                );
+
+                // Deallocate the stack memory now that nothing should be using
+                // it.
                 let r = rustix::mm::munmap(self.mmap_ptr, self.mmap_size);
                 debug_assert!(r.is_ok(), "munmap failed during thread shutdown");
             }

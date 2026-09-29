@@ -71,6 +71,24 @@ impl dsl::Location {
         }
     }
 
+    /// Like [`Self::generate_to_string`], but renders in XED's dialect;
+    /// `None` when the operand prints identically in both.
+    #[must_use]
+    pub fn generate_to_string_xed(&self, _extension: dsl::Extension) -> Option<String> {
+        use dsl::Location::*;
+        match self {
+            rm8 | rm16 | rm32 | rm64 => {
+                let size = self.generate_size().expect("r/m operands have a size");
+                Some(format!("self.{self}.to_string_xed({size})"))
+            }
+            xmm_m8 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 => {
+                Some(format!("self.{self}.to_string_xed()"))
+            }
+            m8 | m16 | m32 | m64 | m128 => Some(format!("alloc::format!(\"{{:#}}\", self.{self})")),
+            _ => None,
+        }
+    }
+
     /// `Size::<operand size>`
     #[must_use]
     fn generate_size(&self) -> Option<&str> {

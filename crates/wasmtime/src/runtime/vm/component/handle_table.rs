@@ -1,4 +1,4 @@
-use super::{TypedResource, TypedResourceIndex};
+use super::{Scope, TypedResource, TypedResourceIndex};
 use crate::prelude::TryVec;
 use crate::{Result, bail};
 use core::mem;
@@ -36,7 +36,7 @@ pub enum RemovedResource {
     /// An `own` resource was removed with the specified `rep`
     Own { rep: u32 },
     /// A `borrow` resource was removed originally created within `scope`.
-    Borrow { scope: u32 },
+    Borrow { scope: Scope },
 }
 
 /// Different kinds of waitables returned by [`HandleTable::waitable_rep`].
@@ -68,7 +68,7 @@ enum Slot {
     /// count of the `scope`.
     ResourceBorrow {
         resource: TypedResource,
-        scope: u32,
+        scope: Scope,
     },
 
     /// Represents a host task handle.
@@ -198,7 +198,7 @@ impl HandleTable {
     /// Inserts a new `borrow` resource into this table whose type/rep are
     /// specified by `resource`. The `scope` specified is used by
     /// `CallContexts` to manage lending information.
-    pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: u32) -> Result<u32> {
+    pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: Scope) -> Result<u32> {
         self.insert(Slot::ResourceBorrow { resource, scope })
     }
 
@@ -458,25 +458,27 @@ impl HandleTable {
         Ok(ret)
     }
 
-    /// Removes the writable future handle from `idx`, returning its `rep`.
+    /// Removes the writable future handle from `idx`, returning its `rep` along
+    /// with whether the writer is "done" (i.e. it either successfully wrote a
+    /// value or was notified that the readable end was dropped).
     pub fn future_remove_writable(
         &mut self,
         expected_ty: TypeFutureTableIndex,
         idx: u32,
-    ) -> Result<u32> {
+    ) -> Result<(u32, bool)> {
         let ret = match self.get_mut(idx)? {
             Slot::Future { rep, ty, state } => {
                 if *ty != expected_ty {
                     bail!("handle is a future of a different type");
                 }
-                match state {
-                    TransmitLocalState::Write { .. } => {}
+                let is_done = match state {
+                    TransmitLocalState::Write { done } => *done,
                     TransmitLocalState::Read { .. } => {
                         bail!("passed read end to `future.drop-writable`")
                     }
                     TransmitLocalState::Busy => bail!("cannot drop busy future"),
-                }
-                *rep
+                };
+                (*rep, is_done)
             }
             _ => bail!("handle is not a future"),
         };

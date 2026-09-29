@@ -55,7 +55,7 @@ impl Response {
         self,
         store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), Error>> + Send + 'static,
-        getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+        getter: impl FnMut(&mut T) -> WasiHttpCtxView<'_> + Clone + Unpin + Send + 'static,
     ) -> wasmtime::Result<http::Response<UnsyncBoxBody<Bytes, Error>>> {
         let res = http::Response::try_from(self)?;
         let (res, body) = res.into_parts();
@@ -94,7 +94,7 @@ impl Response {
         res: http::Response<T>,
     ) -> (
         Self,
-        impl Future<Output = Result<(), Error>> + Send + 'static,
+        impl Future<Output = Result<(), Error>> + Send + 'static + use<T>,
     )
     where
         T: http_body::Body<Data = Bytes> + Send + 'static,

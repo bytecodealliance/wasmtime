@@ -7,11 +7,11 @@
   (elem (ref i31) (item (ref.i31 (i32.const 0))) (item (ref.i31 (i32.const 1))))
 )
 ;; function u2415919104:1(i64 vmctx, i64, i64, i64) -> i8 system_v {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108944 "VMStoreContext+0x50"
-;;     region2 = 67108936 "VMStoreContext+0x48"
-;;     region3 = 67108952 "VMStoreContext+0x58"
-;;     region4 = 67109008 "VMStoreContext+0x90"
+;;     region0 = 123 ""
+;;     region1 = 209 ""
+;;     region2 = 231 ""
+;;     region3 = 106 ""
+;;     region4 = 34 ""
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u2415919104:0 sig0
 ;;
@@ -40,7 +40,7 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
-;;     region0 = 2080374784 "ElementSegment"
+;;     region0 = 116 ""
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u805306368:4 sig0
 ;;

@@ -139,6 +139,7 @@ impl Config {
             extended_const,
             wide_arithmetic,
             branch_hinting,
+            compact_imports,
             component_model_async,
             component_model_more_async_builtins,
             component_model_async_stackful,
@@ -146,8 +147,10 @@ impl Config {
             component_model_error_context,
             component_model_gc,
             component_model_map,
+            component_model_memory64,
             component_model_fixed_length_lists,
             component_model_implements,
+            component_model_canonical_names,
             simd,
             exceptions,
             legacy_exceptions: _,
@@ -174,9 +177,12 @@ impl Config {
             component_model_error_context.unwrap_or(false);
         self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
         self.module_config.component_model_map = component_model_map.unwrap_or(false);
+        self.module_config.component_model_memory64 = component_model_memory64.unwrap_or(false);
         self.module_config.component_model_fixed_length_lists =
             component_model_fixed_length_lists.unwrap_or(false);
         self.module_config.component_model_implements = component_model_implements.unwrap_or(false);
+        self.module_config.component_model_canonical_names =
+            component_model_canonical_names.unwrap_or(false);
         self.module_config.stack_switching = stack_switching.unwrap_or(false);
         self.wasmtime.branch_hinting = branch_hinting.unwrap_or(false);
 
@@ -186,6 +192,7 @@ impl Config {
         config.bulk_memory_enabled = bulk_memory.unwrap_or(false);
         config.multi_value_enabled = true;
         config.wide_arithmetic_enabled = wide_arithmetic.unwrap_or(false);
+        config.compact_imports_enabled = compact_imports.unwrap_or(false);
         config.memory64_enabled = memory64.unwrap_or(false);
         config.relaxed_simd_enabled = relaxed_simd.unwrap_or(false);
         config.simd_enabled = config.relaxed_simd_enabled || simd.unwrap_or(false);
@@ -196,9 +203,11 @@ impl Config {
         config.gc_enabled = gc.unwrap_or(false);
         config.reference_types_enabled = config.gc_enabled
             || self.module_config.function_references_enabled
+            || self.module_config.component_model_async
             || reference_types.unwrap_or(false);
         config.extended_const_enabled = extended_const.unwrap_or(false);
-        config.exceptions_enabled = exceptions.unwrap_or(false);
+        config.exceptions_enabled =
+            self.module_config.stack_switching || exceptions.unwrap_or(false);
         if multi_memory.unwrap_or(false) {
             config.max_memories = limits::MEMORIES_PER_MODULE as usize;
         } else {
@@ -329,10 +338,14 @@ impl Config {
             Some(self.module_config.component_model_error_context);
         cfg.wasm.component_model_gc = Some(self.module_config.component_model_gc);
         cfg.wasm.component_model_map = Some(self.module_config.component_model_map);
+        cfg.wasm.component_model_memory64 = Some(self.module_config.component_model_memory64);
         cfg.wasm.component_model_fixed_length_lists =
             Some(self.module_config.component_model_fixed_length_lists);
         cfg.wasm.component_model_implements = Some(self.module_config.component_model_implements);
+        cfg.wasm.component_model_canonical_names =
+            Some(self.module_config.component_model_canonical_names);
         cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
+        cfg.wasm.compact_imports = Some(self.module_config.config.compact_imports_enabled);
         cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
         cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);
         cfg.wasm.fuel = self.wasmtime.consume_fuel.then(|| u64::MAX);
@@ -682,9 +695,7 @@ impl WasmtimeConfig {
                 // module that wasm-smith generates.
                 config.config.relaxed_simd_enabled = false;
                 config.config.gc_enabled = false;
-                config.config.tail_call_enabled = false;
                 config.config.reference_types_enabled = false;
-                config.config.exceptions_enabled = false;
                 config.function_references_enabled = false;
                 config.stack_switching = false;
 
@@ -699,10 +710,8 @@ impl WasmtimeConfig {
                     config.config.simd_enabled = false;
                 }
 
-                // Account for the proposals that are currently only
-                // supported on x64.
+                // Account for the proposals that Winch only supports on x64.
                 if cfg!(target_arch = "aarch64") {
-                    config.config.simd_enabled = false;
                     config.config.wide_arithmetic_enabled = false;
                     config.config.threads_enabled = false;
                 }
@@ -882,9 +891,16 @@ impl WasmtimeConfig {
             mcfg.gc_heap_may_move = None;
 
             // Don't let the initial size of a GC heap exceed the maximum
-            // allowed by the pooling allocator.
+            // allowed by the pooling allocator. Note that these sizes are
+            // rounded up to the wasm page size used by GC at this time as
+            // that's what happens internally.
             if let Some(amt) = mcfg.gc_heap_initial_size {
-                mcfg.gc_heap_initial_size = Some(amt.min(pcfg.max_memory_size as u64));
+                let page_size = 64 * 1024;
+                let amt = amt.next_multiple_of(page_size);
+                // Round down so the GC's round-up-to-page-size doesn't push
+                // this back over the pooling limit.
+                let max = (pcfg.max_memory_size as u64) / page_size * page_size;
+                mcfg.gc_heap_initial_size = Some(amt.min(max));
             }
         }
 

@@ -1,4 +1,4 @@
-use easy_smt::*;
+use cranelift_isle_veri_caching::*;
 
 fn declare(smt: &mut Context, name: String, val: SExpr) -> SExpr {
     smt.declare_const(name.clone(), val).unwrap();
@@ -9,7 +9,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // Generated code.
     let x1 = declare(
         smt,
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(
@@ -21,7 +21,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x2 = declare(
         smt,
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(
@@ -39,7 +39,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x3 = declare(
         smt,
-        format!("x3_{id}", id = id),
+        format!("x3_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(
@@ -57,7 +57,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x4 = declare(
         smt,
-        format!("x4_{id}", id = id),
+        format!("x4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(
@@ -75,7 +75,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x5 = declare(
         smt,
-        format!("x5_{id}", id = id),
+        format!("x5_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(
@@ -93,7 +93,7 @@ pub fn rev64(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let rev64ret = declare(
         smt,
-        format!("rev64ret_{id}", id = id),
+        format!("rev64ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(64)]),
     );
     let _ = smt.assert(smt.eq(
@@ -119,7 +119,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // Generated code.
     let x1 = declare(
         smt,
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(
@@ -131,7 +131,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x2 = declare(
         smt,
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(
@@ -149,7 +149,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x3 = declare(
         smt,
-        format!("x3_{id}", id = id),
+        format!("x3_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(
@@ -167,7 +167,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x4 = declare(
         smt,
-        format!("x4_{id}", id = id),
+        format!("x4_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(
@@ -185,7 +185,7 @@ pub fn rev32(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let rev32ret = declare(
         smt,
-        format!("rev32ret_{id}", id = id),
+        format!("rev32ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(32)]),
     );
     let _ = smt.assert(smt.eq(
@@ -211,7 +211,7 @@ pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // Generated code.
     let x1 = declare(
         smt,
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(
@@ -223,7 +223,7 @@ pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x2 = declare(
         smt,
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(
@@ -235,7 +235,7 @@ pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x3 = declare(
         smt,
-        format!("x3_{id}", id = id),
+        format!("x3_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(
@@ -247,7 +247,7 @@ pub fn rev16(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let rev16ret = declare(
         smt,
-        format!("rev16ret_{id}", id = id),
+        format!("rev16ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(16)]),
     );
     let _ = smt.assert(smt.eq(
@@ -269,7 +269,7 @@ pub fn rev8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // Generated code.
     let x1 = declare(
         smt,
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(
@@ -281,7 +281,7 @@ pub fn rev8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let x2 = declare(
         smt,
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(
@@ -293,7 +293,7 @@ pub fn rev8(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     ));
     let rev8ret = declare(
         smt,
-        format!("rev8ret_{id}", id = id),
+        format!("rev8ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(8)]),
     );
     let _ = smt.assert(smt.eq(
@@ -315,7 +315,7 @@ pub fn rev1(smt: &mut Context, x: SExpr, id: usize) -> SExpr {
     // Generated code.
     let rev1ret = declare(
         smt,
-        format!("rev1ret_{id}", id = id),
+        format!("rev1ret_{id}"),
         smt.list(vec![smt.atoms().und, smt.atom("BitVec"), smt.numeral(1)]),
     );
     let _ = smt.assert(smt.eq(rev1ret, x));

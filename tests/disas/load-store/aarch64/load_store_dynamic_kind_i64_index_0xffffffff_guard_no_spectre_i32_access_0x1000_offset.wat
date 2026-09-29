@@ -25,8 +25,8 @@
 ;;       cmp     x4, x6
 ;;       b.hi    #0x28
 ;;   14: ldr     x8, [x2, #0x38]
-;;       add     x8, x8, #1, lsl #12
-;;       str     w5, [x8, x4]
+;;       add     x8, x8, x4
+;;       str     w5, [x8, #0x1000]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   28: udf     #0xc11f
@@ -38,8 +38,8 @@
 ;;       cmp     x4, x6
 ;;       b.hi    #0x68
 ;;   54: ldr     x8, [x2, #0x38]
-;;       add     x7, x8, #1, lsl #12
-;;       ldr     w2, [x7, x4]
+;;       add     x8, x8, x4
+;;       ldr     w2, [x8, #0x1000]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   68: udf     #0xc11f

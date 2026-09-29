@@ -235,10 +235,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::f1(host).await;
                             Ok(r)
                         })
@@ -251,10 +251,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::f2(host, arg0).await;
                             Ok(r)
                         })
@@ -270,10 +270,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::f3(host, arg0, arg1).await;
                             Ok(r)
                         })
@@ -286,10 +286,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::f4(host).await;
                             Ok((r,))
                         })
@@ -302,10 +302,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::f5(host).await;
                             Ok((r,))
                         })
@@ -321,10 +321,10 @@ pub mod foo {
                             let access_cx = wasmtime::AsContextMut::as_context_mut(
                                 &mut caller,
                             );
-                            let host = wasmtime::component::Access::new(
-                                access_cx,
-                                host_getter,
-                            );
+                            let host = wasmtime::component::Access::<
+                                T,
+                                D,
+                            >::new(access_cx, host_getter);
                             let r = <D as HostWithStore<T>>::f6(host, arg0, arg1, arg2)
                                 .await;
                             Ok((r,))

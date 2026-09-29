@@ -1171,6 +1171,11 @@ pub struct ComponentExtern<'a> {
     pub ty: ComponentItem,
     /// The `(implements "...")` annotation, if present.
     pub implements: Option<&'a str>,
+    /// The `(external-id "...")` annotation, if present.
+    ///
+    /// This is a free-form host-defined identifier and is intended to indicate
+    /// how the host should satisfy an import (or interpret an export).
+    pub external_id: Option<&'a str>,
 }
 
 impl<'a> ComponentExtern<'a> {
@@ -1181,6 +1186,7 @@ impl<'a> ComponentExtern<'a> {
     ) -> Self {
         Self {
             implements: env.data.implements.as_deref(),
+            external_id: env.data.external_id.as_deref(),
             ty: ComponentItem::from(engine, &env.ty, instance_ty),
         }
     }

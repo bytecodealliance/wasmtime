@@ -35,17 +35,17 @@ TEST(types, component_resource) {
                        .type();
 
   EXPECT_EQ(component.import_count(engine), 1);
-  auto ty = component.import_get(engine, "x")->resource();
+  auto ty = component.import_get(engine, "x")->type().resource();
   auto i = *component.import_nth(engine, 0);
   EXPECT_EQ(i.first, "x");
-  EXPECT_EQ(ty, i.second.resource());
+  EXPECT_EQ(ty, i.second.type().resource());
 
   EXPECT_EQ(component.export_count(engine), 1);
 
-  EXPECT_EQ(component.export_get(engine, "x")->resource(), ty);
+  EXPECT_EQ(component.export_get(engine, "x")->type().resource(), ty);
   auto e = *component.import_nth(engine, 0);
   EXPECT_EQ(e.first, "x");
-  EXPECT_EQ(ty, e.second.resource());
+  EXPECT_EQ(ty, e.second.type().resource());
 }
 
 TEST(types, component_instance) {
@@ -60,14 +60,14 @@ TEST(types, component_instance) {
                        .unwrap()
                        .type();
 
-  auto ty = component.import_get(engine, "x")->component_instance();
+  auto ty = component.import_get(engine, "x")->type().component_instance();
   EXPECT_EQ(ty.export_count(engine), 1);
-  auto resource_ty = ty.export_get(engine, "t")->resource();
-  EXPECT_EQ(resource_ty, ty.export_nth(engine, 0)->second.resource());
+  auto resource_ty = ty.export_get(engine, "t")->type().resource();
+  EXPECT_EQ(resource_ty, ty.export_nth(engine, 0)->second.type().resource());
   EXPECT_EQ("t", ty.export_nth(engine, 0)->first);
 
-  auto ty2 = component.export_get(engine, "x")->component_instance();
-  EXPECT_EQ(resource_ty, ty2.export_get(engine, "t")->resource());
+  auto ty2 = component.export_get(engine, "x")->type().component_instance();
+  EXPECT_EQ(resource_ty, ty2.export_get(engine, "t")->type().resource());
 }
 
 TEST(types, component_func) {
@@ -81,7 +81,7 @@ TEST(types, component_func) {
                        .unwrap()
                        .type();
 
-  auto ty = component.import_get(engine, "x")->component_func();
+  auto ty = component.import_get(engine, "x")->type().component_func();
   EXPECT_EQ(ty.param_count(), 0);
   EXPECT_FALSE(ty.result());
 
@@ -93,7 +93,7 @@ TEST(types, component_func) {
                   .unwrap()
                   .type();
 
-  ty = component.import_get(engine, "x")->component_func();
+  ty = component.import_get(engine, "x")->type().component_func();
   EXPECT_EQ(ty.param_count(), 1);
   EXPECT_EQ(ty.param_nth(0)->first, "x");
   EXPECT_TRUE(ty.param_nth(0)->second.is_u32());
@@ -114,7 +114,7 @@ TEST(types, module_type) {
                        .unwrap();
   auto cty = component.type();
 
-  auto ty = cty.import_get(engine, "x")->module();
+  auto ty = cty.import_get(engine, "x")->type().module();
   EXPECT_EQ(ty.import_count(engine), 0);
   EXPECT_EQ(ty.export_count(engine), 0);
 
@@ -129,7 +129,7 @@ TEST(types, module_type) {
                   .unwrap();
   cty = component.type();
 
-  ty = cty.import_get(engine, "x")->module();
+  ty = cty.import_get(engine, "x")->type().module();
   EXPECT_EQ(ty.import_count(engine), 1);
   auto import = *ty.import_nth(engine, 0);
   EXPECT_EQ(import.ref().module(), "");
@@ -151,7 +151,11 @@ TEST(types, module_type) {
 static ValType result(const char *wat) {
   Engine engine;
   auto component = Component::compile(engine, wat).unwrap();
-  return *component.type().import_get(engine, "f")->component_func().result();
+  return *component.type()
+              .import_get(engine, "f")
+              ->type()
+              .component_func()
+              .result();
 }
 
 TEST(types, valtype_primitives) {
@@ -196,8 +200,11 @@ TEST(types, valtype_map) {
       Component::compile(
           engine, "(component (import \"f\" (func (result (map u32 string)))))")
           .unwrap();
-  auto ty =
-      *component.type().import_get(engine, "f")->component_func().result();
+  auto ty = *component.type()
+                 .import_get(engine, "f")
+                 ->type()
+                 .component_func()
+                 .result();
   EXPECT_TRUE(ty.is_map());
   auto map_ty = ty.map();
   EXPECT_TRUE(map_ty.key().is_u32());
@@ -345,4 +352,102 @@ TEST(types, func_result) {
   auto result = ty.result();
   ASSERT_TRUE(result.has_value());
   EXPECT_TRUE(result->is_u32());
+}
+
+TEST(types, component_extern_annotations) {
+  Config config;
+  config.wasm_component_model_implements(true);
+  Engine engine(std::move(config));
+
+  auto component = Component::compile(engine, R"(
+(component
+  (import "a" (implements "a1:b1/c1") (external-id "user-db-prod:region-a")
+    (instance $a))
+  (import "b" (external-id "user-db-prod:region-b") (instance $b
+    (export "f" (external-id "func-b-f") (func))
+    (export "g" (implements "x:y/z@1.2.0") (instance))
+  ))
+  (import "c" (instance $c))
+  (import "v" (implements "a:b/c@1.2.0") (instance))
+  (export "d" (implements "a2:b2/c2") (external-id "queue-1") (instance $a))
+)
+      )")
+                       .unwrap()
+                       .type();
+
+  EXPECT_EQ(component.import_count(engine), 4);
+  EXPECT_EQ(component.export_count(engine), 1);
+
+  // Both annotations present on a component import.
+  auto a = *component.import_get(engine, "a");
+  EXPECT_TRUE(a.type().is_component_instance());
+  EXPECT_EQ(a.implements(), "a1:b1/c1");
+  EXPECT_EQ(a.external_id(), "user-db-prod:region-a");
+  EXPECT_TRUE(a.is_implements("a1:b1/c1"));
+  EXPECT_FALSE(a.is_implements("a:b/c"));
+  EXPECT_FALSE(a.is_implements("a1:b1/c1@1.0.0"));
+
+  // Only `external-id` present, and annotations on instance type exports.
+  auto b = *component.import_get(engine, "b");
+  EXPECT_FALSE(b.implements().has_value());
+  EXPECT_FALSE(b.is_implements("a1:b1/c1"));
+  EXPECT_EQ(b.external_id(), "user-db-prod:region-b");
+  auto b_ty = b.type().component_instance();
+  EXPECT_EQ(b_ty.export_count(engine), 2);
+  auto f = *b_ty.export_get(engine, "f");
+  EXPECT_TRUE(f.type().is_component_func());
+  EXPECT_FALSE(f.implements().has_value());
+  EXPECT_EQ(f.external_id(), "func-b-f");
+  auto [g_name, g] = *b_ty.export_nth(engine, 1);
+  EXPECT_EQ(g_name, "g");
+  EXPECT_TRUE(g.type().is_component_instance());
+  EXPECT_EQ(g.implements(), "x:y/z@1.2.0");
+  EXPECT_TRUE(g.is_implements("x:y/z@1.0.0"));
+  EXPECT_FALSE(g.external_id().has_value());
+  EXPECT_FALSE(b_ty.export_get(engine, "nope").has_value());
+  EXPECT_FALSE(b_ty.export_nth(engine, 2).has_value());
+
+  // No annotations at all.
+  auto c = *component.import_get(engine, "c");
+  EXPECT_FALSE(c.implements().has_value());
+  EXPECT_FALSE(c.external_id().has_value());
+  EXPECT_FALSE(c.is_implements(""));
+  EXPECT_FALSE(c.is_implements("c"));
+
+  // Semver-compatible matching of `implements`.
+  auto [v_name, v] = *component.import_nth(engine, 3);
+  EXPECT_EQ(v_name, "v");
+  EXPECT_EQ(v.implements(), "a:b/c@1.2.0");
+  EXPECT_FALSE(v.is_implements("a:b/c"));
+  EXPECT_TRUE(v.is_implements("a:b/c@1.2.0"));
+  EXPECT_TRUE(v.is_implements("a:b/c@1.3.0"));
+  EXPECT_TRUE(v.is_implements("a:b/c@1.0.0"));
+  EXPECT_FALSE(v.is_implements("a:b/c@2.0.0"));
+  EXPECT_FALSE(component.import_get(engine, "nope").has_value());
+  EXPECT_FALSE(component.import_nth(engine, 4).has_value());
+
+  // Annotations on component exports, via both lookup methods.
+  auto d = *component.export_get(engine, "d");
+  EXPECT_TRUE(d.type().is_component_instance());
+  EXPECT_EQ(d.implements(), "a2:b2/c2");
+  EXPECT_EQ(d.external_id(), "queue-1");
+  EXPECT_TRUE(d.is_implements("a2:b2/c2"));
+  auto [d_name, d2] = *component.export_nth(engine, 0);
+  EXPECT_EQ(d_name, "d");
+  EXPECT_EQ(d2.implements(), "a2:b2/c2");
+  EXPECT_EQ(d2.external_id(), "queue-1");
+  EXPECT_FALSE(component.export_get(engine, "nope").has_value());
+  EXPECT_FALSE(component.export_nth(engine, 1).has_value());
+
+  // Copies and assignment preserve everything.
+  ComponentExtern a_copy = a;
+  EXPECT_TRUE(a_copy.type().is_component_instance());
+  EXPECT_EQ(a_copy.implements(), "a1:b1/c1");
+  EXPECT_EQ(a_copy.external_id(), "user-db-prod:region-a");
+  EXPECT_TRUE(a_copy.is_implements("a1:b1/c1"));
+  a_copy = c;
+  EXPECT_FALSE(a_copy.implements().has_value());
+  EXPECT_FALSE(a_copy.external_id().has_value());
+  ComponentExtern a_moved = std::move(a);
+  EXPECT_EQ(a_moved.implements(), "a1:b1/c1");
 }

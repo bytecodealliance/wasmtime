@@ -12,7 +12,6 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-cfg-if = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }
 

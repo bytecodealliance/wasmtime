@@ -1,0 +1,184 @@
+; Cranelift-generated trampolines must agree with Winch about who pops
+; incoming stack arguments, including indirect calls.
+test compile precise-output
+target x86_64
+
+function %callee(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 winch {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64):
+    v10 = iadd v0, v9
+    return v10
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq <offset:0>+-8(%rbp), %rdx
+;   leaq (%rdi, %rdx), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq $0x20
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq 0x28(%rbp), %rdx
+;   leaq (%rdi, %rdx), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq $0x20
+
+function %caller() -> i64 system_v {
+    sig0 = (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 winch
+    fn0 = colocated %callee sig0
+block0:
+    v0 = iconst.i64 42
+    v1 = call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    v2 = iadd v1, v0
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %rbx, 0x20(%rsp)
+;   movq %r12, 0x28(%rsp)
+;   movq %r13, 0x30(%rsp)
+;   movq %r14, 0x38(%rsp)
+;   movq %r15, 0x40(%rsp)
+; block0:
+;   movl $0x2a, %r9d
+;   movq %r9, (%rsp)
+;   movq %r9, 8(%rsp)
+;   movq %r9, 0x10(%rsp)
+;   movq %r9, 0x18(%rsp)
+;   movq %r9, %rcx
+;   movq %r9, %rdx
+;   movq %r9, %rsi
+;   movq %r9, %rdi
+;   movq %r9, %r8
+;   call    TestCase(%callee)
+;   leaq 0x2a(%rax), %rax
+;   movq 0x20(%rsp), %rbx
+;   movq 0x28(%rsp), %r12
+;   movq 0x30(%rsp), %r13
+;   movq 0x38(%rsp), %r14
+;   movq 0x40(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %rbx, 0x20(%rsp)
+;   movq %r12, 0x28(%rsp)
+;   movq %r13, 0x30(%rsp)
+;   movq %r14, 0x38(%rsp)
+;   movq %r15, 0x40(%rsp)
+; block1: ; offset 0x21
+;   movl $0x2a, %r9d
+;   movq %r9, (%rsp)
+;   movq %r9, 8(%rsp)
+;   movq %r9, 0x10(%rsp)
+;   movq %r9, 0x18(%rsp)
+;   movq %r9, %rcx
+;   movq %r9, %rdx
+;   movq %r9, %rsi
+;   movq %r9, %rdi
+;   movq %r9, %r8
+;   callq 0x4e ; reloc_external CallPCRel4 %callee -4
+;   subq $0x20, %rsp
+;   addq $0x2a, %rax
+;   movq 0x20(%rsp), %rbx
+;   movq 0x28(%rsp), %r12
+;   movq 0x30(%rsp), %r13
+;   movq 0x38(%rsp), %r14
+;   movq 0x40(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %indirect_caller(i64) -> i64 system_v {
+    sig0 = (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 winch
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = call_indirect sig0, v0(v1, v1, v1, v1, v1, v1, v1, v1, v1, v1)
+    v3 = iadd v2, v1
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %rbx, 0x20(%rsp)
+;   movq %r12, 0x28(%rsp)
+;   movq %r13, 0x30(%rsp)
+;   movq %r14, 0x38(%rsp)
+;   movq %r15, 0x40(%rsp)
+; block0:
+;   movl $0x2a, %r9d
+;   movq %r9, (%rsp)
+;   movq %r9, 8(%rsp)
+;   movq %r9, 0x10(%rsp)
+;   movq %r9, 0x18(%rsp)
+;   movq %rdi, %r10
+;   movq %r9, %rcx
+;   movq %r9, %rdx
+;   movq %r9, %rsi
+;   movq %r9, %rdi
+;   movq %r9, %r8
+;   call    *%r10
+;   leaq 0x2a(%rax), %rax
+;   movq 0x20(%rsp), %rbx
+;   movq 0x28(%rsp), %r12
+;   movq 0x30(%rsp), %r13
+;   movq 0x38(%rsp), %r14
+;   movq 0x40(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x50, %rsp
+;   movq %rbx, 0x20(%rsp)
+;   movq %r12, 0x28(%rsp)
+;   movq %r13, 0x30(%rsp)
+;   movq %r14, 0x38(%rsp)
+;   movq %r15, 0x40(%rsp)
+; block1: ; offset 0x21
+;   movl $0x2a, %r9d
+;   movq %r9, (%rsp)
+;   movq %r9, 8(%rsp)
+;   movq %r9, 0x10(%rsp)
+;   movq %r9, 0x18(%rsp)
+;   movq %rdi, %r10
+;   movq %r9, %rcx
+;   movq %r9, %rdx
+;   movq %r9, %rsi
+;   movq %r9, %rdi
+;   movq %r9, %r8
+;   callq *%r10
+;   subq $0x20, %rsp
+;   addq $0x2a, %rax
+;   movq 0x20(%rsp), %rbx
+;   movq 0x28(%rsp), %r12
+;   movq 0x30(%rsp), %r13
+;   movq 0x38(%rsp), %r14
+;   movq 0x40(%rsp), %r15
+;   addq $0x50, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq

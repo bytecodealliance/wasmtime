@@ -1,10 +1,10 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     fs::File,
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{self, Duration},
 };
 
@@ -13,6 +13,7 @@ use cranelift_isle::{
     sema::{Term, TermId},
     trie_again::RuleSet,
 };
+use cranelift_isle_veri_caching::{self as caching, Cache};
 use rayon::prelude::*;
 use serde::Serialize;
 
@@ -22,11 +23,16 @@ use crate::{
     expand::{Chaining, Expander, Expansion},
     program::Program,
     solver::{Applicability, Dialect, Solver, Verification},
+    spec_check,
     type_inference::{self, Assignment, Choice, type_constraint_system},
     veri::Conditions,
 };
 
 const LOG_DIR: &str = ".veriisle";
+
+/// Cap on how many counterexamples `--print-counterexample` writes to the
+/// summary.
+const MAX_PRINTED_COUNTEREXAMPLES: usize = 25;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SolverBackend {
@@ -224,7 +230,7 @@ impl SolverRule {
     /// Build a rule that selects the solver backend for expansions with an
     /// explicit `solver_<name>` tag.
     fn solver_tag(solver_backend: SolverBackend) -> Self {
-        let tag = format!("solver_{}", solver_backend);
+        let tag = format!("solver_{solver_backend}");
         Self {
             predicate: ExpansionPredicate::Tagged(tag),
             solver_backend,
@@ -294,6 +300,9 @@ pub struct ExpansionReport {
     pub solver: String,
     /// Count of type instantiations that failed at type inference.
     pub failed_type_inference: usize,
+    /// Count of type instantiations that type checked but were not sent to the
+    /// solver, because the solver was skipped.
+    pub skipped_type_instantiations: usize,
     /// Solver reports from type instantiations.
     pub type_instantiations: Vec<TypeInstantationReport>,
     pub duration: Duration,
@@ -343,6 +352,7 @@ impl ExpansionReport {
             tags,
             solver: Default::default(),
             failed_type_inference: 0,
+            skipped_type_instantiations: 0,
             type_instantiations: Vec::new(),
             duration: Default::default(),
         })
@@ -420,6 +430,7 @@ pub struct FailureRecord {
     pub description: String,
     pub instantiation_index: usize,
     pub failure_path: PathBuf,
+    pub counterexample: Option<String>,
 }
 
 /// An expansion that could not be processed at all (for example, because a term
@@ -438,6 +449,11 @@ pub struct RunSummary {
     pub total_expansions: usize,
     pub total_instantiations: usize,
     pub in_scope: usize,
+    /// In-scope expansions for which type inference rejected every candidate
+    /// instantiation, so no query reached the solver. Only populated under
+    /// `--debug`, and only reported when populated.
+    pub no_instantiations: Option<usize>,
+    pub spec_conflicts: usize,
     pub applicable: usize,
     pub success: usize,
     pub failure: usize,
@@ -449,6 +465,9 @@ impl RunSummary {
         println!("============================= Verification summary ============================");
         println!("Total expansions:    {}", self.total_expansions);
         println!("In scope expansions: {}", self.in_scope);
+        if let Some(no_instantiations) = self.no_instantiations {
+            println!("No instantiations:   {no_instantiations}");
+        }
         println!("Type instantiations: {}", self.total_instantiations);
         println!("Applicable:          {}", self.applicable);
         println!("Verification passed: {}", self.success);
@@ -457,6 +476,27 @@ impl RunSummary {
         println!("===============================================================================");
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct RunFailure {
+    pub summary: RunSummary,
+    pub verification_failures: usize,
+    pub expansion_errors: usize,
+}
+
+impl std::fmt::Display for RunFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "verification failures: {failures}, expansion errors: {errors}, spec type conflicts: {conflicts}",
+            failures = self.verification_failures,
+            errors = self.expansion_errors,
+            conflicts = self.summary.spec_conflicts,
+        )
+    }
+}
+
+impl std::error::Error for RunFailure {}
 
 #[derive(Serialize)]
 pub struct Report {
@@ -478,6 +518,12 @@ pub struct Runner {
     prog: Program,
     term_rule_sets: HashMap<TermId, RuleSet>,
 
+    /// Type check findings for every spec in the program, computed once at
+    /// construction. The check needs only the parsed specs, so it does not
+    /// depend on the expansion scope: a spec that no configuration reaches is
+    /// covered the same as one that every configuration does.
+    spec_findings: Vec<spec_check::Finding>,
+
     /// Optional single root term to scope expansion to. If `None`, expansion is
     /// seeded from every term that has rules (all paths from all roots).
     root_term: Option<String>,
@@ -488,7 +534,11 @@ pub struct Runner {
     log_dir: PathBuf,
     skip_solver: bool,
     results_to_log_dir: bool,
+    print_counterexample: bool,
     debug: bool,
+
+    /// Shared cache of SMT query results (None = no caching).
+    cache: Option<Arc<Cache>>,
 }
 
 impl Runner {
@@ -496,9 +546,11 @@ impl Runner {
         let expand_internal_extractors = false;
         let prog = Program::from_files(inputs, expand_internal_extractors)?;
         let term_rule_sets: HashMap<_, _> = prog.build_trie()?.into_iter().collect();
+        let spec_findings = check_all_specs(&prog);
         Ok(Self {
             prog,
             term_rule_sets,
+            spec_findings,
             root_term: None,
             filters: Vec::new(),
             default_solver_backend: SolverBackend::CVC5,
@@ -507,7 +559,9 @@ impl Runner {
             log_dir: PathBuf::from(LOG_DIR),
             results_to_log_dir: false,
             skip_solver: false,
+            print_counterexample: false,
             debug: false,
+            cache: None,
         })
     }
 
@@ -590,12 +644,21 @@ impl Runner {
         self.results_to_log_dir = enabled;
     }
 
+    pub fn set_print_counterexample(&mut self, enabled: bool) {
+        self.print_counterexample = enabled;
+    }
+
     pub fn skip_solver(&mut self, skip: bool) {
         self.skip_solver = skip;
     }
 
     pub fn debug(&mut self, debug: bool) {
         self.debug = debug;
+    }
+
+    /// Enable caching with the given cache.
+    pub fn set_cache(&mut self, cache: Arc<Cache>) {
+        self.cache = Some(cache);
     }
 
     pub fn run(&self) -> Result<RunSummary> {
@@ -663,6 +726,25 @@ impl Runner {
         let expansion_terms: Vec<Vec<TermId>> =
             expansions.iter().map(|e| e.terms(&self.prog)).collect();
 
+        // Report the spec type conflicts found when the runner was built,
+        // before verifying anything.
+        let spec_conflicts = self.report_spec_findings();
+        if spec_conflicts > 0 {
+            let summary = RunSummary {
+                total_expansions: expansions.len(),
+                in_scope: included.iter().filter(|&&b| b).count(),
+                spec_conflicts,
+                ..Default::default()
+            };
+            summary.print();
+            return Err(RunFailure {
+                summary,
+                verification_failures: 0,
+                expansion_errors: 0,
+            }
+            .into());
+        }
+
         // Set of "live" root terms: those reachable from a genuine top-level
         // root via *included* expansion chains. An expansion error whose root
         // term is not live is only reachable to the right of an excluded
@@ -687,7 +769,7 @@ impl Runner {
                 // expansion that has no spec) is recorded and reported rather
                 // than aborting the whole run, so that one un-verifiable
                 // expansion does not hide coverage of all the others.
-                let expansion_log_dir = self.log_dir.join("expansions").join(format!("{:05}", i));
+                let expansion_log_dir = self.log_dir.join("expansions").join(format!("{i:05}"));
                 match self.verify_expansion(expansion, i, expansion_log_dir.clone(), &failures) {
                     Ok(report) => Ok(Some(report)),
                     Err(err) => {
@@ -749,12 +831,36 @@ impl Runner {
                 "=== VERIFICATION FAILURES ({n}) ===",
                 n = verification_failures.len()
             );
+            let mut printed = 0;
             for failure in &verification_failures {
                 let line = format_line(failure);
                 eprintln!("FAILURE {line}");
                 if let Some(f) = summary.as_mut() {
                     let _ = writeln!(f, "{line}");
                 }
+
+                // With `--print-counterexample`, follow each failure with the
+                // model the solver found
+                let Some(counterexample) = &failure.counterexample else {
+                    continue;
+                };
+                if printed < MAX_PRINTED_COUNTEREXAMPLES {
+                    eprintln!(
+                        "#{id}\t{description}\tinstantiation={inst}",
+                        id = failure.expansion_id,
+                        description = failure.description,
+                        inst = failure.instantiation_index,
+                    );
+                    eprintln!("model:");
+                    eprint!("{counterexample}");
+                    printed += 1;
+                }
+            }
+            if printed > 0 && verification_failures.len() > printed {
+                eprintln!(
+                    "... and {n} more counterexamples not printed; see the failure.out files.",
+                    n = verification_failures.len() - printed
+                );
             }
             log::warn!(
                 "verification failures: {n}",
@@ -831,15 +937,58 @@ impl Runner {
             log::info!("suppressed expansion errors: {n}", n = suppressed.len());
         }
 
+        // Under `--debug`, report expansions that were processed without error
+        // but produced no type instantiations at all: every candidate was
+        // rejected by type inference, so nothing was handed to the solver. They
+        // contribute no passes and no failures, so a spec that can never be
+        // instantiated otherwise looks the same as a verified one. Not every
+        // entry is a defect -- a rule guard can make a chained term's
+        // instantiation unreachable -- which is why this is a debugging aid
+        // rather than part of the normal summary.
+        let no_instantiations = if self.debug {
+            let uninstantiated: Vec<&ExpansionReport> = expansion_reports
+                .iter()
+                .filter(|report| report.type_instantiations.is_empty())
+                .collect();
+            if !uninstantiated.is_empty() {
+                let mut summary =
+                    Self::open_log_file(self.log_dir.clone(), "no_instantiations.out").ok();
+                for report in &uninstantiated {
+                    let line = format!(
+                        "#{id}\t{description}\t(type inference rejected {failed} instantiation(s))",
+                        id = report.id,
+                        description = report.description,
+                        failed = report.failed_type_inference,
+                    );
+                    if let Some(f) = summary.as_mut() {
+                        let _ = writeln!(f, "{line}");
+                    }
+                }
+                log::debug!(
+                    "expansions with no type instantiations: {n}",
+                    n = uninstantiated.len()
+                );
+            }
+            Some(uninstantiated.len())
+        } else {
+            None
+        };
+
         // Compute the summary stats
         let total_expansions = expansions.len();
         let in_scope = included.iter().filter(|&&b| b).count();
         let mut summary = RunSummary {
             total_expansions,
             in_scope,
+            no_instantiations,
+            spec_conflicts,
             ..Default::default()
         };
         for report in &expansion_reports {
+            // Instantiations that type checked but never reached the solver
+            // still count towards the total, so the count is meaningful with
+            // `--skip-solver`.
+            summary.total_instantiations += report.skipped_type_instantiations;
             for instantiation in &report.type_instantiations {
                 summary.total_instantiations += 1;
                 match instantiation.verify.verdict {
@@ -887,18 +1036,94 @@ impl Runner {
         // fails below.
         summary.print();
 
-        // Verification failures and un-processable expansions are both overall
-        // errors so that callers (the `veri` binary and tests) observe them via
-        // the returned `Result`.
-        if !verification_failures.is_empty() || !errors.is_empty() {
-            bail!(
-                "verification failures: {}, expansion errors: {}",
-                verification_failures.len(),
-                errors.len()
-            );
+        // Print cache stats if caching is enabled.
+        if let Some(cache) = &self.cache {
+            cache.print_stats();
+        }
+        // Verification failures, un-processable expansions and spec type
+        // conflicts are all overall errors, so that callers (the `veri` binary
+        // and tests) observe them via the returned `Result`.
+        if !verification_failures.is_empty() || !errors.is_empty() || spec_conflicts > 0 {
+            return Err(RunFailure {
+                summary,
+                verification_failures: verification_failures.len(),
+                expansion_errors: errors.len(),
+            }
+            .into());
         }
 
         Ok(summary)
+    }
+
+    /// Tags that this run excludes, for gating tagged instantiation sets.
+    ///
+    /// A tagged instantiation set is treated like an expansion carrying that
+    /// tag: the last filter mentioning it wins, so an `include` filter can
+    /// carve it back out of a broader `exclude`.
+    fn excluded_instantiation_tags(&self) -> HashSet<String> {
+        let tags: HashSet<&String> = self
+            .prog
+            .specenv
+            .tagged_term_instantiations
+            .values()
+            .flatten()
+            .flat_map(|(tags, _)| tags)
+            .collect();
+        tags.into_iter()
+            .filter(|tag| {
+                let mut excluded = false;
+                for filter in &self.filters {
+                    if matches!(&filter.predicate, ExpansionPredicate::Tagged(t) if t == *tag) {
+                        excluded = !filter.include;
+                    }
+                }
+                excluded
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Report the spec type check findings, returning the number of conflicts.
+    fn report_spec_findings(&self) -> usize {
+        let (conflicts, unbuildable): (Vec<_>, Vec<_>) = self
+            .spec_findings
+            .iter()
+            .partition(|finding| finding.kind == spec_check::FindingKind::Conflict);
+
+        // Specs whose conditions could not be built at all are logged but do
+        // not fail the run: a spec shared across ISLE compilations may
+        // legitimately not apply in one of them, and types that verification
+        // never needs have no model by design.
+        if !unbuildable.is_empty() {
+            let mut log = Self::open_log_file(self.log_dir.clone(), "spec_unchecked.out").ok();
+            for finding in &unbuildable {
+                let line = finding.line();
+                log::info!("spec unchecked: {line}");
+                if let Some(f) = log.as_mut() {
+                    let _ = writeln!(f, "{line}");
+                }
+            }
+            log::info!(
+                "specs whose conditions could not be built: {n}",
+                n = unbuildable.len()
+            );
+        }
+
+        if conflicts.is_empty() {
+            return 0;
+        }
+
+        let mut log = Self::open_log_file(self.log_dir.clone(), "spec_conflicts.out").ok();
+        eprintln!("=== SPEC TYPE CONFLICTS ({n}) ===", n = conflicts.len());
+        for conflict in &conflicts {
+            let line = conflict.line();
+            eprintln!("SPEC CONFLICT {line}");
+            if let Some(f) = log.as_mut() {
+                let _ = writeln!(f, "{line}");
+            }
+        }
+        log::warn!("spec type conflicts: {n}", n = conflicts.len());
+        conflicts.len()
     }
 
     fn should_verify(&self, expansion: &Expansion) -> Result<bool> {
@@ -975,7 +1200,8 @@ impl Runner {
         }
 
         // Verification conditions.
-        let conditions = Conditions::from_expansion(expansion, &self.prog)?;
+        let conditions =
+            Conditions::from_expansion(expansion, &self.prog, &self.excluded_instantiation_tags())?;
         if self.debug {
             conditions.pretty_print(&self.prog);
         }
@@ -1066,10 +1292,11 @@ impl Runner {
             // Verify.
             if self.skip_solver {
                 log::debug!("Skipping solver");
+                report.skipped_type_instantiations += 1;
                 continue;
             }
 
-            let solution_log_dir = log_dir.join(format!("{:03}", i));
+            let solution_log_dir = log_dir.join(format!("{i:03}"));
             let verify_report = self
                 .verify_expansion_type_instantiation(
                     &conditions,
@@ -1125,15 +1352,22 @@ impl Runner {
     ) -> Result<VerifyReport> {
         let start = time::Instant::now();
 
-        // Solve.
+        // Build the SMT context through the caching layer: commands are
+        // recorded as they are issued, queries are answered from the cache
+        // when possible, and a solver subprocess is spawned — with the
+        // recorded state played into it — only on a cache miss.
         let binary = solver_backend.prog();
         let args = solver_backend.args(self.timeout);
         let replay_file = Self::open_log_file(log_dir.clone(), "solver.smt2")?;
-        let smt = easy_smt::ContextBuilder::new()
+        let mut smt_builder = caching::ContextBuilder::new();
+        smt_builder
             .solver(binary)
             .solver_args(&args)
-            .replay_file(Some(replay_file))
-            .build()?;
+            .replay_file(Some(replay_file));
+        if let Some(cache) = &self.cache {
+            smt_builder.cache(cache.clone());
+        }
+        let smt = smt_builder.build()?;
 
         let mut solver = Solver::new(smt, &self.prog, conditions, assignment)?;
         solver.set_dialect(solver_backend.dialect());
@@ -1183,6 +1417,7 @@ impl Runner {
                     description: description.to_string(),
                     instantiation_index,
                     failure_path: unknown_path,
+                    counterexample: None,
                 });
 
                 return Ok(VerifyReport {
@@ -1202,6 +1437,10 @@ impl Runner {
         writeln!(output, "\t\tverification = {verification}")?;
         Ok(match verification {
             Verification::Failure(model) => {
+                let mut rendered = Vec::new();
+                conditions.write_model(&mut rendered, &model, &self.prog)?;
+                let rendered = String::from_utf8(rendered)?;
+
                 let failure_path = log_dir.join("failure.out");
                 let mut failure_file = Self::open_log_file(log_dir.clone(), "failure.out")?;
                 writeln!(
@@ -1211,7 +1450,7 @@ impl Runner {
                 writeln!(failure_file, "expansion:")?;
                 write_expansion(&mut failure_file, &self.prog, expansion)?;
                 writeln!(failure_file, "model:")?;
-                conditions.write_model(&mut failure_file, &model, &self.prog)?;
+                write!(failure_file, "{rendered}")?;
 
                 writeln!(output, "\t\tfailure written to {}", failure_path.display())?;
                 log::warn!(
@@ -1225,6 +1464,7 @@ impl Runner {
                     description: description.to_string(),
                     instantiation_index,
                     failure_path,
+                    counterexample: self.print_counterexample.then_some(rendered),
                 });
 
                 VerifyReport {
@@ -1255,6 +1495,20 @@ impl Runner {
         let file = File::create(&path)?;
         Ok(file)
     }
+}
+
+/// Type check every term that has a spec, against nothing but its own declared
+/// types.
+///
+/// Run once for each program, as it is built: the check needs the parsed specs
+/// and nothing else -- no expansion, no solver -- so scoping it to the terms a
+/// particular run reaches would only lose coverage. A term used solely by
+/// another ISLE compilation, or by rules that this run filters out, is checked
+/// all the same.
+fn check_all_specs(prog: &Program) -> Vec<spec_check::Finding> {
+    let terms: BTreeSet<TermId> = prog.specenv.term_spec.keys().copied().collect();
+    log::info!("spec check: {total} specified terms", total = terms.len());
+    spec_check::check(prog, &terms)
 }
 
 /// Compute the set of "live" root terms.

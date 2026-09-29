@@ -211,43 +211,6 @@ WASI_API_EXTERN void wasi_config_set_stderr_custom(
     void (*finalizer)(void *));
 
 /**
- * \brief The permissions granted for a directory when preopening it.
- */
-enum wasi_dir_perms_flags {
-  /**
-   * \brief This directory can be read, for example its entries can be iterated
-   */
-  WASMTIME_WASI_DIR_PERMS_READ = 1,
-
-  /**
-   * \brief This directory can be written to, for example new files can be
-   * created within it.
-   */
-  WASMTIME_WASI_DIR_PERMS_WRITE = 2,
-};
-
-/**
- * \brief The permissions granted for directories when preopening them,
- * which is a bitmask with flag values from wasi_dir_perms_flags.
- */
-typedef size_t wasi_dir_perms;
-
-/**
- * \brief The permissions granted for files when preopening a directory.
- */
-enum wasi_file_perms_flags {
-  /**
-   * \brief Files can be read.
-   */
-  WASMTIME_WASI_FILE_PERMS_READ = 1,
-
-  /**
-   * \brief Files can be written to.
-   */
-  WASMTIME_WASI_FILE_PERMS_WRITE = 2,
-};
-
-/**
  * \brief The max permissions granted a file within a preopened directory,
  * which is a bitmask with flag values from wasi_file_perms_flags.
  */
@@ -264,23 +227,15 @@ typedef size_t wasi_file_perms;
  * The `host_path` argument here is a path name on the host filesystem, and
  * `guest_path` is the name by which it will be known in wasm.
  *
- * The `dir_perms` argument is the permissions that wasm will have to operate on
- * `guest_path`. This can be used, for example, to provide readonly access to a
- * directory. This argument is a bitmask with the following flag values:
- * - WASMTIME_WASI_DIR_PERMS_READ
- * - WASMTIME_WASI_DIR_PERMS_WRITE
- *
- * The `file_perms` argument is similar to `dir_perms` but corresponds to the
- * maximum set of permissions that can be used for any file in this directory.
- * This argument is a bitmask with the following flag values:
- * - WASMTIME_WASI_FILE_PERMS_READ
- * - WASMTIME_WASI_FILE_PERMS_WRITE
+ * The `fs_mutable` argument is the permissions that wasm will have to operate
+ * on `guest_path`. If true, operations that mutate the filesystem will be
+ * permitted under that path. If false, only read operations will be permitted
+ * on under that path.
  */
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t *config,
                                              const char *host_path,
                                              const char *guest_path,
-                                             wasi_dir_perms dir_perms,
-                                             wasi_file_perms file_perms);
+                                             bool fs_mutable);
 
 #undef own
 

@@ -4,8 +4,8 @@ use crate::p2::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
 };
-use cap_std::time::SystemTime;
 use std::time::Duration;
+use std::time::SystemTime;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::poll::{Pollable, subscribe};
 
@@ -148,6 +148,58 @@ impl Pollable for Deadline {
             }
             Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,
             Deadline::Never => std::future::pending().await,
+        }
+    }
+}
+
+mod named {
+    use crate::clocks::WasiClocksNamedView;
+    use crate::p2::DynPollable;
+    use crate::p2::bindings::clocks::monotonic_clock::{Duration as WasiDuration, Instant};
+    use crate::p2::bindings::clocks::wall_clock::Datetime;
+    use crate::p2::bindings::named_imports::wasi::clocks::{monotonic_clock, wall_clock};
+    use crate::{NamedId, WasiCtxNamedView};
+    use wasmtime::component::Resource;
+
+    impl<T> wall_clock::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiClocksNamedView,
+    {
+        fn now(&mut self, id: NamedId) -> wasmtime::Result<Datetime> {
+            super::wall_clock::Host::now(&mut self.0.clocks(id))
+        }
+
+        fn resolution(&mut self, id: NamedId) -> wasmtime::Result<Datetime> {
+            super::wall_clock::Host::resolution(&mut self.0.clocks(id))
+        }
+    }
+
+    impl<T> monotonic_clock::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiClocksNamedView,
+    {
+        fn now(&mut self, id: NamedId) -> wasmtime::Result<Instant> {
+            super::monotonic_clock::Host::now(&mut self.0.clocks(id))
+        }
+
+        fn resolution(&mut self, id: NamedId) -> wasmtime::Result<Instant> {
+            super::monotonic_clock::Host::resolution(&mut self.0.clocks(id))
+        }
+
+        fn subscribe_instant(
+            &mut self,
+            id: NamedId,
+            when: Instant,
+        ) -> wasmtime::Result<Resource<DynPollable>> {
+            super::monotonic_clock::Host::subscribe_instant(&mut self.0.clocks(id), when)
+        }
+
+        fn subscribe_duration(
+            &mut self,
+            id: NamedId,
+            duration: WasiDuration,
+        ) -> wasmtime::Result<Resource<DynPollable>> {
+            super::monotonic_clock::Host::subscribe_duration(&mut self.0.clocks(id), duration)
         }
     }
 }

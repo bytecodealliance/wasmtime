@@ -4159,6 +4159,12 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.0 -> 0.9.0"
 
+[[audits.openvino]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.0 -> 0.11.0"
+notes = "Unsafe bindings, but comes with the territory. Nothing awry."
+
 [[audits.openvino-finder]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -4193,6 +4199,12 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.0 -> 0.9.0"
 
+[[audits.openvino-finder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.0 -> 0.11.0"
+notes = "Just some paths changing here, nothing major"
+
 [[audits.openvino-sys]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -4226,6 +4238,12 @@ notes = "This diff simply re-generates slightly newer C headers with a slightly 
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.0 -> 0.9.0"
+
+[[audits.openvino-sys]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.0 -> 0.11.0"
+notes = "Nothing unexpected for a sys crate update"
 
 [[audits.ort]]
 who = "Andrew Brown <andrew.brown@intel.com>"
@@ -4494,6 +4512,15 @@ the same as before where it's all as expected and the `unsafe` has to do with
 managing OS APIs.
 """
 
+[[audits.region]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "3.0.2 -> 4.0.0"
+notes = """
+A bunch of updates to existing unsafe code, mostly to use newer methods that are
+now available after an MSRV bump. Looks fine.
+"""
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -4510,6 +4537,12 @@ who = "Trevor Elliott <telliott@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "1.1.0 -> 2.0.0"
 notes = "Chris Fallin reviewed this update with me, and we didn't find anything surprising. We did verify that the new constants did originate in the paper referenced."
+
+[[audits.rustc_version]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.4.1"
+notes = "Minor changes, nothing worrisome"
 
 [[audits.rustix]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -4577,6 +4610,16 @@ criteria = "safe-to-deploy"
 delta = "0.22.4 -> 0.23.7"
 notes = "No new unsafe code."
 
+[[audits.rustls]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.23.37 -> 0.23.45"
+notes = """
+A relatively large update, but no new `unsafe` and nothing awry here. Lots of
+protocol/etc updates which I'm not personally an expert within but the rustls
+maintainers are relatively well trusted as well.
+"""
+
 [[audits.rustls-pki-types]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -4603,6 +4646,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.103.12 -> 0.103.13"
 notes = "Minor fixes for the bug being fixed in this release, nothing awry."
+
+[[audits.rustls-webpki]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.103.13 -> 0.103.15"
+notes = "Minor updates and feature shufflings."
 
 [[audits.safetensors]]
 who = "Andrew Brown <andrew.brown@intel.com>"
@@ -7282,7 +7331,7 @@ end = "2024-07-06"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2022-01-04"
-end = "2025-05-06"
+end = "2027-09-10"
 
 [[trusted.proc-macro2]]
 criteria = "safe-to-deploy"
@@ -7426,7 +7475,7 @@ end = "2027-06-26"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-03-01"
-end = "2025-12-02"
+end = "2027-09-10"
 
 [[trusted.system-interface]]
 criteria = "safe-to-deploy"
@@ -7510,13 +7559,19 @@ end = "2026-10-10"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2021-09-13"
-end = "2025-02-12"
+end = "2027-07-20"
 
 [[trusted.toml_parser]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2025-07-08"
 end = "2026-10-10"
+
+[[trusted.toml_write]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2025-04-25"
+end = "2027-07-20"
 
 [[trusted.toml_writer]]
 criteria = "safe-to-deploy"

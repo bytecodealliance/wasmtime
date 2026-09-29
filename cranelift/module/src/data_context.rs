@@ -60,8 +60,11 @@ pub struct DataDescription {
     pub function_relocs: Vec<(CodeOffset, ir::FuncRef)>,
     /// Data addresses to write at specified offsets.
     pub data_relocs: Vec<(CodeOffset, ir::GlobalValue, Addend)>,
-    /// Object file segment, section and Mach-O flags.
-    pub custom_segment_section: Option<(String, String, u32)>,
+    /// Object file section.
+    ///
+    /// Tries to support the same format as LLVM:
+    /// <https://llvm.org/docs/LangRef.html#sections>.
+    pub custom_section: Option<String>,
     /// Alignment in bytes. `None` means that the default alignment of the
     /// respective module should be used.
     pub align: Option<u64>,
@@ -79,7 +82,7 @@ impl DataDescription {
             data_decls: PrimaryMap::new(),
             function_relocs: vec![],
             data_relocs: vec![],
-            custom_segment_section: None,
+            custom_section: None,
             align: None,
             used: false,
         }
@@ -92,7 +95,7 @@ impl DataDescription {
         self.data_decls.clear();
         self.function_relocs.clear();
         self.data_relocs.clear();
-        self.custom_segment_section = None;
+        self.custom_section = None;
         self.align = None;
         self.used = false;
     }
@@ -111,9 +114,9 @@ impl DataDescription {
         self.init = Init::Bytes { contents };
     }
 
-    /// Override the segment/section for data, only supported on Object backend
-    pub fn set_segment_section(&mut self, seg: &str, sec: &str, macho_flags: u32) {
-        self.custom_segment_section = Some((seg.to_owned(), sec.to_owned(), macho_flags))
+    /// Override the section for data, only supported on Object backend
+    pub fn set_custom_section(&mut self, section: &str) {
+        self.custom_section = Some(section.to_owned());
     }
 
     /// Set the alignment for data. The alignment must be a power of two.

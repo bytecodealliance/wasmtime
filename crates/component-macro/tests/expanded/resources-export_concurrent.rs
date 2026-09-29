@@ -268,7 +268,7 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Y>(),
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter(host_getter);
+                            let accessor = &caller.with_getter::<D>(host_getter);
                             wasmtime::ToWasmtimeResult::to_wasmtime_result(
                                 HostYWithStore::<
                                     T,

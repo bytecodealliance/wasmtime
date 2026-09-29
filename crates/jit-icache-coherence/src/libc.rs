@@ -102,15 +102,16 @@ mod details {
 
 #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
 fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "one-core")] {
+    cfg_select! {
+        feature = "one-core" => {
             use std::arch::asm;
             let _ = (start, end);
             unsafe {
                 asm!("fence.i");
             };
             Ok(())
-        } else {
+        }
+        _ => {
             #[expect(non_upper_case_globals, reason = "matching C style")]
             match unsafe {
                 libc::syscall(

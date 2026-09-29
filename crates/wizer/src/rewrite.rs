@@ -12,7 +12,7 @@ impl Wizer {
     ///
     pub(crate) fn rewrite(
         &self,
-        module: &mut ModuleContext<'_>,
+        module: &ModuleContext<'_>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
         remove_wasi_initialize: bool,

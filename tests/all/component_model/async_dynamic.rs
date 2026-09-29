@@ -239,7 +239,7 @@ async fn stream_any_smoke() -> Result<()> {
     (core func $task.return (canon task.return))
     (core func $waitable-set.new (canon waitable-set.new))
     (core func $waitable.join (canon waitable.join))
-    (core func $waitable-set.wait (canon waitable-set.wait (memory $libc "mem")))
+    (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $libc "mem"))))
     (core func $waitable-set.drop (canon waitable-set.drop))
     (core instance $i (instantiate $m
         (with "" (instance
@@ -255,7 +255,7 @@ async fn stream_any_smoke() -> Result<()> {
     (func (export "mk") (result (stream u8))
         (canon lift (core func $i "mk")))
     (func (export "run") async
-        (canon lift (core func $i "run") async (callback (func $i "cb"))))
+        (canon lift (core func $i "run") async (callback (core func $i "cb"))))
 )
         "#,
     )?;

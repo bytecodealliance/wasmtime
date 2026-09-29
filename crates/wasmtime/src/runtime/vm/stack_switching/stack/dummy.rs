@@ -1,15 +1,15 @@
 use crate::Result;
 use core::ops::Range;
 
-use crate::runtime::vm::stack_switching::VMHostArray;
-use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
+use crate::runtime::vm::VMPayloads;
+use crate::runtime::vm::{VMContext, VMFuncRef, VmPtr};
 
 /// Making sure that this has the same size as the non-dummy version, to
 /// make some tests happy.
 #[derive(Debug)]
 #[repr(C)]
 pub struct VMContinuationStack {
-    _top: *mut u8,
+    _top: VmPtr<u8>,
     _len: usize,
     _match_size_on_unix: u8,
 }
@@ -43,6 +43,11 @@ impl VMContinuationStack {
         panic!("Stack switching disabled or not implemented on this platform")
     }
 
+    #[cfg(all(feature = "stack-switching", asan))]
+    pub fn asan_range(&self) -> Option<Range<usize>> {
+        panic!("Stack switching disabled or not implemented on this platform")
+    }
+
     pub fn control_context_instruction_pointer(&self) -> usize {
         panic!("Stack switching disabled or not implemented on this platform")
     }
@@ -59,9 +64,10 @@ impl VMContinuationStack {
         &self,
         _func_ref: *const VMFuncRef,
         _caller_vmctx: *mut VMContext,
-        _args: *mut VMHostArray<ValRaw>,
+        _args: *mut VMPayloads,
         _parameter_count: u32,
         _return_value_count: u32,
+        _gc_refs: bool,
     ) -> Result<()> {
         Ok(())
     }

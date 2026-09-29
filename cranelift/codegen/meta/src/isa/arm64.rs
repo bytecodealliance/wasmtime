@@ -33,6 +33,14 @@ pub(crate) fn define() -> TargetIsa {
         false,
     );
     settings.add_bool(
+        "has_i8mm",
+        "Has Int8 Matrix Multiplication (FEAT_I8MM) support; enables lowering \
+         the mixed unsigned-by-signed i8 dot product to USDOT instead of a \
+         umull/smull + saddlp widening fallback.",
+        "",
+        false,
+    );
+    settings.add_bool(
         "sign_return_address_all",
         "If function return address signing is enabled, then apply it to all \
         functions; does not have an effect on code generation by itself.",

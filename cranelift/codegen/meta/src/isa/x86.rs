@@ -53,6 +53,12 @@ pub(crate) fn define() -> TargetIsa {
         "FMA: CPUID.01H:ECX.FMA[bit 12]",
         false,
     );
+    let has_avx_vnni = settings.add_bool(
+        "has_avx_vnni",
+        "Has support for AVX-VNNI.",
+        "AVX-VNNI: CPUID.07H.01H:EAX.AVX_VNNI[bit 4]",
+        false,
+    );
     let has_avx512bitalg = settings.add_bool(
         "has_avx512bitalg",
         "Has support for AVX512BITALG.",
@@ -81,6 +87,21 @@ pub(crate) fn define() -> TargetIsa {
         "has_avx512f",
         "Has support for AVX512F.",
         "AVX512F: CPUID.07H:EBX.AVX512F[bit 16]",
+        false,
+    );
+    let has_avx512vnni = settings.add_bool(
+        "has_avx512vnni",
+        "Has support for AVX512VNNI.",
+        "AVX512VNNI: CPUID.07H:ECX.AVX512_VNNI[bit 11]",
+        false,
+    );
+    // Registered so `target x86_64 has_apx` parses; not yet referenced by any
+    // preset because no shipping microarchitecture ships APX today. Drop the
+    // leading underscore once a preset needs it.
+    let _has_apx = settings.add_bool(
+        "has_apx",
+        "Has support for APX.",
+        "APX_F: CPUID.(EAX=07H,ECX=1H):EDX.APX_F[bit 21]",
         false,
     );
     let has_popcnt = settings.add_bool(
@@ -175,7 +196,7 @@ pub(crate) fn define() -> TargetIsa {
     let alderlake = settings.add_preset(
         "alderlake",
         "Alderlake microarchitecture.",
-        preset!(tremont && has_bmi1 && has_bmi2 && has_lzcnt && has_fma),
+        preset!(tremont && has_bmi1 && has_bmi2 && has_lzcnt && has_fma && has_avx_vnni),
     );
     let sierra_forest = settings.add_preset(
         "sierraforest",
@@ -261,7 +282,7 @@ pub(crate) fn define() -> TargetIsa {
     let cascadelake = settings.add_preset(
         "cascadelake",
         "Cascade Lake microarchitecture.",
-        preset!(skylake_avx512),
+        preset!(skylake_avx512 && has_avx512vnni),
     );
     settings.add_preset(
         "cooperlake",
@@ -276,7 +297,7 @@ pub(crate) fn define() -> TargetIsa {
     let icelake_client = settings.add_preset(
         "icelake-client",
         "Ice Lake microarchitecture.",
-        preset!(cannonlake && has_avx512bitalg),
+        preset!(cannonlake && has_avx512bitalg && has_avx512vnni),
     );
     // LLVM doesn't use the name "icelake" but Cranelift did in the past; alias it
     settings.add_preset(

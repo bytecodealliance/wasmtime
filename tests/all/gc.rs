@@ -3788,3 +3788,374 @@ fn initial_size_larger_than_reservation() -> Result<()> {
 
     Ok(())
 }
+
+/// Under Winch, a frame holding the only reference to an `externref` across a
+/// collection must keep it alive. Runs under the barrier-free collectors that Winch supports.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_externref_survives_gc_in_frame() -> Result<()> {
+    for collector in [Collector::Null, Collector::Copying] {
+        let mut config = Config::new();
+        config.strategy(Strategy::Winch);
+        config.collector(collector);
+        let Ok(engine) = Engine::new(&config) else {
+            return Ok(());
+        };
+        let module = Module::new(
+            &engine,
+            r#"
+            (module
+              (import "" "make" (func $make (result externref)))
+              (import "" "gc" (func $gc))
+              (func (export "hold") (result externref)
+                ;; the only reference to the object is on this frame's value
+                ;; stack while the collection runs
+                (call $make)
+                (call $gc)))
+            "#,
+        )?;
+        let mut store = Store::new(&engine, ());
+        let make = Func::wrap(
+            &mut store,
+            |mut cx: Caller<'_, ()>| -> Result<Option<Rooted<ExternRef>>> {
+                Ok(Some(ExternRef::new(&mut cx, 0xDECAFu32)?))
+            },
+        );
+        let gc = Func::wrap(&mut store, |mut cx: Caller<'_, ()>| {
+            let _ = cx.gc(None);
+        });
+        let instance = Instance::new(&mut store, &module, &[make.into(), gc.into()])?;
+        let hold = instance.get_typed_func::<(), Option<Rooted<ExternRef>>>(&mut store, "hold")?;
+        let out = hold.call(&mut store, ())?.expect("must not be null");
+        let got = out
+            .data(&store)?
+            .and_then(|d| d.downcast_ref::<u32>().copied());
+        assert_eq!(
+            got,
+            Some(0xDECAF),
+            "externref did not survive GC under {collector:?}"
+        );
+    }
+    Ok(())
+}
+
+/// The write barrier's decrement chain releases an object once a global stops
+/// holding the last reference to it.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_drc_write_barrier_drops_old_global_value() -> Result<()> {
+    let mut config = Config::new();
+    config.strategy(Strategy::Winch);
+    config.collector(Collector::DeferredReferenceCounting);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (global $g (mut externref) (ref.null extern))
+          (func (export "set") (param externref)
+            (global.set $g (local.get 0))))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let set = instance.get_func(&mut store, "set").unwrap();
+
+    let dropped = Arc::new(AtomicBool::new(false));
+    {
+        let mut scope = RootScope::new(&mut store);
+        let r = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
+        set.call(&mut scope, &[Val::ExternRef(Some(r))], &mut [])?;
+    }
+
+    // The global holds the only reference; nothing may be dropped yet.
+    store.gc(None)?;
+    assert!(!dropped.load(SeqCst));
+
+    // Overwriting the global decrements the count to zero and releases the
+    // old value.
+    set.call(&mut store, &[Val::ExternRef(None)], &mut [])?;
+    store.gc(None)?;
+    assert!(dropped.load(SeqCst));
+
+    Ok(())
+}
+
+/// The read barrier holds a count for references entering the stack, so
+/// overwriting their last long-lived home cannot free them out from under
+/// the frame that loaded them.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_drc_read_barrier_keeps_loaded_ref_alive() -> Result<()> {
+    let mut config = Config::new();
+    config.strategy(Strategy::Winch);
+    config.collector(Collector::DeferredReferenceCounting);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (import "" "gc" (func $gc))
+          (global $g (mut externref) (ref.null extern))
+          (func (export "set") (param externref)
+            (global.set $g (local.get 0)))
+          (func (export "swap") (result externref)
+            (local $tmp externref)
+            (local.set $tmp (global.get $g))
+            (global.set $g (ref.null extern))
+            (call $gc)
+            (local.get $tmp)))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let gc = Func::wrap(&mut store, |mut cx: Caller<'_, ()>| {
+        let _ = cx.gc(None);
+    });
+    let instance = Instance::new(&mut store, &module, &[gc.into()])?;
+    let set = instance.get_func(&mut store, "set").unwrap();
+    let swap = instance.get_typed_func::<(), Option<Rooted<ExternRef>>>(&mut store, "swap")?;
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let r = ExternRef::new(&mut scope, 0xDECAFu32)?;
+        set.call(&mut scope, &[Val::ExternRef(Some(r))], &mut [])?;
+    }
+
+    // Settle the deferred unroot so the global truly holds the last count.
+    store.gc(None)?;
+
+    // `swap` loads the reference onto the stack, overwrites the global, and
+    // collects while the stack copy is live.
+    let out = swap.call(&mut store, ())?.expect("must not be null");
+    let got = out
+        .data(&store)?
+        .and_then(|d| d.downcast_ref::<u32>().copied());
+    assert_eq!(got, Some(0xDECAF));
+
+    Ok(())
+}
+
+/// An `externref` may wrap an unboxed i31 created through the host API. Such
+/// values do not have reference counts and must bypass both DRC barriers.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_drc_i31_wrapped_as_externref_skips_global_barriers() -> Result<()> {
+    let mut config = Config::new();
+    config.strategy(Strategy::Winch);
+    config.collector(Collector::DeferredReferenceCounting);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (global $g (mut externref) (ref.null extern))
+          (func (export "set") (param externref)
+            local.get 0
+            global.set $g)
+          (func (export "get") (result externref)
+            global.get $g))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let set = instance.get_func(&mut store, "set").unwrap();
+    let get = instance.get_func(&mut store, "get").unwrap();
+
+    let anyref = AnyRef::from_i31(&mut store, I31::wrapping_u32(0x1234));
+    let externref = ExternRef::convert_any(&mut store, anyref)?;
+    set.call(&mut store, &[Val::ExternRef(Some(externref))], &mut [])?;
+
+    let mut results = [Val::null_extern_ref()];
+    get.call(&mut store, &[], &mut results)?;
+    let externref = results[0]
+        .unwrap_externref()
+        .expect("global.get returned null");
+    let anyref = AnyRef::convert_extern(&mut store, *externref)?;
+    assert_eq!(anyref.unwrap_i31(&store)?.get_u32(), 0x1234);
+
+    // Replacing the i31-backed externref exercises the old-value side of the
+    // write barrier as well.
+    set.call(&mut store, &[Val::null_extern_ref()], &mut [])?;
+    Ok(())
+}
+
+/// Growing the over-approximated-stack-roots list to its threshold forces a
+/// collection from the read barrier and preserves the reference whose load
+/// triggered that collection.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_drc_read_barrier_forces_gc_at_threshold() -> Result<()> {
+    let mut config = Config::new();
+    config.strategy(Strategy::Winch);
+    config.collector(Collector::DeferredReferenceCounting);
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
+
+    let num_refs = wasmtime_environ::DRC_MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD as usize;
+    let mut wat = "(module\n".to_string();
+    for i in 0..num_refs {
+        wat.push_str(&format!(
+            r#"(global $g{i} (export "g{i}") (mut externref) (ref.null extern))
+"#,
+        ));
+    }
+    wat.push_str("(func (export \"drain\")\n");
+    for i in 0..num_refs {
+        wat.push_str(&format!(
+            "(drop (global.get $g{i}))\n(global.set $g{i} (ref.null extern))\n"
+        ));
+    }
+    wat.push_str("))");
+
+    let module = Module::new(&engine, &wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let dropped = Arc::new(AtomicUsize::new(0));
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        for i in 0..num_refs {
+            let gc_ref = ExternRef::new(&mut scope, CountDrops(dropped.clone()))?;
+            let global = instance
+                .get_global(&mut scope, &format!("g{i}"))
+                .expect("global must be exported");
+            global.set(&mut scope, Val::ExternRef(Some(gc_ref)))?;
+        }
+    }
+
+    // Settle the host roots. Each global is now the only long-lived home for
+    // its reference.
+    store.gc(None)?;
+    assert_eq!(dropped.load(SeqCst), 0);
+
+    let drain = instance.get_typed_func::<(), ()>(&mut store, "drain")?;
+    drain.call(&mut store, ())?;
+
+    // The final global.get reaches the threshold and forces a collection.
+    // The preceding references are no longer on the stack or in globals, but
+    // the triggering reference is still live in the global.get result slot.
+    assert_eq!(dropped.load(SeqCst), num_refs - 1);
+
+    // The triggering reference becomes collectible after `drain` returns.
+    store.gc(None)?;
+    assert_eq!(dropped.load(SeqCst), num_refs);
+
+    Ok(())
+}
+
+/// Reference values crossing the ABI boundary in every position: stack-passed
+/// externref params and multi-value externref results (more than fit in registers)
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_ref_params_and_results_across_gc() -> Result<()> {
+    for (nparams, nresults) in [(12, 12), (2, 12), (12, 3), (12, 1)] {
+        let params = "externref ".repeat(nparams);
+        let results = "externref ".repeat(nresults);
+        let gets: String = (0..nresults)
+            .map(|i| format!("(local.get {})", i % nparams))
+            .collect();
+        let wat = format!(
+            r#"(module
+              (import "" "gc" (func $gc))
+              (func (export "hold") (param {params}) (result {results})
+                (call $gc)
+                {gets}))"#
+        );
+        for collector in [Collector::Null, Collector::Copying] {
+            let mut config = Config::new();
+            config.strategy(Strategy::Winch);
+            config.collector(collector);
+            let Ok(engine) = Engine::new(&config) else {
+                return Ok(());
+            };
+            let module = Module::new(&engine, &wat)?;
+            let mut store = Store::new(&engine, ());
+            let gc = Func::wrap(&mut store, |mut cx: Caller<'_, ()>| {
+                let _ = cx.gc(None);
+            });
+            let instance = Instance::new(&mut store, &module, &[gc.into()])?;
+            let hold = instance.get_func(&mut store, "hold").unwrap();
+            let args: Vec<Val> = (0..nparams as u32)
+                .map(|i| Ok(Val::ExternRef(Some(ExternRef::new(&mut store, i)?))))
+                .collect::<Result<_>>()?;
+            let mut outs = vec![Val::null_extern_ref(); nresults];
+            hold.call(&mut store, &args, &mut outs)?;
+            for (i, v) in outs.iter().enumerate() {
+                let id = v
+                    .unwrap_externref()
+                    .expect("result became null")
+                    .data(&store)?
+                    .and_then(|d| d.downcast_ref::<u32>().copied());
+                assert_eq!(
+                    id,
+                    Some((i % nparams) as u32),
+                    "result {i} corrupted under {collector:?} ({nparams}p/{nresults}r)"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn table_fill_null_barriers_ok() -> Result<()> {
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        eprintln!("collector: {collector:?}");
+        let engine = Engine::new(Config::new().collector(collector).table_lazy_init(false))?;
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (table $t (export "t") 1 (ref null extern))
+                    (func (export "fill") (param i32) (param i32)
+                        (table.fill $t (local.get 0) (ref.null extern) (local.get 1)))
+                )
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let fill = instance.get_typed_func::<(u32, u32), ()>(&mut store, "fill")?;
+        let table = instance.get_table(&mut store, "t").unwrap();
+
+        let flag = Arc::new(AtomicBool::new(false));
+
+        {
+            let mut scope = RootScope::new(&mut store);
+            let r = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
+            table.set(&mut scope, 0, r.into())?;
+        }
+
+        assert!(!flag.load(SeqCst));
+        store.gc(None)?;
+        assert!(!flag.load(SeqCst));
+
+        fill.call(&mut store, (0, 1))?;
+        store.gc(None)?;
+        assert!(flag.load(SeqCst));
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn manually_grow_gc_heap() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    assert_eq!(store.gc_heap_capacity(), 0);
+    store.gc_heap_grow(1)?;
+    assert_eq!(store.gc_heap_capacity(), 1 << 16);
+    store.gc_heap_grow(1)?;
+    assert_eq!(store.gc_heap_capacity(), 2 << 16);
+    store.gc_heap_grow_async(1).await?;
+    assert_eq!(store.gc_heap_capacity(), 4 << 16);
+    Ok(())
+}

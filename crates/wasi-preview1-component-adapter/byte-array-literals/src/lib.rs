@@ -1,5 +1,3 @@
-extern crate proc_macro;
-
 use proc_macro::{Delimiter, Group, Literal, Punct, Spacing, TokenStream, TokenTree};
 
 /// Expand a `str` literal into a byte array.

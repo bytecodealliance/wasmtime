@@ -201,6 +201,19 @@ where
 impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     isle_common_prelude_methods!();
 
+    fn zero_constant(&mut self, ty: Type) -> Constant {
+        let data = vec![0; ty.bytes() as usize];
+        self.ctx.func.dfg.constants.insert(data.into())
+    }
+
+    fn f16_zero(&mut self) -> Ieee16 {
+        Ieee16::with_bits(0)
+    }
+
+    fn ty_vector(&mut self, ty: Type) -> Option<Type> {
+        ty.is_vector().then_some(ty)
+    }
+
     type inst_data_value_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
 
     fn inst_data_value_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
@@ -288,6 +301,37 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         }
     }
 
+    fn all_zero_etor(&mut self, (ty, inst_data): (Type, InstructionData)) -> Option<Type> {
+        let is_all_zero = match inst_data {
+            InstructionData::UnaryImm {
+                opcode: Opcode::Iconst,
+                imm,
+            } => imm.bits() == 0,
+            InstructionData::UnaryIeee16 {
+                opcode: Opcode::F16const,
+                imm,
+            } => imm.bits() == 0,
+            InstructionData::UnaryIeee32 {
+                opcode: Opcode::F32const,
+                imm,
+            } => imm.bits() == 0,
+            InstructionData::UnaryIeee64 {
+                opcode: Opcode::F64const,
+                imm,
+            } => imm.bits() == 0,
+            InstructionData::UnaryConst {
+                opcode: Opcode::F128const | Opcode::Vconst,
+                constant_handle,
+            } => {
+                let constant = self.ctx.func.dfg.constants.get(constant_handle);
+                constant.len() == ty.bytes() as usize && constant.iter().all(|&byte| byte == 0)
+            }
+            _ => false,
+        };
+
+        is_all_zero.then_some(ty)
+    }
+
     fn remat(&mut self, value: Value) -> Value {
         trace!("remat: {}", value);
         self.ctx.remat_values.insert(value);
@@ -306,6 +350,11 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         let val = u128::from(val);
         let val = val | (val << 64);
         let imm = V128Imm(val.to_le_bytes());
+        self.ctx.func.dfg.constants.insert(imm.into())
+    }
+
+    fn scalar_to_vector_const64(&mut self, val: u64) -> Constant {
+        let imm = V128Imm(u128::from(val).to_le_bytes());
         self.ctx.func.dfg.constants.insert(imm.into())
     }
 

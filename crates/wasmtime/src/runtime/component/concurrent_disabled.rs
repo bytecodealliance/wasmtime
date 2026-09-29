@@ -2,6 +2,7 @@ use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
 use crate::store::StoreOpaque;
+use crate::vm::component::{CurrentScope, Scope};
 use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;
@@ -151,7 +152,6 @@ unsafe impl Lower for StreamAny {
 impl StoreOpaque {
     pub(crate) fn enter_guest_sync_call(
         &mut self,
-        _guest_caller: Option<RuntimeInstance>,
         _callee_async: bool,
         _callee: RuntimeInstance,
     ) -> Result<()> {
@@ -166,23 +166,17 @@ impl StoreOpaque {
         self.enter_call_not_concurrent()
     }
 
-    pub(crate) fn host_task_reenter_caller(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    pub(crate) fn host_task_delete(&mut self, (): ()) -> Result<()> {
+    pub(crate) fn host_task_delete(&mut self, (): (), (): ()) -> Result<()> {
         Ok(self.exit_call_not_concurrent())
     }
 
-    pub(crate) fn check_blocking(&mut self) -> crate::Result<()> {
+    pub(crate) fn current_materialized_host_task(&mut self) -> Result<()> {
         Ok(())
     }
 
-    pub(crate) fn may_enter(&mut self, _instance: RuntimeInstance) -> Result<bool> {
-        Ok(!self.trapped())
-    }
-
-    pub(crate) fn current_scope_id(&mut self) -> Result<Option<u32>> {
-        self.current_scope_id_not_concurrent()
+    pub(crate) fn current_scope(&mut self) -> Result<Option<CurrentScope>> {
+        Ok(self
+            .current_scope_id_not_concurrent()?
+            .map(|id| CurrentScope::Id(Scope::Id(id))))
     }
 }

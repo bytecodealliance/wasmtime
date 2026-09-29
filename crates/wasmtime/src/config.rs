@@ -648,8 +648,6 @@ impl Config {
     ///
     /// By default this option is `false`.
     ///
-    /// **Note** Enabling this option is not compatible with the Winch compiler.
-    ///
     /// [`Store`]: crate::Store
     pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
         self.tunables.consume_fuel = Some(enable);
@@ -657,6 +655,14 @@ impl Config {
     }
 
     /// Configures the fuel cost of each WebAssembly operator.
+    ///
+    /// In addition to each operator's flat cost, [`OperatorCost::variable`]
+    /// configures per-byte, per-element, and per-page costs for operators whose
+    /// work depends on a runtime operand.
+    ///
+    /// These costs apply both to operators in function bodies and to operators
+    /// in constant expressions evaluated at instantiation time, such as global
+    /// initializers and element or data segment offsets.
     ///
     /// This is only relevant when [`Config::consume_fuel`] is enabled.
     pub fn operator_cost(&mut self, cost: OperatorCost) -> &mut Self {
@@ -745,6 +751,27 @@ impl Config {
     /// opportunity to use `tokio::time::timeout` for example on a wasm
     /// computation and have the desired effect of cancelling a blocking
     /// operation when a timeout expires.
+    ///
+    /// ## Limitations with malicious guests
+    ///
+    /// Epochs are designed to handle malicious WebAssembly guests -- the
+    /// deadline check cannot be avoided by WebAssembly code. It is safe to use
+    /// epoch deadlines to limit the execution time of untrusted code.
+    ///
+    /// Note, though, that a current limitation to this is that
+    /// bulk-data-transfer instructions, such as `memory.copy`, only check the
+    /// epoch once at the start of the operation. These operations can take a
+    /// variable amount of time to complete based on how many bytes are being
+    /// copied. This means that the maximal time slice a guest might take is
+    /// the maximum of the epoch interval and the largest
+    /// memory-copy-style-instruction executed. The size of a copy is bounded
+    /// on the size of linear memory or GC heap size. In the limit, however, a
+    /// guest using a 64-bit linear memory with a 128GiB size could issue a
+    /// 128GiB `memory.copy` which would have no preemption within the
+    /// instruction itself. Hosts which need strict time limits for guests right
+    /// now are recommended to ensure that the store's allocated heap size
+    /// (linear memory + GC heap) are bounded with a
+    /// [`ResourceLimiter`](crate::ResourceLimiter).
     ///
     /// ## When to use fuel vs. epochs
     ///
@@ -994,7 +1021,7 @@ impl Config {
     /// programs to implement some recursive algorithms with *O(1)* stack space
     /// usage.
     ///
-    /// This is `true` by default except when the Winch compiler is enabled.
+    /// This is `true` by default.
     ///
     /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
     pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
@@ -1038,6 +1065,27 @@ impl Config {
     /// [WebAssembly custom-page-sizes proposal]: https://github.com/WebAssembly/custom-page-sizes
     pub fn wasm_custom_page_sizes(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CUSTOM_PAGE_SIZES, enable);
+        self
+    }
+
+    /// Configures whether the WebAssembly compact imports proposal is enabled.
+    ///
+    /// The [WebAssembly compact import section proposal]
+    /// adds two compact encodings for imports:
+    /// - A module name and a list of `(item name, type)` pairs
+    /// - A module name, a type, and a list of item names
+    ///
+    /// This reduces redundant module and type listings, and can
+    /// reduce WebAssembly file size, especially in files with many
+    /// repeated imports.
+    ///
+    /// When enabled, compact imports are accepted in binary and text-format inputs.
+    ///
+    /// This feature is `false` by default.
+    ///
+    /// [WebAssembly compact import section proposal]: https://github.com/WebAssembly/compact-import-section
+    pub fn wasm_compact_imports(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::COMPACT_IMPORTS, enable);
         self
     }
 
@@ -1125,7 +1173,7 @@ impl Config {
     /// Configures whether the [WebAssembly wide-arithmetic][proposal] will be
     /// enabled for compilation.
     ///
-    /// This feature is `false` by default.
+    /// This feature is `true` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/wide-arithmetic
     pub fn wasm_wide_arithmetic(&mut self, enable: bool) -> &mut Self {
@@ -1423,6 +1471,18 @@ impl Config {
         self
     }
 
+    /// Configures whether the component model memory64 support is enabled
+    ///
+    /// This corresponds to the 🐘 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_memory64(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM64, enable);
+        self
+    }
+
     /// This corresponds to the 🔧 emoji in the component model specification.
     ///
     /// Please note that Wasmtime's support for this feature is _very_
@@ -1440,6 +1500,16 @@ impl Config {
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_implements(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_IMPLEMENTS, enable);
+        self
+    }
+
+    /// This corresponds to the 🔗 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is a work in
+    /// progress.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_canonical_names(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_CANON_NAMES, enable);
         self
     }
 
@@ -2478,6 +2548,7 @@ impl Config {
             | WasmFeatures::SHARED_EVERYTHING_THREADS
             | WasmFeatures::COMPONENT_MODEL
             | WasmFeatures::CUSTOM_PAGE_SIZES
+            | WasmFeatures::COMPACT_IMPORTS
             | WasmFeatures::STACK_SWITCHING
             | WasmFeatures::WIDE_ARITHMETIC
             | WasmFeatures::CM_ASYNC
@@ -2487,8 +2558,10 @@ impl Config {
             | WasmFeatures::CM_ERROR_CONTEXT
             | WasmFeatures::CM_GC
             | WasmFeatures::CM_MAP
+            | WasmFeatures::CM64
             | WasmFeatures::CM_FIXED_LENGTH_LISTS
-            | WasmFeatures::CM_IMPLEMENTS;
+            | WasmFeatures::CM_IMPLEMENTS
+            | WasmFeatures::CM_CANON_NAMES;
 
         #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;
@@ -2529,11 +2602,9 @@ impl Config {
                 unsupported |= WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD
-                    | WasmFeatures::TAIL_CALL
-                    | WasmFeatures::GC_TYPES
-                    | WasmFeatures::EXCEPTIONS
                     | WasmFeatures::LEGACY_EXCEPTIONS
                     | WasmFeatures::STACK_SWITCHING;
+
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
                         unsupported |= WasmFeatures::THREADS;
@@ -2590,6 +2661,7 @@ impl Config {
         // features.
         features |= WasmFeatures::WASM3;
 
+        features |= WasmFeatures::WIDE_ARITHMETIC;
         // features |= WasmFeatures::YOUR_WASM_FEATURE;
         // ...
 
@@ -2711,6 +2783,12 @@ impl Config {
         };
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
+
+        // Stack switching is emitted inline in compiled Wasm. In
+        // ASan-enabled builds the compiler must arrange the
+        // corresponding fiber switch handshake around every such
+        // instruction.
+        tunables.asan_stack_switching = cfg!(asan);
 
         // By default this is enabled with the Cargo feature, and if the feature
         // is missing this is disabled.
@@ -2857,6 +2935,15 @@ impl Config {
                 "concurrency support must be enabled to use the component \
                  model async or threading features"
             )
+        }
+
+        // Generated adapters between components will use `ref.func` in some
+        // async-related situations so `component-model-async` requires
+        // `reference-types`.
+        if features.contains(WasmFeatures::CM_ASYNC)
+            && !features.contains(WasmFeatures::REFERENCE_TYPES)
+        {
+            bail!("the component-model-async feature requires the wasm reference-types proposal");
         }
 
         // If the pooling allocator is used and GC is enabled, check that
@@ -4779,6 +4866,7 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
             "paca" => Some(std::arch::is_aarch64_feature_detected!("paca")),
             "fp16" => Some(std::arch::is_aarch64_feature_detected!("fp16")),
             "dotprod" => Some(std::arch::is_aarch64_feature_detected!("dotprod")),
+            "i8mm" => Some(std::arch::is_aarch64_feature_detected!("i8mm")),
 
             _ => None,
         };
@@ -4834,6 +4922,7 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
             "avx" => Some(std::is_x86_feature_detected!("avx")),
             "avx2" => Some(std::is_x86_feature_detected!("avx2")),
             "fma" => Some(std::is_x86_feature_detected!("fma")),
+            "avxvnni" => Some(std::is_x86_feature_detected!("avxvnni")),
             "bmi1" => Some(std::is_x86_feature_detected!("bmi1")),
             "bmi2" => Some(std::is_x86_feature_detected!("bmi2")),
             "avx512bitalg" => Some(std::is_x86_feature_detected!("avx512bitalg")),
@@ -4841,6 +4930,7 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
             "avx512f" => Some(std::is_x86_feature_detected!("avx512f")),
             "avx512vl" => Some(std::is_x86_feature_detected!("avx512vl")),
             "avx512vbmi" => Some(std::is_x86_feature_detected!("avx512vbmi")),
+            "avx512vnni" => Some(std::is_x86_feature_detected!("avx512vnni")),
             "lzcnt" => Some(std::is_x86_feature_detected!("lzcnt")),
 
             _ => None,

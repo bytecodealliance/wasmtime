@@ -13,15 +13,15 @@ use alloc::sync::Arc;
 use core::marker;
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
-use wasmtime_environ::component::NameMap;
+use wasmtime_environ::component::{NameMap, NameMapIntern};
 use wasmtime_environ::{Atom, PrimaryMap, StringPool};
 
 /// A type used to instantiate [`Component`]s.
 ///
-/// This type is used to both link components together as well as supply host
-/// functionality to components. Values are defined in a [`Linker`] by their
-/// import name and then components are instantiated with a [`Linker`] using the
-/// names provided for name resolution of the component's imports.
+/// This type is used to supply host functionality to components. Values are
+/// defined in a [`Linker`] by their import name and then components are
+/// instantiated with a [`Linker`] using the names provided for name resolution
+/// of the component's imports.
 ///
 /// # Names and Semver
 ///
@@ -227,10 +227,17 @@ impl<T: 'static> Linker<T> {
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
     ///
+    /// Returns an error if `component` was not compiled by the same
+    /// [`Engine`](crate::Engine) as this linker.
+    ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
+        ensure!(
+            Engine::same(&self.engine, component.engine()),
+            "cross-`Engine` instantiation is not currently supported"
+        );
         let cx = self.typecheck(&component)?;
 
         // A successful typecheck resolves all of the imported resources used by
@@ -348,16 +355,29 @@ impl<T: 'static> Linker<T> {
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     pub fn define_unknown_imports_as_traps(&mut self, component: &Component) -> Result<()> {
-        use wasmtime_environ::component::ComponentTypes;
-        use wasmtime_environ::component::TypeDef;
         // Recursively stub out all imports of the component with a function that traps.
+        use wasmtime_environ::component::{ComponentTypes, ResourceIndex, TypeDef};
+
         fn stub_item<T>(
             linker: &mut LinkerInstance<T>,
+            resources: &mut TryEntitySet<ResourceIndex>,
             item_name: &str,
             item_def: &TypeDef,
             parent_instance: Option<&str>,
             types: &ComponentTypes,
         ) -> Result<()> {
+            // The first definition of a resource needs to be present, but all other future
+            // references to the same resource are aliases of the original resource definition.
+            // Once a resource is visited here all future hits on the same resource shouldn't
+            // do anything else effectively. If item_name is already defined then we'll bail
+            // out in the below matches!, and otherwise a stub will be inserted, so no matter
+            // what the first resource is defined and all others will refer to that.
+            if let TypeDef::Resource(ty) = item_def
+                && !resources.insert(types[*ty].unwrap_concrete_ty())?
+            {
+                return Ok(());
+            }
+
             // Skip if the item isn't an instance and has already been defined in the linker.
             if !matches!(item_def, TypeDef::ComponentInstance(_)) && linker.get(item_name).is_some()
             {
@@ -414,6 +434,7 @@ impl<T: 'static> Linker<T> {
                     for (export_name, export) in instance.exports.iter() {
                         stub_item(
                             &mut linker_instance,
+                            resources,
                             export_name,
                             &export.ty,
                             Some(item_name),
@@ -433,9 +454,12 @@ impl<T: 'static> Linker<T> {
             Ok(())
         }
 
+        let mut resources = TryEntitySet::new();
+
         for (_, (import_name, import_type)) in &component.env_component().import_types {
             stub_item(
                 &mut self.root(),
+                &mut resources,
                 import_name,
                 &import_type.ty,
                 None,
@@ -908,13 +932,28 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// Same as [`LinkerInstance::instance`] except with different lifetime
     /// parameters.
     pub fn into_instance(mut self, name: &str) -> Result<Self> {
-        let name = self.insert(name, Definition::Instance(NameMap::default()))?;
-        self.map = match self.map.raw_get_mut(&name) {
+        let atom = self.strings.intern(name)?;
+
+        // If this item is already an instance then don't stomp over it with a
+        // new empty instance (or fail due to shadowing being disallowed).
+        // Instead continue through to below to explicitly allow re-opening an
+        // instance multiple times over separate API calls.
+        //
+        // If this item isn't defined, or is defined as anything other than an
+        // instance, however, the insert a fresh new instance and see what
+        // happens as a result.
+        match self.map.raw_get_mut(&atom) {
+            Some(Definition::Instance(_)) => {}
+            _ => {
+                self.insert(name, Definition::Instance(NameMap::default()))?;
+            }
+        }
+        self.map = match self.map.raw_get_mut(&atom) {
             Some(Definition::Instance(map)) => map,
             _ => unreachable!(),
         };
         self.path.truncate(self.path_len);
-        self.path.push(name);
+        self.path.push(atom);
         self.path_len += 1;
         Ok(self)
     }

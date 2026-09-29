@@ -18,22 +18,26 @@ use core::marker::PhantomData;
 use core::ops::Range;
 use wasmtime_environ::error::Error;
 
-cfg_if::cfg_if! {
-    if #[cfg(not(feature = "std"))] {
+cfg_select! {
+    not(feature = "std") => {
         mod nostd;
         use nostd as imp;
         mod stackswitch;
-    } else if #[cfg(miri)] {
+    }
+    miri => {
         mod miri;
         use miri as imp;
-    } else if #[cfg(windows)] {
+    }
+    windows => {
         mod windows;
         use windows as imp;
-    } else if #[cfg(unix)] {
+    }
+    unix => {
         mod unix;
         use unix as imp;
         mod stackswitch;
-    } else {
+    }
+    _ => {
         mod nostd;
         use nostd as imp;
         mod stackswitch;

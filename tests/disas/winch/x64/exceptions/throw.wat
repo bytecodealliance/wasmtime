@@ -1,0 +1,84 @@
+;;! target = "x86_64"
+;;! test = "winch"
+;;! flags = "-W exceptions -C collector=copying"
+
+;; Calls made while the `try_table` handler is active carry exception metadata.
+;; Its landing pad loads the exception's payload and branches to `$h`.
+(module
+  (tag $e (param i32))
+  (func (result i32)
+    (block $h (result i32)
+      (try_table (result i32) (catch $e $h)
+        (throw $e (i32.const 42))))))
+;; wasm[0]::function[0]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    0x20(%r11), %r11
+;;       addq    $0x20, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x11c
+;;   1c: movq    %rdi, %r14
+;;       subq    $0x10, %rsp
+;;       movq    %rdi, 8(%rsp)
+;;       movq    %rsi, (%rsp)
+;;       movq    %r14, %rdi
+;;       callq   0x223
+;;       ├─╼ exception frame offset: SP = FP - 0x10
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x8], handler=0xdc
+;;       movq    8(%rsp), %r14
+;;       movq    0x28(%r14), %rcx
+;;       movl    8(%rcx), %ecx
+;;       subq    $4, %rsp
+;;       movl    %eax, (%rsp)
+;;       subq    $4, %rsp
+;;       movl    %ecx, (%rsp)
+;;       subq    $8, %rsp
+;;       movq    %r14, %rdi
+;;       movl    $0x4000002, %esi
+;;       movl    8(%rsp), %edx
+;;       movl    $0x20, %ecx
+;;       movl    $0x10, %r8d
+;;       callq   0x1d4
+;;       ├─╼ exception frame offset: SP = FP - 0x20
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0xdc
+;;       addq    $0xc, %rsp
+;;       movq    0xc(%rsp), %r14
+;;       movq    8(%r14), %rcx
+;;       movq    0x30(%rcx), %rdx
+;;       movq    0x28(%rcx), %rcx
+;;       movq    %rcx, %rdx
+;;       addq    %rax, %rdx
+;;       movl    (%rsp), %ecx
+;;       addq    $4, %rsp
+;;       movl    %ecx, 0x10(%rdx)
+;;       movl    $0, 0x14(%rdx)
+;;       movl    $0x2a, 0x18(%rdx)
+;;       subq    $4, %rsp
+;;       movl    %eax, (%rsp)
+;;       subq    $0xc, %rsp
+;;       movq    %r14, %rdi
+;;       movl    0xc(%rsp), %esi
+;;       callq   0x250
+;;       ├─╼ exception frame offset: SP = FP - 0x20
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x18], handler=0xdc
+;;       addq    $0x10, %rsp
+;;       movq    8(%rsp), %r14
+;;       movq    %rbp, %rsp
+;;       subq    $0x10, %rsp
+;;       movq    8(%rsp), %r14
+;;       movq    8(%r14), %rcx
+;;       movq    0x30(%rcx), %rdx
+;;       movq    0x28(%rcx), %rcx
+;;       movq    %rax, %r11
+;;       addq    $0x20, %r11
+;;       cmpq    %rdx, %r11
+;;       ja      0x11e
+;;  10a: movq    %rcx, %rdx
+;;       addq    %rax, %rdx
+;;       movl    0x18(%rdx), %eax
+;;       addq    $0x10, %rsp
+;;       popq    %rbp
+;;       retq
+;;  11c: ud2
+;;  11e: ud2

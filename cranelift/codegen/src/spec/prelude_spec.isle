@@ -80,3 +80,22 @@
 
 ; Bit-vector with the sign bit set.
 (macro (fp_sign_bit_set w) (bvshl_int! (bvone! w) (fp_sign_bit! w)))
+
+; Whether a floating-point value is an *arithmetic* NaN: a NaN with the top
+; fraction bit set. CLIF/Wasm arithmetic operations that return a NaN must
+; return an arithmetic NaN, but its sign and remaining payload bits are
+; nondeterministic.
+;
+; An arithmetic NaN is exactly a value whose exponent is all ones and whose top
+; fraction bit is set (which also implies a nonzero mantissa, so it is a NaN
+; rather than an infinity). Those are precisely the bits set in the positive
+; canonical NaN, so the test is `(x & nan_canon) == nan_canon`. Expressed purely
+; in the bit-vector theory (no `fp.isNaN`) so the solver need not bridge the
+; floating-point and bit-vector theories.
+(macro (is_arith_nan x)
+    (= (bvand x (nan_canon! (widthof x))) (nan_canon! (widthof x))))
+
+; CLIF-level floating-point value equivalence. Two results are equivalent if
+; they are bitwise equal, or both are arithmetic NaNs.
+(macro (fp_equiv a b)
+    (or (= a b) (and (is_arith_nan! a) (is_arith_nan! b))))

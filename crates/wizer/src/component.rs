@@ -34,15 +34,15 @@ impl Wizer {
     /// Same as [`Wizer::snapshot`], except for components.
     pub async fn snapshot_component(
         &self,
-        mut cx: ComponentContext<'_>,
+        cx: &ComponentContext<'_>,
         instance: &mut impl ComponentInstanceState,
     ) -> Result<Vec<u8>> {
         if !self.func_renames.is_empty() {
             bail!("components do not support renaming functions");
         }
 
-        let snapshot = snapshot::snapshot(&cx, instance).await;
-        let rewritten_wasm = self.rewrite_component(&mut cx, &snapshot);
+        let snapshot = snapshot::snapshot(cx, instance).await;
+        let rewritten_wasm = self.rewrite_component(cx, &snapshot);
         self.debug_assert_valid_wasm(&rewritten_wasm, "rewritten component");
 
         Ok(rewritten_wasm)

@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    abi::{ABIOperand, ABISig, RetArea, vmctx},
+    abi::{ABI, ABIOperand, ABISig, LocalSlot, RetArea, vmctx},
     bail,
     codegen::BlockSig,
     ensure, format_err,
@@ -20,13 +20,13 @@ use smallvec::SmallVec;
 use std::marker::PhantomData;
 use wasmparser::{
     BinaryReader, FuncValidator, MemArg, Operator, OperatorsReader, ValidatorResources,
-    VisitOperator, VisitSimdOperator,
+    VisitOperator, VisitSimdOperator, WasmFeatures,
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FUNCREF_INIT_BIT, FUNCREF_MASK, GlobalIndex, IndexType, MemoryIndex,
     MemoryKind, MemoryTunables, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType,
-    WasmValType,
+    WasmValType, wasm_unsupported,
 };
 
 mod context;
@@ -40,6 +40,11 @@ pub(crate) use control::*;
 mod builtin;
 pub use builtin::*;
 pub(crate) mod bounds;
+mod drc;
+mod exceptions;
+pub(crate) use exceptions::{CatchInfo, TryTableInfo};
+mod gc;
+use gc::GcCodegenConfig;
 
 use bounds::{Bounds, ImmOffset, Index};
 
@@ -118,6 +123,12 @@ where
 
     /// Local counter to track fuel consumption.
     pub fuel_consumed: i64,
+
+    /// Whether this function accesses the store's GC heap.
+    pub needs_gc_heap: bool,
+
+    /// Collector-specific configuration for generating GC operations.
+    gc_codegen_config: Option<GcCodegenConfig>,
     phase: PhantomData<P>,
 }
 
@@ -131,8 +142,19 @@ where
         context: CodeGenContext<'a, Prologue>,
         env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
         sig: ABISig,
-    ) -> CodeGen<'a, 'translation, 'data, M, Prologue> {
-        Self {
+        wasm_features: &WasmFeatures,
+    ) -> Result<CodeGen<'a, 'translation, 'data, M, Prologue>> {
+        let gc_codegen_config = match tunables.collector {
+            Some(collector) => Some(GcCodegenConfig::new(collector)),
+            None if wasm_features.contains(WasmFeatures::EXCEPTIONS) => {
+                return Err(format_err!(wasm_unsupported!(
+                    "support for GC types disabled at configuration time"
+                )));
+            }
+            None => None,
+        };
+
+        Ok(Self {
             sig,
             context,
             masm,
@@ -142,8 +164,10 @@ where
             control_frames: Default::default(),
             // Empty functions should consume at least 1 fuel unit.
             fuel_consumed: 1,
+            needs_gc_heap: false,
+            gc_codegen_config,
             phase: PhantomData,
-        }
+        })
     }
 
     /// Code generation prologue.
@@ -168,6 +192,7 @@ where
 
         self.masm.reserve_stack(self.context.frame.locals_size)?;
         self.spill_register_arguments()?;
+        self.copy_stack_gc_refs_to_frame()?;
 
         let defined_locals_range = &self.context.frame.defined_locals_range;
         self.masm.zero_mem_range(defined_locals_range.as_range())?;
@@ -202,6 +227,8 @@ where
             source_location: self.source_location,
             control_frames: self.control_frames,
             fuel_consumed: self.fuel_consumed,
+            needs_gc_heap: self.needs_gc_heap,
+            gc_codegen_config: self.gc_codegen_config,
             phase: PhantomData,
         })
     }
@@ -222,14 +249,54 @@ where
                             self.masm.store((*reg).into(), addr, (*ty).try_into()?)?;
                         }
                         Ref(rt) => match rt.heap_type {
-                            WasmHeapType::Func | WasmHeapType::Extern => {
+                            WasmHeapType::Func => {
                                 self.masm.store_ptr(*reg, addr)?;
+                            }
+                            WasmHeapType::Extern
+                            | WasmHeapType::Exn
+                            | WasmHeapType::ConcreteExn(_)
+                            | WasmHeapType::NoExn => {
+                                self.masm.store((*reg).into(), addr, (*ty).try_into()?)?;
                             }
                             _ => bail!(CodeGenError::unsupported_wasm_type()),
                         },
                     }
                 }
                 // Skip non-register arguments
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Copy GC references passed on the stack into frame slots so that
+    /// stack maps cover them: the caller's argument area is not visited by
+    /// the collector, so a reference left there goes stale across a
+    /// collection. Everything else stays in the caller's argument area.
+    fn copy_stack_gc_refs_to_frame(&mut self) -> Result<()> {
+        for (operand, slot) in self
+            .sig
+            .params_without_retptr()
+            .iter()
+            .zip(self.context.frame.locals())
+        {
+            match (operand, slot) {
+                (ABIOperand::Stack { ty, offset, .. }, slot)
+                    if ty.is_vmgcref_type_and_not_i31() =>
+                {
+                    ensure!(
+                        slot.addressed_from_sp(),
+                        CodeGenError::sp_addressing_expected(),
+                    );
+                    let arg_base = u32::from(<M::ABI as ABI>::arg_base_offset());
+                    let src = LocalSlot::stack_arg(*ty, offset + arg_base);
+                    let src_addr = self.masm.local_address(&src)?;
+                    let dst_addr = self.masm.local_address(slot)?;
+                    self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+                        masm.load(src_addr, scratch.writable(), (*ty).try_into()?)?;
+                        masm.store(scratch.inner().into(), dst_addr, (*ty).try_into()?)
+                    })?;
+                }
                 _ => {}
             }
         }
@@ -255,9 +322,17 @@ where
 
     /// Pops a control frame from the control frame stack.
     pub fn pop_control_frame(&mut self) -> Result<ControlStackFrame> {
-        self.control_frames
+        let frame = self
+            .control_frames
             .pop()
-            .ok_or_else(|| format_err!(CodeGenError::control_frame_expected()))
+            .ok_or_else(|| format_err!(CodeGenError::control_frame_expected()))?;
+        if let Some(info) = frame.try_table_info() {
+            self.context
+                .exception_handlers
+                .restore_checkpoint(info.checkpoint);
+        }
+
+        Ok(frame)
     }
 
     /// Derives a [RelSourceLoc] from a [SourceLoc].
@@ -295,6 +370,9 @@ where
 
     pub fn handle_unreachable_end(&mut self) -> Result<()> {
         let mut frame = self.pop_control_frame()?;
+        if let Some(info) = frame.take_try_table_info() {
+            return self.emit_try_table_end(frame, info);
+        }
         // We just popped the outermost block.
         let is_outermost = self.control_frames.len() == 0;
 
@@ -352,7 +430,7 @@ where
         ops.finish()?;
         return Ok(());
 
-        struct ValidateThenVisit<'a, T, U>(T, &'a mut U, usize);
+        struct ValidateThenVisit<'a, T, U>(T, &'a mut U, u64);
 
         macro_rules! validate_then_visit {
             ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident $ann:tt)*) => {
@@ -376,7 +454,7 @@ where
         fn visit_op_when_unreachable(op: &Operator) -> bool {
             use Operator::*;
             match op {
-                If { .. } | Block { .. } | Loop { .. } | Else | End => true,
+                If { .. } | Block { .. } | TryTable { .. } | Loop { .. } | Else | End => true,
                 _ => false,
             }
         }
@@ -385,7 +463,7 @@ where
         /// operator.
         trait VisitorHooks {
             /// Hook prior to visiting an operator.
-            fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()>;
+            fn before_visit_op(&mut self, operator: &Operator, offset: u64) -> Result<()>;
             /// Hook after visiting an operator.
             fn after_visit_op(&mut self) -> Result<()>;
 
@@ -407,7 +485,7 @@ where
                 self.context.reachable || visit_op_when_unreachable(op)
             }
 
-            fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()> {
+            fn before_visit_op(&mut self, operator: &Operator, offset: u64) -> Result<()> {
                 // Handle source location mapping.
                 self.source_location_before_visit_op(offset)?;
 
@@ -452,6 +530,14 @@ where
         }
     }
 
+    /// Whether a GC barrier must be emitted when writing or reading a
+    /// reference of the given type through a collector-visible location.
+    pub fn gc_barrier_needed(&self, ty: &WasmValType) -> bool {
+        ty.is_vmgcref_type_and_not_i31()
+            && self.tunables.collector
+                == Some(wasmtime_environ::Collector::DeferredReferenceCounting)
+    }
+
     /// Emits a a series of instructions that will type check a function reference call.
     pub fn emit_typecheck_funcref(
         &mut self,
@@ -462,12 +548,9 @@ where
         let sig_index_bytes = self.env.vmoffsets.size_of_vmshared_type_index();
         let sig_size = OperandSize::from_bytes(sig_index_bytes);
         let sig_index = self.env.translation.module.types[type_index].unwrap_module_type_index();
-        let sig_offset = sig_index
-            .as_u32()
-            .checked_mul(sig_index_bytes.into())
-            .unwrap();
-        let signatures_base_offset = self.env.vmoffsets.ptr.vmctx_type_ids_array();
-        let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref_type_index();
+        let sig_offset = self.env.shared_type_index_offset(sig_index);
+        let signatures_base_offset = self.env.vmoffsets.ptr.vmctx().type_ids();
+        let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref().type_index();
         // Get the caller id.
         let caller_id = self.context.any_gpr(self.masm)?;
 
@@ -528,8 +611,16 @@ where
             self.context.stack.len() == 0,
             CodeGenError::unexpected_value_in_value_stack()
         );
-        self.masm.free_stack(self.context.frame.locals_size)?;
-        self.masm.epilogue()?;
+        let stack_args_size = if self.sig.call_conv.is_default() {
+            crate::abi::align_to(
+                self.sig.params_stack_size(),
+                u32::from(M::ABI::call_stack_align()),
+            )
+        } else {
+            0
+        };
+        self.masm
+            .epilogue(self.context.frame.locals_size, stack_args_size)?;
         self.masm.end_source_loc()?;
         Ok(())
     }
@@ -1747,7 +1838,8 @@ where
         let data_segment_length_offset = self
             .env
             .vmoffsets
-            .vmctx_runtime_data_length(runtime_data_index);
+            .runtime_data_lengths()
+            .at(runtime_data_index);
         let tmp1 = self.context.any_gpr(self.masm)?;
         let tmp2 = self.context.any_gpr(self.masm)?;
         self.masm.load(
@@ -1774,7 +1866,8 @@ where
         let data_segment_base_offset = self
             .env
             .vmoffsets
-            .vmctx_runtime_data_base(runtime_data_index);
+            .runtime_data_bases()
+            .at(runtime_data_index);
         self.masm.load(
             self.masm.address_at_vmctx(data_segment_base_offset)?,
             writable!(tmp1),
@@ -1812,7 +1905,8 @@ where
         let data_segment_offset = self
             .env
             .vmoffsets
-            .vmctx_runtime_data_length(runtime_data_index);
+            .runtime_data_lengths()
+            .at(runtime_data_index);
         let len_addr = self.masm.address_at_vmctx(data_segment_offset)?;
         self.masm.store(RegImm::i32(0), len_addr, OperandSize::S32)
     }
@@ -2098,8 +2192,8 @@ where
     /// Emits a series of instructions that load the `fuel_consumed` field from
     /// `VMStoreContext`.
     fn emit_load_fuel_consumed(&mut self, fuel_reg: Reg) -> Result<()> {
-        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
-        let fuel_offset = self.env.vmoffsets.ptr.vmstore_context_fuel_consumed();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx().store_context();
+        let fuel_offset = self.env.vmoffsets.ptr.vm_store_context().fuel_consumed();
         self.masm.load_ptr(
             self.masm
                 .address_at_vmctx(u32::from(store_context_offset))?,
@@ -2176,9 +2270,9 @@ where
         epoch_deadline_reg: Reg,
         epoch_counter_reg: Reg,
     ) -> Result<()> {
-        let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx_epoch_ptr();
-        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
-        let epoch_deadline_offset = self.env.vmoffsets.ptr.vmstore_context_epoch_deadline();
+        let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx().epoch_ptr();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx().store_context();
+        let epoch_deadline_offset = self.env.vmoffsets.ptr.vm_store_context().epoch_deadline();
 
         // Load the current epoch value into `epoch_counter_var`.
         self.masm.load_ptr(
@@ -2218,8 +2312,8 @@ where
             return Ok(());
         }
 
-        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
-        let fuel_offset = self.env.vmoffsets.ptr.vmstore_context_fuel_consumed();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx().store_context();
+        let fuel_offset = self.env.vmoffsets.ptr.vm_store_context().fuel_consumed();
         let limits_reg = self.context.any_gpr(self.masm)?;
 
         // Load `VMStoreContext` into the `limits_reg` reg.
@@ -2264,7 +2358,10 @@ where
         if !self.context.reachable {
             // `self.fuel_consumed` must be correctly flushed to memory when
             // entering an unreachable state.
-            ensure!(self.fuel_consumed == 0, CodeGenError::illegal_fuel_state())
+            ensure!(self.fuel_consumed == 0, CodeGenError::illegal_fuel_state());
+            // Control operators are still visited to track nesting and restore
+            // reachability at `else` or `end`, but those visits must not charge fuel.
+            return Ok(());
         }
 
         // Generally, most instructions require 1 fuel unit.
@@ -2298,13 +2395,15 @@ where
             | Operator::CallIndirect { .. }
             | Operator::Call { .. }
             | Operator::ReturnCall { .. }
-            | Operator::ReturnCallIndirect { .. } => self.emit_fuel_increment(),
+            | Operator::ReturnCallIndirect { .. }
+            | Operator::Throw { .. }
+            | Operator::ThrowRef => self.emit_fuel_increment(),
             _ => Ok(()),
         }
     }
 
     // Hook to handle source location mapping before visiting an operator.
-    fn source_location_before_visit_op(&mut self, offset: usize) -> Result<()> {
+    fn source_location_before_visit_op(&mut self, offset: u64) -> Result<()> {
         let loc = SourceLoc::new(offset as u32);
         let rel = self.source_loc_from(loc);
         self.source_location.current = self.masm.start_source_loc(rel)?;
@@ -2337,14 +2436,24 @@ where
         let heap = self.env.resolve_heap(memory_index);
         // We need to pop-push the operand to compute the address before passing control over to
         // masm, because some architectures may have specific requirements for the registers used
-        // in some atomic operations.
+        // in some atomic operations. The computed address is pushed back to the context's stack
+        // too, rather than handed over as a register, since registers that are not tracked by the
+        // value stack can't be spilled, so an untracked address register would make any request
+        // for a fixed register fail if the address happened to be allocated to it. For this
+        // reason, the address is pushed as a register to be dereferenced prior to emission, after
+        // all the ISA-specifc constraints have been solved.
         let operand = self.context.pop_to_reg(self.masm, None)?;
         if let Some(addr) = self.emit_compute_heap_address_align_checked(&heap, arg, size)? {
-            let src = self.masm.address_at_reg(addr, 0)?;
+            self.context
+                .stack
+                .push(TypedReg::new(self.env.ptr_type(), addr).into());
             self.context.stack.push(operand.into());
             self.masm
-                .atomic_rmw(&mut self.context, src, size, op, UNTRUSTED_FLAGS, extend)?;
-            self.context.free_reg(addr);
+                .atomic_rmw(&mut self.context, size, op, UNTRUSTED_FLAGS, extend)?;
+        } else {
+            // Ensure that the operand register is not left allocated if the access was proven to
+            // be out of bounds at compile time.
+            self.context.free_reg(operand);
         }
 
         Ok(())
@@ -2368,10 +2477,15 @@ where
         // with regard to the registers used for some arguments, so we
         // need to pass the context to the masm. To solve this issue,
         // we pop the two first arguments from the stack, compute the
-        // address, push back the arguments, and hand over the control
-        // to masm. The implementer of `atomic_cas` can expect to find
-        // `expected` and `replacement` at the top the context's
-        // stack.
+        // address, push back the address and the arguments, and hand
+        // over the control to masm. The implementer of `atomic_cas`
+        // can expect to find `address`, `expected` and `replacement`
+        // at the top the context's stack.
+        //
+        // The computed address is pushed back to the stack as a
+        // register, rather than handed over directly, so that the
+        // register allocator is able to spill it if the target
+        // requires a fixed register.
 
         let replacement = self.context.pop_to_reg(self.masm, None)?;
         let expected = self.context.pop_to_reg(self.masm, None)?;
@@ -2379,14 +2493,19 @@ where
         let memory_index = MemoryIndex::from_u32(arg.memory);
         let heap = self.env.resolve_heap(memory_index);
         if let Some(addr) = self.emit_compute_heap_address_align_checked(&heap, arg, size)? {
+            self.context
+                .stack
+                .push(TypedReg::new(self.env.ptr_type(), addr).into());
             self.context.stack.push(expected.into());
             self.context.stack.push(replacement.into());
 
-            let src = self.masm.address_at_reg(addr, 0)?;
             self.masm
-                .atomic_cas(&mut self.context, src, size, UNTRUSTED_FLAGS, extend)?;
-
-            self.context.free_reg(addr);
+                .atomic_cas(&mut self.context, size, UNTRUSTED_FLAGS, extend)?;
+        } else {
+            // Ensure that the argument registers are not left allocated if the access was proven
+            // to be out of bounds at compile time.
+            self.context.free_reg(expected);
+            self.context.free_reg(replacement);
         }
         Ok(())
     }
@@ -2507,9 +2626,11 @@ where
             // is loaded from the `VMMemoryImport` and the vmctx is loaded from
             // the vmctx itself.
             None => {
-                let vmimport = self.env.vmoffsets.vmctx_vmmemory_import(mem);
-                let vmctx_offset = vmimport + u32::from(self.env.vmoffsets.vmmemory_import_vmctx());
-                let index_offset = vmimport + u32::from(self.env.vmoffsets.vmmemory_import_index());
+                let vmimport = self.env.vmoffsets.imported_memories().at(mem);
+                let vmctx_offset =
+                    vmimport + u32::from(self.env.vmoffsets.ptr.vm_memory_import().vmctx());
+                let index_offset =
+                    vmimport + u32::from(self.env.vmoffsets.ptr.vm_memory_import().index());
                 let index_addr = self.masm.address_at_vmctx(index_offset)?;
                 let index_dst = self.context.reg_for_class(RegClass::Int, self.masm)?;
                 self.masm
@@ -2537,9 +2658,11 @@ where
                 Ok(Callee::Builtin(builtin))
             }
             None => {
-                let vmimport = self.env.vmoffsets.vmctx_vmtable_import(table);
-                let vmctx_offset = vmimport + u32::from(self.env.vmoffsets.vmtable_import_vmctx());
-                let index_offset = vmimport + u32::from(self.env.vmoffsets.vmtable_import_index());
+                let vmimport = self.env.vmoffsets.imported_tables().at(table);
+                let vmctx_offset =
+                    vmimport + u32::from(self.env.vmoffsets.ptr.vm_table_import().vmctx());
+                let index_offset =
+                    vmimport + u32::from(self.env.vmoffsets.ptr.vm_table_import().index());
                 let index_addr = self.masm.address_at_vmctx(index_offset)?;
                 let index_dst = self.context.reg_for_class(RegClass::Int, self.masm)?;
                 self.masm

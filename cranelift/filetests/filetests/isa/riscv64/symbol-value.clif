@@ -40,7 +40,7 @@ block0:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0 ; reloc_external RiscvPCRelHi20 %func0 0
-;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0 0
+;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0x0 0
 ;   ret
 
 function %symbol_value() -> i64 {
@@ -125,7 +125,7 @@ block0:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0 ; reloc_external RiscvPCRelHi20 %global0 0
-;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0 0
+;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0x0 0
 ;   ret
 
 function %colocated_symbol_value_plus_offset() -> i64 {
@@ -144,7 +144,7 @@ block0:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0 ; reloc_external RiscvPCRelHi20 %global0 123
-;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0 0
+;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0x0 0
 ;   ret
 
 function %colocated_symbol_value_minus_offset() -> i64 {
@@ -163,6 +163,6 @@ block0:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0 ; reloc_external RiscvPCRelHi20 %global0 -123
-;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0 0
+;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+0x0 0
 ;   ret
 

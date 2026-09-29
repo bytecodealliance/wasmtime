@@ -72,7 +72,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
         ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
     };
     ensure!(
-        (header.e_flags(endian) & expected_e_flags) == expected_e_flags,
+        header.e_flags(endian).contains(expected_e_flags),
         "incompatible object file format"
     );
 
@@ -156,12 +156,12 @@ fn detect_precompiled<'data, R: object::ReadRef<'data>>(
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
             e_flags,
-        } if e_flags & obj::EF_WASMTIME_MODULE != 0 => Some(Precompiled::Module),
+        } if e_flags.contains(obj::EF_WASMTIME_MODULE) => Some(Precompiled::Module),
         FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
             e_flags,
-        } if e_flags & obj::EF_WASMTIME_COMPONENT != 0 => Some(Precompiled::Component),
+        } if e_flags.contains(obj::EF_WASMTIME_COMPONENT) => Some(Precompiled::Component),
         _ => None,
     }
 }
@@ -316,6 +316,7 @@ impl Metadata<'_> {
             inlining_sum_size_threshold,
             concurrency_support,
             recording,
+            asan_stack_switching,
 
             // This doesn't affect compilation, it's just a runtime setting.
             memory_reservation_for_growth: _,
@@ -425,6 +426,11 @@ impl Metadata<'_> {
             "concurrency support",
         )?;
         Self::check_bool(recording, other.recording, "RR recording support")?;
+        Self::check_bool(
+            asan_stack_switching,
+            other.asan_stack_switching,
+            "AddressSanitizer stack-switching support",
+        )?;
         Self::check_inlining(inlining, other.inlining)?;
         Self::check_int(
             gc_heap_reservation,

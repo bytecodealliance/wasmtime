@@ -8,6 +8,14 @@ use wasmtime_wasi::p2::add_to_linker_sync;
 use wasmtime_wasi::p2::bindings::sync::Command;
 
 fn run(path: &str, with_builder: impl Fn(&mut WasiCtxBuilder)) -> Result<()> {
+    run_with_workspace_setup(path, |_| Ok(()), with_builder)
+}
+
+fn run_with_workspace_setup(
+    path: &str,
+    setup: impl Fn(&Path) -> Result<()>,
+    with_builder: impl Fn(&mut WasiCtxBuilder),
+) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
     let engine = test_programs_artifacts::engine(|_| {});
@@ -17,7 +25,7 @@ fn run(path: &str, with_builder: impl Fn(&mut WasiCtxBuilder)) -> Result<()> {
     let component = Component::from_file(&engine, path)?;
 
     for blocking in [false, true] {
-        let (mut store, _td) = Ctx::new(&engine, name, |builder| {
+        let (mut store, _td) = Ctx::new_with_workspace_setup(&engine, name, &setup, |builder| {
             with_builder(builder);
             builder.allow_blocking_current_thread(blocking);
             MyWasiCtx::new(builder.build())
@@ -37,44 +45,17 @@ foreach_p2!(assert_test_exists);
 // Below here is mechanical: there should be one test for every binary in
 // wasi-tests.
 #[test_log::test]
-fn p1_big_random_buf() {
-    run(P1_BIG_RANDOM_BUF_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_clock_time_get() {
-    run(P1_CLOCK_TIME_GET_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_close_preopen() {
-    run(P1_CLOSE_PREOPEN_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_dangling_fd() {
-    run(P1_DANGLING_FD_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_dangling_symlink() {
-    run(P1_DANGLING_SYMLINK_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_directory_seek() {
-    run(P1_DIRECTORY_SEEK_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_dir_fd_op_failures() {
-    run(P1_DIR_FD_OP_FAILURES_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_fd_advise() {
-    run(P1_FD_ADVISE_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
 fn p1_fd_filestat_get() {
     run(P1_FD_FILESTAT_GET_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
-fn p1_fd_filestat_set() {
-    run(P1_FD_FILESTAT_SET_COMPONENT, |_| {}).unwrap()
+fn p1_stat_extreme_host_mtime() {
+    run_with_workspace_setup(
+        P1_STAT_EXTREME_HOST_MTIME_COMPONENT,
+        crate::store::prepare_extreme_mtime_fixture,
+        |_| {},
+    )
+    .unwrap()
 }
 #[test_log::test]
 fn p1_fd_flags_set() {
@@ -83,10 +64,6 @@ fn p1_fd_flags_set() {
 #[test_log::test]
 fn p1_fd_readdir() {
     run(P1_FD_READDIR_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_file_allocate() {
-    run(P1_FILE_ALLOCATE_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
 fn p1_file_pread_pwrite() {
@@ -109,100 +86,17 @@ fn p1_file_unbuffered_write() {
     run(P1_FILE_UNBUFFERED_WRITE_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
-fn p1_interesting_paths() {
-    run(P1_INTERESTING_PATHS_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_regular_file_isatty() {
-    run(P1_REGULAR_FILE_ISATTY_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_nofollow_errors() {
-    run(P1_NOFOLLOW_ERRORS_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_overwrite_preopen() {
-    run(P1_OVERWRITE_PREOPEN_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_exists() {
-    run(P1_PATH_EXISTS_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_filestat() {
-    run(P1_PATH_FILESTAT_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_link() {
-    run(P1_PATH_LINK_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_open_create_existing() {
-    run(P1_PATH_OPEN_CREATE_EXISTING_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_open_read_write() {
-    run(P1_PATH_OPEN_READ_WRITE_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_open_dirfd_not_dir() {
-    run(P1_PATH_OPEN_DIRFD_NOT_DIR_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_open_missing() {
-    run(P1_PATH_OPEN_MISSING_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_open_nonblock() {
-    run(P1_PATH_OPEN_NONBLOCK_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_rename_dir_trailing_slashes() {
-    run(P1_PATH_RENAME_DIR_TRAILING_SLASHES_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_rename() {
-    run(P1_PATH_RENAME_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_symlink_trailing_slashes() {
-    run(P1_PATH_SYMLINK_TRAILING_SLASHES_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
 fn p1_poll_oneoff_files() {
     run(P1_POLL_ONEOFF_FILES_COMPONENT, |_| {}).unwrap()
 }
 
 #[test_log::test]
-fn p1_poll_oneoff_stdio() {
-    run(P1_POLL_ONEOFF_STDIO_COMPONENT, |b| {
-        b.inherit_stdio();
-    })
-    .unwrap()
-}
-#[test_log::test]
 fn p1_readlink() {
     run(P1_READLINK_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
-fn p1_remove_directory() {
-    run(P1_REMOVE_DIRECTORY_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_remove_nonempty_directory() {
-    run(P1_REMOVE_NONEMPTY_DIRECTORY_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
 fn p1_renumber() {
     run(P1_RENUMBER_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_sched_yield() {
-    run(P1_SCHED_YIELD_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_stdio() {
-    run(P1_STDIO_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
 fn p1_stdio_isatty() {
@@ -219,26 +113,6 @@ fn p1_stdio_isatty() {
 fn p1_stdio_not_isatty() {
     // Don't inherit stdio, test asserts each is not tty:
     run(P1_STDIO_NOT_ISATTY_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_symlink_create() {
-    run(P1_SYMLINK_CREATE_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_symlink_filestat() {
-    run(P1_SYMLINK_FILESTAT_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_symlink_loop() {
-    run(P1_SYMLINK_LOOP_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_unlink_file_trailing_slashes() {
-    run(P1_UNLINK_FILE_TRAILING_SLASHES_COMPONENT, |_| {}).unwrap()
-}
-#[test_log::test]
-fn p1_path_open_preopen() {
-    run(P1_PATH_OPEN_PREOPEN_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
 fn p1_unicode_output() {
@@ -267,6 +141,10 @@ fn p2_sleep() {
 #[test_log::test]
 fn p2_random() {
     run(P2_RANDOM_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_big_random_buf() {
+    run(P2_BIG_RANDOM_BUF_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
 fn p2_ip_name_lookup() {
@@ -317,12 +195,29 @@ fn p2_udp_states() {
     run(P2_UDP_STATES_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
+fn p2_udp_stream() {
+    run(P2_UDP_STREAM_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
 fn p2_udp_bind() {
     run(P2_UDP_BIND_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
 fn p2_udp_connect() {
     run(P2_UDP_CONNECT_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+// This test is flaky on Windows.  It consistently passes when run by itself but
+// consistently fails when run in combination with the `p2::async_` variation,
+// and we've thus far been unable to determine the reason.
+#[cfg_attr(windows, ignore = "This test is flaky on Windows.")]
+// This test is flaky on macOS in CI. One possible reason is that this relies on
+// a port being closed which concurrent tests can otherwise re-bind. Another
+// reason is that maybe this is just flaky on macOS (LLMs say something about
+// the OS rate-limiting ICMP messages if they're to be believed).
+#[cfg_attr(target_os = "macos", ignore = "This test is flaky on macOS.")]
+fn p2_udp_send_to_closed_receiver() {
+    run(P2_UDP_SEND_TO_CLOSED_RECEIVER_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
 fn p2_stream_pollable_correct() {
@@ -357,12 +252,131 @@ fn p2_file_read_write() {
     run(P2_FILE_READ_WRITE_COMPONENT, |_| {}).unwrap()
 }
 #[test_log::test]
+fn p2_close_preopen() {
+    run(P2_CLOSE_PREOPEN_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_nofollow_errors() {
+    run(P2_NOFOLLOW_ERRORS_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_exists() {
+    run(P2_PATH_EXISTS_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_open_create_existing() {
+    run(P2_PATH_OPEN_CREATE_EXISTING_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_open_missing() {
+    run(P2_PATH_OPEN_MISSING_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_rename_dir_trailing_slashes() {
+    run(P2_PATH_RENAME_DIR_TRAILING_SLASHES_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_remove_nonempty_directory() {
+    run(P2_REMOVE_NONEMPTY_DIRECTORY_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_symlink_create() {
+    run(P2_SYMLINK_CREATE_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_fd_advise() {
+    run(P2_FD_ADVISE_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_poll_oneoff_stdio() {
+    run(P2_POLL_ONEOFF_STDIO_COMPONENT, |b| {
+        b.inherit_stdio();
+    })
+    .unwrap()
+}
+#[test_log::test]
+fn p2_symlink_filestat() {
+    run(P2_SYMLINK_FILESTAT_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_remove_directory() {
+    run(P2_REMOVE_DIRECTORY_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_dangling_symlink() {
+    run(P2_DANGLING_SYMLINK_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_dir_fd_op_failures() {
+    run(P2_DIR_FD_OP_FAILURES_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_fd_filestat_set() {
+    run(P2_FD_FILESTAT_SET_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_interesting_paths() {
+    run(P2_INTERESTING_PATHS_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_filestat() {
+    run(P2_PATH_FILESTAT_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_link() {
+    run(P2_PATH_LINK_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_open_dirfd_not_dir() {
+    run(P2_PATH_OPEN_DIRFD_NOT_DIR_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_open_preopen() {
+    run(P2_PATH_OPEN_PREOPEN_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_open_read_write() {
+    run(P2_PATH_OPEN_READ_WRITE_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_rename() {
+    run(P2_PATH_RENAME_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_path_symlink_trailing_slashes() {
+    run(P2_PATH_SYMLINK_TRAILING_SLASHES_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_symlink_loop() {
+    run(P2_SYMLINK_LOOP_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_unlink_file_trailing_slashes() {
+    run(P2_UNLINK_FILE_TRAILING_SLASHES_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_dangling_fd() {
+    run(P2_DANGLING_FD_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
 fn p2_udp_send_too_much() {
     let e = run(P2_UDP_SEND_TOO_MUCH_COMPONENT, |_| {}).unwrap_err();
     assert_eq!(
         format!("{}", e.source().expect("trap source")),
         "unpermitted: argument exceeds permitted size"
     )
+}
+#[test_log::test]
+fn p2_write_too_much() {
+    let e = run(P2_WRITE_TOO_MUCH_COMPONENT, |_| {}).unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "write exceeded budget"
+    )
+}
+#[test_log::test]
+fn p2_file_settime_overflow() {
+    run(P2_FILE_SETTIME_OVERFLOW_COMPONENT, |_| {}).unwrap()
 }
 
 #[test_log::test]
@@ -376,7 +390,7 @@ fn p2_file_truncation_readonly() {
 
 fn run_with_readonly_testfile(component_path: &str) {
     use std::path::PathBuf;
-    use wasmtime_wasi::{DirPerms, FilePerms};
+    use wasmtime_wasi::FsPerms;
 
     let prefix = "wasi_components_ro_";
     let tempdir = tempfile::Builder::new()
@@ -390,13 +404,8 @@ fn run_with_readonly_testfile(component_path: &str) {
     std::fs::write(&file, EXPECTED_CONTENTS).expect("write read only test file");
 
     run(component_path, |b| {
-        b.preopened_dir(
-            tempdir.path(),
-            "readonly",
-            DirPerms::READ | DirPerms::MUTATE,
-            FilePerms::READ,
-        )
-        .unwrap();
+        b.preopened_dir(tempdir.path(), "readonly", FsPerms::ReadOnly)
+            .unwrap();
     })
     .expect("run guest");
 
@@ -427,38 +436,20 @@ fn p2_file_stream_not_permitted() {
 }
 
 fn file_stream_not_permitted(component_path: &str) {
-    use wasmtime_wasi::{DirPerms, FilePerms};
+    use wasmtime_wasi::FsPerms;
 
     let readonly = tempfile::Builder::new()
         .prefix("wasi_components_stream_np_ro_")
         .tempdir()
         .expect("create readonly tempdir");
-    let writeonly = tempfile::Builder::new()
-        .prefix("wasi_components_stream_np_wo_")
-        .tempdir()
-        .expect("create writeonly tempdir");
 
     const RO_CONTENTS: &[u8] = b"stream permission test\n";
     std::fs::write(readonly.path().join("stream-perms.txt"), RO_CONTENTS)
         .expect("write readonly test file");
-    std::fs::write(writeonly.path().join("stream-write.txt"), b"")
-        .expect("create writeonly test file");
 
     run(component_path, |b| {
-        b.preopened_dir(
-            readonly.path(),
-            "readonly",
-            DirPerms::READ | DirPerms::MUTATE,
-            FilePerms::READ,
-        )
-        .unwrap();
-        b.preopened_dir(
-            writeonly.path(),
-            "writeonly",
-            DirPerms::READ | DirPerms::MUTATE,
-            FilePerms::WRITE,
-        )
-        .unwrap();
+        b.preopened_dir(readonly.path(), "readonly", FsPerms::ReadOnly)
+            .unwrap();
     })
     .expect("run p2_file_stream_not_permitted guest");
 }
@@ -466,4 +457,14 @@ fn file_stream_not_permitted(component_path: &str) {
 #[test_log::test]
 fn p2_clocks_zero_wait() {
     run(P2_CLOCKS_ZERO_WAIT_COMPONENT, |_| {}).unwrap()
+}
+#[test_log::test]
+fn p2_clock_time_get() {
+    run(P2_CLOCK_TIME_GET_COMPONENT, |_| {}).unwrap()
+}
+
+#[test]
+fn p2_environment_named_imports() {
+    // intentionally omitted as named imports are just for async bindings right
+    // now.
 }

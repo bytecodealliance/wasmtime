@@ -2,8 +2,9 @@ use crate::p2::SocketError;
 use crate::p2::bindings::sockets::network::{
     self, ErrorCode, IpAddress, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
 };
-use crate::sockets::WasiSocketsCtxView;
-use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
+use crate::sockets::{
+    WasiSocketsCtxView, from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr,
+};
 use rustix::io::Errno;
 use std::io;
 use wasmtime::Error;
@@ -214,5 +215,41 @@ impl std::net::ToSocketAddrs for Ipv6SocketAddress {
 
     fn to_socket_addrs(&self) -> io::Result<Self::Iter> {
         std::net::SocketAddrV6::from(*self).to_socket_addrs()
+    }
+}
+
+mod named {
+    use crate::p2::SocketError;
+    use crate::p2::bindings::named_imports::wasi::sockets::network;
+    use crate::p2::bindings::sockets::network::{ErrorCode, Network};
+    use crate::sockets::WasiSocketsNamedView;
+    use crate::{NamedId, WasiCtxNamedView};
+    use wasmtime::Error;
+    use wasmtime::component::Resource;
+
+    impl<T> network::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        fn convert_error_code(&mut self, error: SocketError) -> wasmtime::Result<ErrorCode> {
+            error.downcast()
+        }
+
+        fn network_error_code(
+            &mut self,
+            id: NamedId,
+            err: Resource<Error>,
+        ) -> wasmtime::Result<Option<ErrorCode>> {
+            super::network::Host::network_error_code(&mut self.0.sockets(id), err)
+        }
+    }
+
+    impl<T> network::HostNetwork for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        fn drop(&mut self, id: NamedId, this: Resource<Network>) -> Result<(), wasmtime::Error> {
+            super::network::HostNetwork::drop(&mut self.0.sockets(id), this)
+        }
     }
 }

@@ -4,7 +4,7 @@ use std::path::Path;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Result, Store, format_err};
 use wasmtime_wasi::p2::bindings::sync::Command;
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxView};
+use wasmtime_wasi::{FsPerms, WasiCtx, WasiCtxView};
 use wasmtime_wasi_nn::wit::WasiNnView;
 use wasmtime_wasi_nn::{Backend, InMemoryRegistry, wit::WasiNnCtx};
 
@@ -39,8 +39,7 @@ impl Ctx {
         builder.inherit_stdio().preopened_dir(
             preopen_dir,
             PREOPENED_DIR_NAME,
-            DirPerms::READ,
-            FilePerms::READ,
+            FsPerms::ReadOnly,
         )?;
         let wasi = builder.build();
 

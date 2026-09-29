@@ -38,6 +38,8 @@ async fn run_test(provider: Box<dyn TlsProvider>, path: &str) -> Result<()> {
             .inherit_stderr()
             .inherit_network()
             .allow_ip_name_lookup(true)
+            .allow_tcp(true)
+            .allow_udp(true)
             .build(),
         wasi_tls_ctx: WasiTlsCtxBuilder::new().provider(provider).build(),
     };

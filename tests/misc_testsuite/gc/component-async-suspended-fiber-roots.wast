@@ -82,7 +82,7 @@
     (core func $drive (canon lower (func $drive) async))
     (core func $ws-new (canon waitable-set.new))
     (core func $w-join (canon waitable.join))
-    (core func $ws-wait (canon waitable-set.wait (memory $libc "memory")))
+    (core func $ws-wait (canon waitable-set.wait (memory (core memory $libc "memory"))))
     (core func $subtask-drop (canon subtask.drop))
 
     (core module $m

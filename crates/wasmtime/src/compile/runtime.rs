@@ -210,30 +210,22 @@ impl FinishedObject for MmapVecWrapper {
         }
 
         impl WritableBuffer for ObjectMmap {
-            fn len(&self) -> usize {
-                self.len
-            }
-
-            fn reserve(&mut self, additional: usize) -> Result<(), ()> {
+            fn reserve(&mut self, additional: u64) -> Result<(), ()> {
                 assert!(self.mmap.is_none(), "cannot reserve twice");
-                self.mmap = match MmapVec::with_capacity_and_alignment(additional, self.alignment) {
-                    Ok(mmap) => Some(mmap),
-                    Err(e) => {
-                        self.err = Some(e);
-                        return Err(());
-                    }
-                };
+                self.mmap =
+                    match MmapVec::with_capacity_and_alignment(additional as usize, self.alignment)
+                    {
+                        Ok(mmap) => Some(mmap),
+                        Err(e) => {
+                            self.err = Some(e);
+                            return Err(());
+                        }
+                    };
                 Ok(())
             }
 
-            fn resize(&mut self, new_len: usize) {
-                // Resizing always appends 0 bytes and since new mmaps start out as 0
-                // bytes we don't actually need to do anything as part of this other
-                // than update our own length.
-                if new_len <= self.len {
-                    return;
-                }
-                self.len = new_len;
+            fn write_zeros(&mut self, additional: u64) {
+                self.len += additional as usize;
             }
 
             fn write_bytes(&mut self, val: &[u8]) {

@@ -27,7 +27,7 @@
     ))))
     (func (export "f") async (result u32) (canon lift
       (core func $cm "f")
-      async (memory $memory "mem") (callback (func $cm "cb"))
+      async (memory (core memory $memory "mem")) (callback (core func $cm "cb"))
     ))
   )
 
@@ -55,8 +55,8 @@
     )
     (canon waitable.join (core func $waitable.join))
     (canon waitable-set.new (core func $waitable-set.new))
-    (canon waitable-set.wait (memory $memory "mem") (core func $waitable-set.wait))
-    (canon lower (func $f) async (memory $memory "mem") (core func $f'))
+    (canon waitable-set.wait (memory (core memory $memory "mem")) (core func $waitable-set.wait))
+    (canon lower (func $f) async (memory (core memory $memory "mem")) (core func $f'))
     (core instance $dm (instantiate $DM (with "" (instance
       (export "mem" (memory $memory "mem"))
       (export "waitable.join" (func $waitable.join))

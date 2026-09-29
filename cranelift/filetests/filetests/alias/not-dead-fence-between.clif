@@ -1,0 +1,207 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; A call between two stores to the same region is a fence; it must not be
+;; treated as a dead store and removed, and the first store must be kept.
+function %call_between(i64, i32, i32) {
+    region0 = 0 "R"
+    fn0 = colocated %g()
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    call fn0()
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %call_between(i64, i32, i32) fast {
+;     region0 = 0 "R"
+;     sig0 = () fast
+;     fn0 = colocated %g sig0
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     call fn0()
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+;; Same as above, but the call produces a result.
+function %call_result_between(i64, i32) -> i32 {
+    region0 = 0 "R"
+    fn0 = colocated %g(i64) -> i32
+block0(v0: i64, v1: i32):
+    store notrap aligned region0 v1, v0
+    v2 = call fn0(v0)
+    store notrap aligned region0 v2, v0
+    return v2
+}
+
+; function %call_result_between(i64, i32) -> i32 fast {
+;     region0 = 0 "R"
+;     sig0 = (i64) -> i32 fast
+;     fn0 = colocated %g sig0
+;
+; block0(v0: i64, v1: i32):
+;     store notrap aligned region0 v1, v0
+;     v2 = call fn0(v0)
+;     store notrap aligned region0 v2, v0
+;     return v2
+; }
+
+;; A `fence` between two stores must be kept.
+function %fence_between(i64, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    fence
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %fence_between(i64, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     fence 
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+;; An `atomic_cas` between two stores is a fence and must be kept.
+function %atomic_cas_between(i64, i32, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store notrap aligned region0 v1, v0
+    v4 = atomic_cas.i32 v0, v2, v3
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %atomic_cas_between(i64, i32, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store notrap aligned region0 v1, v0
+;     v4 = atomic_cas v0, v2, v3
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+;; A `trapz` between two stores: post-trap memory must reflect the first store,
+;; so the first store cannot be eliminated across the trap.
+function %trapz_between(i64, i32, i32, i32) {
+    region0 = 0 "R"
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store notrap aligned region0 v1, v0
+    trapz v3, user42
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %trapz_between(i64, i32, i32, i32) fast {
+;     region0 = 0 "R"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store notrap aligned region0 v1, v0
+;     trapz v3, user42
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+function %atomic_rmw_between(i64, i32, i32) {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    v3 = atomic_rmw.i32 add v0, v1
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %atomic_rmw_between(i64, i32, i32) fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     v3 = atomic_rmw.i32 add v0, v1
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+function %atomic_load_between(i64, i32, i32) {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    v3 = atomic_load.i32 v0
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %atomic_load_between(i64, i32, i32) fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     v3 = atomic_load.i32 v0
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+function %atomic_store_between(i64, i32, i32, i32) {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store notrap aligned region0 v1, v0
+    atomic_store.i32 v3, v0
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %atomic_store_between(i64, i32, i32, i32) fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store notrap aligned region0 v1, v0
+;     atomic_store v3, v0
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+function %debugtrap_between(i64, i32, i32) {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    debugtrap
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %debugtrap_between(i64, i32, i32) fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     debugtrap 
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+function %sequence_point_between(i64, i32, i32) {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    sequence_point
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %sequence_point_between(i64, i32, i32) fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     sequence_point 
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+

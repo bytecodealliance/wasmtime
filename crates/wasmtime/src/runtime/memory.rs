@@ -978,6 +978,13 @@ impl SharedMemory {
         }
     }
 
+    /// Returns a stable identifier for this shared memory when introspecting
+    /// it through the debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u64 {
+        u64::try_from(self.vm.vmmemory_ptr().as_ptr().addr()).unwrap()
+    }
+
     /// Equivalent of the WebAssembly `memory.atomic.notify` instruction for
     /// this shared memory.
     ///

@@ -1,0 +1,39 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; Removing an idempotent store deliberately leaves the last store for its
+;; region as whatever it was before that store, since that is what the
+;; rewritten code's last store actually is.
+function %stale_after_idempotent_store(i64, i32, i32) -> i32 {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32, v2: i32):
+    store notrap aligned region0 v1, v0
+    brif v2, block1, block2
+
+block1:
+    store notrap aligned region0 v1, v0
+    v3 = load.i32 notrap aligned region0 v0+8
+    return v3
+
+block2:
+    store notrap aligned region0 v2, v0
+    return v2
+}
+
+; function %stale_after_idempotent_store(i64, i32, i32) -> i32 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32, v2: i32):
+;     store notrap aligned region0 v1, v0
+;     brif v2, block1, block2
+;
+; block1:
+;     v3 = load.i32 notrap aligned region0 v0+8
+;     return v3
+;
+; block2:
+;     store.i32 notrap aligned region0 v2, v0
+;     return v2
+; }

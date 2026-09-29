@@ -570,8 +570,10 @@ impl LocalMemory {
                         }
                     };
 
+                    // Memories allocated on demand are never striped with MPK
+                    // protection keys, so this slot has no key to preserve.
                     let mut slot =
-                        MemoryImageSlot::create(mmap_base, byte_size, alloc.byte_capacity());
+                        MemoryImageSlot::create(mmap_base, byte_size, alloc.byte_capacity(), None);
                     slot.instantiate(alloc.byte_size(), Some(image), ty, memory_tunables)?;
                     Some(slot)
                 } else {

@@ -374,6 +374,8 @@
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(all(asan, feature = "stack-switching"), allow(unstable_features))]
+#![cfg_attr(all(asan, feature = "stack-switching"), feature(sanitize))]
 // NB: this list is currently being burned down to remove all features listed
 // here to get warnings in all configurations of Wasmtime.
 #![cfg_attr(
@@ -509,11 +511,11 @@ mod sync_nostd;
 #[cfg(not(feature = "std"))]
 use sync_nostd as sync;
 
-pub use wasmtime_environ::OperatorCost;
 pub use wasmtime_environ::ToWasmtimeResult;
 #[doc(inline)]
 pub use wasmtime_environ::error;
 pub use wasmtime_environ::{FuncIndex, StaticModuleIndex};
+pub use wasmtime_environ::{OperatorCost, VariableOperatorCost};
 
 // Only for use in `bindgen!`-generated code.
 #[doc(hidden)]

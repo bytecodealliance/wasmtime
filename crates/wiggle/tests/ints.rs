@@ -24,7 +24,7 @@ impl<'a> ints::Ints for WasiCtx<'a> {
 }
 
 fn cookie_strat() -> impl Strategy<Value = types::Cookie> {
-    (0..std::u64::MAX)
+    (0..u64::MAX)
         .prop_map(|x| types::Cookie::try_from(x).expect("within range of cookie"))
         .boxed()
 }

@@ -52,6 +52,9 @@ default = ['fuzz-spec-interpreter', 'v8']
 fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
 v8 = ['wasmtime-fuzzing/v8']
 chaos = ["cranelift-control/chaos"]
+# Check the x64 assembler against Intel XED in the `misc` fuzzer. Off by default
+# because XED is built from source, which requires a C compiler and Python.
+fuzz-xed = ["cranelift-assembler-x64/fuzz-xed"]
 
 [[bin]]
 name = "compile"

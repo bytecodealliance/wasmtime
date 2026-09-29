@@ -109,7 +109,7 @@ mod no_imports_concurrent {
                     ))
 
                     (func $f (export "bar") async
-                        (canon lift (core func $i "bar") async (callback (func $i "callback")))
+                        (canon lift (core func $i "bar") async (callback (core func $i "callback")))
                     )
 
                     (instance $i (export "foo" (func $f)))
@@ -244,7 +244,7 @@ mod one_import_concurrent {
                         )
                         (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
                     )
-                    (core func $foo (canon lower (func $foo-instance "foo") async (memory $libc-instance "memory")))
+                    (core func $foo (canon lower (func $foo-instance "foo") async (memory (core memory $libc-instance "memory"))))
                     (core func $task-return (canon task.return))
                     (core instance $i (instantiate $m
                         (with "" (instance
@@ -254,7 +254,7 @@ mod one_import_concurrent {
                     ))
 
                     (func $f (export "bar") async
-                        (canon lift (core func $i "bar") async (callback (func $i "callback")))
+                        (canon lift (core func $i "bar") async (callback (core func $i "callback")))
                     )
 
                     (instance $i (export "foo" (func $f)))
@@ -676,7 +676,7 @@ mod exported_resources {
     (table (export "$imports") 1 1 funcref)
   )
   (core instance $indirect-dtor (instantiate $indirect-dtor))
-  (type $b-x (resource (rep i32) (dtor (func $indirect-dtor "b-x-dtor"))))
+  (type $b-x (resource (rep i32) (dtor (core func $indirect-dtor "b-x-dtor"))))
   (core func $b-x-drop (canon resource.drop $b-x))
   (core func $b-x-rep (canon resource.rep $b-x))
   (core func $b-x-new (canon resource.new $b-x))

@@ -46,14 +46,14 @@
 
 use super::VMArrayRef;
 use super::free_list::FreeList;
-use super::trace_info::{TraceInfo, TraceInfos};
+use super::trace_infos::TraceInfos;
 use crate::hash_set::HashSet;
 use crate::runtime::vm::{
-    ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
-    GcProgress, GcRootsIter, GcRuntime, SendSyncUnsafeCell, TypedGcRef, VMExternRef, VMGcHeader,
-    VMGcObjectData, VMGcRef,
+    ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
+    GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMExternRef,
+    VMGcHeader, VMGcObjectData, VMGcRef,
 };
-use crate::vm::VMMemoryDefinition;
+use crate::vm::{VMDrcHeader, VMDrcHeapData, VMMemoryDefinition};
 use crate::{Engine, Trap, bail_bug, prelude::*};
 use core::sync::atomic::AtomicUsize;
 use core::{
@@ -91,34 +91,23 @@ unsafe impl GcRuntime for DrcCollector {
         &self.layouts
     }
 
-    fn new_gc_heap(&self, engine: &Engine) -> Result<Box<dyn GcHeap>> {
-        let heap = DrcHeap::new(engine)?;
+    fn new_gc_heap(&self, _engine: &Engine) -> Result<Box<dyn GcHeap>> {
+        let heap = DrcHeap::new()?;
         Ok(Box::new(heap) as _)
     }
 }
 
-/// JIT-accessible DRC heap data.
-#[derive(Default)]
-#[repr(C)]
-struct VMDrcHeapDataInner {
-    /// The head of the over-approximated-stack-roots list.
-    over_approximated_stack_roots: Option<VMGcRef>,
-
-    /// The current size of the over-approximated-stack-roots list.
-    current_over_approximated_stack_roots_len: u32,
-
-    /// The size of the over-approximated-stack-roots list immediately after the
-    /// last GC.
-    over_approximated_stack_roots_len_after_last_gc: u32,
-}
-
+/// A `VMDrcHeapData` inside a `SendSyncUnsafeCell`.
+///
+/// Compiled Wasm holds a pointer to the inner `VMDrcHeapData` and writes to it,
+/// so all of the runtime's own accesses go through an `UnsafeCell`.
 #[derive(Default)]
 #[repr(transparent)]
-struct VMDrcHeapData {
-    inner: SendSyncUnsafeCell<VMDrcHeapDataInner>,
+struct VMDrcHeapDataCell {
+    inner: SendSyncUnsafeCell<VMDrcHeapData>,
 }
 
-impl VMDrcHeapData {
+impl VMDrcHeapDataCell {
     fn over_approximated_stack_roots(&self) -> Option<VMGcRef> {
         // Safety: `inner` is valid to read from.
         unsafe {
@@ -177,7 +166,7 @@ struct DrcHeap {
     ///
     /// Note that this is exposed directly to compiled Wasm code through the
     /// vmctx, so must not move.
-    vmctx_data: Box<VMDrcHeapData>,
+    vmctx_data: Box<VMDrcHeapDataCell>,
 
     /// The storage for the GC heap itself.
     memory: Option<crate::vm::Memory>,
@@ -220,10 +209,10 @@ struct TracingAllocs {
 
 impl DrcHeap {
     /// Construct a new, default DRC heap.
-    fn new(engine: &Engine) -> Result<Self> {
+    fn new() -> Result<Self> {
         log::trace!("allocating new DRC heap");
         Ok(Self {
-            trace_infos: TraceInfos::new(engine, GC_REF_ARRAY_ELEMS_OFFSET),
+            trace_infos: TraceInfos::new(),
             no_gc_count: 0,
             vmctx_data: Box::default(),
             memory: None,
@@ -275,23 +264,43 @@ impl DrcHeap {
         Ok(())
     }
 
-    /// Decrement the ref count for the associated object.
+    /// Decrements the reference count of `gc_ref`, if applicable (e.g. not an
+    /// i31).
     ///
-    /// If the ref count reached zero, then deallocate the object and remove its
-    /// associated entry from the `host_data_table` if necessary.
-    ///
-    /// This uses an explicit stack, rather than recursion, for the scenario
-    /// where dropping one object means that the ref count for another object
-    /// that it referenced reaches zero.
-    fn dec_ref_and_maybe_dealloc(
-        &mut self,
-        host_data_table: &mut ExternRefHostDataTable,
-        gc_ref: &VMGcRef,
-    ) -> Result<()> {
+    /// If the reference count reaches 0 then this will enqueue the reference to
+    /// get deallocated at a later time within
+    /// `self.tracing_allocs.dec_ref_stack`.
+    fn dec_ref_and_maybe_enqueue_dealloc(&mut self, gc_ref: &VMGcRef) -> Result<()> {
         if gc_ref.is_i31() {
             return Ok(());
         }
 
+        let drc_header = self.index_mut(drc_ref(gc_ref))?;
+        log::trace!(
+            "decrement {gc_ref:#p} ref count -> {}",
+            drc_header.ref_count - 1
+        );
+        if drc_header.dec_ref() {
+            // The `process_dec_ref_stack` loop below always starts out with a
+            // decrement, so reset the reference count back to 1 so that knows
+            // it has an exclusive copy.
+            drc_header.ref_count = 1;
+            match &mut self.tracing_allocs {
+                Some(allocs) => allocs.dec_ref_stack.push(gc_ref.unchecked_copy()),
+                None => bail_bug!("expected allocations to be present"),
+            }
+        }
+        Ok(())
+    }
+
+    /// Process all elements on `self.tracing_allocs.dec_ref_stack` and
+    /// deallocate them.
+    ///
+    /// This will `dec_ref` all elements on the stack and recursively deallocate
+    /// any that have reached a reference count of 0. Note that this is modeled
+    /// with an explicit stack rather than a recursive function to ensure that
+    /// this cannot overflow the host stack.
+    fn process_dec_ref_stack(&mut self, trace_state: &mut GcStoreTraceState<'_>) -> Result<()> {
         let allocs = match self.tracing_allocs.take() {
             Some(allocs) => allocs,
             None => bail_bug!("allocs missing during tracing"),
@@ -301,15 +310,16 @@ impl DrcHeap {
             this.tracing_allocs = Some(allocs);
         });
         let (this, allocs) = &mut *undo;
+        let this: &mut Self = this;
         let stack = &mut allocs.dec_ref_stack;
         let large_array_stack = &mut allocs.large_array_dec_ref_stack;
         let to_dealloc = &mut allocs.to_dealloc;
 
-        debug_assert!(stack.is_empty());
+        // Assert that our temporary stacks are all empty, but note that
+        // `dec_ref_stack`, our `stack` local variable, may not be empty as it
+        // might have dangling references inserted by `write_gc_ref`.
         debug_assert!(large_array_stack.is_empty());
         debug_assert!(to_dealloc.is_empty());
-
-        stack.push(gc_ref.unchecked_copy());
 
         while !stack.is_empty() || !large_array_stack.is_empty() {
             while let Some(gc_ref) = stack.pop() {
@@ -332,7 +342,7 @@ impl DrcHeap {
 
                 // Trace: enqueue child GC refs for dec-ref'ing.
                 if let Some(ty) = ty {
-                    match this.trace_infos.trace_info(&ty) {
+                    match this.trace_infos.trace_info(&ty, trace_state) {
                         TraceInfo::Struct { gc_ref_offsets } => {
                             stack.reserve(gc_ref_offsets.len());
                             let data = this.gc_object_data(&gc_ref)?;
@@ -378,12 +388,12 @@ impl DrcHeap {
                     // data, and `ty` is `None` only for `externref`s, so we skip
                     // this for `struct` and `array` objects entirely.
                     debug_assert!(drc_header.header.kind().matches(VMGcKind::ExternRef));
-                    let externref = match gc_ref.as_typed::<VMDrcExternRef>(*this) {
+                    let externref = match gc_ref.as_typed::<VMDrcExternRef>(this) {
                         Some(r) => r,
                         None => bail_bug!("expected externref"),
                     };
                     let host_data_id = this.index(externref)?.host_data;
-                    host_data_table.dealloc(host_data_id)?;
+                    trace_state.host_data_table.dealloc(host_data_id)?;
                 }
 
                 to_dealloc.push(gc_ref);
@@ -590,7 +600,7 @@ impl DrcHeap {
 
     /// Sweep the bump allocation table after we've discovered our precise stack
     /// roots.
-    fn sweep(&mut self, host_data_table: &mut ExternRefHostDataTable) -> Result<()> {
+    fn sweep(&mut self, trace_state: &mut GcStoreTraceState<'_>) -> Result<()> {
         if log::log_enabled!(log::Level::Trace) {
             Self::log_gc_ref_set(
                 "over-approximated-stack-roots set before sweeping",
@@ -673,7 +683,15 @@ impl DrcHeap {
             }
             self.vmctx_data
                 .decrement_current_over_approximated_stack_roots_len();
-            self.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref)?;
+            self.dec_ref_and_maybe_enqueue_dealloc(&gc_ref)?;
+        }
+
+        // If some references have reached a 0 reference count then now's the
+        // time to clear them all out.
+        if let Some(allocs) = &self.tracing_allocs
+            && !allocs.dec_ref_stack.is_empty()
+        {
+            self.process_dec_ref_stack(trace_state)?;
         }
 
         self.vmctx_data
@@ -707,19 +725,6 @@ fn externref_to_drc(externref: &VMExternRef) -> &TypedGcRef<VMDrcExternRef> {
     let gc_ref = externref.as_gc_ref();
     debug_assert!(!gc_ref.is_i31());
     gc_ref.as_typed_unchecked()
-}
-
-/// The common header for all objects in the DRC collector.
-///
-/// This adds a ref count on top collector-agnostic `VMGcHeader`.
-///
-/// This is accessed by JIT code.
-#[repr(C)]
-struct VMDrcHeader {
-    header: VMGcHeader,
-    ref_count: u64,
-    next_over_approximated_stack_root: Option<VMGcRef>,
-    object_size: u32,
 }
 
 unsafe impl GcHeapObject for VMDrcHeader {
@@ -899,23 +904,20 @@ unsafe impl GcHeap for DrcHeap {
         } = self;
 
         *no_gc_count = 0;
-        **vmctx_data = VMDrcHeapData::default();
+        **vmctx_data = VMDrcHeapDataCell::default();
         *free_list = None;
         *vmmemory = None;
         *allocated_bytes = 0;
         trace_infos.clear();
 
-        debug_assert!(tracing_allocs.as_ref().is_some_and(|allocs| {
-            allocs.dec_ref_stack.is_empty()
-                && allocs.large_array_dec_ref_stack.is_empty()
-                && allocs.to_dealloc.is_empty()
-        }));
+        debug_assert!(tracing_allocs.is_some());
+        if let Some(allocs) = tracing_allocs {
+            allocs.dec_ref_stack.clear();
+            debug_assert!(allocs.large_array_dec_ref_stack.is_empty());
+            debug_assert!(allocs.to_dealloc.is_empty());
+        }
 
         memory.take().unwrap()
-    }
-
-    fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
-        self.trace_infos.ensure(ty);
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -952,7 +954,6 @@ unsafe impl GcHeap for DrcHeap {
 
     fn write_gc_ref(
         &mut self,
-        host_data_table: &mut ExternRefHostDataTable,
         destination: &mut Option<VMGcRef>,
         source: Option<&VMGcRef>,
     ) -> Result<()> {
@@ -961,10 +962,11 @@ unsafe impl GcHeap for DrcHeap {
             self.inc_ref(src)?;
         }
 
-        // Decrement the ref count of the value being overwritten and, if
-        // necessary, deallocate the GC object.
+        // Decrement the ref count of the value being overwritten. If the
+        // reference count reaches 0 then re-increment it back to one and queue
+        // this up to get deallocated later on during a GC cycle.
         if let Some(dest) = destination {
-            self.dec_ref_and_maybe_dealloc(host_data_table, dest)?;
+            self.dec_ref_and_maybe_enqueue_dealloc(dest)?;
         }
 
         // Do the actual write.
@@ -1053,21 +1055,6 @@ unsafe impl GcHeap for DrcHeap {
         debug_assert!(layout.align() >= core::mem::align_of::<VMDrcHeader>());
         debug_assert!(FreeList::can_align_to(layout.align()));
         debug_assert_eq!(header.reserved_u26(), 0);
-
-        // We must have trace info for every GC type that we allocate in this
-        // heap. Trace info is eagerly registered during module instantiation
-        // and `StructRefPre`/`ArrayRefPre` construction. The only kinds of GC
-        // objects we allocate that do not have an associated
-        // `VMSharedTypeIndex` are `externref`s, and they don't have any GC
-        // edges.
-        if let Some(ty) = header.ty() {
-            debug_assert!(
-                self.trace_infos.contains(&ty),
-                "trace info for {ty:?} should have been eagerly registered",
-            );
-        } else {
-            debug_assert_eq!(header.kind(), VMGcKind::ExternRef);
-        }
 
         let object_size = u32::try_from(layout.size()).unwrap();
         let alloc_size = FreeList::aligned_size(object_size).ok_or(Trap::AllocationTooLarge)?;
@@ -1165,22 +1152,25 @@ unsafe impl GcHeap for DrcHeap {
         self.allocated_bytes
     }
 
-    fn gc<'a>(
+    fn gc<'a, 'b>(
         &'a mut self,
         roots: GcRootsIter<'a>,
-        host_data_table: &'a mut ExternRefHostDataTable,
-    ) -> Box<dyn GarbageCollection<'a> + 'a> {
+        trace_state: &'a mut GcStoreTraceState<'b>,
+    ) -> Box<dyn GarbageCollection + 'a>
+    where
+        'b: 'a,
+    {
         assert_eq!(self.no_gc_count, 0, "Cannot GC inside a no-GC scope!");
         Box::new(DrcCollection {
             roots,
-            host_data_table,
+            trace_state,
             heap: self,
             phase: DrcCollectionPhase::Trace,
         })
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        let ptr: NonNull<VMDrcHeapData> = NonNull::from(&*self.vmctx_data);
+        let ptr: NonNull<VMDrcHeapDataCell> = NonNull::from(&*self.vmctx_data);
         ptr.cast()
     }
 
@@ -1224,9 +1214,9 @@ unsafe impl GcHeap for DrcHeap {
     }
 }
 
-struct DrcCollection<'a> {
+struct DrcCollection<'a, 'b> {
     roots: GcRootsIter<'a>,
-    host_data_table: &'a mut ExternRefHostDataTable,
+    trace_state: &'a mut GcStoreTraceState<'b>,
     heap: &'a mut DrcHeap,
     phase: DrcCollectionPhase,
 }
@@ -1237,7 +1227,7 @@ enum DrcCollectionPhase {
     Done,
 }
 
-impl<'a> GarbageCollection<'a> for DrcCollection<'a> {
+impl GarbageCollection for DrcCollection<'_, '_> {
     fn collect_increment(&mut self) -> Result<GcProgress> {
         match self.phase {
             DrcCollectionPhase::Trace => {
@@ -1268,7 +1258,7 @@ impl<'a> GarbageCollection<'a> for DrcCollection<'a> {
                 self.heap.assert_over_approximated_stack_roots_integrity()?;
                 self.heap.assert_free_blocks_are_poisoned();
 
-                self.heap.sweep(self.host_data_table)?;
+                self.heap.sweep(self.trace_state)?;
 
                 self.heap.assert_over_approximated_stack_roots_integrity()?;
                 self.heap.assert_free_blocks_are_poisoned();
@@ -1321,116 +1311,12 @@ impl<T> DerefMut for DebugOnly<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wasmtime_environ::{HostPtr, PtrSize};
-
-    #[test]
-    fn vm_drc_header_size_align() {
-        assert_eq!(
-            (wasmtime_environ::drc::HEADER_SIZE as usize),
-            core::mem::size_of::<VMDrcHeader>()
-        );
-        assert_eq!(
-            (wasmtime_environ::drc::HEADER_ALIGN as usize),
-            core::mem::align_of::<VMDrcHeader>()
-        );
-    }
 
     #[test]
     fn vm_drc_array_header_length_offset() {
         assert_eq!(
             wasmtime_environ::drc::ARRAY_LENGTH_OFFSET,
             u32::try_from(core::mem::offset_of!(VMDrcArrayHeader, length)).unwrap(),
-        );
-    }
-
-    #[test]
-    fn ref_count_is_at_correct_offset() {
-        let extern_data = VMDrcHeader {
-            header: VMGcHeader::externref(),
-            ref_count: 0,
-            next_over_approximated_stack_root: None,
-            object_size: 0,
-        };
-
-        let extern_data_ptr = &extern_data as *const _;
-        let ref_count_ptr = &extern_data.ref_count as *const _;
-
-        let actual_offset = (ref_count_ptr as usize) - (extern_data_ptr as usize);
-
-        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: HostPtr,
-            num_imported_functions: 0,
-            num_imported_tables: 0,
-            num_imported_memories: 0,
-            num_imported_globals: 0,
-            num_imported_tags: 0,
-            num_defined_tables: 0,
-            num_defined_memories: 0,
-            num_owned_memories: 0,
-            num_defined_globals: 0,
-            num_defined_tags: 0,
-            num_escaped_funcs: 0,
-            num_runtime_data: 0,
-            has_startup_func: false,
-        });
-
-        assert_eq!(
-            offsets.vm_drc_header_ref_count(),
-            u32::try_from(actual_offset).unwrap(),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_over_approximated_stack_roots_offset() {
-        assert_eq!(
-            HostPtr.vmdrc_heap_data_over_approximated_stack_roots() as usize,
-            core::mem::offset_of!(VMDrcHeapDataInner, over_approximated_stack_roots),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_current_over_approximated_stack_roots_len_offset() {
-        assert_eq!(
-            HostPtr.vmdrc_heap_data_current_over_approximated_stack_roots_len() as usize,
-            core::mem::offset_of!(
-                VMDrcHeapDataInner,
-                current_over_approximated_stack_roots_len
-            ),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_over_approximated_stack_roots_len_after_last_gc_offset() {
-        assert_eq!(
-            HostPtr.vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc() as usize,
-            core::mem::offset_of!(
-                VMDrcHeapDataInner,
-                over_approximated_stack_roots_len_after_last_gc
-            ),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_size() {
-        assert_eq!(
-            HostPtr.size_of_vmdrc_heap_data() as usize,
-            core::mem::size_of::<VMDrcHeapData>(),
-        );
-        assert_eq!(
-            HostPtr.size_of_vmdrc_heap_data() as usize,
-            core::mem::size_of::<VMDrcHeapDataInner>(),
-        );
-    }
-
-    #[test]
-    fn vm_drc_heap_data_align() {
-        assert_eq!(
-            HostPtr.align_of_vmdrc_heap_data() as usize,
-            core::mem::align_of::<VMDrcHeapData>(),
-        );
-        assert_eq!(
-            HostPtr.align_of_vmdrc_heap_data() as usize,
-            core::mem::align_of::<VMDrcHeapDataInner>(),
         );
     }
 }

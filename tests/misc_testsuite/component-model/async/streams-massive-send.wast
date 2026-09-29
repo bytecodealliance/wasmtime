@@ -139,9 +139,9 @@
       (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
     )
     (core func $future.new (canon future.new $f))
-    (core func $future.write (canon future.write $f (memory $libc "memory")))
+    (core func $future.write (canon future.write $f (memory (core memory $libc "memory"))))
     (core func $stream.new (canon stream.new $s))
-    (core func $stream.write (canon stream.write $s (memory $libc "memory")))
+    (core func $stream.write (canon stream.write $s (memory (core memory $libc "memory"))))
     (core func $task.return-future (canon task.return (result $f)))
     (core func $task.return-stream (canon task.return (result $s)))
     (core instance $m (instantiate $m
@@ -158,10 +158,10 @@
 
     (func (export "big-stream") async (result $s)
       (canon lift (core func $m "big-stream") async
-        (callback (func $m "cb"))))
+        (callback (core func $m "cb"))))
     (func (export "big-future") async (result $f)
       (canon lift (core func $m "big-future") async
-        (callback (func $m "cb"))))
+        (callback (core func $m "cb"))))
   )
 
   (component $B
@@ -203,14 +203,14 @@
     (core func $big-future (canon lower (func $a "big-future")))
     (core func $stream.read
       (canon stream.read $s
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
       )
     )
     (core func $future.read
       (canon future.read $f
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
       )
     )
     (core instance $m (instantiate $m

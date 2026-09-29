@@ -108,8 +108,7 @@ Instead, these things should be handled by some combination of
 `cranelift/codegen/src/isa/<arch>/lower/isle.rs` or elsewhere).
 
 When an instruction modifies a register, both reading from it and writing to it,
-we should build an SSA view of that instruction that gets legalized via "move
-mitosis" by splitting a move out from the register.
+we should build an SSA view of that instruction that gets legalized by splitting a move out from the register.
 
 For example, on x86 the `add` instruction reads and writes its first operand:
 
@@ -125,18 +124,16 @@ Then, as an implementation detail of the facade, we emit moves as necessary:
 
     add a, b, c    ==>    mov a, b; add b, c
 
-We call the process of emitting these moves "move mitosis". For ISAs with
+For ISAs with
 ubiquitous use of modified registers and instructions in two-operand form, like
-x86, we implement move mitosis with methods on the ISA's `MachInst`. For other
+x86, we implement this with methods methods on the ISA's `MachInst`. For other
 ISAs that are RISCier and where modified registers are pretty rare, such as
-aarch64, we implement the handful of move mitosis special cases at the
+aarch64, we handle the handful of required cases at the
 `inst.isle` layer. Either way, the important thing is that the lowering rules
 remain pure.
 
 Finally, note that these moves are generally cleaned up by the register
-allocator's move coalescing, and move mitosis will eventually go away completely
-once we switch over to `regalloc2`, which takes instructions in SSA form
-directly as input.
+allocator's move coalescing.
 
 Instructions that implicitly operate on specific registers, or which require
 that certain operands be in certain registers, are handled similarly: the

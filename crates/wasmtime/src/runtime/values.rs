@@ -1,7 +1,7 @@
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapType, RefType, Rooted,
-    StructRef, V128, ValType, prelude::*,
+    AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapTopType, HeapType,
+    RefType, Rooted, StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
 
@@ -858,11 +858,11 @@ impl Ref {
     #[inline]
     pub fn null(heap_type: &HeapType) -> Self {
         match heap_type.top() {
-            HeapType::Any => Ref::Any(None),
-            HeapType::Extern => Ref::Extern(None),
-            HeapType::Func => Ref::Func(None),
-            HeapType::Exn => Ref::Exn(None),
-            ty => unreachable!("not a heap type: {ty:?}"),
+            HeapTopType::Any => Ref::Any(None),
+            HeapTopType::Extern => Ref::Extern(None),
+            HeapTopType::Func => Ref::Func(None),
+            HeapTopType::Exn => Ref::Exn(None),
+            HeapTopType::Cont => unimplemented!("embedding API for `(ref cont)`"),
         }
     }
 

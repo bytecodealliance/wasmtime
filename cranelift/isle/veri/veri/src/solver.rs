@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, collections::HashSet, iter::zip};
 
 use anyhow::{Context as _, Error, Result, bail, format_err};
-use easy_smt::{Context, Response, SExpr, SExprData};
+use cranelift_isle_veri_caching::{Context, Response, SExpr, SExprData};
 use num_bigint::BigUint;
 use num_traits::Num as _;
 

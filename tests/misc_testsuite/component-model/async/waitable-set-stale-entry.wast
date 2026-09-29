@@ -11,8 +11,8 @@
   (core func $waitable-set.new (canon waitable-set.new))
   (core func $waitable-set.drop (canon waitable-set.drop))
   (core func $waitable.join (canon waitable.join))
-  (core func $waitable-set.poll (canon waitable-set.poll (memory $libc "m")))
-  (core func $waitable-set.wait (canon waitable-set.wait (memory $libc "m")))
+  (core func $waitable-set.poll (canon waitable-set.poll (memory (core memory $libc "m"))))
+  (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $libc "m"))))
 
   (core module $m
     (import "" "m" (memory 1))
@@ -114,7 +114,7 @@
   (func (export "drop-read-then-wait") async (canon lift (core func $i "drop-read-then-wait")))
   (func (export "drop-write-then-poll") async (canon lift (core func $i "drop-write-then-poll")))
   (func (export "drop-read-then-wait-cb") async
-    (canon lift (core func $i "drop-read-then-wait-cb") async (callback (func $i "cb")))
+    (canon lift (core func $i "drop-read-then-wait-cb") async (callback (core func $i "cb")))
   )
   (func (export "drop-readable-leaves-set") async (canon lift (core func $i "drop-readable-leaves-set")))
   (func (export "drop-writable-leaves-set") async (canon lift (core func $i "drop-writable-leaves-set")))

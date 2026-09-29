@@ -1,7 +1,7 @@
 //! Mutators for the `gc` operations.
 use crate::generators::gc_ops::limits::GcOpsLimits;
-use crate::generators::gc_ops::ops::{GcOp, GcOps};
-use crate::generators::gc_ops::types::{CompositeType, FieldType, StructField, TypeId, Types};
+use crate::generators::gc_ops::ops::{GcOp, GcOpMutator, GcOps};
+use crate::generators::gc_ops::types::{SubType, TypeId, Types};
 use mutatis::{
     Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult, mutators as m,
 };
@@ -14,9 +14,9 @@ use std::collections::BTreeMap;
 pub struct TypesMutator;
 
 impl TypesMutator {
-    /// Add an empty struct in a random existing rec group, or create a rec group
-    /// and add there when `rec_groups` is empty (if `limits.max_rec_groups` allows).
-    fn add_struct(
+    /// Add a type with a randomly generated definition to a random existing rec
+    /// group, or create a rec group when there are none (if `limits` allow).
+    fn add_type(
         &mut self,
         c: &mut Candidates<'_>,
         types: &mut Types,
@@ -26,40 +26,32 @@ impl TypesMutator {
             return Ok(());
         }
 
-        let max_rec_groups = usize::try_from(limits.max_rec_groups).unwrap();
-        if types.rec_groups.is_empty() && max_rec_groups == 0 {
+        if types.rec_groups.is_empty() && limits.max_rec_groups == 0 {
             return Ok(());
         }
 
         c.mutation(|ctx| {
-            let gid = if types.rec_groups.is_empty() {
-                let new_gid = types.fresh_rec_group_id(ctx.rng());
-                types.insert_rec_group(new_gid);
-                new_gid
-            } else {
-                let Some(gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
-                    return Ok(());
-                };
-                gid
+            let gid = match ctx.rng().choose(types.rec_groups.keys()).copied() {
+                Some(gid) => gid,
+                None => {
+                    let new_gid = types.fresh_rec_group_id(ctx.rng());
+                    types.insert_rec_group(new_gid);
+                    new_gid
+                }
             };
 
             let tid = types.fresh_type_id(ctx.rng());
-            let is_final = (ctx.rng().gen_u32() % 4) == 0;
-            let supertype = if (ctx.rng().gen_u32() % 4) == 0 {
-                ctx.rng().choose(types.type_defs.keys()).copied()
-            } else {
-                None
-            };
-            // Add struct with no fields; fields can be added later by `mutate_struct_fields`.
-            types.insert_struct(tid, gid, is_final, supertype, Vec::new());
-            log::debug!("Added struct {tid:?} to rec group {gid:?}");
+            let def = m::default::<SubType>().generate(ctx)?;
+
+            types.insert_type(tid, gid, def.is_final, def.supertype, def.composite_type);
+            log::debug!("Added type {tid:?} to rec group {gid:?}");
             Ok(())
         })?;
         Ok(())
     }
 
     /// Remove a random type from its rec group.
-    fn remove_struct(&mut self, c: &mut Candidates<'_>, types: &mut Types) -> mutatis::Result<()> {
+    fn remove_type(&mut self, c: &mut Candidates<'_>, types: &mut Types) -> mutatis::Result<()> {
         if types.type_defs.is_empty() {
             return Ok(());
         }
@@ -68,7 +60,7 @@ impl TypesMutator {
                 return Ok(());
             };
             types.remove_type(tid);
-            log::debug!("Removed struct type {tid:?}");
+            log::debug!("Removed type {tid:?}");
             Ok(())
         })?;
         Ok(())
@@ -213,17 +205,11 @@ impl TypesMutator {
                 return Ok(());
             }
 
-            // Collect (TypeId, is_final, supertype, fields) for members of the source group.
-            let members: SmallVec<[(TypeId, bool, Option<TypeId>, Vec<StructField>); 32]> =
-                src_members
-                    .iter()
-                    .filter_map(|tid| {
-                        types.type_defs.get(tid).map(|def| {
-                            let CompositeType::Struct(ref st) = def.composite_type;
-                            (*tid, def.is_final, def.supertype, st.fields.clone())
-                        })
-                    })
-                    .collect();
+            // Snapshot the source group's members.
+            let members: SmallVec<[(TypeId, SubType); 32]> = src_members
+                .iter()
+                .filter_map(|tid| types.type_defs.get(tid).map(|def| (*tid, def.clone())))
+                .collect();
 
             if members.is_empty() {
                 return Ok(());
@@ -235,15 +221,21 @@ impl TypesMutator {
 
             // Allocate fresh type ids for each member and build old-to-new map.
             let mut old_to_new: BTreeMap<TypeId, TypeId> = BTreeMap::new();
-            for (old_tid, _, _, _) in &members {
+            for (old_tid, _) in &members {
                 old_to_new.insert(*old_tid, types.fresh_type_id(ctx.rng()));
             }
 
             // Insert duplicated defs, rewriting intra-group supertype edges to cloned ids.
-            for (old_tid, is_final, supertype, fields) in &members {
+            for (old_tid, def) in &members {
                 let new_tid = old_to_new[old_tid];
-                let mapped_super = supertype.map(|st| *old_to_new.get(&st).unwrap_or(&st));
-                types.insert_struct(new_tid, new_gid, *is_final, mapped_super, fields.clone());
+                let mapped_super = def.supertype.map(|st| *old_to_new.get(&st).unwrap_or(&st));
+                types.insert_type(
+                    new_tid,
+                    new_gid,
+                    def.is_final,
+                    mapped_super,
+                    def.composite_type.clone(),
+                );
             }
 
             log::debug!(
@@ -385,24 +377,6 @@ impl TypesMutator {
         Ok(())
     }
 
-    /// Mutate struct fields (add/remove/modify via `m::vec`).
-    fn mutate_struct_fields(
-        &mut self,
-        c: &mut Candidates<'_>,
-        types: &mut Types,
-    ) -> mutatis::Result<()> {
-        // Snapshot target types up front so fields can reference any type (incl. self) without borrowing `types`.
-        let candidates: Vec<TypeId> = types.type_defs.keys().copied().collect();
-        for (_, def) in types.type_defs.iter_mut() {
-            let CompositeType::Struct(ref mut st) = def.composite_type;
-            m::vec(StructFieldMutator {
-                candidates: &candidates,
-            })
-            .mutate(c, &mut st.fields)?;
-        }
-        Ok(())
-    }
-
     /// Run all type / rec-group mutations. [`GcOpsLimits`] come from [`GcOps`].
     fn mutate_with_limits(
         &mut self,
@@ -410,54 +384,25 @@ impl TypesMutator {
         types: &mut Types,
         limits: &GcOpsLimits,
     ) -> mutatis::Result<()> {
-        self.add_struct(c, types, limits)?;
-        self.remove_struct(c, types)?;
+        self.add_type(c, types, limits)?;
+        self.remove_type(c, types)?;
         self.swap_within_group(c, types)?;
         self.move_between_groups(c, types)?;
         self.duplicate_group(c, types, limits)?;
         self.remove_group(c, types)?;
         self.merge_groups(c, types)?;
         self.split_group(c, types, limits)?;
-        self.mutate_struct_fields(c, types)?;
+
+        // Add, remove, rename, and redefine individual types, then let `fixup`
+        // clean things up.
+        m::btree_map(m::default::<TypeId>(), m::default::<SubType>())
+            .mutate(c, &mut types.type_defs)?;
 
         Ok(())
     }
 }
 
-/// Mutator for [`StructField`] (add/remove/modify fields).
-#[derive(Debug)]
-pub struct StructFieldMutator<'a> {
-    candidates: &'a [TypeId],
-}
-
-impl Mutate<StructField> for StructFieldMutator<'_> {
-    fn mutate(&mut self, c: &mut Candidates<'_>, field: &mut StructField) -> MutResult<()> {
-        c.mutation(|ctx| {
-            let old = format!("{field:?}");
-            field.field_type = FieldType::generate(ctx.rng(), self.candidates);
-            field.mutable = (ctx.rng().gen_u32() % 2) == 0;
-            log::debug!("Mutated field {old} -> {field:?}");
-            Ok(())
-        })?;
-        Ok(())
-    }
-}
-
-impl Generate<StructField> for StructFieldMutator<'_> {
-    fn generate(&mut self, ctx: &mut Context) -> MutResult<StructField> {
-        let field = StructField {
-            field_type: FieldType::generate(ctx.rng(), self.candidates),
-            mutable: (ctx.rng().gen_u32() % 2) == 0,
-        };
-        log::debug!("Generated field {field:?}");
-        Ok(field)
-    }
-}
-
-/// Mutator for [`GcOps`].
-///
-/// Also implements [`Mutate`] / [`Generate`] for [`GcOp`] so `m::vec` can mutate
-/// `Vec<GcOp>` without a second struct.
+/// Mutator for `GcOps`.
 #[derive(Debug, Default)]
 pub struct GcOpsMutator {
     types_mutator: TypesMutator,
@@ -465,17 +410,22 @@ pub struct GcOpsMutator {
 
 impl Mutate<GcOp> for GcOpsMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, value: &mut GcOp) -> MutResult<()> {
+        // The derived `GcOpMutator` is deliberately not `GcOp`'s default
+        // mutator: it offers one candidate per variant plus one per field, so
+        // across a test case's ops it would account for the overwhelming
+        // majority of the candidates and starve the type and rec-group
+        // mutations below. Every operand is an index that `fixup` normalizes
+        // anyway, so regenerating doesn't hurt.
         c.mutation(|ctx| {
-            *value = GcOp::generate(ctx)?;
+            *value = GcOpMutator::default().generate(ctx)?;
             Ok(())
-        })?;
-        Ok(())
+        })
     }
 }
 
 impl Generate<GcOp> for GcOpsMutator {
-    fn generate(&mut self, context: &mut Context) -> MutResult<GcOp> {
-        GcOp::generate(context)
+    fn generate(&mut self, ctx: &mut Context) -> MutResult<GcOp> {
+        GcOpMutator::default().generate(ctx)
     }
 }
 
@@ -484,8 +434,14 @@ impl DefaultMutate for GcOp {
 }
 
 impl Mutate<GcOps> for GcOpsMutator {
-    fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> mutatis::Result<()> {
-        m::vec(GcOpsMutator::default()).mutate(c, &mut ops.ops)?;
+    fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut GcOps) -> MutResult<()> {
+        m::default::<GcOpsLimits>()
+            .map(|_ctx, limits: &mut GcOpsLimits| {
+                limits.fixup();
+                Ok(())
+            })
+            .mutate(c, &mut ops.limits)?;
+        m::vec(m::default::<GcOp>()).mutate(c, &mut ops.ops)?;
         self.types_mutator
             .mutate_with_limits(c, &mut ops.types, &ops.limits)?;
         Ok(())
@@ -506,14 +462,12 @@ impl<'a> arbitrary::Arbitrary<'a> for GcOps {
 }
 
 impl Generate<GcOps> for GcOpsMutator {
-    fn generate(&mut self, _ctx: &mut Context) -> MutResult<GcOps> {
+    fn generate(&mut self, ctx: &mut Context) -> MutResult<GcOps> {
         let mut ops = GcOps::default();
-        let mut session = mutatis::Session::new();
-
+        let mut session = mutatis::Session::new().seed(ctx.rng().gen_u64());
         for _ in 0..2048 {
             session.mutate(&mut ops)?;
         }
-
         Ok(ops)
     }
 }

@@ -54,7 +54,7 @@ fn parse_into<'a>(
                 {
                     component.push_raw_section(wasm_encoder::RawSection {
                         id,
-                        data: &full_wasm[range],
+                        data: &full_wasm[range.start as usize..range.end as usize],
                     });
                 }
             }

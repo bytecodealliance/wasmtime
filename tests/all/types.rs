@@ -19,6 +19,37 @@ fn valty(heap_ty: HeapType) -> ValType {
 }
 
 #[test]
+fn heap_type_top_and_bottom() {
+    for (heap_type, top, bottom) in [
+        (
+            HeapType::Extern,
+            HeapTopType::Extern,
+            HeapBottomType::NoExtern,
+        ),
+        (
+            HeapType::NoExtern,
+            HeapTopType::Extern,
+            HeapBottomType::NoExtern,
+        ),
+        (HeapType::Func, HeapTopType::Func, HeapBottomType::NoFunc),
+        (HeapType::NoFunc, HeapTopType::Func, HeapBottomType::NoFunc),
+        (HeapType::Any, HeapTopType::Any, HeapBottomType::None),
+        (HeapType::Eq, HeapTopType::Any, HeapBottomType::None),
+        (HeapType::I31, HeapTopType::Any, HeapBottomType::None),
+        (HeapType::Array, HeapTopType::Any, HeapBottomType::None),
+        (HeapType::Struct, HeapTopType::Any, HeapBottomType::None),
+        (HeapType::None, HeapTopType::Any, HeapBottomType::None),
+        (HeapType::Cont, HeapTopType::Cont, HeapBottomType::NoCont),
+        (HeapType::NoCont, HeapTopType::Cont, HeapBottomType::NoCont),
+        (HeapType::Exn, HeapTopType::Exn, HeapBottomType::NoExn),
+        (HeapType::NoExn, HeapTopType::Exn, HeapBottomType::NoExn),
+    ] {
+        assert_eq!(heap_type.top(), top);
+        assert_eq!(heap_type.bottom(), bottom);
+    }
+}
+
+#[test]
 fn basic_array_types() -> Result<()> {
     let engine = Engine::default();
     for mutability in [Mutability::Const, Mutability::Var] {

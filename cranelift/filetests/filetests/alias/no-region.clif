@@ -1,0 +1,89 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; Stores without a region may alias any region. On the other hand, loads
+;; without an alias region are confined to only the "other" / missing
+;; region. Therefore, removing the first store here is sound.
+function %f(i64, i64) -> i32 {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 0x1234
+    store notrap aligned region0 v2, v0
+
+    v3 = load.i32 notrap aligned v1
+
+    v4 = iconst.i32 0x5678
+    store notrap aligned region0 v4, v0
+
+    return v3
+}
+
+; function %f(i64, i64) -> i32 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i64):
+;     v3 = load.i32 notrap aligned v1
+;     v4 = iconst.i32 0x5678
+;     store notrap aligned region0 v4, v0  ; v4 = 0x5678
+;     return v3
+; }
+
+;; But removing the first store here is NOT sound.
+function %f(i64, i64) -> i32 {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 0x1234
+    store notrap aligned v2, v0
+
+    v3 = load.i32 notrap aligned region0 v1
+
+    v4 = iconst.i32 0x5678
+    store notrap aligned v4, v0
+
+    return v3
+}
+
+; function %f(i64, i64) -> i32 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i32 4660
+;     store notrap aligned v2, v0  ; v2 = 4660
+;     v3 = load.i32 notrap aligned region0 v1
+;     v4 = iconst.i32 0x5678
+;     store notrap aligned v4, v0  ; v4 = 0x5678
+;     return v3
+; }
+
+;; Cross-block version.
+function %f(i64, i64, i32, i32) -> i32 {
+    region0 = 0 "R0"
+block0(v0: i64, v1: i64, v2: i32, v3: i32):
+    store notrap aligned v2, v0
+    jump block1
+
+block1:
+    v4 = load.i32 notrap aligned region0 v1
+    jump block2
+
+block2:
+    store notrap aligned v3, v0
+    return v4
+}
+
+; function %f(i64, i64, i32, i32) -> i32 fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i64, v2: i32, v3: i32):
+;     store notrap aligned v2, v0
+;     jump block1
+;
+; block1:
+;     v4 = load.i32 notrap aligned region0 v1
+;     jump block2
+;
+; block2:
+;     store.i32 notrap aligned v3, v0
+;     return v4
+; }

@@ -1,7 +1,7 @@
 [package]
 name = "cranelift-assembler-x64"
 description = "A Cranelift-specific x64 assembler"
-version = "0.135.0"
+version = "0.137.0-dev"
 license = "Apache-2.0 WITH LLVM-exception"
 edition.workspace = true
 rust-version.workspace = true
@@ -10,16 +10,30 @@ rust-version.workspace = true
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 capstone = { workspace = true, optional = true }
 
+# XED is built from C source by its own Python build system, which is picky
+# about its environment: it only recognizes x86 host CPUs, and it invokes LLVM
+# toolchain binaries (e.g. `llvm-ar`) that are not present on every runner.
+# Restrict it to x86_64 Linux -- the only configuration where the oracle
+# actually runs, i.e. the `fuzz-xed` CI job and OSS-Fuzz -- so that
+# `--all-features` builds keep working elsewhere (see `ci/run-tests.py`).
+[target.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.dependencies]
+xed-sys = { workspace = true, optional = true }
+
 [dev-dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
 arbtest = { workspace = true }
 capstone = { workspace = true }
 
 [build-dependencies]
-cranelift-assembler-x64-meta = { path = "meta", version = "0.135.0" }
+cranelift-assembler-x64-meta = { path = "meta", version = "0.137.0-dev" }
 
 [lints]
 workspace = true
 
 [features]
 fuzz = ['dep:arbitrary', 'dep:capstone']
+# Adds Intel XED as a second, optional disassembler oracle for the roundtrip
+# fuzzer. This is additive on top of `fuzz` (Capstone remains the default
+# oracle); XED is only built when this feature is explicitly enabled, and only
+# on x86_64 Linux. Note that building XED requires Python 3.9+ and a C compiler.
+fuzz-xed = ['fuzz', 'dep:xed-sys']

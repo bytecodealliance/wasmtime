@@ -6,7 +6,7 @@ fn main() {
     let dest_path = std::path::Path::new(&out_dir).join("regexes.yaml");
 
     let status = Command::new("curl")
-        .args(&["-L", url, "--retry", "3"])
+        .args(&["-L", url, "--retry", "3", "--retry-all-errors"])
         .arg("-o")
         .arg(dest_path)
         .status()

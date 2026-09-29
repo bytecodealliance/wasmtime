@@ -296,8 +296,15 @@ pub fn generate_simulated_dwarf(
     out_strings: &mut write::StringTable,
     isa: &dyn TargetIsa,
 ) -> Result<(), Error> {
+    // A component without any core modules has no functions to describe, and
+    // the compilation unit below names itself after the first translation's
+    // wasm file. There is nothing to simulate, so leave the DWARF empty.
+    let Some((_, first_translation)) = compilation.translations.iter().next() else {
+        return Ok(());
+    };
+
     let (wasm_file, path) = {
-        let di = &compilation.translations.iter().next().unwrap().1.debuginfo;
+        let di = &first_translation.debuginfo;
         let path = di
             .wasm_file
             .path

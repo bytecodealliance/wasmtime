@@ -1,7 +1,7 @@
 //! Support for egraphs represented in the DataFlowGraph.
 
 use crate::FxHashSet;
-use crate::alias_analysis::{AliasAnalysis, LastStores, OptResult};
+use crate::alias_analysis::{AliasAnalysis, MemoryState, OptResult};
 use crate::branch_to_trap::BranchToTrapAnalysis;
 use crate::ctxhash::{CtxEq, CtxHash, NullCtx};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
@@ -151,8 +151,11 @@ where
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
     domtree: &'opt DominatorTree,
+    /// The pre-egraph control-flow graph, used by the alias analysis to lazily
+    /// build a post-dominator tree for dead-store elimination.
+    cfg: &'opt ControlFlowGraph,
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
-    pub(crate) alias_analysis_state: &'opt mut LastStores,
+    pub(crate) alias_analysis_state: &'opt mut MemoryState,
     pub(crate) branch_to_trap_analysis: &'opt mut BranchToTrapAnalysis,
     ctrl_plane: &'opt mut ControlPlane,
     // Held locally during optimization of one node (recursively):
@@ -529,7 +532,7 @@ where
                         }
                         (_, _) => unreachable!(),
                     }
-                    Some(SkeletonInstSimplification::Remove)
+                    return Some(SkeletonInstSimplification::Remove);
                 }
                 ScopedEntry::Vacant(v) => {
                     // Otherwise, insert it into the value-map.
@@ -539,42 +542,44 @@ where
                     }
                     v.insert(result);
                     trace!(" -> inserts as new (no GVN)");
-                    None
                 }
             }
         }
-        // Otherwise, if a load or store, process it with the alias
-        // analysis to see if we can optimize it (rewrite in terms of
-        // an earlier load or stored value, or remove an idempotent store).
-        else {
-            match self
-                .alias_analysis
-                .process_inst(self.func, self.alias_analysis_state, inst)
-            {
-                OptResult::AliasedLoad(new_result) => {
-                    self.stats.alias_analysis_removed_load += 1;
-                    let result = self.func.dfg.first_result(inst);
-                    trace!(
-                        " -> inst {} has result {} replaced with {}",
-                        inst, result, new_result
-                    );
-                    self.value_to_opt_value[result] = new_result;
-                    self.available_block[result] = self.available_block[new_result];
-                    Some(SkeletonInstSimplification::Remove)
+
+        // Otherwise, if a load or store, process it with the alias analysis to
+        // see if we can optimize it (rewrite in terms of an earlier load or
+        // stored value, or remove an idempotent store).
+        match self
+            .alias_analysis
+            .process_inst(self.func, self.cfg, self.alias_analysis_state, inst)
+        {
+            OptResult::AliasedLoad(new_result) => {
+                self.stats.alias_analysis_removed_load += 1;
+                let result = self.func.dfg.first_result(inst);
+                trace!(
+                    " -> inst {} has result {} replaced with {}",
+                    inst, result, new_result
+                );
+                self.value_to_opt_value[result] = new_result;
+                self.available_block[result] = self.available_block[new_result];
+                Some(SkeletonInstSimplification::Remove)
+            }
+            OptResult::IdempotentStore => {
+                self.stats.alias_analysis_removed_idempotent_store += 1;
+                Some(SkeletonInstSimplification::Remove)
+            }
+            OptResult::DeadStore { dead, overwriter } => {
+                self.stats.alias_analysis_removed_dead_store += 1;
+                Some(SkeletonInstSimplification::RemoveDeadStore { dead, overwriter })
+            }
+            OptResult::None => {
+                // Generic side-effecting op -- always keep it, and
+                // set its results to identity-map to original values.
+                for &result in self.func.dfg.inst_results(inst) {
+                    self.value_to_opt_value[result] = result;
+                    self.available_block[result] = block;
                 }
-                OptResult::IdempotentStore => {
-                    self.stats.alias_analysis_removed_store += 1;
-                    Some(SkeletonInstSimplification::Remove)
-                }
-                OptResult::None => {
-                    // Generic side-effecting op -- always keep it, and
-                    // set its results to identity-map to original values.
-                    for &result in self.func.dfg.inst_results(inst) {
-                        self.value_to_opt_value[result] = result;
-                        self.available_block[result] = block;
-                    }
-                    None
-                }
+                None
             }
         }
     }
@@ -670,6 +675,14 @@ where
                     return Some(SkeletonInstSimplification::ReplaceWithTwo { first, second });
                 }
 
+                SkeletonInstSimplification::RemoveDeadStore { dead, overwriter } => {
+                    log::trace!(
+                        " -> simplify_skeleton: remove other: {dead}: {}",
+                        ctx.func.dfg.display_inst(dead)
+                    );
+                    return Some(SkeletonInstSimplification::RemoveDeadStore { dead, overwriter });
+                }
+
                 // For instruction replacement simplification, we want to check
                 // that the replacements define the same number and types of
                 // values as the original instruction, and also determine
@@ -731,6 +744,36 @@ where
     }
 }
 
+impl SkeletonInstSimplification {
+    /// Does this simplification rewrite a block terminator, and thus
+    /// potentially change the CFG?
+    fn rewrites_terminator(&self, dfg: &DataFlowGraph) -> bool {
+        let is_terminator = |inst: Inst| dfg.insts[inst].opcode().is_terminator();
+        match self {
+            // Removing an instruction never rewrites a terminator: a block's
+            // terminator cannot be removed or the block would become invalid.
+            SkeletonInstSimplification::Remove
+            | SkeletonInstSimplification::RemoveWithVal { .. }
+            | SkeletonInstSimplification::RemoveDeadStore { .. } => false,
+
+            // Swapping a conditional branch/trap's condition operand leaves the
+            // opcode and successors in place, so the CFG is preserved.
+            SkeletonInstSimplification::ReplaceBranchCond { .. } => false,
+
+            // A one-for-one replacement (e.g. `brif` with a constant condition
+            // into `jump`) rewrites a terminator exactly when the replacement
+            // instruction is itself a terminator.
+            SkeletonInstSimplification::Replace { inst }
+            | SkeletonInstSimplification::ReplaceWithVal { inst, .. } => is_terminator(*inst),
+
+            // Replacing one instruction with two (e.g. a branch to a
+            // trap-only block into a conditional trap plus a jump) rewrites a
+            // terminator exactly when the trailing instruction is a terminator.
+            SkeletonInstSimplification::ReplaceWithTwo { second, .. } => is_terminator(*second),
+        }
+    }
+}
+
 impl<'a> EgraphPass<'a> {
     /// Create a new EgraphPass.
     pub fn new(
@@ -756,7 +799,7 @@ impl<'a> EgraphPass<'a> {
 
     /// Run the process.
     pub fn run(&mut self) {
-        self.remove_pure_and_optimize();
+        let cfg_maybe_changed = self.remove_pure_and_optimize();
 
         trace!("egraph built:\n{}\n", self.func.display());
         if cfg!(feature = "trace-log") {
@@ -773,12 +816,15 @@ impl<'a> EgraphPass<'a> {
 
         // Branch simplification could have mutated the CFG and made some blocks
         // unreachable; recompute the CFG, find which blocks are still
-        // reachable, and remove those that aren't.
-        self.cfg.compute(self.func);
-        let reachable_blocks = self.find_reachable_blocks();
-        crate::unreachable_code::eliminate_unreachable_code(self.func, self.cfg, |block| {
-            reachable_blocks.contains(block)
-        });
+        // reachable, and remove those that aren't. But only do this if we
+        // rewrote a block terminator, because otherwise the CFG is unchanged.
+        if cfg_maybe_changed {
+            self.cfg.compute(self.func);
+            let reachable_blocks = self.find_reachable_blocks();
+            crate::unreachable_code::eliminate_unreachable_code(self.func, self.cfg, |block| {
+                reachable_blocks.contains(block)
+            });
+        }
 
         self.elaborate();
 
@@ -804,8 +850,15 @@ impl<'a> EgraphPass<'a> {
     /// because the eclass can continue to be updated and we need to
     /// only refer to its subset that exists at this stage, to
     /// maintain acyclicity.)
-    fn remove_pure_and_optimize(&mut self) {
+    ///
+    /// Returns whether we may have modified the CFG (i.e. rewrote a
+    /// terminator).
+    fn remove_pure_and_optimize(&mut self) -> bool {
         let mut cursor = FuncCursor::new(self.func);
+
+        // Set to `true` if any skeleton simplification rewrites a terminator and
+        // thus may have made some blocks unreachable. See `run`.
+        let mut cfg_maybe_changed = false;
         let mut value_to_opt_value: SecondaryMap<Value, Value> =
             SecondaryMap::with_default(Value::reserved_value());
 
@@ -870,10 +923,13 @@ impl<'a> EgraphPass<'a> {
             {
                 gvn_map_blocks.pop();
                 gvn_map.decrement_depth();
+                self.alias_analysis.pop_scope();
             }
 
             gvn_map.increment_depth();
             gvn_map_blocks.push(block);
+
+            let mut alias_analysis_state = self.alias_analysis.push_scope(&*self.cfg, block);
 
             // Check that `gvn_map_blocks` is the path from this block up to the
             // root in the dominator tree.
@@ -891,8 +947,6 @@ impl<'a> EgraphPass<'a> {
 
             trace!("Processing block {}", block);
             cursor.set_position(CursorPosition::Before(block));
-
-            let mut alias_analysis_state = self.alias_analysis.block_starting_state(block);
 
             for &param in cursor.func.dfg.block_params(block) {
                 trace!("creating initial singleton eclass for blockparam {}", param);
@@ -937,6 +991,7 @@ impl<'a> EgraphPass<'a> {
                     remat_values: &mut self.remat_values,
                     stats: &mut self.stats,
                     domtree: &self.domtree,
+                    cfg: &*self.cfg,
                     alias_analysis: self.alias_analysis,
                     alias_analysis_state: &mut alias_analysis_state,
                     branch_to_trap_analysis: &mut self.branch_to_trap_analysis,
@@ -957,6 +1012,7 @@ impl<'a> EgraphPass<'a> {
                     cursor.remove_inst_and_step_back();
                 } else {
                     if let Some(cmd) = ctx.optimize_skeleton_inst(inst, block) {
+                        cfg_maybe_changed |= cmd.rewrites_terminator(&cursor.func.dfg);
                         Self::execute_skeleton_inst_simplification(
                             cmd,
                             &mut cursor,
@@ -966,7 +1022,15 @@ impl<'a> EgraphPass<'a> {
                     }
                 }
             }
+
+            // Save this block's exit state, so that any of its successors for
+            // which it is the sole predecessor can inherit that exit state
+            // directly instead of falling back to the initial (and possibly
+            // outdated, after optimizations) initial block-input snapshot.
+            self.alias_analysis
+                .finish_scope(block, alias_analysis_state);
         }
+        cfg_maybe_changed
     }
 
     /// Find the set of blocks reachable from the entry block by
@@ -997,6 +1061,8 @@ impl<'a> EgraphPass<'a> {
         value_to_opt_value: &mut SecondaryMap<Value, Value>,
         old_inst: Inst,
     ) {
+        let old_is_terminator = cursor.func.dfg.insts[old_inst].opcode().is_terminator();
+
         // Redirect uses of `old_val` to `new_val`.
         let forward_val = |cursor: &mut FuncCursor<'_>,
                            value_to_opt_value: &mut SecondaryMap<_, _>,
@@ -1044,6 +1110,10 @@ impl<'a> EgraphPass<'a> {
         let (new_inst, new_val) = match simplification {
             SkeletonInstSimplification::Remove => {
                 cursor.remove_inst_and_step_back();
+                debug_assert!(
+                    !old_is_terminator,
+                    "cannot remove a block terminator (the block would become invalid)",
+                );
                 return;
             }
             SkeletonInstSimplification::RemoveWithVal { val } => {
@@ -1051,6 +1121,10 @@ impl<'a> EgraphPass<'a> {
                 let old_val = cursor.func.dfg.first_result(old_inst);
                 cursor.func.dfg.detach_inst_results(old_inst);
                 forward_val(cursor, value_to_opt_value, old_val, val);
+                debug_assert!(
+                    !old_is_terminator,
+                    "cannot remove a block terminator (the block would become invalid)",
+                );
                 return;
             }
             SkeletonInstSimplification::ReplaceBranchCond { cond } => {
@@ -1069,6 +1143,8 @@ impl<'a> EgraphPass<'a> {
                 // condition or it can be GVN'd.
                 self_map_operands(&cursor.func.dfg, value_to_opt_value, old_inst);
                 reprocess_from(cursor, old_inst);
+                // The opcode and successors are unchanged, so the CFG is
+                // preserved.
                 return;
             }
             SkeletonInstSimplification::ReplaceWithTwo { first, second } => {
@@ -1080,12 +1156,13 @@ impl<'a> EgraphPass<'a> {
                 debug_assert!(cursor.func.dfg.inst_results(first).is_empty());
                 debug_assert!(cursor.func.dfg.inst_results(second).is_empty());
 
+                debug_assert!(!cursor.func.dfg.insts[first].opcode().is_terminator());
                 // If the instruction we're replacing is a block terminator,
                 // then the trailing new instruction must also be a terminator,
                 // so the block remains well-formed.
-                debug_assert!(
-                    !cursor.func.dfg.insts[old_inst].opcode().is_terminator()
-                        || cursor.func.dfg.insts[second].opcode().is_terminator()
+                debug_assert_eq!(
+                    old_is_terminator,
+                    cursor.func.dfg.insts[second].opcode().is_terminator()
                 );
 
                 if let Some(old_srcloc) = old_srcloc {
@@ -1098,6 +1175,13 @@ impl<'a> EgraphPass<'a> {
                 self_map_operands(&cursor.func.dfg, value_to_opt_value, first);
                 self_map_operands(&cursor.func.dfg, value_to_opt_value, second);
                 reprocess_from(cursor, first);
+                return;
+            }
+            SkeletonInstSimplification::RemoveDeadStore { dead, overwriter } => {
+                assert!(!matches!(cursor.position(), CursorPosition::At(inst) if inst == dead));
+                cursor.func.layout.remove_inst(dead);
+                self_map_operands(&cursor.func.dfg, value_to_opt_value, overwriter);
+                cursor.prev_inst();
                 return;
             }
 
@@ -1132,6 +1216,11 @@ impl<'a> EgraphPass<'a> {
 
         self_map_operands(&cursor.func.dfg, value_to_opt_value, new_inst);
         reprocess_from(cursor, new_inst);
+
+        debug_assert_eq!(
+            old_is_terminator,
+            cursor.func.dfg.insts[new_inst].opcode().is_terminator()
+        );
     }
 
     /// Scoped elaboration: compute a final ordering of op computation
@@ -1237,7 +1326,8 @@ pub(crate) struct Stats {
     pub(crate) skeleton_inst_simplified: u64,
     pub(crate) skeleton_inst_gvn: u64,
     pub(crate) alias_analysis_removed_load: u64,
-    pub(crate) alias_analysis_removed_store: u64,
+    pub(crate) alias_analysis_removed_idempotent_store: u64,
+    pub(crate) alias_analysis_removed_dead_store: u64,
     pub(crate) new_inst: u64,
     pub(crate) union: u64,
     pub(crate) subsume: u64,

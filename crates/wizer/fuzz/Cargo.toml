@@ -21,7 +21,7 @@ wasmtime = { workspace = true }
 wasmtime-wizer = { workspace = true, features = ["wasmtime"] }
 
 [[bin]]
-name = "same_result"
-path = "fuzz_targets/same_result.rs"
+name = "same-result"
+path = "fuzz_targets/same-result.rs"
 test = false
 doc = false

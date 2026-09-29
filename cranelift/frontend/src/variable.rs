@@ -8,7 +8,6 @@
 //! Thus, make sure that Variable's indexes are allocated contiguously and
 //! starting at `0`.
 
-use core::u32;
 use cranelift_codegen::entity::entity_impl;
 
 /// An opaque reference to a variable.

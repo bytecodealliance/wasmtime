@@ -12,6 +12,7 @@ use crate::{
 };
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
+use core::fmt;
 use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
@@ -60,6 +61,19 @@ pub struct Component {
     inner: Arc<ComponentInner>,
 }
 
+// SAFETY: restating what rustc already infers to reduce work on rustc.
+//
+// See comments on the similar impls for `Engine` for more details.
+unsafe impl Send for Component {}
+unsafe impl Sync for Component {}
+
+fn _assert_send_sync(e: &Component) {
+    fn _assert<T: Send + Sync>(_: &T) {}
+    let Component { inner } = e;
+    _assert(e);
+    _assert(inner);
+}
+
 struct ComponentInner {
     /// Unique id for this component within this process.
     ///
@@ -98,6 +112,12 @@ struct ComponentInner {
 
     /// The checksum of the source binary from which the module was compiled.
     checksum: WasmChecksum,
+}
+
+impl fmt::Debug for Component {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Component").finish_non_exhaustive()
+    }
 }
 
 pub(crate) struct AllCallFuncPointers {
@@ -896,6 +916,22 @@ impl Component {
     /// Returns the [`Engine`] that this [`Component`] was compiled by.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
+    }
+
+    /// Is this `Component` the same as another?
+    ///
+    /// Ordinarily, component identity does not matter: a Wasmtime user
+    /// will create or obtain a component from some source and
+    /// instantiate it, and any two `Component` objects created from the
+    /// same source component are interchangeable. However, introspecting
+    /// component identity may be useful when examining Wasm VM state,
+    /// e.g. via debug APIs. It is guaranteed that `Component::same`
+    /// returns true for `Component` objects that reference the same
+    /// underlying component (e.g., one created via a `clone` of the
+    /// other).
+    #[inline]
+    pub fn same(a: &Component, b: &Component) -> bool {
+        Arc::ptr_eq(&a.inner, &b.inner)
     }
 
     pub(crate) fn realloc_func_ty(&self) -> &Arc<FuncType> {

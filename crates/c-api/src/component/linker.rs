@@ -115,12 +115,12 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) -> Option<Box<wasmtime_error_t>> {
+    let foreign = crate::ForeignData { data, finalizer };
+
     let name = unsafe { std::slice::from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };
-
-    let foreign = crate::ForeignData { data, finalizer };
 
     let result = linker_instance
         .linker_instance
@@ -181,12 +181,12 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func_async(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) -> Option<Box<wasmtime_error_t>> {
+    let foreign = crate::ForeignData { data, finalizer };
+
     let name = unsafe { std::slice::from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };
-
-    let foreign = crate::ForeignData { data, finalizer };
 
     let result =
         linker_instance
@@ -322,12 +322,12 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_resource(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) -> Option<Box<wasmtime_error_t>> {
+    let foreign = crate::ForeignData { data, finalizer };
+
     let name = unsafe { std::slice::from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };
-
-    let foreign = crate::ForeignData { data, finalizer };
 
     let result = linker_instance
         .linker_instance

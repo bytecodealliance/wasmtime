@@ -5,6 +5,7 @@ use super::{
     asm::{Assembler, PatchableAddToReg, VcmpKind, VcvtKind, VroundMode},
     regs::{self, rbp, rsp, scratch_fpr_bitset, scratch_gpr_bitset},
 };
+use crate::codegen::TailCallPlan;
 use crate::masm::{
     DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch, Imm as I, IntCmpKind,
     IntScratch, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
@@ -34,7 +35,7 @@ use crate::{
     masm::CalleeKind,
 };
 use cranelift_codegen::{
-    Final, MachBufferFinalized, MachLabel,
+    ExceptionContextLoc, MachBufferFinalized, MachExceptionHandler, MachLabel,
     binemit::CodeOffset,
     ir::{MemFlagsData, RelSourceLoc, SourceLoc},
     isa::{
@@ -129,14 +130,14 @@ impl Masm for MacroAssembler {
 
         self.with_scratch::<IntScratch, _>(|masm, scratch| {
             masm.load_ptr(
-                masm.address_at_reg(vmctx, ptr_size.vmcontext_store_context().into())?,
+                masm.address_at_reg(vmctx, ptr_size.vmctx().store_context().into())?,
                 scratch.writable(),
             )?;
 
             masm.load_ptr(
                 Address::offset(
                     scratch.inner(),
-                    ptr_size.vmstore_context_stack_limit().into(),
+                    ptr_size.vm_store_context().stack_limit().into(),
                 ),
                 scratch.writable(),
             )?;
@@ -217,10 +218,26 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn restore_stack_after_call(&mut self, reserved_size: u32, callee_pop_size: u32) -> Result<()> {
+        let caller_pop_size = reserved_size
+            .checked_sub(callee_pop_size)
+            .ok_or_else(|| CodeGenError::invalid_sp_offset())?;
+        self.decrement_sp(callee_pop_size);
+        self.free_stack(caller_pop_size)?;
+        Ok(())
+    }
+
     fn reset_stack_pointer(&mut self, offset: SPOffset) -> Result<()> {
         self.sp_offset = offset.as_u32();
 
         Ok(())
+    }
+
+    fn prepare_for_exception_handler(&mut self, target_offset: SPOffset) -> Result<Reg> {
+        self.asm.mov_rr(rbp(), writable!(rsp()), OperandSize::S64);
+        self.sp_offset = 0;
+        self.reserve_stack(target_offset.as_u32())?;
+        Ok(regs::rax())
     }
 
     fn local_address(&mut self, local: &LocalSlot) -> Result<Address> {
@@ -326,7 +343,12 @@ impl Masm for MacroAssembler {
     fn call(
         &mut self,
         stack_args_size: u32,
-        mut load_callee: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
+        context: &mut CodeGenContext<Emission>,
+        mut load_callee: impl FnMut(
+            &mut Self,
+            &mut CodeGenContext<Emission>,
+        ) -> Result<(CalleeKind, CallingConvention)>,
+        mut finalize: impl FnMut(&mut Self, &mut CodeGenContext<Emission>) -> Result<()>,
     ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
         let addend: u32 = <Self::ABI as abi::ABI>::initial_frame_size().into();
@@ -334,12 +356,111 @@ impl Masm for MacroAssembler {
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack)?;
-        let (callee, cc) = load_callee(self)?;
+        let (callee, cc) = load_callee(self, context)?;
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(cc, reg),
             CalleeKind::Direct(idx) => self.asm.call_with_name(cc, idx),
         };
+        finalize(self, context)?;
+
         Ok(total_stack)
+    }
+
+    fn finish_tail_call_same_size(&mut self) -> Result<()> {
+        self.asm.mov_rr(rbp(), writable!(rsp()), OperandSize::S64);
+        self.asm.pop_r(writable!(rbp()));
+        Ok(())
+    }
+
+    fn finish_tail_call_empty(&mut self, plan: TailCallPlan) -> Result<()> {
+        let word_bytes = u32::from(<Self::ABI as ABI>::word_bytes());
+        let return_address_offset = i32::try_from(i64::from(word_bytes) + plan.args_delta)?;
+
+        // A zero-sized callee has no arguments to copy, and moving the return
+        // address cannot overwrite the current frame pointer. Use one register
+        // to slide the return address and then restore the frame pointer.
+        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+            masm.load_ptr(
+                Address::offset_i32(rbp(), i32::from(<Self::ABI as ABI>::word_bytes())),
+                scratch.writable(),
+            )?;
+            masm.store_ptr(
+                scratch.inner(),
+                Address::offset_i32(rbp(), return_address_offset),
+            )?;
+
+            masm.load_ptr(Address::offset(rbp(), 0), scratch.writable())?;
+            masm.asm.lea(
+                &Address::offset_i32(rbp(), return_address_offset),
+                writable!(rsp()),
+                OperandSize::S64,
+            );
+            masm.asm
+                .mov_rr(scratch.inner(), writable!(rbp()), OperandSize::S64);
+
+            wasmtime_environ::error::Ok(())
+        })
+    }
+
+    fn with_tail_call_resize(
+        &mut self,
+        plan: TailCallPlan,
+        move_args: impl FnOnce(&mut Self, u32) -> Result<()>,
+    ) -> Result<()> {
+        let word_bytes = u32::from(<Self::ABI as ABI>::word_bytes());
+        let return_address_offset = i32::try_from(i64::from(word_bytes) + plan.args_delta)?;
+
+        // Preserve the return address and caller frame pointer in two
+        // scratch slots below the staged arguments. The argument move
+        // can overwrite both of their original frame slots.
+        let scratch_size = align_to(
+            word_bytes * 2,
+            u32::from(<Self::ABI as ABI>::call_stack_align()),
+        );
+        self.reserve_stack(scratch_size)?;
+
+        // Save the frame state in memory so that the scratch register is
+        // available to the generic argument-moving callback.
+        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+            masm.load_ptr(
+                Address::offset_i32(rbp(), i32::from(<Self::ABI as ABI>::word_bytes())),
+                scratch.writable(),
+            )?;
+            masm.store_ptr(scratch.inner(), Address::offset(rsp(), 0))?;
+            masm.load_ptr(Address::offset(rbp(), 0), scratch.writable())?;
+            masm.store_ptr(scratch.inner(), Address::offset(rsp(), word_bytes))?;
+            wasmtime_environ::error::Ok(())
+        })?;
+
+        move_args(self, scratch_size)?;
+
+        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+            // Slide the original return address so that the end of the
+            // incoming argument area remains anchored across a chain
+            // of tail calls, then discard this frame.
+            masm.load_ptr(Address::offset(rsp(), 0), scratch.writable())?;
+            masm.store_ptr(
+                scratch.inner(),
+                Address::offset_i32(rbp(), return_address_offset),
+            )?;
+            masm.load_ptr(Address::offset(rsp(), word_bytes), scratch.writable())?;
+            masm.asm.lea(
+                &Address::offset_i32(rbp(), return_address_offset),
+                writable!(rsp()),
+                OperandSize::S64,
+            );
+            masm.asm
+                .mov_rr(scratch.inner(), writable!(rbp()), OperandSize::S64);
+
+            wasmtime_environ::error::Ok(())
+        })
+    }
+
+    fn tail_jump(&mut self, callee: CalleeKind) {
+        match callee {
+            CalleeKind::Indirect(reg) => self.asm.tail_jump_with_reg(reg),
+            CalleeKind::Direct(name) => self.asm.tail_jump_with_name(name),
+        }
     }
 
     fn load_ptr(&mut self, src: Self::Address, dst: WritableReg) -> Result<()> {
@@ -934,14 +1055,55 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn frame_restore(&mut self) -> Result<()> {
-        debug_assert_eq!(self.sp_offset, 0);
-        self.asm.pop_r(writable!(rbp()));
-        self.asm.ret();
+    fn epilogue(&mut self, locals_size: u32, stack_args_size: u32) -> Result<()> {
+        if stack_args_size == 0 {
+            self.free_stack(locals_size)?;
+            return self.frame_restore(0);
+        }
+
+        // At this boundary SP + locals_size == FP. Move the return address up
+        // by the argument-area size, then discard the frame and finish with a
+        // plain RET instead of an immediate-pop RET.
+        assert_eq!(self.sp_offset, locals_size);
+        let destination = stack_args_size.checked_add(8).unwrap();
+        let sp_destination = locals_size.checked_add(destination).unwrap();
+        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+            // Use SP-relative addressing when all displacements and the ADD
+            // fit signed 8-bit encodings; use FP-relative addressing otherwise.
+            if let Ok(destination) = i8::try_from(sp_destination) {
+                let return_slot = locals_size.checked_add(8).unwrap();
+                masm.load_ptr(Address::offset(rsp(), return_slot), scratch.writable())?;
+                masm.store_ptr(scratch.inner(), Address::offset(rsp(), sp_destination))?;
+                masm.load_ptr(Address::offset(rsp(), locals_size), writable!(rbp()))?;
+                masm.asm.add_ir8(destination, writable!(rsp()));
+            } else {
+                masm.load_ptr(Address::offset(rbp(), 8), scratch.writable())?;
+                masm.store_ptr(scratch.inner(), Address::offset(rbp(), destination))?;
+                masm.asm.lea(
+                    &Address::offset(rbp(), destination),
+                    scratch.writable(),
+                    OperandSize::S64,
+                );
+                masm.load_ptr(Address::offset(rbp(), 0), writable!(rbp()))?;
+                masm.asm
+                    .mov_rr(scratch.inner(), writable!(rsp()), OperandSize::S64);
+            }
+            // Both paths finish reading the old frame before advancing SP.
+            masm.sp_offset = 0;
+            wasmtime_environ::error::Ok(())
+        })?;
+        self.asm.ret(0);
         Ok(())
     }
 
-    fn finalize(mut self, base: Option<SourceLoc>) -> Result<MachBufferFinalized<Final>> {
+    fn frame_restore(&mut self, stack_args_size: u32) -> Result<()> {
+        debug_assert_eq!(self.sp_offset, 0);
+        self.asm.pop_r(writable!(rbp()));
+        self.asm.ret(u16::try_from(stack_args_size)?);
+        Ok(())
+    }
+
+    fn finalize(mut self, base: Option<SourceLoc>) -> Result<MachBufferFinalized> {
         if let Some(patch) = self.stack_max_use_add {
             patch.finalize(i32::try_from(self.sp_max).unwrap(), self.asm.buffer_mut());
         }
@@ -951,6 +1113,10 @@ impl Masm for MacroAssembler {
 
     fn address_at_reg(&self, reg: Reg, offset: u32) -> Result<Self::Address> {
         Ok(Address::offset(reg, offset))
+    }
+
+    fn address_at_fp(&self, offset: i64) -> Result<Self::Address> {
+        Ok(Address::offset_i32(rbp(), i32::try_from(offset)?))
     }
 
     fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize) -> Result<()> {
@@ -1400,6 +1566,41 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[SPOffset]) -> Result<()> {
+        let frame_size = sp_offset.as_u32();
+        let return_addr = self.asm.buffer().cur_offset();
+        let map = cranelift_codegen::ir::UserStackMap::from_sp_offsets(
+            offsets.iter().map(SPOffset::as_u32),
+        );
+        self.asm
+            .buffer_mut()
+            .push_user_stack_map_sp_relative(return_addr, frame_size, map);
+        Ok(())
+    }
+
+    fn emit_try_call_site(
+        &mut self,
+        sp_offset: SPOffset,
+        vmctx_slot_offset: u32,
+        handlers: impl Iterator<Item = MachExceptionHandler>,
+    ) -> Result<()> {
+        let frame_offset = sp_offset.as_u32();
+        let vmctx_offset = frame_offset
+            .checked_sub(vmctx_slot_offset)
+            .ok_or_else(CodeGenError::invalid_local_offset)?;
+
+        let handlers = std::iter::once(MachExceptionHandler::Context(
+            ExceptionContextLoc::SPOffset(vmctx_offset),
+        ))
+        .chain(handlers);
+
+        self.asm
+            .buffer_mut()
+            .add_try_call_site(Some(frame_offset), handlers);
+
+        Ok(())
+    }
+
     fn current_code_offset(&self) -> Result<CodeOffset> {
         Ok(self.asm.buffer().cur_offset())
     }
@@ -1604,29 +1805,31 @@ impl Masm for MacroAssembler {
     fn atomic_rmw(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        addr: Self::Address,
         size: OperandSize,
         op: RmwOp,
         flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         let res = match op {
-            RmwOp::Add => {
+            RmwOp::Add | RmwOp::Sub | RmwOp::Xchg => {
                 let operand = context.pop_to_reg(self, None)?;
-                self.asm
-                    .lock_xadd(addr, writable!(operand.reg), size, flags);
-                operand.reg
-            }
-            RmwOp::Sub => {
-                let operand = context.pop_to_reg(self, None)?;
-                self.asm.neg(operand.reg, writable!(operand.reg), size);
-                self.asm
-                    .lock_xadd(addr, writable!(operand.reg), size, flags);
-                operand.reg
-            }
-            RmwOp::Xchg => {
-                let operand = context.pop_to_reg(self, None)?;
-                self.asm.xchg(addr, writable!(operand.reg), size, flags);
+                let base = context.pop_to_reg(self, None)?;
+                let addr = self.address_at_reg(base.reg, 0)?;
+
+                match op {
+                    RmwOp::Add => self
+                        .asm
+                        .lock_xadd(addr, writable!(operand.reg), size, flags),
+                    RmwOp::Sub => {
+                        self.asm.neg(operand.reg, writable!(operand.reg), size);
+                        self.asm
+                            .lock_xadd(addr, writable!(operand.reg), size, flags);
+                    }
+                    RmwOp::Xchg => self.asm.xchg(addr, writable!(operand.reg), size, flags),
+                    _ => unreachable!(),
+                }
+
+                context.free_reg(base.reg);
                 operand.reg
             }
             RmwOp::And | RmwOp::Or | RmwOp::Xor => {
@@ -1638,8 +1841,11 @@ impl Masm for MacroAssembler {
                         "invalid op for atomic_rmw_seq, should be one of `or`, `and` or `xor`"
                     ),
                 };
+
                 let dst = context.reg(regs::rax(), self)?;
                 let operand = context.pop_to_reg(self, None)?;
+                let base = context.pop_to_reg(self, None)?;
+                let addr = self.address_at_reg(base.reg, 0)?;
 
                 self.with_scratch::<IntScratch, _>(|masm, scratch| {
                     masm.asm.atomic_rmw_seq(
@@ -1654,6 +1860,7 @@ impl Masm for MacroAssembler {
                 });
 
                 context.free_reg(operand.reg);
+                context.free_reg(base.reg);
                 dst
             }
         };
@@ -1791,20 +1998,18 @@ impl Masm for MacroAssembler {
     fn atomic_cas(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        addr: Self::Address,
         size: OperandSize,
         flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()> {
-        // `cmpxchg` expects `expected` to be in the `*a*` register.
-        // reserve rax for the expected argument.
-
         let replacement =
             context.without::<Result<TypedReg>, _, _>(&[regs::rax()], self, |cx, masm| {
                 cx.pop_to_reg(masm, None)
             })??;
 
         let expected = context.pop_to_reg(self, Some(regs::rax()))?;
+        let base = context.pop_to_reg(self, None)?;
+        let addr = self.address_at_reg(base.reg, 0)?;
 
         self.asm
             .cmpxchg(addr, replacement.reg, writable!(expected.reg), size, flags);
@@ -1816,6 +2021,7 @@ impl Masm for MacroAssembler {
 
         context.stack.push(expected.into());
         context.free_reg(replacement);
+        context.free_reg(base.reg);
 
         Ok(())
     }

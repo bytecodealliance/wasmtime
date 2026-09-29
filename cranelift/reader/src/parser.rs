@@ -29,7 +29,6 @@ use cranelift_codegen::{settings, settings::Configurable, timing};
 use smallvec::SmallVec;
 use std::mem;
 use std::str::FromStr;
-use std::{u16, u32};
 use target_lexicon::Triple;
 
 macro_rules! match_imm {
@@ -1005,6 +1004,7 @@ impl<'a> Parser<'a> {
                 I16 => consume!(ty, self.match_imm16("Expected a 16-bit integer")?),
                 I32 => consume!(ty, self.match_imm32("Expected a 32-bit integer")?),
                 I64 => consume!(ty, self.match_imm64("Expected a 64-bit integer")?),
+                F16 => consume!(ty, self.match_ieee16("Expected a 16-bit float")?),
                 F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float")?),
                 F64 => consume!(ty, self.match_ieee64("Expected a 64-bit float")?),
                 _ => return err!(self.loc, "Expected a type of: float, int, bool"),

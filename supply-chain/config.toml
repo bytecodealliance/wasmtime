@@ -290,10 +290,6 @@ criteria = "safe-to-deploy"
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.fallible-iterator]]
-version = "0.2.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.futures-task]]
 version = "0.3.27"
 criteria = "safe-to-deploy"
@@ -336,22 +332,18 @@ criteria = "safe-to-deploy"
 version = "0.7.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.listenfd]]
-version = "1.0.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.logos]]
-version = "0.14.2"
+version = "0.15.1"
 criteria = "safe-to-deploy"
 notes = "safe when forbid_unsafe feature enabled, which it is in our dep through wasm-wave"
 
 [[exemptions.logos-codegen]]
-version = "0.14.2"
+version = "0.15.1"
 criteria = "safe-to-deploy"
 notes = "safe when forbid_unsafe feature enabled, which it is in our dep through wasm-wave"
 
 [[exemptions.logos-derive]]
-version = "0.14.2"
+version = "0.15.1"
 criteria = "safe-to-deploy"
 notes = "safe when forbid_unsafe feature enabled, which it is in our dep through wasm-wave"
 
@@ -525,6 +517,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.winapi-x86_64-pc-windows-gnu]]
 version = "0.4.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.xed-sys]]
+version = "0.6.0+xed-2024.05.20"
 criteria = "safe-to-deploy"
 
 [[exemptions.zip]]

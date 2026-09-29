@@ -36,7 +36,7 @@ pub fn disas(elf: &ElfFile64<'_, Endianness>, func: &[u8], addr: u64) -> Result<
                 FileFlags::Elf { e_flags, .. } => e_flags,
                 _ => bail!("not an ELF file"),
             };
-            if e_flags & (obj::EF_WASMTIME_PULLEY32 | obj::EF_WASMTIME_PULLEY64) != 0 {
+            if e_flags.intersects(obj::EF_WASMTIME_PULLEY32 | obj::EF_WASMTIME_PULLEY64) {
                 return disas_pulley(func, addr);
             } else {
                 "riscv64"

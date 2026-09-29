@@ -900,3 +900,31 @@ block0(v0: i32, v1: i64, v2: i8):
 ; run: %atomic_rmw_xchg_little_i8_no_res(0x12345678, 1, 0xff) == 0x1234ff78
 ; run: %atomic_rmw_xchg_little_i8_no_res(0x12345678, 0, 0x11) == 0x12345611
 ; run: %atomic_rmw_xchg_little_i8_no_res(0x12345678, 0, 0xff) == 0x123456ff
+
+function %atomic_rmw_umin_i8_reduced_operand(i32) -> i8 {
+    ss0 = explicit_slot 1
+
+block0(v0: i32):
+    v1 = stack_addr.i64 ss0
+    v2 = iconst.i8 32
+    store.i8 v2, v1
+    v3 = ireduce.i8 v0
+    v4 = atomic_rmw.i8 umin v1, v3
+    v5 = load.i8 v1
+    return v5
+}
+; run: %atomic_rmw_umin_i8_reduced_operand(0x110) == 16
+
+function %atomic_rmw_umax_i8_reduced_operand(i32) -> i8 {
+    ss0 = explicit_slot 1
+
+block0(v0: i32):
+    v1 = stack_addr.i64 ss0
+    v2 = iconst.i8 32
+    store.i8 v2, v1
+    v3 = ireduce.i8 v0
+    v4 = atomic_rmw.i8 umax v1, v3
+    v5 = load.i8 v1
+    return v5
+}
+; run: %atomic_rmw_umax_i8_reduced_operand(0x110) == 32

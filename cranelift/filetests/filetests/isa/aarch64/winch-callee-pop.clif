@@ -1,0 +1,212 @@
+; Cranelift-generated trampolines must agree with Winch about who pops
+; incoming stack arguments, including indirect calls.
+test compile precise-output
+target aarch64
+
+function %callee(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 winch {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64):
+    v10 = iadd v0, v9
+    return v10
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldr x2, [sp, #24]
+;   add x0, x0, x2
+;   ldp fp, lr, [sp], #16
+;   add sp, sp, #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldur x2, [sp, #0x18]
+;   add x0, x0, x2
+;   ldp x29, x30, [sp], #0x10
+;   add sp, sp, #0x10
+;   ret
+
+function %caller() -> i64 system_v {
+    sig0 = (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 winch
+    fn0 = colocated %callee sig0
+block0:
+    v0 = iconst.i64 42
+    v1 = call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+    v2 = iadd v1, v0
+    return v2
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   str x27, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+;   sub sp, sp, #16
+; block0:
+;   movz x7, #42
+;   str x7, [sp]
+;   str x7, [sp, #8]
+;   mov x0, x7
+;   mov x1, x7
+;   mov x2, x7
+;   mov x3, x7
+;   mov x4, x7
+;   mov x5, x7
+;   mov x6, x7
+;   bl 0
+;   add x0, x0, #42
+;   add sp, sp, #16
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldr x27, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   str x27, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
+;   sub sp, sp, #0x10
+; block1: ; offset 0x30
+;   mov x7, #0x2a
+;   stur x7, [sp]
+;   stur x7, [sp, #8]
+;   mov x0, x7
+;   mov x1, x7
+;   mov x2, x7
+;   mov x3, x7
+;   mov x4, x7
+;   mov x5, x7
+;   mov x6, x7
+;   bl #0x58 ; reloc_external Call %callee 0
+;   sub sp, sp, #0x10
+;   add x0, x0, #0x2a
+;   add sp, sp, #0x10
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldr x27, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %indirect_caller(i64) -> i64 system_v {
+    sig0 = (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 winch
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = call_indirect sig0, v0(v1, v1, v1, v1, v1, v1, v1, v1, v1, v1)
+    v3 = iadd v2, v1
+    return v3
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   str x27, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+;   sub sp, sp, #16
+; block0:
+;   mov x8, x0
+;   movz x7, #42
+;   str x7, [sp]
+;   str x7, [sp, #8]
+;   mov x0, x7
+;   mov x1, x7
+;   mov x2, x7
+;   mov x3, x7
+;   mov x4, x7
+;   mov x5, x7
+;   mov x6, x7
+;   blr x8
+;   add x0, x0, #42
+;   add sp, sp, #16
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldr x27, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   str x27, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
+;   sub sp, sp, #0x10
+; block1: ; offset 0x30
+;   mov x8, x0
+;   mov x7, #0x2a
+;   stur x7, [sp]
+;   stur x7, [sp, #8]
+;   mov x0, x7
+;   mov x1, x7
+;   mov x2, x7
+;   mov x3, x7
+;   mov x4, x7
+;   mov x5, x7
+;   mov x6, x7
+;   blr x8
+;   sub sp, sp, #0x10
+;   add x0, x0, #0x2a
+;   add sp, sp, #0x10
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldr x27, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret

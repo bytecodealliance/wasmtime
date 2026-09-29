@@ -6,15 +6,14 @@ description = "High-level API to expose the Wasmtime runtime"
 documentation = "https://docs.rs/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 
-[lints]
-workspace = true
-
 [package.metadata.docs.rs]
 all-features = true
+
+[lints]
+workspace = true
 
 [dependencies]
 wasmtime-environ = { workspace = true }
@@ -39,7 +38,6 @@ wasm-compose = { workspace = true, optional = true }
 wit-parser = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 libc = { workspace = true }
-cfg-if = { workspace = true }
 log = { workspace = true }
 wat = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -327,7 +325,6 @@ std = [
   'once_cell',
   'wasmtime-fiber?/std',
   'pulley-interpreter/std',
-  'wasmtime-core/std',
   'addr2line?/std',
   "dep:rustix",
   "wasmtime-jit-icache-coherence",
@@ -342,7 +339,12 @@ call-hook = []
 
 # Enables support for "memory protection keys" which can be used in conjunction
 # with the pooling allocator on x64 to compact linear memory allocations.
-memory-protection-keys = ["pooling-allocator"]
+memory-protection-keys = [
+  "pooling-allocator",
+  # MPK currently relies on call-hooks to manage the PKRU register for the host,
+  # so this is implicitly enabled when MPK is enabled.
+  "call-hook",
+]
 
 # Enables a re-export of wasmparser, so that an embedder of Wasmtime can use
 # exactly the version of the parser library that Wasmtime does. Sometimes this

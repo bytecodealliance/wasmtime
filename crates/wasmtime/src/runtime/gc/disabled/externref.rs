@@ -21,20 +21,14 @@ impl ExternRef {
     pub fn data<'a, T: 'static>(
         &self,
         _store: impl Into<StoreContext<'a, T>>,
-    ) -> Result<&'a (dyn Any + Send + Sync)>
-    where
-        T: 'a,
-    {
+    ) -> Result<&'a (dyn Any + Send + Sync)> {
         match *self {}
     }
 
     pub fn data_mut<'a, T: 'static>(
         &self,
         _store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<&'a mut (dyn Any + Send + Sync)>
-    where
-        T: 'a,
-    {
+    ) -> Result<&'a mut (dyn Any + Send + Sync)> {
         match *self {}
     }
 

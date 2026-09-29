@@ -1805,7 +1805,16 @@
   (value_regs_get x 0))
 
 ;;;;;  Rules for `fpromote`;;;;;;;;;;;;;;;;;
-(rule (lower (fpromote _ x))
+(rule (lower (fpromote (ty_supported_float_min $F32)
+                       x @ (value_type (ty_supported_float_min $F16))))
+  (rv_fcvtsh x))
+
+(rule (lower (fpromote (ty_supported_float_min $F64)
+                       x @ (value_type (ty_supported_float_min $F16))))
+  (rv_fcvtdh x))
+
+(rule (lower (fpromote (ty_supported_float_min $F64)
+                       x @ (value_type (ty_supported_float_min $F32))))
   (rv_fcvtds x))
 
 ;;;;;  Rules for `fvpromote_low`;;;;;;;;;;;;
@@ -1815,7 +1824,16 @@
   (rv_vfwcvt_f_f_v x (unmasked) (vstate_mf2 half_ty)))
 
 ;;;;;  Rules for `fdemote`;;;;;;;;;;;;;;;;;;
-(rule (lower (fdemote _ x))
+(rule (lower (fdemote (ty_supported_float_min $F16)
+                      x @ (value_type (ty_supported_float_min $F32))))
+  (rv_fcvths (FRM.RNE) x))
+
+(rule (lower (fdemote (ty_supported_float_min $F16)
+                      x @ (value_type (ty_supported_float_min $F64))))
+  (rv_fcvthd (FRM.RNE) x))
+
+(rule (lower (fdemote (ty_supported_float_min $F32)
+                      x @ (value_type (ty_supported_float_min $F64))))
   (rv_fcvtsd (FRM.RNE) x))
 
 ;;;;;  Rules for `fvdemote`;;;;;;;;;;;;;;;;;
@@ -2448,7 +2466,7 @@
 ;; TODO: could this perhaps be more optimal through inspection of the `fcsr`?
 ;; Unsure whether that needs to be preserved across function calls and/or would
 ;; cause other problems. Also unsure whether it's actually more performant.
-(rule (lower (fcvt_to_uint ity v @ (value_type fty)))
+(rule (lower (fcvt_to_uint (fits_in_64 ity) v @ (value_type fty)))
   (let ((_ InstOutput (gen_trapif (cmp_eqz (rv_feq fty v v)) (TrapCode.BAD_CONVERSION_TO_INTEGER)))
         (min FReg (imm fty (fcvt_umin_bound fty false)))
         (_ InstOutput (gen_trapif (cmp_nez (rv_fle fty v min)) (TrapCode.INTEGER_OVERFLOW)))
@@ -2465,7 +2483,7 @@
 ;;;;;  Rules for `fcvt_to_sint`;;;;;;;;;
 
 ;; NB: see above with `fcvt_to_uint` as this is similar
-(rule (lower (fcvt_to_sint ity v @ (value_type fty)))
+(rule (lower (fcvt_to_sint (fits_in_64 ity) v @ (value_type fty)))
   (let ((_ InstOutput (gen_trapif (cmp_eqz (rv_feq fty v v)) (TrapCode.BAD_CONVERSION_TO_INTEGER)))
         (min FReg (imm fty (fcvt_smin_bound fty ity false)))
         (_ InstOutput (gen_trapif (cmp_nez (rv_fle fty v min)) (TrapCode.INTEGER_OVERFLOW)))
@@ -2481,7 +2499,7 @@
 
 ;;;;;  Rules for `fcvt_to_sint_sat`;;;;;;;;;
 
-(rule 0 (lower (fcvt_to_sint_sat to v @ (value_type (ty_supported_float_full from))))
+(rule 0 (lower (fcvt_to_sint_sat (fits_in_64 to) v @ (value_type (ty_supported_float_full from))))
   (handle_fcvt_to_int_nan from v (lower_fcvt_to_sint_sat from to v)))
 
 ;; Lowers to a `rv_fcvt*` instruction but handles 8/16-bit cases where the
@@ -2524,7 +2542,7 @@
 
 ;;;;;  Rules for `fcvt_to_uint_sat`;;;;;;;;;
 
-(rule 0 (lower (fcvt_to_uint_sat to v @ (value_type (ty_supported_float_full from))))
+(rule 0 (lower (fcvt_to_uint_sat (fits_in_64 to) v @ (value_type (ty_supported_float_full from))))
   (handle_fcvt_to_int_nan from v (lower_fcvt_to_uint_sat from to v)))
 
 ;; Lowers to a `rv_fcvt*` instruction but handles 8/16-bit cases where the
@@ -2683,6 +2701,12 @@
   (rv_andn y (gen_bmask cmp)))
 (rule 3 (lower (select_spectre_guard (fits_in_64 _) cmp x (i64_from_iconst 0)))
   (rv_and x (gen_bmask cmp)))
+
+(rule 4 (lower (select_spectre_guard (ty_supported_vec ty) cmp x y))
+  (let ((mask XReg (gen_bmask cmp)))
+    (rv_vor_vv (rv_vand_vx x mask (unmasked) ty)
+               (rv_vandn_vx y mask (unmasked) ty)
+               (unmasked) ty)))
 
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule

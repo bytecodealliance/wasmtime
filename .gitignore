@@ -18,7 +18,6 @@ target
 .z3-trace
 foo
 .cargo
-publish
 vendor
 examples/build
 examples/.cache
@@ -35,3 +34,7 @@ testcase*.json
 perf.data*
 miri-wast/
 report/
+# Local SMT query cache for the ISLE verifier (see cranelift/isle/veri/verify.sh).
+cranelift/isle/veri/cache/
+# Staging directory used by `verify.sh rebuild-cache` before it swaps in.
+cranelift/isle/veri/cache.rebuild/

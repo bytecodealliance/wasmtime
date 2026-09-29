@@ -951,7 +951,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
                 .collect::<Vec<_>>()
                 .join(", ")));
             if let Some(poly) = &inst.polymorphic_info {
-                fmt.comment(format!("Polymorphic over {}", typeset_to_string(poly.ctrl_typevar.get_raw_typeset())));
+                fmt.comment(format_args!("Polymorphic over {}", typeset_to_string(poly.ctrl_typevar.get_raw_typeset())));
             }
 
             // Compute the bit field encoding, c.f. instructions.rs.

@@ -3,6 +3,7 @@
 pub use self::inst::{AtomicRmwSeqOp, EmitInfo, EmitState, Inst, args, external};
 
 use super::{OwnedTargetIsa, TargetIsa};
+use crate::MachBufferFinalized;
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{self, Function, Type, types};
 #[cfg(feature = "unwind")]
@@ -10,12 +11,11 @@ use crate::isa::unwind::systemv;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey};
 use crate::machinst::{
-    CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet, TextSectionBuilder, VCode,
-    compile,
+    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode, compile,
 };
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
-use crate::{Final, MachBufferFinalized};
 use alloc::string::String;
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use core::fmt;
@@ -61,14 +61,24 @@ impl X64Backend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        regalloc_ctx: &mut regalloc2::Ctx,
         ctrl_plane: &mut ControlPlane,
-    ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
+    ) -> CodegenResult<VCode<inst::Inst>> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(self.flags.clone(), self.x64_flags.clone());
         let sigs = SigSet::new::<abi::X64ABIMachineSpec>(func, &self.flags)?;
         let abi = abi::X64Callee::new(func, self, &self.x64_flags, &sigs)?;
-        compile::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
+        compile::compile::<Self>(
+            func,
+            domtree,
+            regalloc_ctx,
+            self,
+            abi,
+            emit_info,
+            sigs,
+            ctrl_plane,
+        )
     }
 }
 
@@ -77,12 +87,13 @@ impl TargetIsa for X64Backend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        regalloc_ctx: &mut regalloc2::Ctx,
         want_disasm: bool,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let (vcode, regalloc_result) = self.compile_vcode(func, domtree, ctrl_plane)?;
+        let vcode = self.compile_vcode(func, domtree, regalloc_ctx, ctrl_plane)?;
 
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, &self.flags, ctrl_plane);
+        let emit_result = vcode.emit(&regalloc_ctx.output, want_disasm, &self.flags, ctrl_plane)?;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer;
 
@@ -90,13 +101,13 @@ impl TargetIsa for X64Backend {
             crate::trace!("disassembly:\n{}", disasm);
         }
 
-        Ok(CompiledCodeStencil {
+        Ok(CompiledCodeStencil(CompiledCode {
             buffer,
             vcode: emit_result.disasm,
             value_labels_ranges,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
-        })
+        }))
     }
 
     fn flags(&self) -> &Flags {
@@ -212,7 +223,7 @@ impl TargetIsa for X64Backend {
 
 /// Emit unwind info for an x86 target.
 pub fn emit_unwind_info(
-    buffer: &MachBufferFinalized<Final>,
+    buffer: &MachBufferFinalized,
     kind: crate::isa::unwind::UnwindInfoKind,
 ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
     #[cfg(feature = "unwind")]

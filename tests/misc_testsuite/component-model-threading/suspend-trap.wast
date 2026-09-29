@@ -37,7 +37,7 @@
 
     (core func $task-cancel (canon task.cancel))
     (core func $thread-new-indirect
-        (canon thread.new-indirect $start-func-ty (table $libc "table")))
+        (canon thread.new-indirect $start-func-ty (core table $libc "table")))
     (core func $thread-yield (canon thread.yield))
     (core func $thread-yield-then-resume (canon thread.yield-then-resume))
 

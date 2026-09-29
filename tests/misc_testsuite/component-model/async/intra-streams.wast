@@ -13,8 +13,8 @@
 
   (type $s (stream string))
   (core func $stream.new (canon stream.new $s))
-  (core func $stream.read (canon stream.read $s async (memory $libc "m") (realloc (func $libc "realloc"))))
-  (core func $stream.write (canon stream.write $s async (memory $libc "m")))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "m")) (realloc (core func $libc "realloc"))))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "m"))))
 
   (core module $m
     (import "" "m" (memory 1))
@@ -64,8 +64,8 @@
 
   (type $s (stream u64))
   (core func $stream.new (canon stream.new $s))
-  (core func $stream.read (canon stream.read $s async (memory $libc "m")))
-  (core func $stream.write (canon stream.write $s async (memory $libc "m")))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "m"))))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "m"))))
 
   (core module $m
     (import "" "m" (memory 1))
@@ -124,8 +124,8 @@
 
   (type $s (stream u64))
   (core func $stream.new (canon stream.new $s))
-  (core func $stream.read (canon stream.read $s async (memory $libc "m1")))
-  (core func $stream.write (canon stream.write $s async (memory $libc "m2")))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "m1"))))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "m2"))))
 
   (core module $m
     (import "libc" "m1" (memory $m1 1))
@@ -185,8 +185,8 @@
 
   (type $s (stream u64))
   (core func $stream.new (canon stream.new $s))
-  (core func $stream.read (canon stream.read $s async (memory $libc "m1")))
-  (core func $stream.write (canon stream.write $s async (memory $libc "m2")))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "m1"))))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "m2"))))
 
   (core module $m
     (import "libc" "m1" (memory $m1 1))

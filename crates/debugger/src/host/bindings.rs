@@ -23,7 +23,7 @@ wasmtime::component::bindgen!({
         "bytecodealliance:wasmtime/debuggee.module": wasmtime::Module,
         "bytecodealliance:wasmtime/debuggee.table": wasmtime::Table,
         "bytecodealliance:wasmtime/debuggee.global": wasmtime::Global,
-        "bytecodealliance:wasmtime/debuggee.memory": wasmtime::Memory,
+        "bytecodealliance:wasmtime/debuggee.memory": super::api::Memory,
         "bytecodealliance:wasmtime/debuggee.wasm-tag": wasmtime::Tag,
         "bytecodealliance:wasmtime/debuggee.wasm-func": wasmtime::Func,
         "bytecodealliance:wasmtime/debuggee.wasm-exception": super::api::WasmException,

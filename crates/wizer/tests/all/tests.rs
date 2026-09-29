@@ -65,9 +65,7 @@ async fn wizen_and_run_wasm(
     let mut linker = wasmtime::Linker::new(store.engine());
     let thunk = wasmtime::Func::wrap(&mut store, || {});
     linker
-        .define_name(&mut store, "dummy_func", thunk)?
         .define(&mut store, "env", "f", thunk)?
-        .define_name(&mut store, "f", thunk)?
         .define(&mut store, "x", "f", thunk)?;
 
     p1::add_to_linker_async(&mut linker, |wasi| wasi)?;

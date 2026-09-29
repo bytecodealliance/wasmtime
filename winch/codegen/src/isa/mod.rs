@@ -3,7 +3,7 @@ use core::fmt::Formatter;
 use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
 use cranelift_codegen::settings;
-use cranelift_codegen::{Final, MachBufferFinalized, TextSectionBuilder};
+use cranelift_codegen::{MachBufferFinalized, TextSectionBuilder};
 use std::{
     error,
     fmt::{self, Debug, Display},
@@ -94,8 +94,9 @@ pub enum CallingConvention {
     /// See [cranelift_codegen::isa::CallConv::AppleAarch64]
     AppleAarch64,
     /// The default calling convention for Winch. It largely follows SystemV
-    /// for parameter and result handling. This calling convention is part of
-    /// Winch's default ABI `crate::abi::ABI`.
+    /// for parameter and result handling, except that callees pop their stack
+    /// arguments. This calling convention is part of Winch's default ABI
+    /// `crate::abi::ABI`.
     Default,
 }
 
@@ -174,7 +175,7 @@ pub trait TargetIsa: Send + Sync {
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
         tunables: &Tunables,
-    ) -> Result<CompiledFunction>;
+    ) -> Result<(CompiledFunction, bool)>;
 
     /// Get the default calling convention of the underlying target triple.
     fn default_call_conv(&self) -> CallConv {
@@ -199,7 +200,7 @@ pub trait TargetIsa: Send + Sync {
 
     fn emit_unwind_info(
         &self,
-        _result: &MachBufferFinalized<Final>,
+        _result: &MachBufferFinalized,
         _kind: UnwindInfoKind,
     ) -> Result<Option<UnwindInfo>>;
 

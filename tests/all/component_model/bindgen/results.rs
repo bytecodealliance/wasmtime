@@ -45,7 +45,7 @@ mod empty_error {
                     )
                 )
                 (core func $core_empty_error
-                    (canon lower (func $i "empty-error") (memory $libc "memory"))
+                    (canon lower (func $i "empty-error") (memory (core memory $libc "memory")))
                 )
                 (core instance $i (instantiate $m
                     (with "" (instance (export "core_empty_error" (func $core_empty_error))))
@@ -55,7 +55,7 @@ mod empty_error {
                     (export "empty-error")
                     (param "a" f64)
                     (result (result f64))
-                    (canon lift (core func $i "core_empty_error_export") (memory $libc "memory"))
+                    (canon lift (core func $i "core_empty_error_export") (memory (core memory $libc "memory")))
                 )
             )
         "#,
@@ -159,7 +159,7 @@ mod string_error {
                     )
                 )
                 (core func $core_string_error
-                    (canon lower (func $i "string-error") (memory $libc "memory") (realloc (func $libc "realloc")))
+                    (canon lower (func $i "string-error") (memory (core memory $libc "memory")) (realloc (core func $libc "realloc")))
                 )
                 (core instance $i (instantiate $m
                     (with "" (instance (export "core_string_error" (func $core_string_error))))
@@ -169,7 +169,7 @@ mod string_error {
                     (export "string-error")
                     (param "a" f64)
                     (result (result f64 (error string)))
-                    (canon lift (core func $i "core_string_error_export") (memory $libc "memory"))
+                    (canon lift (core func $i "core_string_error_export") (memory (core memory $libc "memory")))
                 )
             )
         "#
@@ -317,7 +317,7 @@ mod enum_error {
                     )
                 )
                 (core func $core_enum_error
-                    (canon lower (func $i "enum-error") (memory $libc "memory") (realloc (func $libc "realloc")))
+                    (canon lower (func $i "enum-error") (memory (core memory $libc "memory")) (realloc (core func $libc "realloc")))
                 )
                 (core instance $i (instantiate $m
                     (with "" (instance (export "core_enum_error" (func $core_enum_error))))
@@ -326,7 +326,7 @@ mod enum_error {
                 (func $f_enum_error
                     (param "a" f64)
                     (result (result f64 (error $err')))
-                    (canon lift (core func $i "core_enum_error_export") (memory $libc "memory"))
+                    (canon lift (core func $i "core_enum_error_export") (memory (core memory $libc "memory")))
                 )
 
                 (component $nested
@@ -481,7 +481,7 @@ mod record_error {
                     )
                 )
                 (core func $core_record_error
-                    (canon lower (func $i "record-error") (memory $libc "memory") (realloc (func $libc "realloc")))
+                    (canon lower (func $i "record-error") (memory (core memory $libc "memory")) (realloc (core func $libc "realloc")))
                 )
                 (core instance $i (instantiate $m
                     (with "" (instance (export "core_record_error" (func $core_record_error))))
@@ -490,7 +490,7 @@ mod record_error {
                 (func $f_record_error
                     (param "a" f64)
                     (result (result f64 (error (record (field "line" u32) (field "col" u32)))))
-                    (canon lift (core func $i "core_record_error_export") (memory $libc "memory"))
+                    (canon lift (core func $i "core_record_error_export") (memory (core memory $libc "memory")))
                 )
 
                 (component $nested
@@ -662,7 +662,7 @@ mod variant_error {
                     )
                 )
                 (core func $core_variant_error
-                    (canon lower (func $i "variant-error") (memory $libc "memory") (realloc (func $libc "realloc")))
+                    (canon lower (func $i "variant-error") (memory (core memory $libc "memory")) (realloc (core func $libc "realloc")))
                 )
                 (core instance $i (instantiate $m
                     (with "" (instance (export "core_variant_error" (func $core_variant_error))))
@@ -671,7 +671,7 @@ mod variant_error {
                 (func $f_variant_error
                     (param "a" f64)
                     (result (result f64 (error $e3')))
-                    (canon lift (core func $i "core_variant_error_export") (memory $libc "memory"))
+                    (canon lift (core func $i "core_variant_error_export") (memory (core memory $libc "memory")))
                 )
 
                 (component $nested
@@ -849,7 +849,7 @@ mod multiple_interfaces_error {
                     )
                 )
                 (core func $core_enum_error
-                    (canon lower (func $i "enum-error") (memory $libc "memory") (realloc (func $libc "realloc")))
+                    (canon lower (func $i "enum-error") (memory (core memory $libc "memory")) (realloc (core func $libc "realloc")))
                 )
                 (core instance $i (instantiate $m
                     (with "" (instance (export "core_enum_error" (func $core_enum_error))))
@@ -858,7 +858,7 @@ mod multiple_interfaces_error {
                 (func $f_enum_error
                     (param "a" f64)
                     (result (result f64 (error $err')))
-                    (canon lift (core func $i "core_enum_error_export") (memory $libc "memory"))
+                    (canon lift (core func $i "core_enum_error_export") (memory (core memory $libc "memory")))
                 )
 
                 (component $nested
@@ -1025,7 +1025,7 @@ mod with_remapping {
                     )
                 )
                 (core func $core_empty_error
-                    (canon lower (func $i "empty-error") (memory $libc "memory"))
+                    (canon lower (func $i "empty-error") (memory (core memory $libc "memory")))
                 )
                 (core instance $i (instantiate $m
                     (with "" (instance (export "core_empty_error" (func $core_empty_error))))
@@ -1035,7 +1035,7 @@ mod with_remapping {
                     (export "empty-error")
                     (param "a" f64)
                     (result (result f64))
-                    (canon lift (core func $i "core_empty_error_export") (memory $libc "memory"))
+                    (canon lift (core func $i "core_empty_error_export") (memory (core memory $libc "memory")))
                 )
             )
         "#,

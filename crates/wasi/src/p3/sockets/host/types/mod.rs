@@ -1,8 +1,6 @@
 use crate::p3::bindings::sockets::types::{ErrorCode, Host};
-use crate::p3::sockets::{SocketError, WasiSockets};
-use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtxView};
-use core::net::SocketAddr;
-use wasmtime::component::Accessor;
+use crate::p3::sockets::SocketError;
+use crate::sockets::WasiSocketsCtxView;
 
 mod tcp;
 mod udp;
@@ -13,14 +11,19 @@ impl Host for WasiSocketsCtxView<'_> {
     }
 }
 
-fn get_socket_addr_check<T>(store: &Accessor<T, WasiSockets>) -> SocketAddrCheck {
-    store.with(|mut view| view.get().ctx.socket_addr_check.clone())
-}
+mod named {
+    use crate::WasiCtxNamedView;
+    use crate::p3::bindings::named_imports::wasi::sockets::types::Host;
+    use crate::p3::bindings::sockets::types::ErrorCode;
+    use crate::p3::sockets::SocketError;
+    use crate::sockets::WasiSocketsNamedView;
 
-async fn is_addr_allowed<T>(
-    store: &Accessor<T, WasiSockets>,
-    addr: SocketAddr,
-    reason: SocketAddrUse,
-) -> bool {
-    get_socket_addr_check(store)(addr, reason).await
+    impl<T> Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        fn convert_error_code(&mut self, error: SocketError) -> wasmtime::Result<ErrorCode> {
+            error.downcast()
+        }
+    }
 }

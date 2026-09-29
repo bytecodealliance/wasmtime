@@ -1,0 +1,32 @@
+test interpret
+test run
+set enable_llvm_abi_extensions
+set enable_multi_ret_implicit_sret
+target aarch64 has_lse
+
+function %atomic_cas(i128, i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128, v2: i128):
+    v6 = stack_addr.i64 ss0
+    store.i128 notrap v0, v6
+    v3 = stack_addr.i64 ss0
+    v4 = atomic_cas.i128 v3, v1, v2
+    v7 = stack_addr.i64 ss0
+    v5 = load.i128 notrap v7
+    return v5, v4
+}
+
+; run: %atomic_cas(0, 0, 2) == [2, 0]
+; run: %atomic_cas(1, 0, 2) == [1, 1]
+; run: %atomic_cas(0, 1, 2) == [0, 0]
+; run: %atomic_cas(0, 0xC0FFEEEE_ABCDEF01_00000000_00000000, 0xDECAFFFF_12345678) == [0, 0]
+; run: %atomic_cas(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xFEDCBA98_76543210_F7E6D5C4_B3A29180, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+
+; Only the high half differs, so a lowering that swapped the low/high halves of
+; either operand pair would still report success here.
+; run: %atomic_cas(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0x11111111_11111111_DECAFFFF_12345678, 0) == [0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+; Only the low half differs.
+; run: %atomic_cas(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_11111111_11111111, 0) == [0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678, 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678]
+; The replacement's halves must not be swapped on a successful swap.
+; run: %atomic_cas(0, 0, 0xFEDCBA98_76543210_F7E6D5C4_B3A29180) == [0xFEDCBA98_76543210_F7E6D5C4_B3A29180, 0]

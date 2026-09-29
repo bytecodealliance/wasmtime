@@ -11,6 +11,18 @@ target pulley32be
 target pulley64
 target pulley64be
 
+set opt_level=speed
+target aarch64
+target x86_64
+target x86_64 has_bmi2
+target s390x
+target riscv64
+target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
 function %ishl_i64_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
     v2 = ishl.i64 v0, v1
@@ -718,8 +730,203 @@ block0(v0: i8, v1: i8):
 ; run: %sshr_i8_i8(0x40, 33) == 0x20
 ; run: %sshr_i8_i8(0x40, 34) == 0x10
 
+function %ishl_i64_i128(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ishl.i64 v0, v3
+    return v4
+}
+; run: %ishl_i64_i128(0x00000000_00000000, 0, 0) == 0x00000000_00000000
+; run: %ishl_i64_i128(0x00000000_00000000, 1, 0) == 0x00000000_00000000
+; run: %ishl_i64_i128(0x0000000f_0000000f, 0, 0) == 0x0000000f_0000000f
+; run: %ishl_i64_i128(0x0000000f_0000000f, 4, 0) == 0x000000f0_000000f0
+; run: %ishl_i64_i128(0x00000000_00000004, 64, 0) == 0x00000000_00000004
+; run: %ishl_i64_i128(0x00000000_00000004, 65, 0) == 0x00000000_00000008
+; run: %ishl_i64_i128(0x00000000_00000004, 66, 0) == 0x00000000_00000010
+; run: %ishl_i64_i128(0x00000000_00000004, 66, 0xffffffff_ffffffff) == 0x00000000_00000010
 
+function %ishl_i32_i128(i32, i64, i64) -> i32 {
+block0(v0: i32, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ishl.i32 v0, v3
+    return v4
+}
+; run: %ishl_i32_i128(0x00000000, 0, 0) == 0x00000000
+; run: %ishl_i32_i128(0x00000000, 1, 0) == 0x00000000
+; run: %ishl_i32_i128(0x0000000f, 0, 0) == 0x0000000f
+; run: %ishl_i32_i128(0x0000000f, 4, 0) == 0x000000f0
+; run: %ishl_i32_i128(0x00000004, 32, 0) == 0x00000004
+; run: %ishl_i32_i128(0x00000004, 33, 0) == 0x00000008
+; run: %ishl_i32_i128(0x00000004, 34, 0) == 0x00000010
+; run: %ishl_i32_i128(0x00000004, 34, 0xffffffff_ffffffff) == 0x00000010
 
+function %ishl_i16_i128(i16, i64, i64) -> i16 {
+block0(v0: i16, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ishl.i16 v0, v3
+    return v4
+}
+; run: %ishl_i16_i128(0x0000, 0, 0) == 0x0000
+; run: %ishl_i16_i128(0x0000, 1, 0) == 0x0000
+; run: %ishl_i16_i128(0x000f, 0, 0) == 0x000f
+; run: %ishl_i16_i128(0x000f, 4, 0) == 0x00f0
+; run: %ishl_i16_i128(0x0004, 16, 0) == 0x0004
+; run: %ishl_i16_i128(0x0004, 17, 0) == 0x0008
+; run: %ishl_i16_i128(0x0004, 18, 0) == 0x0010
+; run: %ishl_i16_i128(0x0004, 32, 0) == 0x0004
+; run: %ishl_i16_i128(0x0004, 33, 0) == 0x0008
+; run: %ishl_i16_i128(0x0004, 34, 0) == 0x0010
+; run: %ishl_i16_i128(0x0004, 34, 0xffffffff_ffffffff) == 0x0010
+
+function %ishl_i8_i128(i8, i64, i64) -> i8 {
+block0(v0: i8, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ishl.i8 v0, v3
+    return v4
+}
+; run: %ishl_i8_i128(0x00, 0, 0) == 0x00
+; run: %ishl_i8_i128(0x00, 1, 0) == 0x00
+; run: %ishl_i8_i128(0x0f, 0, 0) == 0x0f
+; run: %ishl_i8_i128(0x0f, 4, 0) == 0xf0
+; run: %ishl_i8_i128(0x04, 8, 0) == 0x04
+; run: %ishl_i8_i128(0x04, 9, 0) == 0x08
+; run: %ishl_i8_i128(0x04, 10, 0) == 0x10
+; run: %ishl_i8_i128(0x04, 32, 0) == 0x04
+; run: %ishl_i8_i128(0x04, 33, 0) == 0x08
+; run: %ishl_i8_i128(0x04, 34, 0) == 0x10
+; run: %ishl_i8_i128(0x04, 34, 0xffffffff_ffffffff) == 0x10
+
+function %ushr_i64_i128(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ushr.i64 v0, v3
+    return v4
+}
+; run: %ushr_i64_i128(0x10000000_10000000, 0, 0) == 0x10000000_10000000
+; run: %ushr_i64_i128(0x10000000_10000000, 1, 0) == 0x08000000_08000000
+; run: %ushr_i64_i128(0xf0000000_f0000000, 0, 0) == 0xf0000000_f0000000
+; run: %ushr_i64_i128(0xf0000000_f0000000, 4, 0) == 0x0f000000_0f000000
+; run: %ushr_i64_i128(0x40000000_40000000, 64, 0) == 0x40000000_40000000
+; run: %ushr_i64_i128(0x40000000_40000000, 65, 0) == 0x20000000_20000000
+; run: %ushr_i64_i128(0x40000000_40000000, 66, 0) == 0x10000000_10000000
+; run: %ushr_i64_i128(0x40000000_40000000, 66, 0xffffffff_ffffffff) == 0x10000000_10000000
+
+function %ushr_i32_i128(i32, i64, i64) -> i32 {
+block0(v0: i32, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ushr.i32 v0, v3
+    return v4
+}
+; run: %ushr_i32_i128(0x10000000, 0, 0) == 0x10000000
+; run: %ushr_i32_i128(0x10000000, 1, 0) == 0x08000000
+; run: %ushr_i32_i128(0xf0000000, 0, 0) == 0xf0000000
+; run: %ushr_i32_i128(0xf0000000, 4, 0) == 0x0f000000
+; run: %ushr_i32_i128(0x40000000, 32, 0) == 0x40000000
+; run: %ushr_i32_i128(0x40000000, 33, 0) == 0x20000000
+; run: %ushr_i32_i128(0x40000000, 34, 0) == 0x10000000
+; run: %ushr_i32_i128(0x40000000, 34, 0xffffffff_ffffffff) == 0x10000000
+
+function %ushr_i16_i128(i16, i64, i64) -> i16 {
+block0(v0: i16, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ushr.i16 v0, v3
+    return v4
+}
+; run: %ushr_i16_i128(0x1000, 0, 0) == 0x1000
+; run: %ushr_i16_i128(0x1000, 1, 0) == 0x0800
+; run: %ushr_i16_i128(0xf000, 0, 0) == 0xf000
+; run: %ushr_i16_i128(0xf000, 4, 0) == 0x0f00
+; run: %ushr_i16_i128(0x4000, 16, 0) == 0x4000
+; run: %ushr_i16_i128(0x4000, 17, 0) == 0x2000
+; run: %ushr_i16_i128(0x4000, 18, 0) == 0x1000
+; run: %ushr_i16_i128(0x4000, 32, 0) == 0x4000
+; run: %ushr_i16_i128(0x4000, 33, 0) == 0x2000
+; run: %ushr_i16_i128(0x4000, 34, 0) == 0x1000
+; run: %ushr_i16_i128(0x4000, 34, 0xffffffff_ffffffff) == 0x1000
+
+function %ushr_i8_i128(i8, i64, i64) -> i8 {
+block0(v0: i8, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = ushr.i8 v0, v3
+    return v4
+}
+; run: %ushr_i8_i128(0x10, 0, 0) == 0x10
+; run: %ushr_i8_i128(0x10, 1, 0) == 0x08
+; run: %ushr_i8_i128(0xf0, 0, 0) == 0xf0
+; run: %ushr_i8_i128(0xf0, 4, 0) == 0x0f
+; run: %ushr_i8_i128(0x40, 8, 0) == 0x40
+; run: %ushr_i8_i128(0x40, 9, 0) == 0x20
+; run: %ushr_i8_i128(0x40, 10, 0) == 0x10
+; run: %ushr_i8_i128(0x40, 32, 0) == 0x40
+; run: %ushr_i8_i128(0x40, 33, 0) == 0x20
+; run: %ushr_i8_i128(0x40, 34, 0) == 0x10
+; run: %ushr_i8_i128(0x40, 34, 0xffffffff_ffffffff) == 0x10
+
+function %sshr_i64_i128(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = sshr.i64 v0, v3
+    return v4
+}
+; run: %sshr_i64_i128(0x80000000_80000000, 0, 0) == 0x80000000_80000000
+; run: %sshr_i64_i128(0x80000000_80000000, 1, 0) == 0xC0000000_40000000
+; run: %sshr_i64_i128(0xf0000000_f0000000, 0, 0) == 0xf0000000_f0000000
+; run: %sshr_i64_i128(0xf0000000_f0000000, 4, 0) == 0xff000000_0f000000
+; run: %sshr_i64_i128(0x40000000_40000000, 64, 0) == 0x40000000_40000000
+; run: %sshr_i64_i128(0x40000000_40000000, 65, 0) == 0x20000000_20000000
+; run: %sshr_i64_i128(0x40000000_40000000, 66, 0) == 0x10000000_10000000
+; run: %sshr_i64_i128(0x40000000_40000000, 66, 0xffffffff_ffffffff) == 0x10000000_10000000
+
+function %sshr_i32_i128(i32, i64, i64) -> i32 {
+block0(v0: i32, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = sshr.i32 v0, v3
+    return v4
+}
+; run: %sshr_i32_i128(0x80000000, 0, 0) == 0x80000000
+; run: %sshr_i32_i128(0x80000000, 1, 0) == 0xC0000000
+; run: %sshr_i32_i128(0xf0000000, 0, 0) == 0xf0000000
+; run: %sshr_i32_i128(0xf0000000, 4, 0) == 0xff000000
+; run: %sshr_i32_i128(0x40000000, 32, 0) == 0x40000000
+; run: %sshr_i32_i128(0x40000000, 33, 0) == 0x20000000
+; run: %sshr_i32_i128(0x40000000, 34, 0) == 0x10000000
+; run: %sshr_i32_i128(0x40000000, 34, 0xffffffff_ffffffff) == 0x10000000
+
+function %sshr_i16_i128(i16, i64, i64) -> i16 {
+block0(v0: i16, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = sshr.i16 v0, v3
+    return v4
+}
+; run: %sshr_i16_i128(0x8000, 0, 0) == 0x8000
+; run: %sshr_i16_i128(0x8000, 1, 0) == 0xC000
+; run: %sshr_i16_i128(0xf000, 0, 0) == 0xf000
+; run: %sshr_i16_i128(0xf000, 4, 0) == 0xff00
+; run: %sshr_i16_i128(0x4000, 16, 0) == 0x4000
+; run: %sshr_i16_i128(0x4000, 17, 0) == 0x2000
+; run: %sshr_i16_i128(0x4000, 18, 0) == 0x1000
+; run: %sshr_i16_i128(0x4000, 32, 0) == 0x4000
+; run: %sshr_i16_i128(0x4000, 33, 0) == 0x2000
+; run: %sshr_i16_i128(0x4000, 34, 0) == 0x1000
+; run: %sshr_i16_i128(0x4000, 34, 0xffffffff_ffffffff) == 0x1000
+
+function %sshr_i8_i128(i8, i64, i64) -> i8 {
+block0(v0: i8, v1: i64, v2: i64):
+    v3 = iconcat v1, v2
+    v4 = sshr.i8 v0, v3
+    return v4
+}
+; run: %sshr_i8_i128(0x80, 0, 0) == 0x80
+; run: %sshr_i8_i128(0x80, 1, 0) == 0xC0
+; run: %sshr_i8_i128(0xf0, 0, 0) == 0xf0
+; run: %sshr_i8_i128(0xf0, 4, 0) == 0xff
+; run: %sshr_i8_i128(0x40, 8, 0) == 0x40
+; run: %sshr_i8_i128(0x40, 9, 0) == 0x20
+; run: %sshr_i8_i128(0x40, 10, 0) == 0x10
+; run: %sshr_i8_i128(0x40, 32, 0) == 0x40
+; run: %sshr_i8_i128(0x40, 33, 0) == 0x20
+; run: %sshr_i8_i128(0x40, 34, 0) == 0x10
+; run: %sshr_i8_i128(0x40, 34, 0xffffffff_ffffffff) == 0x10
 
 function %ishl_i64_const(i64) -> i64 {
 block0(v0: i64):
@@ -831,3 +1038,225 @@ block0(v0: i32, v1: i32, v3: i32):
 ; run: %fold_shifts_over_and1(0, 0, 0) == 0
 ; run: %fold_shifts_over_and1(1, 31, 0x80000000) == 1
 
+function %ishl_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = ishl v1, v0
+    return v2
+}
+
+; run: %ishl_zero_left_operand(0) == 0
+; run: %ishl_zero_left_operand(1) == 0
+; run: %ishl_zero_left_operand(63) == 0
+; run: %ishl_zero_left_operand(64) == 0
+
+function %ushr_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = ushr v1, v0
+    return v2
+}
+
+; run: %ushr_zero_left_operand(0) == 0
+; run: %ushr_zero_left_operand(1) == 0
+; run: %ushr_zero_left_operand(63) == 0
+; run: %ushr_zero_left_operand(64) == 0
+
+function %rotl_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = rotl v1, v0
+    return v2
+}
+
+; run: %rotl_zero_left_operand(0) == 0
+; run: %rotl_zero_left_operand(1) == 0
+; run: %rotl_zero_left_operand(63) == 0
+; run: %rotl_zero_left_operand(64) == 0
+
+function %rotr_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = rotr v1, v0
+    return v2
+}
+
+; run: %rotr_zero_left_operand(0) == 0
+; run: %rotr_zero_left_operand(1) == 0
+; run: %rotr_zero_left_operand(63) == 0
+; run: %rotr_zero_left_operand(64) == 0
+
+function %sshr_all_ones_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1
+    v2 = sshr v1, v0
+    return v2
+}
+
+; run: %sshr_all_ones_left_operand(0) == -1
+; run: %sshr_all_ones_left_operand(1) == -1
+; run: %sshr_all_ones_left_operand(63) == -1
+; run: %sshr_all_ones_left_operand(64) == -1
+
+function %rotl_all_ones_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1
+    v2 = rotl v1, v0
+    return v2
+}
+
+; run: %rotl_all_ones_left_operand(0) == -1
+; run: %rotl_all_ones_left_operand(1) == -1
+; run: %rotl_all_ones_left_operand(63) == -1
+; run: %rotl_all_ones_left_operand(64) == -1
+
+function %rotr_all_ones_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -1
+    v2 = rotr v1, v0
+    return v2
+}
+
+; run: %rotr_all_ones_left_operand(0) == -1
+; run: %rotr_all_ones_left_operand(1) == -1
+; run: %rotr_all_ones_left_operand(63) == -1
+; run: %rotr_all_ones_left_operand(64) == -1
+
+function %sshr_zero_left_operand(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = sshr v1, v0
+    return v2
+}
+
+; run: %sshr_zero_left_operand(0) == 0
+; run: %sshr_zero_left_operand(1) == 0
+; run: %sshr_zero_left_operand(63) == 0
+; run: %sshr_zero_left_operand(64) == 0
+
+function %ushr_band_ishl_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = ishl v1, v2
+    v4 = band v0, v3
+    v5 = ushr v4, v2
+    return v5
+}
+
+; run: %ushr_band_ishl_rt(0, 0, 0) == 0
+; run: %ushr_band_ishl_rt(0xf0, 0xcc, 4) == 12
+; run: %ushr_band_ishl_rt(0x80000000, -1, 31) == 1
+; run: %ushr_band_ishl_rt(0x12345678, 0xaa, 32) == 0x28
+
+function %bxor_ishl_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = ishl v0, v2
+    v4 = ishl v1, v2
+    v5 = bxor v3, v4
+    return v5
+}
+
+; run: %bxor_ishl_rt(0, 0, 0) == 0
+; run: %bxor_ishl_rt(0x12345678, 0x9abcdef0, 4) == 0x88888880
+; run: %bxor_ishl_rt(0x12345678, 0x9abcdef0, 32) == 0x88888888
+
+function %bxor_sshr_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = sshr v0, v2
+    v4 = sshr v1, v2
+    v5 = bxor v3, v4
+    return v5
+}
+
+; run: %bxor_sshr_rt(0, 0, 0) == 0
+; run: %bxor_sshr_rt(0x87654321, 0x12345678, 4) == 0xf9551155
+; run: %bxor_sshr_rt(0x87654321, 0x12345678, 32) == 0x95511559
+
+function %bxor_ushr_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = ushr v0, v2
+    v4 = ushr v1, v2
+    v5 = bxor v3, v4
+    return v5
+}
+
+; run: %bxor_ushr_rt(0, 0, 0) == 0
+; run: %bxor_ushr_rt(0x12345678, 0x9abcdef0, 4) == 0x08888888
+; run: %bxor_ushr_rt(0x12345678, 0x9abcdef0, 32) == 0x88888888
+
+function %ishl_masked_count_i8_i8_mask7(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 7
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; run: %ishl_masked_count_i8_i8_mask7(1, 0) == 0x1
+; run: %ishl_masked_count_i8_i8_mask7(1, 7) == 0x80
+; run: %ishl_masked_count_i8_i8_mask7(3, 8) == 0x3
+; run: %ishl_masked_count_i8_i8_mask7(-1, 9) == 0xfe
+; run: %ishl_masked_count_i8_i8_mask7(-128, 255) == 0x0
+
+function %ishl_masked_count_i32_i32_mask31(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 31
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; run: %ishl_masked_count_i32_i32_mask31(1, 0) == 0x1
+; run: %ishl_masked_count_i32_i32_mask31(1, 31) == 0x80000000
+; run: %ishl_masked_count_i32_i32_mask31(3, 32) == 0x3
+; run: %ishl_masked_count_i32_i32_mask31(-1, 33) == 0xfffffffe
+; run: %ishl_masked_count_i32_i32_mask31(-128, 4294967295) == 0x0
+
+function %ishl_masked_count_i64_i8_mask63(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = iconst.i8 63
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; run: %ishl_masked_count_i64_i8_mask63(1, 0) == 0x1
+; run: %ishl_masked_count_i64_i8_mask63(1, 63) == 0x8000000000000000
+; run: %ishl_masked_count_i64_i8_mask63(3, 64) == 0x3
+; run: %ishl_masked_count_i64_i8_mask63(-1, 65) == 0xfffffffffffffffe
+; run: %ishl_masked_count_i64_i8_mask63(-128, 255) == 0x0
+
+function %ushr_masked_count_i64_i32_mask63(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = iconst.i32 63
+    v3 = band v1, v2
+    v4 = ushr v0, v3
+    return v4
+}
+; run: %ushr_masked_count_i64_i32_mask63(1, 0) == 0x1
+; run: %ushr_masked_count_i64_i32_mask63(1, 63) == 0x0
+; run: %ushr_masked_count_i64_i32_mask63(3, 64) == 0x3
+; run: %ushr_masked_count_i64_i32_mask63(-1, 65) == 0x7fffffffffffffff
+; run: %ushr_masked_count_i64_i32_mask63(-128, 4294967295) == 0x1
+
+function %sshr_masked_count_i32_i8_mask31(i32, i8) -> i32 {
+block0(v0: i32, v1: i8):
+    v2 = iconst.i8 31
+    v3 = band v1, v2
+    v4 = sshr v0, v3
+    return v4
+}
+; run: %sshr_masked_count_i32_i8_mask31(1, 0) == 0x1
+; run: %sshr_masked_count_i32_i8_mask31(1, 31) == 0x0
+; run: %sshr_masked_count_i32_i8_mask31(3, 32) == 0x3
+; run: %sshr_masked_count_i32_i8_mask31(-1, 33) == 0xffffffff
+; run: %sshr_masked_count_i32_i8_mask31(-128, 255) == 0xffffffff
+
+function %ishl_masked_count_i64_i32_mask31(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = iconst.i32 31
+    v3 = band v1, v2
+    v4 = ishl v0, v3
+    return v4
+}
+; run: %ishl_masked_count_i64_i32_mask31(1, 0) == 0x1
+; run: %ishl_masked_count_i64_i32_mask31(1, 63) == 0x80000000
+; run: %ishl_masked_count_i64_i32_mask31(3, 64) == 0x3
+; run: %ishl_masked_count_i64_i32_mask31(-1, 65) == 0xfffffffffffffffe
+; run: %ishl_masked_count_i64_i32_mask31(-128, 4294967295) == 0xffffffc000000000

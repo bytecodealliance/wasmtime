@@ -23,20 +23,19 @@
 
 use crate::dominator_tree::{ChildIter, DomTreeGraph, DominatorTree};
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::{Block, Function, Layout, ProgramPoint};
+use crate::ir::{Block, Layout, ProgramPoint};
 use core::cmp::Ordering;
 
 /// The reversed control-flow graph, augmented with a virtual sink above the
 /// function's exit blocks. Computing a `DominatorTree` over this graph yields
 /// the post-dominator tree.
 struct ReverseGraph<'a> {
-    func: &'a Function,
     cfg: &'a ControlFlowGraph,
 }
 
 impl DomTreeGraph for ReverseGraph<'_> {
     fn num_blocks(&self) -> usize {
-        self.func.dfg.num_blocks()
+        self.cfg.num_blocks()
     }
 
     fn roots(&self) -> impl Iterator<Item = Block> {
@@ -45,10 +44,14 @@ impl DomTreeGraph for ReverseGraph<'_> {
         // `return_call`, `trap`, etc...). These are exactly the blocks with no
         // CFG successors, and they are precisely the blocks with an edge to the
         // virtual sink.
-        self.func
-            .layout
+        //
+        // `cfg.blocks()` may include blocks not in the layout, but those are
+        // isolated in the graph (no predecessors or successors), so they only
+        // ever appear as trivial single-node roots and never affect the
+        // post-domination of any real block.
+        self.cfg
             .blocks()
-            .filter(|&block| self.func.block_successors(block).next().is_none())
+            .filter(|&block| self.cfg.succ_iter(block).next().is_none())
     }
 
     fn successors(&self, block: Block) -> impl Iterator<Item = Block> {
@@ -62,7 +65,7 @@ impl DomTreeGraph for ReverseGraph<'_> {
     fn predecessors(&self, block: Block) -> impl Iterator<Item = Block> {
         // Edges are reversed: a predecessor in the reversed graph is a
         // successor in the CFG.
-        self.func.block_successors(block)
+        self.cfg.succ_iter(block)
     }
 }
 
@@ -90,18 +93,17 @@ impl PostDominatorTree {
     }
 
     /// Allocate and compute a post-dominator tree.
-    pub fn with_function(func: &Function, cfg: &ControlFlowGraph) -> Self {
+    pub fn with_cfg(cfg: &ControlFlowGraph) -> Self {
         let mut post_domtree = Self::new();
-        post_domtree.compute(func, cfg);
+        post_domtree.compute(cfg);
         post_domtree
     }
 
-    /// Reset and compute the post-dominator tree for `func`, using the
-    /// control-flow graph `cfg`.
-    pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+    /// Reset and compute the post-dominator tree from the control-flow graph
+    /// `cfg`.
+    pub fn compute(&mut self, cfg: &ControlFlowGraph) {
         debug_assert!(cfg.is_valid());
-        self.dom_tree
-            .compute_from_graph(&ReverseGraph { func, cfg });
+        self.dom_tree.compute_from_graph(&ReverseGraph { cfg });
     }
 
     /// Clear the data structures used to represent the post-dominator
@@ -216,7 +218,7 @@ mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
-    use crate::ir::{InstBuilder, TrapCode};
+    use crate::ir::{Function, InstBuilder, TrapCode};
     use alloc::string::String;
     use alloc::vec::Vec;
     use mutatis::{Mutate, check::Check, mutators as m};
@@ -225,7 +227,7 @@ mod tests {
     fn empty() {
         let func = Function::new();
         let cfg = ControlFlowGraph::with_function(&func);
-        let pdt = PostDominatorTree::with_function(&func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
         assert!(pdt.is_valid());
     }
 
@@ -240,12 +242,12 @@ mod tests {
 
         let mut pdt = PostDominatorTree::new();
         assert!(!pdt.is_valid());
-        pdt.compute(cur.func, &cfg);
+        pdt.compute(&cfg);
         assert!(pdt.is_valid());
         pdt.clear();
         assert!(!pdt.is_valid());
         // Recompute after clear.
-        pdt.compute(cur.func, &cfg);
+        pdt.compute(&cfg);
         assert!(pdt.is_valid());
     }
 
@@ -260,7 +262,7 @@ mod tests {
         cur.ins().return_(&[]);
 
         let cfg = ControlFlowGraph::with_function(cur.func);
-        let pdt = PostDominatorTree::with_function(cur.func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
 
         // The single block is an exit, so it has no post-dominator and does not
         // diverge.
@@ -300,7 +302,7 @@ mod tests {
         cur.ins().return_(&[]);
 
         let cfg = ControlFlowGraph::with_function(cur.func);
-        let pdt = PostDominatorTree::with_function(cur.func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
 
         // Every path out of the function passes through `join`.
         assert_eq!(pdt.immediate_post_dominator(block0), Some(join));
@@ -360,7 +362,7 @@ mod tests {
         cur.ins().return_(&[]);
 
         let cfg = ControlFlowGraph::with_function(cur.func);
-        let pdt = PostDominatorTree::with_function(cur.func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
 
         assert_eq!(pdt.immediate_post_dominator(entry), Some(header));
         assert_eq!(pdt.immediate_post_dominator(header), Some(exit));
@@ -387,7 +389,7 @@ mod tests {
         cur.ins().jump(block0, &[]);
 
         let cfg = ControlFlowGraph::with_function(cur.func);
-        let pdt = PostDominatorTree::with_function(cur.func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
 
         // There is no exit block, so the function never returns: every block
         // diverges and has no post-dominator.
@@ -421,7 +423,7 @@ mod tests {
         cur.ins().return_(&[]);
 
         let cfg = ControlFlowGraph::with_function(cur.func);
-        let pdt = PostDominatorTree::with_function(cur.func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
 
         // Only `body` diverges.
         assert!(pdt.diverges(body));
@@ -455,7 +457,7 @@ mod tests {
         cur.ins().return_(&[]);
 
         let cfg = ControlFlowGraph::with_function(cur.func);
-        let pdt = PostDominatorTree::with_function(cur.func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
 
         // Two distinct exit blocks: neither post-dominates the entry, and the
         // entry's only post-dominator is the (virtual) sink.
@@ -495,7 +497,7 @@ mod tests {
         cur.ins().trap(TrapCode::unwrap_user(1));
 
         let cfg = ControlFlowGraph::with_function(cur.func);
-        let pdt = PostDominatorTree::with_function(cur.func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
 
         // A `trap` is a function exit, so `trap_block` is a root of the forest
         // and does not diverge.
@@ -521,7 +523,7 @@ mod tests {
         cur.ins().return_(&[]);
 
         let cfg = ControlFlowGraph::with_function(cur.func);
-        let pdt = PostDominatorTree::with_function(cur.func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
 
         let v1_def = cur.func.dfg.value_def(v1).unwrap_inst();
         let v2_def = cur.func.dfg.value_def(v2).unwrap_inst();
@@ -674,7 +676,7 @@ mod tests {
 
         let (func, blocks) = graph.build();
         let cfg = ControlFlowGraph::with_function(&func);
-        let pdt = PostDominatorTree::with_function(&func, &cfg);
+        let pdt = PostDominatorTree::with_cfg(&cfg);
 
         // The virtual sink is node `n`. Exit blocks have an edge to it.
         let sink = graph.blocks.len();

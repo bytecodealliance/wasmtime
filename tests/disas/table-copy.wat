@@ -24,8 +24,8 @@
     table.copy $u $t))
 
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108896 "VMStoreContext+0x20"
+;;     region0 = 123 ""
+;;     region1 = 196 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+32
@@ -39,8 +39,8 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108896 "VMStoreContext+0x20"
+;;     region0 = 123 ""
+;;     region1 = 196 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+32
@@ -54,8 +54,8 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i32, i32, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108896 "VMStoreContext+0x20"
+;;     region0 = 123 ""
+;;     region1 = 196 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+32
@@ -69,12 +69,12 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108896 "VMStoreContext+0x20"
-;;     region2 = 1342177280 "VMTableImport+0x0"
-;;     region3 = 671088640 "VMTableDefinition+0x0"
-;;     region4 = 671088648 "VMTableDefinition+0x8"
-;;     region5 = 268435456 "PublicTable"
+;;     region0 = 123 ""
+;;     region1 = 196 ""
+;;     region2 = 21 ""
+;;     region3 = 93 ""
+;;     region4 = 211 ""
+;;     region5 = 99 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+32
@@ -209,12 +209,12 @@
 ;; }
 ;;
 ;; function u0:4(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108896 "VMStoreContext+0x20"
-;;     region2 = 671088640 "VMTableDefinition+0x0"
-;;     region3 = 1342177280 "VMTableImport+0x0"
-;;     region4 = 671088648 "VMTableDefinition+0x8"
-;;     region5 = 268435456 "PublicTable"
+;;     region0 = 123 ""
+;;     region1 = 196 ""
+;;     region2 = 93 ""
+;;     region3 = 21 ""
+;;     region4 = 211 ""
+;;     region5 = 99 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+32

@@ -7,7 +7,6 @@ use crate::ir::{ExternalName, types::*};
 use crate::isa;
 use crate::isa::winch;
 use crate::isa::{CallConv, unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings};
-use crate::machinst::abi::*;
 use crate::machinst::*;
 use crate::settings;
 use alloc::borrow::ToOwned;
@@ -168,7 +167,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             }
 
             // Find regclass(es) of the register(s) used to store a value of this type.
-            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+            let (rcs, reg_tys) = Inst::rc_for_type(&param.value_type)?;
 
             // Now assign ABIArgSlots for each register-sized part.
             //
@@ -596,10 +595,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         // Emit return instruction.
-        let stack_bytes_to_pop = if call_conv == CallConv::Tail {
-            frame_layout.tail_args_size
-        } else {
-            0
+        let stack_bytes_to_pop = match call_conv {
+            CallConv::Tail => frame_layout.tail_args_size,
+            CallConv::Winch => frame_layout.incoming_args_size,
+            _ => 0,
         };
         let inst = if stack_bytes_to_pop == 0 {
             asm::inst::retq_zo::new().into()
@@ -907,6 +906,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn get_ext_mode(
         _call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
+        _location: ABIArgLocation,
     ) -> ir::ArgumentExtension {
         specified
     }
@@ -1122,6 +1122,7 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
         },
         CallConv::WindowsFastcall => match fltreg_idx {
             0 => Some(regs::xmm0()),
+            1 => Some(regs::xmm1()), // The Rust ABI for float scalar pairs needs this.
             _ => None,
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),
@@ -1342,4 +1343,52 @@ const fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
     }
 
     env
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::machinst::abi::Callee;
+    use alloc::vec::Vec;
+
+    fn make_frame_layout(total_relevant_fields_sum: u32) -> FrameLayout {
+        FrameLayout {
+            word_bytes: 8,
+            incoming_args_size: 0,
+            tail_args_size: 0,
+            setup_area_size: 0,
+            clobber_size: 0,
+            fixed_frame_storage_size: total_relevant_fields_sum,
+            stackslots_size: 0,
+            outgoing_args_size: 0,
+            clobbered_callee_saves: Vec::new(),
+            function_calls: crate::machinst::FunctionCalls::None,
+        }
+    }
+
+    const ONE_GIB: u32 = 1 << 30;
+
+    #[test]
+    fn frame_layout_under_limit_is_accepted() {
+        let layout = make_frame_layout(ONE_GIB - 1);
+        assert!(!Callee::<X64ABIMachineSpec>::frame_layout_exceeds_limit(
+            &layout, ONE_GIB
+        ));
+    }
+
+    #[test]
+    fn frame_layout_at_exact_limit_is_accepted() {
+        let layout = make_frame_layout(ONE_GIB);
+        assert!(!Callee::<X64ABIMachineSpec>::frame_layout_exceeds_limit(
+            &layout, ONE_GIB
+        ));
+    }
+
+    #[test]
+    fn frame_layout_over_limit_is_rejected() {
+        let layout = make_frame_layout(ONE_GIB + 1);
+        assert!(Callee::<X64ABIMachineSpec>::frame_layout_exceeds_limit(
+            &layout, ONE_GIB
+        ));
+    }
 }

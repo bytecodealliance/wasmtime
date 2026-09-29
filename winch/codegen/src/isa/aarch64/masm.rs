@@ -9,7 +9,9 @@ use crate::{
     Result,
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
     bail,
-    codegen::{CodeGenContext, CodeGenError, Emission, FuncEnv, ptr_type_from_ptr_size},
+    codegen::{
+        CodeGenContext, CodeGenError, Emission, FuncEnv, TailCallPlan, ptr_type_from_ptr_size,
+    },
     format_err,
     isa::{
         CallingConvention,
@@ -18,22 +20,27 @@ use crate::{
     },
     masm::{
         CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch,
-        Imm as I, IntCmpKind, IntScratch, LoadKind, MacroAssembler as Masm, MulWideKind,
-        OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, Scratch,
-        ScratchType, ShiftKind, SplatKind, StackSlot, StoreKind, TRUSTED_FLAGS, TrapCode,
-        TruncKind, UNTRUSTED_FLAGS, V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind,
-        V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind,
-        V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
+        Imm as I, IntCmpKind, IntScratch, LaneSelector, LoadKind, MacroAssembler as Masm,
+        MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset,
+        Scratch, ScratchType, ShiftKind, SplatKind, SplatLoadKind, StackSlot, StoreKind,
+        TRUSTED_FLAGS, TrapCode, TruncKind, UNTRUSTED_FLAGS, V128AbsKind, V128AddKind,
+        V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128LoadExtendKind,
+        V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind, V128SubKind,
+        V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
     },
     stack::{TypedReg, Val},
 };
 use cranelift_codegen::{
-    Final, MachBufferFinalized, MachLabel,
+    ExceptionContextLoc, MachBufferFinalized, MachExceptionHandler, MachLabel,
     binemit::CodeOffset,
     ir::{MemFlagsData, RelSourceLoc, SourceLoc, types},
-    isa::aarch64,
-    isa::aarch64::inst::{
-        self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, VectorSize,
+    isa::aarch64::{
+        self,
+        inst::{
+            self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, ScalarSize,
+            VecALUModOp, VecALUOp, VecExtendOp, VecLanesOp, VecMisc2, VecRRLongOp, VecRRNarrowOp,
+            VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmOp, VectorSize,
+        },
     },
     settings,
 };
@@ -188,14 +195,14 @@ impl Masm for MacroAssembler {
             masm.with_scratch::<IntScratch, _>(|masm, scratch_stk_limit| {
                 masm.with_scratch::<IntScratch, _>(|masm, scratch_tmp| {
                     masm.load_ptr(
-                        masm.address_at_reg(vmctx, ptr_size_u8.vmcontext_store_context().into())?,
+                        masm.address_at_reg(vmctx, ptr_size_u8.vmctx().store_context().into())?,
                         scratch_stk_limit.writable(),
                     )?;
 
                     masm.load_ptr(
                         Address::offset(
                             scratch_stk_limit.inner(),
-                            ptr_size_u8.vmstore_context_stack_limit().into(),
+                            ptr_size_u8.vm_store_context().stack_limit().into(),
                         ),
                         scratch_stk_limit.writable(),
                     )?;
@@ -214,7 +221,7 @@ impl Masm for MacroAssembler {
         })
     }
 
-    fn frame_restore(&mut self) -> Result<()> {
+    fn frame_restore(&mut self, stack_args_size: u32) -> Result<()> {
         debug_assert_eq!(self.sp_offset, 0);
 
         // Sync the real stack pointer with the value of the shadow stack
@@ -245,6 +252,15 @@ impl Masm for MacroAssembler {
         let addr = Address::post_indexed_from_sp_for_pair(offset);
 
         self.asm.ldp(fp, lr, addr.to_pair_addressing_mode());
+
+        if stack_args_size > 0 {
+            self.add_ir(
+                writable!(regs::sp()),
+                regs::sp(),
+                I::I64(stack_args_size.into()),
+                OperandSize::S64,
+            )?;
+        }
         self.asm.ret();
         Ok(())
     }
@@ -311,9 +327,46 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn restore_stack_after_call(&mut self, reserved_size: u32, callee_pop_size: u32) -> Result<()> {
+        let caller_pop_size = reserved_size
+            .checked_sub(callee_pop_size)
+            .ok_or_else(|| CodeGenError::invalid_sp_offset())?;
+        if callee_pop_size > 0 {
+            self.decrement_sp(callee_pop_size);
+            // The architectural SP reflects the callee's pop, while the
+            // callee-saved shadow SP does not. Synchronize them before freeing
+            // the caller-owned alignment space.
+            self.move_sp_to_shadow_sp();
+        }
+        self.free_stack(caller_pop_size)?;
+        Ok(())
+    }
+
     fn reset_stack_pointer(&mut self, offset: SPOffset) -> Result<()> {
         self.sp_offset = offset.as_u32();
         Ok(())
+    }
+
+    fn prepare_for_exception_handler(&mut self, target_offset: SPOffset) -> Result<Reg> {
+        let shadow_sp = regs::shadow_sp();
+
+        self.asm
+            .mov_rr(regs::fp(), writable!(shadow_sp), OperandSize::S64);
+
+        let initial_offset =
+            Imm12::maybe_from_u64(u64::from(SHADOW_STACK_POINTER_SLOT_SIZE)).unwrap();
+        self.asm.sub_ir(
+            initial_offset,
+            shadow_sp,
+            writable!(shadow_sp),
+            OperandSize::S64,
+        );
+
+        self.move_shadow_sp_to_sp();
+        self.sp_offset = 0;
+        self.reserve_stack(target_offset.as_u32())?;
+
+        Ok(regs::xreg(0))
     }
 
     fn local_address(&mut self, local: &LocalSlot) -> Result<Address> {
@@ -362,7 +415,7 @@ impl Masm for MacroAssembler {
                             })
                         })?;
                     }
-                    imm @ (I::F32(_) | I::F64(_)) => {
+                    imm @ (I::F32(_) | I::F64(_) | I::V128(_)) => {
                         self.with_scratch::<FloatScratch, _>(|masm, scratch| -> Result<()> {
                             masm.asm.mov_ir(scratch.writable(), imm, imm.size());
                             dst.to_addressing_mode(masm, size, |masm, mem| {
@@ -371,7 +424,6 @@ impl Masm for MacroAssembler {
                             })
                         })?;
                     }
-                    _ => bail!(CodeGenError::unsupported_wasm_type()),
                 };
                 Ok(())
             }
@@ -391,9 +443,14 @@ impl Masm for MacroAssembler {
             StoreKind::Atomic(_size) => {
                 Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
             }
-            StoreKind::VectorLane(_selector) => {
-                Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
-            }
+            StoreKind::VectorLane(LaneSelector { lane, size }) => masm
+                .with_scratch::<IntScratch, _>(|masm, scratch| {
+                    masm.asm.mov_from_vec(src, scratch.writable(), lane, size);
+                    dst.to_addressing_mode(masm, size, |masm, mem| {
+                        masm.asm.str(scratch.inner(), mem, size, UNTRUSTED_FLAGS);
+                        Ok(())
+                    })
+                }),
         })
     }
 
@@ -412,7 +469,12 @@ impl Masm for MacroAssembler {
     fn call(
         &mut self,
         stack_args_size: u32,
-        mut load_callee: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
+        context: &mut CodeGenContext<Emission>,
+        mut load_callee: impl FnMut(
+            &mut Self,
+            &mut CodeGenContext<Emission>,
+        ) -> Result<(CalleeKind, CallingConvention)>,
+        mut finalize: impl FnMut(&mut Self, &mut CodeGenContext<Emission>) -> Result<()>,
     ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
         let addend: u32 = <Self::ABI as abi::ABI>::initial_frame_size().into();
@@ -420,13 +482,146 @@ impl Masm for MacroAssembler {
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack)?;
-        let (callee, call_conv) = load_callee(self)?;
+        let (callee, call_conv) = load_callee(self, context)?;
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg, call_conv),
             CalleeKind::Direct(idx) => self.asm.call_with_name(idx, call_conv),
         }
+        finalize(self, context)?;
 
         Ok(total_stack)
+    }
+
+    fn finish_tail_call_same_size(&mut self) -> Result<()> {
+        self.load_ptr(
+            Address::offset(regs::fp(), -i64::from(SHADOW_STACK_POINTER_SLOT_SIZE)),
+            writable!(regs::shadow_sp()),
+        )?;
+
+        let zero = Imm12::maybe_from_u64(0).unwrap();
+        self.asm
+            .add_ir(zero, regs::fp(), writable!(regs::sp()), OperandSize::S64);
+        let offset = SImm7Scaled::maybe_from_i64(16, types::I64)
+            .expect("Frame pointer offset 16 is valid for pair addressing");
+        let addr = Address::post_indexed_from_sp_for_pair(offset);
+        self.asm
+            .ldp(regs::fp(), regs::lr(), addr.to_pair_addressing_mode());
+
+        Ok(())
+    }
+
+    fn finish_tail_call_empty(&mut self, plan: TailCallPlan) -> Result<()> {
+        let word_bytes = u32::from(<Self::ABI as ABI>::word_bytes());
+
+        // A zero-sized callee has no argument move that could overwrite frame
+        // state. Restore it directly and position SP at the end of the old
+        // incoming argument area.
+        self.load_ptr(
+            Address::offset(regs::fp(), -i64::from(SHADOW_STACK_POINTER_SLOT_SIZE)),
+            writable!(regs::shadow_sp()),
+        )?;
+        self.load_ptr(
+            Address::offset(regs::fp(), i64::from(word_bytes)),
+            writable!(regs::lr()),
+        )?;
+
+        let entry_sp_offset = plan.callee_args_from_fp.unsigned_abs();
+        if let Some(imm) = Imm12::maybe_from_u64(entry_sp_offset) {
+            assert!(plan.callee_args_from_fp >= 0);
+            self.asm
+                .add_ir(imm, regs::fp(), writable!(regs::sp()), OperandSize::S64);
+        } else {
+            self.with_scratch::<IntScratch, _>(|masm, work| {
+                masm.asm
+                    .mov_ir(work.writable(), I::I64(entry_sp_offset), OperandSize::S64);
+                masm.asm.add_rrr(
+                    regs::fp(),
+                    work.inner(),
+                    writable!(regs::sp()),
+                    OperandSize::S64,
+                );
+            });
+        }
+
+        self.load_ptr(Address::offset(regs::fp(), 0), writable!(regs::fp()))
+    }
+
+    fn with_tail_call_resize(
+        &mut self,
+        plan: TailCallPlan,
+        move_args: impl FnOnce(&mut Self, u32) -> Result<()>,
+    ) -> Result<()> {
+        let word_bytes = u32::from(<Self::ABI as ABI>::word_bytes());
+
+        // Save FP and the caller's shadow SP below the staged arguments. Both
+        // integer scratch registers must be available during the argument move:
+        // one holds the value and the other materializes large address offsets.
+        let scratch_size = align_to(
+            2 * word_bytes,
+            u32::from(<Self::ABI as ABI>::call_stack_align()),
+        );
+        self.reserve_stack(scratch_size)?;
+
+        self.with_scratch::<IntScratch, _>(|masm, work| {
+            // The argument move can overwrite all three original frame slots.
+            masm.load_ptr(Address::offset(regs::fp(), 0), work.writable())?;
+            masm.store_ptr(work.inner(), Address::from_shadow_sp(0))?;
+            masm.load_ptr(
+                Address::offset(regs::fp(), -i64::from(SHADOW_STACK_POINTER_SLOT_SIZE)),
+                work.writable(),
+            )?;
+            masm.store_ptr(work.inner(), Address::from_shadow_sp(i64::from(word_bytes)))
+        })?;
+        self.load_ptr(
+            Address::offset(regs::fp(), i64::from(word_bytes)),
+            writable!(regs::lr()),
+        )?;
+
+        move_args(self, scratch_size)?;
+
+        self.with_scratch::<IntScratch, _>(|masm, work| {
+            // Calculate the callee's entry SP while the current FP is available.
+            let magnitude = plan.callee_args_from_fp.unsigned_abs();
+            if let Some(imm) = Imm12::maybe_from_u64(magnitude) {
+                if plan.callee_args_from_fp >= 0 {
+                    masm.asm
+                        .add_ir(imm, regs::fp(), work.writable(), OperandSize::S64);
+                } else {
+                    masm.asm
+                        .sub_ir(imm, regs::fp(), work.writable(), OperandSize::S64);
+                }
+            } else {
+                masm.asm
+                    .mov_ir(work.writable(), I::I64(magnitude), OperandSize::S64);
+                if plan.callee_args_from_fp >= 0 {
+                    masm.asm
+                        .add_rrr(work.inner(), regs::fp(), work.writable(), OperandSize::S64);
+                } else {
+                    masm.asm
+                        .sub_rrr(work.inner(), regs::fp(), work.writable(), OperandSize::S64);
+                }
+            }
+
+            // Finish all old-frame reads before advancing SP. The tail callee
+            // will save FP, LR, and x28 into its replacement frame.
+            masm.load_ptr(Address::from_shadow_sp(0), writable!(regs::fp()))?;
+            masm.load_ptr(
+                Address::from_shadow_sp(i64::from(word_bytes)),
+                writable!(regs::shadow_sp()),
+            )?;
+
+            let zero = Imm12::maybe_from_u64(0).unwrap();
+            masm.asm
+                .add_ir(zero, work.inner(), writable!(regs::sp()), OperandSize::S64);
+            wasmtime_environ::error::Ok(())
+        })
+    }
+
+    fn tail_jump(&mut self, callee: CalleeKind) {
+        match callee {
+            CalleeKind::Indirect(reg) => self.asm.tail_jump_with_reg(reg),
+            CalleeKind::Direct(name) => self.asm.tail_jump_with_name(name),
+        }
     }
 
     fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) -> Result<()> {
@@ -442,16 +637,25 @@ impl Masm for MacroAssembler {
     fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
         let size = kind.derive_operand_size();
         self.with_aligned_sp(|masm| match &kind {
-            LoadKind::Operand(_) => {
-                if size == OperandSize::S128 {
-                    bail!(CodeGenError::UnimplementedWasmLoadKind)
-                } else {
-                    src.to_addressing_mode(masm, size, |masm, mem| {
-                        Ok(masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS))
-                    })
-                }
+            // Scalar loads into a vector register zero the unused upper bits,
+            // which is exactly the semantics `VectorZero` requires.
+            LoadKind::Operand(_) | LoadKind::VectorZero(_) => {
+                src.to_addressing_mode(masm, size, |masm, mem| {
+                    Ok(masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS))
+                })
             }
-            LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
+            LoadKind::Splat(splat_load_kind) => {
+                let vector_size = match splat_load_kind {
+                    SplatLoadKind::S8 => VectorSize::Size8x16,
+                    SplatLoadKind::S16 => VectorSize::Size16x8,
+                    SplatLoadKind::S32 => VectorSize::Size32x4,
+                    SplatLoadKind::S64 => VectorSize::Size64x2,
+                };
+                let (base, _) = src.unwrap_offset();
+                masm.asm
+                    .vec_load_replicate(base, dst, vector_size, UNTRUSTED_FLAGS);
+                Ok(())
+            }
             LoadKind::ScalarExtend(extend_kind) => {
                 if extend_kind.signed() {
                     src.to_addressing_mode(masm, size, |masm, mem| {
@@ -466,16 +670,41 @@ impl Masm for MacroAssembler {
                     })
                 }
             }
-            LoadKind::VectorExtend(_vector_extend_kind) => {
-                bail!(CodeGenError::UnimplementedWasmLoadKind)
+            LoadKind::VectorExtend(extend_kind) => {
+                let (op, lane_size) = match extend_kind {
+                    V128LoadExtendKind::E8x8S => (VecExtendOp::Sxtl, ScalarSize::Size16),
+                    V128LoadExtendKind::E8x8U => (VecExtendOp::Uxtl, ScalarSize::Size16),
+                    V128LoadExtendKind::E16x4S => (VecExtendOp::Sxtl, ScalarSize::Size32),
+                    V128LoadExtendKind::E16x4U => (VecExtendOp::Uxtl, ScalarSize::Size32),
+                    V128LoadExtendKind::E32x2S => (VecExtendOp::Sxtl, ScalarSize::Size64),
+                    V128LoadExtendKind::E32x2U => (VecExtendOp::Uxtl, ScalarSize::Size64),
+                };
+                src.to_addressing_mode(masm, size, |masm, mem| {
+                    masm.asm.uload(mem, dst, size, UNTRUSTED_FLAGS);
+                    masm.asm.vec_extend(op, dst.to_reg(), dst, false, lane_size);
+                    Ok(())
+                })
             }
-            LoadKind::VectorLane(_selector) => {
-                bail!(CodeGenError::unimplemented_masm_instruction())
+            LoadKind::VectorLane(LaneSelector { lane, size }) => {
+                let vector_size = match size {
+                    OperandSize::S8 => VectorSize::Size8x16,
+                    OperandSize::S16 => VectorSize::Size16x8,
+                    OperandSize::S32 => VectorSize::Size32x4,
+                    OperandSize::S64 => VectorSize::Size64x2,
+                    _ => bail!(CodeGenError::unexpected_operand_size()),
+                };
+                masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    src.to_addressing_mode(masm, *size, |masm, mem| {
+                        masm.asm
+                            .uload(mem, scratch.writable(), *size, UNTRUSTED_FLAGS);
+                        Ok(())
+                    })?;
+                    masm.asm
+                        .mov_to_vec(scratch.inner(), dst, *lane, vector_size);
+                    Ok(())
+                })
             }
             LoadKind::Atomic(_, _) => bail!(CodeGenError::unimplemented_masm_instruction()),
-            LoadKind::VectorZero(_size) => {
-                bail!(CodeGenError::UnimplementedWasmLoadKind)
-            }
         })
     }
 
@@ -502,7 +731,7 @@ impl Masm for MacroAssembler {
         Ok(SPOffset::from_u32(self.sp_offset))
     }
 
-    fn finalize(mut self, base: Option<SourceLoc>) -> Result<MachBufferFinalized<Final>> {
+    fn finalize(mut self, base: Option<SourceLoc>) -> Result<MachBufferFinalized> {
         if let Some(patch) = self.stack_max_use_add {
             patch.finalize(i32::try_from(self.sp_max).unwrap(), self.asm.buffer_mut());
         }
@@ -517,11 +746,10 @@ impl Masm for MacroAssembler {
                     self.asm.mov_ir(dst, v, v.size());
                     Ok(())
                 }
-                imm @ (I::F32(_) | I::F64(_)) => {
+                imm @ (I::F32(_) | I::F64(_) | I::V128(_)) => {
                     self.asm.mov_ir(dst, imm, imm.size());
                     Ok(())
                 }
-                I::V128(_) => bail!(CodeGenError::unsupported_imm()),
             },
             (RegImm::Reg(rs), rd) => match (rs.class(), rd.to_reg().class()) {
                 (RegClass::Int, RegClass::Int) => Ok(self.asm.mov_rr(rs, rd, size)),
@@ -771,10 +999,54 @@ impl Masm for MacroAssembler {
 
     fn maybe_canonicalize_v128_nan(
         &mut self,
-        _reg: WritableReg,
-        _lane_size: OperandSize,
+        reg: WritableReg,
+        lane_size: OperandSize,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        if !self.shared_flags.enable_nan_canonicalization() {
+            return Ok(());
+        }
+
+        // Derive the canonical NaN in the NaN lanes with shifts instead of
+        // loading it as a constant.
+        let (vector_size, ushr, shl) = match lane_size {
+            OperandSize::S32 => (VectorSize::Size32x4, 23, 22),
+            OperandSize::S64 => (VectorSize::Size64x2, 52, 51),
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+        self.with_scratch::<FloatScratch, _>(|masm, mask| {
+            // All ones in the lanes that are not NaN.
+            masm.asm.vec_rrr(
+                VecALUOp::Fcmeq,
+                reg.to_reg(),
+                reg.to_reg(),
+                mask.writable(),
+                vector_size,
+            );
+            // Zero the NaN lanes, preserving the rest.
+            masm.asm
+                .vec_rrr(VecALUOp::And, reg.to_reg(), mask.inner(), reg, vector_size);
+            // All ones in the NaN lanes.
+            masm.asm
+                .vec_misc(VecMisc2::Not, mask.inner(), mask.writable(), vector_size);
+            // Reduce the NaN lanes to canonical NaNs.
+            masm.asm.vec_shift_imm(
+                VecShiftImmOp::Ushr,
+                ushr,
+                mask.inner(),
+                mask.writable(),
+                vector_size,
+            );
+            masm.asm.vec_shift_imm(
+                VecShiftImmOp::Shl,
+                shl,
+                mask.inner(),
+                mask.writable(),
+                vector_size,
+            );
+            masm.asm
+                .vec_rrr(VecALUOp::Orr, reg.to_reg(), mask.inner(), reg, vector_size);
+        });
+        Ok(())
     }
 
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
@@ -1085,6 +1357,10 @@ impl Masm for MacroAssembler {
         Ok(Address::offset(reg, offset as i64))
     }
 
+    fn address_at_fp(&self, offset: i64) -> Result<Self::Address> {
+        Ok(Address::offset(regs::fp(), offset))
+    }
+
     fn cmp_with_set(
         &mut self,
         dst: WritableReg,
@@ -1260,6 +1536,42 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn emit_stack_map(&mut self, sp_offset: SPOffset, offsets: &[SPOffset]) -> Result<()> {
+        let frame_size = sp_offset.as_u32() + u32::from(SHADOW_STACK_POINTER_SLOT_SIZE);
+        let return_addr = self.asm.buffer().cur_offset();
+        let map = cranelift_codegen::ir::UserStackMap::from_sp_offsets(
+            offsets.iter().map(SPOffset::as_u32),
+        );
+        self.asm
+            .buffer_mut()
+            .push_user_stack_map_sp_relative(return_addr, frame_size, map);
+        Ok(())
+    }
+
+    fn emit_try_call_site(
+        &mut self,
+        sp_offset: SPOffset,
+        vmctx_slot_offset: u32,
+        handlers: impl Iterator<Item = MachExceptionHandler>,
+    ) -> Result<()> {
+        let frame_offset = sp_offset.as_u32() + u32::from(SHADOW_STACK_POINTER_SLOT_SIZE);
+        let vmctx_offset = sp_offset
+            .as_u32()
+            .checked_sub(vmctx_slot_offset)
+            .ok_or_else(CodeGenError::invalid_local_offset)?;
+
+        let handlers = std::iter::once(MachExceptionHandler::Context(
+            ExceptionContextLoc::SPOffset(vmctx_offset),
+        ))
+        .chain(handlers);
+
+        self.asm
+            .buffer_mut()
+            .add_try_call_site(Some(frame_offset), handlers);
+
+        Ok(())
+    }
+
     fn current_code_offset(&self) -> Result<CodeOffset> {
         Ok(self.asm.buffer().cur_offset())
     }
@@ -1316,22 +1628,77 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn splat(&mut self, _context: &mut CodeGenContext<Emission>, _size: SplatKind) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn splat(&mut self, context: &mut CodeGenContext<Emission>, size: SplatKind) -> Result<()> {
+        let src = context.pop_to_reg(self, None)?;
+        let dst = writable!(context.any_fpr(self)?);
+
+        match size {
+            SplatKind::I8x16 => {
+                self.asm.vec_dup(src.reg, dst, VectorSize::Size8x16);
+            }
+            SplatKind::I16x8 => {
+                self.asm.vec_dup(src.reg, dst, VectorSize::Size16x8);
+            }
+            SplatKind::I32x4 => {
+                self.asm.vec_dup(src.reg, dst, VectorSize::Size32x4);
+            }
+            SplatKind::I64x2 => {
+                self.asm.vec_dup(src.reg, dst, VectorSize::Size64x2);
+            }
+            SplatKind::F32x4 => {
+                self.asm.vec_dup_elem(src.reg, dst, VectorSize::Size32x4, 0);
+            }
+            SplatKind::F64x2 => {
+                self.asm.vec_dup_elem(src.reg, dst, VectorSize::Size64x2, 0);
+            }
+        }
+        context.free_reg(src);
+        context.stack.push(TypedReg::v128(dst.to_reg()).into());
+        Ok(())
     }
 
-    fn shuffle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg, _lanes: [u8; 16]) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()> {
+        // Use `tbl` with `lanes` to select the lanes in `lhs` and `rhs`
+        // separately, then combine them with `tbx` into `dst`.
+        //
+        // A single-register `tbl` sets lanes whose index is out of range
+        // (above 15) to 0, so each source is indexed by a version of `lanes`
+        // that puts the other source's indices out of range: `lhs` is indexed
+        // by `lanes` as-is (its indices are 0..=15; `rhs`'s 16..=31 fall out
+        // of range), while for `rhs` every index is shifted down by 16
+        // (mapping 16..=31 to 0..=15, and wrapping `lhs`'s 0..=15 to 240..).
+        //
+        // `tbx`, unlike `tbl`, leaves out of range lanes of the destination
+        // unmodified, so the second lookup fills in `rhs`'s lanes while
+        // preserving the lanes already selected from `lhs`, avoiding a
+        // separate combining instruction.
+        let mut lhs_mask = [0u8; 16];
+        let mut rhs_mask = [0u8; 16];
+        for (i, lane) in lanes.iter().enumerate() {
+            lhs_mask[i] = *lane;
+            rhs_mask[i] = lane.wrapping_sub(16);
+        }
+
+        self.with_scratch::<FloatScratch, _>(|masm, mask| {
+            masm.asm.vec_load_const(&lhs_mask, mask.writable());
+            masm.asm.vec_tbl(lhs, mask.inner(), dst);
+            masm.asm.vec_load_const(&rhs_mask, mask.writable());
+            masm.asm.vec_tbl_ext(rhs, mask.inner(), dst);
+        });
+        Ok(())
     }
 
-    fn swizzle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn swizzle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) -> Result<()> {
+        // `tbl` sets lanes whose index is out of range (above 15) to 0, which
+        // is exactly the behavior the Wasm instruction requires, so no
+        // clamping of the indices in `rhs` is needed.
+        self.asm.vec_tbl(lhs, rhs, dst);
+        Ok(())
     }
 
     fn atomic_rmw(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _addr: Self::Address,
         _size: OperandSize,
         _op: RmwOp,
         _flags: MemFlagsData,
@@ -1342,28 +1709,81 @@ impl Masm for MacroAssembler {
 
     fn extract_lane(
         &mut self,
-        _src: Reg,
-        _dst: WritableReg,
-        _lane: u8,
-        _kind: ExtractLaneKind,
+        src: Reg,
+        dst: WritableReg,
+        lane: u8,
+        kind: ExtractLaneKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        match kind {
+            ExtractLaneKind::I8x16S => {
+                self.asm
+                    .mov_from_vec_signed(src, dst, lane, VectorSize::Size8x16, OperandSize::S32)
+            }
+            ExtractLaneKind::I16x8S => {
+                self.asm
+                    .mov_from_vec_signed(src, dst, lane, VectorSize::Size16x8, OperandSize::S32)
+            }
+            ExtractLaneKind::I8x16U => self.asm.mov_from_vec(src, dst, lane, OperandSize::S8),
+            ExtractLaneKind::I16x8U => self.asm.mov_from_vec(src, dst, lane, OperandSize::S16),
+            ExtractLaneKind::I32x4 => self.asm.mov_from_vec(src, dst, lane, OperandSize::S32),
+            ExtractLaneKind::I64x2 => self.asm.mov_from_vec(src, dst, lane, OperandSize::S64),
+            ExtractLaneKind::F32x4 => {
+                self.asm
+                    .fpu_move_from_vec(src, dst, lane, VectorSize::Size32x4)
+            }
+            ExtractLaneKind::F64x2 => {
+                self.asm
+                    .fpu_move_from_vec(src, dst, lane, VectorSize::Size64x2)
+            }
+        }
+        Ok(())
     }
 
     fn replace_lane(
         &mut self,
-        _src: RegImm,
-        _dst: WritableReg,
-        _lane: u8,
-        _kind: ReplaceLaneKind,
+        src: RegImm,
+        dst: WritableReg,
+        lane: u8,
+        kind: ReplaceLaneKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        let size = match kind {
+            ReplaceLaneKind::I8x16 => VectorSize::Size8x16,
+            ReplaceLaneKind::I16x8 => VectorSize::Size16x8,
+            ReplaceLaneKind::I32x4 => VectorSize::Size32x4,
+            ReplaceLaneKind::I64x2 => VectorSize::Size64x2,
+            ReplaceLaneKind::F32x4 => VectorSize::Size32x4,
+            ReplaceLaneKind::F64x2 => VectorSize::Size64x2,
+        };
+        match kind {
+            ReplaceLaneKind::I8x16
+            | ReplaceLaneKind::I16x8
+            | ReplaceLaneKind::I32x4
+            | ReplaceLaneKind::I64x2 => match src {
+                RegImm::Reg(reg) => self.asm.mov_to_vec(reg, dst, lane, size),
+                RegImm::Imm(imm) => {
+                    self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                        masm.asm.mov_ir(scratch.writable(), imm, imm.size());
+                        masm.asm.mov_to_vec(scratch.inner(), dst, lane, size);
+                    });
+                }
+            },
+            ReplaceLaneKind::F32x4 | ReplaceLaneKind::F64x2 => match src {
+                RegImm::Reg(reg) => self.asm.vec_mov_element(reg, dst, lane, 0, size),
+                RegImm::Imm(imm) => {
+                    self.with_scratch::<FloatScratch, _>(|masm, scratch| {
+                        masm.asm.mov_ir(scratch.writable(), imm, imm.size());
+                        masm.asm
+                            .vec_mov_element(scratch.inner(), dst, lane, 0, size);
+                    });
+                }
+            },
+        }
+        Ok(())
     }
 
     fn atomic_cas(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _addr: Self::Address,
         _size: OperandSize,
         _flags: MemFlagsData,
         _extend: Option<Extend<Zero>>,
@@ -1373,298 +1793,1010 @@ impl Masm for MacroAssembler {
 
     fn v128_eq(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorEqualityKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorEqualityKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        match kind {
+            VectorEqualityKind::I8x16 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            VectorEqualityKind::I16x8 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            VectorEqualityKind::I32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            VectorEqualityKind::I64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+            VectorEqualityKind::F32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fcmeq, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            VectorEqualityKind::F64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fcmeq, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
     fn v128_ne(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorEqualityKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorEqualityKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        match kind {
+            VectorEqualityKind::I8x16 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size8x16);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size8x16);
+            }
+            VectorEqualityKind::I16x8 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size16x8);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size16x8);
+            }
+            VectorEqualityKind::I32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size32x4);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size32x4);
+            }
+            VectorEqualityKind::I64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Cmeq, lhs, rhs, dst, VectorSize::Size64x2);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size64x2);
+            }
+            VectorEqualityKind::F32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fcmeq, lhs, rhs, dst, VectorSize::Size32x4);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size32x4);
+            }
+            VectorEqualityKind::F64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fcmeq, lhs, rhs, dst, VectorSize::Size64x2);
+                self.asm
+                    .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
     fn v128_lt(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorCompareKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        // aarch64 lacks vector less-than; swap operands and use greater-than.
+        let (op, size) = match kind {
+            VectorCompareKind::I8x16S => (VecALUOp::Cmgt, VectorSize::Size8x16),
+            VectorCompareKind::I8x16U => (VecALUOp::Cmhi, VectorSize::Size8x16),
+            VectorCompareKind::I16x8S => (VecALUOp::Cmgt, VectorSize::Size16x8),
+            VectorCompareKind::I16x8U => (VecALUOp::Cmhi, VectorSize::Size16x8),
+            VectorCompareKind::I32x4S => (VecALUOp::Cmgt, VectorSize::Size32x4),
+            VectorCompareKind::I32x4U => (VecALUOp::Cmhi, VectorSize::Size32x4),
+            VectorCompareKind::I64x2S => (VecALUOp::Cmgt, VectorSize::Size64x2),
+            VectorCompareKind::F32x4 => (VecALUOp::Fcmgt, VectorSize::Size32x4),
+            VectorCompareKind::F64x2 => (VecALUOp::Fcmgt, VectorSize::Size64x2),
+        };
+        self.asm.vec_rrr(op, rhs, lhs, dst, size);
+        Ok(())
     }
 
     fn v128_le(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorCompareKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        // aarch64 lacks vector less-than; swap operands and use greater-than.
+        let (op, size) = match kind {
+            VectorCompareKind::I8x16S => (VecALUOp::Cmge, VectorSize::Size8x16),
+            VectorCompareKind::I8x16U => (VecALUOp::Cmhs, VectorSize::Size8x16),
+            VectorCompareKind::I16x8S => (VecALUOp::Cmge, VectorSize::Size16x8),
+            VectorCompareKind::I16x8U => (VecALUOp::Cmhs, VectorSize::Size16x8),
+            VectorCompareKind::I32x4S => (VecALUOp::Cmge, VectorSize::Size32x4),
+            VectorCompareKind::I32x4U => (VecALUOp::Cmhs, VectorSize::Size32x4),
+            VectorCompareKind::I64x2S => (VecALUOp::Cmge, VectorSize::Size64x2),
+            VectorCompareKind::F32x4 => (VecALUOp::Fcmge, VectorSize::Size32x4),
+            VectorCompareKind::F64x2 => (VecALUOp::Fcmge, VectorSize::Size64x2),
+        };
+        self.asm.vec_rrr(op, rhs, lhs, dst, size);
+        Ok(())
     }
 
     fn v128_gt(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorCompareKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        let (op, size) = match kind {
+            VectorCompareKind::I8x16S => (VecALUOp::Cmgt, VectorSize::Size8x16),
+            VectorCompareKind::I8x16U => (VecALUOp::Cmhi, VectorSize::Size8x16),
+            VectorCompareKind::I16x8S => (VecALUOp::Cmgt, VectorSize::Size16x8),
+            VectorCompareKind::I16x8U => (VecALUOp::Cmhi, VectorSize::Size16x8),
+            VectorCompareKind::I32x4S => (VecALUOp::Cmgt, VectorSize::Size32x4),
+            VectorCompareKind::I32x4U => (VecALUOp::Cmhi, VectorSize::Size32x4),
+            VectorCompareKind::I64x2S => (VecALUOp::Cmgt, VectorSize::Size64x2),
+            VectorCompareKind::F32x4 => (VecALUOp::Fcmgt, VectorSize::Size32x4),
+            VectorCompareKind::F64x2 => (VecALUOp::Fcmgt, VectorSize::Size64x2),
+        };
+        self.asm.vec_rrr(op, lhs, rhs, dst, size);
+        Ok(())
     }
 
     fn v128_ge(
         &mut self,
-        _dst: WritableReg,
-        _lhs: Reg,
-        _rhs: Reg,
-        _kind: VectorCompareKind,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        let (op, size) = match kind {
+            VectorCompareKind::I8x16S => (VecALUOp::Cmge, VectorSize::Size8x16),
+            VectorCompareKind::I8x16U => (VecALUOp::Cmhs, VectorSize::Size8x16),
+            VectorCompareKind::I16x8S => (VecALUOp::Cmge, VectorSize::Size16x8),
+            VectorCompareKind::I16x8U => (VecALUOp::Cmhs, VectorSize::Size16x8),
+            VectorCompareKind::I32x4S => (VecALUOp::Cmge, VectorSize::Size32x4),
+            VectorCompareKind::I32x4U => (VecALUOp::Cmhs, VectorSize::Size32x4),
+            VectorCompareKind::I64x2S => (VecALUOp::Cmge, VectorSize::Size64x2),
+            VectorCompareKind::F32x4 => (VecALUOp::Fcmge, VectorSize::Size32x4),
+            VectorCompareKind::F64x2 => (VecALUOp::Fcmge, VectorSize::Size64x2),
+        };
+        self.asm.vec_rrr(op, lhs, rhs, dst, size);
+        Ok(())
     }
 
-    fn v128_not(&mut self, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_not(&mut self, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_misc(VecMisc2::Not, dst.to_reg(), dst, VectorSize::Size32x4);
+        Ok(())
     }
 
     fn fence(&mut self) -> Result<()> {
         Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn v128_and(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_and(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_rrr(VecALUOp::And, src1, src2, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_and_not(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_and_not(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_rrr(VecALUOp::Bic, src2, src1, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_or(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_or(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_rrr(VecALUOp::Orr, src1, src2, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_xor(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_xor(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_rrr(VecALUOp::Eor, src1, src2, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_bitselect(
-        &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _mask: Reg,
-        _dst: WritableReg,
-    ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_bitselect(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()> {
+        self.asm.fmov_rr(mask, dst, OperandSize::S128);
+        self.asm
+            .vec_rrr_mod(VecALUModOp::Bsl, src1, src2, dst, VectorSize::Size32x4);
+        Ok(())
     }
 
-    fn v128_any_true(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_any_true(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.with_scratch::<FloatScratch, _>(|masm, tmp| {
+            masm.asm.vec_rrr(
+                VecALUOp::Umaxp,
+                src,
+                src,
+                tmp.writable(),
+                VectorSize::Size32x4,
+            );
+            masm.asm.mov_from_vec(tmp.inner(), dst, 0, OperandSize::S64);
+        });
+        self.asm.subs_ir(
+            Imm12::maybe_from_u64(0).unwrap(),
+            dst.to_reg(),
+            OperandSize::S64,
+        );
+        self.asm.cset(dst, Cond::Ne);
+        Ok(())
     }
 
-    fn v128_convert(&mut self, _src: Reg, _dst: WritableReg, _kind: V128ConvertKind) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_convert(&mut self, src: Reg, dst: WritableReg, kind: V128ConvertKind) -> Result<()> {
+        match kind {
+            V128ConvertKind::I32x4S => {
+                self.asm
+                    .vec_misc(VecMisc2::Scvtf, src, dst, VectorSize::Size32x4);
+            }
+            V128ConvertKind::I32x4U => {
+                self.asm
+                    .vec_misc(VecMisc2::Ucvtf, src, dst, VectorSize::Size32x4);
+            }
+            V128ConvertKind::I32x4LowS => {
+                self.asm
+                    .vec_extend(VecExtendOp::Sxtl, src, dst, false, ScalarSize::Size64);
+                self.asm
+                    .vec_misc(VecMisc2::Scvtf, dst.to_reg(), dst, VectorSize::Size64x2);
+            }
+            V128ConvertKind::I32x4LowU => {
+                self.asm
+                    .vec_extend(VecExtendOp::Uxtl, src, dst, false, ScalarSize::Size64);
+                self.asm
+                    .vec_misc(VecMisc2::Ucvtf, dst.to_reg(), dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
     fn v128_narrow(
         &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _dst: WritableReg,
-        _kind: V128NarrowKind,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        kind: V128NarrowKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        let (op, lane_size) = match kind {
+            V128NarrowKind::I16x8S => (VecRRNarrowOp::Sqxtn, ScalarSize::Size8),
+            V128NarrowKind::I16x8U => (VecRRNarrowOp::Sqxtun, ScalarSize::Size8),
+            V128NarrowKind::I32x4S => (VecRRNarrowOp::Sqxtn, ScalarSize::Size16),
+            V128NarrowKind::I32x4U => (VecRRNarrowOp::Sqxtun, ScalarSize::Size16),
+        };
+        debug_assert!(dst.to_reg() != src2);
+        self.asm.vec_narrow(op, src1, dst, false, lane_size);
+        self.asm.vec_narrow(op, src2, dst, true, lane_size);
+        Ok(())
     }
 
-    fn v128_demote(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_demote(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.asm
+            .vec_narrow(VecRRNarrowOp::Fcvtn, src, dst, false, ScalarSize::Size32);
+        Ok(())
     }
 
-    fn v128_promote(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_promote(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.asm.vec_rr_long(VecRRLongOp::Fcvtl32, src, dst, false);
+        Ok(())
     }
 
-    fn v128_extend(&mut self, _src: Reg, _dst: WritableReg, _kind: V128ExtendKind) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_extend(&mut self, src: Reg, dst: WritableReg, kind: V128ExtendKind) -> Result<()> {
+        use VecExtendOp::{Sxtl, Uxtl};
+        let (op, high_half, lane_size) = match kind {
+            V128ExtendKind::LowI8x16S => (Sxtl, false, ScalarSize::Size16),
+            V128ExtendKind::HighI8x16S => (Sxtl, true, ScalarSize::Size16),
+            V128ExtendKind::LowI8x16U => (Uxtl, false, ScalarSize::Size16),
+            V128ExtendKind::HighI8x16U => (Uxtl, true, ScalarSize::Size16),
+            V128ExtendKind::LowI16x8S => (Sxtl, false, ScalarSize::Size32),
+            V128ExtendKind::HighI16x8S => (Sxtl, true, ScalarSize::Size32),
+            V128ExtendKind::LowI16x8U => (Uxtl, false, ScalarSize::Size32),
+            V128ExtendKind::HighI16x8U => (Uxtl, true, ScalarSize::Size32),
+            V128ExtendKind::LowI32x4S => (Sxtl, false, ScalarSize::Size64),
+            V128ExtendKind::HighI32x4S => (Sxtl, true, ScalarSize::Size64),
+            V128ExtendKind::LowI32x4U => (Uxtl, false, ScalarSize::Size64),
+            V128ExtendKind::HighI32x4U => (Uxtl, true, ScalarSize::Size64),
+        };
+        self.asm.vec_extend(op, src, dst, high_half, lane_size);
+        Ok(())
     }
 
-    fn v128_add(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _kind: V128AddKind,
-    ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_add(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, kind: V128AddKind) -> Result<()> {
+        match kind {
+            V128AddKind::F32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fadd, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            V128AddKind::F64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fadd, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+            V128AddKind::I8x16 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Add, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128AddKind::I8x16SatS => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sqadd, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128AddKind::I8x16SatU => {
+                self.asm
+                    .vec_rrr(VecALUOp::Uqadd, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128AddKind::I16x8 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Add, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128AddKind::I16x8SatS => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sqadd, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128AddKind::I16x8SatU => {
+                self.asm
+                    .vec_rrr(VecALUOp::Uqadd, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128AddKind::I32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Add, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            V128AddKind::I64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Add, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
-    fn v128_sub(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _kind: V128SubKind,
-    ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_sub(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, kind: V128SubKind) -> Result<()> {
+        match kind {
+            V128SubKind::F32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fsub, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            V128SubKind::F64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Fsub, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+            V128SubKind::I8x16 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sub, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128SubKind::I8x16SatS => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sqsub, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128SubKind::I8x16SatU => {
+                self.asm
+                    .vec_rrr(VecALUOp::Uqsub, lhs, rhs, dst, VectorSize::Size8x16);
+            }
+            V128SubKind::I16x8 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sub, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128SubKind::I16x8SatS => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sqsub, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128SubKind::I16x8SatU => {
+                self.asm
+                    .vec_rrr(VecALUOp::Uqsub, lhs, rhs, dst, VectorSize::Size16x8);
+            }
+            V128SubKind::I32x4 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sub, lhs, rhs, dst, VectorSize::Size32x4);
+            }
+            V128SubKind::I64x2 => {
+                self.asm
+                    .vec_rrr(VecALUOp::Sub, lhs, rhs, dst, VectorSize::Size64x2);
+            }
+        }
+        Ok(())
     }
 
     fn v128_mul(
         &mut self,
-        _context: &mut CodeGenContext<Emission>,
-        _kind: V128MulKind,
+        context: &mut CodeGenContext<Emission>,
+        kind: V128MulKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let rhs = context.pop_to_reg(self, None)?;
+        let lhs = context.pop_to_reg(self, None)?;
+
+        match kind {
+            V128MulKind::F32x4 => self.asm.vec_rrr(
+                VecALUOp::Fmul,
+                lhs.reg,
+                rhs.reg,
+                writable!(lhs.reg),
+                VectorSize::Size32x4,
+            ),
+            V128MulKind::F64x2 => self.asm.vec_rrr(
+                VecALUOp::Fmul,
+                lhs.reg,
+                rhs.reg,
+                writable!(lhs.reg),
+                VectorSize::Size64x2,
+            ),
+            V128MulKind::I16x8 => self.asm.vec_rrr(
+                VecALUOp::Mul,
+                lhs.reg,
+                rhs.reg,
+                writable!(lhs.reg),
+                VectorSize::Size16x8,
+            ),
+            V128MulKind::I32x4 => self.asm.vec_rrr(
+                VecALUOp::Mul,
+                lhs.reg,
+                rhs.reg,
+                writable!(lhs.reg),
+                VectorSize::Size32x4,
+            ),
+            // aarch64 has no 64-bit lane `mul`, so the multiplication is
+            // performed with 32-bit operations (following the lowering in
+            // cranelift's `isa/aarch64/lower.isle`).
+            //
+            // Each 64-bit lane of `lhs` and `rhs` is split into 32-bit
+            // halves:
+            //
+            //   x = a + 2^32(b)    pictured as  |b|a|  (high half | low half)
+            //   y = c + 2^32(d)    pictured as  |d|c|
+            //
+            // making each lane of the product:
+            //
+            //   x * y = ac + 2^32(ad + bc) + 2^64(bd)
+            //
+            // The `2^64(bd)` term is entirely above bit 63, so it is
+            // discarded, same as the wrapping 64-bit multiplication.
+            V128MulKind::I64x2 => {
+                let tmp = context.any_fpr(self)?;
+                self.with_scratch::<FloatScratch, _>(|masm, hi| {
+                    // Swap the halves of each lane of `rhs` so each half
+                    // lines up with the opposite half of `lhs`:
+                    //   hi = |c|d|
+                    masm.asm.vec_misc(
+                        VecMisc2::Rev64,
+                        rhs.reg,
+                        hi.writable(),
+                        VectorSize::Size32x4,
+                    );
+                    // A single 32-bit multiply against `lhs = |b|a|` now
+                    // computes both cross terms of every lane:
+                    //   hi = |bc|ad|
+                    // The products' upper bits are discarded, matching the
+                    // shift past 2^64 they would receive below.
+                    masm.asm.vec_rrr(
+                        VecALUOp::Mul,
+                        hi.inner(),
+                        lhs.reg,
+                        hi.writable(),
+                        VectorSize::Size32x4,
+                    );
+                    // Sum adjacent elements, collapsing each lane to:
+                    //   hi = |ad + bc|
+                    masm.asm.vec_rrr(
+                        VecALUOp::Addp,
+                        hi.inner(),
+                        hi.inner(),
+                        hi.writable(),
+                        VectorSize::Size32x4,
+                    );
+                    // Extract the low halves of each lane:
+                    //   tmp = |a1|a0|
+                    //   lhs = |c1|c0|
+                    masm.asm.vec_narrow(
+                        VecRRNarrowOp::Xtn,
+                        lhs.reg,
+                        writable!(tmp),
+                        false,
+                        ScalarSize::Size32,
+                    );
+                    masm.asm.vec_narrow(
+                        VecRRNarrowOp::Xtn,
+                        rhs.reg,
+                        writable!(lhs.reg),
+                        false,
+                        ScalarSize::Size32,
+                    );
+                    // Widen the sums back to 64-bit lanes, shifted into the
+                    // high half:
+                    //   hi = |(ad + bc) << 32|
+                    masm.asm
+                        .vec_rr_long(VecRRLongOp::Shll32, hi.inner(), hi.writable(), false);
+                    // Multiply the low halves into exact 64-bit products and
+                    // accumulate, completing each lane:
+                    //   hi = |ac + 2^32(ad + bc)|
+                    masm.asm.vec_rrrr_long(
+                        VecRRRLongModOp::Umlal32,
+                        lhs.reg,
+                        tmp,
+                        hi.writable(),
+                        false,
+                    );
+                    masm.asm
+                        .fmov_rr(hi.inner(), writable!(lhs.reg), OperandSize::S128);
+                });
+                context.free_reg(tmp);
+            }
+        }
+
+        context.stack.push(lhs.into());
+        context.free_reg(rhs);
+
+        Ok(())
     }
 
-    fn v128_abs(&mut self, _src: Reg, _dst: WritableReg, _kind: V128AbsKind) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_abs(&mut self, src: Reg, dst: WritableReg, kind: V128AbsKind) -> Result<()> {
+        let (misc_op, size) = match kind {
+            V128AbsKind::I8x16 => (VecMisc2::Abs, VectorSize::Size8x16),
+            V128AbsKind::I16x8 => (VecMisc2::Abs, VectorSize::Size16x8),
+            V128AbsKind::I32x4 => (VecMisc2::Abs, VectorSize::Size32x4),
+            V128AbsKind::I64x2 => (VecMisc2::Abs, VectorSize::Size64x2),
+            V128AbsKind::F32x4 => (VecMisc2::Fabs, VectorSize::Size32x4),
+            V128AbsKind::F64x2 => (VecMisc2::Fabs, VectorSize::Size64x2),
+        };
+        self.asm.vec_misc(misc_op, src, dst, size);
+        Ok(())
     }
 
-    fn v128_neg(&mut self, _op: WritableReg, _kind: V128NegKind) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+    fn v128_neg(&mut self, op: WritableReg, kind: V128NegKind) -> Result<()> {
+        let (misc_op, size) = match kind {
+            V128NegKind::I8x16 => (VecMisc2::Neg, VectorSize::Size8x16),
+            V128NegKind::I16x8 => (VecMisc2::Neg, VectorSize::Size16x8),
+            V128NegKind::I32x4 => (VecMisc2::Neg, VectorSize::Size32x4),
+            V128NegKind::I64x2 => (VecMisc2::Neg, VectorSize::Size64x2),
+            V128NegKind::F32x4 => (VecMisc2::Fneg, VectorSize::Size32x4),
+            V128NegKind::F64x2 => (VecMisc2::Fneg, VectorSize::Size64x2),
+        };
+        self.asm.vec_misc(misc_op, op.to_reg(), op, size);
+        Ok(())
     }
 
     fn v128_shift(
         &mut self,
-        _context: &mut CodeGenContext<Emission>,
-        _lane_width: OperandSize,
-        _shift_kind: ShiftKind,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+        shift_kind: ShiftKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let shift_amount = context.pop_to_reg(self, None)?.reg;
+        let operand = context.pop_to_reg(self, None)?.reg;
+        let amount_mask = lane_width.num_bits() - 1;
+        self.and(
+            writable!(shift_amount),
+            shift_amount,
+            RegImm::i32(amount_mask as i32),
+            OperandSize::S32,
+        )?;
+
+        let size = match lane_width {
+            OperandSize::S8 => VectorSize::Size8x16,
+            OperandSize::S16 => VectorSize::Size16x8,
+            OperandSize::S32 => VectorSize::Size32x4,
+            OperandSize::S64 => VectorSize::Size64x2,
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        let (op, negate) = match shift_kind {
+            ShiftKind::Shl => (VecALUOp::Sshl, false),
+            ShiftKind::ShrS => (VecALUOp::Sshl, true),
+            ShiftKind::ShrU => (VecALUOp::Ushl, true),
+            ShiftKind::Rotl | ShiftKind::Rotr => {
+                bail!(CodeGenError::unimplemented_masm_instruction())
+            }
+        };
+
+        if negate {
+            self.asm
+                .neg_rr(shift_amount, writable!(shift_amount), OperandSize::S64);
+        }
+
+        self.with_scratch::<FloatScratch, _>(|masm, tmp| {
+            masm.asm.vec_dup(shift_amount, tmp.writable(), size);
+            masm.asm
+                .vec_rrr(op, operand, tmp.inner(), writable!(operand), size);
+        });
+
+        context.free_reg(shift_amount);
+        context.stack.push(TypedReg::v128(operand).into());
+        Ok(())
     }
 
     fn v128_q15mulr_sat_s(
         &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        self.asm.vec_rrr(
+            VecALUOp::Sqrdmulh,
+            lhs,
+            rhs,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
-    fn v128_all_true(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_all_true(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        match size {
+            OperandSize::S8 | OperandSize::S16 | OperandSize::S32 => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp| {
+                    masm.asm.vec_lanes(
+                        VecLanesOp::Uminv,
+                        src,
+                        tmp.writable(),
+                        VectorSize::from_lane_size(size.into(), true),
+                    );
+                    masm.asm.mov_from_vec(tmp.inner(), dst, 0, OperandSize::S64);
+                });
+                self.asm.subs_ir(
+                    Imm12::maybe_from_u64(0).unwrap(),
+                    dst.to_reg(),
+                    OperandSize::S64,
+                );
+                self.asm.cset(dst, Cond::Ne);
+            }
+            OperandSize::S64 => {
+                self.with_scratch::<FloatScratch, _>(|masm, tmp| {
+                    masm.asm
+                        .vec_misc(VecMisc2::Cmeq0, src, tmp.writable(), VectorSize::Size64x2);
+                    masm.asm.vec_rrr(
+                        VecALUOp::Addp,
+                        tmp.inner(),
+                        tmp.inner(),
+                        tmp.writable(),
+                        VectorSize::Size64x2,
+                    );
+                    masm.asm.fcmp(tmp.inner(), tmp.inner(), OperandSize::S64);
+                });
+                self.asm.cset(dst, Cond::Eq);
+            }
+            OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
+        }
+        Ok(())
     }
 
-    fn v128_bitmask(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        // Each sequence replicates the sign bit across its lane, masks in the
+        // bit position that lane contributes, and sums the lanes together,
+        // following the `vhigh_bits` lowerings in cranelift's
+        // `isa/aarch64/lower.isle`, which use the same masks.
+        let (shift, mask, vector_size) = match size {
+            OperandSize::S8 => (
+                7,
+                [
+                    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08, 0x10,
+                    0x20, 0x40, 0x80,
+                ],
+                VectorSize::Size8x16,
+            ),
+            OperandSize::S16 => (
+                15,
+                [
+                    0x01, 0x00, 0x02, 0x00, 0x04, 0x00, 0x08, 0x00, 0x10, 0x00, 0x20, 0x00, 0x40,
+                    0x00, 0x80, 0x00,
+                ],
+                VectorSize::Size16x8,
+            ),
+            OperandSize::S32 => (
+                31,
+                [
+                    0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x08,
+                    0x00, 0x00, 0x00,
+                ],
+                VectorSize::Size32x4,
+            ),
+            // With only two lanes the sign bits are cheaper to move out and
+            // combine in general purpose registers.
+            OperandSize::S64 => {
+                let sign_bit = ImmShift::maybe_from_u64(63).unwrap();
+                self.with_scratch::<IntScratch, _>(|masm, upper| {
+                    masm.asm
+                        .mov_from_vec(src, upper.writable(), 1, OperandSize::S64);
+                    masm.asm.mov_from_vec(src, dst, 0, OperandSize::S64);
+                    masm.asm.shift_ir(
+                        sign_bit,
+                        upper.inner(),
+                        upper.writable(),
+                        ShiftKind::ShrU,
+                        OperandSize::S64,
+                    );
+                    masm.asm.shift_ir(
+                        sign_bit,
+                        dst.to_reg(),
+                        dst,
+                        ShiftKind::ShrU,
+                        OperandSize::S64,
+                    );
+                    masm.asm.shift_ir(
+                        ImmShift::maybe_from_u64(1).unwrap(),
+                        upper.inner(),
+                        upper.writable(),
+                        ShiftKind::Shl,
+                        OperandSize::S64,
+                    );
+                    masm.asm
+                        .add_rrr(upper.inner(), dst.to_reg(), dst, OperandSize::S64);
+                });
+                return Ok(());
+            }
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        // `src` is dead after this operation, so it doubles as a temporary.
+        let acc = writable!(src);
+        self.with_scratch::<FloatScratch, _>(|masm, tmp| {
+            masm.asm
+                .vec_shift_imm(VecShiftImmOp::Sshr, shift, src, acc, vector_size);
+            masm.asm.vec_load_const(&mask, tmp.writable());
+            masm.asm
+                .vec_rrr(VecALUOp::And, src, tmp.inner(), acc, vector_size);
+            if let VectorSize::Size8x16 = vector_size {
+                // Interleave the two halves so that each 16-bit lane holds one
+                // byte's worth of bits from each half, letting a single
+                // reduction gather all sixteen.
+                masm.asm.vec_extract(src, src, tmp.writable(), 8);
+                masm.asm
+                    .vec_rrr(VecALUOp::Zip1, src, tmp.inner(), acc, VectorSize::Size8x16);
+            }
+            let (reduce_size, lane_size) = match vector_size {
+                VectorSize::Size8x16 | VectorSize::Size16x8 => {
+                    (VectorSize::Size16x8, OperandSize::S16)
+                }
+                other => (other, OperandSize::S32),
+            };
+            masm.asm.vec_lanes(VecLanesOp::Addv, src, acc, reduce_size);
+            masm.asm.mov_from_vec(src, dst, 0, lane_size);
+        });
+        Ok(())
     }
 
     fn v128_trunc(
         &mut self,
-        _context: &mut CodeGenContext<Emission>,
-        _kind: V128TruncKind,
+        context: &mut CodeGenContext<Emission>,
+        kind: V128TruncKind,
     ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+        let reg = writable!(context.pop_to_reg(self, None)?.reg);
+        match kind {
+            V128TruncKind::F32x4 | V128TruncKind::F64x2 => {
+                self.asm.vec_misc(
+                    VecMisc2::Frintz,
+                    reg.to_reg(),
+                    reg,
+                    VectorSize::from_lane_size(kind.dst_lane_size().into(), true),
+                );
+            }
+            V128TruncKind::I32x4FromF32x4S => {
+                self.asm
+                    .vec_misc(VecMisc2::Fcvtzs, reg.to_reg(), reg, VectorSize::Size32x4);
+            }
+            V128TruncKind::I32x4FromF32x4U => {
+                self.asm
+                    .vec_misc(VecMisc2::Fcvtzu, reg.to_reg(), reg, VectorSize::Size32x4);
+            }
+            V128TruncKind::I32x4FromF64x2SZero => {
+                self.asm
+                    .vec_misc(VecMisc2::Fcvtzs, reg.to_reg(), reg, VectorSize::Size64x2);
+                self.asm.vec_narrow(
+                    VecRRNarrowOp::Sqxtn,
+                    reg.to_reg(),
+                    reg,
+                    false,
+                    ScalarSize::Size32,
+                );
+            }
+            V128TruncKind::I32x4FromF64x2UZero => {
+                self.asm
+                    .vec_misc(VecMisc2::Fcvtzu, reg.to_reg(), reg, VectorSize::Size64x2);
+                self.asm.vec_narrow(
+                    VecRRNarrowOp::Uqxtn,
+                    reg.to_reg(),
+                    reg,
+                    false,
+                    ScalarSize::Size32,
+                );
+            }
+        }
+        context.stack.push(TypedReg::v128(reg.to_reg()).into());
+        Ok(())
     }
 
     fn v128_min(
         &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _dst: WritableReg,
-        _kind: V128MinKind,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        kind: V128MinKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let (op, size) = match kind {
+            V128MinKind::F32x4 => (VecALUOp::Fmin, VectorSize::Size32x4),
+            V128MinKind::F64x2 => (VecALUOp::Fmin, VectorSize::Size64x2),
+            V128MinKind::I8x16S => (VecALUOp::Smin, VectorSize::Size8x16),
+            V128MinKind::I8x16U => (VecALUOp::Umin, VectorSize::Size8x16),
+            V128MinKind::I16x8S => (VecALUOp::Smin, VectorSize::Size16x8),
+            V128MinKind::I16x8U => (VecALUOp::Umin, VectorSize::Size16x8),
+            V128MinKind::I32x4S => (VecALUOp::Smin, VectorSize::Size32x4),
+            V128MinKind::I32x4U => (VecALUOp::Umin, VectorSize::Size32x4),
+        };
+        self.asm.vec_rrr(op, src1, src2, dst, size);
+        Ok(())
     }
 
     fn v128_max(
         &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _dst: WritableReg,
-        _kind: V128MaxKind,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        kind: V128MaxKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let (op, size) = match kind {
+            V128MaxKind::F32x4 => (VecALUOp::Fmax, VectorSize::Size32x4),
+            V128MaxKind::F64x2 => (VecALUOp::Fmax, VectorSize::Size64x2),
+            V128MaxKind::I8x16S => (VecALUOp::Smax, VectorSize::Size8x16),
+            V128MaxKind::I8x16U => (VecALUOp::Umax, VectorSize::Size8x16),
+            V128MaxKind::I16x8S => (VecALUOp::Smax, VectorSize::Size16x8),
+            V128MaxKind::I16x8U => (VecALUOp::Umax, VectorSize::Size16x8),
+            V128MaxKind::I32x4S => (VecALUOp::Smax, VectorSize::Size32x4),
+            V128MaxKind::I32x4U => (VecALUOp::Umax, VectorSize::Size32x4),
+        };
+        self.asm.vec_rrr(op, src1, src2, dst, size);
+        Ok(())
     }
 
     fn v128_extmul(
         &mut self,
-        _context: &mut CodeGenContext<Emission>,
-        _kind: V128ExtMulKind,
+        context: &mut CodeGenContext<Emission>,
+        kind: V128ExtMulKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let (op, high_half) = match kind {
+            V128ExtMulKind::LowI8x16S => (VecRRRLongOp::Smull8, false),
+            V128ExtMulKind::HighI8x16S => (VecRRRLongOp::Smull8, true),
+            V128ExtMulKind::LowI8x16U => (VecRRRLongOp::Umull8, false),
+            V128ExtMulKind::HighI8x16U => (VecRRRLongOp::Umull8, true),
+            V128ExtMulKind::LowI16x8S => (VecRRRLongOp::Smull16, false),
+            V128ExtMulKind::HighI16x8S => (VecRRRLongOp::Smull16, true),
+            V128ExtMulKind::LowI16x8U => (VecRRRLongOp::Umull16, false),
+            V128ExtMulKind::HighI16x8U => (VecRRRLongOp::Umull16, true),
+            V128ExtMulKind::LowI32x4S => (VecRRRLongOp::Smull32, false),
+            V128ExtMulKind::HighI32x4S => (VecRRRLongOp::Smull32, true),
+            V128ExtMulKind::LowI32x4U => (VecRRRLongOp::Umull32, false),
+            V128ExtMulKind::HighI32x4U => (VecRRRLongOp::Umull32, true),
+        };
+        let rhs = context.pop_to_reg(self, None)?;
+        let lhs = context.pop_to_reg(self, None)?;
+        self.asm
+            .vec_rrr_long(op, lhs.reg, rhs.reg, writable!(lhs.reg), high_half);
+        context.free_reg(rhs);
+        context.stack.push(TypedReg::v128(lhs.reg).into());
+        Ok(())
     }
 
     fn v128_extadd_pairwise(
         &mut self,
-        _src: Reg,
-        _dst: WritableReg,
-        _kind: V128ExtAddKind,
+        src: Reg,
+        dst: WritableReg,
+        kind: V128ExtAddKind,
     ) -> Result<()> {
-        Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
+        let op = match kind {
+            V128ExtAddKind::I8x16S => VecRRPairLongOp::Saddlp8,
+            V128ExtAddKind::I8x16U => VecRRPairLongOp::Uaddlp8,
+            V128ExtAddKind::I16x8S => VecRRPairLongOp::Saddlp16,
+            V128ExtAddKind::I16x8U => VecRRPairLongOp::Uaddlp16,
+        };
+        self.asm.vec_rr_pair_long(op, src, dst);
+        Ok(())
     }
 
-    fn v128_dot(&mut self, _lhs: Reg, _rhs: Reg, _dst: WritableReg) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_dot(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg) -> Result<()> {
+        self.with_scratch::<FloatScratch, _>(|masm, low| {
+            // Multiply each half into 32-bit lanes, then sum adjacent pairs.
+            masm.asm
+                .vec_rrr_long(VecRRRLongOp::Smull16, lhs, rhs, low.writable(), false);
+            masm.asm
+                .vec_rrr_long(VecRRRLongOp::Smull16, lhs, rhs, dst, true);
+            masm.asm.vec_rrr(
+                VecALUOp::Addp,
+                low.inner(),
+                dst.to_reg(),
+                dst,
+                VectorSize::Size32x4,
+            );
+        });
+        Ok(())
     }
 
-    fn v128_popcnt(&mut self, _context: &mut CodeGenContext<Emission>) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_popcnt(&mut self, context: &mut CodeGenContext<Emission>) -> Result<()> {
+        let reg = writable!(context.pop_to_reg(self, None)?.reg);
+        self.asm
+            .vec_misc(VecMisc2::Cnt, reg.to_reg(), reg, VectorSize::Size8x16);
+        context.stack.push(TypedReg::v128(reg.to_reg()).into());
+        Ok(())
     }
 
-    fn v128_avgr(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
-    ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.asm.vec_rrr(
+            VecALUOp::Urhadd,
+            lhs,
+            rhs,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
-    fn v128_div(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
-    ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_div(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.asm.vec_rrr(
+            VecALUOp::Fdiv,
+            lhs,
+            rhs,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
-    fn v128_sqrt(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_sqrt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.asm.vec_misc(
+            VecMisc2::Fsqrt,
+            src,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
-    fn v128_ceil(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_ceil(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.asm.vec_misc(
+            VecMisc2::Frintp,
+            src,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
-    fn v128_floor(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_floor(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.asm.vec_misc(
+            VecMisc2::Frintm,
+            src,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
-    fn v128_nearest(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_nearest(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.asm.vec_misc(
+            VecMisc2::Frintn,
+            src,
+            dst,
+            VectorSize::from_lane_size(size.into(), true),
+        );
+        Ok(())
     }
 
-    fn v128_pmin(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
-    ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_pmin(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        let size = VectorSize::from_lane_size(size.into(), true);
+        self.with_scratch::<FloatScratch, _>(|masm, mask| {
+            masm.asm
+                .vec_rrr(VecALUOp::Fcmgt, lhs, rhs, mask.writable(), size);
+            masm.asm
+                .vec_rrr_mod(VecALUModOp::Bsl, rhs, lhs, mask.writable(), size);
+            masm.asm.fmov_rr(mask.inner(), dst, OperandSize::S128);
+        });
+        Ok(())
     }
 
-    fn v128_pmax(
-        &mut self,
-        _lhs: Reg,
-        _rhs: Reg,
-        _dst: WritableReg,
-        _size: OperandSize,
-    ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
+    fn v128_pmax(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        let size = VectorSize::from_lane_size(size.into(), true);
+        self.with_scratch::<FloatScratch, _>(|masm, mask| {
+            masm.asm
+                .vec_rrr(VecALUOp::Fcmgt, rhs, lhs, mask.writable(), size);
+            masm.asm
+                .vec_rrr_mod(VecALUModOp::Bsl, rhs, lhs, mask.writable(), size);
+            masm.asm.fmov_rr(mask.inner(), dst, OperandSize::S128);
+        });
+        Ok(())
     }
 }
 
