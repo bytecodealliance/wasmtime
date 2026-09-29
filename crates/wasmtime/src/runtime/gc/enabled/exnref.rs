@@ -10,7 +10,7 @@ use crate::{
     ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
 };
-use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, prelude::*};
+use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, bail_bug, prelude::*};
 use alloc::sync::Arc;
 use core::mem;
 use core::mem::MaybeUninit;
@@ -628,7 +628,10 @@ impl ExnRef {
         assert!(self.comes_from_same_store(&store));
         let exnref = self.exnref(&store)?.unchecked_copy();
         let (instance, index) = exnref.tag(&mut store)?;
-        Ok(Tag::from_raw_indices(&*store, instance, index))
+        match Tag::from_raw_indices(&*store, instance, index) {
+            Some(tag) => Ok(tag),
+            None => bail_bug!("invalid tag indices in exception object"),
+        }
     }
 }
 

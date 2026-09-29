@@ -1643,6 +1643,16 @@ impl StoreOpaque {
         self.instances[id].handle.get()
     }
 
+    /// Accessor from `InstanceId` to `&vm::Instance`, if `id` is actually an
+    /// instance within this store.
+    ///
+    /// Unlike `instance`, this does not assume `id` has already been validated,
+    /// and so suits ids from an untrusted source.
+    #[inline]
+    pub fn try_instance(&self, id: InstanceId) -> Option<&vm::Instance> {
+        Some(self.instances.get(id)?.handle.get())
+    }
+
     /// Accessor from `InstanceId` to `Pin<&mut vm::Instance>`.
     ///
     /// Note that if you have a `StoreInstanceId` you should use
