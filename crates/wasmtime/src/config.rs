@@ -1432,7 +1432,8 @@ impl Config {
 
     /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
     ///
-    /// This is `true` by default.
+    /// This is `true` by default, except when using [`Strategy::Winch`] where
+    /// it defaults to `false`.
     ///
     /// [proposal]: https://github.com/WebAssembly/exception-handling
     #[cfg(feature = "gc")]
