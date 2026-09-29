@@ -196,7 +196,7 @@ async fn p3_http_outbound_request_get() -> wasmtime::Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_timeout() -> wasmtime::Result<()> {
-    let server = Server::http1(1)?;
+    let server = Server::http1(3)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server).await
 }
 
