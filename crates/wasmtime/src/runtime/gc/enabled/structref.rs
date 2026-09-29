@@ -459,7 +459,11 @@ impl StructRef {
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
-        debug_assert!(header.kind().matches(VMGcKind::StructRef));
+        debug_assert!(
+            header
+                .kind()
+                .is_some_and(|k| k.matches(VMGcKind::StructRef))
+        );
 
         let index = header.ty().expect("structrefs should have concrete types");
         let ty = StructType::from_shared_type_index(store.engine(), index);
@@ -517,7 +521,11 @@ impl StructRef {
     fn structref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMStructRef> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        debug_assert!(self.header(store)?.kind().matches(VMGcKind::StructRef));
+        debug_assert!(
+            self.header(store)?
+                .kind()
+                .is_some_and(|k| k.matches(VMGcKind::StructRef))
+        );
         Ok(gc_ref.as_structref_unchecked())
     }
 
@@ -623,7 +631,11 @@ impl StructRef {
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
-        debug_assert!(header.kind().matches(VMGcKind::StructRef));
+        debug_assert!(
+            header
+                .kind()
+                .is_some_and(|k| k.matches(VMGcKind::StructRef))
+        );
         Ok(header.ty().expect("structrefs should have concrete types"))
     }
 

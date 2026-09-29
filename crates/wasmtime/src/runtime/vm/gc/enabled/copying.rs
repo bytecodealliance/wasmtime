@@ -144,7 +144,7 @@ struct VMCopyingArrayHeader {
 unsafe impl GcHeapObject for VMCopyingArrayHeader {
     #[inline]
     fn is(header: &VMGcHeader) -> bool {
-        header.kind() == VMGcKind::ArrayRef
+        header.kind() == Some(VMGcKind::ArrayRef)
     }
 }
 
@@ -166,7 +166,7 @@ struct VMCopyingExternRef {
 unsafe impl GcHeapObject for VMCopyingExternRef {
     #[inline]
     fn is(header: &VMGcHeader) -> bool {
-        header.kind() == VMGcKind::ExternRef
+        header.kind() == Some(VMGcKind::ExternRef)
     }
 }
 
@@ -566,7 +566,7 @@ survived collection, since the active space is the same size as the idle space",
             .index(copying_ref(&to_ref))?
             .header
             .kind()
-            .matches(VMGcKind::ExternRef)
+            .is_some_and(|k| k.matches(VMGcKind::ExternRef))
         {
             let old_head = self.active_extern_ref_set_head.take();
             self.index_mut::<VMCopyingExternRef>(to_ref.as_typed_unchecked())?
@@ -799,9 +799,8 @@ unsafe impl GcHeap for CopyingHeap {
         let header: &VMGcHeader = self.index(gc_ref.as_typed_unchecked())?;
 
         debug_assert!(
-            VMGcKind::try_from_u32(header.kind().as_u32()).is_some(),
-            "header: invalid VMGcKind {:#010x} at gc_ref {gc_ref:#p}",
-            header.kind().as_u32(),
+            header.kind().is_some(),
+            "header: invalid VMGcKind at gc_ref {gc_ref:#p}",
         );
 
         Ok(header)
@@ -811,9 +810,8 @@ unsafe impl GcHeap for CopyingHeap {
         let header: &mut VMGcHeader = self.index_mut(gc_ref.as_typed_unchecked())?;
 
         debug_assert!(
-            VMGcKind::try_from_u32(header.kind().as_u32()).is_some(),
-            "header_mut: invalid VMGcKind {:#010x} at gc_ref {gc_ref:#p}",
-            header.kind().as_u32(),
+            header.kind().is_some(),
+            "header_mut: invalid VMGcKind at gc_ref {gc_ref:#p}",
         );
 
         Ok(header)

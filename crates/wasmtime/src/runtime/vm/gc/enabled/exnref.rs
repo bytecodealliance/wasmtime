@@ -41,7 +41,7 @@ impl VMGcRef {
         }
 
         match gc_heap.header(&self) {
-            Ok(header) => header.kind().matches(VMGcKind::ExnRef),
+            Ok(header) => header.kind().is_some_and(|k| k.matches(VMGcKind::ExnRef)),
             Err(_) => false,
         }
     }

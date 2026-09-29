@@ -374,7 +374,7 @@ impl ExnRef {
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
-        debug_assert!(header.kind().matches(VMGcKind::ExnRef));
+        debug_assert!(header.kind().is_some_and(|k| k.matches(VMGcKind::ExnRef)));
         Ok(header.ty().expect("exnrefs should have concrete types"))
     }
 
@@ -500,7 +500,7 @@ impl ExnRef {
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
-        debug_assert!(header.kind().matches(VMGcKind::ExnRef));
+        debug_assert!(header.kind().is_some_and(|k| k.matches(VMGcKind::ExnRef)));
 
         let index = header.ty().expect("exnrefs should have concrete types");
         let ty = ExnType::from_shared_type_index(store.engine(), index);
@@ -558,7 +558,11 @@ impl ExnRef {
     fn exnref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMExnRef> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        debug_assert!(self.header(store)?.kind().matches(VMGcKind::ExnRef));
+        debug_assert!(
+            self.header(store)?
+                .kind()
+                .is_some_and(|k| k.matches(VMGcKind::ExnRef))
+        );
         Ok(gc_ref.as_exnref_unchecked())
     }
 

@@ -502,7 +502,11 @@ fn gc_alloc_raw(
     use core::alloc::Layout;
     use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
-    let kind = VMGcKind::from_high_bits_of_u32(kind_and_reserved);
+    // NB: unlike most `VMGcKind`s, this one is a constant baked into compiled
+    // code by our own code generator, not a value out of the GC heap.
+    let Some(kind) = VMGcKind::from_high_bits_of_u32(kind_and_reserved) else {
+        bail_bug!("compiler emitted an invalid `VMGcKind`")
+    };
     log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})");
 
     let shared_type_index = VMSharedTypeIndex::from_u32(shared_type_index);

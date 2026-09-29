@@ -167,9 +167,8 @@ impl EqRef {
             gc_ref.is_i31()
                 || store
                     .unwrap_gc_store()
-                    .header(&gc_ref)
+                    .kind(&gc_ref)
                     .unwrap()
-                    .kind()
                     .matches(VMGcKind::EqRef)
         );
         Rooted::new(store, gc_ref)
@@ -200,18 +199,22 @@ impl EqRef {
         }
 
         let header = store.require_gc_store()?.header(gc_ref)?;
+        let kind = match header.kind() {
+            Some(kind) => kind,
+            None => bail_bug!("invalid `VMGcKind`"),
+        };
         let ty = match header.ty() {
             Some(ty) => ty,
             None => bail_bug!("ty should be present"),
         };
 
-        if header.kind().matches(VMGcKind::StructRef) {
+        if kind.matches(VMGcKind::StructRef) {
             return Ok(HeapType::ConcreteStruct(
                 StructType::from_shared_type_index(store.engine(), ty),
             ));
         }
 
-        if header.kind().matches(VMGcKind::ArrayRef) {
+        if kind.matches(VMGcKind::ArrayRef) {
             return Ok(HeapType::ConcreteArray(ArrayType::from_shared_type_index(
                 store.engine(),
                 ty,

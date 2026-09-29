@@ -392,7 +392,12 @@ impl DrcHeap {
                     // Handle `externref` host data. Only `externref`s have host
                     // data, and `ty` is `None` only for `externref`s, so we skip
                     // this for `struct` and `array` objects entirely.
-                    debug_assert!(drc_header.header.kind().matches(VMGcKind::ExternRef));
+                    debug_assert!(
+                        drc_header
+                            .header
+                            .kind()
+                            .is_some_and(|k| k.matches(VMGcKind::ExternRef))
+                    );
                     let externref = match gc_ref.as_typed::<VMDrcExternRef>(this) {
                         Some(r) => r,
                         None => bail_bug!("expected externref"),
@@ -483,10 +488,9 @@ impl DrcHeap {
 
             // Each entry must have a valid `VMGcKind`.
             let header = self.header(&gc_ref)?;
-            let kind = header.kind().as_u32();
             assert!(
-                VMGcKind::try_from_u32(kind).is_some(),
-                "over-approx list: entry at heap index {idx} has invalid VMGcKind {kind:#034b}",
+                header.kind().is_some(),
+                "over-approx list: entry at heap index {idx} has an invalid VMGcKind",
             );
 
             // Each entry must have its in-list bit set.
@@ -848,7 +852,7 @@ struct VMDrcArrayHeader {
 unsafe impl GcHeapObject for VMDrcArrayHeader {
     #[inline]
     fn is(header: &VMGcHeader) -> bool {
-        header.kind() == VMGcKind::ArrayRef
+        header.kind() == Some(VMGcKind::ArrayRef)
     }
 }
 
@@ -864,7 +868,7 @@ struct VMDrcExternRef {
 unsafe impl GcHeapObject for VMDrcExternRef {
     #[inline]
     fn is(header: &VMGcHeader) -> bool {
-        header.kind() == VMGcKind::ExternRef
+        header.kind() == Some(VMGcKind::ExternRef)
     }
 }
 
@@ -1043,9 +1047,8 @@ unsafe impl GcHeap for DrcHeap {
         let header: &VMGcHeader = self.index(gc_ref.as_typed_unchecked())?;
 
         debug_assert!(
-            VMGcKind::try_from_u32(header.kind().as_u32()).is_some(),
-            "header: invalid VMGcKind {:#010x} at gc_ref {gc_ref:#p}",
-            header.kind().as_u32(),
+            header.kind().is_some(),
+            "header: invalid VMGcKind at gc_ref {gc_ref:#p}",
         );
 
         Ok(header)
@@ -1055,9 +1058,8 @@ unsafe impl GcHeap for DrcHeap {
         let header: &mut VMGcHeader = self.index_mut(gc_ref.as_typed_unchecked())?;
 
         debug_assert!(
-            VMGcKind::try_from_u32(header.kind().as_u32()).is_some(),
-            "header_mut: invalid VMGcKind {:#010x} at gc_ref {gc_ref:#p}",
-            header.kind().as_u32(),
+            header.kind().is_some(),
+            "header_mut: invalid VMGcKind at gc_ref {gc_ref:#p}",
         );
 
         Ok(header)
