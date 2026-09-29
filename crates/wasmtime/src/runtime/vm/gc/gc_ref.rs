@@ -423,7 +423,10 @@ impl VMGcRef {
                 }
                 HeapTopType::Func => {
                     let func_ref_id = data.read_u32(offset)?;
-                    let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
+                    let func_ref_id = match FuncRefTableId::from_raw(func_ref_id) {
+                        Some(id) => id,
+                        None => bail_bug!("bad FuncRefTableId"),
+                    };
                     let func_ref = store
                         .unwrap_gc_store()
                         .func_ref_table
