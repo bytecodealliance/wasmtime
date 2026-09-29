@@ -684,23 +684,23 @@ mod tests {
         let mut header = VMGcHeader::from_kind_and_index(kind, ty);
 
         assert_eq!(header.reserved_u26(), 0);
-        assert_eq!(header.kind(), kind);
+        assert_eq!(header.kind(), Some(kind));
         assert_eq!(header.ty(), Some(ty));
 
         header.set_reserved_u26(36);
         assert_eq!(header.reserved_u26(), 36);
-        assert_eq!(header.kind(), kind);
+        assert_eq!(header.kind(), Some(kind));
         assert_eq!(header.ty(), Some(ty));
 
         let max = (1 << 26) - 1;
         header.set_reserved_u26(max);
         assert_eq!(header.reserved_u26(), max);
-        assert_eq!(header.kind(), kind);
+        assert_eq!(header.kind(), Some(kind));
         assert_eq!(header.ty(), Some(ty));
 
         header.set_reserved_u26(0);
         assert_eq!(header.reserved_u26(), 0);
-        assert_eq!(header.kind(), kind);
+        assert_eq!(header.kind(), Some(kind));
         assert_eq!(header.ty(), Some(ty));
 
         let result = std::panic::catch_unwind(move || header.set_reserved_u26(max + 1));
