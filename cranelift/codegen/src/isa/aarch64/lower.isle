@@ -48,14 +48,6 @@
 (attr lower_branch (tag TODO))
 (decl partial lower_branch (Inst MachLabelSlice) Unit)
 
-;; A scalar float type, but only `F16` when FEAT_FP16 is implemented. The
-;; half-precision scalar encodings are UNDEFINED without it.
-(spec (ty_scalar_float_with_fp16 ty)
-      (match (or (= (:bits result) 32) (= (:bits result) 64)))
-      (provide (= result ty)))
-(decl ty_scalar_float_with_fp16 (Type) Type)
-(extern extractor ty_scalar_float_with_fp16 ty_scalar_float_with_fp16)
-
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule iconst (lower (iconst ty (u64_from_imm64 n)))
@@ -490,72 +482,117 @@
 (rule -1 (lower (fadd ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fadd) rn rm (vector_size ty)))
 
-(rule (lower (fadd (ty_scalar_float_with_fp16 ty) rn rm))
-      (fpu_rrr (FPUOp2.Add) rn rm (scalar_size ty)))
+(rule 1 (lower (fadd $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Add) rn rm (ScalarSize.Size16)))
+(rule (lower (fadd $F32 rn rm))
+      (fpu_rrr (FPUOp2.Add) rn rm (ScalarSize.Size32)))
+(rule (lower (fadd $F64 rn rm))
+      (fpu_rrr (FPUOp2.Add) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fsub ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fsub) rn rm (vector_size ty)))
 
-(rule fsub (lower (fsub (ty_scalar_float_with_fp16 ty) rn rm))
-      (fpu_rrr (FPUOp2.Sub) rn rm (scalar_size ty)))
+(rule 1 (lower (fsub $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Sub) rn rm (ScalarSize.Size16)))
+(rule fsub (lower (fsub $F32 rn rm))
+      (fpu_rrr (FPUOp2.Sub) rn rm (ScalarSize.Size32)))
+(rule fsub64 (lower (fsub $F64 rn rm))
+      (fpu_rrr (FPUOp2.Sub) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fmul ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fmul) rn rm (vector_size ty)))
 
-(rule (lower (fmul (ty_scalar_float_with_fp16 ty) rn rm))
-      (fpu_rrr (FPUOp2.Mul) rn rm (scalar_size ty)))
+(rule 1 (lower (fmul $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Mul) rn rm (ScalarSize.Size16)))
+(rule (lower (fmul $F32 rn rm))
+      (fpu_rrr (FPUOp2.Mul) rn rm (ScalarSize.Size32)))
+(rule (lower (fmul $F64 rn rm))
+      (fpu_rrr (FPUOp2.Mul) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fdiv ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fdiv) rn rm (vector_size ty)))
 
-(rule (lower (fdiv (ty_scalar_float_with_fp16 ty) rn rm))
-      (fpu_rrr (FPUOp2.Div) rn rm (scalar_size ty)))
+(rule 1 (lower (fdiv $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Div) rn rm (ScalarSize.Size16)))
+(rule (lower (fdiv $F32 rn rm))
+      (fpu_rrr (FPUOp2.Div) rn rm (ScalarSize.Size32)))
+(rule (lower (fdiv $F64 rn rm))
+      (fpu_rrr (FPUOp2.Div) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fmin ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fmin) rn rm (vector_size ty)))
 
-(rule (lower (fmin (ty_scalar_float_with_fp16 ty) rn rm))
-      (fpu_rrr (FPUOp2.Min) rn rm (scalar_size ty)))
+(rule 1 (lower (fmin $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Min) rn rm (ScalarSize.Size16)))
+(rule (lower (fmin $F32 rn rm))
+      (fpu_rrr (FPUOp2.Min) rn rm (ScalarSize.Size32)))
+(rule (lower (fmin $F64 rn rm))
+      (fpu_rrr (FPUOp2.Min) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fmax ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fmax) rn rm (vector_size ty)))
 
-(rule (lower (fmax (ty_scalar_float_with_fp16 ty) rn rm))
-      (fpu_rrr (FPUOp2.Max) rn rm (scalar_size ty)))
+(rule 1 (lower (fmax $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Max) rn rm (ScalarSize.Size16)))
+(rule (lower (fmax $F32 rn rm))
+      (fpu_rrr (FPUOp2.Max) rn rm (ScalarSize.Size32)))
+(rule (lower (fmax $F64 rn rm))
+      (fpu_rrr (FPUOp2.Max) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (sqrt ty @ (multi_lane _ _) x))
       (vec_misc (VecMisc2.Fsqrt) x (vector_size ty)))
 
-(rule (lower (sqrt (ty_scalar_float_with_fp16 ty) x))
-      (fpu_rr (FPUOp1.Sqrt) x (scalar_size ty)))
+(rule 1 (lower (sqrt $F16 x))
+      (if-let true (use_fp16))
+      (fpu_rr (FPUOp1.Sqrt) x (ScalarSize.Size16)))
+(rule (lower (sqrt $F32 x))
+      (fpu_rr (FPUOp1.Sqrt) x (ScalarSize.Size32)))
+(rule (lower (sqrt $F64 x))
+      (fpu_rr (FPUOp1.Sqrt) x (ScalarSize.Size64)))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fneg ty @ (multi_lane _ _) x))
       (vec_misc (VecMisc2.Fneg) x (vector_size ty)))
 
-(rule (lower (fneg (ty_scalar_float_with_fp16 ty) x))
-      (fpu_rr (FPUOp1.Neg) x (scalar_size ty)))
+(rule 1 (lower (fneg $F16 x))
+      (if-let true (use_fp16))
+      (fpu_rr (FPUOp1.Neg) x (ScalarSize.Size16)))
+(rule (lower (fneg $F32 x))
+      (fpu_rr (FPUOp1.Neg) x (ScalarSize.Size32)))
+(rule (lower (fneg $F64 x))
+      (fpu_rr (FPUOp1.Neg) x (ScalarSize.Size64)))
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fabs ty @ (multi_lane _ _) x))
       (vec_misc (VecMisc2.Fabs) x (vector_size ty)))
 
-(rule (lower (fabs (ty_scalar_float_with_fp16 ty) x))
-      (fpu_rr (FPUOp1.Abs) x (scalar_size ty)))
+(rule 1 (lower (fabs $F16 x))
+      (if-let true (use_fp16))
+      (fpu_rr (FPUOp1.Abs) x (ScalarSize.Size16)))
+(rule (lower (fabs $F32 x))
+      (fpu_rr (FPUOp1.Abs) x (ScalarSize.Size32)))
+(rule (lower (fabs $F64 x))
+      (fpu_rr (FPUOp1.Abs) x (ScalarSize.Size64)))
 
 ;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -614,7 +651,7 @@
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (attr rule fma (tag vector))
 (rule fma 1 (lower (fma ty x y z)) (fmadd ty x y z))
-(rule 2 (lower (fma (ty_scalar_float_with_fp16 ty) x y (fneg _ z))) (fnmsub ty x y z))
+(rule 2 (lower (fma (ty_scalar_float ty) x y (fneg _ z))) (fnmsub ty x y z))
 
 ;; Constructors matching the scalar behavior of aarch64. If you're confused like
 ;; I was reading over these, they are:
@@ -623,9 +660,7 @@
 ;; * fnmadd  r = -(a * b) - c   /   multiply, then negate, then subtract
 ;; * fmsub   r = -(a * b) + c   /   multiply, then negate, then add
 ;; * fnmsub  r =   a * b  - c   /   multiply, then subtract
-;; Partial so `fma` on a type the scalar rules cannot lower reports "should be
-;; implemented in ISLE" instead of panicking. All four, since the negation
-;; rules rewrite through each other.
+;; `partial` so that unsupported cases fail at the top level rather than panicking
 (attr fmadd (tag vector))
 (decl partial fmadd (Type Value Value Value) Reg)
 
@@ -646,14 +681,22 @@
 (rule 3 (fnmsub ty x (fneg _ y) z) (fnmadd ty x y z))
 
 ;; Scalar cases
-(rule 0 (fmadd (ty_scalar_float_with_fp16 ty) x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
-(rule 0 (fnmadd (ty_scalar_float_with_fp16 ty) x y z) (fpu_rrrr (FPUOp3.NMAdd) (scalar_size ty) x y z))
-(rule 0 (fmsub (ty_scalar_float_with_fp16 ty) x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
-(rule 0 (fnmsub (ty_scalar_float_with_fp16 ty) x y z) (fpu_rrrr (FPUOp3.NMSub) (scalar_size ty) x y z))
+(rule 1 (fmadd $F16 x y z) (if-let true (use_fp16)) (fpu_rrrr (FPUOp3.MAdd) (ScalarSize.Size16) x y z))
+(rule 1 (fnmadd $F16 x y z) (if-let true (use_fp16)) (fpu_rrrr (FPUOp3.NMAdd) (ScalarSize.Size16) x y z))
+(rule 1 (fmsub $F16 x y z) (if-let true (use_fp16)) (fpu_rrrr (FPUOp3.MSub) (ScalarSize.Size16) x y z))
+(rule 1 (fnmsub $F16 x y z) (if-let true (use_fp16)) (fpu_rrrr (FPUOp3.NMSub) (ScalarSize.Size16) x y z))
+(rule -1 (fmadd $F32 x y z) (fpu_rrrr (FPUOp3.MAdd) (ScalarSize.Size32) x y z))
+(rule -1 (fnmadd $F32 x y z) (fpu_rrrr (FPUOp3.NMAdd) (ScalarSize.Size32) x y z))
+(rule -1 (fmsub $F32 x y z) (fpu_rrrr (FPUOp3.MSub) (ScalarSize.Size32) x y z))
+(rule -1 (fnmsub $F32 x y z) (fpu_rrrr (FPUOp3.NMSub) (ScalarSize.Size32) x y z))
+(rule -1 (fmadd $F64 x y z) (fpu_rrrr (FPUOp3.MAdd) (ScalarSize.Size64) x y z))
+(rule -1 (fnmadd $F64 x y z) (fpu_rrrr (FPUOp3.NMAdd) (ScalarSize.Size64) x y z))
+(rule -1 (fmsub $F64 x y z) (fpu_rrrr (FPUOp3.MSub) (ScalarSize.Size64) x y z))
+(rule -1 (fnmsub $F64 x y z) (fpu_rrrr (FPUOp3.NMSub) (ScalarSize.Size64) x y z))
 
 ;; Vector cases
-(rule 1 (fmadd ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
-(rule 1 (fmsub ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmls) x y z (vector_size ty)))
+(rule 0 (fmadd ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
+(rule 0 (fmsub ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmls) x y z (vector_size ty)))
 
 ;; Lowers a fused-multiply-add operation handling various forms of the
 ;; instruction to get maximal coverage of what's available on AArch64.
@@ -1291,7 +1334,12 @@
 ;; per-lane mask of either all ones or zeroes. rather than 0 or 1.
 (rule 1 (lower (uextend (fits_in_64 _) (icmp _ cond x @ (value_type (ty_int _)) y)))
       (lower_cond_result_bool (emit_icmp cond x y)))
-(rule 1 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type (ty_scalar_float_with_fp16 _)) y)))
+(rule 2 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type $F16) y)))
+      (if-let true (use_fp16))
+      (lower_cond_result_bool (emit_fcmp cond x y)))
+(rule 1 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type $F32) y)))
+      (lower_cond_result_bool (emit_fcmp cond x y)))
+(rule 1 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type $F64) y)))
       (lower_cond_result_bool (emit_fcmp cond x y)))
 
 ;; Conversion to 128-bit needs a zero-extension of the lower bits and the upper
@@ -2189,7 +2237,12 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero_swap cond rn vec_size))))
 
-(rule 0 (lower (fcmp _ cond x @ (value_type (ty_scalar_float_with_fp16 _)) y))
+(rule 5 (lower (fcmp _ cond x @ (value_type $F16) y))
+      (if-let true (use_fp16))
+      (lower_cond_result_bool (emit_fcmp cond x y)))
+(rule 0 (lower (fcmp _ cond x @ (value_type $F32) y))
+  (lower_cond_result_bool (emit_fcmp cond x y)))
+(rule 0 (lower (fcmp _ cond x @ (value_type $F64) y))
   (lower_cond_result_bool (emit_fcmp cond x y)))
 
 (rule -1 (lower (fcmp _ cond x @ (value_type in_ty) y))

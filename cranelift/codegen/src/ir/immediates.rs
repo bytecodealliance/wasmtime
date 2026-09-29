@@ -1547,6 +1547,198 @@ mod tests {
         );
     }
 
+    /// Known bit patterns, so a widening bug that round-trips is still caught.
+    #[test]
+    fn to_f32_known_values_ieee16() {
+        let cases = [
+            (0x0000, 0x0000_0000), // +0
+            (0x8000, 0x8000_0000), // -0
+            (0x3c00, 0x3f80_0000), // 1
+            (0xbc00, 0xbf80_0000), // -1
+            (0x7bff, 0x477f_e000), // 65504, the largest finite value
+            (0x7c00, 0x7f80_0000), // infinity
+            (0x0400, 0x3880_0000), // 2^-14, smallest normal
+            (0x0001, 0x3380_0000), // 2^-24, smallest subnormal
+            (0x03ff, 0x387f_c000), // 1023 * 2^-24, largest subnormal
+            (0x0200, 0x3800_0000), // 2^-15
+        ];
+        for (input, expected) in cases {
+            assert_eq!(
+                Ieee16::with_bits(input).to_f32().to_bits(),
+                expected,
+                "bits = {input:#06x}"
+            );
+        }
+    }
+
+    /// Every midpoint must round to the neighbour with an even significand.
+    #[test]
+    fn every_tie_rounds_to_even_ieee16() {
+        for bits in 0..u16::MAX {
+            let (lo, hi) = (Ieee16::with_bits(bits), Ieee16::with_bits(bits + 1));
+            // Skip the pairs that straddle an infinity or a NaN encoding.
+            if lo.is_nan() || hi.is_nan() || (lo.bits() & 0x7fff) == 0x7bff {
+                continue;
+            }
+            let even = if bits & 1 == 0 { lo } else { hi };
+
+            let (a, b) = (lo.to_f32(), hi.to_f32());
+            let mid = (a + b) / 2.0;
+            assert_eq!(
+                Ieee16::from_f32_rne(mid),
+                even,
+                "midpoint of {:#06x} and {:#06x}",
+                bits,
+                bits + 1
+            );
+
+            // Which side is nearer depends on the sign, so only check the
+            // non-negative half.
+            if bits < 0x8000 {
+                let up = f32::from_bits(mid.to_bits() + 1);
+                let down = f32::from_bits(mid.to_bits() - 1);
+                assert_eq!(Ieee16::from_f32_rne(up), hi, "{bits:#06x} up");
+                assert_eq!(Ieee16::from_f32_rne(down), lo, "{bits:#06x} down");
+            }
+        }
+    }
+
+    /// Round-tripping is the identity, except a NaN comes back quieted.
+    #[test]
+    fn round_trip_is_identity_ieee16() {
+        for bits in 0..=u16::MAX {
+            let original = Ieee16::with_bits(bits);
+            let back = Ieee16::from_f32_rne(original.to_f32());
+            let expected = if original.is_nan() {
+                Ieee16::with_bits(bits | 0x0200)
+            } else {
+                original
+            };
+            assert_eq!(back, expected, "bits = {bits:#06x}");
+        }
+    }
+
+    /// An `f64` that is exactly an `f32` must narrow the same way either way.
+    #[test]
+    fn from_f64_rne_agrees_ieee16() {
+        for bits in 0..u16::MAX {
+            let value = Ieee16::with_bits(bits);
+            if value.is_nan() {
+                continue;
+            }
+            let as_f64 = f64::from(value.to_f32());
+            assert_eq!(
+                Ieee16::from_f64_rne(as_f64),
+                Ieee16::from_f32_rne(value.to_f32()),
+                "bits = {bits:#06x}"
+            );
+        }
+    }
+
+    /// The same trap for a fused multiply-add: the exact product and sum needs
+    /// more than 24 bits.
+    #[test]
+    fn fma_does_not_double_round_ieee16() {
+        let (x, y, z) = (
+            f64::from(Ieee16::with_bits(0x520b).to_f32()),
+            f64::from(Ieee16::with_bits(0x00e9).to_f32()),
+            f64::from(Ieee16::with_bits(0x2ff6).to_f32()),
+        );
+        // Exact in f64: the product needs 22 bits, the sum under 34. Not
+        // `mul_add`, which is not correct on every target.
+        let exact = x * y + z;
+        assert_eq!(Ieee16::from_f64_rne(exact).bits(), 0x3001);
+        assert_eq!(Ieee16::from_f32_rne(exact as f32).bits(), 0x3000);
+    }
+
+    /// A subnormal source has no implicit one, but every binary32 and binary64
+    /// subnormal is far below the smallest binary16 subnormal.
+    #[test]
+    fn subnormal_source_rounds_to_zero_ieee16() {
+        for bits in [0x0000_0001, 0x003f_ffff, 0x007f_ffff, 0x807f_ffff] {
+            let x = f32::from_bits(bits);
+            let expected = if bits >> 31 == 1 { 0x8000 } else { 0x0000 };
+            assert_eq!(
+                Ieee16::from_f32_rne(x).bits(),
+                expected,
+                "bits = {bits:#010x}"
+            );
+        }
+        for bits in [
+            0x0000_0000_0000_0001,
+            0x000f_ffff_ffff_ffff,
+            0x800f_ffff_ffff_ffff,
+        ] {
+            let x = f64::from_bits(bits);
+            let expected = if bits >> 63 == 1 { 0x8000 } else { 0x0000 };
+            assert_eq!(
+                Ieee16::from_f64_rne(x).bits(),
+                expected,
+                "bits = {bits:#018x}"
+            );
+        }
+        // Zero itself, including both signs.
+        assert_eq!(Ieee16::from_f32_rne(0.0).bits(), 0x0000);
+        assert_eq!(Ieee16::from_f32_rne(-0.0).bits(), 0x8000);
+        assert_eq!(Ieee16::from_f64_rne(0.0).bits(), 0x0000);
+        assert_eq!(Ieee16::from_f64_rne(-0.0).bits(), 0x8000);
+    }
+
+    /// Narrowing an `f64` through `f32` can pick the wrong side of a midpoint.
+    #[test]
+    fn f64_narrowing_does_not_double_round_ieee16() {
+        let just_past = 1.0 + 2f64.powi(-11) + 2f64.powi(-40);
+        assert_eq!(Ieee16::from_f64_rne(just_past).bits(), 0x3c01);
+        assert_eq!(Ieee16::from_f64_rne(-just_past).bits(), 0xbc01);
+        assert_eq!(Ieee16::from_f32_rne(just_past as f32).bits(), 0x3c00);
+    }
+
+    #[test]
+    fn overflow_boundaries_ieee16() {
+        assert_eq!(Ieee16::from_f32_rne(65504.0).bits(), 0x7bff);
+        assert_eq!(Ieee16::from_f32_rne(65519.0).bits(), 0x7bff);
+        // The tie between 65504 and infinity rounds to even, which overflows.
+        assert_eq!(Ieee16::from_f32_rne(65520.0).bits(), 0x7c00);
+        assert_eq!(Ieee16::from_f32_rne(65536.0).bits(), 0x7c00);
+        assert_eq!(Ieee16::from_f32_rne(f32::INFINITY).bits(), 0x7c00);
+        assert_eq!(Ieee16::from_f32_rne(-f32::INFINITY).bits(), 0xfc00);
+        assert_eq!(Ieee16::from_f32_rne(1e30).bits(), 0x7c00);
+    }
+
+    #[test]
+    fn underflow_boundaries_ieee16() {
+        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-14)).bits(), 0x0400);
+        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-15)).bits(), 0x0200);
+        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-24)).bits(), 0x0001);
+        // 2^-25 is the tie between zero and the smallest subnormal.
+        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-25)).bits(), 0x0000);
+        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-26)).bits(), 0x0000);
+        assert_eq!(Ieee16::from_f32_rne(0.0).bits(), 0x0000);
+        assert_eq!(Ieee16::from_f32_rne(-0.0).bits(), 0x8000);
+    }
+
+    #[test]
+    fn subnormal_rounds_up_to_smallest_normal_ieee16() {
+        assert_eq!(
+            Ieee16::from_f32_rne(Ieee16::with_bits(0x03ff).to_f32()).bits(),
+            0x03ff
+        );
+        // The midpoint between 0x03ff and 0x0400. 1023 is odd, so the tie
+        // rounds up to the smallest normal.
+        assert_eq!(
+            Ieee16::from_f32_rne(f32::from_bits(0x387f_e000)).bits(),
+            0x0400
+        );
+    }
+
+    #[test]
+    fn nan_is_quieted_ieee16() {
+        for input in [f32::NAN, -f32::NAN, f32::from_bits(0x7f80_0001)] {
+            let out = Ieee16::from_f32_rne(input);
+            assert!(out.is_nan(), "input = {input:e}");
+        }
+    }
+
     #[test]
     fn format_ieee32() {
         assert_eq!(Ieee32::with_float(0.0).to_string(), "0.0");
@@ -2060,215 +2252,5 @@ mod tests {
                 "n = {n}"
             );
         }
-    }
-}
-
-#[cfg(test)]
-mod f16_f32_conversion_tests {
-    use super::*;
-
-    /// Round-tripping is the identity, except a NaN comes back quieted.
-    #[test]
-    fn round_trip_is_identity() {
-        for bits in 0..=u16::MAX {
-            let original = Ieee16::with_bits(bits);
-            let back = Ieee16::from_f32_rne(original.to_f32());
-            let expected = if original.is_nan() {
-                Ieee16::with_bits(bits | 0x0200)
-            } else {
-                original
-            };
-            assert_eq!(back, expected, "bits = {bits:#06x}");
-        }
-    }
-
-    #[test]
-    fn to_f32_is_exact() {
-        for bits in 0..=u16::MAX {
-            let value = Ieee16::with_bits(bits);
-            if value.is_nan() {
-                continue;
-            }
-            let widened = value.to_f32();
-            let rewidened = Ieee16::from_f32_rne(widened);
-            assert_eq!(rewidened, value, "bits = {bits:#06x}");
-        }
-    }
-
-    /// Known bit patterns, so a widening bug that round-trips is still caught.
-    #[test]
-    fn to_f32_known_values() {
-        let cases = [
-            (0x0000, 0x0000_0000), // +0
-            (0x8000, 0x8000_0000), // -0
-            (0x3c00, 0x3f80_0000), // 1
-            (0xbc00, 0xbf80_0000), // -1
-            (0x7bff, 0x477f_e000), // 65504, the largest finite value
-            (0x7c00, 0x7f80_0000), // infinity
-            (0x0400, 0x3880_0000), // 2^-14, smallest normal
-            (0x0001, 0x3380_0000), // 2^-24, smallest subnormal
-            (0x03ff, 0x387f_c000), // 1023 * 2^-24, largest subnormal
-            (0x0200, 0x3800_0000), // 2^-15
-        ];
-        for (input, expected) in cases {
-            assert_eq!(
-                Ieee16::with_bits(input).to_f32().to_bits(),
-                expected,
-                "bits = {input:#06x}"
-            );
-        }
-    }
-
-    /// Every midpoint must round to the neighbour with an even significand.
-    #[test]
-    fn every_tie_rounds_to_even() {
-        for bits in 0..u16::MAX {
-            let (lo, hi) = (Ieee16::with_bits(bits), Ieee16::with_bits(bits + 1));
-            // Skip the pairs that straddle an infinity or a NaN encoding.
-            if lo.is_nan() || hi.is_nan() || (lo.bits() & 0x7fff) == 0x7bff {
-                continue;
-            }
-            let even = if bits & 1 == 0 { lo } else { hi };
-
-            let (a, b) = (lo.to_f32(), hi.to_f32());
-            let mid = (a + b) / 2.0;
-            assert_eq!(
-                Ieee16::from_f32_rne(mid),
-                even,
-                "midpoint of {:#06x} and {:#06x}",
-                bits,
-                bits + 1
-            );
-
-            // Which side is nearer depends on the sign, so only check the
-            // non-negative half.
-            if bits < 0x8000 {
-                let up = f32::from_bits(mid.to_bits() + 1);
-                let down = f32::from_bits(mid.to_bits() - 1);
-                assert_eq!(Ieee16::from_f32_rne(up), hi, "{bits:#06x} up");
-                assert_eq!(Ieee16::from_f32_rne(down), lo, "{bits:#06x} down");
-            }
-        }
-    }
-
-    #[test]
-    fn overflow_boundaries() {
-        assert_eq!(Ieee16::from_f32_rne(65504.0).bits(), 0x7bff);
-        assert_eq!(Ieee16::from_f32_rne(65519.0).bits(), 0x7bff);
-        // The tie between 65504 and infinity rounds to even, which overflows.
-        assert_eq!(Ieee16::from_f32_rne(65520.0).bits(), 0x7c00);
-        assert_eq!(Ieee16::from_f32_rne(65536.0).bits(), 0x7c00);
-        assert_eq!(Ieee16::from_f32_rne(f32::INFINITY).bits(), 0x7c00);
-        assert_eq!(Ieee16::from_f32_rne(-f32::INFINITY).bits(), 0xfc00);
-        assert_eq!(Ieee16::from_f32_rne(1e30).bits(), 0x7c00);
-    }
-
-    #[test]
-    fn underflow_boundaries() {
-        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-14)).bits(), 0x0400);
-        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-15)).bits(), 0x0200);
-        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-24)).bits(), 0x0001);
-        // 2^-25 is the tie between zero and the smallest subnormal.
-        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-25)).bits(), 0x0000);
-        assert_eq!(Ieee16::from_f32_rne(2f32.powi(-26)).bits(), 0x0000);
-        assert_eq!(Ieee16::from_f32_rne(0.0).bits(), 0x0000);
-        assert_eq!(Ieee16::from_f32_rne(-0.0).bits(), 0x8000);
-    }
-
-    #[test]
-    fn subnormal_rounds_up_to_smallest_normal() {
-        assert_eq!(
-            Ieee16::from_f32_rne(Ieee16::with_bits(0x03ff).to_f32()).bits(),
-            0x03ff
-        );
-        // The midpoint between 0x03ff and 0x0400. 1023 is odd, so the tie
-        // rounds up to the smallest normal.
-        assert_eq!(
-            Ieee16::from_f32_rne(f32::from_bits(0x387f_e000)).bits(),
-            0x0400
-        );
-    }
-
-    #[test]
-    fn nan_is_quieted() {
-        for input in [f32::NAN, -f32::NAN, f32::from_bits(0x7f80_0001)] {
-            let out = Ieee16::from_f32_rne(input);
-            assert!(out.is_nan(), "input = {input:e}");
-        }
-    }
-
-    /// A subnormal source has no implicit one, but every binary32 and binary64
-    /// subnormal is far below the smallest binary16 subnormal.
-    #[test]
-    fn subnormal_source_rounds_to_zero() {
-        for bits in [0x0000_0001, 0x003f_ffff, 0x007f_ffff, 0x807f_ffff] {
-            let x = f32::from_bits(bits);
-            let expected = if bits >> 31 == 1 { 0x8000 } else { 0x0000 };
-            assert_eq!(
-                Ieee16::from_f32_rne(x).bits(),
-                expected,
-                "bits = {bits:#010x}"
-            );
-        }
-        for bits in [
-            0x0000_0000_0000_0001,
-            0x000f_ffff_ffff_ffff,
-            0x800f_ffff_ffff_ffff,
-        ] {
-            let x = f64::from_bits(bits);
-            let expected = if bits >> 63 == 1 { 0x8000 } else { 0x0000 };
-            assert_eq!(
-                Ieee16::from_f64_rne(x).bits(),
-                expected,
-                "bits = {bits:#018x}"
-            );
-        }
-        // Zero itself, including both signs.
-        assert_eq!(Ieee16::from_f32_rne(0.0).bits(), 0x0000);
-        assert_eq!(Ieee16::from_f32_rne(-0.0).bits(), 0x8000);
-        assert_eq!(Ieee16::from_f64_rne(0.0).bits(), 0x0000);
-        assert_eq!(Ieee16::from_f64_rne(-0.0).bits(), 0x8000);
-    }
-
-    /// An `f64` that is exactly an `f32` must narrow the same way either way.
-    #[test]
-    fn f64_agrees_with_f32_when_exact() {
-        for bits in 0..u16::MAX {
-            let value = Ieee16::with_bits(bits);
-            if value.is_nan() {
-                continue;
-            }
-            let as_f64 = f64::from(value.to_f32());
-            assert_eq!(
-                Ieee16::from_f64_rne(as_f64),
-                Ieee16::from_f32_rne(value.to_f32()),
-                "bits = {bits:#06x}"
-            );
-        }
-    }
-
-    /// Narrowing an `f64` through `f32` can pick the wrong side of a midpoint.
-    #[test]
-    fn f64_narrowing_does_not_double_round() {
-        let just_past = 1.0 + 2f64.powi(-11) + 2f64.powi(-40);
-        assert_eq!(Ieee16::from_f64_rne(just_past).bits(), 0x3c01);
-        assert_eq!(Ieee16::from_f64_rne(-just_past).bits(), 0xbc01);
-        assert_eq!(Ieee16::from_f32_rne(just_past as f32).bits(), 0x3c00);
-    }
-
-    /// The same trap for a fused multiply-add: the exact product and sum needs
-    /// more than 24 bits.
-    #[test]
-    fn fma_does_not_double_round() {
-        let (x, y, z) = (
-            f64::from(Ieee16::with_bits(0x520b).to_f32()),
-            f64::from(Ieee16::with_bits(0x00e9).to_f32()),
-            f64::from(Ieee16::with_bits(0x2ff6).to_f32()),
-        );
-        // Exact in f64: the product needs 22 bits, the sum under 34. Not
-        // `mul_add`, which is not correct on every target.
-        let exact = x * y + z;
-        assert_eq!(Ieee16::from_f64_rne(exact).bits(), 0x3001);
-        assert_eq!(Ieee16::from_f32_rne(exact as f32).bits(), 0x3000);
     }
 }
