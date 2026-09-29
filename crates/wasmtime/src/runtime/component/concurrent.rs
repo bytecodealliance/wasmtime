@@ -2289,6 +2289,9 @@ impl StoreOpaque {
                     }
                     SuspendReason::Yielding { thread } => {
                         let slot = &mut state.get_mut(thread.thread)?.state;
+                        if matches!(slot, GuestThreadState::Fiber { .. }) {
+                            bail_bug!("yielding thread already owns a fiber");
+                        }
                         *slot = GuestThreadState::Fiber {
                             fiber: resuming.fiber.take().unwrap(),
                             kind: FiberKind::Ready,
@@ -2298,19 +2301,25 @@ impl StoreOpaque {
                     }
                     SuspendReason::ExplicitlySuspending { thread } => {
                         let slot = &mut state.get_mut(thread.thread)?.state;
+                        if matches!(slot, GuestThreadState::Fiber { .. }) {
+                            bail_bug!("suspending thread already owns a fiber");
+                        }
                         *slot = GuestThreadState::Fiber {
                             fiber: resuming.fiber.take().unwrap(),
                             kind: FiberKind::Suspended,
                         };
                     }
                     SuspendReason::Waiting { set, thread } => {
+                        assert!(!state.get_mut(set)?.waiting.contains_key(&thread));
                         let slot = &mut state.get_mut(thread.thread)?.state;
+                        if matches!(slot, GuestThreadState::Fiber { .. }) {
+                            bail_bug!("waiting thread already owns a fiber");
+                        }
                         *slot = GuestThreadState::Fiber {
                             fiber: resuming.fiber.take().unwrap(),
                             kind: FiberKind::Waiting,
                         };
-                        let old = state.get_mut(set)?.waiting.insert(thread, WaitMode::Fiber);
-                        assert!(old.is_none());
+                        state.get_mut(set)?.waiting.insert(thread, WaitMode::Fiber);
                     }
                     SuspendReason::YieldingToSubtask { thread } => {
                         // In this case, the thread has either invoked or sent a
@@ -2323,13 +2332,7 @@ impl StoreOpaque {
                         // item only carries the thread id; the fiber stays in
                         // the thread until the item runs.
                         let instance = state.get_mut(thread.task)?.instance;
-                        let slot = &mut state.get_mut(thread.thread)?.state;
-                        *slot = GuestThreadState::Fiber {
-                            fiber: resuming.fiber.take().unwrap(),
-                            kind: FiberKind::Scheduled,
-                        };
-                        let item = WorkItem::ResumeFiber { instance, thread };
-                        if state.next_switch_item.replace(item).is_some() {
+                        if state.next_switch_item.is_some() {
                             // This should be unreachable per the save/restore
                             // code in `Self::suspend`.
                             bail_bug!(
@@ -2337,6 +2340,15 @@ impl StoreOpaque {
                                  a thread wanted to wait on a subtask"
                             );
                         }
+                        let slot = &mut state.get_mut(thread.thread)?.state;
+                        if matches!(slot, GuestThreadState::Fiber { .. }) {
+                            bail_bug!("yielding thread already owns a fiber");
+                        }
+                        *slot = GuestThreadState::Fiber {
+                            fiber: resuming.fiber.take().unwrap(),
+                            kind: FiberKind::Scheduled,
+                        };
+                        state.next_switch_item = Some(WorkItem::ResumeFiber { instance, thread });
                     }
                 }
             } else {
@@ -2412,7 +2424,7 @@ impl StoreOpaque {
 
         if let Some(item) = old_next_switch_item {
             let state = self.concurrent_state_mut()?;
-            state.next_switch_item = state.delete(item)?;
+            state.restore_next_switch_item(item)?;
         }
 
         Ok(())
@@ -2474,6 +2486,9 @@ impl StoreOpaque {
         // status update, if any, to our caller, so we do that here:
         state.take_next_switch_item()?;
         let thread_data = state.get_mut(guest_thread.thread)?;
+        if matches!(thread_data.state, GuestThreadState::Fiber { .. }) {
+            bail_bug!("cannot clean up a thread that still owns a fiber");
+        }
         let sync_call_set = thread_data.sync_call_set;
         if let Some(guest_id) = thread_data.instance_rep {
             self.instance_state(runtime_instance)
@@ -2811,6 +2826,9 @@ impl Instance {
                     //
                     // Here we also set `GuestTask::wake_on_cancel` which allows
                     // `subtask.cancel` to interrupt the wait.
+                    if state.get_mut(set)?.waiting.contains_key(&guest_thread) {
+                        bail_bug!("set's waiting set already had this thread registered");
+                    }
                     let old = state
                         .get_mut(guest_thread.thread)?
                         .wake_on_cancel
@@ -2818,13 +2836,10 @@ impl Instance {
                     if !old.is_none() {
                         bail_bug!("thread unexpectedly had wake_on_cancel set");
                     }
-                    let old = state
+                    state
                         .get_mut(set)?
                         .waiting
                         .insert(guest_thread, WaitMode::Callback(self));
-                    if !old.is_none() {
-                        bail_bug!("set's waiting set already had this thread registered");
-                    }
                 }
             }
             _ => bail!(Trap::UnsupportedCallbackCode),
@@ -4490,7 +4505,7 @@ impl Instance {
             store.wait_for_event(self.runtime_instance(caller_instance), waitable)?;
 
             let state = store.concurrent_state_mut()?;
-            state.next_switch_item = state.delete(old_next_switch_item)?;
+            state.restore_next_switch_item(old_next_switch_item)?;
 
             // .. fall through to determine what event's in store for us.
         }
@@ -6156,6 +6171,16 @@ impl ConcurrentState {
         if let Some(item) = self.next_switch_item.take() {
             self.set_switch_item(item)?;
         }
+        Ok(())
+    }
+
+    fn restore_next_switch_item(&mut self, saved: TableId<Option<WorkItem>>) -> Result<()> {
+        // The saved item was taken before blocking, so another one appearing in
+        // the meantime would otherwise be overwritten and its switch lost.
+        if self.next_switch_item.is_some() {
+            bail_bug!("next switch item already set when restoring");
+        }
+        self.next_switch_item = self.delete(saved)?;
         Ok(())
     }
 
