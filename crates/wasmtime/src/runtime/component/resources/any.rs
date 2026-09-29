@@ -27,25 +27,47 @@ enum ResourceAnyIndex {
     Borrow(u32),
 }
 
-/// Representation of a resource in the component model, either a guest-defined
-/// or a host-defined resource.
+/// Representation of a dynamically typed guest-defined or host-defined
+/// resource in the component model.
 ///
-/// This type is similar to [`Resource`] except that it can be used to represent
-/// any resource, either host or guest. This type cannot be directly constructed
-/// and is only available if the guest returns it to the host (e.g. a function
-/// returning a guest-defined resource) or by a conversion from [`Resource`] via
-/// [`ResourceAny::try_from_resource`].
-/// This type also does not carry a static type parameter `T` for example and
-/// does not have as much information about its type.
-/// This means that it's possible to get runtime type-errors when
-/// using this type because it cannot statically prevent mismatching resource
-/// types.
+/// # Guest-defined resources
+///
+/// Guest-defined resources enter the host through generated bindings, such as
+/// a function that returns an owned resource. Their methods are called through
+/// the generated type for that resource, for example `GuestLogger` in the
+/// exported resources example in [`bindgen_examples`]. A guest-defined
+/// [`ResourceAny`] cannot be converted to [`Resource`] or [`ResourceDynamic`],
+/// because those types represent host-defined resources.
+///
+/// [`bindgen_examples`]: crate::component::bindgen_examples
+///
+/// # Host-defined resources
+///
+/// Convert a host-defined [`Resource<T>`](Resource) to this type with
+/// [`ResourceAny::try_from_resource`]. Convert it back with
+/// [`ResourceAny::try_into_resource`] or
+/// [`ResourceAny::try_into_resource_dynamic`]. These conversions check the
+/// resource type at runtime.
+///
+/// # Ownership and destruction
 ///
 /// Like [`Resource`] this type represents either an `own` or a `borrow`
-/// resource internally. A [`ResourceAny`] with a host table entry must be
-/// explicitly destroyed with [`ResourceAny::resource_drop`] (or converted to
-/// a typed resource). This updates dynamic state tracking and invokes the
-/// WebAssembly-defined destructor for a resource, if any.
+/// resource internally, and the WIT signature controls which one a value is.
+/// Passing a resource to an `own` parameter transfers ownership to the callee,
+/// while passing it to a `borrow` parameter keeps ownership with the caller.
+/// When a function returns an `own` resource, the caller acquires ownership.
+/// The same applies to each owned resource nested in a record, variant, list,
+/// or other value.
+///
+/// A [`ResourceAny`] with a host table entry that the host still owns must
+/// eventually be passed to an `own` parameter, converted to a typed resource,
+/// or explicitly destroyed with [`ResourceAny::resource_drop`]. Destroying it
+/// updates dynamic state tracking and invokes the WebAssembly-defined
+/// destructor for a resource, if any. `ResourceAny` is `Copy`, but once
+/// ownership has been transferred the handle must not be used again.
+///
+/// `ResourceAny` has no static type parameter, so using one with the wrong
+/// generated function produces a runtime type error.
 ///
 /// Borrows lifted from a component have host table state and must be dropped.
 /// Synthetic borrows converted from [`Resource::new_borrow`] have no host table
@@ -74,15 +96,14 @@ impl ResourceAny {
         }
     }
 
-    /// Attempts to convert an imported [`Resource`] into [`ResourceAny`].
+    /// Attempts to convert a host-defined [`Resource`] into [`ResourceAny`].
     ///
     /// * `resource` is the resource to convert.
     /// * `store` is the store to place the returned resource into.
     ///
-    /// The returned `ResourceAny` will not have a destructor attached to it
-    /// meaning that if `resource_drop` is called then it will not invoked a
-    /// host-defined destructor. This is similar to how `Resource<T>` does not
-    /// have a destructor associated with it.
+    /// The returned `ResourceAny` has no destructor attached to it, so
+    /// `resource_drop` will not invoke a host-defined destructor. This matches
+    /// [`Resource`], which has no associated destructor.
     ///
     /// # Errors
     ///
@@ -100,7 +121,12 @@ impl ResourceAny {
         resource.try_into_resource_any(store)
     }
 
-    /// See [`Resource::try_from_resource_any`]
+    /// Attempts to convert this value into a statically typed, host-defined
+    /// [`Resource`].
+    ///
+    /// This conversion accepts only host-defined resources of type `T`.
+    /// Guest-defined resources must remain [`ResourceAny`] values and be used
+    /// through their generated functions and resource projection.
     ///
     /// # Errors
     ///
@@ -111,7 +137,12 @@ impl ResourceAny {
         Resource::try_from_resource_any(self, store)
     }
 
-    /// See [`ResourceDynamic::try_from_resource_any`]
+    /// Attempts to convert this value into a dynamically typed, host-defined
+    /// [`ResourceDynamic`].
+    ///
+    /// This conversion accepts only host-defined resources. Guest-defined
+    /// resources must remain [`ResourceAny`] values and be used through their
+    /// generated functions and resource projection.
     pub fn try_into_resource_dynamic(self, store: impl AsContextMut) -> Result<ResourceDynamic> {
         ResourceDynamic::try_from_resource_any(self, store)
     }
