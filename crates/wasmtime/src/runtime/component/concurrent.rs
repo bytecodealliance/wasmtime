@@ -672,6 +672,24 @@ enum CallerInfo {
     },
 }
 
+/// A fiber while `resume_fiber` runs it, between leaving its guest thread or
+/// the worker slot and being put back.
+///
+/// This is the only place a fiber is held outside the store's state. If the
+/// fiber is not put back, dropping this disposes of it through the store.
+struct ResumingFiber<'a> {
+    store: &'a mut StoreOpaque,
+    fiber: Option<StoreFiber<'static>>,
+}
+
+impl Drop for ResumingFiber<'_> {
+    fn drop(&mut self) {
+        if let Some(mut fiber) = self.fiber.take() {
+            fiber.dispose(self.store);
+        }
+    }
+}
+
 /// Indicates how a guest task is waiting on a waitable set.
 enum WaitMode {
     /// The guest task is waiting using `task.wait`
@@ -1620,7 +1638,10 @@ impl<T> StoreContextMut<'_, T> {
 
     /// Execute the specified guest call on a worker fiber.
     async fn run_on_worker(self, item: WorkerItem) -> Result<()> {
-        let worker = if let Some(fiber) = self.0.concurrent_state_mut()?.worker.take() {
+        let state = self.0.concurrent_state_mut()?;
+        assert!(state.worker_item.is_none());
+        let existing = state.worker.take();
+        let worker = if let Some(fiber) = existing {
             fiber
         } else {
             // SAFETY: the `make_fiber_unchecked` function is unsafe because the
@@ -1658,10 +1679,9 @@ impl<T> StoreContextMut<'_, T> {
             }
         };
 
-        let worker_item = &mut self.0.concurrent_state_mut()?.worker_item;
-        assert!(worker_item.is_none());
-        *worker_item = Some(item);
-
+        self.0
+            .concurrent_state_mut_already_forced_current_thread()
+            .worker_item = Some(item);
         self.0.resume_fiber(worker).await
     }
 
@@ -2229,95 +2249,101 @@ impl StoreOpaque {
         Ok(())
     }
 
-    /// Resume the specified fiber, giving it exclusive access to the specified
-    /// store.
-    async fn resume_fiber(&mut self, fiber: StoreFiber<'static>) -> Result<()> {
-        let old_thread = self.current_thread()?;
-        log::trace!("resume_fiber: save current thread {old_thread:?}");
+    /// Resume a fiber while retaining the store needed to dispose it if the
+    /// future is cancelled or any handoff fails.
+    fn resume_fiber(
+        &mut self,
+        fiber: StoreFiber<'static>,
+    ) -> impl Future<Output = Result<()>> + '_ {
+        let mut resuming = ResumingFiber {
+            store: self,
+            fiber: Some(fiber),
+        };
+        async move {
+            let old_thread = resuming.store.current_thread()?;
+            log::trace!("resume_fiber: save current thread {old_thread:?}");
 
-        let fiber = fiber::resolve_or_release(self, fiber).await?;
+            let fiber = resuming.fiber.take().unwrap();
+            resuming.fiber = fiber::resolve_or_release(resuming.store, fiber).await?;
 
-        self.set_thread(old_thread)?;
+            resuming.store.set_thread(old_thread)?;
+            let state = resuming.store.concurrent_state_mut()?;
 
-        let state = self.concurrent_state_mut()?;
+            if let Some(ot) = old_thread.guest() {
+                state.set_thread_running(ot.thread)?;
+            }
+            log::trace!("resume_fiber: restore current thread {old_thread:?}");
 
-        if let Some(ot) = old_thread.guest() {
-            state.set_thread_running(ot.thread)?;
-        }
-        log::trace!("resume_fiber: restore current thread {old_thread:?}");
-
-        if let Some(mut fiber) = fiber {
-            log::trace!("resume_fiber: suspend reason {:?}", &state.suspend_reason);
-            // See the `SuspendReason` documentation for what each case means.
-            let reason = match state.suspend_reason.take() {
-                Some(r) => r,
-                None => bail_bug!("suspend reason missing when resuming fiber"),
-            };
-            match reason {
-                SuspendReason::NeedWork => {
-                    if state.worker.is_none() {
-                        state.worker = Some(fiber);
-                    } else {
-                        fiber.dispose(self);
+            if resuming.fiber.is_some() {
+                log::trace!("resume_fiber: suspend reason {:?}", &state.suspend_reason);
+                // See the `SuspendReason` documentation for what each case means.
+                let reason = match state.suspend_reason.take() {
+                    Some(reason) => reason,
+                    None => bail_bug!("suspend reason missing when resuming fiber"),
+                };
+                match reason {
+                    SuspendReason::NeedWork => {
+                        if state.worker.is_none() {
+                            state.worker = resuming.fiber.take();
+                        }
+                    }
+                    SuspendReason::Yielding { thread } => {
+                        let slot = &mut state.get_mut(thread.thread)?.state;
+                        *slot = GuestThreadState::Fiber {
+                            fiber: resuming.fiber.take().unwrap(),
+                            kind: FiberKind::Ready,
+                        };
+                        let instance = state.get_mut(thread.task)?.instance;
+                        state.push_low_priority(WorkItem::ResumeThread { instance, thread });
+                    }
+                    SuspendReason::ExplicitlySuspending { thread } => {
+                        let slot = &mut state.get_mut(thread.thread)?.state;
+                        *slot = GuestThreadState::Fiber {
+                            fiber: resuming.fiber.take().unwrap(),
+                            kind: FiberKind::Suspended,
+                        };
+                    }
+                    SuspendReason::Waiting { set, thread } => {
+                        let slot = &mut state.get_mut(thread.thread)?.state;
+                        *slot = GuestThreadState::Fiber {
+                            fiber: resuming.fiber.take().unwrap(),
+                            kind: FiberKind::Waiting,
+                        };
+                        let old = state.get_mut(set)?.waiting.insert(thread, WaitMode::Fiber);
+                        assert!(old.is_none());
+                    }
+                    SuspendReason::YieldingToSubtask { thread } => {
+                        // In this case, the thread has either invoked or sent a
+                        // cancel request to a subtask, and is now yielding to
+                        // that subtask.  According to the CM spec, that subtask
+                        // may only yield back to the original thread the first
+                        // time it suspends or exits (or a thread that it has
+                        // resumed suspends or exits, etc.), which we ensure by
+                        // setting `ConcurrentState::next_switch_item` here. The
+                        // item only carries the thread id; the fiber stays in
+                        // the thread until the item runs.
+                        let instance = state.get_mut(thread.task)?.instance;
+                        let slot = &mut state.get_mut(thread.thread)?.state;
+                        *slot = GuestThreadState::Fiber {
+                            fiber: resuming.fiber.take().unwrap(),
+                            kind: FiberKind::Scheduled,
+                        };
+                        let item = WorkItem::ResumeFiber { instance, thread };
+                        if state.next_switch_item.replace(item).is_some() {
+                            // This should be unreachable per the save/restore
+                            // code in `Self::suspend`.
+                            bail_bug!(
+                                "`ConcurrentState::next_switch_item` was already `Some(_)` when \
+                                 a thread wanted to wait on a subtask"
+                            );
+                        }
                     }
                 }
-                SuspendReason::Yielding { thread } => {
-                    let slot = &mut state.get_mut(thread.thread)?.state;
-                    *slot = GuestThreadState::Fiber {
-                        fiber,
-                        kind: FiberKind::Ready,
-                    };
-                    let instance = state.get_mut(thread.task)?.instance;
-                    state.push_low_priority(WorkItem::ResumeThread { instance, thread });
-                }
-                SuspendReason::ExplicitlySuspending { thread } => {
-                    let slot = &mut state.get_mut(thread.thread)?.state;
-                    *slot = GuestThreadState::Fiber {
-                        fiber,
-                        kind: FiberKind::Suspended,
-                    };
-                }
-                SuspendReason::Waiting { set, thread } => {
-                    let slot = &mut state.get_mut(thread.thread)?.state;
-                    *slot = GuestThreadState::Fiber {
-                        fiber,
-                        kind: FiberKind::Waiting,
-                    };
-                    let old = state.get_mut(set)?.waiting.insert(thread, WaitMode::Fiber);
-                    assert!(old.is_none());
-                }
-                SuspendReason::YieldingToSubtask { thread } => {
-                    // In this case, the thread has either invoked or sent a
-                    // cancel request to a subtask, and is now yielding to that
-                    // subtask.  According to the CM spec, that subtask may only
-                    // yield back to the original thread the first time it
-                    // suspends or exits (or a thread that it has resumed
-                    // suspends or exits, etc.), which we ensure by setting
-                    // `ConcurrentState::next_switch_item` here. The item only
-                    // carries the thread id; the fiber stays in the thread
-                    // until the item runs.
-                    let instance = state.get_mut(thread.task)?.instance;
-                    let slot = &mut state.get_mut(thread.thread)?.state;
-                    *slot = GuestThreadState::Fiber {
-                        fiber,
-                        kind: FiberKind::Scheduled,
-                    };
-                    let item = WorkItem::ResumeFiber { instance, thread };
-                    if state.next_switch_item.replace(item).is_some() {
-                        // This should be unreachable per the save/restore code
-                        // in `Self::suspend`.
-                        bail_bug!(
-                            "`ConcurrentState::next_switch_item` was already `Some(_)` when \
-                             a thread wanted to wait on a subtask"
-                        );
-                    }
-                }
-            };
-        } else {
-            log::trace!("resume_fiber: fiber has exited");
+            } else {
+                log::trace!("resume_fiber: fiber has exited");
+            }
+            Ok(())
         }
-
-        Ok(())
     }
 
     /// Suspend the current fiber, storing the reason in
