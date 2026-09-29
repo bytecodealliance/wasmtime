@@ -272,7 +272,7 @@ enum WriteState<IO> {
     Closed,
     Error(io::Error),
 }
-const READY_SIZE: usize = 1024 * 1024 * 1024;
+const READY_SIZE: usize = 64 * 1024;
 
 impl<IO> WriteState<IO>
 where
