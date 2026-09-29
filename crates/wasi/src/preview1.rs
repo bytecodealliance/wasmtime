@@ -173,7 +173,7 @@ impl WasiP1Ctx {
 
     /// Assumes the host is going to copy all of `array` in which case a
     /// corresponding amount of fuel is consumed to ensure it's not too large.
-    fn consume_fuel_for_array<T>(&mut self, array: wiggle::GuestPtr<[T]>) -> Result<()> {
+    pub(crate) fn consume_fuel_for_array<T>(&mut self, array: wiggle::GuestPtr<[T]>) -> Result<()> {
         let byte_size = usize::try_from(array.len())?
             .checked_mul(size_of::<T>())
             .ok_or(types::Errno::Overflow)?;

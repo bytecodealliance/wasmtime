@@ -2707,3 +2707,15 @@ fn hostcall_fuel() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn wasi_snapshot0_poll_oneoff_hostcall_fuel() -> Result<()> {
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Shostcall-fuel=1000",
+        "--invoke=run",
+        "tests/all/cli_tests/poll-oneoff.wat",
+    ])?;
+    assert_eq!(stdout, "48\n"); // `errno::nomem`
+    Ok(())
+}
