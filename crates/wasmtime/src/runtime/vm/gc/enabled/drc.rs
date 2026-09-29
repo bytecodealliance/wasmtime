@@ -305,7 +305,12 @@ impl DrcHeap {
             Some(allocs) => allocs,
             None => bail_bug!("allocs missing during tracing"),
         };
-        let mut undo = Undo::new((self, allocs), |(this, allocs)| {
+        let mut undo = Undo::new((self, allocs), |(this, mut allocs)| {
+            // Unwinding out of a collection leaves these populated, so we must
+            // restore the invariant that they are empty between collections.
+            allocs.large_array_dec_ref_stack.clear();
+            allocs.to_dealloc.clear();
+
             debug_assert!(this.tracing_allocs.is_none());
             this.tracing_allocs = Some(allocs);
         });
@@ -342,7 +347,7 @@ impl DrcHeap {
 
                 // Trace: enqueue child GC refs for dec-ref'ing.
                 if let Some(ty) = ty {
-                    match this.trace_infos.trace_info(&ty, trace_state) {
+                    match this.trace_infos.trace_info(&ty, trace_state)? {
                         TraceInfo::Struct { gc_ref_offsets } => {
                             stack.reserve(gc_ref_offsets.len());
                             let data = this.gc_object_data(&gc_ref)?;
@@ -918,9 +923,12 @@ unsafe impl GcHeap for DrcHeap {
 
         debug_assert!(tracing_allocs.is_some());
         if let Some(allocs) = tracing_allocs {
+            // Clear, rather than assert empty: an interrupted collection leaves
+            // entries behind, and this runs while the store is being dropped,
+            // where a panic would abort the process.
             allocs.dec_ref_stack.clear();
-            debug_assert!(allocs.large_array_dec_ref_stack.is_empty());
-            debug_assert!(allocs.to_dealloc.is_empty());
+            allocs.large_array_dec_ref_stack.clear();
+            allocs.to_dealloc.clear();
         }
 
         memory.take().unwrap()

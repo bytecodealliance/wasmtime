@@ -626,7 +626,7 @@ survived collection, since the active space is the same size as the idle space",
                 let Some(ty) = ty else {
                     bail_bug!("out-of-line trace info but no type index");
                 };
-                match trace_infos.trace_info(&ty, trace_state) {
+                match trace_infos.trace_info(&ty, trace_state)? {
                     TraceInfo::Struct { gc_ref_offsets } => {
                         for &offset in gc_ref_offsets {
                             self.scan_field(object_start, offset)?;
