@@ -105,6 +105,7 @@ fn has_memory_fence_semantics(op: Opcode) -> bool {
         | Opcode::AtomicLoad
         | Opcode::AtomicStore
         | Opcode::Fence
+        | Opcode::StackSwitch
         | Opcode::Debugtrap
         | Opcode::SequencePoint => true,
         Opcode::Call | Opcode::CallIndirect | Opcode::TryCall | Opcode::TryCallIndirect => true,
