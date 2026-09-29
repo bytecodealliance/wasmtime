@@ -146,19 +146,6 @@ pub struct WasiP1Ctx {
     hostcall_fuel: usize,
 }
 
-pub(crate) struct WasiP0Ctx(WasiP1Ctx);
-
-impl WasiP0Ctx {
-    pub(crate) fn from_mut(ctx: &mut WasiP1Ctx) -> &mut Self {
-        // SAFETY: `WasiP0Ctx` is a transparent wrapper around `WasiP1Ctx`.
-        unsafe { &mut *(ctx as *mut WasiP1Ctx).cast() }
-    }
-
-    pub(crate) fn as_p1(&mut self) -> &mut WasiP1Ctx {
-        &mut self.0
-    }
-}
-
 impl WasiP1Ctx {
     pub(crate) fn new(wasi: WasiCtx) -> Self {
         Self {
