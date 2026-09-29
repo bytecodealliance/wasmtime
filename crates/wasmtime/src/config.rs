@@ -1432,7 +1432,8 @@ impl Config {
 
     /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
     ///
-    /// This is `true` by default.
+    /// This is `true` by default, except when using [`Strategy::Winch`] where
+    /// it defaults to `false`.
     ///
     /// [proposal]: https://github.com/WebAssembly/exception-handling
     #[cfg(feature = "gc")]
@@ -2603,6 +2604,13 @@ impl Config {
         // supports one particular platform and not others. Things like that.
         features = features & !self.compiler_panicking_wasm_features();
 
+        // Winch can compile GC types (e.g. `externref`) but they're not enabled
+        // by default. Exceptions require a GC heap, so they're disabled too.
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        if self.compiler_config.as_ref().and_then(|c| c.strategy) == Some(Strategy::Winch) {
+            features.remove(WasmFeatures::GC_TYPES | WasmFeatures::EXCEPTIONS);
+        }
+
         // And, finally, process all explicitly enabled/disabled features on
         // behalf of the embedder's frobbing `Config::wasm_*`. These have the
         // highest priority since they were explicitly requested.
@@ -3276,7 +3284,8 @@ impl Config {
     /// be enabled without also having this option enabled.
     ///
     /// This option defaults to whether the crate `gc` feature is enabled or
-    /// not.
+    /// not, except when using [`Strategy::Winch`] where it defaults to
+    /// `false`.
     pub fn gc_support(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::GC_TYPES, enable)
     }

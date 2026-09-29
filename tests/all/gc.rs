@@ -3796,6 +3796,7 @@ fn initial_size_larger_than_reservation() -> Result<()> {
 fn winch_externref_survives_gc_in_frame() -> Result<()> {
     for collector in [Collector::Null, Collector::Copying] {
         let mut config = Config::new();
+        config.gc_support(true);
         config.strategy(Strategy::Winch);
         config.collector(collector);
         let Ok(engine) = Engine::new(&config) else {
@@ -3845,6 +3846,7 @@ fn winch_externref_survives_gc_in_frame() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn winch_drc_write_barrier_drops_old_global_value() -> Result<()> {
     let mut config = Config::new();
+    config.gc_support(true);
     config.strategy(Strategy::Winch);
     config.collector(Collector::DeferredReferenceCounting);
     let Ok(engine) = Engine::new(&config) else {
@@ -3890,6 +3892,7 @@ fn winch_drc_write_barrier_drops_old_global_value() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn winch_drc_read_barrier_keeps_loaded_ref_alive() -> Result<()> {
     let mut config = Config::new();
+    config.gc_support(true);
     config.strategy(Strategy::Winch);
     config.collector(Collector::DeferredReferenceCounting);
     let Ok(engine) = Engine::new(&config) else {
@@ -3945,6 +3948,7 @@ fn winch_drc_read_barrier_keeps_loaded_ref_alive() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn winch_drc_i31_wrapped_as_externref_skips_global_barriers() -> Result<()> {
     let mut config = Config::new();
+    config.gc_support(true);
     config.strategy(Strategy::Winch);
     config.collector(Collector::DeferredReferenceCounting);
     let Ok(engine) = Engine::new(&config) else {
@@ -3992,6 +3996,7 @@ fn winch_drc_i31_wrapped_as_externref_skips_global_barriers() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn winch_drc_read_barrier_forces_gc_at_threshold() -> Result<()> {
     let mut config = Config::new();
+    config.gc_support(true);
     config.strategy(Strategy::Winch);
     config.collector(Collector::DeferredReferenceCounting);
     let Ok(engine) = Engine::new(&config) else {
@@ -4070,6 +4075,7 @@ fn winch_ref_params_and_results_across_gc() -> Result<()> {
         );
         for collector in [Collector::Null, Collector::Copying] {
             let mut config = Config::new();
+            config.gc_support(true);
             config.strategy(Strategy::Winch);
             config.collector(collector);
             let Ok(engine) = Engine::new(&config) else {
