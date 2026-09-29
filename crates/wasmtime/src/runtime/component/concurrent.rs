@@ -5942,15 +5942,40 @@ impl ConcurrentState {
     pub(crate) fn take_fibers_and_futures(
         &mut self,
         fibers: &mut Vec<StoreFiber<'static>>,
-        futures: &mut Vec<FuturesUnordered<HostTaskFuture>>,
+        futures_out: &mut Vec<FuturesUnordered<HostTaskFuture>>,
     ) {
+        // Keep this exhaustive alongside trace_fiber_roots. Suspended guest
+        // fibers live only in table entries, and the reusable fiber in worker.
+        let ConcurrentState {
+            table,
+            worker,
+            switch_item,
+            next_switch_item,
+            high_priority,
+            low_priority,
+            futures,
+            worker_item: _,
+            unforced_current_thread: _,
+            deferred_host_call_context: _,
+            suspend_reason: _,
+            global_error_context_ref_counts: _,
+            interesting_tasks: _,
+            interesting_tasks_empty_waker: _,
+            ready_for_concurrent_call_waker: _,
+            event_loop_running: _,
+        } = self;
+
         let mut items = Vec::new();
-        for entry in self.table.get_mut().iter_mut() {
+        for entry in table.get_mut().iter_mut() {
             if let Some(thread) = entry.downcast_mut::<GuestThread>() {
-                if let GuestThreadState::Fiber { fiber, .. } =
-                    mem::replace(&mut thread.state, GuestThreadState::Completed)
-                {
-                    fibers.push(fiber);
+                match mem::replace(&mut thread.state, GuestThreadState::Completed) {
+                    GuestThreadState::Fiber { fiber, .. } => {
+                        fibers.push(fiber);
+                    }
+                    GuestThreadState::NotStartedImplicit
+                    | GuestThreadState::NotStartedExplicit(_)
+                    | GuestThreadState::Running
+                    | GuestThreadState::Completed => {}
                 }
             } else if let Some(item) = entry.downcast_mut::<Option<WorkItem>>() {
                 if let Some(item) = item.take() {
@@ -5959,13 +5984,13 @@ impl ConcurrentState {
             }
         }
 
-        if let Some(fiber) = self.worker.take() {
+        if let Some(fiber) = worker.take() {
             fibers.push(fiber);
         }
 
         let mut handle_item = |item| match item {
             WorkItem::PushFuture(future) => {
-                self.futures
+                futures
                     .get_mut()
                     .as_mut()
                     .unwrap()
@@ -5980,21 +6005,21 @@ impl ConcurrentState {
         for item in items {
             handle_item(item);
         }
-        if let Some(item) = self.switch_item.take() {
+        if let Some(item) = switch_item.take() {
             handle_item(item);
         }
-        if let Some(item) = self.next_switch_item.take() {
+        if let Some(item) = next_switch_item.take() {
             handle_item(item);
         }
-        for item in mem::take(&mut self.high_priority) {
+        for item in mem::take(high_priority) {
             handle_item(item);
         }
-        for item in mem::take(&mut self.low_priority) {
+        for item in mem::take(low_priority) {
             handle_item(item);
         }
 
-        if let Some(them) = self.futures.get_mut().take() {
-            futures.push(them);
+        if let Some(them) = futures.get_mut().take() {
+            futures_out.push(them);
         }
     }
 
@@ -6035,8 +6060,14 @@ impl ConcurrentState {
 
         for entry in table.get_mut().iter_mut() {
             if let Some(thread) = entry.downcast_mut::<GuestThread>() {
-                if let GuestThreadState::Fiber { fiber, .. } = &mut thread.state {
-                    fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+                match &mut thread.state {
+                    GuestThreadState::Fiber { fiber, .. } => {
+                        fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+                    }
+                    GuestThreadState::NotStartedImplicit
+                    | GuestThreadState::NotStartedExplicit(_)
+                    | GuestThreadState::Running
+                    | GuestThreadState::Completed => {}
                 }
             }
         }
