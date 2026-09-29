@@ -277,6 +277,15 @@ fn shared_type_index_to_slab_id(index: VMSharedTypeIndex) -> SlabId {
     SlabId::from_raw(index.bits())
 }
 
+/// Like `shared_type_index_to_slab_id`, but for untrusted indices.
+#[inline]
+fn try_shared_type_index_to_slab_id(index: VMSharedTypeIndex) -> Option<SlabId> {
+    if index.is_reserved_value() {
+        return None;
+    }
+    SlabId::try_from_raw(index.bits())
+}
+
 #[inline]
 fn slab_id_to_shared_type_index(id: SlabId) -> VMSharedTypeIndex {
     let index = VMSharedTypeIndex::new(id.into_raw());
@@ -415,6 +424,35 @@ impl RegisteredType {
         };
 
         Ok(RegisteredType::from_parts(
+            engine.clone(),
+            entry,
+            index,
+            ty,
+            layout,
+        ))
+    }
+
+    /// Create an owning handle to the given index's associated type, if that
+    /// index names a registered type.
+    ///
+    /// Unlike `root`, this does not assume `index` is valid, and so suits
+    /// indices from an untrusted source, such as the GC heap.
+    pub fn try_root(engine: &Engine, index: VMSharedTypeIndex) -> Option<RegisteredType> {
+        let (entry, ty, layout) = {
+            let id = try_shared_type_index_to_slab_id(index)?;
+            let inner = engine.signatures().0.read();
+
+            let ty = inner.types.get(id)?.clone()?;
+            let entry = inner.type_to_rec_group.get(index)?.clone()?;
+            let layout = inner.type_to_gc_layout.get(index).and_then(|l| l.clone());
+
+            // NB: as in `root`, incref while the lock is held.
+            entry.incref("RegisteredType::try_root");
+
+            (entry, ty, layout)
+        };
+
+        Some(RegisteredType::from_parts(
             engine.clone(),
             entry,
             index,

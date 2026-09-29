@@ -2138,6 +2138,20 @@ impl StructType {
         Self::from_registered_type(ty)
     }
 
+    /// Like `from_shared_type_index`, but for untrusted indices, such as
+    /// indices out of the GC heap.
+    #[cfg(feature = "gc")]
+    pub(crate) fn try_from_shared_type_index(
+        engine: &Engine,
+        index: VMSharedTypeIndex,
+    ) -> Option<StructType> {
+        let ty = RegisteredType::try_root(engine, index)?;
+        if !ty.is_struct() {
+            return None;
+        }
+        Some(Self::from_registered_type(ty))
+    }
+
     pub(crate) fn from_registered_type(registered_type: RegisteredType) -> Self {
         debug_assert!(registered_type.is_struct());
         Self { registered_type }
@@ -2377,6 +2391,20 @@ impl ArrayType {
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ArrayType {
         let ty = RegisteredType::root(engine, index);
         Self::from_registered_type(ty)
+    }
+
+    /// Like `from_shared_type_index`, but for untrusted indices, such as
+    /// indices out of the GC heap.
+    #[cfg(feature = "gc")]
+    pub(crate) fn try_from_shared_type_index(
+        engine: &Engine,
+        index: VMSharedTypeIndex,
+    ) -> Option<ArrayType> {
+        let ty = RegisteredType::try_root(engine, index)?;
+        if !ty.is_array() {
+            return None;
+        }
+        Some(Self::from_registered_type(ty))
     }
 
     pub(crate) fn from_registered_type(registered_type: RegisteredType) -> Self {
@@ -2752,6 +2780,20 @@ impl FuncType {
         Self::from_registered_type(ty)
     }
 
+    /// Like `from_shared_type_index`, but for untrusted indices, such as
+    /// indices out of the GC heap.
+    #[cfg(feature = "gc")]
+    pub(crate) fn try_from_shared_type_index(
+        engine: &Engine,
+        index: VMSharedTypeIndex,
+    ) -> Option<FuncType> {
+        let ty = RegisteredType::try_root(engine, index)?;
+        if !ty.is_func() {
+            return None;
+        }
+        Some(Self::from_registered_type(ty))
+    }
+
     pub(crate) fn from_registered_type(registered_type: RegisteredType) -> Self {
         debug_assert!(registered_type.is_func());
         Self { registered_type }
@@ -3003,6 +3045,27 @@ impl ExnType {
             func_ty,
             registered_type: ty,
         }
+    }
+
+    /// Like `from_shared_type_index`, but for untrusted indices, such as
+    /// indices out of the GC heap.
+    #[cfg(feature = "gc")]
+    pub(crate) fn try_from_shared_type_index(
+        engine: &Engine,
+        index: VMSharedTypeIndex,
+    ) -> Option<ExnType> {
+        let ty = RegisteredType::try_root(engine, index)?;
+        if !ty.is_exn() {
+            return None;
+        }
+        let func_ty = FuncType::try_from_shared_type_index(
+            engine,
+            ty.unwrap_exn().func_ty.as_engine_type_index()?,
+        )?;
+        Some(Self {
+            func_ty,
+            registered_type: ty,
+        })
     }
 }
 

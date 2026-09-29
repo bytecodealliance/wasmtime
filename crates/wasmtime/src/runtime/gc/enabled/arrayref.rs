@@ -8,12 +8,12 @@ use crate::vm::{self, VMArrayRef, VMGcHeader};
 use crate::{AnyRef, FieldType};
 use crate::{
     ArrayType, AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
-    OwnedRooted, RefType, Rooted, Val, ValRaw, ValType, WasmTy,
+    OwnedRooted, RefType, Rooted, Val, ValRaw, ValType, WasmTy, bail_bug,
     prelude::*,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
 };
 use core::mem::{self, MaybeUninit};
-use wasmtime_environ::{GcArrayLayout, GcLayout, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcArrayLayout, VMGcKind, VMSharedTypeIndex};
 
 /// An allocator for a particular Wasm GC array type.
 ///
@@ -769,7 +769,10 @@ impl ArrayRef {
     pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<ArrayType> {
         assert!(self.comes_from_same_store(store));
         let index = self.type_index(store)?;
-        Ok(ArrayType::from_shared_type_index(store.engine(), index))
+        match ArrayType::try_from_shared_type_index(store.engine(), index) {
+            Some(ty) => Ok(ty),
+            None => bail_bug!("invalid array type index"),
+        }
     }
 
     /// Does this `arrayref` match the given type?
@@ -926,15 +929,7 @@ impl ArrayRef {
     pub(crate) fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcArrayLayout> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
-        let layout = store
-            .engine()
-            .signatures()
-            .layout(type_index)
-            .expect("array types should have GC layouts");
-        match layout {
-            GcLayout::Array(a) => Ok(a),
-            GcLayout::Struct(_) => unreachable!(),
-        }
+        super::gc_array_layout(store.engine(), type_index)
     }
 
     fn field_ty(&self, store: &StoreOpaque) -> Result<FieldType> {
@@ -1037,7 +1032,10 @@ impl ArrayRef {
         let gc_ref = self.inner.try_gc_ref(store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().is_some_and(|k| k.matches(VMGcKind::ArrayRef)));
-        Ok(header.ty().expect("arrayrefs should have concrete types"))
+        match header.ty() {
+            Some(ty) => Ok(ty),
+            None => bail_bug!("arrayrefs should have concrete types"),
+        }
     }
 
     /// Create a new `Rooted<ArrayRef>` from the given GC reference.

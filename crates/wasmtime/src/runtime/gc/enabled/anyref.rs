@@ -372,16 +372,17 @@ impl AnyRef {
         };
 
         if kind.matches(VMGcKind::StructRef) {
-            return Ok(HeapType::ConcreteStruct(
-                StructType::from_shared_type_index(store.engine(), ty),
-            ));
+            return match StructType::try_from_shared_type_index(store.engine(), ty) {
+                Some(ty) => Ok(HeapType::ConcreteStruct(ty)),
+                None => bail_bug!("invalid struct type index"),
+            };
         }
 
         if kind.matches(VMGcKind::ArrayRef) {
-            return Ok(HeapType::ConcreteArray(ArrayType::from_shared_type_index(
-                store.engine(),
-                ty,
-            )));
+            return match ArrayType::try_from_shared_type_index(store.engine(), ty) {
+                Some(ty) => Ok(HeapType::ConcreteArray(ty)),
+                None => bail_bug!("invalid array type index"),
+            };
         }
 
         bail_bug!("no other kinds of `anyref`s")

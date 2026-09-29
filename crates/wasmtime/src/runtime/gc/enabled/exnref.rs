@@ -14,7 +14,7 @@ use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, bail_bu
 use alloc::sync::Arc;
 use core::mem;
 use core::mem::MaybeUninit;
-use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// An allocator for a particular Wasm GC exception type.
 ///
@@ -375,7 +375,10 @@ impl ExnRef {
         let gc_ref = self.inner.try_gc_ref(store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().is_some_and(|k| k.matches(VMGcKind::ExnRef)));
-        Ok(header.ty().expect("exnrefs should have concrete types"))
+        match header.ty() {
+            Some(ty) => Ok(ty),
+            None => bail_bug!("exnrefs should have concrete types"),
+        }
     }
 
     /// Create a new `Rooted<ExnRef>` from the given GC reference.
@@ -440,7 +443,10 @@ impl ExnRef {
     pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<ExnType> {
         assert!(self.comes_from_same_store(store));
         let index = self.type_index(store)?;
-        Ok(ExnType::from_shared_type_index(store.engine(), index))
+        match ExnType::try_from_shared_type_index(store.engine(), index) {
+            Some(ty) => Ok(ty),
+            None => bail_bug!("invalid exception type index"),
+        }
     }
 
     /// Does this `exnref` match the given type?
@@ -502,8 +508,14 @@ impl ExnRef {
         let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().is_some_and(|k| k.matches(VMGcKind::ExnRef)));
 
-        let index = header.ty().expect("exnrefs should have concrete types");
-        let ty = ExnType::from_shared_type_index(store.engine(), index);
+        let index = match header.ty() {
+            Some(index) => index,
+            None => bail_bug!("exnrefs should have concrete types"),
+        };
+        let ty = match ExnType::try_from_shared_type_index(store.engine(), index) {
+            Some(ty) => ty,
+            None => bail_bug!("invalid exception type index"),
+        };
         let len = ty.fields().len();
 
         return Ok(Fields {
@@ -569,15 +581,7 @@ impl ExnRef {
     fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<Arc<GcStructLayout>> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
-        let layout = store
-            .engine()
-            .signatures()
-            .layout(type_index)
-            .expect("exn types should have GC layouts");
-        match layout {
-            GcLayout::Struct(s) => Ok(s),
-            GcLayout::Array(_) => unreachable!(),
-        }
+        super::gc_struct_layout(store.engine(), type_index)
     }
 
     fn field_ty(&self, store: &StoreOpaque, field: usize) -> Result<FieldType> {
