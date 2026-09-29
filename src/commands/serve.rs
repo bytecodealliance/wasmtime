@@ -29,12 +29,12 @@ use wasmtime::{
 use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::WasiHttpCtx;
 use wasmtime_wasi_http::handler::{
     HandlerState, Instance, Prepared, Proxy, ProxyHandler, ProxyPre, ShouldAccept,
     WorkerExpiration, WorkerState, WorkerStatus,
 };
 use wasmtime_wasi_http::io::TokioIo;
+use wasmtime_wasi_http::{ErrorResponse, WasiHttpCtx};
 
 #[cfg(feature = "debug")]
 use crate::commands::run::RunCommand;
@@ -1269,57 +1269,36 @@ async fn handle_client(
                     None => None,
                 };
                 let debuggee_store = debuggee_store.as_mut().map(|s| &mut ***s);
-                // RFC 9112 section 3.2:
-                //
-                //   A server MUST respond with a 400 (Bad Request) status code
-                //   to any HTTP/1.1 request message that lacks a Host header
-                //   field ...
-                //
-                // This only applies to `wasi:http/proxy` components: turning
-                // such a request into a guest request fails there because the
-                // request carries neither a URI authority nor a `Host` header
-                // (see `HostIncomingRequest::new_incoming_request`), and that
-                // failure reaches the client as a 500.  A `wasi:http/service`
-                // component handles the same request without error -- the guest
-                // observes `authority() == none` -- so it is deliberately left
-                // untouched here.
-                if matches!(&handler.state().instance, ProxyPre::P2(_))
-                    && req.version() == http::Version::HTTP_11
-                    && req.uri().authority().is_none()
-                    && !req.headers().contains_key(http::header::HOST)
-                {
-                    return Ok(Response::builder()
-                        .status(StatusCode::BAD_REQUEST)
-                        .header("Content-Type", "text/html; charset=UTF-8")
-                        .body(
-                            Full::new(bytes::Bytes::from_static(
-                                b"<!doctype html><html><head><title>400 Bad Request</title></head><body><center><h1>400 Bad Request</h1><hr>wasmtime</center></body></html>",
-                            ))
-                            .map_err(|_| unreachable!())
-                            .boxed_unsync(),
-                        )
-                        .unwrap());
-                }
                 match handle_request(handler, debuggee_store, req).await {
                     Ok(r) => Ok::<_, Infallible>(r),
                     Err(e) => {
                         eprintln!("error: {e:?}");
-                        let error_html = "\
+                        // Some errors know which status code the client should
+                        // see; everything else is a failure on our side.
+                        let status = e
+                            .downcast_ref::<ErrorResponse>()
+                            .map(|e| e.status())
+                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                        // `StatusCode`'s own `Display` renders as the numeric
+                        // code followed by its canonical reason.
+                        let error_html = format!(
+                            "\
 <!doctype html>
 <html>
 <head>
-    <title>500 Internal Server Error</title>
+    <title>{status}</title>
 </head>
 <body>
     <center>
-        <h1>500 Internal Server Error</h1>
+        <h1>{status}</h1>
         <hr>
         wasmtime
     </center>
 </body>
-</html>";
+</html>"
+                        );
                         Ok(Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .status(status)
                             .header("Content-Type", "text/html; charset=UTF-8")
                             .body(
                                 Full::new(bytes::Bytes::from(error_html))

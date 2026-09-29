@@ -2042,18 +2042,32 @@ start a print 1234
 
         // hyper's client always synthesizes a `Host` header for HTTP/1.1
         // requests, so write this request out by hand in order to leave both
-        // the URI authority and the `Host` header off.  RFC 9112 section 3.2
-        // requires a 400 here, as opposed to the 500 the handler failure would
-        // otherwise produce.
+        // the URI authority and the `Host` header off.  There is nothing to
+        // serve such a request with: it is rejected while it is being turned
+        // into a guest request, before the guest runs at all, so the status
+        // code comes from the error rather than from a guest response.
         let mut stream = TcpStream::connect(server.first_addr()).await?;
         stream.write_all(b"GET / HTTP/1.1\r\n\r\n").await?;
-        let mut buf = [0; 256];
-        let n = tokio::time::timeout(Duration::from_secs(10), stream.read(&mut buf))
-            .await
-            .expect("timed out waiting for a response")?;
-        let response = std::str::from_utf8(&buf[..n])?;
+        // The connection is kept alive, so read until the body has arrived
+        // rather than until EOF.
+        let mut response = Vec::new();
+        let mut buf = [0; 512];
+        while !response.ends_with(b"</html>") && response.len() < 8192 {
+            let n = tokio::time::timeout(Duration::from_secs(10), stream.read(&mut buf))
+                .await
+                .expect("timed out waiting for a response")?;
+            if n == 0 {
+                break;
+            }
+            response.extend_from_slice(&buf[..n]);
+        }
+        let response = String::from_utf8(response)?;
         assert!(
             response.starts_with("HTTP/1.1 400"),
+            "unexpected response: {response:?}",
+        );
+        assert!(
+            response.contains("<h1>400 Bad Request</h1>"),
             "unexpected response: {response:?}",
         );
         drop(stream);

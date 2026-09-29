@@ -861,6 +861,11 @@ where
     /// - [`ExpirationError`] if the request expired before it produced a
     /// response.  See [`WorkerState::on_request_start`] for details.
     ///
+    /// - The original error, including anything it carries such as an
+    /// [`ErrorResponse`](crate::ErrorResponse), if the request was rejected
+    /// while being converted into a guest request, e.g. a `wasi:http/proxy`
+    /// request with neither a URI authority nor a `Host` header.
+    ///
     /// - [`TrapOrPanicError`] if the worker responsible for handling the
     /// request trapped or panicked before it produced a response.  This may be
     /// used when a trap occurs but cannot be traced to a specific request,
@@ -1019,8 +1024,28 @@ impl<'a, T: Send> Prepared<'a, T> {
                 // producing a response.
                 let tx = Arc::new(Mutex::new(Some(tx)));
 
-                let request =
-                    view(store.data_mut()).new_incoming_request(p2_types::Scheme::Http, request)?;
+                let request = match view(store.data_mut())
+                    .new_incoming_request(p2_types::Scheme::Http, request)
+                {
+                    Ok(request) => request,
+                    Err(e) => {
+                        // The request never reached the guest, so there is no
+                        // `response-outparam` to report the failure with, and
+                        // `tx` would otherwise be dropped along with the error.
+                        // Send it back through `tx` so that `handle` returns the
+                        // original error -- and anything it carries with it,
+                        // such as an `ErrorResponse` status.
+                        if let Some(tx) = tx.lock().unwrap().take() {
+                            _ = tx.send(Err(e));
+                        }
+                        // The failure is on its way to the caller already; the
+                        // error returned here only ends up in the worker's own
+                        // log, so don't report it as a trap or a panic.
+                        return Err(wasmtime::Error::msg(
+                            "request was rejected before it could be turned into a guest request",
+                        ));
+                    }
+                };
 
                 let out = view(store.data_mut()).new_response_outparam_from_callback({
                     let tx = tx.clone();

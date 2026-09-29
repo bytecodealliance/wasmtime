@@ -5,12 +5,12 @@ use crate::p2::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
-use crate::{Error, FieldMap, WasiHttpCtxView};
+use crate::{Error, ErrorResponse, FieldMap, WasiHttpCtxView};
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Body;
+use wasmtime::Result;
 use wasmtime::component::Resource;
-use wasmtime::{Result, bail};
 use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
 
@@ -89,7 +89,12 @@ impl WasiHttpCtxView<'_> {
             Some(authority) => authority.to_string(),
             None => match parts.headers.get(http::header::HOST) {
                 Some(host) => host.to_str()?.to_string(),
-                None => bail!("invalid HTTP request missing authority in URI and host header"),
+                None => {
+                    return Err(wasmtime::Error::msg(
+                        "invalid HTTP request missing authority in URI and host header",
+                    )
+                    .context(ErrorResponse::new(http::StatusCode::BAD_REQUEST)));
+                }
             },
         };
 

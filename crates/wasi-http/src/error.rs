@@ -265,3 +265,38 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+/// A response that should be returned to the client when a request cannot be
+/// turned into a guest request, carried on the error so that the status code
+/// survives the trip back up to the embedder.
+///
+/// Some requests are rejected before a guest gets to run, so there is no guest
+/// response to describe the problem with. Embedders such as `wasmtime serve`
+/// otherwise have nothing to go on beyond the generic failure they use for
+/// every other error. The fields are private so that more information can be
+/// carried here in the future without breaking the API.
+#[derive(Debug)]
+pub struct ErrorResponse {
+    status: http::StatusCode,
+}
+
+impl ErrorResponse {
+    /// Create a new [`ErrorResponse`] that describes a response with the given
+    /// status code.
+    pub fn new(status: http::StatusCode) -> Self {
+        Self { status }
+    }
+
+    /// The status code of the response that should be returned.
+    pub fn status(&self) -> http::StatusCode {
+        self.status
+    }
+}
+
+impl fmt::Display for ErrorResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "error response: {}", self.status)
+    }
+}
+
+impl std::error::Error for ErrorResponse {}
