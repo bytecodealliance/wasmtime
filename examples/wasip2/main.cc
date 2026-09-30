@@ -76,7 +76,7 @@ int main() {
   // Run it. The `run` function takes no arguments and returns a single
   // `result<(), ()>` value indicating whether the program succeeded.
   auto results = std::array<component::Val, 1>{false};
-  func.call(context, Span<const component::Val>(nullptr, 0), results).unwrap();
+  func.call(context, {}, results).unwrap();
   if (!results[0].get_result().is_ok()) {
     std::cerr << "error: program returned an error\n";
     return 1;
