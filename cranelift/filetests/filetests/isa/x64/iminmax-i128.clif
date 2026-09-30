@@ -19,19 +19,18 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   uninit  %rax
-;   xorq %rax, %rax
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
-;   movq %rax, %rdi
-;   subq $0x0, %rdi
-;   movq %rdx, %r9
-;   sbbq $0x0, %r9
-;   cmpq %rax, %rdi
-;   movq %r9, %r8
+;   movq %rdx, %rsi
+;   subq $0x0, %rsi
+;   movq %rdx, %rdi
+;   sbbq $0x0, %rdi
+;   cmpq %rdx, %rsi
+;   movq %rdi, %r8
 ;   sbbq %rdx, %r8
-;   cmovbq %rdi, %rax
-;   cmovbq %r9, %rdx
+;   movq %rdx, %rax
+;   cmovbq %rsi, %rax
+;   cmovbq %rdi, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -41,17 +40,17 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   xorq %rax, %rax
 ;   xorq %rdx, %rdx
-;   movq %rax, %rdi
-;   subq $0, %rdi
-;   movq %rdx, %r9
-;   sbbq $0, %r9
-;   cmpq %rax, %rdi
-;   movq %r9, %r8
+;   movq %rdx, %rsi
+;   subq $0, %rsi
+;   movq %rdx, %rdi
+;   sbbq $0, %rdi
+;   cmpq %rdx, %rsi
+;   movq %rdi, %r8
 ;   sbbq %rdx, %r8
-;   cmovbq %rdi, %rax
-;   cmovbq %r9, %rdx
+;   movq %rdx, %rax
+;   cmovbq %rsi, %rax
+;   cmovbq %rdi, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

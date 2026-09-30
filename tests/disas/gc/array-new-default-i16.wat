@@ -36,10 +36,9 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @001f                               v4 = uextend.i64 v2
-;;                                     v91 = iconst.i64 1
-;;                                     v92 = ishl v4, v91  ; v91 = 1
+;;                                     v90 = iadd v4, v4
 ;; @001f                               v7 = iconst.i64 32
-;; @001f                               v8 = ushr v92, v7  ; v7 = 32
+;; @001f                               v8 = ushr v90, v7  ; v7 = 32
 ;; @001f                               trapnz v8, user18
 ;; @001f                               v3 = iconst.i32 20
 ;;                                     v96 = iadd v2, v2
@@ -108,12 +107,12 @@
 ;; @001f                               v76 = load.i64 notrap aligned region12 v145+40
 ;; @001f                               v64 = iconst.i64 20
 ;; @001f                               v65 = iadd v49, v64  ; v64 = 20
-;; @001f                               v78 = uadd_overflow_trap v65, v92, user2
+;; @001f                               v78 = uadd_overflow_trap v65, v90, user2
 ;; @001f                               v77 = iadd v146, v76
 ;; @001f                               v79 = icmp ugt v78, v77
 ;; @001f                               trapnz v79, user2
 ;; @001f                               v44 = iconst.i32 0
-;; @001f                               call fn1(v0, v65, v44, v92), stack_map=[i32 @ ss0+0]  ; v44 = 0
+;; @001f                               call fn1(v0, v65, v44, v90), stack_map=[i32 @ ss0+0]  ; v44 = 0
 ;; @0022                               jump block1
 ;;
 ;;                                 block1:

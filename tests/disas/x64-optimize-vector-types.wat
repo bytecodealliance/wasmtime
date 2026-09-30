@@ -201,10 +201,12 @@
 ;; wasm[0]::function[8]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       por     %xmm0, %xmm1
 ;;       pcmpeqd %xmm7, %xmm7
+;;       movdqa  %xmm1, %xmm2
+;;       pxor    %xmm7, %xmm2
+;;       pandn   %xmm0, %xmm1
 ;;       movdqa  %xmm1, %xmm0
-;;       pcmpeqb %xmm7, %xmm0
+;;       pcmpeqb %xmm2, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
