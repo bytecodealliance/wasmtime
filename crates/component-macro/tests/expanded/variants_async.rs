@@ -217,15 +217,18 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(record)]
             #[derive(Clone, Copy)]
-            pub struct Empty {}
+            pub struct Empty {
+                #[component(name = "a")]
+                pub a: u32,
+            }
             impl core::fmt::Debug for Empty {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("Empty").finish()
+                    f.debug_struct("Empty").field("a", &self.a).finish()
                 }
             }
             const _: () = {
-                assert!(0 == < Empty as wasmtime::component::ComponentType >::SIZE32);
-                assert!(1 == < Empty as wasmtime::component::ComponentType >::ALIGN32);
+                assert!(4 == < Empty as wasmtime::component::ComponentType >::SIZE32);
+                assert!(4 == < Empty as wasmtime::component::ComponentType >::ALIGN32);
             };
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
@@ -493,7 +496,7 @@ pub mod foo {
                 fn option_arg(
                     &mut self,
                     a: Option<bool>,
-                    b: Option<()>,
+                    b: Option<(u32,)>,
                     c: Option<u32>,
                     d: Option<E1>,
                     e: Option<f32>,
@@ -504,7 +507,7 @@ pub mod foo {
                 ) -> impl ::core::future::Future<
                     Output = (
                         Option<bool>,
-                        Option<()>,
+                        Option<(u32,)>,
                         Option<u32>,
                         Option<E1>,
                         Option<f32>,
@@ -527,7 +530,7 @@ pub mod foo {
                     a: Result<(), ()>,
                     b: Result<(), E1>,
                     c: Result<E1, ()>,
-                    d: Result<(), ()>,
+                    d: Result<(u32,), (u32,)>,
                     e: Result<u32, V1>,
                     f: Result<
                         wasmtime::component::__internal::String,
@@ -541,7 +544,7 @@ pub mod foo {
                         Result<(), ()>,
                         Result<(), E1>,
                         Result<E1, ()>,
-                        Result<(), ()>,
+                        Result<(u32,), (u32,)>,
                         Result<u32, V1>,
                         Result<
                             wasmtime::component::__internal::String,
@@ -619,7 +622,7 @@ pub mod foo {
                 fn option_arg(
                     &mut self,
                     a: Option<bool>,
-                    b: Option<()>,
+                    b: Option<(u32,)>,
                     c: Option<u32>,
                     d: Option<E1>,
                     e: Option<f32>,
@@ -632,7 +635,7 @@ pub mod foo {
                 ) -> impl ::core::future::Future<
                     Output = (
                         Option<bool>,
-                        Option<()>,
+                        Option<(u32,)>,
                         Option<u32>,
                         Option<E1>,
                         Option<f32>,
@@ -659,7 +662,7 @@ pub mod foo {
                     a: Result<(), ()>,
                     b: Result<(), E1>,
                     c: Result<E1, ()>,
-                    d: Result<(), ()>,
+                    d: Result<(u32,), (u32,)>,
                     e: Result<u32, V1>,
                     f: Result<
                         wasmtime::component::__internal::String,
@@ -675,7 +678,7 @@ pub mod foo {
                         Result<(), ()>,
                         Result<(), E1>,
                         Result<E1, ()>,
-                        Result<(), ()>,
+                        Result<(u32,), (u32,)>,
                         Result<u32, V1>,
                         Result<
                             wasmtime::component::__internal::String,
@@ -821,7 +824,7 @@ pub mod foo {
                             arg5,
                         ): (
                             Option<bool>,
-                            Option<()>,
+                            Option<(u32,)>,
                             Option<u32>,
                             Option<E1>,
                             Option<f32>,
@@ -890,7 +893,7 @@ pub mod foo {
                             Result<(), ()>,
                             Result<(), E1>,
                             Result<E1, ()>,
-                            Result<(), ()>,
+                            Result<(u32,), (u32,)>,
                             Result<u32, V1>,
                             Result<
                                 wasmtime::component::__internal::String,
@@ -1070,21 +1073,24 @@ pub mod exports {
                 #[derive(wasmtime::component::Lower)]
                 #[component(record)]
                 #[derive(Clone, Copy)]
-                pub struct Empty {}
+                pub struct Empty {
+                    #[component(name = "a")]
+                    pub a: u32,
+                }
                 impl core::fmt::Debug for Empty {
                     fn fmt(
                         &self,
                         f: &mut core::fmt::Formatter<'_>,
                     ) -> core::fmt::Result {
-                        f.debug_struct("Empty").finish()
+                        f.debug_struct("Empty").field("a", &self.a).finish()
                     }
                 }
                 const _: () = {
                     assert!(
-                        0 == < Empty as wasmtime::component::ComponentType >::SIZE32
+                        4 == < Empty as wasmtime::component::ComponentType >::SIZE32
                     );
                     assert!(
-                        1 == < Empty as wasmtime::component::ComponentType >::ALIGN32
+                        4 == < Empty as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
                 #[derive(wasmtime::component::ComponentType)]
@@ -1539,7 +1545,7 @@ pub mod exports {
                             .get_typed_func::<
                                 (
                                     Option<bool>,
-                                    Option<()>,
+                                    Option<(u32,)>,
                                     Option<u32>,
                                     Option<E1>,
                                     Option<f32>,
@@ -1554,7 +1560,7 @@ pub mod exports {
                                 (
                                     (
                                         Option<bool>,
-                                        Option<()>,
+                                        Option<(u32,)>,
                                         Option<u32>,
                                         Option<E1>,
                                         Option<f32>,
@@ -1575,7 +1581,7 @@ pub mod exports {
                                     Result<(), ()>,
                                     Result<(), E1>,
                                     Result<E1, ()>,
-                                    Result<(), ()>,
+                                    Result<(u32,), (u32,)>,
                                     Result<u32, &V1>,
                                     Result<&str, &[u8]>,
                                 ),
@@ -1590,7 +1596,7 @@ pub mod exports {
                                         Result<(), ()>,
                                         Result<(), E1>,
                                         Result<E1, ()>,
-                                        Result<(), ()>,
+                                        Result<(u32,), (u32,)>,
                                         Result<u32, V1>,
                                         Result<
                                             wasmtime::component::__internal::String,
@@ -1825,7 +1831,7 @@ pub mod exports {
                     ) -> wasmtime::component::TypedFunc<
                         (
                             Option<bool>,
-                            Option<()>,
+                            Option<(u32,)>,
                             Option<u32>,
                             Option<E1>,
                             Option<f32>,
@@ -1837,7 +1843,7 @@ pub mod exports {
                             wasmtime::component::TypedFunc::<
                                 (
                                     Option<bool>,
-                                    Option<()>,
+                                    Option<(u32,)>,
                                     Option<u32>,
                                     Option<E1>,
                                     Option<f32>,
@@ -1851,7 +1857,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: Option<bool>,
-                        arg1: Option<()>,
+                        arg1: Option<(u32,)>,
                         arg2: Option<u32>,
                         arg3: Option<E1>,
                         arg4: Option<f32>,
@@ -1876,7 +1882,7 @@ pub mod exports {
                         (
                             (
                                 Option<bool>,
-                                Option<()>,
+                                Option<(u32,)>,
                                 Option<u32>,
                                 Option<E1>,
                                 Option<f32>,
@@ -1890,7 +1896,7 @@ pub mod exports {
                                 (
                                     (
                                         Option<bool>,
-                                        Option<()>,
+                                        Option<(u32,)>,
                                         Option<u32>,
                                         Option<E1>,
                                         Option<f32>,
@@ -1906,7 +1912,7 @@ pub mod exports {
                     ) -> wasmtime::Result<
                         (
                             Option<bool>,
-                            Option<()>,
+                            Option<(u32,)>,
                             Option<u32>,
                             Option<E1>,
                             Option<f32>,
@@ -1966,7 +1972,7 @@ pub mod exports {
                             Result<(), ()>,
                             Result<(), E1>,
                             Result<E1, ()>,
-                            Result<(), ()>,
+                            Result<(u32,), (u32,)>,
                             Result<u32, &V1>,
                             Result<&str, &[u8]>,
                         ),
@@ -1978,7 +1984,7 @@ pub mod exports {
                                     Result<(), ()>,
                                     Result<(), E1>,
                                     Result<E1, ()>,
-                                    Result<(), ()>,
+                                    Result<(u32,), (u32,)>,
                                     Result<u32, &V1>,
                                     Result<&str, &[u8]>,
                                 ),
@@ -1992,7 +1998,7 @@ pub mod exports {
                         arg0: Result<(), ()>,
                         arg1: Result<(), E1>,
                         arg2: Result<E1, ()>,
-                        arg3: Result<(), ()>,
+                        arg3: Result<(u32,), (u32,)>,
                         arg4: Result<u32, &V1>,
                         arg5: Result<&str, &[u8]>,
                     ) -> wasmtime::Result<()>
@@ -2017,7 +2023,7 @@ pub mod exports {
                                 Result<(), ()>,
                                 Result<(), E1>,
                                 Result<E1, ()>,
-                                Result<(), ()>,
+                                Result<(u32,), (u32,)>,
                                 Result<u32, V1>,
                                 Result<
                                     wasmtime::component::__internal::String,
@@ -2034,7 +2040,7 @@ pub mod exports {
                                         Result<(), ()>,
                                         Result<(), E1>,
                                         Result<E1, ()>,
-                                        Result<(), ()>,
+                                        Result<(u32,), (u32,)>,
                                         Result<u32, V1>,
                                         Result<
                                             wasmtime::component::__internal::String,
@@ -2053,7 +2059,7 @@ pub mod exports {
                             Result<(), ()>,
                             Result<(), E1>,
                             Result<E1, ()>,
-                            Result<(), ()>,
+                            Result<(u32,), (u32,)>,
                             Result<u32, V1>,
                             Result<
                                 wasmtime::component::__internal::String,
