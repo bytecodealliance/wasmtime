@@ -3844,6 +3844,10 @@ fn winch_externref_survives_gc_in_frame() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn winch_typed_select_null_across_gc() -> Result<()> {
+    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
+        return Ok(());
+    }
+
     for collector in [
         Collector::Null,
         Collector::Copying,
@@ -3890,6 +3894,10 @@ fn winch_typed_select_null_across_gc() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn winch_typed_select_preserves_externref_across_gc() -> Result<()> {
+    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
+        return Ok(());
+    }
+
     for collector in [
         Collector::Null,
         Collector::Copying,
