@@ -1,4 +1,5 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -90,6 +91,141 @@ async fn run_concurrent_yields_during_high_priority_work() -> Result<()> {
         "Tokio did not run until all {TASKS} store tasks completed"
     );
     store.assert_concurrent_state_empty();
+    Ok(())
+}
+
+// A callback-driven guest can continuously cancel host subtasks. If Tokio's
+// cooperative budget is exhausted, even a ready timer cannot complete until
+// Wasmtime returns Pending to Tokio.
+#[tokio::test(flavor = "current_thread")]
+#[cfg_attr(miri, ignore)]
+async fn guest_cancellation_loop_does_not_starve_tokio() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_more_async_builtins(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+        (component
+          (import "burn" (func $burn))
+          (import "probe" (func $probe async))
+          (import "pending" (func $pending async))
+
+          (core module $m
+            (import "" "burn" (func $burn))
+            (import "" "probe" (func $probe (result i32)))
+            (import "" "pending" (func $pending (result i32)))
+            (import "" "cancel" (func $cancel (param i32) (result i32)))
+            (import "" "drop" (func $drop (param i32)))
+            (import "" "new" (func $new (result i32)))
+            (import "" "join" (func $join (param i32 i32)))
+            (import "" "task.return" (func $task.return))
+
+            (global $set (mut i32) (i32.const 0))
+            (global $probe-handle (mut i32) (i32.const 0))
+            (global $pending-handle (mut i32) (i32.const 0))
+            (global $cancellations (mut i32) (i32.const 0))
+
+            (func $start (param $status i32) (result i32)
+              (if (i32.ne (i32.and (local.get $status) (i32.const 15)) (i32.const 1))
+                (then unreachable))
+              (i32.shr_u (local.get $status) (i32.const 4)))
+
+            (func $start-pending
+              (global.set $pending-handle (call $start (call $pending)))
+              (if (i32.ne (call $cancel (global.get $pending-handle)) (i32.const -1))
+                (then unreachable))
+              (call $join (global.get $pending-handle) (global.get $set)))
+
+            (func (export "run") (result i32)
+              (call $burn)
+              (global.set $set (call $new))
+              (global.set $probe-handle (call $start (call $probe)))
+              (call $join (global.get $probe-handle) (global.get $set))
+              (call $start-pending)
+              (i32.or (i32.const 2) (i32.shl (global.get $set) (i32.const 4))))
+
+            (func (export "callback") (param $event i32) (param $waitable i32)
+              (param $code i32) (result i32)
+              (if (i32.ne (local.get $event) (i32.const 1)) (then unreachable))
+              (if (i32.eq (local.get $waitable) (global.get $probe-handle))
+                (then
+                  (if (i32.ne (local.get $code) (i32.const 2)) (then unreachable))
+                  (call $drop (global.get $probe-handle))
+                  (call $task.return)
+                  (return (i32.const 0))))
+              (if (i32.ne (local.get $waitable) (global.get $pending-handle))
+                (then unreachable))
+              (if (i32.ne (local.get $code) (i32.const 4)) (then unreachable))
+              (call $drop (global.get $pending-handle))
+              (global.set $cancellations (i32.add (global.get $cancellations) (i32.const 1)))
+              (if (i32.gt_u (global.get $cancellations) (i32.const 500))
+                (then unreachable))
+              (call $start-pending)
+              (i32.or (i32.const 2) (i32.shl (global.get $set) (i32.const 4))))
+          )
+
+          (core func $burn (canon lower (func $burn)))
+          (core func $probe (canon lower (func $probe) async))
+          (core func $pending (canon lower (func $pending) async))
+          (core func $cancel (canon subtask.cancel async))
+          (core func $drop (canon subtask.drop))
+          (core func $new (canon waitable-set.new))
+          (core func $join (canon waitable.join))
+          (core func $task.return (canon task.return))
+          (core instance $i (instantiate $m (with "" (instance
+            (export "burn" (func $burn))
+            (export "probe" (func $probe))
+            (export "pending" (func $pending))
+            (export "cancel" (func $cancel))
+            (export "drop" (func $drop))
+            (export "new" (func $new))
+            (export "join" (func $join))
+            (export "task.return" (func $task.return))
+          ))))
+          (func (export "run") async
+            (canon lift (core func $i "run") async
+              (callback (core func $i "callback"))))
+        )
+        "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .func_wrap("burn", |_: StoreContextMut<()>, ()| {
+            let mut context = Context::from_waker(std::task::Waker::noop());
+            let mut exhausted = false;
+            for _ in 0..256 {
+                let (sender, mut receiver) = tokio::sync::oneshot::channel();
+                sender.send(()).unwrap();
+                if Pin::new(&mut receiver).poll(&mut context).is_pending() {
+                    exhausted = true;
+                    break;
+                }
+            }
+            assert!(exhausted, "failed to exhaust Tokio's cooperative budget");
+            Ok(())
+        })?;
+    linker.root().func_wrap_concurrent("probe", |_, ()| {
+        Box::pin(async {
+            tokio::time::sleep(std::time::Duration::ZERO).await;
+            Ok(())
+        })
+    })?;
+    linker.root().func_wrap_concurrent("pending", |_, ()| {
+        Box::pin(async {
+            std::future::pending::<()>().await;
+            Ok(())
+        })
+    })?;
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    instance
+        .get_typed_func::<(), ()>(&mut store, "run")?
+        .call_async(&mut store, ())
+        .await?;
     Ok(())
 }
 
