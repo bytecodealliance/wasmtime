@@ -122,7 +122,6 @@ impl ComponentStoreData {
         // be called from with in the context of a `tls::set` closure.
         #[cfg(feature = "component-model-async")]
         if store.0.component_data().task_state.is_concurrent() {
-            #[cfg(feature = "task-group-hook")]
             store.0.clean_up_task_groups();
 
             ComponentStoreData::drop_fibers_and_futures(store.0);

@@ -5,14 +5,16 @@ use crate::store::StoreOpaque;
 /// Represents a "task group" containing the "root" task of a host->guest call,
 /// plus any subtasks transitively created by that task.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-pub struct TaskGroupId;
+pub struct TaskGroupId {
+    _priv: (),
+}
 
 impl StoreOpaque {
     pub(crate) fn clean_up_task_groups(&mut self) {}
 }
 
 impl ConcurrentState {
-    pub(super) fn switch_threads(
+    pub(super) fn handle_thread_switch(
         &mut self,
         _old: CurrentThread,
         _new: CurrentThread,
@@ -21,7 +23,7 @@ impl ConcurrentState {
     }
 
     pub(super) fn make_task_group(&mut self) -> Result<TaskGroupId> {
-        Ok(TaskGroupId)
+        Ok(TaskGroupId { _priv: () })
     }
 
     pub(super) fn increment_group_ref_count(&mut self, _group: TaskGroupId) -> Result<()> {

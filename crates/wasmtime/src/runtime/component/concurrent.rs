@@ -86,8 +86,6 @@ use futures::channel::oneshot;
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
 use table::{TableDebug, TableId};
-#[cfg(not(feature = "task-group-hook"))]
-use task_group_hook_disabled as task_group_hook;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
@@ -123,6 +121,8 @@ pub(crate) mod table;
 mod task_group_hook;
 #[cfg(not(feature = "task-group-hook"))]
 mod task_group_hook_disabled;
+#[cfg(not(feature = "task-group-hook"))]
+use task_group_hook_disabled as task_group_hook;
 pub(crate) mod tls;
 
 /// Constant defined in the Component Model spec to indicate that the async
@@ -2063,7 +2063,7 @@ impl StoreOpaque {
         state.debug_assert_deferred_host_invariant();
         let old_thread = mem::replace(&mut state.unforced_current_thread, thread);
 
-        state.switch_threads(old_thread, thread)?;
+        state.handle_thread_switch(old_thread, thread)?;
 
         // First thing to do after swapping threads is updating the context
         // slots for this thread within the store. This restores the behavior of

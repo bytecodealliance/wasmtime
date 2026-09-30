@@ -157,7 +157,11 @@ impl CurrentThread {
 }
 
 impl ConcurrentState {
-    pub(super) fn switch_threads(&mut self, old: CurrentThread, new: CurrentThread) -> Result<()> {
+    pub(super) fn handle_thread_switch(
+        &mut self,
+        old: CurrentThread,
+        new: CurrentThread,
+    ) -> Result<()> {
         let old_group = old.group(self)?;
         let new_group = new.group(self)?;
         if let (true, Some(hook)) = ((old_group != new_group), &mut self.task_group_hook) {
