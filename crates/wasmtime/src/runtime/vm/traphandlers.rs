@@ -48,6 +48,7 @@ pub use self::tls::{AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
 
+#[derive(Clone, Copy)]
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,

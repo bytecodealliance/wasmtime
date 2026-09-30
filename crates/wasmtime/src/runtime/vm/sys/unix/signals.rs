@@ -579,7 +579,6 @@ unsafe extern "C" fn trap_handler(
             _ => None,
         };
         let regs = unsafe { get_trap_registers(context, signum) };
-        let pc = regs.pc;
         let test = info.test_if_trap(
             regs,
             faulting_addr,
@@ -616,7 +615,7 @@ unsafe extern "C" fn trap_handler(
                 // handler exits.
                 resume_into_task_switch_trampoline(
                     unsafe { &mut *(context as *mut libc::ucontext_t) },
-                    pc as *const (),
+                    regs.pc as *const (),
                 );
                 true
             }
