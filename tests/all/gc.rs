@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::task::{Context, Poll};
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
 struct SetFlagOnDrop(Arc<AtomicBool>);
 
@@ -3841,27 +3842,16 @@ fn winch_externref_survives_gc_in_frame() -> Result<()> {
 }
 
 /// Typed null selects retain a valid reference representation across a GC call.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn winch_typed_select_null_across_gc() -> Result<()> {
-    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
-        return Ok(());
-    }
-
-    for collector in [
-        Collector::Null,
-        Collector::Copying,
-        Collector::DeferredReferenceCounting,
-    ] {
-        let mut config = Config::new();
-        config.gc_support(true);
-        config.strategy(Strategy::Winch);
-        config.collector(collector);
-        config.wasm_gc(false);
-        let engine = Engine::new(&config)?;
-        let module = Module::new(
-            &engine,
-            r#"
+#[wasmtime_test(
+    strategies(only(Winch)),
+    collectors(All),
+    wasm_features(reference_types)
+)]
+fn typed_select_null_across_gc(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"
             (module
               (import "" "gc" (func $gc))
               (func (export "select-null") (param i32) (result externref)
@@ -3871,47 +3861,35 @@ fn winch_typed_select_null_across_gc() -> Result<()> {
                 select (result externref)
                 call $gc))
             "#,
-        )?;
-        let mut store = Store::new(&engine, 0usize);
-        let gc = Func::wrap(&mut store, |mut cx: Caller<'_, usize>| -> Result<()> {
-            cx.gc(None)?;
-            *cx.data_mut() += 1;
-            Ok(())
-        });
-        let instance = Instance::new(&mut store, &module, &[gc.into()])?;
-        let select =
-            instance.get_typed_func::<i32, Option<Rooted<ExternRef>>>(&mut store, "select-null")?;
-        for cond in [0, 1] {
-            assert!(select.call(&mut store, cond)?.is_none());
-        }
-        assert_eq!(*store.data(), 2, "GC calls did not run under {collector:?}");
+    )?;
+    let mut store = Store::new(&engine, 0usize);
+    let gc = Func::wrap(&mut store, |mut cx: Caller<'_, usize>| -> Result<()> {
+        cx.gc(None)?;
+        *cx.data_mut() += 1;
+        Ok(())
+    });
+    let instance = Instance::new(&mut store, &module, &[gc.into()])?;
+    let select =
+        instance.get_typed_func::<i32, Option<Rooted<ExternRef>>>(&mut store, "select-null")?;
+    for cond in [0, 1] {
+        assert!(select.call(&mut store, cond)?.is_none());
     }
+    assert_eq!(*store.data(), 2, "GC calls did not run");
     Ok(())
 }
 
 /// A typed select must keep a live externref in the call-site stack map even
 /// when its unselected operand is null.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn winch_typed_select_preserves_externref_across_gc() -> Result<()> {
-    if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
-        return Ok(());
-    }
-
-    for collector in [
-        Collector::Null,
-        Collector::Copying,
-        Collector::DeferredReferenceCounting,
-    ] {
-        let mut config = Config::new();
-        config.gc_support(true);
-        config.strategy(Strategy::Winch);
-        config.collector(collector);
-        config.wasm_gc(false);
-        let engine = Engine::new(&config)?;
-        let module = Module::new(
-            &engine,
-            r#"
+#[wasmtime_test(
+    strategies(only(Winch)),
+    collectors(All),
+    wasm_features(reference_types)
+)]
+fn typed_select_preserves_externref_across_gc(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"
             (module
               (import "" "make" (func $make (result externref)))
               (import "" "gc" (func $gc))
@@ -3927,25 +3905,23 @@ fn winch_typed_select_preserves_externref_across_gc() -> Result<()> {
                 select (result externref)
                 call $gc))
             "#,
-        )?;
-        let mut store = Store::new(&engine, ());
-        let make = Func::wrap(
-            &mut store,
-            |mut cx: Caller<'_, ()>| -> Result<Option<Rooted<ExternRef>>> {
-                Ok(Some(ExternRef::new(&mut cx, 0xDECAFu32)?))
-            },
-        );
-        let gc = Func::wrap(&mut store, |mut cx: Caller<'_, ()>| cx.gc(None));
-        let instance = Instance::new(&mut store, &module, &[make.into(), gc.into()])?;
-        for export in ["control", "selected"] {
-            let func =
-                instance.get_typed_func::<(), Option<Rooted<ExternRef>>>(&mut store, export)?;
-            let result = func.call(&mut store, ())?.expect("reference became null");
-            let data = result
-                .data(&store)?
-                .and_then(|value| value.downcast_ref::<u32>().copied());
-            assert_eq!(data, Some(0xDECAF), "{export} under {collector:?}");
-        }
+    )?;
+    let mut store = Store::new(&engine, ());
+    let make = Func::wrap(
+        &mut store,
+        |mut cx: Caller<'_, ()>| -> Result<Option<Rooted<ExternRef>>> {
+            Ok(Some(ExternRef::new(&mut cx, 0xDECAFu32)?))
+        },
+    );
+    let gc = Func::wrap(&mut store, |mut cx: Caller<'_, ()>| cx.gc(None));
+    let instance = Instance::new(&mut store, &module, &[make.into(), gc.into()])?;
+    for export in ["control", "selected"] {
+        let func = instance.get_typed_func::<(), Option<Rooted<ExternRef>>>(&mut store, export)?;
+        let result = func.call(&mut store, ())?.expect("reference became null");
+        let data = result
+            .data(&store)?
+            .and_then(|value| value.downcast_ref::<u32>().copied());
+        assert_eq!(data, Some(0xDECAF), "{export}");
     }
     Ok(())
 }
