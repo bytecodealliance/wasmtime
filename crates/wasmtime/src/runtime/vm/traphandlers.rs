@@ -995,19 +995,16 @@ impl CallThreadState {
         // See if any instance registered has a custom trap handler, in which
         // case run them all. If any handle the trap, then return
         // `HandledByEmbedder`, else None.
-        fn attempt_custom_handler(
-            call_handler: impl FnOnce(&SignalHandler) -> bool,
-            signal_handler: Option<*const SignalHandler>,
-        ) -> Option<TrapTest> {
+        let attempt_custom_handler = || {
             let _ = &call_handler;
             #[cfg(all(has_native_signals, not(miri)))]
-            if let Some(handler) = signal_handler {
+            if let Some(handler) = self.signal_handler {
                 if unsafe { call_handler(&*handler) } {
                     return Some(TrapTest::HandledByEmbedder);
                 }
             }
             None
-        }
+        };
 
         // First, check for faults outside Wasm code--or in Wasm code that isn't
         // expected to trap.
@@ -1020,8 +1017,7 @@ impl CallThreadState {
             // trapping. That indicates a bug in Cranelift/Winch/etc., so we
             // pretend it's NotWasm so the program likely aborts. Give the
             // custom handler a chance to handle it, and then report as is.
-            return attempt_custom_handler(call_handler, self.signal_handler)
-                .unwrap_or(TrapTest::NotWasm);
+            return attempt_custom_handler().unwrap_or(TrapTest::NotWasm);
         };
 
         // This fault was in Wasm code.
@@ -1049,7 +1045,7 @@ impl CallThreadState {
         }
 
         // Give custom handlers a chance to handle in-Wasm faults.
-        if let Some(trap_kind) = attempt_custom_handler(call_handler, self.signal_handler) {
+        if let Some(trap_kind) = attempt_custom_handler() {
             return trap_kind;
         }
 
