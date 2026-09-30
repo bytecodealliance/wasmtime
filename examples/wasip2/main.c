@@ -121,7 +121,7 @@ int main() {
 
   // Run it. The `run` function takes no arguments and returns a single
   // `result<(), ()>` value indicating whether the program succeeded.
-  wasmtime_component_val_t result;
+  wasmtime_component_val_t result = {.kind = WASMTIME_COMPONENT_BOOL};
   error = wasmtime_component_func_call(&func, context, NULL, 0, &result, 1);
   if (error != NULL)
     exit_with_error("error calling `run`", error, NULL);
