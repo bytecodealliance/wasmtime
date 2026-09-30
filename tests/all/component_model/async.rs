@@ -1,5 +1,7 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 use wasmtime::Result;
 use wasmtime::{AsContextMut, Config, Engine, Store, StoreContextMut, Trap, component::*};
@@ -43,6 +45,51 @@ async fn smoke() -> Result<()> {
         .unwrap_err();
     assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn run_concurrent_yields_during_high_priority_work() -> Result<()> {
+    const TASKS: usize = 256;
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let completed = Arc::new(AtomicUsize::new(0));
+    let mut handles = Vec::new();
+
+    // Spawning store tasks queues high-priority work. Each task is immediately
+    // ready, so the event loop can drain them without returning to Tokio.
+    for _ in 0..TASKS {
+        let completed = completed.clone();
+        handles.push(store.spawn(async move |_| {
+            completed.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        })?);
+    }
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        _ = tx.send(completed.load(Ordering::Relaxed));
+    });
+
+    // On a current-thread runtime, the spawned Tokio task can only run once
+    // `run_concurrent` returns Pending. It should get a turn before all store
+    // tasks have completed.
+    let completed_when_tokio_ran = store.run_concurrent(async |_| rx.await).await??;
+    store
+        .run_concurrent(async move |_| {
+            for handle in handles {
+                handle.await;
+            }
+        })
+        .await?;
+    assert!(
+        completed_when_tokio_ran < TASKS,
+        "Tokio did not run until all {TASKS} store tasks completed"
+    );
+    store.assert_concurrent_state_empty();
     Ok(())
 }
 
