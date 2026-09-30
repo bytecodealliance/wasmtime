@@ -1335,7 +1335,7 @@ impl<T> StoreContextMut<'_, T> {
         // Keep a continuously busy event loop from holding one executor poll
         // indefinitely.  In particular, Tokio's cooperative budget is only
         // replenished when the future returns `Pending` to the executor.
-        const MAX_TURNS_WITHOUT_YIELD: usize = 64;
+        const MAX_TURNS_WITHOUT_YIELD: usize = 128;
         let mut turns_without_yield = 0;
 
         loop {
