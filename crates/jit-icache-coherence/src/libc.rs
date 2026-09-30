@@ -140,35 +140,92 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
     }
 }
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", target_vendor = "apple"))]
+fn aarch64_flush_icache(start: u64, end: u64) {
+    // Reading CTR_EL0 at EL0 gets SIGILL on macOS, so do what compiler-rt does on
+    // Darwin and call the libSystem routine instead:
+    // https://github.com/llvm/llvm-project/blob/3390613ccf0fbbb40026dcbabb36fce444f79480/compiler-rt/lib/builtins/clear_cache.c#L225-L228
+    // https://github.com/apple/darwin-libplatform/blob/215b09856ab5765b7462a91be7076183076600df/src/cachecontrol/arm64/cache.s#L31-L52
+    unsafe extern "C" {
+        fn sys_icache_invalidate(start: *mut c_void, len: usize);
+    }
+    unsafe {
+        sys_icache_invalidate(start as *mut c_void, (end - start) as usize);
+    }
+}
+
+/// The fields of CTR_EL0 that decide which cache maintenance a core needs.
+#[cfg(any(all(target_arch = "aarch64", not(target_vendor = "apple")), test))]
+struct CacheType {
+    idc: bool,
+    dic: bool,
+    dmin_line: u64,
+    imin_line: u64,
+}
+
+#[cfg(any(all(target_arch = "aarch64", not(target_vendor = "apple")), test))]
+impl CacheType {
+    fn decode(ctr: u64) -> Self {
+        CacheType {
+            idc: ctr & (1 << 28) != 0,
+            dic: ctr & (1 << 29) != 0,
+            dmin_line: 4 << ((ctr >> 16) & 15),
+            imin_line: 4 << (ctr & 15),
+        }
+    }
+}
+
+#[cfg(all(target_arch = "aarch64", not(target_vendor = "apple")))]
 fn aarch64_flush_icache(start: u64, end: u64) {
     use core::arch::asm;
+    use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
-    // See `sys_icache_invalidate` implementation in Darwin at
-    // https://github.com/apple/darwin-libplatform/blob/main/src/cachecontrol/arm64/cache.s. It
-    // turns out that all of these instructions work in userspace, so
-    // we can do this portably without having to rely on OS-specific
-    // syscalls like `sys_cache_invalidate()` on macOS or something
-    // equivalent on Linux.
-    const CACHE_LINE_SIZE: u64 = 64;
-    // For each cache line, flush the icache.
-    // Round down the start and round up the end.
-    let mut start = (start - CACHE_LINE_SIZE + 1).next_multiple_of(CACHE_LINE_SIZE);
-    let end = end.next_multiple_of(CACHE_LINE_SIZE);
-    while start < end {
+    // The sequence compiler-rt and the Linux kernel use to make newly written
+    // instructions visible: clean the data cache to the point of unification (unless
+    // CTR_EL0.IDC says that isn't needed), then invalidate the instruction cache (unless
+    // CTR_EL0.DIC), each by that cache's minimum line size. Without the clean, `ic ivau`
+    // can refetch stale bytes on cores such as Cortex-A72.
+    // https://github.com/llvm/llvm-project/blob/3390613ccf0fbbb40026dcbabb36fce444f79480/compiler-rt/lib/builtins/clear_cache.c#L121-L153
+    // https://github.com/torvalds/linux/blob/551c722f40809618230001baccf219193e22fc5a/arch/arm64/mm/cache.S#L28-L43
+
+    // Bit 31 of CTR_EL0 is RES1, so zero means it hasn't been read yet.
+    static CTR_EL0: AtomicU64 = AtomicU64::new(0);
+    let mut ctr = CTR_EL0.load(Relaxed);
+    if ctr == 0 {
         unsafe {
-            asm!("ic ivau, {}", in(reg) start);
+            asm!("mrs {}, ctr_el0", out(reg) ctr, options(nomem, nostack, preserves_flags));
         }
-        start += CACHE_LINE_SIZE;
+        CTR_EL0.store(ctr, Relaxed);
     }
 
-    // Flush the dcache, and then issue an instruction barrier so
-    // fetch can't restart until that's done. All cache lines we are
-    // about to execute (in the flushed range) are now guaranteed to
-    // see the new data.
+    let cache = CacheType::decode(ctr);
+    if !cache.idc {
+        let mut addr = start & !(cache.dmin_line - 1);
+        while addr < end {
+            unsafe {
+                asm!("dc cvau, {}", in(reg) addr, options(nostack, preserves_flags));
+            }
+            addr += cache.dmin_line;
+        }
+    }
     unsafe {
-        asm!("dsb ish"); // Flush dcache.
-        asm!("isb"); // Instruction fetch barrier.
+        asm!("dsb ish", options(nostack, preserves_flags));
+    }
+
+    if !cache.dic {
+        let mut addr = start & !(cache.imin_line - 1);
+        while addr < end {
+            unsafe {
+                asm!("ic ivau, {}", in(reg) addr, options(nostack, preserves_flags));
+            }
+            addr += cache.imin_line;
+        }
+        unsafe {
+            asm!("dsb ish", options(nostack, preserves_flags));
+        }
+    }
+    unsafe {
+        asm!("isb", options(nostack, preserves_flags));
     }
 }
 
@@ -182,4 +239,70 @@ pub(crate) fn clear_cache(_ptr: *const c_void, _len: usize) -> Result<()> {
     #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
     riscv_flush_icache(_ptr as u64, (_ptr as u64) + (_len as u64))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ctr_el0_decode() {
+        // Cortex-A72 (Graviton1), qemu -cpu max, Neoverse-N1 (Graviton2)
+        for (ctr, idc, dic, dmin_line, imin_line) in [
+            (0x8444c004, false, false, 64, 64),
+            (0x80038003, false, false, 32, 32),
+            (0xb444c004, true, true, 64, 64),
+        ] {
+            let cache = super::CacheType::decode(ctr);
+            assert_eq!(cache.idc, idc, "{ctr:#x}");
+            assert_eq!(cache.dic, dic, "{ctr:#x}");
+            assert_eq!(cache.dmin_line, dmin_line, "{ctr:#x}");
+            assert_eq!(cache.imin_line, imin_line, "{ctr:#x}");
+        }
+    }
+
+    // Rewrite a function in a page that has already executed it, the way a JIT reuses
+    // code memory. Cores with CTR_EL0.IDC == 0 run the old function without the data
+    // cache clean; the kernel only cleans a page the first time it becomes executable.
+    #[cfg(all(
+        target_arch = "aarch64",
+        any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "freebsd",
+            target_os = "macos"
+        )
+    ))]
+    #[test]
+    fn rewritten_code_runs() {
+        use libc::{MAP_ANONYMOUS, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE};
+        use std::ptr::null_mut;
+
+        let len = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
+        let page = unsafe {
+            libc::mmap(
+                null_mut(),
+                len,
+                PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANONYMOUS,
+                -1,
+                0,
+            )
+        };
+        assert_ne!(page, libc::MAP_FAILED);
+        let code = page as *mut u32;
+        let f: extern "C" fn() -> u32 = unsafe { std::mem::transmute(code) };
+        for i in 0..100u32 {
+            unsafe {
+                assert_eq!(libc::mprotect(page, len, PROT_READ | PROT_WRITE), 0);
+                code.write_volatile(0x5280_0000 | (i << 5)); // movz w0, #i
+                code.add(1).write_volatile(0xd65f_03c0); // ret
+                crate::clear_cache(page, 8).unwrap();
+                assert_eq!(libc::mprotect(page, len, PROT_READ | PROT_EXEC), 0);
+            }
+            crate::pipeline_flush_mt().unwrap();
+            assert_eq!(f(), i);
+        }
+        unsafe {
+            libc::munmap(page, len);
+        }
+    }
 }
