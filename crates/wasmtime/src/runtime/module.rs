@@ -129,6 +129,19 @@ pub struct Module {
     inner: Arc<ModuleInner>,
 }
 
+// SAFETY: restating what rustc already infers to reduce work on rustc.
+//
+// See comments on the similar impls for `Engine` for more details.
+unsafe impl Send for Module {}
+unsafe impl Sync for Module {}
+
+fn _assert_send_sync(e: &Module) {
+    fn _assert<T: Send + Sync>(_: &T) {}
+    let Module { inner } = e;
+    _assert(e);
+    _assert(inner);
+}
+
 struct ModuleInner {
     engine: Engine,
     /// The compiled artifacts for this module that will be instantiated and
@@ -1239,11 +1252,6 @@ pub struct ModuleExport {
     pub(crate) module: CompiledModuleId,
     /// A raw index into the wasm module.
     pub(crate) entity: EntityIndex,
-}
-
-fn _assert_send_sync() {
-    fn _assert<T: Send + Sync>() {}
-    _assert::<Module>();
 }
 
 /// Helper method to construct a `ModuleMemoryImages` for an associated

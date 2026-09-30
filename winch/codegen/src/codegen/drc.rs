@@ -11,6 +11,9 @@ use wasmtime_environ::{
     WasmValType,
 };
 
+/// The DRC header stores its reference count as a `u64`.
+const DRC_REF_COUNT_SIZE: u32 = 8;
+
 #[derive(Clone, Copy)]
 enum RefCountMutation {
     Increment,
@@ -21,7 +24,31 @@ impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {
-    /// Emits a DRC read barrier for a value loaded from `addr`.
+    /// Emits a DRC initialization barrier for a reference stored at `addr`.
+    ///
+    /// A newly initialized field has no old reference to release. Non-null,
+    /// non-i31 heap references are retained before the field is initialized.
+    pub(crate) fn emit_drc_init_barrier(
+        &mut self,
+        ty: WasmValType,
+        addr: M::Address,
+    ) -> Result<()> {
+        let new_ref = self.context.pop_to_reg(self.masm, None)?;
+        let skip_inc = self.masm.get_label()?;
+        self.emit_skip_if_gc_ref_is_null_or_i31(new_ref.reg, skip_inc)?;
+
+        let (heap_reg, bound_reg) = self.emit_load_gc_heap_base_and_bound()?;
+        self.emit_drc_retain_gc_ref(new_ref.reg, heap_reg, bound_reg)?;
+        self.context.free_reg(bound_reg);
+        self.context.free_reg(heap_reg);
+
+        self.masm.bind(skip_inc)?;
+        self.masm.store(new_ref.reg.into(), addr, ty.try_into()?)?;
+        self.context.free_reg(new_ref.reg);
+        Ok(())
+    }
+
+    /// Emits a DRC read barrier for the value in `gc_ref`.
     ///
     /// The loaded reference is first pushed and spilled so it is represented
     /// in a stack map if this barrier calls `force_gc`. Null and i31 references
@@ -32,16 +59,8 @@ where
     /// Finally it forces a collection when the roots list reaches both the
     /// proportional and absolute thresholds.
     ///
-    /// Leaves the loaded reference on the value stack and marks
-    /// `storage_base` available for register reuse before returning.
-    pub(crate) fn emit_drc_read_barrier(
-        &mut self,
-        ty: WasmValType,
-        storage_base: Reg,
-        addr: M::Address,
-    ) -> Result<()> {
-        let gc_ref = self.context.reg_for_type(ty, self.masm)?;
-        self.masm.load(addr, writable!(gc_ref), ty.try_into()?)?;
+    /// Leaves the loaded reference on the value stack.
+    pub(crate) fn emit_drc_read_barrier(&mut self, ty: WasmValType, gc_ref: Reg) -> Result<()> {
         self.context.stack.push(Val::reg(gc_ref, ty));
 
         // Spill the loaded result into a stack-map-visible slot before the
@@ -71,7 +90,9 @@ where
         let header_extent = i64::from(
             self.env
                 .vmoffsets
-                .vm_drc_header_next_over_approximated_stack_root(),
+                .ptr
+                .vm_drc_header()
+                .next_over_approximated_stack_root(),
         ) + 4;
         self.emit_gc_ref_bounds_check(ref_reg, bound_reg, header_extent)?;
 
@@ -94,7 +115,6 @@ where
         self.emit_maybe_force_gc(roots_len, heap_data_reg)?;
 
         self.masm.bind(skip_barrier)?;
-        self.context.free_reg(storage_base);
         Ok(())
     }
 
@@ -121,19 +141,14 @@ where
         let old_reg = self.context.any_gpr(self.masm)?;
         self.masm.load(addr, writable!(old_reg), OperandSize::S32)?;
 
-        let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
-        let header_extent = i64::from(ref_count_offset) + 8;
+        let ref_count_offset = u32::from(self.env.vmoffsets.ptr.vm_drc_header().ref_count());
+        let header_extent = i64::from(ref_count_offset + DRC_REF_COUNT_SIZE);
 
         // Retain the new heap reference before publishing it. This ordering
         // keeps self-assignment from temporarily dropping the final owner.
         let skip_inc = self.masm.get_label()?;
         self.emit_skip_if_gc_ref_is_null_or_i31(new_ref.reg, skip_inc)?;
-        self.emit_gc_ref_bounds_check(new_ref.reg, bound_reg, header_extent)?;
-        let new_addr = self.emit_gc_ref_addr(new_ref.reg, heap_reg)?;
-        let count = self.emit_mutate_ref_count(new_addr, RefCountMutation::Increment)?;
-        self.emit_store_ref_count(new_addr, count)?;
-        self.context.free_reg(count);
-        self.context.free_reg(new_addr);
+        self.emit_drc_retain_gc_ref(new_ref.reg, heap_reg, bound_reg)?;
 
         self.masm.bind(skip_inc)?;
         // Publish the new value before releasing the old one because the
@@ -189,7 +204,7 @@ where
         object_addr: Reg,
         skip: MachLabel,
     ) -> Result<()> {
-        let reserved_offset = self.env.vmoffsets.vm_gc_header_reserved_bits();
+        let reserved_offset = u32::from(self.env.vmoffsets.ptr.vm_gc_header().kind());
         self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
             masm.load(
                 masm.address_at_reg(object_addr, reserved_offset)?,
@@ -230,19 +245,24 @@ where
             self.env
                 .vmoffsets
                 .ptr
-                .vmdrc_heap_data_over_approximated_stack_roots(),
+                .vm_drc_heap_data()
+                .over_approximated_stack_roots(),
         );
         let roots_len_offset = u32::from(
             self.env
                 .vmoffsets
                 .ptr
-                .vmdrc_heap_data_current_over_approximated_stack_roots_len(),
+                .vm_drc_heap_data()
+                .current_over_approximated_stack_roots_len(),
         );
-        let next_offset = self
-            .env
-            .vmoffsets
-            .vm_drc_header_next_over_approximated_stack_root();
-        let reserved_offset = self.env.vmoffsets.vm_gc_header_reserved_bits();
+        let next_offset = u32::from(
+            self.env
+                .vmoffsets
+                .ptr
+                .vm_drc_header()
+                .next_over_approximated_stack_root(),
+        );
+        let reserved_offset = u32::from(self.env.vmoffsets.ptr.vm_gc_header().kind());
 
         let heap_data_reg = self.context.any_gpr(self.masm)?;
         self.masm.load_ptr(
@@ -284,9 +304,7 @@ where
         })?;
 
         // Retain the object for the list's ownership.
-        let count = self.emit_mutate_ref_count(object_addr, RefCountMutation::Increment)?;
-        self.emit_store_ref_count(object_addr, count)?;
-        self.context.free_reg(count);
+        self.emit_increment_ref_count(object_addr)?;
 
         // Publish the new head, then the updated length. The length outlives
         // this helper, so it gets its own allocated register.
@@ -330,7 +348,8 @@ where
             self.env
                 .vmoffsets
                 .ptr
-                .vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc(),
+                .vm_drc_heap_data()
+                .over_approximated_stack_roots_len_after_last_gc(),
         );
         let skip_gc = self.masm.get_label()?;
         self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
@@ -377,6 +396,34 @@ where
         self.masm.bind(skip_gc)
     }
 
+    /// Retains a non-null, non-i31 GC reference.
+    ///
+    /// The bounds check covers the complete `u64` reference-count field. The
+    /// caller retains ownership of all register arguments.
+    fn emit_drc_retain_gc_ref(
+        &mut self,
+        gc_ref: Reg,
+        heap_base: Reg,
+        heap_bound: Reg,
+    ) -> Result<()> {
+        let ref_count_offset = u32::from(self.env.vmoffsets.ptr.vm_drc_header().ref_count());
+        let header_extent = i64::from(ref_count_offset + DRC_REF_COUNT_SIZE);
+        self.emit_gc_ref_bounds_check(gc_ref, heap_bound, header_extent)?;
+
+        let object_addr = self.emit_gc_ref_addr(gc_ref, heap_base)?;
+        self.emit_increment_ref_count(object_addr)?;
+        self.context.free_reg(object_addr);
+        Ok(())
+    }
+
+    /// Increments and stores the reference count at `object_addr`.
+    fn emit_increment_ref_count(&mut self, object_addr: Reg) -> Result<()> {
+        let count = self.emit_mutate_ref_count(object_addr, RefCountMutation::Increment)?;
+        self.emit_store_ref_count(object_addr, count)?;
+        self.context.free_reg(count);
+        Ok(())
+    }
+
     /// Loads a reference count and applies `mutation`, returning the register
     /// holding the updated value. The caller decides whether and when to store
     /// it, and must eventually free the returned register.
@@ -389,7 +436,7 @@ where
         object_addr: Reg,
         mutation: RefCountMutation,
     ) -> Result<Reg> {
-        let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+        let ref_count_offset = u32::from(self.env.vmoffsets.ptr.vm_drc_header().ref_count());
         let count = self.context.any_gpr(self.masm)?;
         self.masm.load(
             self.masm.address_at_reg(object_addr, ref_count_offset)?,
@@ -410,7 +457,7 @@ where
     }
 
     fn emit_store_ref_count(&mut self, object_addr: Reg, count: Reg) -> Result<()> {
-        let ref_count_offset = self.env.vmoffsets.vm_drc_header_ref_count();
+        let ref_count_offset = u32::from(self.env.vmoffsets.ptr.vm_drc_header().ref_count());
         self.masm.store(
             count.into(),
             self.masm.address_at_reg(object_addr, ref_count_offset)?,

@@ -294,10 +294,9 @@ pub unsafe trait WasmTy: Send {
                 // parameters, and fall back to dynamic type checks on the
                 // arguments passed to each invocation, as necessary.
                 (Some(expected_ref), Some(actual_ref)) if actual_ref.heap_type().is_concrete() => {
-                    expected_ref
-                        .heap_type()
-                        .top()
-                        .ensure_matches(engine, &actual_ref.heap_type().top())
+                    let expected_top = HeapType::from(expected_ref.heap_type().top());
+                    let actual_top = HeapType::from(actual_ref.heap_type().top());
+                    expected_top.ensure_matches(engine, &actual_top)
                 }
                 _ => expected.ensure_matches(engine, &actual),
             },

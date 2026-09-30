@@ -4538,6 +4538,12 @@ criteria = "safe-to-deploy"
 delta = "1.1.0 -> 2.0.0"
 notes = "Chris Fallin reviewed this update with me, and we didn't find anything surprising. We did verify that the new constants did originate in the paper referenced."
 
+[[audits.rustc_version]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.4.1"
+notes = "Minor changes, nothing worrisome"
+
 [[audits.rustix]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -4604,6 +4610,16 @@ criteria = "safe-to-deploy"
 delta = "0.22.4 -> 0.23.7"
 notes = "No new unsafe code."
 
+[[audits.rustls]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.23.37 -> 0.23.45"
+notes = """
+A relatively large update, but no new `unsafe` and nothing awry here. Lots of
+protocol/etc updates which I'm not personally an expert within but the rustls
+maintainers are relatively well trusted as well.
+"""
+
 [[audits.rustls-pki-types]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -4630,6 +4646,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.103.12 -> 0.103.13"
 notes = "Minor fixes for the bug being fixed in this release, nothing awry."
+
+[[audits.rustls-webpki]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.103.13 -> 0.103.15"
+notes = "Minor updates and feature shufflings."
 
 [[audits.safetensors]]
 who = "Andrew Brown <andrew.brown@intel.com>"
@@ -7309,7 +7331,7 @@ end = "2024-07-06"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2022-01-04"
-end = "2025-05-06"
+end = "2027-09-10"
 
 [[trusted.proc-macro2]]
 criteria = "safe-to-deploy"
@@ -7453,7 +7475,7 @@ end = "2027-06-26"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-03-01"
-end = "2025-12-02"
+end = "2027-09-10"
 
 [[trusted.system-interface]]
 criteria = "safe-to-deploy"

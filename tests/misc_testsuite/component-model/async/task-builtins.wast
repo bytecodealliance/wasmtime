@@ -272,7 +272,7 @@
         (if (i32.ne (local.get 2) (i32.const 1)) (then (unreachable)))
         (if (i32.ne (local.get 3) (i32.const 2)) (then (unreachable)))
 
-        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 0)) (then (unreachable)))
         (call $context.set (i32.const 500))
 
         call $backpressure.inc
@@ -326,19 +326,19 @@
 
       ;; set this tasks's context before calling $run, in calling $run the
       ;; runtime will then call `realloc` above for the string return value
-      ;; which should see our 400 value. That will then set 500 which we should
-      ;; then see after the return.
+      ;; which should NOT see our 400 value. That will then set 500 which we
+      ;; should NOT then see after the return.
 
       (func (export "sync-to-sync")
         (call $context.set (i32.const 400))
         (call $sync-to-sync (i32.const 20))
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
       )
 
       (func (export "sync-to-async")
         (call $context.set (i32.const 400))
         (call $sync-to-async (i32.const 20))
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
       )
 
       (func (export "async-to-sync")
@@ -350,7 +350,7 @@
           )
           (then (unreachable))
         )
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
       )
 
       (func (export "async-to-async")
@@ -362,7 +362,7 @@
           )
           (then (unreachable))
         )
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
+        (if (i32.ne (call $context.get) (i32.const 400)) (then (unreachable)))
       )
     )
     (core instance $m (instantiate $M (with "" (instance
@@ -527,7 +527,9 @@
         (local.set $ret (call $run-reader-stream (local.get $sr) (global.get $stream-retp)))
         (global.set $stream-subtask (i32.shr_u (local.get $ret) (i32.const 4)))
         (local.set $ret (call $stream.write (global.get $sw) (i32.const 40) (i32.const 1)))
-        (if (i32.ne (i32.const 0x10 (; COMPLETED | 1<<4 ;)) (local.get $ret)) (then (unreachable)))
+        ;; This will be blocked because `run-future` has not yet exited and
+        ;; `run-stream` is waiting for the exclusive lock on the instance:
+        (if (i32.ne (i32.const -1 (; BLOCKED ;)) (local.get $ret)) (then (unreachable)))
 
         ;; Create a waitable set and join both subtasks to wait for both to complete
         (global.set $ws (call $waitable-set.new))

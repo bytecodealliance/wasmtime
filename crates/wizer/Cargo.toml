@@ -68,7 +68,7 @@ wasmtime = [
 ]
 
 # Enable support for wizening components.
-component-model = ['wasmtime/component-model']
+component-model = ['wasmtime/component-model', 'wasmtime/anyhow']
 
 [[test]]
 name = "all"

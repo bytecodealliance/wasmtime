@@ -59,4 +59,5 @@ block0(v0: i64, v1: i64):
 ;   fstp %st(5)
 ;   outb %al, %dx
 ;   outb %al, %dx
+;   .byte 0xff, 0xff
 

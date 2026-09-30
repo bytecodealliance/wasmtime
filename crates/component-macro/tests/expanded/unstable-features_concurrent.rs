@@ -1,15 +1,15 @@
 /// Link-time configurations.
 #[derive(Clone, Debug, Default)]
 pub struct LinkOptions {
-    experimental_interface: bool,
-    experimental_interface_function: bool,
-    experimental_interface_resource: bool,
-    experimental_interface_resource_method: bool,
-    experimental_world: bool,
-    experimental_world_function_import: bool,
-    experimental_world_interface_import: bool,
-    experimental_world_resource: bool,
-    experimental_world_resource_method: bool,
+    pub(crate) experimental_interface: bool,
+    pub(crate) experimental_interface_function: bool,
+    pub(crate) experimental_interface_resource: bool,
+    pub(crate) experimental_interface_resource_method: bool,
+    pub(crate) experimental_world: bool,
+    pub(crate) experimental_world_function_import: bool,
+    pub(crate) experimental_world_interface_import: bool,
+    pub(crate) experimental_world_resource: bool,
+    pub(crate) experimental_world_resource_method: bool,
 }
 impl LinkOptions {
     /// Enable members marked as `@unstable(feature = experimental-interface)`
@@ -283,7 +283,7 @@ const _: () = {
                             wasmtime::component::ResourceType::host::<Baz>(),
                             move |caller: &wasmtime::component::Accessor<T>, rep| {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_getter(host_getter);
+                                    let accessor = &caller.with_getter::<D>(host_getter);
                                     wasmtime::ToWasmtimeResult::to_wasmtime_result(
                                         HostBazWithStore::<
                                             T,
@@ -306,10 +306,10 @@ const _: () = {
                                     let access_cx = wasmtime::AsContextMut::as_context_mut(
                                         &mut caller,
                                     );
-                                    let host = wasmtime::component::Access::new(
-                                        access_cx,
-                                        host_getter,
-                                    );
+                                    let host = wasmtime::component::Access::<
+                                        T,
+                                        D,
+                                    >::new(access_cx, host_getter);
                                     let r = <D as TheWorldImportsWithStore<T>>::foo(host).await;
                                     Ok(r)
                                 })
@@ -328,10 +328,10 @@ const _: () = {
                                     let access_cx = wasmtime::AsContextMut::as_context_mut(
                                         &mut caller,
                                     );
-                                    let host = wasmtime::component::Access::new(
-                                        access_cx,
-                                        host_getter,
-                                    );
+                                    let host = wasmtime::component::Access::<
+                                        T,
+                                        D,
+                                    >::new(access_cx, host_getter);
                                     let r = <D as HostBazWithStore<T>>::foo(host, arg0).await;
                                     Ok(r)
                                 })
@@ -374,10 +374,10 @@ pub mod foo {
             /// Link-time configurations.
             #[derive(Clone, Debug, Default)]
             pub struct LinkOptions {
-                experimental_interface: bool,
-                experimental_interface_function: bool,
-                experimental_interface_resource: bool,
-                experimental_interface_resource_method: bool,
+                pub(crate) experimental_interface: bool,
+                pub(crate) experimental_interface_function: bool,
+                pub(crate) experimental_interface_resource: bool,
+                pub(crate) experimental_interface_resource_method: bool,
             }
             impl LinkOptions {
                 /// Enable members marked as `@unstable(feature = experimental-interface)`
@@ -451,7 +451,7 @@ pub mod foo {
                             wasmtime::component::ResourceType::host::<Bar>(),
                             move |caller: &wasmtime::component::Accessor<T>, rep| {
                                 wasmtime::component::__internal::Box::pin(async move {
-                                    let accessor = &caller.with_getter(host_getter);
+                                    let accessor = &caller.with_getter::<D>(host_getter);
                                     wasmtime::ToWasmtimeResult::to_wasmtime_result(
                                         HostBarWithStore::<
                                             T,
@@ -473,10 +473,10 @@ pub mod foo {
                                     let access_cx = wasmtime::AsContextMut::as_context_mut(
                                         &mut caller,
                                     );
-                                    let host = wasmtime::component::Access::new(
-                                        access_cx,
-                                        host_getter,
-                                    );
+                                    let host = wasmtime::component::Access::<
+                                        T,
+                                        D,
+                                    >::new(access_cx, host_getter);
                                     let r = <D as HostWithStore<T>>::foo(host).await;
                                     Ok(r)
                                 })
@@ -494,10 +494,10 @@ pub mod foo {
                                     let access_cx = wasmtime::AsContextMut::as_context_mut(
                                         &mut caller,
                                     );
-                                    let host = wasmtime::component::Access::new(
-                                        access_cx,
-                                        host_getter,
-                                    );
+                                    let host = wasmtime::component::Access::<
+                                        T,
+                                        D,
+                                    >::new(access_cx, host_getter);
                                     let r = <D as HostBarWithStore<T>>::foo(host, arg0).await;
                                     Ok(r)
                                 })

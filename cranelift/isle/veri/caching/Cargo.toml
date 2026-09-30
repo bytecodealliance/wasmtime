@@ -5,6 +5,9 @@ edition.workspace = true
 publish = false
 description = "Transparent caching layer over easy-smt for the ISLE verifier"
 
+[lints]
+workspace = true
+
 [dependencies]
 easy-smt = "0.3.2"
 log = { workspace = true }

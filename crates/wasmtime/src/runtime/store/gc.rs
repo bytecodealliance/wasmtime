@@ -95,6 +95,36 @@ impl<T> Store<T> {
         self.inner.gc_heap_capacity()
     }
 
+    /// Manually grow the GC heap by at least `bytes` bytes.
+    ///
+    /// This method will attempt to increase the size of the GC heap used for GC
+    /// objects by at least `bytes` bytes. The current capacity of the GC heap
+    /// can be determined by looking at [`Store::gc_heap_capacity`].
+    ///
+    /// This method can be useful, for example, to pre-allocate space in the GC
+    /// heap for guests that are known to have GC-heavy workloads. This can help
+    /// amortize startup costs in some situations.
+    ///
+    /// Note that GC heap capacity does not mean that an `(array i8)` of size
+    /// equal to the heap's capacity will succeed. Wasmtime's GC implementations
+    /// are responsible for how the heap is used and divvy'd up. As a result
+    /// the growth here does not have a precise semantic meaning and instead
+    /// it's recommended to primarily use this for performance tuning.
+    ///
+    /// # Errors
+    ///
+    /// GC heap growth is a resource-consuming operation that can fail for a
+    /// number of reasons:
+    ///
+    /// * The OS might reject growth of the GC heap.
+    /// * The GC heap's configuration may not allow it to grow further.
+    /// * The store's resource limiter might reject the growth.
+    /// * This method was used when the [`Store::gc_heap_grow_async`] method
+    ///   must be used instead.
+    pub fn gc_heap_grow(&mut self, bytes: u64) -> Result<()> {
+        StoreContextMut(&mut self.inner).gc_heap_grow(bytes)
+    }
+
     /// Set an exception as the currently pending exception, and
     /// return an error that propagates the throw.
     ///
@@ -164,6 +194,14 @@ impl<'a, T> StoreContextMut<'a, T> {
             Asyncness::No,
         ))?;
         Ok(())
+    }
+
+    /// Manually grow the GC heap by at least `bytes` bytes.
+    ///
+    /// For more information, see the documentation of [`Store::gc_heap_grow`].
+    pub fn gc_heap_grow(&mut self, bytes: u64) -> Result<()> {
+        let (mut limiter, store) = self.0.validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(store.grow_gc_heap(limiter.as_mut(), bytes, crate::store::Asyncness::No))
     }
 
     /// Set an exception as the currently pending exception, and
@@ -275,7 +313,7 @@ impl StoreOpaque {
     /// Returns an error if growing the GC heap fails.
     pub(crate) async fn grow_gc_heap(
         &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         bytes_needed: u64,
         asyncness: Asyncness,
     ) -> Result<()> {
@@ -301,6 +339,9 @@ impl StoreOpaque {
                 "needs_gc_before_next_growth should return false after a GC"
             );
         }
+
+        // Make sure the GC heap is actually allocated to get grown.
+        self.ensure_gc_store(limiter.as_deref_mut()).await?;
 
         let page_size = self.engine().tunables().gc_heap_memory_type().page_size();
 
@@ -795,22 +836,42 @@ impl StoreOpaque {
 
     #[cfg(feature = "stack-switching")]
     fn trace_wasm_continuation_roots(&mut self, gc_roots_list: &mut GcRootsList) {
-        use crate::vm::VMStackState;
+        use crate::vm::{VMPayloads, VMStackState, ValRaw};
+
+        unsafe fn trace_payload_roots(gc_roots_list: &mut GcRootsList, payloads: &VMPayloads) {
+            let gc_ref_data = payloads.gc_ref_data;
+            let payloads = &payloads.buffer;
+            assert!(payloads.length <= payloads.capacity);
+            let Some(gc_ref_data) = gc_ref_data else {
+                return;
+            };
+            let gc_ref_data = gc_ref_data.as_ptr();
+            let data = payloads
+                .data
+                .expect("payload GC metadata requires an allocated payload buffer")
+                .as_ptr();
+
+            for index in 0..usize::try_from(payloads.length).unwrap() {
+                let marker = unsafe { gc_ref_data.add(index).read() };
+                if marker == wasmtime_environ::CONTINUATION_PAYLOAD_GC_REF {
+                    let slot = unsafe { data.cast::<ValRaw>().add(index).cast::<u32>() };
+                    unsafe {
+                        StoreOpaque::trace_wasm_stack_slot(gc_roots_list, slot);
+                    }
+                }
+            }
+        }
 
         log::trace!("Begin trace GC roots :: continuations");
 
         for continuation in &self.continuations {
             let state = continuation.common_stack_information.state;
 
-            // FIXME(frank-emrich) In general, it is not enough to just trace
-            // through the stacks of continuations; we also need to look through
-            // their `cont.bind` arguments. However, we don't currently have
-            // enough RTTI information to check if any of the values in the
-            // buffers used by `cont.bind` are GC values. As a workaround, note
-            // that we currently disallow cont.bind-ing GC values altogether.
-            // This way, it is okay not to check them here.
             match state {
                 VMStackState::Suspended => {
+                    unsafe {
+                        trace_payload_roots(gc_roots_list, &continuation.values);
+                    }
                     Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
                         Self::trace_wasm_stack_frame(self.modules(), gc_roots_list, frame);
                         core::ops::ControlFlow::Continue(())
@@ -824,8 +885,11 @@ impl StoreOpaque {
                     // either case things should be handled correctly when traversing
                     // further along in the chain, nothing required at this point.
                 }
-                VMStackState::Fresh | VMStackState::Returned | VMStackState::Trapped => {
-                    // Fresh/terminal continuations have no live GC values on their stack.
+                VMStackState::Fresh => unsafe {
+                    trace_payload_roots(gc_roots_list, &continuation.args);
+                },
+                VMStackState::Returned | VMStackState::Trapped => {
+                    // Terminal continuations have no live GC values.
                 }
             }
         }

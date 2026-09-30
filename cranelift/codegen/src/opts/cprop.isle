@@ -226,7 +226,7 @@
 
 (rule (simplify (select ty (iconst_u _ (u64_when_non_zero)) x _))
       (subsume x))
-(rule (simplify (select ty (iconst_u _ 0) _ y))
+(rule (simplify (select ty (all_zero _) _ y))
       (subsume y))
 
 (rule (simplify

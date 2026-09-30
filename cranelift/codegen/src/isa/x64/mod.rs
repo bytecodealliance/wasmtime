@@ -3,6 +3,7 @@
 pub use self::inst::{AtomicRmwSeqOp, EmitInfo, EmitState, Inst, args, external};
 
 use super::{OwnedTargetIsa, TargetIsa};
+use crate::MachBufferFinalized;
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{self, Function, Type, types};
 #[cfg(feature = "unwind")]
@@ -10,12 +11,11 @@ use crate::isa::unwind::systemv;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey};
 use crate::machinst::{
-    CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet, TextSectionBuilder, VCode,
-    compile,
+    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode, compile,
 };
 use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
-use crate::{Final, MachBufferFinalized};
 use alloc::string::String;
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use core::fmt;
@@ -101,13 +101,13 @@ impl TargetIsa for X64Backend {
             crate::trace!("disassembly:\n{}", disasm);
         }
 
-        Ok(CompiledCodeStencil {
+        Ok(CompiledCodeStencil(CompiledCode {
             buffer,
             vcode: emit_result.disasm,
             value_labels_ranges,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
-        })
+        }))
     }
 
     fn flags(&self) -> &Flags {
@@ -223,7 +223,7 @@ impl TargetIsa for X64Backend {
 
 /// Emit unwind info for an x86 target.
 pub fn emit_unwind_info(
-    buffer: &MachBufferFinalized<Final>,
+    buffer: &MachBufferFinalized,
     kind: crate::isa::unwind::UnwindInfoKind,
 ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
     #[cfg(feature = "unwind")]

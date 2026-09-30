@@ -592,6 +592,8 @@ block0(v0: f64x2):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   sarb $0xff, %bh
+;   .byte 0xff, 0xdf, 0x41, 0x00, 0x00, 0xc0, 0xff, 0xff
+;   .byte 0xff, 0xdf, 0x41
 
 function %load_and_store_f32(i64, i64) {
 block0(v0: i64, v1: i64):

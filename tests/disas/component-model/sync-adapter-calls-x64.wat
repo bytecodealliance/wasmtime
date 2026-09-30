@@ -54,43 +54,13 @@
 ;; wasm[1]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    8(%rdi), %r10
-;;       movq    0x18(%r10), %r10
-;;       addq    $0x20, %r10
-;;       cmpq    %rsp, %r10
-;;       ja      0xe6
-;;   39: subq    $0x20, %rsp
 ;;       movq    0x48(%rdi), %rdi
-;;       movq    0xe8(%rdi), %rax
-;;       movl    (%rax), %ecx
-;;       testl   %ecx, %ecx
-;;       je      0xe8
-;;   52: movq    0x100(%rdi), %rdx
-;;       movl    (%rdx), %esi
-;;       movl    $0, (%rdx)
-;;       movq    8(%rdi), %rdi
-;;       movq    0x88(%rdi), %r8
-;;       leaq    (%rsp), %r10
-;;       movq    %r8, (%rsp)
-;;       movl    $2, 8(%rsp)
-;;       movl    $0, 0xc(%rsp)
-;;       movl    $1, 0x10(%rsp)
-;;       movl    0x80(%rdi), %r9d
-;;       movl    %r9d, 0x14(%rsp)
-;;       movl    $0, 0x80(%rdi)
-;;       movl    0x84(%rdi), %r11d
-;;       movl    %r11d, 0x18(%rsp)
-;;       movl    $0, 0x84(%rdi)
-;;       movq    %r10, 0x88(%rdi)
-;;       movq    %r8, 0x88(%rdi)
-;;       movl    %r9d, 0x80(%rdi)
-;;       movl    %r11d, 0x84(%rdi)
-;;       movl    %ecx, (%rax)
-;;       movl    %esi, (%rdx)
-;;       movl    $0x4fc, %eax
-;;       addq    $0x20, %rsp
+;;       movq    0xa8(%rdi), %rdi
+;;       movl    (%rdi), %edi
+;;       testl   %edi, %edi
+;;       je      0x43
+;;   39: movl    $0x4fc, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   e6: ud2
-;;   e8: ud2
+;;   43: ud2

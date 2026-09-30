@@ -837,7 +837,7 @@ impl Conditions {
             if !call.args.is_empty() {
                 println!("\t\t\targs = [");
                 for arg in &call.args {
-                    println!("\t\t\t\t{}", arg);
+                    println!("\t\t\t\t{arg}");
                 }
                 println!("\t\t\t]");
             }

@@ -417,6 +417,15 @@ fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) 
         | nzcv.bits()
 }
 
+impl BfmOp {
+    fn opc(self) -> u8 {
+        match self {
+            BfmOp::UBfm => 0b10,
+            BfmOp::SBfm => 0b00,
+        }
+    }
+}
+
 fn enc_bfm(opc: u8, size: OperandSize, rd: Writable<Reg>, rn: Reg, immr: u8, imms: u8) -> u32 {
     match size {
         OperandSize::Size64 => {
@@ -641,6 +650,16 @@ fn enc_cas(size: u32, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
 
     0b00_0010001_1_1_00000_1_11111_00000_00000
         | size << 30
+        | machreg_to_gpr(rs.to_reg()) << 16
+        | machreg_to_gpr(rn) << 5
+        | machreg_to_gpr(rt)
+}
+
+fn enc_casp(rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
+    debug_assert_eq!(machreg_to_gpr(rs.to_reg()) & 1, 0);
+    debug_assert_eq!(machreg_to_gpr(rt) & 1, 0);
+
+    0b0_1_0010000_1_1_00000_1_11111_00000_00000
         | machreg_to_gpr(rs.to_reg()) << 16
         | machreg_to_gpr(rn) << 5
         | machreg_to_gpr(rt)
@@ -1665,6 +1684,30 @@ impl MachInstEmit for Inst {
                 }
 
                 sink.put4(enc_cas(size, rd, rt, rn));
+            }
+            Inst::AtomicCAS128 { args } => {
+                let &AtomicCAS128Args {
+                    rd_lo,
+                    rd_hi,
+                    rs_lo,
+                    rs_hi,
+                    rt_lo,
+                    rt_hi,
+                    rn,
+                    flags,
+                } = &**args;
+                debug_assert_eq!(rd_lo.to_reg(), rs_lo);
+                debug_assert_eq!(rd_hi.to_reg(), rs_hi);
+
+                // These should be pinned to pairs that `casp` requires.
+                debug_assert_eq!(rs_hi, xreg(machreg_to_gpr(rs_lo) as u8 + 1));
+                debug_assert_eq!(rt_hi, xreg(machreg_to_gpr(rt_lo) as u8 + 1));
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                sink.put4(enc_casp(rd_lo, rt_lo, rn));
             }
             &Inst::AtomicCASLoop { ty, flags, .. } => {
                 /* Emit this:
@@ -2920,12 +2963,35 @@ impl MachInstEmit for Inst {
                 from_bits,
                 to_bits,
             } => {
-                let (opc, size) = if signed {
-                    (0b00, OperandSize::from_bits(to_bits))
+                let (bfm_op, size) = if signed {
+                    (BfmOp::SBfm, OperandSize::from_bits(to_bits))
                 } else {
-                    (0b10, OperandSize::Size32)
+                    (BfmOp::UBfm, OperandSize::Size32)
                 };
+                let opc = bfm_op.opc();
                 sink.put4(enc_bfm(opc, size, rd, rn, 0, from_bits - 1));
+            }
+            &Inst::BitfieldMove {
+                size,
+                bfm_op,
+                rd,
+                rn,
+                immr,
+                imms,
+            } => {
+                let opc = bfm_op.opc();
+                sink.put4(enc_bfm(opc, size, rd, rn, immr.value(), imms.value()));
+            }
+            &Inst::BitfieldMoveMod {
+                size,
+                rd,
+                ri,
+                rn,
+                immr,
+                imms,
+            } => {
+                debug_assert_eq!(rd.to_reg(), ri);
+                sink.put4(enc_bfm(0b01, size, rd, rn, immr.value(), imms.value()));
             }
             &Inst::Jump { ref dest } => {
                 let off = sink.cur_offset();

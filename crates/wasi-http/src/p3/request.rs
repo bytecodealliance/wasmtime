@@ -89,7 +89,7 @@ impl Request {
         req: http::Request<T>,
     ) -> (
         Self,
-        impl Future<Output = Result<(), Error>> + Send + 'static,
+        impl Future<Output = Result<(), Error>> + Send + 'static + use<T>,
     )
     where
         T: http_body::Body<Data = Bytes> + Send + 'static,
@@ -142,7 +142,7 @@ impl Request {
         self,
         mut store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), Error>> + Send + 'static,
-        getter: fn(&mut T) -> WasiHttpCtxView<'_>,
+        mut getter: impl FnMut(&mut T) -> WasiHttpCtxView<'_> + Clone + Unpin + Send + 'static,
     ) -> HttpResult<(
         http::Request<UnsyncBoxBody<Bytes, Error>>,
         Option<Arc<RequestOptions>>,
@@ -182,7 +182,7 @@ impl Request {
                 fut,
                 content_length,
                 ErrorCode::HttpRequestBodySize,
-                getter,
+                getter.clone(),
             )
             .map_err(HttpError::trap)?
             .boxed_unsync(),

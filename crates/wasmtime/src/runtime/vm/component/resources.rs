@@ -73,9 +73,27 @@ pub struct ResourceTables<'a> {
     /// as borrow counts.
     pub task_state: &'a mut ComponentTaskState,
 
-    /// Identifier for the current "scope" which is used for various functions
-    /// on `task_state` above to mutate borrows/etc of the current scope.
-    pub current_scope_id: Option<u32>,
+    /// The current scope, used to mutate borrows and lenders for the call.
+    pub current_scope: Option<CurrentScope>,
+}
+
+/// The resource-borrow scope associated with the current component call.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CurrentScope {
+    /// A scope which already has an ID in the component task state.
+    Id(Scope),
+    /// A host scope whose task has not yet been materialized.
+    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    DeferredHost,
+}
+
+/// Identifier for a component call's resource-borrow scope.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Scope {
+    /// A non-concurrent scope or a concurrent guest-task scope.
+    Id(u32),
+    /// A concurrent host-task scope.
+    HostId(u32),
 }
 
 /// Typed representation of a "rep" for a resource.
@@ -178,6 +196,13 @@ pub struct CallContext {
     borrow_count: u32,
 }
 
+impl CallContext {
+    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.lenders.is_empty() && self.borrow_count == 0
+    }
+}
+
 impl ResourceTables<'_> {
     fn table_for_resource(&mut self, resource: &TypedResource) -> &mut HandleTable {
         match resource {
@@ -266,9 +291,29 @@ impl ResourceTables<'_> {
         }
     }
 
-    fn current_scope_id(&self) -> Result<u32> {
-        match self.current_scope_id {
-            Some(id) => Ok(id),
+    fn materialize_current_scope(&mut self) -> Result<Scope> {
+        let id = match self.current_scope {
+            Some(CurrentScope::Id(id)) => return Ok(id),
+            Some(CurrentScope::DeferredHost) => self.task_state.materialize_current_scope()?,
+            None => bail_bug!("no current scope"),
+        };
+        self.current_scope = Some(CurrentScope::Id(id));
+        Ok(id)
+    }
+
+    /// Returns the current call's resource-borrow scope.
+    ///
+    /// Unlike [`Self::materialize_current_scope`], this does not materialize a
+    /// deferred host task.
+    fn current_scope(&mut self) -> Result<&mut CallContext> {
+        match self.current_scope {
+            Some(CurrentScope::Id(id)) => self.task_state.call_context(id),
+            Some(CurrentScope::DeferredHost) => {
+                match self.task_state.deferred_host_call_context() {
+                    Some(cx) => Ok(cx),
+                    None => bail_bug!("deferred host scope has no call context"),
+                }
+            }
             None => bail_bug!("no current scope"),
         }
     }
@@ -285,8 +330,7 @@ impl ResourceTables<'_> {
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
         let (rep, is_own) = self.table_for_index(&index).resource_lend(index)?;
         if is_own {
-            let current = self.current_scope_id()?;
-            self.task_state.call_context(current)?.lenders.push(index);
+            self.current_scope()?.lenders.push(index);
         }
         Ok(rep)
     }
@@ -304,7 +348,7 @@ impl ResourceTables<'_> {
     /// `VMComponentContext` which handles the special case of avoiding borrow
     /// tracking entirely.
     pub fn resource_lower_borrow(&mut self, resource: TypedResource) -> Result<u32> {
-        let scope = self.current_scope_id()?;
+        let scope = self.materialize_current_scope()?;
         let cx = self.task_state.call_context(scope)?;
         cx.borrow_count = cx.borrow_count.checked_add(1).unwrap();
         self.table_for_resource(&resource)
@@ -318,7 +362,7 @@ impl ResourceTables<'_> {
     /// resources that were originally passed in.
     #[inline]
     pub fn validate_scope_exit(&mut self) -> Result<()> {
-        let cx = self.task_state.call_context(self.current_scope_id()?)?;
+        let cx = self.current_scope()?;
         if cx.borrow_count > 0 {
             bail!("borrow handles still remain at the end of the call")
         }

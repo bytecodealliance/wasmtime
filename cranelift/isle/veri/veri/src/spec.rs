@@ -944,11 +944,7 @@ impl SpecEnv {
         }
 
         // Extractor
-        if term.has_extractor() {
-            return true;
-        }
-
-        false
+        term.has_extractor()
     }
 
     fn check_for_chained_terms_with_spec(&self) {

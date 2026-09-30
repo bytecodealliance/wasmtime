@@ -29,7 +29,7 @@
 ;;       movk    x17, #0x90
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x9c
+;;       b.lo    #0xa0
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x90
 ;;       mov     sp, x28
@@ -57,8 +57,9 @@
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
+;;       add     sp, sp, #0x20
 ;;       ret
-;;   9c: udf     #0xc11f
+;;   a0: udf     #0xc11f
 ;;
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
@@ -71,8 +72,8 @@
 ;;       movk    x17, #0x30
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x148
-;;   cc: mov     x9, x0
+;;       b.lo    #0x164
+;;   ec: mov     x9, x0
 ;;       sub     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
@@ -81,21 +82,20 @@
 ;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       mov     x1, x9
-;;       ldr     q0, #0x150
-;;       ldr     q1, #0x160
-;;       ldr     q2, #0x170
-;;       ldr     q3, #0x180
-;;       ldr     q4, #0x190
-;;       ldr     q5, #0x1a0
-;;       ldr     q6, #0x1b0
-;;       ldr     q7, #0x1c0
-;;       ldr     q31, #0x1d0
+;;       ldr     q0, #0x170
+;;       ldr     q1, #0x180
+;;       ldr     q2, #0x190
+;;       ldr     q3, #0x1a0
+;;       ldr     q4, #0x1b0
+;;       ldr     q5, #0x1c0
+;;       ldr     q6, #0x1d0
+;;       ldr     q7, #0x1e0
+;;       ldr     q31, #0x1f0
 ;;       stur    q31, [x28]
-;;       ldr     q31, #0x1e0
+;;       ldr     q31, #0x200
 ;;       stur    q31, [x28, #0x10]
 ;;       bl      #0
-;;  124: add     x28, x28, #0x20
-;;       mov     sp, x28
+;;  144: mov     x28, sp
 ;;       ldur    x9, [x28, #8]
 ;;       add     x28, x28, #0x10
 ;;       mov     sp, x28
@@ -103,45 +103,46 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  148: udf     #0xc11f
-;;  14c: udf     #0
-;;  150: udf     #0
-;;  154: udf     #0
-;;  158: udf     #0
-;;  15c: udf     #0
-;;  160: udf     #1
-;;  164: udf     #0
-;;  168: udf     #1
+;;  164: udf     #0xc11f
+;;  168: udf     #0
 ;;  16c: udf     #0
-;;  170: udf     #2
+;;  170: udf     #0
 ;;  174: udf     #0
-;;  178: udf     #2
+;;  178: udf     #0
 ;;  17c: udf     #0
-;;  180: udf     #3
+;;  180: udf     #1
 ;;  184: udf     #0
-;;  188: udf     #3
+;;  188: udf     #1
 ;;  18c: udf     #0
-;;  190: udf     #4
+;;  190: udf     #2
 ;;  194: udf     #0
-;;  198: udf     #4
+;;  198: udf     #2
 ;;  19c: udf     #0
-;;  1a0: udf     #5
+;;  1a0: udf     #3
 ;;  1a4: udf     #0
-;;  1a8: udf     #5
+;;  1a8: udf     #3
 ;;  1ac: udf     #0
-;;  1b0: udf     #6
+;;  1b0: udf     #4
 ;;  1b4: udf     #0
-;;  1b8: udf     #6
+;;  1b8: udf     #4
 ;;  1bc: udf     #0
-;;  1c0: udf     #7
+;;  1c0: udf     #5
 ;;  1c4: udf     #0
-;;  1c8: udf     #7
+;;  1c8: udf     #5
 ;;  1cc: udf     #0
-;;  1d0: udf     #8
+;;  1d0: udf     #6
 ;;  1d4: udf     #0
-;;  1d8: udf     #8
+;;  1d8: udf     #6
 ;;  1dc: udf     #0
-;;  1e0: udf     #9
+;;  1e0: udf     #7
 ;;  1e4: udf     #0
-;;  1e8: udf     #9
+;;  1e8: udf     #7
 ;;  1ec: udf     #0
+;;  1f0: udf     #8
+;;  1f4: udf     #0
+;;  1f8: udf     #8
+;;  1fc: udf     #0
+;;  200: udf     #9
+;;  204: udf     #0
+;;  208: udf     #9
+;;  20c: udf     #0

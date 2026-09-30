@@ -89,4 +89,4 @@
     )
 )
 
-(assert_trap (invoke "export" (u32.const 42)) "cannot enter component instance")
+(assert_return (invoke "export" (u32.const 42)) (u32.const 0))

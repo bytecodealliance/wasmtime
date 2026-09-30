@@ -253,7 +253,7 @@ fn extract_fuzz_input(data: &[u8]) -> wasmtime::Result<FuzzInput<'_>> {
         // binary format means that we can simply chop off the last custom
         // section and still have a valid module.
         if let Payload::CustomSection(s) = &section {
-            if s.name() == SECTION_NAME && s.range().end == data.len() {
+            if s.name() == SECTION_NAME && s.range().end == data.len() as u64 {
                 return Ok(FuzzInput {
                     module: &data[..prev_end],
                     fuzz_data: s.data(),
@@ -264,7 +264,7 @@ fn extract_fuzz_input(data: &[u8]) -> wasmtime::Result<FuzzInput<'_>> {
         // Record each section's end to record what the end of the module is
         // up to this point.
         if let Some((_, range)) = section.as_section() {
-            prev_end = range.end;
+            prev_end = range.end as usize;
         }
     }
     wasmtime::bail!("no input found")

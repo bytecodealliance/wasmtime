@@ -122,7 +122,7 @@
   (func (export "run") (alias export $other-child "run"))
 )
 
-(assert_trap (invoke "run") "wasm trap: cannot block a synchronous task before returning")
+(assert_return (invoke "run"))
 
 ;; synchronous future.read; async lift
 (component

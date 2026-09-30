@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::Command;
 use std::process::exit;
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not worth cfgs")]
 fn build_c_plugin() {
     // Run wit-bindgen
     let mut status = Command::new("wit-bindgen")
@@ -12,10 +12,7 @@ fn build_c_plugin() {
         .status()
         .expect("wit-bindgen c ../wit/calculator.wit failed (cwd = c-plugin)");
     if !status.success() {
-        println!(
-            "wit-bindgen c ../wit/calculator.wit failed (cwd = c-plugin): status {}",
-            status
-        );
+        println!("wit-bindgen c ../wit/calculator.wit failed (cwd = c-plugin): status {status}");
         exit(1);
     }
 
@@ -54,7 +51,7 @@ fn build_c_plugin() {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not worth cfgs")]
 fn build_js_plugin() {
     Command::new("jco")
         .args([

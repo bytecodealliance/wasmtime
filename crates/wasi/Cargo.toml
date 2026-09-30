@@ -7,7 +7,6 @@ license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 include = ["src/**/*", "README.md", "LICENSE", "witx/*", "wit/**/*", "tests/*"]
@@ -26,8 +25,6 @@ tokio = { workspace = true,  features = ["time", "sync", "io-std", "io-util", "r
 bytes = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true, features = ["std", "attributes"] }
-cap-primitives = { workspace = true }
-cap-fs-ext-avoid-using-this = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
@@ -45,7 +42,8 @@ wasmtime-test-util = { workspace = true }
 env_logger = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["event", "fs", "net"] }
+rustix = { workspace = true, features = ["event", "fs", "net", "time"] }
+rustix-linux-procfs = "0.1.1"
 
 [target.'cfg(windows)'.dependencies]
 rustix = { workspace = true, features = ["event", "net"] }
@@ -57,11 +55,12 @@ features = [
   "Win32_Foundation",
   "Win32_Storage_FileSystem",
   "Win32_System_IO",
+  "Win32_System_Ioctl",
   "Win32_System_Performance",
 ]
 
 [features]
-default = ["p1", "p2"]
+default = ["p1", "p2", "p3"]
 p0 = ["p1"]
 p1 = ["dep:wiggle", "p2"]
 p2 = ["wasmtime/component-model", "wasmtime/async"]

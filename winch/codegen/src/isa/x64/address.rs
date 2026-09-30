@@ -25,6 +25,14 @@ impl Address {
         Self::Offset { base, offset }
     }
 
+    /// Create an address with a signed offset.
+    pub fn offset_i32(base: Reg, offset: i32) -> Self {
+        Self::Offset {
+            base,
+            offset: offset as u32,
+        }
+    }
+
     /// Create an address for a constant.
     pub fn constant(data: VCodeConstant) -> Self {
         Self::Const(data)

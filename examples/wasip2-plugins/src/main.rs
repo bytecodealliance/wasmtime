@@ -71,7 +71,7 @@ fn load_plugin(
     linker: &Linker<()>,
     path: PathBuf,
 ) -> wasmtime::Result<()> {
-    println!("Loading plugin from file {:?}", path);
+    println!("Loading plugin from file {path:?}");
 
     // Creates a component from a .wasm file
     let component = Component::from_file(engine, &path)?;

@@ -53,6 +53,7 @@ TEST(Config, Smoke) {
   config.wasm_component_model(false);
   config.wasm_exceptions(false);
   config.wasm_custom_page_sizes(false);
+  config.wasm_compact_imports(false);
   config.strategy(Strategy::Auto);
   config.cranelift_debug_verifier(false);
   config.cranelift_opt_level(OptLevel::Speed);

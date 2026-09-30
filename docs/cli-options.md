@@ -170,6 +170,22 @@ Furthermore, an address can be specified via:
 wasmtime serve --addr=0.0.0.0:8081 foo.wasm
 ```
 
+### ⚠️ Security Warning
+
+> **Not recommended for production use**
+>
+> The `wasmtime serve` command is intended solely for local development and
+> testing. It **does not** implement safeguards against:
+> - Unbounded outbound HTTP requests
+> - Rate limiting or connection throttling
+> - DDoS protections
+> - Request size limits
+> - TLS/HTTPS termination
+>
+> **Do not deploy `wasmtime serve` in a production environment** without an
+> additional reverse proxy or gateway layer (e.g., Nginx, Envoy, or a dedicated
+> WASI host) that enforces request limits, authentication, and security controls.
+
 At the time of writing, the `wasi:http/proxy` world is still experimental and
 requires setup of some `wit` dependencies. For more information, see
 the [hello-wasi-http](https://github.com/sunfishcode/hello-wasi-http/) example.
@@ -328,6 +344,7 @@ For example, adding `--optimize opt-level=0` to a `wasmtime compile` subcommand
 will turn off most optimizations for the generated code.
 
 ## CLI options using TOML file
+
 Most key-value options that can be provided using the `--optimize`, `--codegen`,
 `--debug`, `--wasm`, and `--wasi` flags can also be provided using a TOML
 file using the `--config <FILE>` cli flag, by putting the key-value inside a TOML
@@ -352,3 +369,48 @@ key-value pairs as you want in the TOML file.
 Options on the CLI take precedent over options specified in a configuration
 file, meaning they're allowed to shadow configuration values in a TOML
 configuration file.
+
+## CLI options using environment variables
+
+Shared CLI options are additionally supported when passed in environment
+variables. Each option can be individually specified as an environment variable
+or as a group of options. For example
+
+```console
+wasmtime compile --optimize opt-level=0
+```
+
+is equivalent to
+
+```console
+export WASMTIME_OPTIMIZE_OPT_LEVEL=0
+wasmtime compile
+```
+
+is equivalent to
+
+```console
+export WASMTIME_OPTIMIZE=opt-level=0
+wasmtime compile
+```
+
+Specific environment variables override more general ones, so for example an
+optimization level of 1 is used in this case:
+
+```console
+export WASMTIME_OPTIMIZE=opt-level=0
+export WASMTIME_OPTIMIZE_OPT_LEVEL=1
+wasmtime compile
+```
+
+Additionally command-line parameters override what's specified in environment
+variables, additionally using the optimization level of 1 in this case:
+
+```console
+export WASMTIME_OPTIMIZE_OPT_LEVEL=0
+wasmtime compile --optimize opt-level=1
+```
+
+Environment variables names are "WASMTIME_" followed by the group name, such as
+"OPTIMIZE", followed by specific options. The syntax for option values in
+environment variables is the same for those specified in arguments.

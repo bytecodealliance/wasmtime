@@ -4,6 +4,9 @@ version = "0.1.0"
 publish = false
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 cranelift-isle-veri-aslp = { path = "../aslp" }
 cranelift-isle = { path = "../../isle" }

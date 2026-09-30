@@ -204,6 +204,22 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Actual uses of each SSA value so far, incremented while lowering.
     value_lowered_uses: SecondaryMap<Value, u32>,
 
+    /// "Opportunistic defs" of values: when lowering an instruction that
+    /// incidentally computes another value (e.g., a branch that directly
+    /// consumes the flags of an `uadd_overflow` also computes the sum), we
+    /// record that value here, along with the regs it was computed into and
+    /// the use-count at the time of registration.
+    ///
+    /// When the scan reaches the actual definition of such a value, if its
+    /// use-count has not grown (i.e., no further uses were found while
+    /// scanning up), then the definition can be skipped and the value can be
+    /// aliased to the opportunistically-computed regs instead.
+    ///
+    /// The key is (block, value): the opportunistic def is only usable when
+    /// the actual definition is in the same block as the registration site,
+    /// further up in the scan.
+    opportunistic_defs: FxHashMap<(Block, Value), (ValueRegs<Reg>, u32)>,
+
     /// Effectful instructions that have been sunk; they are not codegen'd at
     /// their original locations.
     inst_sunk: FxHashSet<Inst>,
@@ -292,33 +308,25 @@ pub struct Lower<'func, I: VCodeInst> {
 /// actually merged" point. Instead, we compute a
 /// transitive-uniqueness. That is what this enum represents.
 ///
-/// There is one final caveat as well to the result of this analysis.  Notably,
-/// we define some instructions to be "root" instructions, which means that we
-/// assume they will always be codegen'd at the root of a matching tree, and not
-/// matched. (This comes with the caveat that we actually enforce this property
-/// by making them "opaque" to subtree matching in
-/// `get_value_as_source_or_const`). Because they will always be codegen'd once,
-/// they in some sense "reset" multiplicity: these root instructions can be used
-/// many times, but because their result(s) are only computed once, they only
-/// use their inputs once.
-///
-/// We currently define all multi-result instructions to be "root" instructions,
-/// because it is too complex to reason about matching through them, and they
-/// cause too-coarse-grained approximation of multiplicity otherwise: the
-/// analysis would have to assume (as it used to!) that they are always
-/// multiply-used, simply because they have multiple outputs even if those
-/// outputs are used only once.
-///
-/// In the future we could define other instructions to be "root" instructions
-/// as well, if we make the corresponding change to get_value_as_source_or_const
-/// as well.
+/// Note that this analysis is fundamentally about *instructions*
+/// being codegen'd more than once, even though it is tracked per
+/// value. For an instruction with multiple results, a use of any
+/// result is a use of the instruction: a lowering that merges the
+/// instruction by matching on one of its results (e.g., a `brif` that
+/// directly consumes the flags produced by a `uadd_overflow`)
+/// generates the whole instruction, including its operands.  We
+/// account for this by treating a use of any result as a use of every
+/// result: as soon as a second result of the same instruction becomes
+/// used, all of its used results (and, transitively, its operand
+/// tree) become `Multiple`.
 ///
 /// To define `ValueUseState` more plainly: a value is `Unused` if no references
 /// exist to it; `Once` if only one other op refers to it, *and* that other op
-/// is `Unused` or `Once`; and `Multiple` otherwise. In other words, `Multiple`
-/// is contagious (except through root instructions): even if an op's result
-/// value is directly used only once in the CLIF, that value is `Multiple` if
-/// the op that uses it is itself used multiple times (hence could be codegen'd
+/// is `Unused` or `Once`, *and* no other result of the same instruction is
+/// used; and `Multiple` otherwise. In
+/// other words, `Multiple` is contagious: even if an op's result value is
+/// directly used only once in the CLIF, that value is `Multiple` if the op
+/// that uses it is itself used multiple times (hence could be codegen'd
 /// multiple times). In brief, this analysis tells us whether, if every op
 /// merged all of its operand tree, a given op could be codegen'd in more than
 /// one place.
@@ -498,6 +506,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             side_effect_inst_entry_colors,
             value_ir_uses,
             value_lowered_uses: SecondaryMap::default(),
+            opportunistic_defs: FxHashMap::default(),
             inst_sunk: FxHashSet::default(),
             cur_scan_entry_color: None,
             cur_inst: None,
@@ -526,7 +535,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             );
 
             for (i, param) in self.f.dfg.block_params(entry_bb).iter().enumerate() {
-                if self.value_ir_uses[*param] == ValueUseState::Unused {
+                if self.value_use_state(*param) == ValueUseState::Unused {
                     continue;
                 }
                 let regs = writable_value_regs(self.value_regs[*param]);
@@ -597,7 +606,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // for the benefit of debuginfo.
         if self.f.dfg.values_labels.is_some() {
             if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
-                if self.value_ir_uses[vmctx_val] != ValueUseState::Unused {
+                if self.value_use_state(vmctx_val) != ValueUseState::Unused {
                     let vmctx_reg = self.value_regs[vmctx_val].only_reg().unwrap();
                     self.emit(I::gen_dummy_use(vmctx_reg));
                 }
@@ -712,6 +721,112 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             .any(|&result| self.value_lowered_uses[result] > 0)
     }
 
+    /// Record an "opportunistic def" of `val` into `regs` at the current scan
+    /// position.
+    ///
+    /// The lowering that is currently being generated (e.g., a branch that
+    /// directly consumes the flags produced by an `uadd_overflow`) also
+    /// computes `val`'s value as a byproduct, and does so in `regs`. If, when
+    /// the scan reaches the actual definition of `val` (which must be in the
+    /// current block, further up), no further uses of `val` are found (i.e.,
+    /// the use-count matches the one recorded here), then that definition can
+    /// be skipped entirely and `val` can be aliased to `regs` instead.
+    ///
+    /// If further uses *are* found, then this opportunistic def is discarded
+    /// and the actual definition is lowered as usual (this is safe because
+    /// the value is still computed by the current lowering, just unused).
+    pub fn opportunistic_def(&mut self, val: Value, regs: ValueRegs<Reg>) {
+        trace!("opportunistic_def: val {val} regs {regs:?}");
+
+        if self.value_lowered_uses[val] == 0 {
+            trace!(" -> no uses so far; ignoring");
+            return;
+        }
+
+        // The actual definition of `val` must be in the same block as the
+        // current scan position, further up. Otherwise the regs computed here
+        // cannot possibly dominate all uses of `val` (and in particular the
+        // use-count check below is meaningless across blocks), so ignore.
+        let cur_block = match self
+            .cur_inst
+            .and_then(|inst| self.f.layout.inst_block(inst))
+        {
+            Some(block) => block,
+            None => {
+                trace!(" -> no current inst/block; ignoring");
+                return;
+            }
+        };
+        let def_block = match self.f.dfg.value_def(val) {
+            ValueDef::Result(src_inst, _) => self.f.layout.inst_block(src_inst),
+            _ => None,
+        };
+        if def_block != Some(cur_block) {
+            trace!(" -> def not in current block; ignoring");
+            return;
+        }
+
+        let uses = self.value_lowered_uses[val];
+        // Note that a later registration for the same (block, value)
+        // overwrites an earlier one: the later one is higher in the block
+        // (closer to the definition), so its defs dominate those of the
+        // earlier one, and it is strictly more useful.
+        self.opportunistic_defs
+            .insert((cur_block, val), (regs, uses));
+        trace!(" -> recorded with {uses} uses so far");
+    }
+
+    /// Attempt to commit to the opportunistic defs recorded for the results
+    /// of `inst` (whose definition is at the current scan position in
+    /// `block`).
+    ///
+    /// Returns `true` if we were able to use the opportunistic defs
+    /// and can skip this lowering.
+    fn try_use_opportunistic_defs(&mut self, block: Block, inst: Inst) -> bool {
+        let results = self.f.dfg.inst_results(inst);
+
+        // To skip the lowering and use the opportunistic defs, every
+        // result of `inst` that has uses must have a registered
+        // opportunistic def whose recorded use-count matches the
+        // current one.
+        for &result in results {
+            if self.value_lowered_uses[result] == 0 {
+                continue;
+            }
+            match self.opportunistic_defs.get(&(block, result)) {
+                Some(&(_, recorded_uses)) if recorded_uses == self.value_lowered_uses[result] => {}
+                _ => {
+                    trace!(
+                        "opportunistic defs: not committing for inst {inst}: \
+                         result {result} has {} uses but no matching opportunistic def",
+                        self.value_lowered_uses[result]
+                    );
+                    return false;
+                }
+            }
+        }
+
+        // Commit: set aliases for every result that has an opportunistic def
+        // (by the check above, this is exactly the set of results with uses),
+        // and clear the entries.
+        for &result in results {
+            if let Some(&(regs, _)) = self.opportunistic_defs.get(&(block, result)) {
+                let dsts = self.value_regs[result];
+                debug_assert_eq!(dsts.len(), regs.len());
+                for (&dst, &src) in dsts.regs().iter().zip(regs.regs().iter()) {
+                    trace!(
+                        "set vreg alias (opportunistic def): {result:?} = {dst:?}, \
+                         lowering = {src:?}"
+                    );
+                    self.vregs.set_vreg_alias(dst, src);
+                }
+                self.opportunistic_defs.remove(&(block, result));
+            }
+        }
+
+        true
+    }
+
     fn lower_clif_block<B: LowerBackend<MInst = I>>(
         &mut self,
         backend: &B,
@@ -789,6 +904,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs is used.
             if must_lower || value_needed {
+                if !has_side_effect && !must_lower && self.try_use_opportunistic_defs(block, inst) {
+                    trace!(
+                        "lowering: inst {}: {}: using opportunistic defs; skipping",
+                        inst,
+                        self.f.dfg.display_inst(inst)
+                    );
+                    continue;
+                }
+
                 trace!("lowering: inst {}: {}", inst, self.f.dfg.display_inst(inst));
                 let temp_regs = match backend.lower(self, inst) {
                     Some(regs) => regs,
@@ -806,16 +930,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     }
                 };
 
-                // The ISLE generated code emits its own registers to define the
-                // instruction's lowered values in. However, other instructions
-                // that use this SSA value will be lowered assuming that the value
-                // is generated into a pre-assigned, different, register.
+                // The ISLE generated code emits its own registers to define
+                // the instruction's lowered values in. However, other
+                // instructions that use this SSA value will be lowered
+                // assuming that the value is generated into a
+                // pre-assigned, different, register.
                 //
-                // To connect the two, we set up "aliases" in the VCodeBuilder
-                // that apply when it is building the Operand table for the
-                // regalloc to use. These aliases effectively rewrite any use of
-                // the pre-assigned register to the register that was returned by
-                // the ISLE lowering logic.
+                // To connect the two, we set up "aliases" in the
+                // VCodeBuilder that apply when it is building the Operand
+                // table for the regalloc to use. These aliases effectively
+                // rewrite any use of the pre-assigned register to the
+                // register that was returned by the ISLE lowering logic.
                 let results = self.f.dfg.inst_results(inst);
                 debug_assert_eq!(temp_regs.len(), results.len());
                 for (regs, &result) in temp_regs.iter().zip(results) {
@@ -1214,11 +1339,19 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         Ok(vcode)
     }
 
+    fn value_use_state(&self, val: Value) -> ValueUseState {
+        let val = map_to_first_result(self.f, val);
+        self.value_ir_uses[val]
+    }
+
     pub fn value_is_unused(&self, val: Value) -> bool {
-        match self.value_ir_uses[val] {
-            ValueUseState::Unused => true,
-            _ => false,
-        }
+        self.value_lowered_uses[val] == 0
+    }
+
+    /// Does this value still have uses to serve at the current point in the
+    /// lowering scan? If not, a lowering may be elided.
+    pub(crate) fn value_lowered_used(&self, val: Value) -> bool {
+        self.value_lowered_uses[val] > 0
     }
 
     pub fn block_successor_label(&self, block: Block, succ: usize) -> MachLabel {
@@ -1233,6 +1366,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         trace!(" -> succs {succs:?}");
         let succ_block = *succs.get(succ).expect("Successor index out of range");
         MachLabel::from_block(succ_block)
+    }
+}
+
+/// Map any `Value` to the first `Value` defined by its defining
+/// instruction. (Leaves values defined by blockparams
+/// identity-mapped.)
+fn map_to_first_result(f: &Function, val: Value) -> Value {
+    match f.dfg.value_def(val) {
+        ValueDef::Result(_, idx) if idx == 0 => val,
+        ValueDef::Result(inst, _) => f.dfg.inst_results(inst)[0],
+        _ => val,
     }
 }
 
@@ -1262,32 +1406,32 @@ fn compute_use_states(
 
     let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
 
+    // Step 1: call `mark_use` on every use. When a value is used
+    // multiple times, it is pushed into `multiple_stack`, which we
+    // use to do the graph-walk that propagates multiplicity below.
+    let mut multiple_stack: SmallVec<[Value; 16]> = smallvec![];
+
     if let Some(sret_param) = sret_param {
         // There's an implicit use of the struct-return parameter in each
         // copy of the function epilogue, which we count here.
         value_ir_uses[sret_param] = ValueUseState::Multiple;
+        multiple_stack.push(sret_param);
     }
 
-    // Stack of iterators over Values as we do DFS to mark
-    // Multiple-state subtrees. The iterator type is whatever is
-    // returned by `uses` below.
-    let mut stack: SmallVec<[_; 16]> = smallvec![];
+    let mut mark_use = |val: Value, multiple_stack: &mut SmallVec<[Value; 16]>| {
+        let val = map_to_first_result(f, val);
+        let old = value_ir_uses[val];
+        value_ir_uses[val].inc();
+        if value_ir_uses[val] == ValueUseState::Multiple && old != ValueUseState::Multiple {
+            multiple_stack.push(val);
+        }
+    };
 
     // Find the args for the inst corresponding to the given value.
-    //
-    // Note that "root" instructions are skipped here. This means that multiple
-    // uses of any result of a multi-result instruction are not considered
-    // multiple uses of the operands of a multi-result instruction. This
-    // requires tight coupling with `get_value_as_source_or_const` above which
-    // is the consumer of the map that this function is producing.
-    let uses = |value| {
+    let uses = |value: Value| {
         trace!(" -> pushing args for {} onto stack", value);
         if let ValueDef::Result(src_inst, _) = f.dfg.value_def(value) {
-            if is_value_use_root(f, src_inst) {
-                None
-            } else {
-                Some(f.dfg.inst_values(src_inst))
-            }
+            Some(f.dfg.inst_values(src_inst))
         } else {
             None
         }
@@ -1304,67 +1448,22 @@ fn compute_use_states(
         // additional use on each operand.
         for arg in f.dfg.inst_values(inst) {
             debug_assert!(f.dfg.value_is_real(arg));
-            let old = value_ir_uses[arg];
-            value_ir_uses[arg].inc();
-            let new = value_ir_uses[arg];
-            trace!("arg {} used, old state {:?}, new {:?}", arg, old, new);
+            mark_use(arg, &mut multiple_stack);
+        }
+    }
 
-            // On transition to Multiple, do DFS.
-            if old == ValueUseState::Multiple || new != ValueUseState::Multiple {
-                continue;
-            }
-            if let Some(iter) = uses(arg) {
-                stack.push(iter);
-            }
-            while let Some(iter) = stack.last_mut() {
-                if let Some(value) = iter.next() {
-                    debug_assert!(f.dfg.value_is_real(value));
-                    trace!(" -> DFS reaches {}", value);
-                    if value_ir_uses[value] == ValueUseState::Multiple {
-                        // Truncate DFS here: no need to go further,
-                        // as whole subtree must already be Multiple.
-                        // With debug asserts, check one level of
-                        // that invariant at least.
-                        debug_assert!(uses(value).into_iter().flatten().all(|arg| {
-                            debug_assert!(f.dfg.value_is_real(arg));
-                            value_ir_uses[arg] == ValueUseState::Multiple
-                        }));
-                        continue;
-                    }
-                    value_ir_uses[value] = ValueUseState::Multiple;
-                    trace!(" -> became Multiple");
-                    if let Some(iter) = uses(value) {
-                        stack.push(iter);
-                    }
-                } else {
-                    // Empty iterator, discard.
-                    stack.pop();
-                }
-            }
+    // Step 2: propagate multiplicity. `Multiple` is
+    // transitive/contagious: if we can lower any value `v` multiple
+    // times, that might involve lowering its uses multiple times, and
+    // their uses, and so on, depending on how deep a lowering rule
+    // matches.
+    while let Some(value) = multiple_stack.pop() {
+        for u in uses(value).into_iter().flatten() {
+            mark_use(u, &mut multiple_stack);
         }
     }
 
     value_ir_uses
-}
-
-/// Definition of a "root" instruction for the calculation of `ValueUseState`.
-///
-/// This function calculates whether `inst` is considered a "root" for value-use
-/// information. This concept is used to forcibly prevent looking-through the
-/// instruction during `get_value_as_source_or_const` as it additionally
-/// prevents propagating `Multiple`-used results of the `inst` here to the
-/// operands of the instruction.
-///
-/// Currently this is defined as multi-result instructions. That means that
-/// lowerings are never allowed to look through a multi-result instruction to
-/// generate patterns. Note that this isn't possible in ISLE today anyway so
-/// this isn't currently much of a loss.
-///
-/// The main purpose of this function is to prevent the operands of a
-/// multi-result instruction from being forcibly considered `Multiple`-used
-/// regardless of circumstances.
-fn is_value_use_root(f: &Function, inst: Inst) -> bool {
-    f.dfg.inst_results(inst).len() > 1
 }
 
 /// Function-level queries.
@@ -1534,17 +1633,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // OK to merge source instruction if we have a source
             // instruction, and one of these two conditions hold:
             //
-            // - It has no side-effects and this instruction is not a "value-use
-            //   root" instruction. Instructions which are considered "roots"
-            //   for value-use calculations do not have accurate information
-            //   known about the `ValueUseState` of their operands. This is
-            //   currently done for multi-result instructions to prevent a use
-            //   of each result from forcing all operands of the multi-result
-            //   instruction to also be `Multiple`. This in turn means that the
-            //   `ValueUseState` for operands of a "root" instruction to be a
-            //   lie if pattern matching were to look through the multi-result
-            //   instruction. As a result the "look through this instruction"
-            //   logic only succeeds if it's not a root instruction.
+            // - It has no side-effects.
             //
             // - It has a side-effect, has one output value, that one
             //   output has only one use, directly or indirectly (so
@@ -1571,16 +1660,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let src_side_effect = src_entry_color.get() != 0;
                 trace!(" -> src inst {}", self.f.dfg.display_inst(src_inst));
                 trace!(" -> has lowering side effect: {}", src_side_effect);
-                if is_value_use_root(self.f, src_inst) {
-                    // If this instruction is a "root instruction" then it's
-                    // required that we can't look through it to see the
-                    // definition. This means that the `ValueUseState` for the
-                    // operands of this result assume that this instruction is
-                    // generated exactly once which might get violated were we
-                    // to allow looking through it.
-                    trace!(" -> is a root instruction");
-                    InputSourceInst::None
-                } else if !src_side_effect {
+                if !src_side_effect {
                     // Otherwise if this instruction has no side effects and the
                     // value is used only once then we can look through it with
                     // a "unique" tag. A non-unique `Use` can be shown for other
@@ -1712,7 +1792,7 @@ mod tests {
     use crate::ir::{Function, InstBuilder};
 
     #[test]
-    fn multi_result_use_once() {
+    fn multi_result_two_results_used_once_each() {
         let mut func = Function::new();
         let block0 = func.dfg.make_block();
         let mut pos = FuncCursor::new(&mut func);
@@ -1725,31 +1805,33 @@ mod tests {
         let func = pos.func;
 
         let uses = super::compute_use_states(&func, None);
-        assert_eq!(uses[v1], ValueUseState::Once);
-        assert_eq!(uses[v2], ValueUseState::Once);
-        assert_eq!(uses[v3], ValueUseState::Once);
-        assert_eq!(uses[v4], ValueUseState::Once);
-        assert_eq!(uses[v5], ValueUseState::Once);
+        assert_eq!(uses[v1], ValueUseState::Multiple);
+        assert_eq!(uses[v2], ValueUseState::Multiple);
+        assert_eq!(uses[v3], ValueUseState::Multiple);
+        assert_eq!(uses[v4], ValueUseState::Multiple);
+        assert_eq!(uses[v5], ValueUseState::Unused);
     }
 
     #[test]
-    fn results_used_twice_but_not_operands() {
+    fn multi_result_one_result_used() {
         let mut func = Function::new();
         let block0 = func.dfg.make_block();
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_block(block0);
         let v1 = pos.ins().iconst(types::I64, 0);
         let v2 = pos.ins().iconst(types::I64, 1);
-        let v3 = pos.ins().iconcat(v1, v2);
-        let (v4, v5) = pos.ins().isplit(v3);
-        pos.ins().return_(&[v4, v4]);
+        let v3 = pos.ins().iadd(v1, v2);
+        let (v4, v5) = pos.ins().uadd_overflow(v3, v1);
+        let v6 = pos.ins().uextend(types::I64, v5);
+        pos.ins().return_(&[v6]);
         let func = pos.func;
 
         let uses = super::compute_use_states(&func, None);
-        assert_eq!(uses[v1], ValueUseState::Once);
+        assert_eq!(uses[v1], ValueUseState::Multiple);
         assert_eq!(uses[v2], ValueUseState::Once);
         assert_eq!(uses[v3], ValueUseState::Once);
-        assert_eq!(uses[v4], ValueUseState::Multiple);
-        assert_eq!(uses[v5], ValueUseState::Unused);
+        assert_eq!(uses[v4], ValueUseState::Once);
+        assert_eq!(uses[v5], ValueUseState::Unused); // use counted against first def.
+        assert_eq!(uses[v6], ValueUseState::Once);
     }
 }

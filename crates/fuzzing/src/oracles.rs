@@ -620,6 +620,12 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 
     let test = &test.test;
 
+    // FIXME(#14222) stack-switching and asan aren't integrated yet, so skip
+    // stack-switching tests when asan is enabled.
+    if cfg!(asan) && test.config.stack_switching == Some(true) {
+        return Err(arbitrary::Error::IncorrectFormat);
+    }
+
     if test.config.component_model_async() || u.arbitrary()? {
         fuzz_config.enable_async(u)?;
     }
@@ -998,17 +1004,9 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
 /// Execute a series of exception-related operations.
 pub fn exception_ops(mut fuzz_config: generators::Config, mut ops: ExceptionOps) -> Result<()> {
-    match fuzz_config.wasmtime.compiler_strategy {
-        // Winch doesn't support exceptions; force to Cranelift.
-        CompilerStrategy::Winch => {
-            fuzz_config.wasmtime.compiler_strategy = CompilerStrategy::CraneliftNative;
-        }
-        CompilerStrategy::CraneliftNative | CompilerStrategy::CraneliftPulley => {}
-    }
-
     let module_cfg = &mut fuzz_config.module_config.config;
-    // Force exceptions + GC on (exceptions require GC).
-    module_cfg.gc_enabled = true;
+    // Force exceptions, but don't force Wasm GC on: Winch doesn't support it,
+    // and Cranelift should use its generated GC setting.
     module_cfg.exceptions_enabled = true;
     module_cfg.reference_types_enabled = true;
 
@@ -1342,6 +1340,7 @@ mod tests {
             | WasmFeatures::FUNCTION_REFERENCES
             | WasmFeatures::GC
             | WasmFeatures::GC_TYPES
+            | WasmFeatures::COMPACT_IMPORTS
             | WasmFeatures::CUSTOM_PAGE_SIZES
             | WasmFeatures::EXTENDED_CONST
             | WasmFeatures::EXCEPTIONS;

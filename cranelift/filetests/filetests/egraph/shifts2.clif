@@ -32,3 +32,121 @@ block0(v0: i64, v1: i64, v3: i64):
 ;     return v7
 ; }
 
+function %not_sshr_not_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = sshr v2, v1
+    v4 = bnot v3
+    return v4
+}
+
+; function %not_sshr_not_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = sshr v0, v1
+;     return v5
+; }
+
+function %not_ushr_not_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = ushr v2, v1
+    v4 = bnot v3
+    return v4
+}
+
+; function %not_ushr_not_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = bnot v0
+;     v3 = ushr v2, v1
+;     v4 = bnot v3
+;     return v4
+; }
+
+function %not_sshr_not_vector(i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32):
+    v2 = bnot v0
+    v3 = sshr v2, v1
+    v4 = bnot v3
+    return v4
+}
+
+; function %not_sshr_not_vector(i32x4, i32) -> i32x4 fast {
+; block0(v0: i32x4, v1: i32):
+;     v5 = sshr v0, v1
+;     return v5
+; }
+
+function %ishl_zero_vector(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = ishl v1, v0
+    return v2
+}
+
+; function %ishl_zero_vector(i32) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32):
+;     v1 = vconst.i32x4 const0
+;     return v1  ; v1 = const0
+; }
+
+function %ushr_zero_vector(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = ushr v1, v0
+    return v2
+}
+
+; function %ushr_zero_vector(i32) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32):
+;     v1 = vconst.i32x4 const0
+;     return v1  ; v1 = const0
+; }
+
+function %sshr_zero_vector(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = sshr v1, v0
+    return v2
+}
+
+; function %sshr_zero_vector(i32) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32):
+;     v1 = vconst.i32x4 const0
+;     return v1  ; v1 = const0
+; }
+
+function %rotl_zero_vector(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = rotl v1, v0
+    return v2
+}
+
+; function %rotl_zero_vector(i32) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32):
+;     v1 = vconst.i32x4 const0
+;     return v1  ; v1 = const0
+; }
+
+function %rotr_zero_vector(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = rotr v1, v0
+    return v2
+}
+
+; function %rotr_zero_vector(i32) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32):
+;     v1 = vconst.i32x4 const0
+;     return v1  ; v1 = const0
+; }

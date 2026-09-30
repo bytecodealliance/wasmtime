@@ -13,8 +13,9 @@ use std::mem;
 use wasmparser::BlockType;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedFuncIndex, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
-    MemoryIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, Table, TableIndex,
-    TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType, collections::TryClone as _,
+    MemoryIndex, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap,
+    PtrSize, Table, TableIndex, TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType,
+    collections::TryClone as _,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -177,6 +178,14 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         self.ptr_type
     }
 
+    /// Returns the byte offset of `index` in the module's shared type-ID array.
+    pub(crate) fn shared_type_index_offset(&self, index: ModuleInternedTypeIndex) -> u32 {
+        index
+            .as_u32()
+            .checked_mul(u32::from(self.vmoffsets.size_of_vmshared_type_index()))
+            .unwrap()
+    }
+
     /// Resolves a [`Callee::FuncRef`] from a type index.
     pub(crate) fn funcref(&mut self, idx: TypeIndex) -> Callee {
         Callee::FuncRef(idx)
@@ -208,6 +217,11 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                 BlockSig::new(control::BlockType::func(sig.clone_panic_on_oom()))
             }
         })
+    }
+
+    /// Converts a parser heap type into its canonicalized Wasmtime type.
+    pub(crate) fn convert_heap_type(&self, ty: wasmparser::HeapType) -> Result<WasmHeapType> {
+        Ok(TypeConverter::new(self.translation, self.types).convert_heap_type(ty)?)
     }
 
     /// Resolves `GlobalData` of a global at the given index.

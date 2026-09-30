@@ -9,11 +9,11 @@
   (data (i32.const 1) "hi")
 )
 ;; function u2415919104:1(i64 vmctx, i64, i64, i64) -> i8 system_v {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 67108936 "VMStoreContext+0x48"
-;;     region2 = 67108928 "VMStoreContext+0x40"
-;;     region3 = 67108944 "VMStoreContext+0x50"
-;;     region4 = 67109000 "VMStoreContext+0x88"
+;;     region0 = 123 ""
+;;     region1 = 231 ""
+;;     region2 = 243 ""
+;;     region3 = 209 ""
+;;     region4 = 68 ""
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u2415919104:0 sig0
 ;;
@@ -42,10 +42,10 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
-;;     region0 = 112 "VMContext+0x70"
-;;     region1 = 120 "VMContext+0x78"
-;;     region2 = 603979784 "VMMemoryDefinition+0x8"
-;;     region3 = 603979776 "VMMemoryDefinition+0x0"
+;;     region0 = 174 ""
+;;     region1 = 10 ""
+;;     region2 = 105 ""
+;;     region3 = 215 ""
 ;;     sig0 = (i64 vmctx, i64, i64, i64) tail
 ;;     fn0 = colocated u805306368:1 sig0
 ;;

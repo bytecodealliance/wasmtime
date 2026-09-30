@@ -73,7 +73,7 @@ struct Opts {
     ignore_solver_tags: bool,
 
     /// Per-query timeout, in seconds.
-    #[arg(long, default_value = "300", env = "ISLE_VERI_TIMEOUT")]
+    #[arg(long, default_value = "90", env = "ISLE_VERI_TIMEOUT")]
     timeout: u64,
 
     /// Number of threads to use (0 defaults to # of logical cores)
@@ -87,6 +87,15 @@ struct Opts {
     /// Write results to files under log directory. (Use 0 to select automatically.)
     #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     results_to_log_dir: bool,
+
+    /// Print the counterexample for each verification failure.
+    /// At most 25 counterexamples are printed.
+    #[arg(
+        long,
+        env = "ISLE_VERI_PRINT_COUNTEREXAMPLE",
+        value_parser = clap::builder::FalseyValueParser::new(),
+    )]
+    print_counterexample: bool,
 
     /// Skip solver.
     #[arg(long, env = "ISLE_VERI_SKIP_SOLVER")]
@@ -285,6 +294,7 @@ fn main() -> Result<()> {
         runner.set_log_dir(log_dir);
     }
     runner.set_results_to_log_dir(opts.results_to_log_dir);
+    runner.set_print_counterexample(opts.print_counterexample);
     runner.skip_solver(opts.skip_solver);
     runner.debug(opts.debug);
 

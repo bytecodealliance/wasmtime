@@ -31,6 +31,7 @@ use crate::component::*;
 use crate::error::Result;
 use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, Trap, WasmValType};
+use cranelift_entity::EntitySet;
 use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
 use info::LinearMemoryOptions;
@@ -143,13 +144,17 @@ pub struct ComponentDfg {
     ///
     /// Currently all side effects are either instantiating core wasm modules or
     /// declaring a resource. These side effects affect the dataflow processing
-    /// of this component by idnicating what order operations should be
+    /// of this component by indicating what order operations should be
     /// performed during instantiation.
     pub side_effects: Vec<SideEffect>,
 
     /// Interned map of id-to-`CanonicalOptions`, or all sets-of-options used by
     /// this component.
     pub options: Intern<OptionsId, CanonicalOptions>,
+
+    /// The set of fused adapters which may skip their
+    /// `{enter,exit}-sync-call` window.
+    pub transparent_adapters: EntitySet<AdapterId>,
 }
 
 /// Possible side effects that are possible with instantiating this component.
@@ -267,7 +272,6 @@ pub enum CoreDef {
     InstanceFlags(RuntimeComponentInstanceIndex),
     Trampoline(TrampolineIndex),
     UnsafeIntrinsic(ModuleInternedTypeIndex, UnsafeIntrinsic),
-    TaskMayBlock,
 
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
@@ -485,27 +489,21 @@ pub enum Trampoline {
     },
     ThreadSuspend {
         instance: RuntimeComponentInstanceIndex,
-        cancellable: bool,
     },
     ThreadYield {
         instance: RuntimeComponentInstanceIndex,
-        cancellable: bool,
     },
     ThreadSuspendThenResume {
         instance: RuntimeComponentInstanceIndex,
-        cancellable: bool,
     },
     ThreadYieldThenResume {
         instance: RuntimeComponentInstanceIndex,
-        cancellable: bool,
     },
     ThreadSuspendThenPromote {
         instance: RuntimeComponentInstanceIndex,
-        cancellable: bool,
     },
     ThreadYieldThenPromote {
         instance: RuntimeComponentInstanceIndex,
-        cancellable: bool,
     },
 }
 
@@ -543,7 +541,6 @@ pub struct CanonicalOptions {
     pub callback: Option<CallbackId>,
     pub post_return: Option<PostReturnId>,
     pub async_: bool,
-    pub cancellable: bool,
     pub core_type: ModuleInternedTypeIndex,
     pub data_model: CanonicalOptionsDataModel,
 }
@@ -848,7 +845,6 @@ impl LinearizeDfg<'_> {
             callback,
             post_return,
             async_: options.async_,
-            cancellable: options.cancellable,
             core_type: options.core_type,
             data_model,
         };
@@ -913,7 +909,6 @@ impl LinearizeDfg<'_> {
                 }
                 info::CoreDef::UnsafeIntrinsic(*i)
             }
-            CoreDef::TaskMayBlock => info::CoreDef::TaskMayBlock,
         }
     }
 
@@ -1173,48 +1168,32 @@ impl LinearizeDfg<'_> {
             Trampoline::ThreadResumeLater { instance } => info::Trampoline::ThreadResumeLater {
                 instance: *instance,
             },
-            Trampoline::ThreadSuspend {
-                instance,
-                cancellable,
-            } => info::Trampoline::ThreadSuspend {
+            Trampoline::ThreadSuspend { instance } => info::Trampoline::ThreadSuspend {
                 instance: *instance,
-                cancellable: *cancellable,
             },
-            Trampoline::ThreadYield {
-                instance,
-                cancellable,
-            } => info::Trampoline::ThreadYield {
+            Trampoline::ThreadYield { instance } => info::Trampoline::ThreadYield {
                 instance: *instance,
-                cancellable: *cancellable,
             },
-            Trampoline::ThreadSuspendThenResume {
-                instance,
-                cancellable,
-            } => info::Trampoline::ThreadSuspendThenResume {
-                instance: *instance,
-                cancellable: *cancellable,
-            },
-            Trampoline::ThreadYieldThenResume {
-                instance,
-                cancellable,
-            } => info::Trampoline::ThreadYieldThenResume {
-                instance: *instance,
-                cancellable: *cancellable,
-            },
-            Trampoline::ThreadSuspendThenPromote {
-                instance,
-                cancellable,
-            } => info::Trampoline::ThreadSuspendThenPromote {
-                instance: *instance,
-                cancellable: *cancellable,
-            },
-            Trampoline::ThreadYieldThenPromote {
-                instance,
-                cancellable,
-            } => info::Trampoline::ThreadYieldThenPromote {
-                instance: *instance,
-                cancellable: *cancellable,
-            },
+            Trampoline::ThreadSuspendThenResume { instance } => {
+                info::Trampoline::ThreadSuspendThenResume {
+                    instance: *instance,
+                }
+            }
+            Trampoline::ThreadYieldThenResume { instance } => {
+                info::Trampoline::ThreadYieldThenResume {
+                    instance: *instance,
+                }
+            }
+            Trampoline::ThreadSuspendThenPromote { instance } => {
+                info::Trampoline::ThreadSuspendThenPromote {
+                    instance: *instance,
+                }
+            }
+            Trampoline::ThreadYieldThenPromote { instance } => {
+                info::Trampoline::ThreadYieldThenPromote {
+                    instance: *instance,
+                }
+            }
         };
         let i1 = self.trampolines.push(*signature);
         let i2 = self.trampoline_defs.push(trampoline);

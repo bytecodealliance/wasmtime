@@ -6,7 +6,7 @@ test_programs::p3::export!(Component);
 
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
-        let res = test_programs::p3::http::request(
+        let (transmit, _response) = test_programs::p3::http::request_with_transmit_result(
             Method::Get,
             Scheme::Http,
             "some.invalid.dnsname:3000",
@@ -17,9 +17,10 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             None,
             None,
         )
-        .await;
+        .await
+        .expect("failed to construct request");
 
-        let e = res.unwrap_err();
+        let e = transmit.expect_err("expected request transmission to fail");
         assert!(
             matches!(
                 e.downcast_ref::<ErrorCode>()

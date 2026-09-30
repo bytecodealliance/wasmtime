@@ -825,7 +825,25 @@ impl ComponentTypesBuilder {
     /// Returns whether the type specified contains any borrowed resources
     /// within it.
     pub fn ty_contains_borrow_resource(&self, ty: &InterfaceType) -> bool {
-        self.type_information(ty).has_borrow
+        self.type_information(ty).handles.has_borrow()
+    }
+
+    /// Returns whether the type specified contains any handle within it, where
+    /// "handle" means `own`, `borrow`, `future`, `stream`, or `error-context`.
+    fn ty_contains_any_handle(&self, ty: &InterfaceType) -> bool {
+        self.type_information(ty).handles.has_any()
+    }
+
+    /// Returns whether the signature of `ty` mentions any handle, in either its
+    /// parameters or its results.
+    pub fn func_contains_any_handle(&self, ty: TypeFuncIndex) -> bool {
+        let ty = &self[ty];
+        let params = &self[ty.params].types;
+        let results = &self[ty.results].types;
+        params
+            .iter()
+            .chain(results.iter())
+            .any(|ty| self.ty_contains_any_handle(ty))
     }
 
     fn type_information(&self, ty: &InterfaceType) -> &TypeInformation {
@@ -837,18 +855,25 @@ impl ComponentTypesBuilder {
             | InterfaceType::S16
             | InterfaceType::U32
             | InterfaceType::S32
-            | InterfaceType::Char
-            | InterfaceType::Own(_)
+            | InterfaceType::Char => {
+                static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
+                &INFO
+            }
+            InterfaceType::Own(_)
             | InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => {
-                static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
+                static INFO: TypeInformation = {
+                    let mut info = TypeInformation::primitive(FlatType::I32);
+                    info.handles = Handles::NoBorrow;
+                    info
+                };
                 &INFO
             }
             InterfaceType::Borrow(_) => {
                 static INFO: TypeInformation = {
                     let mut info = TypeInformation::primitive(FlatType::I32);
-                    info.has_borrow = true;
+                    info.handles = Handles::Borrow;
                     info
                 };
                 &INFO
@@ -993,16 +1018,54 @@ struct TypeInformationCache {
     fixed_length_lists: PrimaryMap<TypeFixedLengthListIndex, TypeInformation>,
 }
 
+/// What kind of handles a type transitively contains.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum Handles {
+    /// This type contains no handles at all.
+    None,
+
+    /// This type contains at least one handle, but none of them are `borrow`s.
+    ///
+    /// That is, it contains an `own`, `future`, `stream`, or `error-context`.
+    NoBorrow,
+
+    /// This type contains at least one `borrow` handle.
+    Borrow,
+}
+
+impl Handles {
+    /// Does this type contain any handle at all?
+    const fn has_any(self) -> bool {
+        !matches!(self, Handles::None)
+    }
+
+    /// Does this type contain a `borrow` handle?
+    const fn has_borrow(self) -> bool {
+        matches!(self, Handles::Borrow)
+    }
+
+    /// Join two facts together.
+    const fn join(a: Self, b: Self) -> Handles {
+        match (a, b) {
+            (Handles::Borrow, _) | (_, Handles::Borrow) => Handles::Borrow,
+            (Handles::NoBorrow, _) | (_, Handles::NoBorrow) => Handles::NoBorrow,
+            (Handles::None, Handles::None) => Handles::None,
+        }
+    }
+}
+
 struct TypeInformation {
     flat: FlatTypesStorage,
-    has_borrow: bool,
+
+    /// Which handles this type transitively contains, if any.
+    handles: Handles,
 }
 
 impl TypeInformation {
     const fn new() -> TypeInformation {
         TypeInformation {
             flat: FlatTypesStorage::new(),
-            has_borrow: false,
+            handles: Handles::None,
         }
     }
 
@@ -1028,7 +1091,7 @@ impl TypeInformation {
     /// for all of the component fields of the record.
     fn build_record<'a>(&mut self, types: impl Iterator<Item = &'a TypeInformation>) {
         for info in types {
-            self.has_borrow = self.has_borrow || info.has_borrow;
+            self.handles = Handles::join(self.handles, info.handles);
             match info.flat.as_flat_types() {
                 Some(types) => {
                     for (t32, t64) in types.memory32.iter().zip(types.memory64) {
@@ -1069,7 +1132,7 @@ impl TypeInformation {
                 // the flat representation
                 None => continue,
             };
-            self.has_borrow = self.has_borrow || info.has_borrow;
+            self.handles = Handles::join(self.handles, info.handles);
 
             // If this variant is already unrepresentable in a flat
             // representation then this can be skipped.
@@ -1134,7 +1197,7 @@ impl TypeInformation {
 
     fn fixed_length_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedLengthList) {
         let element_info = types.type_information(&ty.element);
-        self.has_borrow = element_info.has_borrow;
+        self.handles = element_info.handles;
         match element_info.flat.as_flat_types() {
             Some(types) => {
                 'outer: for _ in 0..ty.size {
@@ -1189,7 +1252,7 @@ impl TypeInformation {
     fn lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeList) {
         *self = TypeInformation::string();
         let info = types.type_information(&ty.element);
-        self.has_borrow = info.has_borrow;
+        self.handles = info.handles;
     }
 
     fn maps(&mut self, types: &ComponentTypesBuilder, ty: &TypeMap) {
@@ -1198,6 +1261,6 @@ impl TypeInformation {
         *self = TypeInformation::string();
         let key_info = types.type_information(&ty.key);
         let value_info = types.type_information(&ty.value);
-        self.has_borrow = key_info.has_borrow || value_info.has_borrow;
+        self.handles = Handles::join(key_info.handles, value_info.handles);
     }
 }

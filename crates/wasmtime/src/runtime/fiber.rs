@@ -888,19 +888,6 @@ where
     })
 }
 
-/// Safe wrapper around [`make_fiber_unchecked`] which requires that `S` is
-/// `Send`.
-#[cfg(feature = "component-model-async")]
-pub(crate) fn make_fiber<'a, S>(
-    store: &mut S,
-    fun: impl FnOnce(&mut S) -> Result<()> + Send + Sync + 'a,
-) -> Result<StoreFiber<'a>>
-where
-    S: AsStoreOpaque + Send + ?Sized + 'a,
-{
-    unsafe { make_fiber_unchecked(store, fun) }
-}
-
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
 pub(crate) async fn on_fiber<S, R>(

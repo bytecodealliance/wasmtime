@@ -167,7 +167,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             }
 
             // Find regclass(es) of the register(s) used to store a value of this type.
-            let (rcs, reg_tys) = Inst::rc_for_type(param.value_type)?;
+            let (rcs, reg_tys) = Inst::rc_for_type(&param.value_type)?;
 
             // Now assign ABIArgSlots for each register-sized part.
             //
@@ -595,10 +595,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         // Emit return instruction.
-        let stack_bytes_to_pop = if call_conv == CallConv::Tail {
-            frame_layout.tail_args_size
-        } else {
-            0
+        let stack_bytes_to_pop = match call_conv {
+            CallConv::Tail => frame_layout.tail_args_size,
+            CallConv::Winch => frame_layout.incoming_args_size,
+            _ => 0,
         };
         let inst = if stack_bytes_to_pop == 0 {
             asm::inst::retq_zo::new().into()
@@ -906,6 +906,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn get_ext_mode(
         _call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
+        _location: ABIArgLocation,
     ) -> ir::ArgumentExtension {
         specified
     }
@@ -1121,6 +1122,7 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
         },
         CallConv::WindowsFastcall => match fltreg_idx {
             0 => Some(regs::xmm0()),
+            1 => Some(regs::xmm1()), // The Rust ABI for float scalar pairs needs this.
             _ => None,
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),

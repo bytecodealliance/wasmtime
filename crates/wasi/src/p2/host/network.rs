@@ -217,3 +217,39 @@ impl std::net::ToSocketAddrs for Ipv6SocketAddress {
         std::net::SocketAddrV6::from(*self).to_socket_addrs()
     }
 }
+
+mod named {
+    use crate::p2::SocketError;
+    use crate::p2::bindings::named_imports::wasi::sockets::network;
+    use crate::p2::bindings::sockets::network::{ErrorCode, Network};
+    use crate::sockets::WasiSocketsNamedView;
+    use crate::{NamedId, WasiCtxNamedView};
+    use wasmtime::Error;
+    use wasmtime::component::Resource;
+
+    impl<T> network::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        fn convert_error_code(&mut self, error: SocketError) -> wasmtime::Result<ErrorCode> {
+            error.downcast()
+        }
+
+        fn network_error_code(
+            &mut self,
+            id: NamedId,
+            err: Resource<Error>,
+        ) -> wasmtime::Result<Option<ErrorCode>> {
+            super::network::Host::network_error_code(&mut self.0.sockets(id), err)
+        }
+    }
+
+    impl<T> network::HostNetwork for WasiCtxNamedView<'_, T>
+    where
+        T: WasiSocketsNamedView,
+    {
+        fn drop(&mut self, id: NamedId, this: Resource<Network>) -> Result<(), wasmtime::Error> {
+            super::network::HostNetwork::drop(&mut self.0.sockets(id), this)
+        }
+    }
+}

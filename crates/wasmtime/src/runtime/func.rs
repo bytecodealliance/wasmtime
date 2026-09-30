@@ -3,7 +3,7 @@ use crate::prelude::*;
 use crate::runtime::vm::{
     self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
     VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
-    VMStoreContext,
+    VMStoreContext, VmPtr,
 };
 use crate::store::{Asyncness, AutoAssertNoGc, InstanceId, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
@@ -277,7 +277,7 @@ pub struct Func {
     /// Note that this field has an `unsafe_*` prefix to discourage use of it.
     /// This is only safe to read/use if `self.store` is validated to belong to
     /// an ambiently provided `StoreOpaque` or similar. Use the
-    /// `self.func_ref()` method instead of this field to perform this check.
+    /// `self.vm_func_ref()` method instead of this field to perform this check.
     unsafe_func_ref: SendSyncPtr<VMFuncRef>,
 }
 
@@ -1586,6 +1586,10 @@ impl EntryStoreContext {
 
         unsafe {
             let vm_store_context = store.0.vm_store_context();
+            let initial_stack_information = VmPtr::from(
+                NonNull::new(initial_stack_information)
+                    .expect("expected non-null stack information"),
+            );
             let new_stack_chain = VMStackChain::InitialStack(initial_stack_information);
             let stack_chain =
                 mem::replace(&mut *vm_store_context.stack_chain.get(), new_stack_chain);

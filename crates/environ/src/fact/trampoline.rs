@@ -30,7 +30,7 @@ use crate::fact::{
     LinearMemoryOptions, Module, Options,
 };
 use crate::prelude::*;
-use crate::{FuncIndex, GlobalIndex, IndexType, Trap};
+use crate::{FuncIndex, GlobalIndex, IndexType, NUM_COMPONENT_CONTEXT_SLOTS, Trap};
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
@@ -111,19 +111,6 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             lower_sig,
             lift_sig,
         )
-    }
-
-    // If the lift and lower instances are equal, or if one is an ancestor of
-    // the other, we trap unconditionally.  This ensures that recursive
-    // reentrance via an adapter is impossible.
-    if adapter.lift.instance == adapter.lower.instance
-        || adapter.lower.ancestors.contains(&adapter.lift.instance)
-        || adapter.lift.ancestors.contains(&adapter.lower.instance)
-    {
-        let (mut compiler, _, _) = compiler(module, adapter);
-        compiler.trap(Trap::CannotEnterComponent);
-        compiler.finish();
-        return;
     }
 
     // This closure compiles a function to be exported to the host which host to
@@ -769,25 +756,19 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let saved_lower_may_leave =
             self.trap_if_not_may_leave(adapter.lower.flags, Trap::CannotLeaveComponent);
 
-        let old_task_may_block = if self.module.tunables.concurrency_support {
-            // Save, clear, and later restore the `may_block` field.
-            let task_may_block = self.module.import_task_may_block();
-            let old_task_may_block = if self.types[adapter.lift.ty].async_ {
-                self.instruction(GlobalGet(task_may_block.as_u32()));
-                self.instruction(I32Eqz);
-                self.instruction(If(BlockType::Empty));
-                self.trap(Trap::CannotBlockSyncTask);
-                self.instruction(End);
-                None
-            } else {
-                let task_may_block = self.module.import_task_may_block();
-                self.instruction(GlobalGet(task_may_block.as_u32()));
-                let old_task_may_block = self.local_set_new_tmp(ValType::I32);
-                self.instruction(I32Const(0));
-                self.instruction(GlobalSet(task_may_block.as_u32()));
-                Some(old_task_may_block)
-            };
+        // If nothing that this adapter can reach is able to observe or mutate
+        // the thread state that `enter-sync-call`/`exit-sync-call` maintain then
+        // none of its bookkeeping is necessary.
+        //
+        // See `crates/environ/src/component/thread_transparency.rs` for details.
+        debug_assert!(
+            !(adapter.thread_transparent && self.emit_resource_call),
+            "resources are not thread transparent",
+        );
+        let needs_thread_state =
+            self.module.tunables.concurrency_support && !adapter.thread_transparent;
 
+        if needs_thread_state {
             // Push a task onto the current task stack.
             //
             // Note that for sync-to-sync calls, we replace this call with
@@ -796,9 +777,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             // adapter for most sync-to-sync calls, since most sync-to-sync
             // calls do not do anything to force the task's creation
             // (e.g. adjust backpressure).
-            self.instruction(I32Const(
-                i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
-            ));
             self.instruction(I32Const(if self.types[adapter.lift.ty].async_ {
                 1
             } else {
@@ -809,23 +787,15 @@ impl<'a, 'b> Compiler<'a, 'b> {
             ));
             let enter_sync_call = self.module.import_enter_sync_call();
             self.instruction(Call(enter_sync_call.as_u32()));
-
-            old_task_may_block
         } else if self.emit_resource_call {
             assert!(!self.types[adapter.lift.ty].async_);
-            self.instruction(I32Const(
-                i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
-            ));
             self.instruction(I32Const(0));
             self.instruction(I32Const(
                 i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
             ));
             let enter_sync_call = self.module.import_enter_sync_call();
             self.instruction(Call(enter_sync_call.as_u32()));
-            None
-        } else {
-            None
-        };
+        }
 
         // Perform the translation of arguments. Note that the `may_leave` flag
         // is cleared around this invocation for the callee as per the
@@ -874,7 +844,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // With all the arguments on the stack the actual target function is
         // now invoked. The core wasm results of the function are then placed
         // into locals for result translation afterwards.
+
         self.instruction(Call(adapter.callee.as_u32()));
+
         let mut result_locals = Vec::with_capacity(lift_sig.results.len());
         let mut temps = Vec::new();
         for ty in lift_sig.results.iter().rev() {
@@ -883,6 +855,15 @@ impl<'a, 'b> Compiler<'a, 'b> {
             temps.push(local);
         }
         result_locals.reverse();
+
+        // The `exit-sync-call` intrinsic below will clobber this task's context
+        // slots, but if we've got a post-return we'll want to restore them
+        // temporarily for that. Save them if it's necessary.
+        let callee_context = if adapter.lift.post_return.is_some() {
+            self.save_context()
+        } else {
+            Vec::new()
+        };
 
         // Handle a few things related to the concurrent task infrastructure
         // after the callee has finished, such as:
@@ -900,7 +881,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // Note that for sync-to-sync calls, we will emit inline code during
         // translation to CLIF to avoid actually calling out to a libcall when
         // the deferred task's allocation was never forced.
-        if self.emit_resource_call || self.module.tunables.concurrency_support {
+        if self.emit_resource_call || needs_thread_state {
             let exit_sync_call = self.module.import_exit_sync_call();
             self.instruction(Call(exit_sync_call.as_u32()));
         }
@@ -916,25 +897,23 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         // And finally post-return state is handled here once all results/etc
         // are all translated.
+        //
+        // Note that for this call the callee's previous context is shuffled
+        // in-and-then-back-out after the call.
         if let Some(func) = adapter.lift.post_return {
+            let caller_context = self.save_context();
+            self.restore_context(callee_context);
             for (result, _) in result_locals.iter() {
                 self.instruction(LocalGet(*result));
             }
             self.instruction(Call(func.as_u32()));
+            self.restore_context(caller_context);
+        } else {
+            assert!(callee_context.is_empty());
         }
 
         for tmp in temps {
             self.free_temp_local(tmp);
-        }
-
-        if self.module.tunables.concurrency_support {
-            // Restore old `may_block_field`
-            if let Some(old_task_may_block) = old_task_may_block {
-                let task_may_block = self.module.import_task_may_block();
-                self.instruction(LocalGet(old_task_may_block.idx));
-                self.instruction(GlobalSet(task_may_block.as_u32()));
-                self.free_temp_local(old_task_may_block);
-            }
         }
 
         self.exit_exception_barrier();
@@ -1209,7 +1188,19 @@ impl<'a, 'b> Compiler<'a, 'b> {
             InterfaceType::FixedLengthList(i) => self.types[*i].size as usize,
         };
 
-        match self.fuel.checked_sub(cost) {
+        // If this function has the initial set of fuel then we want to be sure
+        // to translate at least one type, even if it's a huge one,
+        // unconditionally allow this type to get translate.d Here
+        // `saturating_sub` will clamp at 0 if `cost` is higher than `fuel`,
+        // which is what we want anyway where if this type is huge it just
+        // prevents other translations in this function.
+        let remaining_fuel = if self.fuel == INITIAL_FUEL {
+            Some(self.fuel.saturating_sub(cost))
+        } else {
+            self.fuel.checked_sub(cost)
+        };
+
+        match remaining_fuel {
             // This function has enough fuel to perform the layer of translation
             // necessary for this type, so the fuel is updated in-place and
             // translation continues. Note that the recursion here is bounded by
@@ -3715,7 +3706,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.ptr_uconst(mem_opts, 0);
                 self.ptr_uconst(mem_opts, align);
                 self.alloc_size(mem_opts, &size);
-                self.instruction(Call(realloc.as_u32()));
+                self.call_realloc(realloc);
                 let addr = self.local_set_new_tmp(mem_opts.ptr());
                 self.memory_operand(opts, addr, size, align, oob_trap)
             }
@@ -3744,7 +3735,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.alloc_size(mem_opts, &prev_size);
                 self.ptr_uconst(mem_opts, align);
                 self.alloc_size(mem_opts, &size);
-                self.instruction(Call(realloc.as_u32()));
+                self.call_realloc(realloc);
                 self.instruction(LocalSet(ptr.idx));
                 self.validate_guest_pointer(opts, &ptr, &size, align, oob_trap)
             }
@@ -3923,6 +3914,56 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .or_insert(Vec::new())
             .push(local.idx);
         local.needs_free = false;
+    }
+
+    /// Reads all of the current task's `context.{get,set}` slots into fresh
+    /// temporary locals which can later be handed to `restore_context`.
+    fn save_context(&mut self) -> Vec<TempLocal> {
+        if !self.module.tunables.concurrency_support {
+            return Vec::new();
+        }
+        let mut saved = Vec::new();
+        for slot in 0..NUM_COMPONENT_CONTEXT_SLOTS {
+            let get = self.module.import_context_get(slot);
+            self.instruction(Call(get.as_u32()));
+            saved.push(self.local_set_new_tmp(ValType::I32));
+        }
+        saved
+    }
+
+    /// Stores zero into all of the current task's `context.{get,set}` slots.
+    fn clear_context(&mut self) {
+        if !self.module.tunables.concurrency_support {
+            return;
+        }
+        for slot in 0..NUM_COMPONENT_CONTEXT_SLOTS {
+            let set = self.module.import_context_set(slot);
+            self.instruction(I32Const(0));
+            self.instruction(Call(set.as_u32()));
+        }
+    }
+
+    /// Stores the slot values previously read by `save_context` back into the
+    /// current task's `context.{get,set}` slots.
+    fn restore_context(&mut self, saved: Vec<TempLocal>) {
+        for (slot, local) in saved.into_iter().enumerate() {
+            let set = self.module.import_context_set(slot);
+            self.instruction(LocalGet(local.idx));
+            self.instruction(Call(set.as_u32()));
+            self.free_temp_local(local);
+        }
+    }
+
+    /// Emits a call to a guest `realloc` function.
+    ///
+    /// Note that this has special handling of the current task's
+    /// `context.{get,set}` slots, namely they're saved/restored around this
+    /// call and zero'd out during the call.
+    fn call_realloc(&mut self, realloc: FuncIndex) {
+        let saved = self.save_context();
+        self.clear_context();
+        self.instruction(Call(realloc.as_u32()));
+        self.restore_context(saved);
     }
 
     fn instruction(&mut self, instr: Instruction) {

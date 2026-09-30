@@ -234,7 +234,7 @@ impl Opts {
         }
 
         let mut r = Wasmtime::default();
-        r.sizes.fill(resolve);
+        r.sizes.fill(resolve)?;
         r.opts = self.clone();
         r.populate_world_and_interface_options(resolve, world);
         r.generate(resolve, world)
@@ -1720,7 +1720,7 @@ impl Wasmtime {
                         {id_outer}move |caller: &{wt}::component::Accessor::<T>, rep| {{
                             {id_inner}
                             {wt}::component::__internal::Box::pin(async move {{
-                                let accessor = &caller.with_getter(host_getter);
+                                let accessor = &caller.with_getter::<D>(host_getter);
                                 {wt}::ToWasmtimeResult::to_wasmtime_result(
                                     Host{camel}WithStore::<T>::drop(accessor, {id_arg}{wt}::component::Resource::new_own(rep)).await
                                 )
@@ -1748,7 +1748,7 @@ impl Wasmtime {
         } else {
             let (first_arg, trait_suffix) = if flags.contains(FunctionFlags::STORE) {
                 (
-                    format!("{wt}::component::Access::new(store, host_getter)"),
+                    format!("{wt}::component::Access::<T, D>::new(store, host_getter)"),
                     "WithStore::<T>",
                 )
             } else {
@@ -2482,15 +2482,58 @@ impl<'a> InterfaceGenerator<'a> {
             _ => return None,
         };
         let error_typeid = match result.err? {
-            Type::Id(id) => resolve_type_definition_id(&self.resolve, id),
+            Type::Id(id) => id,
             _ => return None,
         };
 
-        let name = self.generator.trappable_errors.get(&error_typeid)?;
+        let trappable_error_id = resolve_type_definition_id(self.resolve, error_typeid);
+        let name = self.generator.trappable_errors.get(&trappable_error_id)?;
 
         let mut path = self.path_to_root();
         uwrite!(path, "{name}");
         Some((result, error_typeid, path))
+    }
+
+    /// Determines the path to the `Host` trait and type name/identifier to use
+    /// when using `id` as an error type.
+    ///
+    /// The `id` provided is the `E` in `result<T, E>`, and its root definition
+    /// must be in `self.generator.trappable_errors`. This function will return
+    /// the path to the `Host` trait, or `None` if it's in the trait in this
+    /// module being generated. Additionally a new `TypeId` is returned which is
+    /// either `id` or the root definition of `id` if it's a `use` alias for
+    /// example.
+    ///
+    /// The returned `id` should be used for naming purposes for the error
+    /// conversion.
+    fn error_convert_path_to_host_and_id(&self, id: TypeId) -> (Option<String>, TypeId) {
+        let trappable_error_id = resolve_type_definition_id(self.resolve, id);
+
+        // If we're generating a trait for a named import then don't use the
+        // `Host` trait for non-named imports since that's likely got other
+        // methods we're not interested in. By returning `None` here it means
+        // that named import traits will have their own conversions for errors.
+        //
+        // Note that this is a bit unfortunate where it means that every
+        // interface referring to an error will have a conversion method instead
+        // of just one conversion method on the original definition. The only
+        // way I can think of to solve that would be to have a new trait
+        // generated like `HostErrorConvert` but that's a bit heavyweight of a
+        // change for now. In the meantime we'll just live with some duplicated
+        // error conversions in `wasmtime-wasi` hopefully...
+        if self.named_import_id.is_some() {
+            return (None, id);
+        }
+
+        // Otherwise though if we're not generating anything for a named import
+        // then we're specifically interested in the root definition of the `id`
+        // error type, so look it up all based on its resolved version (aka
+        // `trappable_error_id` here).
+        let owner = match self.resolve.types[trappable_error_id].owner {
+            TypeOwner::Interface(i) => i,
+            _ => unimplemented!(),
+        };
+        (self.path_to_interface(owner), trappable_error_id)
     }
 
     fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) {
@@ -2501,7 +2544,7 @@ impl<'a> InterfaceGenerator<'a> {
         let mut required_conversion_traits = IndexSet::new();
         let extra_functions = {
             let mut functions = Vec::new();
-            let mut errors_converted = IndexMap::new();
+            let mut errors_converted = IndexSet::new();
             let mut my_error_types = iface
                 .types
                 .iter()
@@ -2516,23 +2559,31 @@ impl<'a> InterfaceGenerator<'a> {
                     .map(|(_, id, _)| id),
             );
             for err_id in my_error_types {
-                let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err_id)];
-                let err_name = err.name.as_ref().unwrap();
-                let owner = match err.owner {
-                    TypeOwner::Interface(i) => i,
-                    _ => unimplemented!(),
-                };
-                match self.path_to_interface(owner) {
+                let (convert_path, err_id) = self.error_convert_path_to_host_and_id(err_id);
+                let trappable_error_id = resolve_type_definition_id(self.resolve, err_id);
+                match convert_path {
                     Some(path) => {
                         required_conversion_traits.insert(format!("{path}::Host"));
                     }
                     None => {
-                        if errors_converted.insert(err_name, err_id).is_none() {
-                            functions.push(ExtraTraitMethod::ErrorConvert {
-                                name: err_name,
-                                id: err_id,
-                            })
+                        if !errors_converted.insert(err_id) {
+                            continue;
                         }
+                        let err = &self.resolve.types[err_id];
+                        let err_name = err.name.as_ref().unwrap();
+                        let owner = match err.owner {
+                            TypeOwner::Interface(i) => i,
+                            _ => unimplemented!(),
+                        };
+                        let ty_path_prefix = match self.path_to_interface(owner) {
+                            Some(path) => format!("{path}::"),
+                            None => String::new(),
+                        };
+                        functions.push(ExtraTraitMethod::ErrorConvert {
+                            name: err_name,
+                            trappable_error_id,
+                            ty_path_prefix,
+                        });
                     }
                 }
             }
@@ -2602,9 +2653,18 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         let options_param = if self.generator.interface_link_options[&id].has_any() {
-            "options: &LinkOptions,"
+            let path = match self.named_import_id {
+                Some(_) => {
+                    let path = self
+                        .path_to_interface(id)
+                        .expect("named import always has a sibling interface-import module");
+                    format!("{path}::")
+                }
+                None => String::new(),
+            };
+            format!("options: &{path}LinkOptions,")
         } else {
-            ""
+            String::new()
         };
         let options_param_forward = if self.generator.interface_link_options[&id].has_any() {
             "options,"
@@ -2856,7 +2916,10 @@ pub fn add_to_linker<T, D>(
         }
 
         if func.kind.is_async() {
-            uwriteln!(self.src, "let host = &caller.with_getter(host_getter);");
+            uwriteln!(
+                self.src,
+                "let host = &caller.with_getter::<D>(host_getter);"
+            );
         } else if flags.contains(FunctionFlags::STORE) {
             uwriteln!(
                 self.src,
@@ -2864,7 +2927,7 @@ pub fn add_to_linker<T, D>(
             );
             uwriteln!(
                 self.src,
-                "let host = {wt}::component::Access::new(access_cx, host_getter);"
+                "let host = {wt}::component::Access::<T, D>::new(access_cx, host_getter);"
             );
         } else {
             self.src
@@ -2927,13 +2990,10 @@ pub fn add_to_linker<T, D>(
                 uwrite!(self.src, "Ok(r)\n");
             }
         } else if let Some((_, err, _)) = self.special_case_trappable_error(func) {
-            let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
+            let (convert_path, err) = self.error_convert_path_to_host_and_id(err);
+            let err = &self.resolve.types[err];
             let err_name = err.name.as_ref().unwrap();
-            let owner = match err.owner {
-                TypeOwner::Interface(i) => i,
-                _ => unimplemented!(),
-            };
-            let convert_trait = match self.path_to_interface(owner) {
+            let convert_trait = match convert_path {
                 Some(path) => format!("{path}::Host"),
                 None => format!("Host"),
             };
@@ -3401,9 +3461,13 @@ fn drop(accessor: {wt}::component::Access<T, Self>, {id_param}rep: {wt}::compone
                     }
                     uwrite!(self.src, ";");
                 }
-                ExtraTraitMethod::ErrorConvert { name, id } => {
+                ExtraTraitMethod::ErrorConvert {
+                    name,
+                    trappable_error_id,
+                    ty_path_prefix,
+                } => {
                     let root = self.path_to_root();
-                    let custom_name = &self.generator.trappable_errors[id];
+                    let custom_name = &self.generator.trappable_errors[trappable_error_id];
                     let snake = name.to_snake_case();
                     let camel = name.to_upper_camel_case();
                     uwrite!(
@@ -3413,7 +3477,7 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                         "
                     );
                     self.push_wasmtime_or_anyhow_result();
-                    uwrite!(self.src, "<{camel}>;");
+                    uwrite!(self.src, "<{ty_path_prefix}{camel}>;");
                 }
             }
         }
@@ -3483,9 +3547,13 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                         ",
                     );
                 }
-                ExtraTraitMethod::ErrorConvert { name, id } => {
+                ExtraTraitMethod::ErrorConvert {
+                    name,
+                    trappable_error_id,
+                    ty_path_prefix,
+                } => {
                     let root = self.path_to_root();
-                    let custom_name = &self.generator.trappable_errors[id];
+                    let custom_name = &self.generator.trappable_errors[trappable_error_id];
                     let snake = name.to_snake_case();
                     let camel = name.to_upper_camel_case();
                     uwrite!(
@@ -3495,7 +3563,7 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                     self.push_wasmtime_or_anyhow_result();
                     uwriteln!(
                         self.src,
-                        "<{camel}> {{
+                        "<{ty_path_prefix}{camel}> {{
     {trait_name}::convert_{snake}(*self, err)
 }}
                         ",
@@ -3510,8 +3578,21 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
 }
 
 enum ExtraTraitMethod<'a> {
-    ResourceDrop { name: &'a str },
-    ErrorConvert { name: &'a str, id: TypeId },
+    ResourceDrop {
+        name: &'a str,
+    },
+    ErrorConvert {
+        name: &'a str,
+        /// This is the `TypeId` that's a member of the `trappable_errors` set
+        /// within the generator.
+        ///
+        /// Note that this is distinct from the `E` in `result<T, E>` where `E`
+        /// might actually be a `use` or a rename of some other type. Here the
+        /// `trappable_error_id` is the "root" type or the type definition
+        /// itself.
+        trappable_error_id: TypeId,
+        ty_path_prefix: String,
+    },
 }
 
 struct FunctionPartitioning<'a> {
@@ -3653,7 +3734,7 @@ impl LinkOptionsBuilder {
 
         for feature in unstable_features.iter() {
             let feature_rust_name = feature.to_snake_case();
-            uwriteln!(src, "{feature_rust_name}: bool,");
+            uwriteln!(src, "pub(crate) {feature_rust_name}: bool,");
         }
 
         uwriteln!(src, "}}");

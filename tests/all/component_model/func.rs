@@ -592,44 +592,63 @@ fn chars() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let u32_to_char = instance.get_typed_func::<(u32,), (char,)>(&mut store, "u32-to-char")?;
-    let char_to_u32 = instance.get_typed_func::<(char,), (u32,)>(&mut store, "char-to-u32")?;
 
-    let mut roundtrip = |x: char| -> Result<()> {
-        assert_eq!(char_to_u32.call(&mut store, (x,))?, (x as u32,));
-        assert_eq!(u32_to_char.call(&mut store, (x as u32,))?, (x,));
-        Ok(())
-    };
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+        let u32_to_char = instance.get_typed_func::<(u32,), (char,)>(&mut store, "u32-to-char")?;
+        let char_to_u32 = instance.get_typed_func::<(char,), (u32,)>(&mut store, "char-to-u32")?;
 
-    roundtrip('x')?;
-    roundtrip('a')?;
-    roundtrip('\0')?;
-    roundtrip('\n')?;
-    roundtrip('💝')?;
+        let mut roundtrip = |x: char| -> Result<()> {
+            assert_eq!(char_to_u32.call(&mut store, (x,))?, (x as u32,));
+            assert_eq!(u32_to_char.call(&mut store, (x as u32,))?, (x,));
+            Ok(())
+        };
+
+        roundtrip('x')?;
+        roundtrip('a')?;
+        roundtrip('\0')?;
+        roundtrip('\n')?;
+        roundtrip('💝')?;
+    }
 
     let u32_to_char = |store: &mut Store<()>| {
         Linker::new(&engine)
             .instantiate(&mut *store, &component)?
             .get_typed_func::<(u32,), (char,)>(&mut *store, "u32-to-char")
     };
-    let err = u32_to_char(&mut store)?
-        .call(&mut store, (0xd800,))
-        .unwrap_err();
-    assert!(err.to_string().contains("integer out of range"), "{}", err);
-    let err = u32_to_char(&mut store)?
-        .call(&mut store, (0xdfff,))
-        .unwrap_err();
-    assert!(err.to_string().contains("integer out of range"), "{}", err);
-    let err = u32_to_char(&mut store)?
-        .call(&mut store, (0x110000,))
-        .unwrap_err();
-    assert!(err.to_string().contains("integer out of range"), "{}", err);
-    let err = u32_to_char(&mut store)?
-        .call(&mut store, (u32::MAX,))
-        .unwrap_err();
-    assert!(err.to_string().contains("integer out of range"), "{}", err);
+
+    {
+        let mut store = Store::new(&engine, ());
+        let err = u32_to_char(&mut store)?
+            .call(&mut store, (0xd800,))
+            .unwrap_err();
+        assert!(err.to_string().contains("integer out of range"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let err = u32_to_char(&mut store)?
+            .call(&mut store, (0xdfff,))
+            .unwrap_err();
+        assert!(err.to_string().contains("integer out of range"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let err = u32_to_char(&mut store)?
+            .call(&mut store, (0x110000,))
+            .unwrap_err();
+        assert!(err.to_string().contains("integer out of range"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let err = u32_to_char(&mut store)?
+            .call(&mut store, (u32::MAX,))
+            .unwrap_err();
+        assert!(err.to_string().contains("integer out of range"), "{}", err);
+    }
 
     Ok(())
 }
@@ -1922,19 +1941,26 @@ fn string_list_oob() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let ret_list_u8 = Linker::new(&engine)
-        .instantiate(&mut store, &component)?
-        .get_typed_func::<(), (WasmList<u8>,)>(&mut store, "ret-list-u8")?;
-    let ret_string = Linker::new(&engine)
-        .instantiate(&mut store, &component)?
-        .get_typed_func::<(), (WasmStr,)>(&mut store, "ret-string")?;
 
-    let err = ret_list_u8.call(&mut store, ()).err().unwrap();
-    assert!(err.to_string().contains("out of bounds"), "{}", err);
+    {
+        let mut store = Store::new(&engine, ());
+        let ret_list_u8 = Linker::new(&engine)
+            .instantiate(&mut store, &component)?
+            .get_typed_func::<(), (WasmList<u8>,)>(&mut store, "ret-list-u8")?;
 
-    let err = ret_string.call(&mut store, ()).err().unwrap();
-    assert!(err.to_string().contains("out of bounds"), "{}", err);
+        let err = ret_list_u8.call(&mut store, ()).err().unwrap();
+        assert!(err.to_string().contains("out of bounds"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let ret_string = Linker::new(&engine)
+            .instantiate(&mut store, &component)?
+            .get_typed_func::<(), (WasmStr,)>(&mut store, "ret-string")?;
+
+        let err = ret_string.call(&mut store, ()).err().unwrap();
+        assert!(err.to_string().contains("out of bounds"), "{}", err);
+    }
 
     Ok(())
 }
@@ -2072,71 +2098,81 @@ fn option() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
 
-    let option_u8_to_tuple = instance
-        .get_typed_func::<(Option<u8>,), ((u32, u32),)>(&mut store, "option-u8-to-tuple")?;
-    assert_eq!(option_u8_to_tuple.call(&mut store, (None,))?, ((0, 0),));
-    assert_eq!(option_u8_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
-    assert_eq!(
-        option_u8_to_tuple.call(&mut store, (Some(100),))?,
-        ((1, 100),)
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
 
-    let option_u32_to_tuple = instance
-        .get_typed_func::<(Option<u32>,), ((u32, u32),)>(&mut store, "option-u32-to-tuple")?;
-    assert_eq!(option_u32_to_tuple.call(&mut store, (None,))?, ((0, 0),));
-    assert_eq!(option_u32_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
-    assert_eq!(
-        option_u32_to_tuple.call(&mut store, (Some(100),))?,
-        ((1, 100),)
-    );
+        let option_u8_to_tuple = instance
+            .get_typed_func::<(Option<u8>,), ((u32, u32),)>(&mut store, "option-u8-to-tuple")?;
+        assert_eq!(option_u8_to_tuple.call(&mut store, (None,))?, ((0, 0),));
+        assert_eq!(option_u8_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
+        assert_eq!(
+            option_u8_to_tuple.call(&mut store, (Some(100),))?,
+            ((1, 100),)
+        );
 
-    let option_string_to_tuple = instance.get_typed_func::<(Option<&str>,), ((u32, WasmStr),)>(
-        &mut store,
-        "option-string-to-tuple",
-    )?;
-    let ((a, b),) = option_string_to_tuple.call(&mut store, (None,))?;
-    assert_eq!(a, 0);
-    assert_eq!(b.to_str(&store)?, "");
-    let ((a, b),) = option_string_to_tuple.call(&mut store, (Some(""),))?;
-    assert_eq!(a, 1);
-    assert_eq!(b.to_str(&store)?, "");
-    let ((a, b),) = option_string_to_tuple.call(&mut store, (Some("hello"),))?;
-    assert_eq!(a, 1);
-    assert_eq!(b.to_str(&store)?, "hello");
+        let option_u32_to_tuple = instance
+            .get_typed_func::<(Option<u32>,), ((u32, u32),)>(&mut store, "option-u32-to-tuple")?;
+        assert_eq!(option_u32_to_tuple.call(&mut store, (None,))?, ((0, 0),));
+        assert_eq!(option_u32_to_tuple.call(&mut store, (Some(0),))?, ((1, 0),));
+        assert_eq!(
+            option_u32_to_tuple.call(&mut store, (Some(100),))?,
+            ((1, 100),)
+        );
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_option_u8 =
-        instance.get_typed_func::<(u32, u32), (Option<u8>,)>(&mut store, "to-option-u8")?;
-    assert_eq!(to_option_u8.call(&mut store, (0x00_00, 0))?, (None,));
-    assert_eq!(to_option_u8.call(&mut store, (0x00_01, 0))?, (Some(0),));
-    assert_eq!(to_option_u8.call(&mut store, (0xfd_01, 0))?, (Some(0xfd),));
-    assert!(to_option_u8.call(&mut store, (0x00_02, 0)).is_err());
+        let option_string_to_tuple = instance
+            .get_typed_func::<(Option<&str>,), ((u32, WasmStr),)>(
+                &mut store,
+                "option-string-to-tuple",
+            )?;
+        let ((a, b),) = option_string_to_tuple.call(&mut store, (None,))?;
+        assert_eq!(a, 0);
+        assert_eq!(b.to_str(&store)?, "");
+        let ((a, b),) = option_string_to_tuple.call(&mut store, (Some(""),))?;
+        assert_eq!(a, 1);
+        assert_eq!(b.to_str(&store)?, "");
+        let ((a, b),) = option_string_to_tuple.call(&mut store, (Some("hello"),))?;
+        assert_eq!(a, 1);
+        assert_eq!(b.to_str(&store)?, "hello");
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_option_u32 =
-        instance.get_typed_func::<(u32, u32), (Option<u32>,)>(&mut store, "to-option-u32")?;
-    assert_eq!(to_option_u32.call(&mut store, (0, 0))?, (None,));
-    assert_eq!(to_option_u32.call(&mut store, (1, 0))?, (Some(0),));
-    assert_eq!(
-        to_option_u32.call(&mut store, (1, 0x1234fead))?,
-        (Some(0x1234fead),)
-    );
-    assert!(to_option_u32.call(&mut store, (2, 0)).is_err());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_option_u8 =
+            instance.get_typed_func::<(u32, u32), (Option<u8>,)>(&mut store, "to-option-u8")?;
+        assert_eq!(to_option_u8.call(&mut store, (0x00_00, 0))?, (None,));
+        assert_eq!(to_option_u8.call(&mut store, (0x00_01, 0))?, (Some(0),));
+        assert_eq!(to_option_u8.call(&mut store, (0xfd_01, 0))?, (Some(0xfd),));
+        assert!(to_option_u8.call(&mut store, (0x00_02, 0)).is_err());
+    }
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_option_string = instance
-        .get_typed_func::<(u32, &str), (Option<WasmStr>,)>(&mut store, "to-option-string")?;
-    let ret = to_option_string.call(&mut store, (0, ""))?.0;
-    assert!(ret.is_none());
-    let ret = to_option_string.call(&mut store, (1, ""))?.0;
-    assert_eq!(ret.unwrap().to_str(&store)?, "");
-    let ret = to_option_string.call(&mut store, (1, "cheesecake"))?.0;
-    assert_eq!(ret.unwrap().to_str(&store)?, "cheesecake");
-    assert!(to_option_string.call(&mut store, (2, "")).is_err());
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_option_u32 =
+            instance.get_typed_func::<(u32, u32), (Option<u32>,)>(&mut store, "to-option-u32")?;
+        assert_eq!(to_option_u32.call(&mut store, (0, 0))?, (None,));
+        assert_eq!(to_option_u32.call(&mut store, (1, 0))?, (Some(0),));
+        assert_eq!(
+            to_option_u32.call(&mut store, (1, 0x1234fead))?,
+            (Some(0x1234fead),)
+        );
+        assert!(to_option_u32.call(&mut store, (2, 0)).is_err());
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_option_string = instance
+            .get_typed_func::<(u32, &str), (Option<WasmStr>,)>(&mut store, "to-option-string")?;
+        let ret = to_option_string.call(&mut store, (0, ""))?.0;
+        assert!(ret.is_none());
+        let ret = to_option_string.call(&mut store, (1, ""))?.0;
+        assert_eq!(ret.unwrap().to_str(&store)?, "");
+        let ret = to_option_string.call(&mut store, (1, "cheesecake"))?.0;
+        assert_eq!(ret.unwrap().to_str(&store)?, "cheesecake");
+        assert!(to_option_string.call(&mut store, (2, "")).is_err());
+    }
 
     Ok(())
 }
@@ -2223,56 +2259,64 @@ fn expected() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
-    let instance = linker.instantiate(&mut store, &component)?;
-    let take_expected_unit =
-        instance.get_typed_func::<(Result<(), ()>,), (u32,)>(&mut store, "take-expected-unit")?;
-    assert_eq!(take_expected_unit.call(&mut store, (Ok(()),))?, (0,));
-    assert_eq!(take_expected_unit.call(&mut store, (Err(()),))?, (1,));
 
-    let take_expected_u8_f32 = instance
-        .get_typed_func::<(Result<u8, f32>,), ((u32, u32),)>(&mut store, "take-expected-u8-f32")?;
-    assert_eq!(take_expected_u8_f32.call(&mut store, (Ok(1),))?, ((0, 1),));
-    assert_eq!(
-        take_expected_u8_f32.call(&mut store, (Err(2.0),))?,
-        ((1, 2.0f32.to_bits()),)
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let take_expected_unit = instance
+            .get_typed_func::<(Result<(), ()>,), (u32,)>(&mut store, "take-expected-unit")?;
+        assert_eq!(take_expected_unit.call(&mut store, (Ok(()),))?, (0,));
+        assert_eq!(take_expected_unit.call(&mut store, (Err(()),))?, (1,));
 
-    let take_expected_string = instance
-        .get_typed_func::<(Result<&str, &[u8]>,), ((u32, WasmStr),)>(
+        let take_expected_u8_f32 = instance.get_typed_func::<(Result<u8, f32>,), ((u32, u32),)>(
             &mut store,
-            "take-expected-string",
+            "take-expected-u8-f32",
         )?;
-    let ((a, b),) = take_expected_string.call(&mut store, (Ok("hello"),))?;
-    assert_eq!(a, 0);
-    assert_eq!(b.to_str(&store)?, "hello");
-    let ((a, b),) = take_expected_string.call(&mut store, (Err(b"goodbye"),))?;
-    assert_eq!(a, 1);
-    assert_eq!(b.to_str(&store)?, "goodbye");
+        assert_eq!(take_expected_u8_f32.call(&mut store, (Ok(1),))?, ((0, 1),));
+        assert_eq!(
+            take_expected_u8_f32.call(&mut store, (Err(2.0),))?,
+            ((1, 2.0f32.to_bits()),)
+        );
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_expected_unit =
-        instance.get_typed_func::<(u32,), (Result<(), ()>,)>(&mut store, "to-expected-unit")?;
-    assert_eq!(to_expected_unit.call(&mut store, (0,))?, (Ok(()),));
-    assert_eq!(to_expected_unit.call(&mut store, (1,))?, (Err(()),));
-    let err = to_expected_unit.call(&mut store, (2,)).unwrap_err();
-    assert!(err.to_string().contains("invalid expected"), "{}", err);
+        let take_expected_string = instance
+            .get_typed_func::<(Result<&str, &[u8]>,), ((u32, WasmStr),)>(
+                &mut store,
+                "take-expected-string",
+            )?;
+        let ((a, b),) = take_expected_string.call(&mut store, (Ok("hello"),))?;
+        assert_eq!(a, 0);
+        assert_eq!(b.to_str(&store)?, "hello");
+        let ((a, b),) = take_expected_string.call(&mut store, (Err(b"goodbye"),))?;
+        assert_eq!(a, 1);
+        assert_eq!(b.to_str(&store)?, "goodbye");
 
-    let instance = linker.instantiate(&mut store, &component)?;
-    let to_expected_s16_f32 = instance
-        .get_typed_func::<(u32, u32), (Result<i16, f32>,)>(&mut store, "to-expected-s16-f32")?;
-    assert_eq!(to_expected_s16_f32.call(&mut store, (0, 0))?, (Ok(0),));
-    assert_eq!(to_expected_s16_f32.call(&mut store, (0, 100))?, (Ok(100),));
-    assert_eq!(
-        to_expected_s16_f32.call(&mut store, (1, 1.0f32.to_bits()))?,
-        (Err(1.0),)
-    );
-    let ret = to_expected_s16_f32
-        .call(&mut store, (1, CANON_32BIT_NAN | 1))?
-        .0;
-    assert_eq!(ret.unwrap_err().to_bits(), CANON_32BIT_NAN | 1);
-    assert!(to_expected_s16_f32.call(&mut store, (2, 0)).is_err());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_expected_unit =
+            instance.get_typed_func::<(u32,), (Result<(), ()>,)>(&mut store, "to-expected-unit")?;
+        assert_eq!(to_expected_unit.call(&mut store, (0,))?, (Ok(()),));
+        assert_eq!(to_expected_unit.call(&mut store, (1,))?, (Err(()),));
+        let err = to_expected_unit.call(&mut store, (2,)).unwrap_err();
+        assert!(err.to_string().contains("invalid expected"), "{}", err);
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let to_expected_s16_f32 = instance
+            .get_typed_func::<(u32, u32), (Result<i16, f32>,)>(&mut store, "to-expected-s16-f32")?;
+        assert_eq!(to_expected_s16_f32.call(&mut store, (0, 0))?, (Ok(0),));
+        assert_eq!(to_expected_s16_f32.call(&mut store, (0, 100))?, (Ok(100),));
+        assert_eq!(
+            to_expected_s16_f32.call(&mut store, (1, 1.0f32.to_bits()))?,
+            (Err(1.0),)
+        );
+        let ret = to_expected_s16_f32
+            .call(&mut store, (1, CANON_32BIT_NAN | 1))?
+            .0;
+        assert_eq!(ret.unwrap_err().to_bits(), CANON_32BIT_NAN | 1);
+        assert!(to_expected_s16_f32.call(&mut store, (2, 0)).is_err());
+    }
 
     Ok(())
 }
@@ -2449,54 +2493,62 @@ fn invalid_alignment() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
     let instance = |store: &mut Store<()>| Linker::new(&engine).instantiate(store, &component);
 
-    let err = instance(&mut store)?
-        .get_typed_func::<(
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-            &str,
-        ), ()>(&mut store, "many-params")?
-        .call(&mut store, ("", "", "", "", "", "", "", "", "", "", "", ""))
-        .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("realloc return: result not aligned"),
-        "{}",
-        err
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let err = instance(&mut store)?
+            .get_typed_func::<(
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+                &str,
+            ), ()>(&mut store, "many-params")?
+            .call(&mut store, ("", "", "", "", "", "", "", "", "", "", "", ""))
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("realloc return: result not aligned"),
+            "{}",
+            err
+        );
+    }
 
-    let err = instance(&mut store)?
-        .get_typed_func::<(), (WasmStr,)>(&mut store, "string-ret")?
-        .call(&mut store, ())
-        .err()
-        .unwrap();
-    assert!(
-        err.to_string().contains("return pointer not aligned"),
-        "{}",
-        err
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let err = instance(&mut store)?
+            .get_typed_func::<(), (WasmStr,)>(&mut store, "string-ret")?
+            .call(&mut store, ())
+            .err()
+            .unwrap();
+        assert!(
+            err.to_string().contains("return pointer not aligned"),
+            "{}",
+            err
+        );
+    }
 
-    let err = instance(&mut store)?
-        .get_typed_func::<(), (WasmList<u32>,)>(&mut store, "list-u32-ret")?
-        .call(&mut store, ())
-        .err()
-        .unwrap();
-    assert!(
-        err.to_string().contains("list pointer is not aligned"),
-        "{}",
-        err
-    );
+    {
+        let mut store = Store::new(&engine, ());
+        let err = instance(&mut store)?
+            .get_typed_func::<(), (WasmList<u32>,)>(&mut store, "list-u32-ret")?
+            .call(&mut store, ())
+            .err()
+            .unwrap();
+        assert!(
+            err.to_string().contains("list pointer is not aligned"),
+            "{}",
+            err
+        );
+    }
 
     Ok(())
 }
@@ -2997,26 +3049,18 @@ enum RecurseKind {
 }
 
 #[test]
-fn recurse() -> Result<()> {
+fn recurse_a_then_b() -> Result<()> {
     test_recurse(RecurseKind::AThenB)
 }
 
 #[test]
-fn recurse_trap() -> Result<()> {
-    let error = test_recurse(RecurseKind::AThenA).unwrap_err();
-
-    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
-
-    Ok(())
+fn recurse_a_then_a() -> Result<()> {
+    test_recurse(RecurseKind::AThenA)
 }
 
 #[test]
-fn recurse_more_trap() -> Result<()> {
-    let error = test_recurse(RecurseKind::AThenBThenA).unwrap_err();
-
-    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
-
-    Ok(())
+fn recurse_a_then_b_then_a() -> Result<()> {
+    test_recurse(RecurseKind::AThenBThenA)
 }
 
 fn test_recurse(kind: RecurseKind) -> Result<()> {
@@ -3165,8 +3209,9 @@ async fn thread_index_via_resource_drop_concurrent() -> Result<()> {
     thread_index_via_resource_drop(ApiStyle::Concurrent).await
 }
 
-async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
-    let component = r#"
+/// A component exporting a resource whose destructor traps unless it runs on a
+/// non-zero `thread.index`, i.e. within a guest thread context.
+const THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT: &str = r#"
 (component
   (core module $m
     (import "" "thread.index" (func $thread-index (result i32)))
@@ -3203,8 +3248,10 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
   (export "i" (instance $c))
 )
 "#;
+
+async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     let engine = Engine::new(&style.config())?;
-    let component = Component::new(&engine, component)?;
+    let component = Component::new(&engine, THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT)?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
     let instance = style.instantiate(&mut store, &linker, &component).await?;
@@ -3215,6 +3262,33 @@ async fn thread_index_via_resource_drop(style: ApiStyle) -> Result<()> {
     let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
     let (resource,) = style.call(&mut store, run, ()).await?;
     style.resource_drop(&mut store, resource).await?;
+    Ok(())
+}
+
+/// Test that a guest-exported `ResourceAny` can be dropped with
+/// `resource_drop_concurrent` inside the same `Store::run_concurrent` call
+/// that produced it, i.e. while the store's event loop is already running.
+/// This is the scenario from issue #14291.
+#[tokio::test]
+async fn resource_drop_concurrent_in_run_concurrent() -> Result<()> {
+    let style = ApiStyle::Concurrent;
+    let engine = Engine::new(&style.config())?;
+    let component = Component::new(&engine, THREAD_INDEX_VIA_RESOURCE_DROP_COMPONENT)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = style.instantiate(&mut store, &linker, &component).await?;
+    let instance_index = instance.get_export_index(&mut store, None, "i").unwrap();
+    let func_index = instance
+        .get_export_index(&mut store, Some(&instance_index), "new")
+        .unwrap();
+    let run = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, &func_index)?;
+    store
+        .run_concurrent(async |accessor| {
+            let (resource,) = run.call_concurrent(accessor, ()).await?;
+            resource.resource_drop_concurrent(accessor).await
+        })
+        .await??;
+    store.assert_concurrent_state_empty();
     Ok(())
 }
 

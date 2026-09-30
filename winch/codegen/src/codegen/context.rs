@@ -3,7 +3,9 @@ use crate::{
     Result,
     abi::{ABIOperand, ABIResults, RetArea, vmctx},
     bail,
-    codegen::{BranchState, CodeGenError, CodeGenPhase, Emission, Prologue},
+    codegen::{
+        BranchState, CodeGenError, CodeGenPhase, Emission, Prologue, exceptions::HandlerState,
+    },
     ensure, format_err,
     frame::Frame,
     isa::reg::RegClass,
@@ -45,6 +47,8 @@ pub(crate) struct CodeGenContext<'a, P: CodeGenPhase> {
     pub reachable: bool,
     /// A reference to the VMOffsets.
     pub vmoffsets: &'a VMOffsets<u8>,
+    /// The exception handlers currently in scope.
+    pub exception_handlers: HandlerState,
 }
 
 impl<'a> CodeGenContext<'a, Emission> {
@@ -123,6 +127,7 @@ impl<'a> CodeGenContext<'a, Prologue> {
             frame,
             reachable: true,
             vmoffsets,
+            exception_handlers: Default::default(),
         }
     }
 
@@ -134,6 +139,7 @@ impl<'a> CodeGenContext<'a, Prologue> {
             reachable: self.reachable,
             vmoffsets: self.vmoffsets,
             frame: self.frame.for_emission(),
+            exception_handlers: self.exception_handlers,
         }
     }
 }
@@ -160,9 +166,11 @@ impl<'a> CodeGenContext<'a, Emission> {
             // All of our supported architectures use the float registers for vector operations.
             V128 => self.reg_for_class(RegClass::Float, masm),
             Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func | WasmHeapType::Extern => {
-                    self.reg_for_class(RegClass::Int, masm)
-                }
+                WasmHeapType::Func
+                | WasmHeapType::Extern
+                | WasmHeapType::Exn
+                | WasmHeapType::ConcreteExn(_)
+                | WasmHeapType::NoExn => self.reg_for_class(RegClass::Int, masm),
                 _ => bail!(CodeGenError::unsupported_wasm_type()),
             },
         }

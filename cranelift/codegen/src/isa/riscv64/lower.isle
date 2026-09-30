@@ -2702,6 +2702,12 @@
 (rule 3 (lower (select_spectre_guard (fits_in_64 _) cmp x (i64_from_iconst 0)))
   (rv_and x (gen_bmask cmp)))
 
+(rule 4 (lower (select_spectre_guard (ty_supported_vec ty) cmp x y))
+  (let ((mask XReg (gen_bmask cmp)))
+    (rv_vor_vv (rv_vand_vx x mask (unmasked) ty)
+               (rv_vandn_vx y mask (unmasked) ty)
+               (unmasked) ty)))
+
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule
   (lower (bmask oty x))

@@ -6,7 +6,9 @@
 //! next instruction is a control instruction, we could avoid emitting
 //! a [`crate::masm::MacroAssembler::cmp_with_set`] and instead emit
 //! a conditional jump inline when emitting the control flow instruction.
-use super::{CodeGenContext, CodeGenError, Emission, OperandSize, Reg, TypedReg};
+use super::{
+    CodeGenContext, CodeGenError, Emission, OperandSize, Reg, TypedReg, exceptions::TryTableInfo,
+};
 use crate::{
     CallingConvention, Result,
     abi::{ABI, ABIOperand, ABIResults, ABISig, RetArea},
@@ -244,6 +246,8 @@ pub(crate) enum ControlStackFrame {
         /// target. By default, this is false, and it's updated when
         /// emitting a `br` or `br_if`.
         is_branch_target: bool,
+        /// Exception-handling information when this block is a `try_table`.
+        try_table_info: Option<TryTableInfo>,
     },
     Loop {
         /// The start of the Loop.
@@ -280,15 +284,51 @@ impl ControlStackFrame {
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
     ) -> Result<Self> {
+        Self::block_impl(sig, None, masm, context)
+    }
+
+    /// Returns a block control frame with exception-handler information.
+    pub fn try_table<M: MacroAssembler>(
+        sig: BlockSig,
+        info: TryTableInfo,
+        masm: &mut M,
+        context: &mut CodeGenContext<Emission>,
+    ) -> Result<Self> {
+        Self::block_impl(sig, Some(info), masm, context)
+    }
+
+    fn block_impl<M: MacroAssembler>(
+        sig: BlockSig,
+        try_table_info: Option<TryTableInfo>,
+        masm: &mut M,
+        context: &mut CodeGenContext<Emission>,
+    ) -> Result<Self> {
         let mut control = Self::Block {
             sig,
             is_branch_target: false,
             exit: masm.get_label()?,
             stack_state: Default::default(),
+            try_table_info,
         };
 
         control.emit(masm, context)?;
         Ok(control)
+    }
+
+    /// Returns this block's try-table information, if present.
+    pub fn try_table_info(&self) -> Option<&TryTableInfo> {
+        match self {
+            Self::Block { try_table_info, .. } => try_table_info.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Takes this block's try-table information, if present.
+    pub fn take_try_table_info(&mut self) -> Option<TryTableInfo> {
+        match self {
+            Self::Block { try_table_info, .. } => try_table_info.take(),
+            _ => None,
+        }
     }
 
     /// Returns [`ControlStackFrame`] for a loop.

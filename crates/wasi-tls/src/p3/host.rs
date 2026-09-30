@@ -7,9 +7,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::{io::AsyncWriteExt as _, sync::oneshot};
 use wasmtime::StoreContextMut;
-use wasmtime::component::{
-    Access, Accessor, AccessorTask, FutureProducer, FutureReader, HasData, Resource, StreamReader,
-};
+use wasmtime::component::{Access, Accessor, FutureProducer, FutureReader, Resource, StreamReader};
 
 /// Host-side state stored for `wasi:tls/client` `connector` resources.
 pub struct Connector {
@@ -90,7 +88,7 @@ impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
         )?;
 
         let ciphertext = AsyncReadProducer::new(ciphertext_reader, ciphertext_result_tx);
-        store.spawn(FnTask(async move || {
+        store.spawn(async move |_| {
             let cleartext_result = match cleartext_result_rx.await? {
                 Ok(mut inner) => inner.shutdown().await, // Drive the close_notify sequence
                 Err(e) => Err(e),
@@ -101,7 +99,7 @@ impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
                 .map_err(|e| Error::from(e));
             _ = send_result_tx.send(combined_result);
             Ok(())
-        }))?;
+        })?;
         let result = ResultProducer::new(getter, send_result_rx);
 
         Ok((
@@ -152,7 +150,7 @@ impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
         )?;
 
         let cleartext = AsyncReadProducer::new(connection, cleartext_result_tx);
-        store.spawn(FnTask(async move || {
+        store.spawn(async move |_| {
             let ciphertext_result = match ciphertext_result_rx.await? {
                 // Let the TLS implementation know the transport is closed.
                 // Most likely, `shutdown` will be entirely synchronous and
@@ -167,7 +165,7 @@ impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
                 .map_err(|e| Error::from(e));
             _ = recv_result_tx.send(combined_result);
             Ok(())
-        }))?;
+        })?;
         let result = ResultProducer::new(getter, recv_result_rx);
 
         Ok((
@@ -221,21 +219,6 @@ impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
                 Ok(Err(resource))
             }
         }
-    }
-}
-
-pub(crate) struct FnTask<Fn>(pub(crate) Fn);
-impl<Fn, Fut, T, D> AccessorTask<T, D> for FnTask<Fn>
-where
-    Fn: FnOnce() -> Fut + Send + 'static,
-    Fut: Future<Output = wasmtime::Result<()>> + Send + 'static,
-    D: HasData + ?Sized,
-{
-    fn run(
-        self,
-        _accessor: &wasmtime::component::Accessor<T, D>,
-    ) -> impl Future<Output = wasmtime::Result<()>> + Send {
-        self.0()
     }
 }
 

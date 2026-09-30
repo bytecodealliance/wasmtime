@@ -69,11 +69,19 @@ mod compiler;
 #[cfg(feature = "compile")]
 pub mod dfg;
 #[cfg(feature = "compile")]
+mod same_vmctx;
+#[cfg(feature = "compile")]
+mod thread_transparency;
+#[cfg(feature = "compile")]
 mod translate;
 #[cfg(feature = "compile")]
 mod types_builder;
 #[cfg(feature = "compile")]
 pub use self::compiler::*;
+#[cfg(feature = "compile")]
+pub use self::same_vmctx::analyze_same_vmctx_imports;
+#[cfg(feature = "compile")]
+pub use self::thread_transparency::transparent_adapters;
 #[cfg(feature = "compile")]
 pub use self::translate::*;
 #[cfg(feature = "compile")]
@@ -97,7 +105,7 @@ macro_rules! foreach_builtin_component_function {
             resource_transfer_own(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             resource_transfer_borrow(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
 
-            enter_sync_call(vmctx: vmctx, caller_instance: u32, callee_async: u32, callee_instance: u32) -> bool;
+            enter_sync_call(vmctx: vmctx, callee_async: u32, callee_instance: u32) -> bool;
             exit_sync_call(vmctx: vmctx) -> bool;
 
             #[cfg(feature = "component-model-async")]
@@ -190,17 +198,17 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             thread_resume_later(vmctx: vmctx, caller_instance: u32, thread_idx: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            thread_suspend(vmctx: vmctx, caller_instance: u32, cancellable: u8) -> u32;
+            thread_suspend(vmctx: vmctx, caller_instance: u32) -> u32;
             #[cfg(feature = "component-model-async")]
-            thread_yield(vmctx: vmctx, caller_instance: u32, cancellable: u8) -> u32;
+            thread_yield(vmctx: vmctx, caller_instance: u32) -> u32;
             #[cfg(feature = "component-model-async")]
-            thread_suspend_then_resume(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
+            thread_suspend_then_resume(vmctx: vmctx, caller_instance: u32, thread_idx: u32) -> u32;
             #[cfg(feature = "component-model-async")]
-            thread_yield_then_resume(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
+            thread_yield_then_resume(vmctx: vmctx, caller_instance: u32, thread_idx: u32) -> u32;
             #[cfg(feature = "component-model-async")]
-            thread_suspend_then_promote(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
+            thread_suspend_then_promote(vmctx: vmctx, caller_instance: u32, thread_idx: u32) -> u32;
             #[cfg(feature = "component-model-async")]
-            thread_yield_then_promote(vmctx: vmctx, caller_instance: u32, cancellable: u8, thread_idx: u32) -> u32;
+            thread_yield_then_promote(vmctx: vmctx, caller_instance: u32, thread_idx: u32) -> u32;
 
             utf8_to_utf8(vmctx: vmctx, src: ptr_u8, len: size, dst: ptr_u8) -> bool;
             utf16_to_utf16(vmctx: vmctx, src: ptr_u16, len: size, dst: ptr_u16) -> bool;

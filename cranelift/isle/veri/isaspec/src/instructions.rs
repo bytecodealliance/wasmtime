@@ -464,7 +464,7 @@ fn alu_rrr_shift_size_case(alu_op: ALUOp, size: OperandSize, op: ShiftOp) -> Res
         OperandSize::Size32 => 5,
         OperandSize::Size64 => 6,
     };
-    let amt_var = format!("amt{}", amt_width);
+    let amt_var = format!("amt{amt_width}");
 
     // Setup scope with shift amount variable.
     let amt_target = Target::Var(amt_var.clone());

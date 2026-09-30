@@ -1,15 +1,17 @@
 [package]
 name = "cranelift-native"
-version = "0.136.0-dev"
+version = "0.137.0-dev"
 authors = ["The Cranelift Project Developers"]
 description = "Support for targeting the host with Cranelift"
 documentation = "https://docs.rs/cranelift-native"
 repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 license = "Apache-2.0 WITH LLVM-exception"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 cranelift-codegen = { workspace = true }
@@ -17,6 +19,9 @@ target-lexicon = { workspace = true }
 
 [target.'cfg(target_arch = "riscv64")'.dependencies]
 libc = { workspace = true }
+
+[target.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.dependencies]
+mach2 = { workspace = true }
 
 [features]
 default = ["std"]

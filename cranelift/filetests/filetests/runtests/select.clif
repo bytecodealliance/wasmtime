@@ -599,3 +599,36 @@ block0(v0: i8, v1: i32, v2: i32):
 ; run: %select_eq_eq_to_eq_select_rt(1, 5, 5) == 1
 ; run: %select_eq_eq_to_eq_select_rt(1, 5, 7) == 0
 
+function %select_eq_zero_isub(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = iconst.i32 0
+    v4 = isub v0, v1
+    v5 = select v2, v3, v4
+    return v5
+}
+; run: %select_eq_zero_isub(7, 7) == 0
+; run: %select_eq_zero_isub(7, 3) == 4
+; run: %select_eq_zero_isub(3, 7) == -4
+
+function %add_swapped_selects(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = select v0, v1, v2
+    v4 = select v0, v2, v1
+    v5 = iadd v3, v4
+    return v5
+}
+; run: %add_swapped_selects(0, 7, 3) == 10
+; run: %add_swapped_selects(1, 7, 3) == 10
+
+function %select_ne_isub_zero(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ne v0, v1
+    v3 = isub v0, v1
+    v4 = iconst.i32 0
+    v5 = select v2, v3, v4
+    return v5
+}
+; run: %select_ne_isub_zero(7, 7) == 0
+; run: %select_ne_isub_zero(7, 3) == 4
+; run: %select_ne_isub_zero(3, 7) == -4

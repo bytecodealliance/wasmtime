@@ -1,7 +1,7 @@
 use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{
-    AsContextMut, FrameInfo, Global, HeapType, Instance, Memory, Module, StoreContextMut, Val,
+    AsContextMut, FrameInfo, Global, HeapTopType, Instance, Memory, Module, StoreContextMut, Val,
     ValType, WasmBacktrace, store::StoreOpaque,
 };
 use std::fmt;
@@ -185,13 +185,21 @@ impl WasmCoreDump {
                     // what a concrete type reference's index is in the local
                     // core dump index space.
                     ValType::Ref(r) => match r.heap_type().top() {
-                        HeapType::Extern => wasm_encoder::ValType::EXTERNREF,
-
-                        HeapType::Func => wasm_encoder::ValType::FUNCREF,
-
-                        HeapType::Any => wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF),
-
-                        ty => unreachable!("not a top type: {ty:?}"),
+                        HeapTopType::Extern => wasm_encoder::ValType::EXTERNREF,
+                        HeapTopType::Func => wasm_encoder::ValType::FUNCREF,
+                        HeapTopType::Any => {
+                            wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)
+                        }
+                        HeapTopType::Exn => {
+                            wasm_encoder::ValType::Ref(wasm_encoder::RefType::EXNREF)
+                        }
+                        HeapTopType::Cont => {
+                            wasm_encoder::ValType::Ref(wasm_encoder::RefType::new_abstract(
+                                wasm_encoder::AbstractHeapType::Cont,
+                                true,
+                                false,
+                            ))
+                        }
                     },
                 };
                 let init = match g.get(&mut store) {

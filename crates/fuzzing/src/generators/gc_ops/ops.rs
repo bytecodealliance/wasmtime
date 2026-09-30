@@ -2,9 +2,10 @@
 
 use crate::generators::gc_ops::types::StackType;
 use crate::generators::gc_ops::{
-    limits::GcOpsLimits,
-    types::{CompositeType, RecGroupId, TypeId, Types},
+    limits::{GcOpsLimits, MAX_INLINE_CONSTRUCTION},
+    types::{CompositeType, EmitCtx, RecGroupId, StructField, TypeId, Types, emit_new},
 };
+use mutatis::Generate;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use wasm_encoder::{
@@ -23,6 +24,37 @@ fn pick_type_index(indices: &[u32], raw: u32) -> Option<u32> {
     }
 }
 
+/// Returns the element field if the indexed type is an array
+fn array_element<'a>(
+    types: &'a Types,
+    encoding_order: &[TypeId],
+    type_index: u32,
+) -> Option<&'a StructField> {
+    encoding_order
+        .get(usize::try_from(type_index).unwrap())
+        .and_then(|tid| types.type_defs.get(tid))
+        .and_then(|def| match &def.composite_type {
+            CompositeType::Array(at) => Some(&at.element),
+            CompositeType::Struct(_) => None,
+        })
+}
+
+/// The fields of the struct type at `type_index`, or `None` if that index is
+/// out of range or names an array type.
+fn struct_fields<'a>(
+    types: &'a Types,
+    encoding_order: &[TypeId],
+    type_index: u32,
+) -> Option<&'a [StructField]> {
+    encoding_order
+        .get(usize::try_from(type_index).unwrap())
+        .and_then(|tid| types.type_defs.get(tid))
+        .and_then(|def| match &def.composite_type {
+            CompositeType::Struct(st) => Some(st.fields.as_slice()),
+            CompositeType::Array(_) => None,
+        })
+}
+
 /// The base offsets and indices for various Wasm entities within
 /// their index spaces in the the encoded Wasm binary.
 #[derive(Clone, Copy)]
@@ -34,6 +66,7 @@ struct WasmEncodingBases {
     i31_local_idx: u32,
     array_local_idx: u32,
     typed_local_base: u32,
+    typed_local2_base: u32,
     struct_global_idx: u32,
     eq_global_idx: u32,
     i31_global_idx: u32,
@@ -49,7 +82,7 @@ struct WasmEncodingBases {
 
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GcOps {
     pub(crate) limits: GcOpsLimits,
     pub(crate) ops: Vec<GcOp>,
@@ -481,15 +514,21 @@ impl GcOps {
         ));
 
         let typed_local_base: u32 = array_local_idx + 1;
-        for i in 0..concrete_count {
-            let concrete = struct_type_base + i;
-            local_decls.push((
-                1,
-                ValType::Ref(RefType {
-                    nullable: true,
-                    heap_type: wasm_encoder::HeapType::Concrete(concrete),
-                }),
-            ));
+        let typed_local2_base: u32 = typed_local_base + concrete_count;
+        // A third set holds one shared prototype per concrete type; see
+        // `Types::prototype_types`.
+        let proto_local_base: u32 = typed_local2_base + concrete_count;
+        for _ in 0..3 {
+            for i in 0..concrete_count {
+                let concrete = struct_type_base + i;
+                local_decls.push((
+                    1,
+                    ValType::Ref(RefType {
+                        nullable: true,
+                        heap_type: wasm_encoder::HeapType::Concrete(concrete),
+                    }),
+                ));
+            }
         }
 
         let storage_bases = WasmEncodingBases {
@@ -500,6 +539,7 @@ impl GcOps {
             i31_local_idx,
             array_local_idx,
             typed_local_base,
+            typed_local2_base,
             struct_global_idx,
             eq_global_idx,
             i31_global_idx,
@@ -513,16 +553,48 @@ impl GcOps {
             array_length: self.limits.array_length,
         };
 
+        let mut inhabitable = BTreeMap::new();
+        self.types.inhabitable(&mut inhabitable);
+        let struct_ref_target = self.types.least_rank_inhabitable_struct(&inhabitable);
+
+        // Map each prototyped type to the local holding its instance. A type
+        // absent from this map is cheap enough to rebuild at every use.
+        let proto_order = self
+            .types
+            .prototype_types(&inhabitable, MAX_INLINE_CONSTRUCTION);
+        let protos: BTreeMap<TypeId, u32> = proto_order
+            .iter()
+            .map(|tid| {
+                let dense = type_ids_to_index[tid] - struct_type_base;
+                (*tid, proto_local_base + dense)
+            })
+            .collect();
+
+        let ctx = EmitCtx {
+            types: &self.types,
+            struct_ref_target,
+            protos: &protos,
+            type_ids_to_index: &type_ids_to_index,
+        };
+
         let mut func = Function::new(local_decls);
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
+
+        // Refill the prototypes at the top of every iteration, so the ops below
+        // never read a null local and each iteration allocates a fresh set of
+        // objects for the collector to find and reclaim. `proto_order` is in
+        // rank order, so a prototype's referents are already built.
+        for tid in &proto_order {
+            emit_new(*tid, &mut func, ctx);
+            func.instruction(&Instruction::LocalSet(protos[tid]));
+        }
         for op in &self.ops {
             op.encode(
                 &mut func,
                 scratch_local,
                 storage_bases,
-                &self.types,
+                ctx,
                 &encoding_order,
-                &type_ids_to_index,
             );
         }
         func.instruction(&Instruction::Br(0));
@@ -695,6 +767,13 @@ macro_rules! for_each_gc_op {
                 type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
             StructNew { type_index: u32 },
+
+            #[operands([])]
+            #[results([Struct(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
+            })]
+            StructNewDefault { type_index: u32 },
 
             #[operands([Some(Struct(None))])]
             #[results([])]
@@ -878,6 +957,13 @@ macro_rules! for_each_gc_op {
             #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 type_index = pick_type_index(struct_type_indices, type_index)?;
             })]
+            StructGetU { type_index: u32, field_index: u32 },
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(struct_type_indices, type_index)?;
+            })]
             StructSet { type_index: u32, field_index: u32 },
 
             #[operands([])]
@@ -958,7 +1044,22 @@ macro_rules! for_each_gc_op {
             #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
                 type_index = pick_type_index(array_type_indices, type_index)?;
             })]
+            ArrayNewDefault { type_index: u32 },
+
+            #[operands([])]
+            #[results([Array(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
             ArrayNew { type_index: u32 },
+
+            #[operands([])]
+            #[results([Array(Some(type_index))])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                n = n % (limits.array_length + 1);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            ArrayNewFixed { type_index: u32, n: u32 },
 
             #[operands([])]
             #[results([Array(None)])]
@@ -1097,7 +1198,34 @@ macro_rules! for_each_gc_op {
                 index = index % (limits.array_length + 1);
                 type_index = pick_type_index(array_type_indices, type_index)?;
             })]
+            ArrayGetU { type_index: u32, index: u32 },
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                index = index % (limits.array_length + 1);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
             ArraySet { type_index: u32, index: u32 },
+
+            #[operands([Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                offset = offset % (limits.array_length + 1);
+                len = len % (limits.array_length - offset + 2);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            ArrayFill { type_index: u32, offset: u32, len: u32 },
+
+            #[operands([Some(Array(Some(type_index))), Some(Array(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|limits, num_types, struct_type_indices, array_type_indices| {
+                dst_offset = dst_offset % (limits.array_length + 1);
+                src_offset = src_offset % (limits.array_length + 1);
+                len = len % (limits.array_length - dst_offset.max(src_offset) + 2);
+                type_index = pick_type_index(array_type_indices, type_index)?;
+            })]
+            ArrayCopy { type_index: u32, dst_offset: u32, src_offset: u32, len: u32 },
 
             #[operands([Some(Array(None))])]
             #[results([])]
@@ -1125,11 +1253,14 @@ macro_rules! define_gc_op_variants {
         )*
     ) => {
         /// The operations that can be performed by the `gc` function.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, mutatis::Mutate,
+        )]
+        #[mutatis(default_mutate = false)]
         #[allow(missing_docs, reason = "self-describing")]
         pub enum GcOp {
             $(
-                $op $( { $( $field : $field_ty ),* } )? ,
+                $op $( { $( #[mutatis(default_mutate)] $field : $field_ty ),* } )? ,
             )*
         }
     };
@@ -1278,45 +1409,15 @@ impl GcOp {
         for_each_gc_op!(define_gc_op_fixup)
     }
 
-    pub(crate) fn generate(ctx: &mut mutatis::Context) -> mutatis::Result<GcOp> {
-        macro_rules! define_gc_op_generate {
-            (
-                $(
-                    $( #[$attr:meta] )*
-                    $op:ident $( { $( $field:ident : $field_ty:ty ),* } )? ,
-                )*
-            ) => {{
-                let choices: &[fn(&mut mutatis::Context) -> mutatis::Result<GcOp>] = &[
-                    $(
-                        |_ctx| Ok(GcOp::$op $( {
-                            $(
-                                $field: {
-                                    let mut mutator = <$field_ty as mutatis::DefaultMutate>::DefaultMutate::default();
-                                    mutatis::Generate::<$field_ty>::generate(&mut mutator, _ctx)?
-                                }
-                            ),*
-                        } )? ),
-                    )*
-                ];
-
-                let f = *ctx.rng()
-                    .choose(choices)
-                    .unwrap();
-                (f)(ctx)
-            }};
-        }
-        for_each_gc_op!(define_gc_op_generate)
-    }
-
     fn encode(
         &self,
         func: &mut Function,
         scratch_local: u32,
         encoding_bases: WasmEncodingBases,
-        types: &Types,
+        ctx: EmitCtx<'_>,
         encoding_order: &[TypeId],
-        type_ids_to_index: &BTreeMap<TypeId, u32>,
     ) {
+        let types = ctx.types;
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
@@ -1409,26 +1510,73 @@ impl GcOp {
                 )));
             }
             Self::StructNew { type_index: x } => {
-                if let Some(tid) = encoding_order.get(usize::try_from(x).unwrap()) {
-                    if let Some(CompositeType::Struct(st)) =
-                        types.type_defs.get(tid).map(|def| &def.composite_type)
-                    {
-                        for field in &st.fields {
-                            field.field_type.emit_default_const(func, type_ids_to_index);
-                        }
-                    }
+                for field in struct_fields(types, encoding_order, x).unwrap_or(&[]) {
+                    field.field_type.emit_default_const(func, ctx);
                 }
                 func.instruction(&Instruction::StructNew(encoding_bases.struct_type_base + x));
             }
-            Self::ArrayNew { type_index: x } => {
+            Self::StructNewDefault { type_index: x } => {
+                // `struct.new_default` requires every field to be defaultable,
+                // which a non-nullable reference is not. Build those fields
+                // explicitly instead; the resulting value and stack effect are
+                // the same.
+                let fields = struct_fields(types, encoding_order, x).unwrap_or(&[]);
+                if fields.iter().all(|f| f.field_type.is_defaultable()) {
+                    func.instruction(&Instruction::StructNewDefault(
+                        encoding_bases.struct_type_base + x,
+                    ));
+                } else {
+                    for field in fields {
+                        field.field_type.emit_default_const(func, ctx);
+                    }
+                    func.instruction(&Instruction::StructNew(encoding_bases.struct_type_base + x));
+                }
+            }
+            Self::ArrayNewDefault { type_index: x } => {
                 // Create a default-initialized array of a fixed length so most
                 // subsequent indexed accesses are in-bounds.
+                match array_element(types, encoding_order, x) {
+                    // As above, `array.new_default` needs a defaultable
+                    // element. `array.new` takes the initial value explicitly,
+                    // so it covers non-nullable elements at the same length.
+                    Some(element) if !element.field_type.is_defaultable() => {
+                        element.field_type.emit_default_const(func, ctx);
+                        func.instruction(&Instruction::I32Const(
+                            encoding_bases.array_length.cast_signed(),
+                        ));
+                        func.instruction(&Instruction::ArrayNew(
+                            encoding_bases.struct_type_base + x,
+                        ));
+                    }
+                    _ => {
+                        func.instruction(&Instruction::I32Const(
+                            encoding_bases.array_length.cast_signed(),
+                        ));
+                        func.instruction(&Instruction::ArrayNewDefault(
+                            encoding_bases.struct_type_base + x,
+                        ));
+                    }
+                }
+            }
+            Self::ArrayNew { type_index: x } => {
+                if let Some(element) = array_element(types, encoding_order, x) {
+                    element.field_type.emit_default_const(func, ctx);
+                }
                 func.instruction(&Instruction::I32Const(
                     encoding_bases.array_length.cast_signed(),
                 ));
-                func.instruction(&Instruction::ArrayNewDefault(
-                    encoding_bases.struct_type_base + x,
-                ));
+                func.instruction(&Instruction::ArrayNew(encoding_bases.struct_type_base + x));
+            }
+            Self::ArrayNewFixed { type_index: x, n } => {
+                if let Some(element) = array_element(types, encoding_order, x) {
+                    for _ in 0..n {
+                        element.field_type.emit_default_const(func, ctx);
+                    }
+                }
+                func.instruction(&Instruction::ArrayNewFixed {
+                    array_type_index: encoding_bases.struct_type_base + x,
+                    array_size: n,
+                });
             }
             Self::TakeStructCall => {
                 func.instruction(&Instruction::Call(take_structref_idx));
@@ -1587,6 +1735,10 @@ impl GcOp {
             Self::StructGet {
                 type_index,
                 field_index,
+            }
+            | Self::StructGetU {
+                type_index,
+                field_index,
             } => {
                 let wasm_type = encoding_bases.struct_type_base + type_index;
                 let fields = encoding_order
@@ -1608,10 +1760,17 @@ impl GcOp {
                         func.instruction(&Instruction::LocalGet(typed_local));
                         let idx = field_index % u32::try_from(fields.len()).unwrap();
                         if fields[usize::try_from(idx).unwrap()].field_type.is_packed() {
-                            func.instruction(&Instruction::StructGetS {
-                                struct_type_index: wasm_type,
-                                field_index: idx,
-                            });
+                            if matches!(self, Self::StructGetU { .. }) {
+                                func.instruction(&Instruction::StructGetU {
+                                    struct_type_index: wasm_type,
+                                    field_index: idx,
+                                });
+                            } else {
+                                func.instruction(&Instruction::StructGetS {
+                                    struct_type_index: wasm_type,
+                                    field_index: idx,
+                                });
+                            }
                         } else {
                             func.instruction(&Instruction::StructGet {
                                 struct_type_index: wasm_type,
@@ -1659,9 +1818,7 @@ impl GcOp {
                                 func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
                                 func.instruction(&Instruction::Else);
                                 func.instruction(&Instruction::LocalGet(typed_local));
-                                fields[idx]
-                                    .field_type
-                                    .emit_default_const(func, type_ids_to_index);
+                                fields[idx].field_type.emit_default_const(func, ctx);
                                 let idx = u32::try_from(idx).unwrap();
                                 func.instruction(&Instruction::StructSet {
                                     struct_type_index: wasm_type,
@@ -1793,7 +1950,7 @@ impl GcOp {
                 func.instruction(&Instruction::LocalGet(encoding_bases.array_local_idx));
                 func.instruction(&Instruction::TableSet(encoding_bases.array_table_idx));
             }
-            Self::ArrayGet { type_index, index } => {
+            Self::ArrayGet { type_index, index } | Self::ArrayGetU { type_index, index } => {
                 let wasm_type = encoding_bases.struct_type_base + type_index;
                 let typed_local = encoding_bases.typed_local_base + type_index;
                 let element = encoding_order
@@ -1815,7 +1972,11 @@ impl GcOp {
                         func.instruction(&Instruction::LocalGet(typed_local));
                         func.instruction(&Instruction::I32Const(index.cast_signed()));
                         if element.field_type.is_packed() {
-                            func.instruction(&Instruction::ArrayGetS(wasm_type));
+                            if matches!(self, Self::ArrayGetU { .. }) {
+                                func.instruction(&Instruction::ArrayGetU(wasm_type));
+                            } else {
+                                func.instruction(&Instruction::ArrayGetS(wasm_type));
+                            }
                         } else {
                             func.instruction(&Instruction::ArrayGet(wasm_type));
                         }
@@ -1848,14 +2009,74 @@ impl GcOp {
                         func.instruction(&Instruction::Else);
                         func.instruction(&Instruction::LocalGet(typed_local));
                         func.instruction(&Instruction::I32Const(index.cast_signed()));
-                        element
-                            .field_type
-                            .emit_default_const(func, type_ids_to_index);
+                        element.field_type.emit_default_const(func, ctx);
                         func.instruction(&Instruction::ArraySet(wasm_type));
                         func.instruction(&Instruction::End);
                     }
                     // Immutable element or non-array: just drop the operand.
                     _ => {
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
+            }
+            Self::ArrayFill {
+                type_index,
+                offset,
+                len,
+            } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let typed_local = encoding_bases.typed_local_base + type_index;
+                match array_element(types, encoding_order, type_index) {
+                    Some(element) if element.mutable => {
+                        func.instruction(&Instruction::LocalTee(typed_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                        func.instruction(&Instruction::Else);
+                        func.instruction(&Instruction::LocalGet(typed_local));
+                        func.instruction(&Instruction::I32Const(offset.cast_signed()));
+                        element.field_type.emit_default_const(func, ctx);
+                        func.instruction(&Instruction::I32Const(len.cast_signed()));
+                        func.instruction(&Instruction::ArrayFill(wasm_type));
+                        func.instruction(&Instruction::End);
+                    }
+                    _ => {
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
+            }
+            Self::ArrayCopy {
+                type_index,
+                dst_offset,
+                src_offset,
+                len,
+            } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let dst_local = encoding_bases.typed_local_base + type_index;
+                let src_local = encoding_bases.typed_local2_base + type_index;
+                match array_element(types, encoding_order, type_index) {
+                    Some(element) if element.mutable => {
+                        func.instruction(&Instruction::LocalSet(src_local));
+                        func.instruction(&Instruction::LocalSet(dst_local));
+                        func.instruction(&Instruction::LocalGet(dst_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::LocalGet(src_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::I32Or);
+                        func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                        func.instruction(&Instruction::Else);
+                        func.instruction(&Instruction::LocalGet(dst_local));
+                        func.instruction(&Instruction::I32Const(dst_offset.cast_signed()));
+                        func.instruction(&Instruction::LocalGet(src_local));
+                        func.instruction(&Instruction::I32Const(src_offset.cast_signed()));
+                        func.instruction(&Instruction::I32Const(len.cast_signed()));
+                        func.instruction(&Instruction::ArrayCopy {
+                            array_type_index_dst: wasm_type,
+                            array_type_index_src: wasm_type,
+                        });
+                        func.instruction(&Instruction::End);
+                    }
+                    _ => {
+                        func.instruction(&Instruction::Drop);
                         func.instruction(&Instruction::Drop);
                     }
                 }

@@ -28,22 +28,22 @@
 (rule (simplify
        (slt ty
              (uextend $I64 x @ (value_type $I32))
-             (iconst_u _ 0)))
-      (subsume (iconst_u ty 0)))
+             (all_zero _)))
+      (subsume (all_zero ty)))
 (rule (simplify
        (sge ty
              (uextend $I64 x @ (value_type $I32))
-             (iconst_u _ 0)))
+             (all_zero _)))
       (subsume (iconst_u ty 1)))
 
 ;; Sign-extending can't change whether a number is zero nor how it signed-compares to zero
-(rule (simplify (eq _ (sextend _ x@(value_type ty)) (iconst_s _ 0)))
-      (eq ty x (iconst_s ty 0)))
-(rule (simplify (ne _ (sextend _ x@(value_type ty)) (iconst_s _ 0)))
-      (ne ty x (iconst_s ty 0)))
-(rule (simplify (icmp _ cc (sextend _ x@(value_type ty)) (iconst_s _ 0)))
+(rule (simplify (eq _ (sextend _ x@(value_type ty)) (all_zero _)))
+      (eq ty x (all_zero ty)))
+(rule (simplify (ne _ (sextend _ x@(value_type ty)) (all_zero _)))
+      (ne ty x (all_zero ty)))
+(rule (simplify (icmp _ cc (sextend _ x@(value_type ty)) (all_zero _)))
       (if (signed_cond_code cc))
-      (icmp ty cc x (iconst_s ty 0)))
+      (icmp ty cc x (all_zero ty)))
 
 ;; A reduction-of-an-extend back to the same original type is the same as not
 ;; actually doing the extend in the first place.
@@ -91,8 +91,14 @@
 (rule (simplify (ireduce ty (band _ x y))) (band ty (ireduce ty x) (ireduce ty y)))
 
 ;; Try to transform an `iconcat` into an i128 into either an sextend or uextend
-(rule (simplify (iconcat $I128 x (iconst_u _ 0))) (uextend $I128 x))
+(rule (simplify (iconcat $I128 x (all_zero _))) (uextend $I128 x))
 (rule (simplify (iconcat $I128 x (sshr _ x (iconst_u _ 63)))) (sextend $I128 x))
 
 ;; Select narrowest type
 (rule (simplify (ireduce ty (ireduce cty x))) (ireduce ty x))
+
+;; uextend(x) <u uextend(y) --> x <u y.
+(rule (simplify (ult rty
+                    (uextend ty x @ (value_type (ty_int narrow)))
+                    (uextend ty y @ (value_type narrow))))
+      (ult rty x y))

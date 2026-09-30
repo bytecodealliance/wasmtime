@@ -61,6 +61,7 @@ pub use crate::ir::memflags::{
     MemFlagsSet,
 };
 pub use crate::ir::progpoint::ProgramPoint;
+pub use crate::ir::sourceloc::MaybeRelSourceLoc;
 pub use crate::ir::sourceloc::RelSourceLoc;
 pub use crate::ir::sourceloc::SourceLoc;
 pub use crate::ir::stackslot::{

@@ -4,8 +4,8 @@
 use crate::Result;
 use core::ops::Range;
 
-use crate::runtime::vm::stack_switching::VMHostArray;
-use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
+use crate::runtime::vm::VMPayloads;
+use crate::runtime::vm::{VMContext, VMFuncRef};
 
 cfg_select! {
     all(feature = "stack-switching", unix, target_arch = "x86_64") => {
@@ -77,6 +77,13 @@ impl VMContinuationStack {
         self.0.range()
     }
 
+    /// Returns the usable stack range to report to AddressSanitizer. Unlike
+    /// [`Self::range`], this excludes any inaccessible guard region.
+    #[cfg(all(feature = "stack-switching", asan))]
+    pub(crate) fn asan_range(&self) -> Option<Range<usize>> {
+        self.0.asan_range()
+    }
+
     /// Returns the instruction pointer stored in the Fiber's ControlContext.
     pub fn control_context_instruction_pointer(&self) -> usize {
         self.0.control_context_instruction_pointer()
@@ -95,7 +102,9 @@ impl VMContinuationStack {
     /// Initializes this stack, such that it will execute the function denoted
     /// by `func_ref`. `parameter_count` and `return_value_count` must be the
     /// corresponding number of parameters and return values of `func_ref`.
-    /// `args` must point to the `args` field of the `VMContRef` owning this pointer.
+    /// `args` must point to the `args` field of the `VMContRef` owning this
+    /// stack. When `gc_refs` is true, its `gc_ref_data` field receives the
+    /// corresponding root-marker buffer.
     ///
     /// It will be updated by this function to correctly describe
     /// the buffer used by this function for its arguments and return values.
@@ -103,9 +112,10 @@ impl VMContinuationStack {
         &self,
         func_ref: *const VMFuncRef,
         caller_vmctx: *mut VMContext,
-        args: *mut VMHostArray<ValRaw>,
+        args: *mut VMPayloads,
         parameter_count: u32,
         return_value_count: u32,
+        gc_refs: bool,
     ) -> Result<()> {
         self.0.initialize(
             func_ref,
@@ -113,6 +123,7 @@ impl VMContinuationStack {
             args,
             parameter_count,
             return_value_count,
+            gc_refs,
         )
     }
 }

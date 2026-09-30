@@ -13,7 +13,7 @@ use wasmtime_environ::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESUL
 /// Returned from [`Func::start_call_concurrent`] to represent a
 /// pending-but-not-yet-resolved call into wasm.
 pub struct FuncCallConcurrent<'a, T> {
-    call: concurrent::QueuedCall<Vec<Val>>,
+    call: concurrent::StagedCall<Vec<Val>>,
     results: &'a mut [Val],
     _marker: marker::PhantomData<fn(T)>,
 }
@@ -136,7 +136,7 @@ impl Func {
     ) -> Result<FuncCallConcurrent<'a, T>> {
         self.check_params_results(store.as_context_mut(), params, results)?;
         let prepared = self.prepare_call_dynamic(store.as_context_mut(), params.to_vec())?;
-        let call = concurrent::QueuedCall::new(store.as_context_mut(), prepared)?;
+        let call = concurrent::StagedCall::new(store.as_context_mut(), prepared)?;
         Ok(FuncCallConcurrent {
             call,
             results,
@@ -171,24 +171,27 @@ impl Func {
         params: Vec<Val>,
     ) -> Result<PreparedCall<Vec<Val>>> {
         let store = store.as_context_mut();
+        let (options, flags, ty, raw_options) = self.abi_info(store.0);
+        let async_ = raw_options.async_;
+        let instance = self.instance();
 
         concurrent::prepare_call(
             store,
             self,
             MAX_FLAT_PARAMS,
             false,
-            move |func, store, params_out| {
-                func.with_lower_context(store, |cx, ty| {
+            move |store, params_out| {
+                Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
-            move |func, store, results| {
-                let max_flat = if func.abi_async(store) {
+            move |store, results| {
+                let max_flat = if async_ {
                     MAX_FLAT_PARAMS
                 } else {
                     MAX_FLAT_RESULTS
                 };
-                let results = func.with_lift_context(store, |cx, ty| {
+                let results = Func::with_lift_context(instance, store, options, ty, |cx, ty| {
                     Self::lift_results(cx, ty, results, max_flat)?.collect::<Result<Vec<_>>>()
                 })?;
                 Ok(Box::new(results))
@@ -210,7 +213,7 @@ impl<T> FuncCallConcurrent<'_, T> {
 /// Returned from [`TypedFunc::start_call_concurrent`] to represent a
 /// pending-but-not-yet-resolved call into wasm.
 pub struct TypedFuncCallConcurrent<T, P, R> {
-    call: concurrent::QueuedCall<R>,
+    call: concurrent::StagedCall<R>,
     _marker: marker::PhantomData<fn(T, P)>,
 }
 
@@ -268,7 +271,7 @@ where
             task: prepared.task_id(),
         };
 
-        let result = concurrent::QueuedCall::new(wrapper.store.as_context_mut(), prepared)?;
+        let result = concurrent::StagedCall::new(wrapper.store.as_context_mut(), prepared)?;
         wrapper
             .store
             .as_context_mut()
@@ -378,7 +381,7 @@ where
         let prepared = self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
             Self::lower_args(cx, ty, dst, &params)
         })?;
-        let call = concurrent::QueuedCall::new(store, prepared)?;
+        let call = concurrent::StagedCall::new(store, prepared)?;
         Ok(TypedFuncCallConcurrent {
             call,
             _marker: marker::PhantomData,
@@ -431,22 +434,27 @@ where
         } else {
             1
         };
-        let max_results = if self.func().abi_async(store.0) {
+        let (options, flags, ty, raw_options) = self.func().abi_info(store.0);
+        let instance = self.func().instance();
+        let max_results = if raw_options.async_ {
             MAX_FLAT_PARAMS
         } else {
             MAX_FLAT_RESULTS
         };
+
         concurrent::prepare_call(
             store,
             *self.func(),
             param_count,
             host_future_present,
-            move |func, store, params_out| {
-                func.with_lower_context(store, |cx, ty| lower(cx, ty, params_out))
+            move |store, params_out| {
+                Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
+                    lower(cx, ty, params_out)
+                })
             },
-            move |func, store, results| {
+            move |store, results| {
                 let result = if Return::flatten_count() <= max_results {
-                    func.with_lift_context(store, |cx, ty| {
+                    Func::with_lift_context(instance, store, options, ty, |cx, ty| {
                         // SAFETY: Per the safety requirements documented for the
                         // `ComponentType` trait, `Return::Lower` must be
                         // compatible at the binary level with a `[ValRaw; N]`,
@@ -468,7 +476,7 @@ where
                         Self::lift_stack_result(cx, ty, results)
                     })?
                 } else {
-                    func.with_lift_context(store, |cx, ty| {
+                    Func::with_lift_context(instance, store, options, ty, |cx, ty| {
                         Self::lift_heap_result(cx, ty, &results[0])
                     })?
                 };

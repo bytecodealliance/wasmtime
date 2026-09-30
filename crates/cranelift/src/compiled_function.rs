@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use crate::{Relocation, mach_reloc_to_reloc, mach_trap_to_trap};
 use cranelift_codegen::{
-    Final, MachBufferFinalized, MachBufferFrameLayout, MachSrcLoc, ValueLabelsRanges, ir,
+    MachBufferFinalized, MachBufferFrameLayout, MachSrcLoc, ValueLabelsRanges, ir,
     isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
 };
 use wasmtime_environ::{
@@ -58,7 +58,7 @@ pub struct CompiledFunctionMetadata {
 /// Compiled function: machine code body, jump table offsets, and unwind information.
 pub struct CompiledFunction {
     /// The machine code buffer for this function.
-    pub buffer: MachBufferFinalized<Final>,
+    pub buffer: MachBufferFinalized,
     /// What names each name ref corresponds to.
     name_map: PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
     /// The alignment for the compiled function.
@@ -77,7 +77,7 @@ impl CompiledFunction {
     /// This function uses the information in the machine buffer to derive the traps and relocations
     /// fields. The compiled function metadata is loaded with the default values.
     pub fn new(
-        buffer: MachBufferFinalized<Final>,
+        buffer: MachBufferFinalized,
         name_map: PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
         alignment: u32,
     ) -> Self {
@@ -169,7 +169,7 @@ impl CompiledFunction {
             .buffer
             .get_srclocs_sorted()
             .into_iter()
-            .map(|&MachSrcLoc { start, end, loc }| (loc, start, (end - start)));
+            .map(|&MachSrcLoc { start, end, loc }| (loc.as_abs(), start, (end - start)));
         let instructions = if with_instruction_addresses {
             collect_address_maps(len.try_into().unwrap(), srclocs)
         } else {

@@ -632,7 +632,10 @@ impl Table {
         if delta == 0 {
             return Ok(Some(old_size));
         }
-        let delta = usize::try_from(delta).map_err(|_| Trap::TableOutOfBounds)?;
+
+        // Clamp to maximum usize, the system won't be able to allocate this
+        // anyway and we'll go to the normal failure path.
+        let delta = usize::try_from(delta).unwrap_or(usize::MAX);
 
         let new_size = match old_size.checked_add(delta) {
             Some(s) => s,

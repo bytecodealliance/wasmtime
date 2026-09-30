@@ -33,6 +33,10 @@ pub const STACK_STATE_TRAPPED_DISCRIMINANT: u32 = 5;
 /// Discriminant of variant `Return` in
 /// `runtime::vm::ControlEffect`.
 pub const CONTROL_EFFECT_RETURN_DISCRIMINANT: u32 = 0;
+
+/// Marker for a continuation payload slot that contains a GC-managed
+/// reference and must be traced while the continuation is suspended.
+pub const CONTINUATION_PAYLOAD_GC_REF: u8 = 1;
 /// Discriminant of variant `Resume` in
 /// `runtime::vm::ControlEffect`.
 pub const CONTROL_EFFECT_RESUME_DISCRIMINANT: u32 = 1;

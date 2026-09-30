@@ -3,23 +3,23 @@
 ;; x>>0 == x<<0 == x rotr 0 == x rotl 0 == x.
 (rule (simplify (ishl ty
                       x
-                      (iconst_u ty 0)))
+                      (all_zero ty)))
       (subsume x))
 (rule (simplify (ushr ty
                       x
-                      (iconst_u ty 0)))
+                      (all_zero ty)))
       (subsume x))
 (rule (simplify (sshr ty
                       x
-                      (iconst_u ty 0)))
+                      (all_zero ty)))
       (subsume x))
 (rule (simplify (rotr ty
                       x
-                      (iconst_u ty 0)))
+                      (all_zero ty)))
       (subsume x))
 (rule (simplify (rotl ty
                       x
-                      (iconst_u ty 0)))
+                      (all_zero ty)))
       (subsume x))
 
 ;; `(x >> k) << k` is the same as masking off the bottom `k` bits (regardless if
@@ -188,7 +188,7 @@
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let true (u64_lt_eq (ty_bits_u64 ty) shift_amt))
-      (subsume (iconst_u ty 0)))
+      (subsume (all_zero ty)))
 
 (rule (simplify (ushr ty
                       (ushr ty x (iconst_u _ k1))
@@ -197,7 +197,7 @@
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let true (u64_lt_eq (ty_bits_u64 ty) shift_amt))
-      (subsume (iconst_u ty 0)))
+      (subsume (all_zero ty)))
 
 ;; (rotl (rotr x y) y) == x
 ;; (rotr (rotl x y) y) == x
@@ -311,19 +311,34 @@
       (rotl ty x (iconst_u kty (u64_and k (ty_shift_mask ty)))))
 
 (rule (simplify (band ty (ishl ty x z) (ishl ty y z))) (ishl ty (band ty x y) z))
+(rule (simplify (bor ty (ishl ty x z) (ishl ty y z))) (ishl ty (bor ty x y) z))
 (rule (simplify (isub ty (ishl ty x z) (ishl ty y z))) (ishl ty (isub ty x y) z))
 (rule (simplify (iadd ty (ishl ty x z) (ishl ty y z))) (ishl ty (iadd ty x y) z))
 
 (rule (simplify (ushr ty (band ty (ishl ty x y) z) y)) (band ty x (ushr ty z y)))
+(rule (simplify (ushr ty (band ty x (ishl ty y z)) z)) (band ty y (ushr ty x z)))
 
 ;; Zero remains zero for any shift or rotate amount.
-(rule (simplify (ishl ty (iconst_u ty 0) x)) (subsume (iconst_u ty 0)))
-(rule (simplify (ushr ty (iconst_u ty 0) x)) (subsume (iconst_u ty 0)))
-(rule (simplify (sshr ty (iconst_u ty 0) x)) (subsume (iconst_u ty 0)))
-(rule (simplify (rotl ty (iconst_u ty 0) x)) (subsume (iconst_u ty 0)))
-(rule (simplify (rotr ty (iconst_u ty 0) x)) (subsume (iconst_u ty 0)))
+(rule (simplify (ishl ty (all_zero ty) x)) (subsume (all_zero ty)))
+(rule (simplify (ushr ty (all_zero ty) x)) (subsume (all_zero ty)))
+(rule (simplify (sshr ty (all_zero ty) x)) (subsume (all_zero ty)))
+(rule (simplify (rotl ty (all_zero ty) x)) (subsume (all_zero ty)))
+(rule (simplify (rotr ty (all_zero ty) x)) (subsume (all_zero ty)))
 
 ;; All ones remain all ones for arithmetic right shifts or rotates.
 (rule (simplify (sshr ty (iconst_s ty -1) x)) (subsume (iconst_s ty -1)))
 (rule (simplify (rotl ty (iconst_s ty -1) x)) (subsume (iconst_s ty -1)))
 (rule (simplify (rotr ty (iconst_s ty -1) x)) (subsume (iconst_s ty -1)))
+
+;; x << (k & (B - 1)) --> x << k.
+(rule (simplify (ishl ty x (band _ k (iconst_u _ mask))))
+      (if-let mask (ty_shift_mask ty))
+      (ishl ty x k))
+;; x >>u (k & (B - 1)) --> x >>u k.
+(rule (simplify (ushr ty x (band _ k (iconst_u _ mask))))
+      (if-let mask (ty_shift_mask ty))
+      (ushr ty x k))
+;; x >>s (k & (B - 1)) --> x >>s k.
+(rule (simplify (sshr ty x (band _ k (iconst_u _ mask))))
+      (if-let mask (ty_shift_mask ty))
+      (sshr ty x k))

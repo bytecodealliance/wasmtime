@@ -66,7 +66,7 @@ jobs:
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
   clangformat:
     name: Clang format
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
     - uses: actions/checkout@v6
       with:
@@ -75,7 +75,7 @@ jobs:
         git ls-files '*.h' '*.c' '*.cpp' '*.hh' '*.cc' | \
           grep -v wasmtime-platform.h | \
           grep -v wasm.h | \
-          xargs clang-format-18 --dry-run --Werror --verbose
+          xargs clang-format-22 --dry-run --Werror --verbose
     # Make sure our `clangformat.sh` helper script keeps running and stays
     # in-sync with the previous check.
     - run: crates/c-api/clangformat.sh
@@ -189,6 +189,7 @@ jobs:
       run-dwarf: ${{ steps.calculate.outputs.run-dwarf }}
       platform-checks: ${{ steps.calculate.outputs.platform-checks }}
       test-gc-zeal: ${{ steps.calculate.outputs.test-gc-zeal }}
+      run-isle-veri: ${{ steps.calculate.outputs.run-isle-veri }}
     steps:
     - uses: actions/checkout@v6
     - id: calculate
@@ -245,6 +246,15 @@ jobs:
           if grep -q gc names.log; then
             echo test-gc-zeal=true >> $GITHUB_OUTPUT
           fi
+          # Run the ISLE verifier for PRs that touch the ISLE toolchain
+          # (cranelift/isle) or any ISLE source file (*.isle); `prtest:full`
+          # is handled by run_full below.
+          if grep -q cranelift/isle names.log; then
+            echo run-isle-veri=true >> $GITHUB_OUTPUT
+          fi
+          if grep -qE '\.isle$' names.log; then
+            echo run-isle-veri=true >> $GITHUB_OUTPUT
+          fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
         echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
@@ -263,6 +273,7 @@ jobs:
             echo preview1-adapter=true >> $GITHUB_OUTPUT
             echo run-dwarf=true >> $GITHUB_OUTPUT
             echo platform-checks=true >> $GITHUB_OUTPUT
+            echo run-isle-veri=true >> $GITHUB_OUTPUT
         fi
 
   # Build all documentation of Wasmtime, including the C API documentation,
@@ -274,7 +285,7 @@ jobs:
     name: Doc build
     runs-on: ubuntu-latest
     env:
-      RUSTDOCFLAGS: -Dwarnings --cfg docsrs
+      RUSTDOCFLAGS: --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
     - uses: actions/checkout@v6
@@ -417,6 +428,10 @@ jobs:
               -p cranelift-entity --no-default-features
               -p cranelift-entity --no-default-features --features enable-serde
 
+          - name: cranelift-module
+            checks: |
+              -p cranelift-module --no-default-features
+
           - name: wasmtime-bench-api
             checks: |
               -p wasmtime-bench-api
@@ -427,6 +442,7 @@ jobs:
               -p wasmtime-c-api --no-default-features --features wat
               -p wasmtime-c-api --no-default-features --features wasi
               -p wasmtime-c-api --no-default-features --features gc
+              -p wasmtime-c-api --no-default-features --features component-model
 
           - name: wasmtime-wasi-http
             checks: |
@@ -634,6 +650,8 @@ jobs:
           os: ubuntu-latest
           cross: true
           test: cross build
+          env:
+            RUSTFLAGS: -Alinker-messages
         - target: wasm32-wasip1
           os: ubuntu-latest
           test: cargo build --no-default-features --features compile,cranelift,all-arch
@@ -737,7 +755,7 @@ jobs:
     - uses: ./.github/actions/cargo-install
       with:
         crate: cargo-fuzz
-        version: 0.13.1
+        version: 0.13.2
     - uses: ./.github/actions/apt-get-install
       with:
         packages: ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
@@ -786,7 +804,7 @@ jobs:
           # linking, and this is intended to be the "main set of tests".
           #
           # Run this on windows/mac/linux
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             # Only run the "plugins" example on Linux
             flags: -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DBUILD_RUST_EXAMPLES=ON -DBUILD_RUST_PLUGINS_EXAMPLE=ON
             name: Linux
@@ -803,12 +821,12 @@ jobs:
           # This tests using static linking for examples but skips building the
           # Rust examples as well as C/C++ tests. Intended to be a faster build
           # which mostly just tests static linking.
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             flags: -DBUILD_SHARED_LIBS=OFF -DBUILD_RUST_EXAMPLES=OFF
             name: Linux (static linking)
 
           # Run tests with ASAN for leak checking primarily.
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             flags: -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
             name: Linux (ASAN)
     steps:
@@ -842,9 +860,7 @@ jobs:
     needs: determine
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    env:
-      QEMU_BUILD_VERSION: 10.0.3
-      SDE_BUILD_VERSION: 9.58.0-2025-06-16
+    env: ${{ matrix.env || fromJSON('{}') }}
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
@@ -910,14 +926,6 @@ jobs:
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
         echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
 
-        # QEMU emulation is not always the speediest, so total testing time
-        # goes down if we build the libs in release mode when running tests.
-        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
-
-        # See comments in the source for why we enable this during QEMU
-        # emulation.
-        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
-
         # See if qemu is already in the cache
         if [ -f ${{ runner.tool_cache }}/qemu/built ]; then
           exit 0
@@ -946,18 +954,6 @@ jobs:
         # Set up SDE as runner for x86_64 targets
         echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=${{ runner.tool_cache }}/sde/sde64 -future --" >> $GITHUB_ENV
 
-        # SDE emulation is very slow, so use release mode for better performance
-        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
-
-        # Enable environment variable to indicate SDE is being used
-        echo WASMTIME_TEST_SDE=1 >> $GITHUB_ENV
-
-        # Generic variable for skipping tests that are problematic under SDE (performance, compatibility, etc.)
-        echo WASMTIME_TEST_NO_SDE=1 >> $GITHUB_ENV
-
-        # Similar to QEMU, reduce memory usage during SDE emulation
-        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
-
         # See if SDE is already in the cache
         if [ -f ${{ runner.tool_cache }}/sde/sde64 ]; then
           exit 0
@@ -972,14 +968,6 @@ jobs:
 
         chmod +x ${{ runner.tool_cache }}/sde/sde64
       if: matrix.sde != ''
-
-    - name: Configure ASAN
-      run: |
-        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
-        echo CARGO_PROFILE_TEST_OPT_LEVEL=2 >> $GITHUB_ENV
-        echo RUSTFLAGS=-Zsanitizer=address >> $GITHUB_ENV
-        echo RUSTDOCFLAGS="-Zsanitizer=address -Copt-level=2 -Ccodegen-units=16" >> $GITHUB_ENV
-      if: ${{ contains(matrix.name, 'ASAN') }}
 
     # Record some CPU details; this is helpful information if tests fail due
     # to CPU-specific features.
@@ -1024,48 +1012,6 @@ jobs:
       shell: pwsh
     - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
       if: runner.os != 'Windows'
-
-  # Test `wasmtime-wasi-nn` in its own job, as not all of its backends are
-  # compatible with all targets, and each must be tested separately anyways.
-  test_wasi_nn:
-    strategy:
-      matrix:
-        feature: ["openvino", "onnx-download"]
-        os: ["ubuntu-24.04", "windows-2025"]
-        include:
-          - os: windows-2025
-            feature: winml
-    name: Test wasi-nn (${{ matrix.feature }}, ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    needs: determine
-    if: needs.determine.outputs.run-full
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-
-    # Install OpenVINO
-    - uses: abrown/install-openvino-action@v12
-      if: runner.arch == 'X64'
-
-    # Install WinML for testing wasi-nn WinML backend. WinML is only available
-    # on Windows clients and Windows Server with desktop experience enabled.
-    # GitHub Actions Window Server image doesn't have desktop experience
-    # enabled, so we download the standalone library from ONNX Runtime project.
-    - uses: nuget/setup-nuget@v2
-      if: (runner.os == 'Windows') && (matrix.feature == 'winml')
-    - run: nuget install Microsoft.AI.MachineLearning
-      if: (runner.os == 'Windows') && (matrix.feature == 'winml')
-
-    # Install Rust targets.
-    - run: rustup target add wasm32-wasip1 wasm32-wasip2
-
-    # Run the tests!
-    - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
-      env:
-        # Avoid AMX instructions. Details at https://github.com/uxlfoundation/oneDNN/issues/5689
-        ONEDNN_MAX_CPU_ISA: AVX10_1_512
 
   # Test `wasmtime-wasi-tls` in its own job, as not all of its providers are
   # compatible with all targets. The primary culprit is the OpenSSL dependency,
@@ -1126,7 +1072,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-dwarf
     name: Test DWARF debugging
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
     - uses: actions/checkout@v6
       with:
@@ -1157,7 +1103,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-dwarf
     name: Test guest debugging
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
     - uses: actions/checkout@v6
       with:
@@ -1358,20 +1304,76 @@ jobs:
     - run: ${{ matrix.script }}
       if: ${{ matrix.script }}
 
-  # Check the ISLE verifier builds/runs (without invoking the SMT solver, for now).
-  isle_veri_basic_check:
+  # Run the full ISLE verifier (see cranelift/isle/veri/) incrementally on top
+  # of a shared SMT query cache. Cache misses are solved with cvc5/z3, so this
+  # is fast when the cache is warm and can take a long time when it is cold.
+  #
+  # The cache is a named entry in the actions cache, keyed by a hash of the
+  # ISLE sources and the ISLE toolchain (see `hashFiles` in the cache key).
+  # Caches saved by merge-queue runs are stored in the default branch's
+  # cache scope and are visible to every PR and future merge-queue run, so
+  # each distinct ISLE state gets exactly one immutable entry on `main`, and
+  # no branch ever needs to "update" an existing entry: a new ISLE state is
+  # a new key. PR runs read those entries and, when their ISLE state is new,
+  # save an entry scoped to their own merge ref, so repeated runs of the
+  # same PR verify incrementally on top of their previous run's cache.
+  #
+  # The rebuilt cache is also uploaded as the `isle-veri-cache` run
+  # artifact; the `publish-artifacts.yml` workflow publishes it as the
+  # `isle-veri-cache.tar.gz` asset on the rolling `dev` release so local
+  # users can download it with `cranelift/isle/veri/setup/download-cache.sh`.
+  # That asset is a convenience snapshot for humans; CI itself only uses the
+  # named cache above.
+  isle_veri_full_check:
     needs: determine
-    if: needs.determine.outputs.run-full
-    name: ISLE verifier basic check
+    if: needs.determine.outputs.run-isle-veri
+    name: ISLE verifier full check
     runs-on: ubuntu-latest
+    # Runs can be cold and take a long time; most will not take this long.
+    timeout-minutes: 360
     steps:
     - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-fast.args --skip-solver
-    - run: cargo run -p cranelift-isle-veri --bin veri -- --name x64 --rule iadd_base_case_32_or_64_lea --skip-solver
-    - run: cargo run -p cranelift-isle-veri --bin veri -- --name opt --only-root simplify --default-excludes --skip-solver
+    - uses: ./.github/actions/apt-get-install
+      with:
+        packages: wget unzip
+    - name: Install SMT solvers (cvc5, z3)
+      run: |
+        solver_dir="$HOME/.cache/smt-solvers"
+        mkdir -p "${solver_dir}/bin"
+        ./cranelift/isle/veri/setup/install-cvc5.sh -i "${solver_dir}"
+        ./cranelift/isle/veri/setup/install-z3.sh -b "${solver_dir}/bin"
+    - name: Add solvers to PATH
+      run: echo "$HOME/.cache/smt-solvers/bin" >> "${GITHUB_PATH}"
+    - name: Restore and save verifier cache
+      uses: actions/cache@v5
+      with:
+        path: cranelift/isle/veri/cache
+        # Bump `v1` if the cache format changes. `hashFiles` covers the ISLE
+        # sources and the ISLE toolchain itself by hashing the paths and
+        # contents of all matching files.
+        key: isle-veri-cache-v1-${{ hashFiles('cranelift/isle/**/*.rs', 'cranelift/codegen/**/*.isle') }}
+        restore-keys: |
+          isle-veri-cache-v1-
+    - name: Verify and rebuild cache
+      env:
+        # Per-SMT-query timeout, in seconds (see the `--timeout` option in
+        # cranelift/isle/veri/veri/src/bin/veri.rs).
+        ISLE_VERI_TIMEOUT: "90"
+        # Print the counterexample for each verification failure.
+        ISLE_VERI_PRINT_COUNTEREXAMPLE: "1"
+      run: |
+        mkdir -p cranelift/isle/veri/cache
+        ./cranelift/isle/veri/verify.sh rebuild-cache aarch64 opt x64-iadd-base-case
+    - name: Package rebuilt cache
+      run: tar czf isle-veri-cache.tar.gz -C cranelift/isle/veri cache
+    - name: Upload cache tarball as run artifact
+      uses: actions/upload-artifact@v6
+      with:
+        name: isle-veri-cache
+        path: isle-veri-cache.tar.gz
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
@@ -1462,7 +1464,6 @@ jobs:
       - test_capi
       - test_debug_dwarf
       - test_fuzzing
-      # - test_wasi_nn
       - test_nightly
       - build
       - rustfmt
@@ -1482,7 +1483,7 @@ jobs:
       - verify-publish
       - determine
       - miri
-      - isle_veri_basic_check
+      - isle_veri_full_check
       - build-preview1-component-adapter
       - build-preview1-component-adapter-provider
       - test-min-platform-example

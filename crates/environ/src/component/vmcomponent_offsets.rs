@@ -50,7 +50,6 @@ pub struct VMComponentOffsets<P> {
     // generated `compute_field_offsets` and read by the generated accessors of
     // the same names.
     may_leave: u32,
-    task_may_block: u32,
     trampoline_func_refs: u32,
     intrinsic_func_refs: u32,
     lowerings: u32,
@@ -166,7 +165,6 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             },
             num_resources: component.num_resources,
             may_leave: 0,
-            task_may_block: 0,
             trampoline_func_refs: 0,
             intrinsic_func_refs: 0,
             lowerings: 0,
@@ -180,6 +178,14 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         };
 
         ret.compute_field_offsets();
+
+        // The component-model flags must land where a compiler that only knows
+        // the pointer size can find them.
+        debug_assert!(
+            (0..ret.num_runtime_component_instances)
+                .map(RuntimeComponentInstanceIndex::from_u32)
+                .all(|i| ret.may_leave().at(i) == ret.ptr.vmcomponent().may_leave(i))
+        );
 
         ret
     }
@@ -218,5 +224,35 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     #[inline]
     pub fn lowering_data_offset(&self) -> u32 {
         u32::from(self.ptr.size())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The pointer-size-only flag offsets must match the real layout for every
+    /// pointer width and every number of component instances, since core Wasm
+    /// compilation uses them to build alias regions that must agree with the
+    /// regions the component trampolines use.
+    #[test]
+    fn flag_offsets_match_layout() {
+        for ptr in [4u8, 8] {
+            for num_runtime_component_instances in 0..8 {
+                let component = Component {
+                    num_runtime_component_instances,
+                    ..Default::default()
+                };
+                let offsets = VMComponentOffsets::new(ptr, &component);
+
+                for i in 0..num_runtime_component_instances {
+                    let index = RuntimeComponentInstanceIndex::from_u32(i);
+                    assert_eq!(
+                        offsets.may_leave().at(index),
+                        ptr.vmcomponent().may_leave(index)
+                    );
+                }
+            }
+        }
     }
 }

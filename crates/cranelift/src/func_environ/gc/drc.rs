@@ -11,8 +11,8 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::drc::{EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET};
 use wasmtime_environ::{
-    GcTypeLayouts, TypeIndex, VMGcKind, WasmHeapType, WasmRefType, WasmResult, WasmStorageType,
-    WasmValType, drc::DrcTypeLayouts,
+    GcTypeLayouts, PtrSize, TypeIndex, VMGcKind, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType, drc::DrcTypeLayouts,
 };
 
 #[derive(Default)]
@@ -30,7 +30,7 @@ impl DrcCompiler {
         builder: &mut FunctionBuilder,
         gc_ref: ir::Value,
     ) -> ir::Value {
-        let offset = func_env.offsets.vm_drc_header_ref_count();
+        let offset = u32::from(func_env.offsets.ptr.vm_drc_header().ref_count());
         let pointer = func_env.prepare_gc_ref_access(
             builder,
             gc_ref,
@@ -39,7 +39,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_memflags(&mut builder.func, GcAccess::DrcRefCount);
         builder.ins().load(ir::types::I64, flags, pointer, 0)
     }
 
@@ -54,7 +54,7 @@ impl DrcCompiler {
         gc_ref: ir::Value,
         new_ref_count: ir::Value,
     ) {
-        let offset = func_env.offsets.vm_drc_header_ref_count();
+        let offset = u32::from(func_env.offsets.ptr.vm_drc_header().ref_count());
         let pointer = func_env.prepare_gc_ref_access(
             builder,
             gc_ref,
@@ -63,7 +63,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_memflags(&mut builder.func, GcAccess::DrcRefCount);
         builder.ins().store(flags, new_ref_count, pointer, 0);
     }
 
@@ -113,7 +113,9 @@ impl DrcCompiler {
         // element.
         let next = func_env
             .alias_regions
-            .vmdrc_heap_data_over_approximated_stack_roots(&mut builder.cursor(), heap_data);
+            .vm_drc_heap_data()
+            .over_approximated_stack_roots()
+            .load(&mut builder.cursor(), heap_data);
 
         // Update our object's header to point to `next` and consider itself part of the list.
         self.set_next_over_approximated_stack_root(func_env, builder, gc_ref, next);
@@ -125,11 +127,9 @@ impl DrcCompiler {
         // Commit this object as the new head of the list.
         func_env
             .alias_regions
-            .store_vmdrc_heap_data_over_approximated_stack_roots(
-                &mut builder.cursor(),
-                heap_data,
-                gc_ref,
-            );
+            .vm_drc_heap_data()
+            .over_approximated_stack_roots()
+            .store(&mut builder.cursor(), heap_data, gc_ref);
 
         // Increment the list's length.
         //
@@ -140,19 +140,16 @@ impl DrcCompiler {
         // `u32::MAX`.
         let current_len = func_env
             .alias_regions
-            .vmdrc_heap_data_current_over_approximated_stack_roots_len(
-                &mut builder.cursor(),
-                heap_data,
-            );
+            .vm_drc_heap_data()
+            .current_over_approximated_stack_roots_len()
+            .load(&mut builder.cursor(), heap_data);
         let one = builder.ins().iconst(ir::types::I32, 1);
         let new_current_len = builder.ins().iadd(current_len, one);
         func_env
             .alias_regions
-            .store_vmdrc_heap_data_current_over_approximated_stack_roots_len(
-                &mut builder.cursor(),
-                heap_data,
-                new_current_len,
-            );
+            .vm_drc_heap_data()
+            .current_over_approximated_stack_roots_len()
+            .store(&mut builder.cursor(), heap_data, new_current_len);
     }
 
     /// Trigger a GC when the over-approximated-stack-roots list has doubled
@@ -178,16 +175,14 @@ impl DrcCompiler {
             .load(&mut builder.cursor(), vmctx);
         let current_len = func_env
             .alias_regions
-            .vmdrc_heap_data_current_over_approximated_stack_roots_len(
-                &mut builder.cursor(),
-                heap_data,
-            );
+            .vm_drc_heap_data()
+            .current_over_approximated_stack_roots_len()
+            .load(&mut builder.cursor(), heap_data);
         let last_len = func_env
             .alias_regions
-            .vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc(
-                &mut builder.cursor(),
-                heap_data,
-            );
+            .vm_drc_heap_data()
+            .over_approximated_stack_roots_len_after_last_gc()
+            .load(&mut builder.cursor(), heap_data);
 
         let doubled_last_len = builder.ins().iadd(last_len, last_len);
         let min_threshold = builder.ins().iconst(
@@ -230,13 +225,20 @@ impl DrcCompiler {
             builder,
             gc_ref,
             BoundsCheck::StaticOffset {
-                offset: func_env
-                    .offsets
-                    .vm_drc_header_next_over_approximated_stack_root(),
+                offset: u32::from(
+                    func_env
+                        .offsets
+                        .ptr
+                        .vm_drc_header()
+                        .next_over_approximated_stack_root(),
+                ),
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_memflags(
+            &mut builder.func,
+            GcAccess::DrcNextOverApproximatedStackRoot,
+        );
         builder.ins().store(flags, next, ptr, 0);
     }
 
@@ -269,11 +271,11 @@ impl DrcCompiler {
             builder,
             gc_ref,
             BoundsCheck::StaticOffset {
-                offset: func_env.offsets.vm_gc_header_reserved_bits(),
+                offset: u32::from(func_env.offsets.ptr.vm_gc_header().kind()),
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_memflags(&mut builder.func, GcAccess::HeaderKind);
         builder.ins().store(flags, new_reserved, ptr, 0);
     }
 }
@@ -326,7 +328,7 @@ impl GcCompiler for DrcCompiler {
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), array_ref);
         let object_addr = builder.ins().iadd(base, extended_array_ref);
         let len_addr = builder.ins().iadd_imm_s(object_addr, i64::from(len_offset));
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_memflags(&mut builder.func, GcAccess::ArrayLength);
         builder.ins().store(flags, len, len_addr, 0);
         Ok(array_ref)
     }
@@ -437,6 +439,7 @@ impl GcCompiler for DrcCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             instance_id_addr,
+            GcAccess::ExnTagInstance,
             instance_id,
         )?;
         let tag_addr = builder
@@ -447,6 +450,7 @@ impl GcCompiler for DrcCompiler {
             builder,
             WasmStorageType::Val(WasmValType::I32),
             tag_addr,
+            GcAccess::ExnTagDefined,
             tag,
         )?;
 
@@ -572,11 +576,11 @@ impl GcCompiler for DrcCompiler {
             builder,
             gc_ref,
             BoundsCheck::StaticOffset {
-                offset: func_env.offsets.vm_gc_header_reserved_bits(),
+                offset: u32::from(func_env.offsets.ptr.vm_gc_header().kind()),
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let flags = func_env.gc_memflags(&mut builder.func);
+        let flags = func_env.gc_memflags(&mut builder.func, GcAccess::HeaderKind);
         let reserved = builder.ins().load(ir::types::I32, flags, ptr, 0);
         let in_set_bit = builder.ins().iconst(
             ir::types::I32,
@@ -914,6 +918,7 @@ impl GcCompiler for DrcCompiler {
         builder: &mut FunctionBuilder<'_>,
         ty: WasmStorageType,
         field_addr: ir::Value,
+        access: GcAccess,
         val: ir::Value,
     ) -> WasmResult<()> {
         if let WasmStorageType::Val(WasmValType::Ref(r)) = ty
@@ -921,12 +926,12 @@ impl GcCompiler for DrcCompiler {
         {
             // Data inside GC objects is always little endian.
             let flags = func_env
-                .gc_memflags(&mut builder.func)
+                .gc_memflags(&mut builder.func, access)
                 .with_endianness(ir::Endianness::Little);
             return self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags);
         }
 
-        write_field_at_addr(func_env, builder, ty, field_addr, val)?;
+        write_field_at_addr(func_env, builder, ty, field_addr, access, val)?;
 
         Ok(())
     }

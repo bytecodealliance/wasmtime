@@ -7,6 +7,9 @@ rust-version.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 cranelift-isle = { path = "../isle/", features = ["fancy-errors", "logging"] }
 env_logger = { workspace = true }

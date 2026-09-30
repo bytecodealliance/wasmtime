@@ -562,3 +562,163 @@ block0(v0: i32, v1: i32):
 ;     return v3
 ; }
 
+function %udiv_shift_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v2, v1
+    v4 = udiv v0, v3
+    return v4
+}
+
+; function %udiv_shift_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = ushr v0, v1
+;     v4 -> v5
+;     return v5
+; }
+
+function %add_zero_vector(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = iadd v0, v1
+    return v2
+}
+
+; function %add_zero_vector(i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4):
+;     return v0
+; }
+
+function %sub_zero_vector(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = isub v0, v1
+    return v2
+}
+
+; function %sub_zero_vector(i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4):
+;     return v0
+; }
+
+function %zero_sub_vector(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = isub v1, v0
+    return v2
+}
+
+; function %zero_sub_vector(i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4):
+;     v3 = ineg v0
+;     return v3
+; }
+
+function %mul_zero_vector(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = vconst.i32x4 0x00000000000000000000000000000000
+    v2 = imul v0, v1
+    return v2
+}
+
+; function %mul_zero_vector(i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4):
+;     v1 = vconst.i32x4 const0
+;     return v1  ; v1 = const0
+; }
+
+function %urem_shifted_1_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_1_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v2 = iconst.i8 1
+;     v3 = ishl v2, v1  ; v2 = 1
+;     v5 = isub v3, v2  ; v2 = 1
+;     v6 = band v0, v5
+;     v4 -> v6
+;     return v6
+; }
+
+function %urem_shifted_1_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = iconst.i16 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_1_i16(i16, i16) -> i16 fast {
+; block0(v0: i16, v1: i16):
+;     v2 = iconst.i16 1
+;     v3 = ishl v2, v1  ; v2 = 1
+;     v5 = isub v3, v2  ; v2 = 1
+;     v6 = band v0, v5
+;     v4 -> v6
+;     return v6
+; }
+
+function %urem_shifted_1_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_1_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 1
+;     v3 = ishl v2, v1  ; v2 = 1
+;     v5 = isub v3, v2  ; v2 = 1
+;     v6 = band v0, v5
+;     v4 -> v6
+;     return v6
+; }
+
+function %urem_shifted_1_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_1_i64(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 1
+;     v3 = ishl v2, v1  ; v2 = 1
+;     v5 = isub v3, v2  ; v2 = 1
+;     v6 = band v0, v5
+;     v4 -> v6
+;     return v6
+; }
+
+function %urem_shifted_2_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 2
+    v3 = ishl v2, v1
+    v4 = urem v0, v3
+    return v4
+}
+
+; function %urem_shifted_2_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 2
+;     v3 = ishl v2, v1  ; v2 = 2
+;     v4 = urem v0, v3
+;     return v4
+; }

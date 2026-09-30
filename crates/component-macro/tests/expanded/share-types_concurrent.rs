@@ -298,7 +298,10 @@ pub mod http_fetch {
             move |mut caller: wasmtime::StoreContextMut<'_, T>, (arg0,): (Request,)| {
                 wasmtime::component::__internal::Box::new(async move {
                     let access_cx = wasmtime::AsContextMut::as_context_mut(&mut caller);
-                    let host = wasmtime::component::Access::new(access_cx, host_getter);
+                    let host = wasmtime::component::Access::<
+                        T,
+                        D,
+                    >::new(access_cx, host_getter);
                     let r = <D as HostWithStore<T>>::fetch_request(host, arg0).await;
                     Ok((r,))
                 })

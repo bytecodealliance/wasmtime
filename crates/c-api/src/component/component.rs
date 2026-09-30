@@ -1,6 +1,6 @@
-use crate::{
-    wasm_byte_vec_t, wasm_config_t, wasm_engine_t, wasmtime_component_type_t, wasmtime_error_t,
-};
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+use crate::wasm_byte_vec_t;
+use crate::{wasm_config_t, wasm_engine_t, wasmtime_component_type_t, wasmtime_error_t};
 use std::ffi::{CStr, c_char};
 use wasmtime::component::{Component, ComponentExportIndex};
 use wasmtime::error::Context;
@@ -16,6 +16,22 @@ pub extern "C" fn wasmtime_config_wasm_component_model_map_set(
     enable: bool,
 ) {
     c.config.wasm_component_model_map(enable);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_wasm_component_model_implements_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_component_model_implements(enable);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_wasm_component_model_canonical_names_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_component_model_canonical_names(enable);
 }
 
 #[unsafe(no_mangle)]

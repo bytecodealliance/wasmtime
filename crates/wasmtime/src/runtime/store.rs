@@ -242,7 +242,7 @@ pub struct StoreInner<T: 'static> {
     call_hook: Option<CallHookInner<T>>,
     #[cfg(target_has_atomic = "64")]
     epoch_deadline_behavior:
-        Option<Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>>,
+        Option<Box<dyn FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync>>,
 
     /// The user's `T` data.
     ///
@@ -369,7 +369,7 @@ impl StoreResourceLimiter<'_> {
 
 enum CallHookInner<T: 'static> {
     #[cfg(feature = "call-hook")]
-    Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
+    Sync(Box<dyn FnMut(StoreHookState<'_, T>, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(all(feature = "async", feature = "call-hook"))]
     Async(Box<dyn CallHookHandler<T> + Send + Sync>),
     #[expect(
@@ -965,7 +965,7 @@ impl<T> Store<T> {
     #[cfg(feature = "call-hook")]
     pub fn call_hook(
         &mut self,
-        hook: impl FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync + 'static,
+        hook: impl FnMut(StoreHookState<'_, T>, CallHook) -> Result<()> + Send + Sync + 'static,
     ) {
         self.inner.call_hook = Some(CallHookInner::Sync(Box::new(hook)));
     }
@@ -1146,7 +1146,7 @@ impl<T> Store<T> {
     #[cfg(target_has_atomic = "64")]
     pub fn epoch_deadline_callback(
         &mut self,
-        callback: impl FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync + 'static,
+        callback: impl FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync + 'static,
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
@@ -1432,16 +1432,18 @@ impl<T> StoreInner<T> {
     fn invoke_call_hook(&mut self, call_hook: &mut CallHookInner<T>, s: CallHook) -> Result<()> {
         match call_hook {
             #[cfg(feature = "call-hook")]
-            CallHookInner::Sync(hook) => hook((&mut *self).as_context_mut(), s),
+            CallHookInner::Sync(hook) => {
+                hook(StoreHookState::new((&mut *self).as_context_mut()), s)
+            }
 
             #[cfg(all(feature = "async", feature = "call-hook"))]
             CallHookInner::Async(handler) => {
                 if !self.can_block() {
                     bail!("couldn't grab async_cx for call hook")
                 }
-                return (&mut *self)
-                    .as_context_mut()
-                    .with_blocking(|store, cx| cx.block_on(handler.handle_call_event(store, s)))?;
+                return (&mut *self).as_context_mut().with_blocking(|store, cx| {
+                    cx.block_on(handler.handle_call_event(StoreHookState::new(store), s))
+                })?;
             }
 
             CallHookInner::ForceTypeParameterToBeUsed { uninhabited, .. } => {
@@ -2139,6 +2141,17 @@ at https://bytecodealliance.org/security.
         let mut continuation = Box::new(VMContRef::empty());
         let stack_size = self.engine.config().async_stack_size;
         let stack = crate::vm::VMContinuationStack::new(stack_size)?;
+        #[cfg(asan)]
+        {
+            let asan_range = stack
+                .asan_range()
+                .expect("supported continuation stacks have a usable range");
+            continuation.common_stack_information.asan_stack_bottom = Some(vm::VmPtr::from(
+                NonNull::new(asan_range.start as *mut u8)
+                    .expect("a continuation stack's ASan range must have a non-null bottom"),
+            ));
+            continuation.common_stack_information.asan_stack_size = asan_range.len();
+        }
         continuation.stack = stack;
         let ptr = continuation.deref_mut() as *mut VMContRef;
         self.continuations.push(continuation);
@@ -2354,7 +2367,7 @@ unsafe impl<T> VMStore for StoreInner<T> {
         // multiple times.
         let mut behavior = self.epoch_deadline_behavior.take();
         let update = match &mut behavior {
-            Some(callback) => callback((&mut *self).as_context_mut()),
+            Some(callback) => callback(StoreHookState::new((&mut *self).as_context_mut())),
             None => Ok(UpdateDeadline::Interrupt),
         };
 
@@ -2388,7 +2401,7 @@ impl<T> StoreInner<T> {
     #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_callback(
         &mut self,
-        callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>,
+        callback: Box<dyn FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync>,
     ) {
         self.epoch_deadline_behavior = Some(callback);
     }

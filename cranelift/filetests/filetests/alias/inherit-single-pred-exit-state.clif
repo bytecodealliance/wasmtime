@@ -1,0 +1,140 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Everything in the same block does not rely on inheriting a sole predecessor's
+;; exit state.
+function %same_block(i64) {
+    region0 = 0 "flags"
+
+block0(v0: i64):
+    ;; Initial flag load and trap if it is unset.
+    v1 = load.i32 notrap aligned region0 v0
+    trapz v1, user26
+
+    ;; Unset the flag.
+    v2 = iconst.i32 0
+    store notrap aligned region0 v2, v0
+
+    ;; Reset the flag, making the previous store dead, and then revealing that
+    ;; this store is idempotent. Both stores should therefore get removed.
+    store notrap aligned region0 v1, v0
+
+    ;; Load the flag again and trap if it is unset again.
+    ;;
+    ;; We should forward the previous load of `v1` to `v3`, which should then
+    ;; allow the `trapz` to be deduped by GVN.
+    v3 = load.i32 notrap aligned region0 v0
+    trapz v3, user26
+
+    return
+}
+
+; function %same_block(i64) fast {
+;     region0 = 0 "flags"
+;
+; block0(v0: i64):
+;     v1 = load.i32 notrap aligned region0 v0
+;     trapz v1, user26
+;     return
+; }
+
+;; Same thing, but spread across a chain of single-predecessor blocks.
+;;
+;; The optimizations firing in this case relies upon reusing a block's sole
+;; predecessor's exit state.
+function %chain(i64) {
+    region0 = 0 "flags"
+
+block0(v0: i64):
+    v1 = load.i32 notrap aligned region0 v0
+    trapz v1, user26
+    v2 = iconst.i32 0
+    store notrap aligned region0 v2, v0
+    store notrap aligned region0 v1, v0
+    jump block1
+
+block1:
+    jump block2
+
+block2:
+    jump block3
+
+block3:
+    jump block4
+
+block4:
+    v3 = load.i32 notrap aligned region0 v0
+    trapz v3, user26
+    return
+}
+
+; function %chain(i64) fast {
+;     region0 = 0 "flags"
+;
+; block0(v0: i64):
+;     v1 = load.i32 notrap aligned region0 v0
+;     trapz v1, user26
+;     jump block1
+;
+; block1:
+;     jump block2
+;
+; block2:
+;     jump block3
+;
+; block3:
+;     jump block4
+;
+; block4:
+;     return
+; }
+
+;; Same thing, but instructions distributed cross the chain differently.
+function %chain2(i64) {
+    region0 = 0 "flags"
+
+block0(v0: i64):
+    v1 = load.i32 notrap aligned region0 v0
+    jump block1
+
+block1:
+    trapz v1, user26
+    jump block2
+
+block2:
+    v2 = iconst.i32 0
+    store notrap aligned region0 v2, v0
+    jump block3
+
+block3:
+    store notrap aligned region0 v1, v0
+    jump block4
+
+block4:
+    v3 = load.i32 notrap aligned region0 v0
+    trapz v3, user26
+
+    return
+}
+
+; function %chain2(i64) fast {
+;     region0 = 0 "flags"
+;
+; block0(v0: i64):
+;     v1 = load.i32 notrap aligned region0 v0
+;     jump block1
+;
+; block1:
+;     trapz.i32 v1, user26
+;     jump block2
+;
+; block2:
+;     jump block3
+;
+; block3:
+;     jump block4
+;
+; block4:
+;     return
+; }

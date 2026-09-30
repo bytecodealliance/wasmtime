@@ -215,7 +215,7 @@ fn dynamic_fixed_length_list_nested_in_tuple() -> Result<()> {
   (import "f" (func $f (result $t)))
   (core module $mem (memory (export "memory") 1))
   (core instance $memi (instantiate $mem))
-  (core func $f2 (canon lower (func $f) (memory $memi "memory")))
+  (core func $f2 (canon lower (func $f) (memory (core memory $memi "memory"))))
   (core module $m
     (import "" "f" (func $f (param i32)))
     (import "mem" "memory" (memory 1))
@@ -225,7 +225,7 @@ fn dynamic_fixed_length_list_nested_in_tuple() -> Result<()> {
   )
   (core instance $ci (export "f" (func $f2)))
   (core instance $mi (instantiate $m (with "" (instance $ci)) (with "mem" (instance $memi))))
-  (func (export "run") (result u32) (canon lift (core func $mi "run") (memory $memi "memory")))
+  (func (export "run") (result u32) (canon lift (core func $mi "run") (memory (core memory $memi "memory"))))
 )
 "#;
 

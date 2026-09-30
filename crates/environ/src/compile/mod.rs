@@ -433,6 +433,10 @@ pub trait Compiler: Send + Sync {
         // By default, an ISA cannot create a System V CIE.
         None
     }
+
+    /// Invoked at the end of a module or component compilation and signals
+    /// that any transient caches across functions can now be dropped.
+    fn release_caches(&self);
 }
 
 /// An inlining compiler.

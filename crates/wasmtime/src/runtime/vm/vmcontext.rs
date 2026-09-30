@@ -7,12 +7,14 @@ pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
-use crate::vm::stack_switching::VMStackChain;
+use crate::vm::stack_switching::{VMContinuationStack, VMStackChain, VMStackState};
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
 use core::fmt;
-use core::marker;
+use core::marker::{self, PhantomPinned};
 use core::mem::{self, MaybeUninit};
+#[cfg(feature = "gc-null")]
+use core::num::NonZeroU32;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -183,8 +185,6 @@ pub enum VMGlobalKind {
     /// Flags for a component instance, stored in `VMComponentContext`.
     #[cfg(feature = "component-model")]
     ComponentFlags(wasmtime_environ::component::RuntimeComponentInstanceIndex),
-    #[cfg(feature = "component-model")]
-    TaskMayBlock,
 }
 
 // SAFETY: the above enum is repr(C) and stores nothing else
@@ -195,9 +195,59 @@ unsafe impl VmSafe for VMGlobalKind {}
 unsafe impl VmSafe for VMTagImport {}
 
 /// Define the runtime definitions of the shared `VM*` types.
+#[cfg_attr(
+    not(test),
+    allow(
+        unused_macro_rules,
+        reason = "the `@test` arms are only expanded inside the `#[cfg(test)]` \
+                  layout-test module"
+    )
+)]
 macro_rules! define_vm_types {
+    (@test [ $($cfg:tt)* ] $Name:ident $snake:ident [ $($fname:ident)* ]) => {
+        $($cfg)*
+        #[test]
+        fn $snake() {
+            use super::$Name;
+
+            let host = HostPtr;
+            let offsets = host.$snake();
+
+            let expected = usize::from(offsets.size());
+            let actual = size_of::<$Name>();
+            assert_eq!(
+                expected,
+                actual,
+                "size of {} failed: {expected} (expected) != {actual} (actual)",
+                stringify!($Name),
+            );
+
+            let expected = usize::from(offsets.align());
+            let actual = align_of::<$Name>();
+            assert_eq!(
+                expected,
+                actual,
+                "alignment of {} failed: {expected} (expected) != {actual} (actual)",
+                stringify!($Name),
+            );
+
+            $(
+                let expected = usize::from(offsets.$fname());
+                let actual = offset_of!($Name, $fname);
+                assert_eq!(
+                    expected,
+                    actual,
+                    "offset of {}::{} failed: {expected} (expected) != {actual} (actual)",
+                    stringify!($Name),
+                    stringify!($fname),
+                );
+            )*
+        }
+    };
+
     ( $(
         $(#[doc = $sdoc:literal])*
+        $(#[cfg($($scfg:tt)*)])?
         $(#[derive($($d:ident),*)])?
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
@@ -205,66 +255,41 @@ macro_rules! define_vm_types {
             $(
                 $(#[doc = $fdoc:literal])*
                 $(#[aggregate])?
+                $(#[indexed])?
                 $(#[readonly])?
                 $(#[can_move])?
-                $fvis:vis $fname:ident : $fty:tt $(< $fgen:ty >)? ,
+                // Unlike the offsets and alias-region consumers, this one only
+                // ever re-emits a field's type verbatim, so it can capture the
+                // whole type as one fragment instead of taking it apart.
+                $fvis:vis $fname:ident : $fty:ty ,
             )*
         }
     )* ) => {
         $(
             $(#[doc = $sdoc])*
+            $(#[cfg($($scfg)*)])?
             $(#[derive($($d),*)])?
             #[repr($($repr)*)]
             $svis struct $Name {
                 $(
                     $(#[doc = $fdoc])*
-                    $fvis $fname: $fty $(< $fgen >)?,
+                    $fvis $fname: $fty,
                 )*
             }
         )*
 
         #[cfg(test)]
         mod test_vm_type_layouts {
-            use super::{ $( $Name, )* };
             use core::mem::{align_of, offset_of, size_of};
             use wasmtime_environ::{HostPtr, PtrSize};
 
             $(
-                #[test]
-                fn $snake() {
-                    let host = HostPtr;
-                    let offsets = host.$snake();
-
-                    let expected = usize::from(offsets.size());
-                    let actual = size_of::<$Name>();
-                    assert_eq!(
-                        expected,
-                        actual,
-                        "size of {} failed: {expected} (expected) != {actual} (actual)",
-                        stringify!($Name),
-                    );
-
-                    let expected = usize::from(offsets.align());
-                    let actual = align_of::<$Name>();
-                    assert_eq!(
-                        expected,
-                        actual,
-                        "alignment of {} failed: {expected} (expected) != {actual} (actual)",
-                        stringify!($Name),
-                    );
-
-                    $(
-                        let expected = usize::from(offsets.$fname());
-                        let actual = offset_of!($Name, $fname);
-                        assert_eq!(
-                            expected,
-                            actual,
-                            "offset of {}::{} failed: {expected} (expected) != {actual} (actual)",
-                            stringify!($Name),
-                            stringify!($fname),
-                        );
-                    )*
-                }
+                define_vm_types!(
+                    @test
+                    [ $(#[cfg($($scfg)*)])? ]
+                    $Name $snake
+                    [ $($fname)* ]
+                );
             )*
         }
     };
@@ -825,11 +850,10 @@ mod test_vmstore_context {
     use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
 
     /// Check the `VMStoreContext` offsets that `for_each_vm_type!` does *not*
-    /// generate: the offsets reaching into the inlined `gc_heap`, and the
-    /// indexed `component_context` slot accessor.
+    /// generate: the offsets reaching into the inlined `gc_heap`.
     ///
-    /// Every plain field offset, plus the size and alignment of the type, is
-    /// already checked by the generated `test_vm_type_layouts::vm_store_context`.
+    /// Every field offset, plus the size and alignment of the type, is already
+    /// checked by the generated `test_vm_type_layouts::vm_store_context`.
     #[test]
     fn derived_field_offsets() {
         let module = Module::new(StaticModuleIndex::from_u32(0));
@@ -842,20 +866,26 @@ mod test_vmstore_context {
             offset_of!(VMStoreContext, gc_heap) + offset_of!(VMMemoryDefinition, current_length),
             usize::from(offsets.ptr.vm_store_context().gc_heap_current_length())
         );
-        assert_eq!(
-            offset_of!(VMStoreContext, component_context),
-            usize::from(offsets.ptr.vm_store_context().component_context_slot(0))
-        );
+    }
+}
 
-        // Make sure that the calculation for the size of a slot is also
-        // accurate.
-        let slot_width = offsets.ptr.vm_store_context().component_context_slot(1)
-            - offsets.ptr.vm_store_context().component_context_slot(0);
-        let mut default = VMStoreContext::default();
-        assert_eq!(
-            size_of_val(&default.component_context.get_mut()[0]),
-            usize::from(slot_width)
-        );
+#[cfg(test)]
+mod test_vm_cont_ref {
+    use wasmtime_environ::PtrSize;
+
+    /// Check the one `VMContRef` property that `for_each_vm_type!` does *not*
+    /// generate an assertion for: that `revision` lands at an eight-aligned
+    /// offset for every target pointer width, not just the host's.
+    ///
+    /// Some 32-bit platforms need it to be 8-byte aligned and some don't, so we
+    /// make sure that it always is, without padding to get there.
+    ///
+    /// Every field offset, plus the size and alignment of the type, is already
+    /// checked by the generated `test_vm_type_layouts::vm_cont_ref`.
+    #[test]
+    fn revision_is_eight_aligned() {
+        assert_eq!(4u8.vm_cont_ref().revision() % 8, 0);
+        assert_eq!(8u8.vm_cont_ref().revision() % 8, 0);
     }
 }
 
@@ -922,30 +952,6 @@ mod test_vmlazy_thread {
         assert_eq!(
             VMLazyThread::forced().thread.unwrap().addr().get(),
             usize::try_from(wasmtime_environ::VM_LAZY_THREAD_FORCED).unwrap()
-        );
-    }
-}
-
-#[cfg(test)]
-mod test_vmdeferred_thread {
-    use super::*;
-    use core::mem::offset_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
-
-    /// Check the indexed `saved_context` slot accessor, which
-    /// `for_each_vm_type!` does not generate.
-    ///
-    /// Every plain field offset, plus the size and alignment of the type, is
-    /// already checked by the generated
-    /// `test_vm_type_layouts::vm_deferred_thread`.
-    #[test]
-    fn deferred_thread_derived_field_offsets() {
-        let module = Module::new(StaticModuleIndex::from_u32(0));
-        let offsets = VMOffsets::new(HostPtr, &module);
-        let ptr = offsets.ptr;
-        assert_eq!(
-            offset_of!(VMDeferredThread, saved_context),
-            usize::from(ptr.vm_deferred_thread().saved_context_slot(0))
         );
     }
 }

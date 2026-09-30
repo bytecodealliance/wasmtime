@@ -392,10 +392,6 @@ pub enum CoreDef {
     Trampoline(TrampolineIndex),
     /// An intrinsic for compile-time builtins.
     UnsafeIntrinsic(UnsafeIntrinsic),
-    /// Reference to a wasm global which represents a runtime-managed boolean
-    /// indicating whether the currently-running task may perform a blocking
-    /// operation.
-    TaskMayBlock,
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -534,10 +530,6 @@ pub struct CanonicalOptions {
 
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
-
-    /// Whether or not this function can consume a task cancellation
-    /// notification.
-    pub cancellable: bool,
 
     /// The core function type that is being lifted from / lowered to.
     pub core_type: ModuleInternedTypeIndex,
@@ -1135,9 +1127,6 @@ pub enum Trampoline {
     ThreadSuspend {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance may receive notification
-        /// of task cancellation.
-        cancellable: bool,
     },
 
     /// A `thread.yield` intrinsic, which yields control to the host so that other
@@ -1145,9 +1134,6 @@ pub enum Trampoline {
     ThreadYield {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance may receive notification
-        /// of task cancellation.
-        cancellable: bool,
     },
 
     /// Intrinsic used to implement the `thread.suspend-then-resume` component
@@ -1155,9 +1141,6 @@ pub enum Trampoline {
     ThreadSuspendThenResume {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance may receive notification
-        /// of task cancellation.
-        cancellable: bool,
     },
 
     /// Intrinsic used to implement the `thread.yield-then-resume` component
@@ -1165,9 +1148,6 @@ pub enum Trampoline {
     ThreadYieldThenResume {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance may receive notification
-        /// of task cancellation.
-        cancellable: bool,
     },
 
     /// Intrinsic used to implement the `thread.suspend-then-promote` component
@@ -1175,9 +1155,6 @@ pub enum Trampoline {
     ThreadSuspendThenPromote {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance may receive notification
-        /// of task cancellation.
-        cancellable: bool,
     },
 
     /// Intrinsic used to implement the `thread.yield-then-promote` component
@@ -1185,9 +1162,6 @@ pub enum Trampoline {
     ThreadYieldThenPromote {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// If `true`, indicates the caller instance may receive notification
-        /// of task cancellation.
-        cancellable: bool,
     },
 }
 

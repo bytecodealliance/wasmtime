@@ -154,11 +154,35 @@ fn test_udp_connect_and_send(net: &Network, family: IpAddressFamily) {
     ));
 }
 
+fn test_udp_reconnect_after_pending_receive(net: &Network, family: IpAddressFamily) {
+    let unspecified_addr = IpSocketAddress::new(IpAddress::new_unspecified(family), 0);
+    let remote = IpSocketAddress::new(IpAddress::new_loopback(family), 4321);
+
+    let client = UdpSocket::new(family).unwrap();
+    client.blocking_bind(&net, unspecified_addr).unwrap();
+
+    // Connect/reconnect in a loop, and this should always succeed...
+    for _ in 0..100 {
+        {
+            let (rx, _tx) = client.stream(None).unwrap();
+            assert!(rx.receive(1).unwrap().is_empty());
+        }
+        {
+            let (rx, _tx) = client.stream(Some(remote)).unwrap();
+            assert_eq!(client.remote_address(), Ok(remote));
+            assert!(rx.receive(1).unwrap().is_empty());
+        }
+    }
+}
+
 fn main() {
     let net = Network::default();
 
     test_udp_connect_disconnect_reconnect(&net, IpAddressFamily::Ipv4);
     test_udp_connect_disconnect_reconnect(&net, IpAddressFamily::Ipv6);
+
+    test_udp_reconnect_after_pending_receive(&net, IpAddressFamily::Ipv4);
+    test_udp_reconnect_after_pending_receive(&net, IpAddressFamily::Ipv6);
 
     test_udp_disconnect_local_address(&net, IpAddressFamily::Ipv4);
     test_udp_disconnect_local_address(&net, IpAddressFamily::Ipv6);

@@ -4,7 +4,7 @@ use super::REALLOC_AND_FREE;
 use std::ops::Deref;
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, WasmBacktrace};
+use wasmtime::{Config, Engine, Store, StoreContextMut, WasmBacktrace};
 
 #[test]
 fn can_compile() -> Result<()> {
@@ -409,7 +409,7 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
 }
 
 #[test]
-fn attempt_to_reenter_during_host() -> Result<()> {
+fn reenter_during_host() -> Result<()> {
     let component = r#"
 (component
   (import "thunk" (func $thunk))
@@ -445,13 +445,9 @@ fn attempt_to_reenter_during_host() -> Result<()> {
     linker.root().func_wrap(
         "thunk",
         |mut store: StoreContextMut<'_, StaticState>, _: ()| -> Result<()> {
-            let func = store.data_mut().func.take().unwrap();
-            let trap = func.call(&mut store, ()).unwrap_err();
-            assert_eq!(
-                trap.downcast_ref(),
-                Some(&Trap::CannotEnterComponent),
-                "bad trap: {trap:?}",
-            );
+            if let Some(func) = store.data_mut().func.take() {
+                func.call(&mut store, ())?;
+            }
             Ok(())
         },
     )?;
@@ -471,13 +467,9 @@ fn attempt_to_reenter_during_host() -> Result<()> {
     linker.root().func_new(
         "thunk",
         |mut store: StoreContextMut<'_, DynamicState>, _, _, _| {
-            let func = store.data_mut().func.take().unwrap();
-            let trap = func.call(&mut store, &[], &mut []).unwrap_err();
-            assert_eq!(
-                trap.downcast_ref(),
-                Some(&Trap::CannotEnterComponent),
-                "bad trap: {trap:?}",
-            );
+            if let Some(func) = store.data_mut().func.take() {
+                func.call(&mut store, &[], &mut [])?;
+            }
             Ok(())
         },
     )?;

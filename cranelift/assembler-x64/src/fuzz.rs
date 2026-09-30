@@ -34,6 +34,13 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
         return;
     }
 
+    // Likewise, capstone cannot decode the APX extended-EVEX ("map 4")
+    // encodings at all, returning zero instructions. These are instead checked
+    // against XED by `roundtrip_xed`, which does understand map 4.
+    if features_mention(inst.features(), Feature::apx) {
+        return;
+    }
+
     roundtrip_with(
         inst,
         "capstone",
@@ -588,5 +595,63 @@ mod test {
             Ok(())
         })
         .budget_ms(1_000);
+    }
+
+    /// Byte-level encoding check for the APX NDD (new-data-destination) form of
+    /// `ADD`, promoted into EVEX "map 4" via the extended-EVEX prefix.
+    ///
+    /// We assert the exact bytes rather than round-tripping through Capstone
+    /// because the bundled disassembler does not yet understand APX. With
+    /// `ND = 1` the architectural destination is the `vvvv`-encoded register, so
+    /// the `RVM` operands are `[ModRM.reg source, vvvv destination, ModRM.rm
+    /// source]`. For `addq %rax, %rcx, %rdx` (destination `%rax` = 0 in `vvvv`,
+    /// source `%rcx` = 1 in ModRM.reg, source `%rdx` = 2 in ModRM.rm), `W = 1`,
+    /// `ND = 1`, `NF = 0`, the expected sequence is:
+    ///
+    /// ```text
+    ///   62 F4 FC 18 01 CA
+    ///   ^^ ^^ ^^ ^^ ^^ ^^
+    ///   |  |  |  |  |  └ ModRM: mod=11 reg=rcx r/m=rdx
+    ///   |  |  |  |  └ opcode 0x01 (ADD r/m, reg)
+    ///   |  |  |  └ P2: ND=1 (bit4), V4=1 (bit3, inverted), NF=0
+    ///   |  |  └ P1: W=1, vvvv=~rax=1111, U=1, pp=00
+    ///   |  └ P0: R3 X3 B3 R4 = 1111, B4=0, map=100 (map 4)
+    ///   └ EVEX identifier
+    /// ```
+    #[test]
+    fn apx_addq_rvm_ndd_encoding() {
+        use crate::inst::addq_rvm;
+        // Format is `RVM` = [ModRM.reg source, vvvv destination, ModRM.rm
+        // source], so the constructor arguments are (reg source = %rcx,
+        // destination = %rax, r/m source = %rdx).
+        let inst = addq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1801CA");
+    }
+
+    /// Companion to [`apx_addq_rvm_ndd_encoding`] covering a memory operand.
+    ///
+    /// APX map-4 instructions are legacy instructions promoted into EVEX, so
+    /// their `disp8` keeps legacy semantics: a plain byte offset. The
+    /// compressed-displacement scheme that divides `disp8` by a tuple-derived
+    /// factor `N` applies only to the vector EVEX encodings. Encoding
+    /// `0x50(%rdi)` must therefore emit `0x50` and not `0x50 / 16 = 0x05`,
+    /// which would silently address the wrong memory.
+    #[test]
+    fn apx_addq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::addq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = addq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418017F50");
     }
 }

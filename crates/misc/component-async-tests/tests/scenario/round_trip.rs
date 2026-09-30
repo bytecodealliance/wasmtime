@@ -8,10 +8,8 @@ use futures::{
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
-use wasmtime::component::{
-    Accessor, AccessorTask, HasData, HasSelf, Instance, Linker, ResourceTable, Val,
-};
-use wasmtime::{Engine, Result, Store, Trap, format_err};
+use wasmtime::component::{Accessor, HasData, Instance, Linker, ResourceTable, Val};
+use wasmtime::{Engine, Result, Store, format_err};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 #[tokio::test]
@@ -202,7 +200,7 @@ pub async fn async_round_trip_stackless_sync_import() -> Result<()> {
 }
 
 #[tokio::test]
-pub async fn async_round_trip_stackless_recurse() -> Result<()> {
+pub async fn async_round_trip_stackless_recurse_different_instance() -> Result<()> {
     test_round_trip_recurse(
         test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
         false,
@@ -211,40 +209,21 @@ pub async fn async_round_trip_stackless_recurse() -> Result<()> {
 }
 
 #[tokio::test]
-pub async fn async_round_trip_stackless_recurse_trap() -> Result<()> {
-    let error = test_round_trip_recurse(
+pub async fn async_round_trip_stackless_recurse_same_instance() -> Result<()> {
+    test_round_trip_recurse(
         test_programs_artifacts::ASYNC_ROUND_TRIP_STACKLESS_COMPONENT,
         true,
     )
     .await
-    .unwrap_err();
-
-    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
-
-    Ok(())
 }
 
 #[tokio::test]
-pub async fn async_round_trip_synchronous_recurse() -> Result<()> {
+pub async fn async_round_trip_synchronous_recurse_different_instance() -> Result<()> {
     test_round_trip_recurse(
         test_programs_artifacts::ASYNC_ROUND_TRIP_SYNCHRONOUS_COMPONENT,
         false,
     )
     .await
-}
-
-#[tokio::test]
-pub async fn async_round_trip_synchronous_recurse_trap() -> Result<()> {
-    let error = test_round_trip_recurse(
-        test_programs_artifacts::ASYNC_ROUND_TRIP_SYNCHRONOUS_COMPONENT,
-        true,
-    )
-    .await
-    .unwrap_err();
-
-    assert_eq!(error.downcast::<Trap>()?, Trap::CannotEnterComponent);
-
-    Ok(())
 }
 
 async fn test_round_trip_recurse(component: &str, same_instance: bool) -> Result<()> {
@@ -416,51 +395,37 @@ pub async fn test_round_trip(
 
         if call_style == 1 || !cfg!(miri) {
             // And again using `Instance::spawn`:
-            struct Task {
-                instance: Instance,
-                inputs_and_outputs: Vec<(String, String)>,
-                tx: oneshot::Sender<()>,
-            }
-
-            impl AccessorTask<Ctx, HasSelf<Ctx>> for Task {
-                async fn run(self, accessor: &Accessor<Ctx>) -> Result<()> {
-                    let round_trip = accessor.with(|mut store| {
-                        component_async_tests::round_trip::bindings::RoundTrip::new(
-                            &mut store,
-                            &self.instance,
-                        )
-                    })?;
-
-                    let mut futures = FuturesUnordered::new();
-                    for (input, output) in &self.inputs_and_outputs {
-                        let output = output.clone();
-                        futures.push(
-                            round_trip
-                                .local_local_baz()
-                                .call_foo(accessor, input.clone())
-                                .map(move |v| v.map(move |v| (v, output)))
-                                .boxed(),
-                        );
-                    }
-
-                    while let Some((actual, expected)) = futures.try_next().await? {
-                        assert_eq!(expected, actual);
-                    }
-
-                    _ = self.tx.send(());
-
-                    Ok(())
-                }
-            }
-
             let (tx, rx) = oneshot::channel();
-            store.spawn(Task {
-                instance,
-                inputs_and_outputs: inputs_and_outputs
-                    .iter()
-                    .map(|(a, b)| (String::from(*a), String::from(*b)))
-                    .collect::<Vec<_>>(),
-                tx,
+            let inputs_and_outputs = inputs_and_outputs
+                .iter()
+                .map(|(a, b)| (String::from(*a), String::from(*b)))
+                .collect::<Vec<_>>();
+            store.spawn(async move |accessor| {
+                let round_trip = accessor.with(|mut store| {
+                    component_async_tests::round_trip::bindings::RoundTrip::new(
+                        &mut store, &instance,
+                    )
+                })?;
+
+                let mut futures = FuturesUnordered::new();
+                for (input, output) in &inputs_and_outputs {
+                    let output = output.clone();
+                    futures.push(
+                        round_trip
+                            .local_local_baz()
+                            .call_foo(accessor, input.clone())
+                            .map(move |v| v.map(move |v| (v, output)))
+                            .boxed(),
+                    );
+                }
+
+                while let Some((actual, expected)) = futures.try_next().await? {
+                    assert_eq!(expected, actual);
+                }
+
+                _ = tx.send(());
+
+                Ok(())
             })?;
 
             store.run_concurrent(async |_| rx.await).await??;

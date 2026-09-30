@@ -11,7 +11,7 @@ use crate::{
     vm::{
         ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
         GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TypedGcRef, VMGcHeader, VMGcRef,
-        VMMemoryDefinition,
+        VMMemoryDefinition, VMNullHeapData,
     },
 };
 use core::ptr::NonNull;
@@ -38,14 +38,26 @@ unsafe impl GcRuntime for NullCollector {
     }
 }
 
+impl VMNullHeapData {
+    /// The heap data for a detached heap.
+    fn detached() -> Self {
+        VMNullHeapData {
+            next: NonZeroU32::new(u32::MAX).unwrap(),
+        }
+    }
+}
+
 /// A GC heap for the null collector.
+///
+/// Compiled Wasm reaches the JIT-accessible bump-allocation state through a
+/// pointer to `vmctx_data`, and accesses nothing else in here, so that field
+/// must stay first.
 #[repr(C)]
 struct NullHeap {
-    /// Bump-allocation finger indexing within `1..self.heap.len()`.
+    /// The bump-allocation finger, indexing within `1..self.heap.len()`.
     ///
-    /// NB: this is an `UnsafeCell` because it is written to by compiled Wasm
-    /// code.
-    next: SendSyncUnsafeCell<NonZeroU32>,
+    /// NB: this is in a cell because it is written to by compiled Wasm code.
+    vmctx_data: SendSyncUnsafeCell<VMNullHeapData>,
 
     /// The number of active no-gc scopes at the current moment.
     no_gc_count: usize,
@@ -111,7 +123,7 @@ impl NullHeap {
     fn new() -> Result<Self> {
         Ok(Self {
             no_gc_count: 0,
-            next: SendSyncUnsafeCell::new(NonZeroU32::new(u32::MAX).unwrap()),
+            vmctx_data: SendSyncUnsafeCell::new(VMNullHeapData::detached()),
             memory: None,
         })
     }
@@ -140,7 +152,7 @@ impl NullHeap {
             None => return Err(crate::Trap::AllocationTooLarge.into()),
         };
 
-        let next = *self.next.get_mut();
+        let next = self.vmctx_data.get_mut().next;
 
         // Increment the bump pointer to the layout's requested alignment.
         let aligned = match u32::try_from(layout.align())
@@ -163,7 +175,7 @@ impl NullHeap {
         }
 
         // Update the bump pointer, write the header, and return the GC ref.
-        *self.next.get_mut() = NonZeroU32::new(end_of_object).unwrap();
+        self.vmctx_data.get_mut().next = NonZeroU32::new(end_of_object).unwrap();
 
         let aligned = NonZeroU32::new(aligned).unwrap();
         let gc_ref = VMGcRef::from_heap_index(aligned).unwrap();
@@ -184,22 +196,21 @@ unsafe impl GcHeap for NullHeap {
     fn attach(&mut self, memory: crate::vm::Memory) {
         assert!(!self.is_attached());
         self.memory = Some(memory);
-        self.next = SendSyncUnsafeCell::new(NonZeroU32::new(1).unwrap());
+        self.vmctx_data.get_mut().next = NonZeroU32::new(1).unwrap();
     }
 
     fn detach(&mut self) -> crate::vm::Memory {
         assert!(self.is_attached());
 
         let NullHeap {
-            next,
+            vmctx_data,
             no_gc_count,
             memory,
         } = self;
 
-        *next.get_mut() = NonZeroU32::new(1).unwrap();
+        *vmctx_data.get_mut() = VMNullHeapData::detached();
         *no_gc_count = 0;
 
-        self.next = SendSyncUnsafeCell::new(NonZeroU32::new(u32::MAX).unwrap());
         memory.take().unwrap()
     }
 
@@ -337,7 +348,7 @@ unsafe impl GcHeap for NullHeap {
         // the heap up to the bump pointer is allocated. Subtract 1 because
         // the bump pointer starts at index 1 (index 0 is unused since
         // `VMGcRef` uses `NonZeroU32`), not because any byte was allocated.
-        let next = unsafe { *self.next.get() };
+        let next = unsafe { (*self.vmctx_data.get()).next };
         usize::try_from(next.get()).unwrap() - 1
     }
 
@@ -354,8 +365,8 @@ unsafe impl GcHeap for NullHeap {
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        let ptr_to_next: *mut NonZeroU32 = unsafe { self.next.get() };
-        NonNull::new(ptr_to_next).unwrap().cast()
+        let ptr: *mut VMNullHeapData = unsafe { self.vmctx_data.get() };
+        NonNull::new(ptr).unwrap().cast()
     }
 }
 

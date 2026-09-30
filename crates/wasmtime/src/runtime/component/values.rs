@@ -132,23 +132,30 @@ impl Val {
                 let (ptr, len) = lift_flat_pointer_pair(cx, src)?;
                 load_map(cx, i, ptr, len)?
             }
-            InterfaceType::Record(i) => Val::Record(
-                cx.types[i]
-                    .fields
-                    .iter()
-                    .map(|field| {
-                        let val = Self::lift(cx, field.ty, src)?;
-                        Ok((field.name.to_string(), val))
-                    })
-                    .collect::<Result<_>>()?,
-            ),
-            InterfaceType::Tuple(i) => Val::Tuple(
-                cx.types[i]
-                    .types
-                    .iter()
-                    .map(|ty| Self::lift(cx, *ty, src))
-                    .collect::<Result<_>>()?,
-            ),
+            InterfaceType::Record(i) => {
+                let fields = &cx.types[i].fields;
+                cx.consume_fuel_array(fields.len(), size_of::<Val>())?;
+                Val::Record(
+                    fields
+                        .iter()
+                        .map(|field| {
+                            let val = Self::lift(cx, field.ty, src)?;
+                            cx.consume_fuel(field.name.len())?;
+                            Ok((field.name.to_string(), val))
+                        })
+                        .collect::<Result<_>>()?,
+                )
+            }
+            InterfaceType::Tuple(i) => {
+                let types = &cx.types[i].types;
+                cx.consume_fuel_array(types.len(), size_of::<Val>())?;
+                Val::Tuple(
+                    types
+                        .iter()
+                        .map(|ty| Self::lift(cx, *ty, src))
+                        .collect::<Result<_>>()?,
+                )
+            }
             InterfaceType::Variant(i) => {
                 let vty = &cx.types[i];
                 let (discriminant, value) = lift_variant(
@@ -159,6 +166,7 @@ impl Val {
                 )?;
 
                 let (k, _) = vty.cases.get_index(discriminant as usize).unwrap();
+                cx.consume_fuel(k.len())?;
                 Val::Variant(k.clone(), value)
             }
             InterfaceType::Enum(i) => {
@@ -170,7 +178,9 @@ impl Val {
                     src,
                 )?;
 
-                Val::Enum(ety.names[discriminant as usize].clone())
+                let name = &ety.names[discriminant as usize];
+                cx.consume_fuel(name.len())?;
+                Val::Enum(name.clone())
             }
             InterfaceType::Option(i) => {
                 let (_discriminant, value) = lift_variant(
@@ -202,12 +212,8 @@ impl Val {
                 let ty = &cx.types[i];
                 let mut flags = Vec::new();
                 for i in 0..u32::try_from(u32_count).unwrap() {
-                    push_flags(
-                        ty,
-                        &mut flags,
-                        i * 32,
-                        u32::linear_lift_from_flat(cx, InterfaceType::U32, next(src))?,
-                    );
+                    let bits = u32::linear_lift_from_flat(cx, InterfaceType::U32, next(src))?;
+                    push_flags(cx, ty, &mut flags, i * 32, bits)?;
                 }
 
                 Val::Flags(flags)
@@ -264,9 +270,11 @@ impl Val {
             InterfaceType::Record(i) => {
                 let mut offset = 0;
                 let fields = cx.types[i].fields.iter();
+                cx.consume_fuel_array(fields.len(), size_of::<Val>())?;
                 Val::Record(
                     fields
                         .map(|field| -> Result<(String, Val)> {
+                            cx.consume_fuel(field.name.len())?;
                             let abi = cx.types.canonical_abi(&field.ty);
                             let offset = abi.next_field32(&mut offset);
                             let offset = usize::try_from(offset).unwrap();
@@ -281,6 +289,7 @@ impl Val {
             }
             InterfaceType::Tuple(i) => {
                 let types = cx.types[i].types.iter().copied();
+                cx.consume_fuel_array(types.len(), size_of::<Val>())?;
                 let mut offset = 0;
                 Val::Tuple(
                     types
@@ -300,6 +309,7 @@ impl Val {
                     load_variant(cx, &ty.info, ty.cases.values().copied(), bytes)?;
 
                 let (k, _) = ty.cases.get_index(discriminant as usize).unwrap();
+                cx.consume_fuel(k.len())?;
                 Val::Variant(k.clone(), value)
             }
             InterfaceType::Enum(i) => {
@@ -307,7 +317,9 @@ impl Val {
                 let (discriminant, _) =
                     load_variant(cx, &ty.info, ty.names.iter().map(|_| None), bytes)?;
 
-                Val::Enum(ty.names[discriminant as usize].clone())
+                let name = &ty.names[discriminant as usize];
+                cx.consume_fuel(name.len())?;
+                Val::Enum(name.clone())
             }
             InterfaceType::Option(i) => {
                 let ty = &cx.types[i];
@@ -334,11 +346,11 @@ impl Val {
                     FlagsSize::Size0 => {}
                     FlagsSize::Size1 => {
                         let bits = u8::linear_lift_from_memory(cx, InterfaceType::U8, bytes)?;
-                        push_flags(ty, &mut flags, 0, u32::from(bits));
+                        push_flags(cx, ty, &mut flags, 0, u32::from(bits))?;
                     }
                     FlagsSize::Size2 => {
                         let bits = u16::linear_lift_from_memory(cx, InterfaceType::U16, bytes)?;
-                        push_flags(ty, &mut flags, 0, u32::from(bits));
+                        push_flags(cx, ty, &mut flags, 0, u32::from(bits))?;
                     }
                     FlagsSize::Size4Plus(n) => {
                         for i in 0..n {
@@ -347,7 +359,7 @@ impl Val {
                                 InterfaceType::U32,
                                 &bytes[usize::from(i) * 4..][..4],
                             )?;
-                            push_flags(ty, &mut flags, u32::from(i) * 32, bits);
+                            push_flags(cx, ty, &mut flags, u32::from(i) * 32, bits)?;
                         }
                     }
                 }
@@ -1105,6 +1117,7 @@ fn load_variant(
         .ok_or_else(|| format_err!("discriminant {discriminant} out of range [0..{len})"))?;
     let value = match case_ty {
         Some(case_ty) => {
+            cx.consume_fuel(size_of::<Val>())?;
             let payload_offset = usize::try_from(info.payload_offset32).unwrap();
             let case_abi = cx.types.canonical_abi(&case_ty);
             let case_size = usize::try_from(case_abi.size32).unwrap();
@@ -1131,10 +1144,13 @@ fn lift_variant(
         .nth(discriminant as usize)
         .ok_or_else(|| format_err!("discriminant {discriminant} out of range [0..{len})"))?;
     let (value, value_flat) = match ty {
-        Some(ty) => (
-            Some(Box::new(Val::lift(cx, ty, src)?)),
-            cx.types.canonical_abi(&ty).flat_count(usize::MAX).unwrap(),
-        ),
+        Some(ty) => {
+            cx.consume_fuel(size_of::<Val>())?;
+            (
+                Some(Box::new(Val::lift(cx, ty, src)?)),
+                cx.types.canonical_abi(&ty).flat_count(usize::MAX).unwrap(),
+            )
+        }
         None => (None, 0),
     };
     for _ in (1 + value_flat)..flatten_count {
@@ -1195,14 +1211,23 @@ fn lower_map<T>(
     Ok((ptr, pairs.len()))
 }
 
-fn push_flags(ty: &TypeFlags, flags: &mut Vec<String>, mut offset: u32, mut bits: u32) {
+fn push_flags(
+    cx: &mut LiftContext<'_>,
+    ty: &TypeFlags,
+    flags: &mut Vec<String>,
+    mut offset: u32,
+    mut bits: u32,
+) -> Result<()> {
     while bits > 0 && usize::try_from(offset).unwrap() < ty.names.len() {
         if bits & 1 != 0 {
-            flags.push(ty.names[offset as usize].clone());
+            let name = &ty.names[offset as usize];
+            cx.consume_fuel(name.len())?;
+            flags.push(name.clone());
         }
         bits >>= 1;
         offset += 1;
     }
+    Ok(())
 }
 
 fn flags_to_storage(ty: &TypeFlags, flags: &[String]) -> Result<Vec<u32>> {

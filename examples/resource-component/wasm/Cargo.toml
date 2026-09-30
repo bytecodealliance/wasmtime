@@ -5,6 +5,9 @@ authors = ["The Wasmtime Project Developers"]
 edition = "2024"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 wit-bindgen = { workspace = true, default-features = true }
 

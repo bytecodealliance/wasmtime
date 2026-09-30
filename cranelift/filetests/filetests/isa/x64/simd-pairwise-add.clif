@@ -84,6 +84,7 @@ block0(v0: i16x8):
 ;   addb %al, (%rcx)
 ;   addb %al, (%rcx)
 ;   addb %al, (%rcx)
+;   .byte 0x00
 
 function %fn3(i8x16) -> i16x8 {
 block0(v0: i8x16):

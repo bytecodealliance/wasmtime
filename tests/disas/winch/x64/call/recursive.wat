@@ -30,7 +30,7 @@
 ;;       movq    0x18(%r11), %r11
 ;;       addq    $0x30, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0xee
+;;       ja      0xe0
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
@@ -43,7 +43,7 @@
 ;;       testl   %eax, %eax
 ;;       je      0x54
 ;;   4b: movl    0xc(%rsp), %eax
-;;       jmp     0xe5
+;;       jmp     0xd7
 ;;   54: movl    0xc(%rsp), %eax
 ;;       subl    $1, %eax
 ;;       subq    $4, %rsp
@@ -53,8 +53,7 @@
 ;;       movq    %r14, %rsi
 ;;       movl    0xc(%rsp), %edx
 ;;       callq   0
-;;       addq    $0xc, %rsp
-;;       addq    $4, %rsp
+;;       addq    $0x10, %rsp
 ;;       movq    0x18(%rsp), %r14
 ;;       movl    0xc(%rsp), %ecx
 ;;       subl    $2, %ecx
@@ -67,8 +66,7 @@
 ;;       movq    %r14, %rsi
 ;;       movl    8(%rsp), %edx
 ;;       callq   0
-;;       addq    $8, %rsp
-;;       addq    $4, %rsp
+;;       addq    $0xc, %rsp
 ;;       movq    0x1c(%rsp), %r14
 ;;       movl    (%rsp), %ecx
 ;;       addq    $4, %rsp
@@ -77,4 +75,4 @@
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   ee: ud2
+;;   e0: ud2

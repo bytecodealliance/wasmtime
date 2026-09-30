@@ -148,6 +148,16 @@ fn spec_test_config(test: &Path) -> TestConfig {
         Some("custom-descriptors") => {
             ret.custom_descriptors = Some(true);
         }
+        Some("compact-import-section") => {
+            ret.compact_imports = Some(true);
+            ret.reference_types = Some(true);
+            ret.multi_memory = Some(true);
+            ret.exceptions = Some(true);
+        }
+        Some("extended-name-section") => {
+            ret.gc = Some(true);
+            ret.exceptions = Some(true);
+        }
         Some(proposal) => panic!("unsupported proposal {proposal:?}"),
 
         // The rough goal here is to enable a minimal set of features for the
@@ -197,8 +207,16 @@ fn spec_test_config(test: &Path) -> TestConfig {
             {
                 ret.gc = Some(true);
             }
+            if test_name == "throw_ref.wast" {
+                // This test only uses exception references, which do not
+                // require enabling the GC proposal.
+                ret.gc = Some(false);
+            }
             if test_name.contains("return_") || test_name.contains("try_table") {
                 ret.tail_call = Some(true);
+            }
+            if test_name == "return_call.wast" || test_name == "return_call_indirect.wast" {
+                ret.function_references = Some(true);
             }
             if test_name.contains("tag")
                 || test_name.contains("try_table")
@@ -247,6 +265,7 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.reference_types = Some(true);
     ret.multi_memory = Some(true);
     ret.component_model_implements = Some(true);
+    ret.component_model_canonical_names = Some(true);
     ret.bulk_memory = Some(true);
     ret.component_model_async = Some(true);
     ret.component_model_more_async_builtins = Some(true);
@@ -330,6 +349,7 @@ macro_rules! foreach_config_option {
             extended_const
             wide_arithmetic
             branch_hinting
+            compact_imports
             hogs_memory
             nan_canonicalization
             component_model_async
@@ -342,6 +362,7 @@ macro_rules! foreach_config_option {
             component_model_memory64
             component_model_fixed_length_lists
             component_model_implements
+            component_model_canonical_names
             simd
             gc_types
             exceptions
@@ -455,7 +476,6 @@ impl Compiler {
 
             Compiler::Winch => {
                 if config.gc()
-                    || config.tail_call()
                     || config.function_references()
                     || config.relaxed_simd()
                     || config.legacy_exceptions()
@@ -557,6 +577,18 @@ impl WastTest {
             return true;
         }
 
+        // Waiting for bytecodealliance/wasm-tools#2664 zero-length compact imports,
+        // as well as the Extended Name Section Proposal.
+        let unsupported = [
+            "spec_testsuite/proposals/compact-import-section/imports-compact.wast",
+            "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
+            "spec_testsuite/proposals/extended-name-section/custom/name.wast",
+            "spec_testsuite/type-subtyping.wast",
+        ];
+        if unsupported.iter().any(|part| self.path.ends_with(part)) {
+            return true;
+        }
+
         // Disable spec tests per target for proposals that Winch does not implement yet.
         if config.compiler == Compiler::Winch {
             // Common list for tests that fail in all targets supported by Winch.
@@ -567,11 +599,6 @@ impl WastTest {
                 "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
                 "misc_testsuite/no-panic.wast",
-                // Currently exceptions trap on throw, re-enable after catch
-                // is implemented.
-                "misc_testsuite/traps-skip-catch-all.wast",
-                "misc_testsuite/component-model/async/exceptions.wast",
-                "spec_testsuite/throw.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
@@ -689,6 +716,28 @@ impl WastTest {
             if happens_to_work.iter().any(|part| self.path.ends_with(part)) {
                 return false;
             }
+            return true;
+        }
+
+        // `stream.forward` not yet implemented:
+        let uses_stream_forward = [
+            "component-model/test/values/post-return.wast",
+            "component-model/test/async/big-interleaving-test.wast",
+            "component-model/test/async/forward.wast",
+        ];
+
+        if uses_stream_forward
+            .iter()
+            .any(|part| self.path.ends_with(part))
+        {
+            return true;
+        }
+
+        // Obsolete test to be removed in https://github.com/WebAssembly/component-model/pull/726
+        if self
+            .path
+            .ends_with("component-model/test/async/cancel-instance-wide-resume.wast")
+        {
             return true;
         }
 

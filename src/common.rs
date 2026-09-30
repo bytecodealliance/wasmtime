@@ -4,7 +4,7 @@ use clap::Parser;
 use std::net::TcpListener;
 use std::{fs::File, path::Path, time::Duration};
 use wasmtime::{
-    Engine, Module, Precompiled, Result, StoreLimits, StoreLimitsBuilder, bail,
+    Engine, Module, Precompiled, Result, Store, StoreLimits, StoreLimitsBuilder, bail,
     error::Context as _, format_err,
 };
 use wasmtime_cli_flags::{CommonOptions, opt::WasmtimeOptionValue};
@@ -285,6 +285,7 @@ impl RunCommon {
             None => {
                 let mut code = wasmtime::CodeBuilder::new(engine);
                 code.wasm_binary_or_text(bytes, Some(path))?;
+                crate::code_builder::configure_code_builder(&self.common, &mut code)?;
                 match code.hint() {
                     Some(wasmtime::CodeHint::Component) => {
                         #[cfg(feature = "component-model")]
@@ -356,9 +357,6 @@ impl RunCommon {
             builder.initial_cwd(cwd);
         }
 
-        if self.common.wasi.listenfd == Some(true) {
-            bail!("components do not support --listenfd");
-        }
         for _ in self.compute_preopen_sockets()? {
             bail!("components do not support --tcplisten");
         }
@@ -401,12 +399,14 @@ impl RunCommon {
                 .common
                 .wasi
                 .http_outgoing_body_buffer_chunks
-                .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS),
+                .map(|n| n.get())
+                .unwrap_or(wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS),
             p2_outgoing_body_chunk_size: self
                 .common
                 .wasi
                 .http_outgoing_body_chunk_size
-                .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE),
+                .map(|n| n.get())
+                .unwrap_or(wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE),
         }
     }
 
@@ -478,6 +478,38 @@ impl RunCommon {
                 .context("failed to link `wasi:cli@0.3.x`")?;
         }
 
+        Ok(())
+    }
+
+    pub fn configure_store<T>(
+        &self,
+        store: &mut Store<T>,
+        limits: fn(&mut T) -> &mut StoreLimits,
+    ) -> Result<()>
+    where
+        T: wasmtime_wasi::WasiView,
+    {
+        if let Some(max) = self.common.wasi.max_resources {
+            if self.common.wasi.cli != Some(false) {
+                store.data_mut().ctx().table.set_max_capacity(max);
+            }
+            #[cfg(feature = "component-model-async")]
+            if let Some(table) = store.concurrent_resource_table() {
+                table.set_max_capacity(max);
+            }
+        }
+        if let Some(fuel) = self.common.wasi.hostcall_fuel {
+            store.set_hostcall_fuel(fuel);
+        }
+
+        *limits(store.data_mut()) = self.store_limits();
+        store.limiter(move |t| limits(t));
+
+        // If fuel has been configured, we want to add the configured
+        // fuel amount to this store.
+        if let Some(fuel) = self.common.wasm.fuel {
+            store.set_fuel(fuel)?;
+        }
         Ok(())
     }
 }

@@ -278,6 +278,83 @@ block0:
 ;   popq %rbp
 ;   retq
 
+function %direct_winch_call() winch {
+    fn0 = colocated %direct_callee() winch
+
+block0:
+    call fn0()
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   call    TestCase(%direct_callee)
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   callq 9 ; reloc_external CallPCRel4 %direct_callee -4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %try_winch_call() -> i32 winch {
+    sig0 = () winch
+    fn0 = colocated %try_callee sig0
+
+block0:
+    try_call fn0(), sig0, block1(), [ default: block2 ]
+
+block1:
+    v0 = iconst.i32 0
+    return v0
+
+block2:
+    v1 = iconst.i32 1
+    return v1
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   call    TestCase(%try_callee); jmp MachLabel(1); catch [default: MachLabel(2)]
+; block1:
+;   uninit  %rax
+;   xorl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block2:
+;   movl $0x1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   callq 9 ; reloc_external CallPCRel4 %try_callee -4
+; block2: ; offset 0x9
+;   xorl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x10
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
 function %f6(i64) -> i32 {
   sig0 = () -> i32, i32, f64 winch
   fn0 = %g sig0
@@ -448,4 +525,3 @@ block0:
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-

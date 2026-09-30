@@ -62,10 +62,13 @@ use core::ptr::NonNull;
 use std::io;
 use std::ops::Range;
 use std::ptr;
+#[cfg(asan)]
+use std::sync::Mutex;
 
 use crate::prelude::*;
-use crate::runtime::vm::stack_switching::VMHostArray;
-use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
+use crate::runtime::vm::{
+    VMContext, VMFuncRef, VMHostArray, VMPayloads, ValRaw, VmPtr, host_page_size,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Allocator {
@@ -73,12 +76,20 @@ pub enum Allocator {
     Custom,
 }
 
+// ASan retains metadata for addresses that have been used as
+// stacks. We keep continuation mappings alive and reuse them instead
+// to avoid false-positives to arise from the memory subsystem
+// choosing to repurpose previous stack space.
+#[cfg(asan)]
+static ASAN_STACKS: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct VMContinuationStack {
-    // The top of the stack; for stacks allocated by the fiber implementation itself,
-    // the base address of the allocation will be `top.sub(len.unwrap())`
-    top: *mut u8,
+    // The top of the stack. For stacks allocated by the fiber implementation
+    // itself, the base address of the allocation will be `top.sub(len)`.
+    // Zero-length, unallocated stacks use a non-null dangling pointer.
+    top: VmPtr<u8>,
     // The length of the stack
     len: usize,
     // allocation strategy
@@ -89,7 +100,7 @@ impl VMContinuationStack {
     pub fn new(size: usize) -> io::Result<Self> {
         // Round up our stack size request to the nearest multiple of the
         // page size.
-        let page_size = rustix::param::page_size();
+        let page_size = host_page_size();
         let size = if size == 0 {
             page_size
         } else {
@@ -99,6 +110,25 @@ impl VMContinuationStack {
         unsafe {
             // Add in one page for a guard page and then ask for some memory.
             let mmap_len = size + page_size;
+
+            #[cfg(asan)]
+            if let Some((base, len)) = {
+                let mut stacks = ASAN_STACKS.lock().unwrap();
+                stacks
+                    .iter()
+                    .position(|(_, len)| *len == mmap_len)
+                    .map(|index| stacks.swap_remove(index))
+            } {
+                return Ok(Self {
+                    top: VmPtr::from(
+                        NonNull::new((base as *mut u8).add(len))
+                            .expect("a cached continuation stack must have a non-null top"),
+                    ),
+                    len,
+                    allocator: Allocator::Mmap,
+                });
+            }
+
             let mmap = rustix::mm::mmap_anonymous(
                 ptr::null_mut(),
                 mmap_len,
@@ -113,7 +143,7 @@ impl VMContinuationStack {
             )?;
 
             Ok(Self {
-                top: mmap.cast::<u8>().add(mmap_len),
+                top: VmPtr::from(NonNull::new_unchecked(mmap.cast::<u8>().add(mmap_len))),
                 len: mmap_len,
                 allocator: Allocator::Mmap,
             })
@@ -122,14 +152,13 @@ impl VMContinuationStack {
 
     pub fn unallocated() -> Self {
         Self {
-            top: std::ptr::null_mut(),
+            top: VmPtr::dangling(),
             len: 0,
             allocator: Allocator::Custom,
         }
     }
 
     pub fn is_unallocated(&self) -> bool {
-        debug_assert_eq!(self.len == 0, self.top == std::ptr::null_mut());
         self.len == 0
     }
 
@@ -139,7 +168,10 @@ impl VMContinuationStack {
         len: usize,
     ) -> io::Result<Self> {
         Ok(Self {
-            top: unsafe { base.add(len) },
+            top: VmPtr::from(
+                NonNull::new(unsafe { base.add(len) })
+                    .expect("a continuation stack's top-of-stack pointer must be non-null"),
+            ),
             len,
             allocator: Allocator::Custom,
         })
@@ -150,19 +182,37 @@ impl VMContinuationStack {
     }
 
     pub fn top(&self) -> Option<*mut u8> {
-        Some(self.top)
+        Some(self.top.as_ptr())
     }
 
     pub fn range(&self) -> Option<Range<usize>> {
-        let base = unsafe { self.top.sub(self.len).addr() };
+        let top = self.top.as_ptr();
+        let base = unsafe { top.sub(self.len).addr() };
         Some(base..base + self.len)
+    }
+
+    #[cfg(asan)]
+    pub fn asan_range(&self) -> Option<Range<usize>> {
+        let top = self.top.addr().get();
+        let bottom = top - self.len;
+        let usable_bottom = match self.allocator {
+            Allocator::Mmap =>
+            // The ASan fiber switch API requires the bounds of
+            // the readable and writable stack region, therefore
+            // we disregard the guard page here.
+            {
+                bottom + host_page_size()
+            }
+            Allocator::Custom => bottom,
+        };
+        Some(usable_bottom..top)
     }
 
     pub fn control_context_instruction_pointer(&self) -> usize {
         // See picture at top of this file:
         // RIP is stored 8 bytes below top of stack.
         unsafe {
-            let ptr = self.top.sub(8).cast::<usize>();
+            let ptr = self.top.as_ptr().sub(8).cast::<usize>();
             *ptr
         }
     }
@@ -171,7 +221,7 @@ impl VMContinuationStack {
         // See picture at top of this file:
         // RBP is stored 16 bytes below top of stack.
         unsafe {
-            let ptr = self.top.sub(16).cast::<usize>();
+            let ptr = self.top.as_ptr().sub(16).cast::<usize>();
             *ptr
         }
     }
@@ -180,7 +230,7 @@ impl VMContinuationStack {
         // See picture at top of this file:
         // RSP is stored 24 bytes below top of stack.
         unsafe {
-            let ptr = self.top.sub(24).cast::<usize>();
+            let ptr = self.top.as_ptr().sub(24).cast::<usize>();
             *ptr
         }
     }
@@ -194,11 +244,14 @@ impl VMContinuationStack {
     /// calls `fiber_start` with  the following arguments:
     /// TOS, func_ref, caller_vmctx, args_ptr, args_capacity
     ///
-    /// Note that at this point we also allocate the args buffer
-    /// (see picture at the top of this file).
+    /// Note that at this point we also allocate persistent launch storage for
+    /// the args buffer and, when `gc_refs` is true, its parallel
+    /// GC-reference-marker buffer (see picture at the top of this file).
     /// We define `args_capacity` as the max of parameter and return value count.
-    /// Then the size s of the actual buffer size is calculated as follows:
-    /// s = size_of(ValRaw) * `args_capacity`,
+    /// Their combined, 16-byte-aligned size `s` is calculated as follows when
+    /// `gc_refs` is true:
+    /// s = size_of(ValRaw) * `args_capacity`
+    ///   + align_up(`args_capacity`, 16),
     ///
     /// Note that this value is used below, and we may have s = 0.
     ///
@@ -222,17 +275,24 @@ impl VMContinuationStack {
     ///  ---------------|-------------------------------------------------------
     ///       -0x28 - s | func_ref
     ///       -0x30 - s | caller_vmctx
-    ///       -0x38 - s | args (of type *mut ArrayRef<ValRaw>)
+    ///       -0x38 - s | args (of type *mut VMHostArray)
     ///       -0x40 - s | return_value_count
+    ///
+    /// The saved RSP points at `TOS - 0x40 - s`. On entry,
+    /// `wasmtime_continuation_start` pops the four launch-record words, leaving
+    /// RSP at `TOS - 0x20 - s`, immediately below the persistent buffers.
+    /// Subsequent stack frames grow towards lower addresses and may reuse the
+    /// consumed launch-record storage.
     pub fn initialize(
         &self,
         func_ref: *const VMFuncRef,
         caller_vmctx: *mut VMContext,
-        args: *mut VMHostArray<ValRaw>,
+        args: *mut VMPayloads,
         parameter_count: u32,
         return_value_count: u32,
+        gc_refs: bool,
     ) -> Result<()> {
-        let tos = self.top;
+        let tos = self.top.as_ptr();
 
         unsafe {
             let store = |tos_neg_offset, value| {
@@ -240,22 +300,50 @@ impl VMContinuationStack {
                 target.write(value)
             };
 
-            let args_ref = &mut *args;
+            let payloads = &mut *args;
+            let args_ref = &mut payloads.buffer;
             let args_capacity = std::cmp::max(parameter_count, return_value_count);
             // The args object must currently be empty.
             debug_assert_eq!(args_ref.capacity, 0);
             debug_assert_eq!(args_ref.length, 0);
 
-            let total_control_size = usize::try_from(args_capacity)?
+            let args_data_size = usize::try_from(args_capacity)?
                 .checked_mul(std::mem::size_of::<ValRaw>())
-                .and_then(|s| s.checked_add(0x40))
                 .ok_or_else(|| {
                     format_err!(
                         "continuation function type with {args_capacity} args \
                          overflows stack control data size calculation"
                     )
                 })?;
-            let args_data_size = total_control_size - 0x40;
+            // Keep the fixed startup data 16-byte aligned.
+            let gc_refs_data_size = if cfg!(feature = "gc") && gc_refs {
+                usize::try_from(args_capacity)?
+                    .checked_add(15)
+                    .map(|s| s & !15)
+                    .ok_or_else(|| {
+                        format_err!(
+                            "continuation function type with {args_capacity} args \
+                             overflows stack control data size calculation"
+                        )
+                    })?
+            } else {
+                0
+            };
+            let dynamic_data_size =
+                args_data_size
+                    .checked_add(gc_refs_data_size)
+                    .ok_or_else(|| {
+                        format_err!(
+                            "continuation function type with {args_capacity} args \
+                         overflows stack control data size calculation"
+                        )
+                    })?;
+            let total_control_size = dynamic_data_size.checked_add(0x40).ok_or_else(|| {
+                format_err!(
+                    "continuation function type with {args_capacity} args \
+                     overflows stack control data size calculation"
+                )
+            })?;
 
             // Ensure the control data (fixed header + args buffer) fits
             // within the usable stack space. For Mmap allocations,
@@ -263,7 +351,7 @@ impl VMContinuationStack {
             // Without subtracting the guard page, a high-arity function
             // type could pass this check but write into the guard page,
             // causing a segfault (see #13703).
-            let page_size = rustix::param::page_size();
+            let page_size = host_page_size();
             let usable_len = match self.allocator {
                 Allocator::Mmap => self.len.saturating_sub(page_size),
                 Allocator::Custom => self.len,
@@ -281,7 +369,18 @@ impl VMContinuationStack {
             };
 
             args_ref.capacity = args_capacity;
-            args_ref.data = args_data_ptr.cast::<ValRaw>();
+            args_ref.data = NonNull::new(args_data_ptr).map(VmPtr::from);
+            if cfg!(feature = "gc") && gc_refs {
+                let data = if args_capacity == 0 {
+                    ptr::null_mut()
+                } else {
+                    tos.sub(0x20 + dynamic_data_size)
+                };
+                if args_capacity > 0 {
+                    data.write_bytes(0, usize::try_from(args_capacity)?);
+                }
+                payloads.gc_ref_data = NonNull::new(data).map(VmPtr::from);
+            }
 
             let to_store = [
                 // Data near top of stack:
@@ -290,10 +389,16 @@ impl VMContinuationStack {
                 (0x18, tos.sub(total_control_size).addr()),
                 (0x20, usize::try_from(args_capacity)?),
                 // Data after the args buffer:
-                (0x28 + args_data_size, func_ref.addr()),
-                (0x30 + args_data_size, caller_vmctx.addr()),
-                (0x38 + args_data_size, args.addr()),
-                (0x40 + args_data_size, usize::try_from(return_value_count)?),
+                (0x28 + dynamic_data_size, func_ref.addr()),
+                (0x30 + dynamic_data_size, caller_vmctx.addr()),
+                (
+                    0x38 + dynamic_data_size,
+                    (args_ref as *mut VMHostArray).addr(),
+                ),
+                (
+                    0x40 + dynamic_data_size,
+                    usize::try_from(return_value_count)?,
+                ),
             ];
 
             for (offset, data) in to_store {
@@ -306,12 +411,27 @@ impl VMContinuationStack {
 }
 
 impl Drop for VMContinuationStack {
+    #[cfg(asan)]
     fn drop(&mut self) {
         unsafe {
             match self.allocator {
                 Allocator::Mmap => {
-                    let ret = rustix::mm::munmap(self.top.sub(self.len) as _, self.len);
-                    debug_assert!(ret.is_ok());
+                    let bottom = self.top.as_ptr().sub(self.len);
+                    ASAN_STACKS.lock().unwrap().push((bottom.addr(), self.len))
+                }
+                Allocator::Custom => {} // It's the creator's responsibility to reclaim the memory.
+            }
+        }
+    }
+
+    #[cfg(not(asan))]
+    fn drop(&mut self) {
+        unsafe {
+            match self.allocator {
+                Allocator::Mmap => {
+                    let bottom = self.top.as_ptr().sub(self.len);
+                    let ret = rustix::mm::munmap(bottom as _, self.len);
+                    debug_assert!(ret.is_ok())
                 }
                 Allocator::Custom => {} // It's the creator's responsibility to reclaim the memory.
             }
@@ -324,18 +444,28 @@ impl Drop for VMContinuationStack {
 unsafe extern "C" fn fiber_start(
     func_ref: *mut VMFuncRef,
     caller_vmctx: *mut VMContext,
-    args: *mut VMHostArray<ValRaw>,
+    args: *mut VMHostArray,
     return_value_count: u32,
 ) -> bool {
     unsafe {
+        #[cfg(asan)]
+        crate::vm::stack_switching::asan::fiber_start_complete(args);
+
         let func_ref = NonNull::new(func_ref).unwrap();
         let caller_vmxtx = NonNull::new_unchecked(caller_vmctx);
         let args = &mut *args;
         let params_and_returns: NonNull<[ValRaw]> = if args.capacity == 0 {
             NonNull::from(&[])
         } else {
-            std::slice::from_raw_parts_mut(args.data, usize::try_from(args.capacity).unwrap())
-                .into()
+            let data = args
+                .data
+                .expect("non-empty continuation arguments require an allocated buffer")
+                .as_ptr();
+            std::slice::from_raw_parts_mut(
+                data.cast::<ValRaw>(),
+                usize::try_from(args.capacity).unwrap(),
+            )
+            .into()
         };
 
         // NOTE(frank-emrich) The usage of the `caller_vmctx` is probably not

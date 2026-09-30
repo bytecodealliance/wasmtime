@@ -122,6 +122,7 @@
 
 ;; Pure constant-folding helpers on 64-bit immediates.
 (spec (i64_wrapping_neg x) (provide (= result (bvneg x))))
+(spec (i64_wrapping_sub x y) (provide (= result (bvsub x y))))
 (spec (u64_lt x y) (provide (= result (bvult x y))))
 (spec (imm64 x) (provide (= result x)))
 
@@ -431,6 +432,10 @@
                        (concat (extract 47 40 n)
                        (concat (extract 55 48 n) (extract 63 56 n)))))))))))
 (spec (u64_lt_eq x y) (provide (= result (bvule x y))))
+(spec (u32_lt x y) (provide (= result (bvult x y))))
+(spec (u64_is_power_of_two x)
+    (provide (= result (and (not (= x #x0000000000000000))
+                           (= (bvand x (bvsub x #x0000000000000001)) #x0000000000000000)))))
 (spec (u64_checked_rem x y)
     (match (not (bv_is_zero! y)))
     (provide (= result (bvurem x y))))
@@ -449,7 +454,10 @@
     (match (not (bv_is_zero! result)))
     (provide (= x result)))
 (spec (i64_lt x y) (provide (= result (bvslt x y))))
+(spec (i64_gt x y) (provide (= result (if (bvsgt x y) true false))))
 (spec (i64_gt_eq x y) (provide (= result (bvsge x y))))
+(spec (i64_trailing_zeros x)
+    (provide (= result (extract 31 0 (clz (rev x))))))
 
 ;;;; Type-derived signed bounds ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Signed min/max of `ty` in the low bits: `(i64::{MIN,MAX} as u64) >> (64-bits)`.

@@ -448,7 +448,7 @@ impl Module for ObjectModule {
         info!("defining function {}: {}", func_id, ctx.func.display());
 
         let res = ctx.compile(self.isa(), ctrl_plane)?;
-        let alignment = res.buffer.alignment as u64;
+        let alignment = res.buffer.min_alignment as u64;
 
         let compiled = ctx.compiled_code().unwrap();
         #[cfg(feature = "unwind")]

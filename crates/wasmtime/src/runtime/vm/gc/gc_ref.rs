@@ -1,7 +1,7 @@
 use crate::runtime::vm::{FuncRefTableId, GcHeap, GcStore, I31, SendSyncPtr};
 use crate::store::AutoAssertNoGc;
 use crate::{
-    AnyRef, ExnRef, ExternRef, Func, HeapType, Result, StorageType, Val, ValType, bail_bug,
+    AnyRef, ExnRef, ExternRef, Func, HeapTopType, Result, StorageType, Val, ValType, bail_bug,
 };
 use core::fmt;
 use core::marker;
@@ -10,38 +10,7 @@ use wasmtime_core::truncate::{truncate_i32_to_i8, truncate_i32_to_i16};
 use wasmtime_environ::packed_option::ReservedValue;
 use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
-/// The common header for all objects allocated in a GC heap.
-///
-/// This header is shared across all collectors, although particular collectors
-/// may always add their own trailing fields to this header for all of their own
-/// GC objects.
-///
-/// This is a bit-packed structure that logically has the following fields:
-///
-/// ```ignore
-/// struct VMGcHeader {
-///     // Highest 5 bits.
-///     kind: VMGcKind,
-///
-///     // 27 bits available for the `GcRuntime` to make use of however it sees fit.
-///     reserved: u27,
-///
-///     // The `VMSharedTypeIndex` for this GC object, if it isn't an
-///     // `externref` (or an `externref` re-wrapped as an `anyref`). `None` is
-///     // represented with `VMSharedTypeIndex::reserved_value()`.
-///     ty: Option<VMSharedTypeIndex>,
-/// }
-/// ```
-#[repr(C, align(8))]
-#[derive(Debug, Clone, Copy)]
-pub struct VMGcHeader {
-    /// The object's `VMGcKind` and 27 bits of space reserved for however the GC
-    /// sees fit to use it.
-    kind: u32,
-
-    /// The object's type index.
-    ty: VMSharedTypeIndex,
-}
+pub use crate::runtime::vm::vmcontext::VMGcHeader;
 
 unsafe impl GcHeapObject for VMGcHeader {
     #[inline]
@@ -440,19 +409,19 @@ impl VMGcRef {
             StorageType::ValType(ValType::F64) => Val::F64(data.read_u64(offset)?),
             StorageType::ValType(ValType::V128) => Val::V128(data.read_v128(offset)?),
             StorageType::ValType(ValType::Ref(r)) => match r.heap_type().top() {
-                HeapType::Extern => {
+                HeapTopType::Extern => {
                     let raw = data.read_u32(offset)?;
                     Val::ExternRef(ExternRef::_from_raw(store, raw))
                 }
-                HeapType::Any => {
+                HeapTopType::Any => {
                     let raw = data.read_u32(offset)?;
                     Val::AnyRef(AnyRef::_from_raw(store, raw))
                 }
-                HeapType::Exn => {
+                HeapTopType::Exn => {
                     let raw = data.read_u32(offset)?;
                     Val::ExnRef(ExnRef::_from_raw(store, raw))
                 }
-                HeapType::Func => {
+                HeapTopType::Func => {
                     let func_ref_id = data.read_u32(offset)?;
                     let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
                     let func_ref = store
@@ -463,7 +432,7 @@ impl VMGcRef {
                         func_ref.map(|p| Func::from_vm_func_ref(store.id(), p.as_non_null()))
                     })
                 }
-                otherwise => bail_bug!("not a top type: {otherwise:?}"),
+                HeapTopType::Cont => bail_bug!("continuation references are unsupported"),
             },
         })
     }

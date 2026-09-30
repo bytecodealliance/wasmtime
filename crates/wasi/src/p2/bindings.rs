@@ -172,6 +172,7 @@ pub mod sync {
                 "wasi:sockets/udp.incoming-datagram-stream": super::super::sockets::udp::IncomingDatagramStream,
                 "wasi:sockets/udp.outgoing-datagram-stream": super::super::sockets::udp::OutgoingDatagramStream,
                 "wasi:sockets/udp.udp-socket": crate::p2::UdpSocket,
+                "wasi:sockets/ip-name-lookup.resolve-address-stream": crate::p2::ip_name_lookup::ResolveAddressStream,
 
                 // Error host trait from wasmtime-wasi-io is synchronous, so we can alias it
                 "wasi:io/error": wasmtime_wasi_io::bindings::wasi::io::error,
@@ -371,6 +372,8 @@ mod async_io {
             "wasi:sockets/udp.[method]udp-socket.start-bind": async | tracing | trappable,
             "wasi:sockets/udp.[method]udp-socket.stream": async | tracing | trappable,
             "wasi:sockets/udp.[drop]outgoing-datagram-stream": async | tracing | trappable,
+            "wasi:sockets/udp.[drop]incoming-datagram-stream": async | tracing | trappable,
+            "wasi:sockets/ip-name-lookup.[drop]resolve-address-stream": async | tracing | trappable,
             default: tracing | trappable,
         },
         exports: { default: async },
@@ -400,11 +403,38 @@ mod async_io {
             "wasi:cli/terminal-input.terminal-input": crate::p2::stdio::TerminalInput,
             "wasi:cli/terminal-output.terminal-output": crate::p2::stdio::TerminalOutput,
         },
+        named_imports: {
+            "wasi:clocks/monotonic-clock": crate::NamedId,
+            "wasi:clocks/wall-clock": crate::NamedId,
+            "wasi:random/random": crate::NamedId,
+            "wasi:random/insecure": crate::NamedId,
+            "wasi:random/insecure-seed": crate::NamedId,
+            "wasi:cli/exit": crate::NamedId,
+            "wasi:cli/environment": crate::NamedId,
+            "wasi:cli/stdin": crate::NamedId,
+            "wasi:cli/stdout": crate::NamedId,
+            "wasi:cli/stderr": crate::NamedId,
+            "wasi:cli/terminal-input": crate::NamedId,
+            "wasi:cli/terminal-output": crate::NamedId,
+            "wasi:cli/terminal-stdin": crate::NamedId,
+            "wasi:cli/terminal-stdout": crate::NamedId,
+            "wasi:cli/terminal-stderr": crate::NamedId,
+            "wasi:filesystem/types": crate::NamedId,
+            "wasi:filesystem/preopens": crate::NamedId,
+            "wasi:sockets/instance-network": crate::NamedId,
+            "wasi:sockets/network": crate::NamedId,
+            "wasi:sockets/ip-name-lookup": crate::NamedId,
+            "wasi:sockets/tcp-create-socket": crate::NamedId,
+            "wasi:sockets/tcp": crate::NamedId,
+            "wasi:sockets/udp-create-socket": crate::NamedId,
+            "wasi:sockets/udp": crate::NamedId,
+        },
     });
 }
 
 pub use self::async_io::LinkOptions;
 pub use self::async_io::exports;
+pub use self::async_io::named_imports;
 pub use self::async_io::wasi::*;
 
 /// Asynchronous bindings to execute and run a `wasi:cli/command`.

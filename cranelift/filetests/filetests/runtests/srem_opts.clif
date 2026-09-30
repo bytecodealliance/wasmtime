@@ -414,3 +414,236 @@ block0(v0: i64):
 ; run: %srem_imm_prime_i64(-1000) == -30
 ; run: %srem_imm_prime_i64(96) == 96
 ; run: %srem_imm_prime_i64(-96) == -96
+
+function %srem_zero_i8_divisor8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 8
+    v2 = srem v0, v1
+    v3 = iconst.i8 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %srem_zero_i8_divisor8(0) == 1
+; run: %srem_zero_i8_divisor8(8) == 1
+; run: %srem_zero_i8_divisor8(-8) == 1
+; run: %srem_zero_i8_divisor8(9) == 0
+; run: %srem_zero_i8_divisor8(-9) == 0
+; run: %srem_zero_i8_divisor8(-128) == 1
+; run: %srem_zero_i8_divisor8(127) == 0
+
+function %srem_zero_i16_divisor8(i16) -> i8 {
+block0(v0: i16):
+    v1 = iconst.i16 8
+    v2 = srem v0, v1
+    v3 = iconst.i16 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %srem_zero_i16_divisor8(0) == 1
+; run: %srem_zero_i16_divisor8(8) == 1
+; run: %srem_zero_i16_divisor8(-8) == 1
+; run: %srem_zero_i16_divisor8(9) == 0
+; run: %srem_zero_i16_divisor8(-9) == 0
+; run: %srem_zero_i16_divisor8(-32768) == 1
+; run: %srem_zero_i16_divisor8(32767) == 0
+
+function %srem_zero_i32_divisor2(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %srem_zero_i32_divisor2(0) == 1
+; run: %srem_zero_i32_divisor2(2) == 1
+; run: %srem_zero_i32_divisor2(-2) == 1
+; run: %srem_zero_i32_divisor2(3) == 0
+; run: %srem_zero_i32_divisor2(-3) == 0
+; run: %srem_zero_i32_divisor2(-2147483648) == 1
+; run: %srem_zero_i32_divisor2(2147483647) == 0
+
+function %srem_zero_i32_divisor8(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %srem_zero_i32_divisor8(0) == 1
+; run: %srem_zero_i32_divisor8(8) == 1
+; run: %srem_zero_i32_divisor8(-8) == 1
+; run: %srem_zero_i32_divisor8(9) == 0
+; run: %srem_zero_i32_divisor8(-9) == 0
+; run: %srem_zero_i32_divisor8(-2147483648) == 1
+; run: %srem_zero_i32_divisor8(2147483647) == 0
+
+function %srem_zero_i64_divisor64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 64
+    v2 = srem v0, v1
+    v3 = iconst.i64 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %srem_zero_i64_divisor64(0) == 1
+; run: %srem_zero_i64_divisor64(64) == 1
+; run: %srem_zero_i64_divisor64(-64) == 1
+; run: %srem_zero_i64_divisor64(65) == 0
+; run: %srem_zero_i64_divisor64(-65) == 0
+; run: %srem_zero_i64_divisor64(-9223372036854775808) == 1
+; run: %srem_zero_i64_divisor64(9223372036854775807) == 0
+
+function %srem_zero_i32_divisorneg8(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 -8
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %srem_zero_i32_divisorneg8(0) == 1
+; run: %srem_zero_i32_divisorneg8(-8) == 1
+; run: %srem_zero_i32_divisorneg8(8) == 1
+; run: %srem_zero_i32_divisorneg8(-7) == 0
+; run: %srem_zero_i32_divisorneg8(-9) == 0
+; run: %srem_zero_i32_divisorneg8(-2147483648) == 1
+; run: %srem_zero_i32_divisorneg8(2147483647) == 0
+
+function %srem_zero_i32_divisor7(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 7
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %srem_zero_i32_divisor7(0) == 1
+; run: %srem_zero_i32_divisor7(7) == 1
+; run: %srem_zero_i32_divisor7(-7) == 1
+; run: %srem_zero_i32_divisor7(8) == 0
+; run: %srem_zero_i32_divisor7(-8) == 0
+; run: %srem_zero_i32_divisor7(-2147483648) == 0
+; run: %srem_zero_i32_divisor7(2147483647) == 0
+
+function %srem_zero_shared_remainder(i32) -> i32, i8 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = srem v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v2, v4
+}
+; run: %srem_zero_shared_remainder(9) == [1, 0]
+; run: %srem_zero_shared_remainder(-9) == [-1, 0]
+; run: %srem_zero_shared_remainder(-8) == [0, 1]
+; run: %srem_zero_shared_remainder(-2147483648) == [0, 1]
+
+function %rounding_eq_add0_eq0_shift29_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+; run: %rounding_eq_add0_eq0_shift29_mask8(0, -2147483648) == 1
+; run: %rounding_eq_add0_eq0_shift29_mask8(8, -1) == 1
+; run: %rounding_eq_add0_eq0_shift29_mask8(-8, -1) == 1
+; run: %rounding_eq_add0_eq0_shift29_mask8(9, -1) == 0
+; run: %rounding_eq_add0_eq0_shift29_mask8(-1, -1) == 0
+; run: %rounding_eq_add0_eq0_shift29_mask8(4, 0) == 0
+; run: %rounding_eq_add0_eq0_shift29_mask8(2147483647, -1) == 0
+
+function %rounding_eq_add1_eq0_shift29_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v3, v0
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+; run: %rounding_eq_add1_eq0_shift29_mask8(0, -2147483648) == 1
+; run: %rounding_eq_add1_eq0_shift29_mask8(8, -1) == 1
+; run: %rounding_eq_add1_eq0_shift29_mask8(-8, -1) == 1
+; run: %rounding_eq_add1_eq0_shift29_mask8(9, -1) == 0
+; run: %rounding_eq_add1_eq0_shift29_mask8(-1, -1) == 0
+; run: %rounding_eq_add1_eq0_shift29_mask8(4, 0) == 0
+; run: %rounding_eq_add1_eq0_shift29_mask8(2147483647, -1) == 0
+
+function %rounding_eq_add0_eq1_shift29_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v6, v0
+    return v7
+}
+; run: %rounding_eq_add0_eq1_shift29_mask8(0, -2147483648) == 1
+; run: %rounding_eq_add0_eq1_shift29_mask8(8, -1) == 1
+; run: %rounding_eq_add0_eq1_shift29_mask8(-8, -1) == 1
+; run: %rounding_eq_add0_eq1_shift29_mask8(9, -1) == 0
+; run: %rounding_eq_add0_eq1_shift29_mask8(-1, -1) == 0
+; run: %rounding_eq_add0_eq1_shift29_mask8(4, 0) == 0
+; run: %rounding_eq_add0_eq1_shift29_mask8(2147483647, -1) == 0
+
+function %rounding_eq_add1_eq1_shift61_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 61
+    v3 = ushr v1, v2
+    v4 = iadd v3, v0
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v6, v0
+    return v7
+}
+; run: %rounding_eq_add1_eq1_shift61_mask8(0, -2147483648) == 1
+; run: %rounding_eq_add1_eq1_shift61_mask8(8, -1) == 1
+; run: %rounding_eq_add1_eq1_shift61_mask8(-8, -1) == 1
+; run: %rounding_eq_add1_eq1_shift61_mask8(9, -1) == 0
+; run: %rounding_eq_add1_eq1_shift61_mask8(-1, -1) == 0
+; run: %rounding_eq_add1_eq1_shift61_mask8(4, 0) == 0
+; run: %rounding_eq_add1_eq1_shift61_mask8(2147483647, -1) == 0
+
+function %rounding_eq_add0_eq0_shift28_mask8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 28
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -8
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+; run: %rounding_eq_add0_eq0_shift28_mask8(0, -2147483648) == 0
+; run: %rounding_eq_add0_eq0_shift28_mask8(8, -1) == 0
+; run: %rounding_eq_add0_eq0_shift28_mask8(-8, -1) == 0
+; run: %rounding_eq_add0_eq0_shift28_mask8(9, -1) == 0
+; run: %rounding_eq_add0_eq0_shift28_mask8(-1, -1) == 0
+; run: %rounding_eq_add0_eq0_shift28_mask8(4, 0) == 0
+; run: %rounding_eq_add0_eq0_shift28_mask8(2147483647, -1) == 0
+
+function %rounding_eq_add0_eq0_shift29_mask12(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 29
+    v3 = ushr v1, v2
+    v4 = iadd v0, v3
+    v5 = iconst.i32 -12
+    v6 = band v4, v5
+    v7 = icmp eq v0, v6
+    return v7
+}
+; run: %rounding_eq_add0_eq0_shift29_mask12(0, -2147483648) == 0
+; run: %rounding_eq_add0_eq0_shift29_mask12(8, -1) == 0
+; run: %rounding_eq_add0_eq0_shift29_mask12(-8, -1) == 0
+; run: %rounding_eq_add0_eq0_shift29_mask12(9, -1) == 0
+; run: %rounding_eq_add0_eq0_shift29_mask12(-1, -1) == 0
+; run: %rounding_eq_add0_eq0_shift29_mask12(4, 0) == 1
+; run: %rounding_eq_add0_eq0_shift29_mask12(2147483647, -1) == 0

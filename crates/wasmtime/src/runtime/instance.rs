@@ -254,7 +254,7 @@ impl Instance {
         imports: Imports<'_>,
         asyncness: Asyncness,
     ) -> Result<Instance> {
-        let instance = {
+        let (instance, needs_startup) = {
             let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
             // SAFETY: the safety contract of `new_raw` is the same as this
             // function.
@@ -267,7 +267,7 @@ impl Instance {
         // function itself, but it's finalization of initialization of this
         // instance, for example for complicated global initialization
         // expressions.
-        if instance.id.get_mut(store.0).needs_startup() {
+        if needs_startup {
             if asyncness == Asyncness::No {
                 instance.start_raw(store)?;
             } else {
@@ -285,24 +285,17 @@ impl Instance {
     /// Internal function to create an instance which doesn't have its `start`
     /// function run yet.
     ///
-    /// This is not intended to be exposed from Wasmtime, it's intended to
-    /// refactor out common code from `new_started` and `new_started_async`.
-    ///
-    /// Note that this step needs to be run on a fiber in async mode even
-    /// though it doesn't do any blocking work because an async resource
-    /// limiter may need to yield.
-    ///
     /// # Unsafety
     ///
     /// This method is unsafe because it does not type-check the `imports`
     /// provided. The `imports` provided must be suitable for the module
     /// provided as well.
-    async unsafe fn new_raw(
+    pub(crate) async unsafe fn new_raw(
         store: &mut StoreOpaque,
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         module: &Module,
         imports: Imports<'_>,
-    ) -> Result<Instance> {
+    ) -> Result<(Instance, bool)> {
         if !Engine::same(store.engine(), module.engine()) {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
@@ -335,12 +328,16 @@ impl Instance {
                 .await?
         };
 
+        let instance = Instance::from_wasmtime(id, store);
+
+        let needs_startup = instance.id.get_mut(store).needs_startup();
+
         // At this point the instance is created and stored within the store,
         // but it's also not quite usable just yet. Initialization hasn't
         // completed (e.g. active data/element segments) and the `start`
         // function additionally has not yet been invoked. That's the
         // responsibility of the caller to handle, however.
-        Ok(Instance::from_wasmtime(id, store))
+        Ok((instance, needs_startup))
     }
 
     pub(crate) fn from_wasmtime(id: InstanceId, store: &mut StoreOpaque) -> Instance {
@@ -349,7 +346,7 @@ impl Instance {
         }
     }
 
-    fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+    pub(crate) fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let store_id = store.0.id();

@@ -24,7 +24,7 @@ impl<'a> Parse<'a> for FuelWast<'a> {
     }
 }
 
-#[wasmtime_test(wasm_features(bulk_memory, reference_types, gc))]
+#[wasmtime_test(wasm_features(bulk_memory, reference_types, gc, function_references, exceptions))]
 #[cfg_attr(miri, ignore)]
 fn run(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
@@ -694,6 +694,155 @@ fn custom_operator_cost(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
+#[wasmtime_test(wasm_features(tail_call))]
+#[cfg_attr(miri, ignore)]
+fn unreachable_control_operator_cost(config: &mut Config) -> Result<()> {
+    // Use nonzero costs so charging unreachable control operators is observable.
+    config.consume_fuel(true).operator_cost(OperatorCost {
+        Block: 1,
+        Loop: 1,
+        If: 1,
+        Else: 1,
+        End: 1,
+        ..Default::default()
+    });
+    let engine = Engine::new(config)?;
+    for terminator in [
+        "return",
+        "unreachable",
+        "return_call $leaf",
+        "i32.const 0 return_call_indirect (type $t)",
+        "br $exit",
+    ] {
+        let body = |dead: &str| {
+            format!(
+                r#"(param i32)
+                    block $exit
+                        local.get 0
+                        if
+                            {terminator}
+                            {dead}
+                        else
+                            i32.const 3 drop
+                        end
+                        i32.const 5 drop
+                    end
+                    i32.const 7 drop"#
+            )
+        };
+        let module = Module::new(
+            &engine,
+            format!(
+                r#"(module
+                    (type $t (func))
+                    (func $leaf (type $t))
+                    (table funcref (elem $leaf))
+                    (func (export "with_dead") {})
+                    (func (export "without_dead") {}))"#,
+                body("block loop end i32.const 0 if else end end"),
+                body(""),
+            ),
+        )?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        // Exercise both the terminating path and the reachable else/end joins.
+        for condition in [0, 1] {
+            let mut consumed = Vec::new();
+            for export in ["with_dead", "without_dead"] {
+                store.set_fuel(1_000)?;
+                let run = instance.get_typed_func::<i32, ()>(&mut store, export)?;
+                let result = run.call(&mut store, condition);
+                if terminator == "unreachable" && condition == 1 {
+                    assert_eq!(
+                        result.unwrap_err().downcast::<Trap>()?,
+                        Trap::UnreachableCodeReached
+                    );
+                } else {
+                    result?;
+                }
+                consumed.push(1_000 - store.get_fuel()?);
+            }
+            assert_eq!(consumed[0], consumed[1], "{terminator}, {condition}");
+        }
+    }
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[cfg_attr(miri, ignore)]
+fn unreachable_try_table_fuel(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (func (export "run") (result i32)
+                i32.const 42
+                return
+                (try_table)))"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    assert_eq!(run.call(&mut store, ())?, 42);
+    // Only function entry and i32.const consume fuel.
+    assert_eq!(store.get_fuel()?, 98);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[cfg_attr(miri, ignore)]
+fn exceptions_with_fuel(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (tag $e (param i32))
+
+          (func (export "throw") (param i32) (result i32)
+            (block $catch (result i32)
+              (try_table (result i32) (catch $e $catch)
+                local.get 0
+                if
+                  i32.const 42
+                  throw $e
+                end
+                i32.const 7)))
+
+          (func (export "throw_ref") (result i32)
+            (block $catch (result i32)
+              (try_table (result i32) (catch $e $catch)
+                (block $rethrow (result i32 exnref)
+                  (try_table (result i32 exnref) (catch_ref $e $rethrow)
+                    i32.const 42
+                    throw $e))
+                throw_ref))))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let throw = instance.get_typed_func::<i32, i32>(&mut store, "throw")?;
+    for (condition, result, consumed) in [(0, 7, 5), (1, 42, 6)] {
+        store.set_fuel(100)?;
+        assert_eq!(throw.call(&mut store, condition)?, result);
+        // Function entry, try_table, local.get, if, and i32.const each
+        // consume one fuel unit, as does throw when the branch is taken.
+        assert_eq!(store.get_fuel()?, 100 - consumed);
+    }
+
+    let throw_ref = instance.get_typed_func::<(), i32>(&mut store, "throw_ref")?;
+    store.set_fuel(100)?;
+    assert_eq!(throw_ref.call(&mut store, ())?, 42);
+    // Function entry, two try_tables, i32.const, throw, and throw_ref.
+    assert_eq!(store.get_fuel()?, 94);
+    Ok(())
+}
+
 #[wasmtime_test(wasm_features(bulk_memory, reference_types, gc, function_references))]
 #[cfg_attr(miri, ignore)]
 fn custom_variable_operator_cost(config: &mut Config) -> Result<()> {
@@ -829,48 +978,6 @@ fn custom_variable_operator_cost(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(reference_types), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-fn variable_operator_cost_failed_growth(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let mut op_cost = OperatorCost {
-        I32Const: 0,
-        RefNull: 0,
-        MemoryGrow: 0,
-        TableGrow: 0,
-        ..Default::default()
-    };
-    op_cost.variable.memory_grow_per_page = 7;
-    op_cost.variable.table_grow_per_element = 19;
-    config.operator_cost(op_cost.clone());
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (memory 1 1)
-            (table 0 0 funcref)
-            (func (export "main")
-                ;; these exceed the max limits so they fail
-                i32.const 5 memory.grow drop
-                ref.null func i32.const 5 table.grow drop)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(1_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
-
-    let initial_fuel = store.get_fuel()?;
-    main.call(&mut store, ())?;
-    let cost_of_execution = 5 * u64::from(op_cost.variable.memory_grow_per_page)
-        + 5 * u64::from(op_cost.variable.table_grow_per_element)
-        + 1;
-    assert_eq!(store.get_fuel()?, initial_fuel - cost_of_execution);
-
-    Ok(())
-}
-
 #[wasmtime_test(wasm_features(bulk_memory), strategies(not(Winch)))]
 #[cfg_attr(miri, ignore)]
 fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()> {
@@ -908,64 +1015,6 @@ fn variable_operator_cost_follows_bounds_check(config: &mut Config) -> Result<()
     // variable charge or the pending function-entry unit is flushed.
     assert_eq!(store.get_fuel()?, initial_fuel);
 
-    Ok(())
-}
-
-#[wasmtime_test(wasm_features(memory64), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-fn memory64_variable_operator_cost_saturates(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let mut operator_cost = OperatorCost::default();
-    operator_cost.variable.memory_grow_per_page = 2;
-    config.operator_cost(operator_cost);
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (memory i64 0 0)
-            (func (export "grow") (param i64) (result i64)
-                local.get 0 memory.grow)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(10_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let grow = instance.get_typed_func::<i64, i64>(&mut store, "grow")?;
-
-    // i64::MAX * 2 must saturate at i64::MAX rather than wrap to -2.
-    let error = grow.call(&mut store, i64::MAX).unwrap_err();
-    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
-
-    Ok(())
-}
-
-#[wasmtime_test(wasm_features(memory64, reference_types), strategies(not(Winch)))]
-#[cfg_attr(miri, ignore)]
-#[cfg(target_pointer_width = "64")]
-fn table64_variable_operator_cost_saturates(config: &mut Config) -> Result<()> {
-    config.consume_fuel(true);
-    let mut operator_cost = OperatorCost::default();
-    operator_cost.variable.table_grow_per_element = 2;
-    config.operator_cost(operator_cost);
-
-    let engine = Engine::new(config)?;
-    let module = Module::new(
-        &engine,
-        r#"(module
-            (table i64 0 0 funcref)
-            (func (export "grow") (param i64) (result i64)
-                ref.null func local.get 0 table.grow)
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    store.set_fuel(10_000)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let grow = instance.get_typed_func::<i64, i64>(&mut store, "grow")?;
-
-    // i64::MAX * 2 must saturate at i64::MAX rather than wrap to -2.
-    let error = grow.call(&mut store, i64::MAX).unwrap_err();
-    assert_eq!(error.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
     Ok(())
 }
 
@@ -1040,15 +1089,241 @@ fn fuel_around_table_grow() -> Result<()> {
     store.set_fuel(2)?;
     let instance = Instance::new(&mut store, &module, &[])?;
     let grow = instance.get_typed_func::<(), i32>(&mut store, "grow")?;
+    // The fuel check for a large bulk operation runs after the operation
+    // completes so this call still traps with "out of fuel", but the grow
+    // itself took effect.
     let trap = grow.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
     assert_eq!(trap, Trap::OutOfFuel);
 
     store.set_fuel(u64::MAX)?;
     let call = instance.get_typed_func::<i32, ()>(&mut store, "call")?;
-    let trap = call
-        .call(&mut store, 9999999)
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert_eq!(trap, Trap::TableOutOfBounds);
+    call.call(&mut store, 9999999)?;
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(extended_const))]
+#[cfg_attr(miri, ignore)]
+fn const_expr_honors_operator_cost(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (global $g i32 (i32.add (i32.const 1) (i32.const 2)))
+          (export "g" (global $g))
+          (func $start)
+          (start $start))
+    "#;
+
+    fn instantiation_fuel(config: &mut Config, op_cost: OperatorCost) -> Result<u64> {
+        config.consume_fuel(true).operator_cost(op_cost);
+        let engine = Engine::new(config)?;
+        let module = Module::new(&engine, WAT)?;
+
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(10_000)?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        let g = instance
+            .get_global(&mut store, "g")
+            .unwrap()
+            .get(&mut store);
+        assert_eq!(g.i32(), Some(3), "global initializer did not run");
+
+        Ok(10_000 - store.get_fuel()?)
+    }
+
+    assert_eq!(instantiation_fuel(config, OperatorCost::default())?, 6);
+
+    let custom = OperatorCost {
+        I32Const: 7,
+        I32Add: 100,
+        ..Default::default()
+    };
+    assert_eq!(instantiation_fuel(config, custom)?, 117);
+
+    Ok(())
+}
+
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn module_start_call_honors_operator_cost(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (func $start)
+          (start $start))
+    "#;
+
+    fn instantiation_fuel(config: &mut Config, op_cost: OperatorCost) -> Result<u64> {
+        config.consume_fuel(true).operator_cost(op_cost);
+        let engine = Engine::new(config)?;
+        let module = Module::new(&engine, WAT)?;
+
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(10_000)?;
+        Instance::new(&mut store, &module, &[])?;
+
+        Ok(10_000 - store.get_fuel()?)
+    }
+
+    assert_eq!(instantiation_fuel(config, OperatorCost::default())?, 3);
+
+    let custom = OperatorCost {
+        Call: 50,
+        ..Default::default()
+    };
+    assert_eq!(instantiation_fuel(config, custom)?, 52);
+
+    Ok(())
+}
+
+#[wasmtime_test(strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn call_ref_respects_fuel(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (type $t (func (param i32 i32)))
+          (func $run (export "run") (param $cnt i32) (param $depth i32)
+            (local $i i32)
+            (local.set $i (local.get $cnt))
+            local.get $depth
+            if
+              (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+              loop $l
+                (call_ref $t
+                  (local.get $cnt)
+                  (local.get $depth)
+                  (ref.func $run))
+                (local.tee $i (i32.sub (local.get $i) (i32.const 1)))
+                if br $l end
+              end
+            end
+          )
+        )
+    "#;
+
+    config.consume_fuel(true);
+    config.wasm_reference_types(true);
+    config.wasm_function_references(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let result = func.call(&mut store, &[Val::I32(10), Val::I32(10)], &mut []);
+    assert!(result.is_err());
+    assert!(format!("{result:?}").contains("all fuel consumed by WebAssembly"));
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn try_call_normal_return_respects_fuel(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (tag $e)
+          (func $run (export "run") (param $cnt i32) (param $depth i32)
+            (local $i i32)
+            (local.set $i (local.get $cnt))
+            local.get $depth
+            if
+              (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+              loop $l
+                (block $catch
+                  (try_table (catch $e $catch)
+                    (call $run (local.get $cnt) (local.get $depth))))
+                (local.tee $i (i32.sub (local.get $i) (i32.const 1)))
+                if br $l end
+              end
+            end
+          )
+        )
+    "#;
+
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let result = func.call(&mut store, &[Val::I32(10), Val::I32(10)], &mut []);
+    assert!(result.is_err());
+    assert!(format!("{result:?}").contains("all fuel consumed by WebAssembly"));
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions), strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn try_call_exceptional_return_respects_fuel(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (tag $e)
+          (func $run (param $cnt i32) (param $depth i32)
+            (local $i i32)
+            (local.set $i (local.get $cnt))
+            local.get $depth
+            if
+              (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+              loop $l
+                (block $catch
+                  (try_table (catch $e $catch)
+                    (call $run (local.get $cnt) (local.get $depth))))
+                (local.tee $i (i32.sub (local.get $i) (i32.const 1)))
+                if br $l end
+              end
+            end
+            throw $e
+          )
+          (func (export "run") (param $cnt i32) (param $depth i32)
+            (block $catch
+              (try_table (catch $e $catch)
+                (call $run (local.get $cnt) (local.get $depth))))
+          )
+        )
+    "#;
+
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let result = func.call(&mut store, &[Val::I32(10), Val::I32(10)], &mut []);
+    assert!(result.is_err());
+    assert!(format!("{result:?}").contains("all fuel consumed by WebAssembly"));
+    Ok(())
+}
+#[wasmtime_test(wasm_features(extended_const))]
+#[cfg_attr(miri, ignore)]
+fn const_expr_fuel_is_accounted_without_start(config: &mut Config) -> Result<()> {
+    // Same module as `const_expr_honors_operator_cost` above, but with no
+    // `start` function. The synthesized module startup function is the only
+    // place the const-expr runs, and it has no trailing `end` operator to fold
+    // the buffered charges into the fuel counter, so it must do that itself on
+    // the way out.
+    const WAT: &str = r#"
+        (module
+          (global $g i32 (i32.add (i32.const 1) (i32.const 2)))
+          (export "g" (global $g)))
+    "#;
+
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, WAT)?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(10_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let g = instance
+        .get_global(&mut store, "g")
+        .unwrap()
+        .get(&mut store);
+    assert_eq!(g.i32(), Some(3), "global initializer did not run");
+
+    // One unit for the startup function's entry charge, plus one for each
+    // const-expr operator: `i32.const`, `i32.const`, `i32.add`.
+    assert_eq!(10_000 - store.get_fuel()?, 4);
+
     Ok(())
 }

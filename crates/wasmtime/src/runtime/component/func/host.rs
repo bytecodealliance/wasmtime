@@ -283,10 +283,6 @@ where
     T: 'static,
     R: Send + Sync + 'static,
 {
-    /// Whether or not this is `async` function from the perspective of the
-    /// component model.
-    const ASYNC: bool;
-
     /// Performs a type-check to ensure that this host function can be imported
     /// with the provided signature that a component is using.
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()>;
@@ -363,13 +359,6 @@ where
         let vminstance = instance.id().get(store.0);
         let async_ = vminstance.component().env_component().options[options].async_;
 
-        // If this is a synchronous-lower of a host-async function, then the
-        // guest is blocking. Test, in the context of the guest task, if that's
-        // allowed.
-        if !async_ && Self::ASYNC {
-            store.0.check_blocking()?;
-        }
-
         if async_ {
             #[cfg(feature = "component-model-async")]
             {
@@ -430,7 +419,12 @@ where
             )?)
         };
         lower.validate_scope_exit()?;
-        lower.store.0.host_task_delete(entered_host_task)?;
+        // Check if running the future created an actual host task in the store.
+        let materialized_host_task = lower.store.0.current_materialized_host_task()?;
+        lower
+            .store
+            .0
+            .host_task_delete(entered_host_task, materialized_host_task)?;
         Self::lower_raw(&mut lower, ty, ret, dst)
     }
 
@@ -484,7 +478,12 @@ where
                 let result = result?;
                 let mut lower = LowerContext::new(store, options, instance);
                 lower.validate_scope_exit()?;
-                lower.store.0.host_task_delete(entered_host_task)?;
+                // Check if running the future created an actual host task in the store.
+                let materialized_host_task = lower.store.0.current_materialized_host_task()?;
+                lower
+                    .store
+                    .0
+                    .host_task_delete(entered_host_task, materialized_host_task)?;
                 Self::lower_raw(&mut lower, ty, result, Destination::Memory(retptr))?;
                 Status::Returned.pack(None)
             }
@@ -492,11 +491,14 @@ where
                 store.as_context_mut(),
                 entered_host_task,
                 future,
-                move |store, ret, immediate| {
+                move |store, ret, immediate, materialized_host_task| {
                     let mut lower = LowerContext::new(store, options, instance);
                     lower.validate_scope_exit()?;
                     if immediate {
-                        lower.store.0.host_task_delete(entered_host_task)?;
+                        lower
+                            .store
+                            .0
+                            .host_task_delete(entered_host_task, materialized_host_task)?;
                     }
                     // FIXME(WebAssembly/component-model#678) the currently
                     // running thread for this exit lower is wrong. This happens
@@ -631,8 +633,6 @@ where
     P: ComponentNamedList + Lift + 'static,
     R: ComponentNamedList + Lower + 'static,
 {
-    const ASYNC: bool = ASYNC;
-
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()> {
         let ty = &types.types[ty];
         typecheck_async(ASYNC, ty.async_)?;
@@ -709,8 +709,6 @@ where
     T: 'static,
     F: Fn(StoreContextMut<'_, T>, ComponentFunc, Vec<Val>, usize) -> HostResult<Vec<Val>>,
 {
-    const ASYNC: bool = ASYNC;
-
     /// This function performs dynamic type checks on its parameters and
     /// results and subsequently does not need to perform up-front type
     /// checks. However, we _do_ verify async-ness here.

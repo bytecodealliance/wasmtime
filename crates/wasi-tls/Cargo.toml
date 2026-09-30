@@ -15,7 +15,7 @@ workspace = true
 all-features = true
 
 [features]
-default = ["p2", "rustls"]
+default = ["p2", "p3", "rustls"]
 p2 = ["wasmtime-wasi/p2"]
 p3 = ["wasmtime-wasi/p3", "wasmtime/component-model-async", "tracing"]
 rustls = ["dep:rustls", "dep:tokio-rustls", "dep:webpki-roots"]

@@ -355,16 +355,29 @@ impl<T: 'static> Linker<T> {
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     pub fn define_unknown_imports_as_traps(&mut self, component: &Component) -> Result<()> {
-        use wasmtime_environ::component::ComponentTypes;
-        use wasmtime_environ::component::TypeDef;
         // Recursively stub out all imports of the component with a function that traps.
+        use wasmtime_environ::component::{ComponentTypes, ResourceIndex, TypeDef};
+
         fn stub_item<T>(
             linker: &mut LinkerInstance<T>,
+            resources: &mut TryEntitySet<ResourceIndex>,
             item_name: &str,
             item_def: &TypeDef,
             parent_instance: Option<&str>,
             types: &ComponentTypes,
         ) -> Result<()> {
+            // The first definition of a resource needs to be present, but all other future
+            // references to the same resource are aliases of the original resource definition.
+            // Once a resource is visited here all future hits on the same resource shouldn't
+            // do anything else effectively. If item_name is already defined then we'll bail
+            // out in the below matches!, and otherwise a stub will be inserted, so no matter
+            // what the first resource is defined and all others will refer to that.
+            if let TypeDef::Resource(ty) = item_def
+                && !resources.insert(types[*ty].unwrap_concrete_ty())?
+            {
+                return Ok(());
+            }
+
             // Skip if the item isn't an instance and has already been defined in the linker.
             if !matches!(item_def, TypeDef::ComponentInstance(_)) && linker.get(item_name).is_some()
             {
@@ -421,6 +434,7 @@ impl<T: 'static> Linker<T> {
                     for (export_name, export) in instance.exports.iter() {
                         stub_item(
                             &mut linker_instance,
+                            resources,
                             export_name,
                             &export.ty,
                             Some(item_name),
@@ -440,9 +454,12 @@ impl<T: 'static> Linker<T> {
             Ok(())
         }
 
+        let mut resources = TryEntitySet::new();
+
         for (_, (import_name, import_type)) in &component.env_component().import_types {
             stub_item(
                 &mut self.root(),
+                &mut resources,
                 import_name,
                 &import_type.ty,
                 None,

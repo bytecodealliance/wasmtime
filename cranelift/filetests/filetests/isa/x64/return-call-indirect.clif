@@ -79,7 +79,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   leaq (%rip), %r10 ; reloc_external CallPCRel4 %callee_i64 -4
+;   leaq (%rip), %r10 ; reloc_external PCRel4 %callee_i64 -4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   jmpq *%r10

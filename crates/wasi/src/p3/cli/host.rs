@@ -13,11 +13,12 @@ use core::task::{Context, Poll};
 use std::io;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::oneshot;
+use wasmtime::AsContextMut;
 use wasmtime::component::{
     Access, Destination, FutureReader, Resource, Source, StreamConsumer, StreamProducer,
     StreamReader, StreamResult,
 };
-use wasmtime::{AsContextMut as _, StoreContextMut, error::Context as _, format_err};
+use wasmtime::{StoreContextMut, error::Context as _, format_err};
 
 struct InputStreamProducer {
     rx: Pin<Box<dyn AsyncRead + Send + Sync>>,
@@ -222,52 +223,68 @@ impl terminal_stderr::Host for WasiCliCtxView<'_> {
     }
 }
 
+fn read_stdin(
+    mut store: impl AsContextMut,
+    stdin: Box<dyn AsyncRead + Send + Sync>,
+) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
+    let mut store = store.as_context_mut();
+    let (result_tx, result_rx) = oneshot::channel();
+    let stream = StreamReader::new(
+        &mut store,
+        InputStreamProducer {
+            rx: Box::into_pin(stdin),
+            result_tx: Some(result_tx),
+        },
+    )?;
+    let future = FutureReader::new(&mut store, async {
+        wasmtime::error::Ok(match result_rx.await {
+            Ok(err) => Err(err),
+            Err(_) => Ok(()),
+        })
+    })?;
+    Ok((stream, future))
+}
+
 impl<U> stdin::HostWithStore<U> for WasiCli {
     fn read_via_stream(
         mut store: Access<U, Self>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
         let rx = store.get().ctx.stdin.async_stream();
-        let (result_tx, result_rx) = oneshot::channel();
-        let stream = StreamReader::new(
-            &mut store,
-            InputStreamProducer {
-                rx: Box::into_pin(rx),
-                result_tx: Some(result_tx),
-            },
-        )?;
-        let future = FutureReader::new(&mut store, async {
-            wasmtime::error::Ok(match result_rx.await {
-                Ok(err) => Err(err),
-                Err(_) => Ok(()),
-            })
-        })?;
-        Ok((stream, future))
+        read_stdin(&mut store, rx)
     }
 }
 
 impl stdin::Host for WasiCliCtxView<'_> {}
+
+fn write_output(
+    mut store: impl AsContextMut,
+    data: StreamReader<u8>,
+    writer: Box<dyn AsyncWrite + Send + Sync>,
+) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
+    let (result_tx, result_rx) = oneshot::channel();
+    data.pipe(
+        &mut store,
+        OutputStreamConsumer {
+            tx: Box::into_pin(writer),
+            result_tx: Some(result_tx),
+            flush_pending: false,
+        },
+    )?;
+    FutureReader::new(&mut store, async {
+        wasmtime::error::Ok(match result_rx.await {
+            Ok(err) => Err(err),
+            Err(_) => Ok(()),
+        })
+    })
+}
 
 impl<U> stdout::HostWithStore<U> for WasiCli {
     fn write_via_stream(
         mut store: Access<'_, U, Self>,
         data: StreamReader<u8>,
     ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
-        let (result_tx, result_rx) = oneshot::channel();
         let tx = store.get().ctx.stdout.async_stream();
-        data.pipe(
-            &mut store,
-            OutputStreamConsumer {
-                tx: Box::into_pin(tx),
-                result_tx: Some(result_tx),
-                flush_pending: false,
-            },
-        )?;
-        FutureReader::new(&mut store, async {
-            wasmtime::error::Ok(match result_rx.await {
-                Ok(err) => Err(err),
-                Err(_) => Ok(()),
-            })
-        })
+        write_output(store, data, tx)
     }
 }
 
@@ -278,22 +295,8 @@ impl<U> stderr::HostWithStore<U> for WasiCli {
         mut store: Access<'_, U, Self>,
         data: StreamReader<u8>,
     ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
-        let (result_tx, result_rx) = oneshot::channel();
         let tx = store.get().ctx.stderr.async_stream();
-        data.pipe(
-            &mut store,
-            OutputStreamConsumer {
-                tx: Box::into_pin(tx),
-                result_tx: Some(result_tx),
-                flush_pending: false,
-            },
-        )?;
-        FutureReader::new(&mut store, async {
-            wasmtime::error::Ok(match result_rx.await {
-                Ok(err) => Err(err),
-                Err(_) => Ok(()),
-            })
-        })
+        write_output(store, data, tx)
     }
 }
 
@@ -324,5 +327,151 @@ impl exit::Host for WasiCliCtxView<'_> {
 
     fn exit_with_code(&mut self, status_code: u8) -> wasmtime::Result<()> {
         Err(format_err!(I32Exit(status_code.into())))
+    }
+}
+
+mod named {
+    use crate::cli::{WasiCliNamed, WasiCliNamedView};
+    use crate::p3::bindings::cli::types::ErrorCode;
+    use crate::p3::bindings::named_imports::wasi::cli::{
+        environment, exit, stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr,
+        terminal_stdin, terminal_stdout,
+    };
+    use crate::p3::cli::{TerminalInput, TerminalOutput};
+    use crate::{NamedId, WasiCtxNamedView};
+    use wasmtime::component::{Access, FutureReader, Resource, StreamReader};
+
+    impl<T> exit::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn exit(&mut self, id: NamedId, status: Result<(), ()>) -> wasmtime::Result<()> {
+            super::exit::Host::exit(&mut self.0.cli(id), status)
+        }
+
+        fn exit_with_code(&mut self, id: NamedId, status_code: u8) -> wasmtime::Result<()> {
+            super::exit::Host::exit_with_code(&mut self.0.cli(id), status_code)
+        }
+    }
+
+    impl<T> terminal_input::Host for WasiCtxNamedView<'_, T> where T: WasiCliNamedView {}
+    impl<T> terminal_output::Host for WasiCtxNamedView<'_, T> where T: WasiCliNamedView {}
+
+    impl<T> terminal_input::HostTerminalInput for WasiCtxNamedView<'_, T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn drop(&mut self, id: NamedId, rep: Resource<TerminalInput>) -> wasmtime::Result<()> {
+            super::terminal_input::HostTerminalInput::drop(&mut self.0.cli(id), rep)
+        }
+    }
+
+    impl<T> terminal_output::HostTerminalOutput for WasiCtxNamedView<'_, T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn drop(&mut self, id: NamedId, rep: Resource<TerminalOutput>) -> wasmtime::Result<()> {
+            super::terminal_output::HostTerminalOutput::drop(&mut self.0.cli(id), rep)
+        }
+    }
+
+    impl<T> terminal_stdin::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn get_terminal_stdin(
+            &mut self,
+            id: NamedId,
+        ) -> wasmtime::Result<Option<Resource<TerminalInput>>> {
+            super::terminal_stdin::Host::get_terminal_stdin(&mut self.0.cli(id))
+        }
+    }
+
+    impl<T> terminal_stdout::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn get_terminal_stdout(
+            &mut self,
+            id: NamedId,
+        ) -> wasmtime::Result<Option<Resource<TerminalOutput>>> {
+            super::terminal_stdout::Host::get_terminal_stdout(&mut self.0.cli(id))
+        }
+    }
+
+    impl<T> terminal_stderr::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn get_terminal_stderr(
+            &mut self,
+            id: NamedId,
+        ) -> wasmtime::Result<Option<Resource<TerminalOutput>>> {
+            super::terminal_stderr::Host::get_terminal_stderr(&mut self.0.cli(id))
+        }
+    }
+
+    impl<T, U> stdin::HostWithStore<U> for WasiCliNamed<T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn read_via_stream(
+            mut store: Access<U, Self>,
+            id: NamedId,
+        ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
+            let rx = store.get().0.cli(id).ctx.stdin.async_stream();
+            super::read_stdin(&mut store, rx)
+        }
+    }
+
+    impl<T> stdin::Host for WasiCtxNamedView<'_, T> where T: WasiCliNamedView {}
+
+    impl<T, U> stdout::HostWithStore<U> for WasiCliNamed<T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn write_via_stream(
+            mut store: Access<'_, U, Self>,
+            id: NamedId,
+            data: StreamReader<u8>,
+        ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
+            let tx = store.get().0.cli(id).ctx.stdout.async_stream();
+            super::write_output(store, data, tx)
+        }
+    }
+
+    impl<T> stdout::Host for WasiCtxNamedView<'_, T> where T: WasiCliNamedView {}
+
+    impl<T, U> stderr::HostWithStore<U> for WasiCliNamed<T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn write_via_stream(
+            mut store: Access<'_, U, Self>,
+            id: NamedId,
+            data: StreamReader<u8>,
+        ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
+            let tx = store.get().0.cli(id).ctx.stderr.async_stream();
+            super::write_output(store, data, tx)
+        }
+    }
+
+    impl<T> stderr::Host for WasiCtxNamedView<'_, T> where T: WasiCliNamedView {}
+
+    impl<T> environment::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiCliNamedView,
+    {
+        fn get_environment(&mut self, id: NamedId) -> wasmtime::Result<Vec<(String, String)>> {
+            super::environment::Host::get_environment(&mut self.0.cli(id))
+        }
+
+        fn get_arguments(&mut self, id: NamedId) -> wasmtime::Result<Vec<String>> {
+            super::environment::Host::get_arguments(&mut self.0.cli(id))
+        }
+
+        fn get_initial_cwd(&mut self, id: NamedId) -> wasmtime::Result<Option<String>> {
+            super::environment::Host::get_initial_cwd(&mut self.0.cli(id))
+        }
     }
 }

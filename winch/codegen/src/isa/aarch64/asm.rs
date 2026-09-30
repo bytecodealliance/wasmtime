@@ -19,7 +19,7 @@ use cranelift_codegen::isa::aarch64::inst::{
     VecRRNarrowOp, VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmOp,
 };
 use cranelift_codegen::{
-    Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
+    MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
     Writable,
     ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
@@ -27,7 +27,7 @@ use cranelift_codegen::{
         FPULeftShiftImm, FPUOp1, FPUOp2,
         FPUOpRI::{self, UShr32, UShr64},
         FPUOpRIMod, FPURightShiftImm, FpuRoundMode, Imm12, ImmLogic, ImmShift, Inst, IntToFpuOp,
-        PairAMode, ScalarSize, VecALUOp, VecLanesOp, VecMisc2, VectorSize,
+        PairAMode, ReturnCallInfo, ScalarSize, VecALUOp, VecLanesOp, VecMisc2, VectorSize,
         emit::{EmitInfo, EmitState},
     },
     settings,
@@ -126,11 +126,12 @@ impl Assembler {
 
 impl Assembler {
     /// Return the emitted code.
-    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
-        let stencil = self
+    pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized {
+        let mut buffer = self
             .buffer
             .finish(&self.pool.constants(), self.emit_state.ctrl_plane_mut());
-        stencil.apply_base_srcloc(loc.unwrap_or_default())
+        buffer.apply_base_srcloc(loc.unwrap_or_default());
+        buffer
     }
 
     fn emit(&mut self, inst: Inst) {
@@ -1489,6 +1490,36 @@ impl Assembler {
                 callee.into(),
                 call_conv.into(),
             )),
+        })
+    }
+
+    /// Emit a direct tail jump to a named target.
+    pub fn tail_jump_with_name(&mut self, name: UserExternalNameRef) {
+        // Winch has already replaced the frame, so the generic Cranelift
+        // return-call sequence must see a zero-sized default frame here.
+        self.emit(Inst::ReturnCall {
+            info: Box::new(ReturnCallInfo {
+                dest: ExternalName::user(name),
+                uses: Default::default(),
+                new_stack_arg_size: 0,
+                key: None,
+                sign_return_address_all: false,
+            }),
+        })
+    }
+
+    /// Emit an indirect tail jump to the address in `callee`.
+    pub fn tail_jump_with_reg(&mut self, callee: Reg) {
+        // Winch has already replaced the frame, so the generic Cranelift
+        // return-call sequence must see a zero-sized default frame here.
+        self.emit(Inst::ReturnCallInd {
+            info: Box::new(ReturnCallInfo {
+                dest: callee.into(),
+                uses: Default::default(),
+                new_stack_arg_size: 0,
+                key: None,
+                sign_return_address_all: false,
+            }),
         })
     }
 

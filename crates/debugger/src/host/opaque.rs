@@ -2,11 +2,54 @@
 //! within a resource.
 
 use crate::host::wit;
-use crate::host::{api::WasmValue, bindings::val_type_to_wasm_type};
-use wasmtime::{
-    Engine, ExnRef, ExnRefPre, ExnType, FrameHandle, Func, FuncType, Global, Instance, Memory,
-    Module, OwnedRooted, Result, Table, Tag, TagType, Val, ValType,
+use crate::host::{
+    api::{Memory, WasmValue},
+    bindings::val_type_to_wasm_type,
 };
+#[cfg(feature = "threads")]
+use std::sync::atomic::{AtomicU8, Ordering};
+use wasmtime::{
+    Engine, ExnRef, ExnRefPre, ExnType, FrameHandle, Func, FuncType, Global, Instance, Module,
+    OwnedRooted, Result, Table, Tag, TagType, Val, ValType,
+};
+
+#[cfg(feature = "threads")]
+fn shared_memory_read_bytes(
+    memory: &wasmtime::SharedMemory,
+    addr: u64,
+    len: u64,
+) -> Option<Vec<u8>> {
+    let addr = usize::try_from(addr).ok()?;
+    let len = usize::try_from(len).ok()?;
+    let end = addr.checked_add(len)?;
+    let data = memory.data().get(addr..end)?;
+    Some(
+        data.iter()
+            .map(|byte| {
+                // SAFETY: `byte` is a valid byte from `SharedMemory::data`,
+                // and `AtomicU8` has the same alignment requirement as `u8`.
+                unsafe { AtomicU8::from_ptr(byte.get()).load(Ordering::Relaxed) }
+            })
+            .collect(),
+    )
+}
+
+#[cfg(feature = "threads")]
+fn shared_memory_write_bytes(
+    memory: &wasmtime::SharedMemory,
+    addr: u64,
+    bytes: &[u8],
+) -> Option<()> {
+    let addr = usize::try_from(addr).ok()?;
+    let end = addr.checked_add(bytes.len())?;
+    let data = memory.data().get(addr..end)?;
+    for (byte, value) in data.iter().zip(bytes) {
+        // SAFETY: `byte` is a valid byte from `SharedMemory::data`, and
+        // `AtomicU8` has the same alignment requirement as `u8`.
+        unsafe { AtomicU8::from_ptr(byte.get()).store(*value, Ordering::Relaxed) };
+    }
+    Some(())
+}
 
 /// Type-erased interface to the `Debugger<T>` implementing all
 /// functionality necessary for the interfaces here. This needs to be
@@ -168,8 +211,17 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         instance: Instance,
         idx: u32,
     ) -> Result<Option<Memory>> {
-        self.with_store(move |mut store| instance.debug_memory(&mut store, idx))
-            .await
+        self.with_store(move |mut store| {
+            let memory = instance.debug_memory(&mut store, idx).map(Memory::Unshared);
+            #[cfg(feature = "threads")]
+            let memory = memory.or_else(|| {
+                instance
+                    .debug_shared_memory(&mut store, idx)
+                    .map(Memory::Shared)
+            });
+            memory
+        })
+        .await
     }
 
     async fn instance_get_global(
@@ -197,24 +249,43 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
     }
 
     async fn memory_size_bytes(&mut self, memory: Memory) -> Result<u64> {
-        self.with_store(move |store| u64::try_from(memory.data_size(&store)).unwrap())
-            .await
+        self.with_store(move |store| match memory {
+            Memory::Unshared(memory) => u64::try_from(memory.data_size(&store)).unwrap(),
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => u64::try_from(memory.data_size()).unwrap(),
+        })
+        .await
     }
 
     async fn memory_page_size(&mut self, memory: Memory) -> Result<u64> {
-        self.with_store(move |store| memory.page_size(&store)).await
+        self.with_store(move |store| match memory {
+            Memory::Unshared(memory) => memory.page_size(&store),
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => memory.page_size(),
+        })
+        .await
     }
 
     async fn memory_grow(&mut self, memory: Memory, delta_bytes: u64) -> Result<u64> {
         self.with_store(move |mut store| -> Result<u64> {
-            let page_size = memory.page_size(&store);
+            let page_size = match &memory {
+                Memory::Unshared(memory) => memory.page_size(&store),
+                #[cfg(feature = "threads")]
+                Memory::Shared(memory) => memory.page_size(),
+            };
             if delta_bytes & (page_size - 1) != 0 {
                 return Err(wit::Error::MemoryGrowFailure.into());
             }
             let delta_pages = delta_bytes / page_size;
-            let old_pages = memory
-                .grow(&mut store, delta_pages)
-                .map_err(|_| wit::Error::MemoryGrowFailure)?;
+            let old_pages = match memory {
+                Memory::Unshared(memory) => memory
+                    .grow(&mut store, delta_pages)
+                    .map_err(|_| wit::Error::MemoryGrowFailure)?,
+                #[cfg(feature = "threads")]
+                Memory::Shared(memory) => memory
+                    .grow(delta_pages)
+                    .map_err(|_| wit::Error::MemoryGrowFailure)?,
+            };
             Ok(old_pages * page_size)
         })
         .await?
@@ -226,11 +297,16 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         addr: u64,
         len: u64,
     ) -> Result<Option<Vec<u8>>> {
-        self.with_store(move |store| {
-            let data = memory.data(&store);
-            let addr = usize::try_from(addr).unwrap();
-            let len = usize::try_from(len).unwrap();
-            data.get(addr..addr + len).map(|s| s.to_vec())
+        self.with_store(move |store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data(&store);
+                let addr = usize::try_from(addr).ok()?;
+                let len = usize::try_from(len).ok()?;
+                let end = addr.checked_add(len)?;
+                data.get(addr..end).map(|s| s.to_vec())
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => shared_memory_read_bytes(&memory, addr, len),
         })
         .await
     }
@@ -241,62 +317,95 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         addr: u64,
         bytes: Vec<u8>,
     ) -> Result<Option<()>> {
-        self.with_store(move |mut store| {
-            let data = memory.data_mut(&mut store);
-            let addr = usize::try_from(addr).unwrap();
-            let dest = data.get_mut(addr..addr + bytes.len())?;
-            dest.copy_from_slice(&bytes);
-            Some(())
+        self.with_store(move |mut store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data_mut(&mut store);
+                let addr = usize::try_from(addr).ok()?;
+                let end = addr.checked_add(bytes.len())?;
+                let dest = data.get_mut(addr..end)?;
+                dest.copy_from_slice(&bytes);
+                Some(())
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => shared_memory_write_bytes(&memory, addr, &bytes),
         })
         .await
     }
 
     async fn memory_read_u8(&mut self, memory: Memory, addr: u64) -> Result<Option<u8>> {
-        self.with_store(move |store| {
-            let data = memory.data(&store);
-            let addr = usize::try_from(addr).unwrap();
-            Some(*data.get(addr)?)
+        self.with_store(move |store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data(&store);
+                let addr = usize::try_from(addr).ok()?;
+                Some(*data.get(addr)?)
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => Some(shared_memory_read_bytes(&memory, addr, 1)?[0]),
         })
         .await
     }
 
     async fn memory_read_u16(&mut self, memory: Memory, addr: u64) -> Result<Option<u16>> {
-        self.with_store(move |store| {
-            let data = memory.data(&store);
-            let addr = usize::try_from(addr).unwrap();
-            Some(u16::from_le_bytes([*data.get(addr)?, *data.get(addr + 1)?]))
+        self.with_store(move |store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data(&store);
+                let addr = usize::try_from(addr).ok()?;
+                Some(u16::from_le_bytes([*data.get(addr)?, *data.get(addr + 1)?]))
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => Some(u16::from_le_bytes(
+                shared_memory_read_bytes(&memory, addr, 2)?
+                    .try_into()
+                    .unwrap(),
+            )),
         })
         .await
     }
 
     async fn memory_read_u32(&mut self, memory: Memory, addr: u64) -> Result<Option<u32>> {
-        self.with_store(move |store| {
-            let data = memory.data(&store);
-            let addr = usize::try_from(addr).unwrap();
-            Some(u32::from_le_bytes([
-                *data.get(addr)?,
-                *data.get(addr + 1)?,
-                *data.get(addr + 2)?,
-                *data.get(addr + 3)?,
-            ]))
+        self.with_store(move |store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data(&store);
+                let addr = usize::try_from(addr).ok()?;
+                Some(u32::from_le_bytes([
+                    *data.get(addr)?,
+                    *data.get(addr + 1)?,
+                    *data.get(addr + 2)?,
+                    *data.get(addr + 3)?,
+                ]))
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => Some(u32::from_le_bytes(
+                shared_memory_read_bytes(&memory, addr, 4)?
+                    .try_into()
+                    .unwrap(),
+            )),
         })
         .await
     }
 
     async fn memory_read_u64(&mut self, memory: Memory, addr: u64) -> Result<Option<u64>> {
-        self.with_store(move |store| {
-            let data = memory.data(&store);
-            let addr = usize::try_from(addr).unwrap();
-            Some(u64::from_le_bytes([
-                *data.get(addr)?,
-                *data.get(addr + 1)?,
-                *data.get(addr + 2)?,
-                *data.get(addr + 3)?,
-                *data.get(addr + 4)?,
-                *data.get(addr + 5)?,
-                *data.get(addr + 6)?,
-                *data.get(addr + 7)?,
-            ]))
+        self.with_store(move |store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data(&store);
+                let addr = usize::try_from(addr).ok()?;
+                Some(u64::from_le_bytes([
+                    *data.get(addr)?,
+                    *data.get(addr + 1)?,
+                    *data.get(addr + 2)?,
+                    *data.get(addr + 3)?,
+                    *data.get(addr + 4)?,
+                    *data.get(addr + 5)?,
+                    *data.get(addr + 6)?,
+                    *data.get(addr + 7)?,
+                ]))
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => Some(u64::from_le_bytes(
+                shared_memory_read_bytes(&memory, addr, 8)?
+                    .try_into()
+                    .unwrap(),
+            )),
         })
         .await
     }
@@ -307,11 +416,15 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         addr: u64,
         value: u8,
     ) -> Result<Option<()>> {
-        self.with_store(move |mut store| {
-            let data = memory.data_mut(&mut store);
-            let addr = usize::try_from(addr).unwrap();
-            *data.get_mut(addr)? = value;
-            Some(())
+        self.with_store(move |mut store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data_mut(&mut store);
+                let addr = usize::try_from(addr).ok()?;
+                *data.get_mut(addr)? = value;
+                Some(())
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => shared_memory_write_bytes(&memory, addr, &[value]),
         })
         .await
     }
@@ -322,12 +435,19 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         addr: u64,
         value: u16,
     ) -> Result<Option<()>> {
-        self.with_store(move |mut store| {
-            let data = memory.data_mut(&mut store);
-            let addr = usize::try_from(addr).unwrap();
-            data.get_mut(addr..(addr + 2))?
-                .copy_from_slice(&value.to_le_bytes());
-            Some(())
+        self.with_store(move |mut store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data_mut(&mut store);
+                let addr = usize::try_from(addr).ok()?;
+                let end = addr.checked_add(2)?;
+                data.get_mut(addr..end)?
+                    .copy_from_slice(&value.to_le_bytes());
+                Some(())
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => {
+                shared_memory_write_bytes(&memory, addr, &value.to_le_bytes())
+            }
         })
         .await
     }
@@ -338,12 +458,19 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         addr: u64,
         value: u32,
     ) -> Result<Option<()>> {
-        self.with_store(move |mut store| {
-            let data = memory.data_mut(&mut store);
-            let addr = usize::try_from(addr).unwrap();
-            data.get_mut(addr..(addr + 4))?
-                .copy_from_slice(&value.to_le_bytes());
-            Some(())
+        self.with_store(move |mut store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data_mut(&mut store);
+                let addr = usize::try_from(addr).ok()?;
+                let end = addr.checked_add(4)?;
+                data.get_mut(addr..end)?
+                    .copy_from_slice(&value.to_le_bytes());
+                Some(())
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => {
+                shared_memory_write_bytes(&memory, addr, &value.to_le_bytes())
+            }
         })
         .await
     }
@@ -354,12 +481,19 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         addr: u64,
         value: u64,
     ) -> Result<Option<()>> {
-        self.with_store(move |mut store| {
-            let data = memory.data_mut(&mut store);
-            let addr = usize::try_from(addr).unwrap();
-            data.get_mut(addr..(addr + 8))?
-                .copy_from_slice(&value.to_le_bytes());
-            Some(())
+        self.with_store(move |mut store| match memory {
+            Memory::Unshared(memory) => {
+                let data = memory.data_mut(&mut store);
+                let addr = usize::try_from(addr).ok()?;
+                let end = addr.checked_add(8)?;
+                data.get_mut(addr..end)?
+                    .copy_from_slice(&value.to_le_bytes());
+                Some(())
+            }
+            #[cfg(feature = "threads")]
+            Memory::Shared(memory) => {
+                shared_memory_write_bytes(&memory, addr, &value.to_le_bytes())
+            }
         })
         .await
     }

@@ -290,3 +290,105 @@ block0(v0: i32, v1: i32):
 
 ; run: %test_bxor_bor_bnot_bxor(0, 0) == 0xffffffff
 ; run: %test_bxor_bor_bnot_bxor(1, 0) == 0xffffffff
+
+function %udiv_shift_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v2, v1
+    v4 = udiv v0, v3
+    return v4
+}
+; run: %udiv_shift_i32(0, 0) == 0
+; run: %udiv_shift_i32(123, 0) == 123
+; run: %udiv_shift_i32(-1, 1) == 2147483647
+; run: %udiv_shift_i32(-1, 31) == 1
+; run: %udiv_shift_i32(-1, 32) == -1
+; run: %udiv_shift_i32(-1, 33) == 2147483647
+; run: %udiv_shift_i32(-1, -1) == 1
+; run: %udiv_shift_i32(-2147483648, 31) == 1
+
+function %shift_nonnegative_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = sshr v0, v1
+    v3 = iconst.i32 -1
+    v4 = icmp sgt v2, v3
+    return v4
+}
+; run: %shift_nonnegative_i32(0, 0) == 1
+; run: %shift_nonnegative_i32(1, 31) == 1
+; run: %shift_nonnegative_i32(-1, 0) == 0
+; run: %shift_nonnegative_i32(-1, 32) == 0
+; run: %shift_nonnegative_i32(-2147483648, 31) == 0
+; run: %shift_nonnegative_i32(2147483647, -1) == 1
+; run: %shift_nonnegative_i32(-2147483648, 33) == 0
+
+function %eq_rotl_i32(i32, i32, i32) -> i8 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = rotl v0, v2
+    v4 = rotl v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+; run: %eq_rotl_i32(0, 0, 0) == 1
+; run: %eq_rotl_i32(1, 2, 31) == 0
+; run: %eq_rotl_i32(-1, -1, -1) == 1
+; run: %eq_rotl_i32(1, 1, 32) == 1
+; run: %eq_rotl_i32(-2147483648, 2147483647, 33) == 0
+
+function %not_sshr_not_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = sshr v2, v1
+    v4 = bnot v3
+    return v4
+}
+; run: %not_sshr_not_i32(0, 0) == 0
+; run: %not_sshr_not_i32(0, 31) == 0
+; run: %not_sshr_not_i32(-1, 1) == -1
+; run: %not_sshr_not_i32(2147483647, 1) == 1073741823
+; run: %not_sshr_not_i32(-2147483648, 31) == -1
+; run: %not_sshr_not_i32(-2147483648, 32) == -2147483648
+; run: %not_sshr_not_i32(-2147483648, 33) == -1073741824
+; run: %not_sshr_not_i32(-1, -1) == -1
+
+function %not_ushr_not_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = ushr v2, v1
+    v4 = bnot v3
+    return v4
+}
+; run: %not_ushr_not_i32(0, 1) == -2147483648
+; run: %not_ushr_not_i32(-1, 31) == -1
+
+function %udiv_shift_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v2, v1
+    v4 = udiv v0, v3
+    return v4
+}
+; run: %udiv_shift_i64(-1, 63) == 1
+; run: %udiv_shift_i64(-1, 64) == -1
+; run: %udiv_shift_i64(-1, 65) == 9223372036854775807
+; run: %udiv_shift_i64(-1, -1) == 1
+
+function %neg_low_bit_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = ineg v0
+    v2 = iconst.i8 1
+    v3 = band v1, v2
+    return v3
+}
+; run: %neg_low_bit_i8(-128) == 0
+; run: %neg_low_bit_i8(127) == 1
+
+function %not_sub_not_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = bnot v0
+    v3 = isub v2, v1
+    v4 = bnot v3
+    return v4
+}
+; run: %not_sub_not_i64(9223372036854775807, 1) == -9223372036854775808
+; run: %not_sub_not_i64(-9223372036854775808, -1) == 9223372036854775807

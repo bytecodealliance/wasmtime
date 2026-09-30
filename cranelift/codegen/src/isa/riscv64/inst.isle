@@ -2968,10 +2968,10 @@
 ;; Note that non-64-bit types need to be extended since the upper bits from
 ;; Cranelift's point of view are undefined. Favor a zero extension for 8-bit
 ;; types because that's a single `andi` instruction, but favor sign-extension
-;; for 16 and 32-bit types because many RISC-V which operate on the low 32-bits.
+;; for 16 and 32-bit types because many RISC-V impls operate on the low 32-bits
+;; of registers sign-extend the results.
 ;; Additionally the base 64-bit ISA has a single instruction for sign-extending
 ;; from 32 to 64-bits which makes that a bit cheaper if used.
-;; of registers sign-extend the results.
 (rule 0 (is_nonzero_cmp val @ (value_type (fits_in_64 _)))
   (cmp_nez (sext val)))
 (rule 1 (is_nonzero_cmp val @ (value_type $I8))

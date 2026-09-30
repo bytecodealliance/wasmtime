@@ -47,8 +47,32 @@ pub(crate) struct Elaborator<'a> {
     /// Map from Value to the best (lowest-cost) Value in its eclass
     /// (tree of union value-nodes).
     value_to_best_value: SecondaryMap<Value, BestEntry>,
-    /// Stack of blocks and loops in current elaboration path.
+    /// Stack of loops whose headers dominate the current elaboration
+    /// path, outermost first.
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
+    /// How many of the entries in `loop_stack` actually contain the current
+    /// block in their loop.
+    ///
+    /// Valid LICM hoisting targets are `loop_stack[..active_loop_depth]`.
+    ///
+    /// This is not *strictly* necessary for correctness, and we could hoist to
+    /// anything in `loop_stack` because they all dominate the block we are
+    /// currently elaborating, but this prevents us from hoisting instructions
+    /// from loop-exit blocks to loop-header blocks, which (1) wouldn't cut down
+    /// on the number of times they're executed, and in fact could make them go
+    /// from being executed zero times (if we exit the loop through a different
+    /// loop-exit block) to executed once in the header, and (2) would make us
+    /// hoist cold code out of blocks that terminate with a trap into loop
+    /// headers.
+    active_loop_depth: usize,
+    /// For each loop currently on `loop_stack`, its index in that stack;
+    /// `NOT_ON_LOOP_STACK` for every other loop.
+    ///
+    /// This lets us compute `active_loop_depth` with a single walk up the loop
+    /// tree, rather than testing each entry of `loop_stack` for membership in
+    /// turn, which would be quadratic in the depth of the loop nest because
+    /// `LoopAnalysis::is_in_loop` itself walks the loop tree.
+    loop_stack_index: SecondaryMap<Loop, u32>,
     /// The current block into which we are elaborating.
     cur_block: Block,
     /// Values that opt rules have indicated should be rematerialized
@@ -70,6 +94,10 @@ pub(crate) struct Elaborator<'a> {
     /// correct results when our heuristics make bad decisions.
     ctrl_plane: &'a mut ControlPlane,
 }
+
+/// Sentinel for `Elaborator::loop_stack_index`: this loop is not currently on
+/// the loop stack.
+const NOT_ON_LOOP_STACK: u32 = u32::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BestEntry(Cost, Value);
@@ -133,8 +161,15 @@ enum ElabStackEntry {
 
 #[derive(Clone, Debug)]
 enum BlockStackEntry {
+    /// Elaborate the given block.
     Elaborate { block: Block, idom: Option<Block> },
-    Pop,
+
+    /// Leave the subtree we just finished elaborating.
+    Pop {
+        /// Truncate `loop_stack` back to `loop_depth`, the depth it had when we
+        /// entered this subtree.
+        loop_depth: usize,
+    },
 }
 
 impl<'a> Elaborator<'a> {
@@ -157,6 +192,8 @@ impl<'a> Elaborator<'a> {
             value_to_elaborated_value: ScopedHashMap::with_capacity(num_values),
             value_to_best_value,
             loop_stack: smallvec![],
+            active_loop_depth: 0,
+            loop_stack_index: SecondaryMap::with_default(NOT_ON_LOOP_STACK),
             cur_block: Block::reserved_value(),
             remat_values,
             elab_stack: vec![],
@@ -177,14 +214,6 @@ impl<'a> Elaborator<'a> {
             self.value_to_elaborated_value.depth()
         );
 
-        // Pop any loop levels we're no longer in.
-        while let Some(inner_loop) = self.loop_stack.last() {
-            if self.loop_analysis.is_in_loop(block, inner_loop.lp) {
-                break;
-            }
-            self.loop_stack.pop();
-        }
-
         // Note that if the *entry* block is a loop header, we will
         // not make note of the loop here because it will not have an
         // immediate dominator. We must disallow this case because we
@@ -202,6 +231,10 @@ impl<'a> Elaborator<'a> {
                     hoist_block: idom,
                     scope_depth: (self.value_to_elaborated_value.depth() - 1) as u32,
                 });
+
+                debug_assert_eq!(self.loop_stack_index[lp], NOT_ON_LOOP_STACK);
+                self.loop_stack_index[lp] = u32::try_from(self.loop_stack.len() - 1).unwrap();
+
                 trace!(
                     " -> loop header, pushing; depth now {}",
                     self.loop_stack.len()
@@ -214,9 +247,36 @@ impl<'a> Elaborator<'a> {
             );
         }
 
-        trace!("block {}: loop stack is {:?}", block, self.loop_stack);
+        self.active_loop_depth = self.find_active_loop_depth(block);
+
+        trace!(
+            "block {}: loop stack is {:?}, active depth {}",
+            block, self.loop_stack, self.active_loop_depth
+        );
 
         self.cur_block = block;
+    }
+
+    /// Find the active loop depth for a new block.
+    ///
+    /// Not every block dominated by a loop header is inside that loop: a block
+    /// that cannot reach the backedge, such as one that only traps or returns,
+    /// is dominated by the header but is not a member of the natural loop. This
+    /// function finds how much of the loop stack actually contains this block;
+    /// the rest is not available to hoist out of.
+    ///
+    /// Returns `depth` where every loop in `self.loop_stack[..depth]` contains
+    /// `block`.
+    fn find_active_loop_depth(&self, block: Block) -> usize {
+        let mut lp = self.loop_analysis.innermost_loop(block);
+        while let Some(l) = lp {
+            let index = self.loop_stack_index[l];
+            if index != NOT_ON_LOOP_STACK {
+                return index as usize + 1;
+            }
+            lp = self.loop_analysis.loop_parent(l);
+        }
+        0
     }
 
     fn topo_sorted_values(&self) -> Vec<Value> {
@@ -559,20 +619,21 @@ impl<'a> Elaborator<'a> {
                     // placing too much register pressure on the entire
                     // function. This is modeled with the `.saturating_sub(1)`
                     // as the default if there's otherwise no maximum.
+                    let active_loop_depth = self.active_loop_depth;
                     let loop_hoist_level = arg_values
                         .iter()
                         .map(|&value| {
-                            // Find the outermost loop level at which
-                            // the value's defining block *is not* a
-                            // member. This is the loop-nest level
-                            // whose hoist-block we hoist to.
-                            let hoist_level = self
-                                .loop_stack
+                            // Find the outermost loop level whose
+                            // hoist-block this value is already
+                            // available at. This is the loop-nest
+                            // level whose hoist-block we hoist to.
+                            let hoist_level = self.loop_stack[..active_loop_depth]
                                 .iter()
                                 .position(|loop_entry| {
-                                    !self.loop_analysis.is_in_loop(value.in_block, loop_entry.lp)
+                                    self.domtree
+                                        .block_dominates(value.in_block, loop_entry.hoist_block)
                                 })
-                                .unwrap_or(self.loop_stack.len());
+                                .unwrap_or(active_loop_depth);
                             trace!(
                                 " -> arg: elab_value {:?} hoist level {:?}",
                                 value, hoist_level
@@ -580,12 +641,10 @@ impl<'a> Elaborator<'a> {
                             hoist_level
                         })
                         .max()
-                        .unwrap_or(self.loop_stack.len().saturating_sub(1));
+                        .unwrap_or(active_loop_depth.saturating_sub(1));
                     trace!(
                         " -> loop hoist level: {:?}; cur loop depth: {:?}, loop_stack: {:?}",
-                        loop_hoist_level,
-                        self.loop_stack.len(),
-                        self.loop_stack,
+                        loop_hoist_level, active_loop_depth, self.loop_stack,
                     );
 
                     // We know that this is a pure inst, because
@@ -598,7 +657,7 @@ impl<'a> Elaborator<'a> {
                     // block *unless* we hoist above a loop when all
                     // args are loop-invariant (and this op is pure).
                     let (scope_depth, before, insert_block) = if loop_hoist_level
-                        == self.loop_stack.len()
+                        >= active_loop_depth
                     {
                         // Depends on some value at the current
                         // loop depth, or remat forces it here:
@@ -829,7 +888,9 @@ impl<'a> Elaborator<'a> {
         while let Some(top) = self.block_stack.pop() {
             match top {
                 BlockStackEntry::Elaborate { block, idom } => {
-                    self.block_stack.push(BlockStackEntry::Pop);
+                    self.block_stack.push(BlockStackEntry::Pop {
+                        loop_depth: self.loop_stack.len(),
+                    });
                     self.value_to_elaborated_value.increment_depth();
 
                     self.elaborate_block(&mut elab_values, idom, block);
@@ -850,8 +911,12 @@ impl<'a> Elaborator<'a> {
                     // we can't `.rev()` above.)
                     self.block_stack[block_stack_end..].reverse();
                 }
-                BlockStackEntry::Pop => {
+                BlockStackEntry::Pop { loop_depth } => {
                     self.value_to_elaborated_value.decrement_depth();
+                    for entry in &self.loop_stack[loop_depth..] {
+                        self.loop_stack_index[entry.lp] = NOT_ON_LOOP_STACK;
+                    }
+                    self.loop_stack.truncate(loop_depth);
                 }
             }
         }

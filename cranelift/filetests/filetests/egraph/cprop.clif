@@ -349,8 +349,8 @@ block0(v0: i32, v1: i32):
     return v7
 }
 
-; check: v16 = iconst.i32 333
-; check: v18 = iadd v1, v16
+; check: v9 = iconst.i32 333
+; check: v18 = iadd v1, v9
 ; check: v19 = icmp eq v0, v18
 ; nextln: return v19
 
@@ -364,8 +364,8 @@ block0(v0: i32, v1: i32):
     return v7
 }
 
-; check: v40 = iconst.i32 333
-; check: v44 = iadd v0, v40
+; check: v36 = iconst.i32 333
+; check: v44 = iadd v0, v36
 ; check: v45 = icmp eq v1, v44
 ; nextln: return v45
 

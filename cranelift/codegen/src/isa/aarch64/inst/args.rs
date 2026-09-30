@@ -713,6 +713,25 @@ impl APIKey {
     }
 }
 
+/// "Package" of the arguments for the instruction `AtomicCAS128` to avoid
+/// making the `Inst` enum massive.
+///
+/// `rd_lo`/`rd_hi` are really `rs`/`rs+1` in the encoded instruction (so
+/// `rd_lo == rs_lo` and `rd_hi == rs_hi`); they are separated here to have
+/// separate use and def vregs for regalloc.
+#[derive(Clone, Debug)]
+#[expect(missing_docs, reason = "self-describing fields")]
+pub struct AtomicCAS128Args {
+    pub rd_lo: Writable<Reg>,
+    pub rd_hi: Writable<Reg>,
+    pub rs_lo: Reg,
+    pub rs_hi: Reg,
+    pub rt_lo: Reg,
+    pub rt_hi: Reg,
+    pub rn: Reg,
+    pub flags: MemFlagsData,
+}
+
 pub use crate::isa::aarch64::lower::isle::generated_code::TestBitAndBranchKind;
 
 impl TestBitAndBranchKind {

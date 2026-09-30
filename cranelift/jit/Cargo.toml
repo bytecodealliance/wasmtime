@@ -1,12 +1,11 @@
 [package]
 name = "cranelift-jit"
-version = "0.136.0-dev"
+version = "0.137.0-dev"
 authors = ["The Cranelift Project Developers"]
 description = "A JIT library backed by Cranelift"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/cranelift-jit"
 license = "Apache-2.0 WITH LLVM-exception"
-readme = "README.md"
 edition.workspace = true
 rust-version.workspace = true
 

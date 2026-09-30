@@ -6,7 +6,6 @@ use crate::isa::aarch64::settings as aarch64_settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey, TargetIsa};
-#[cfg(feature = "unwind")]
 use crate::machinst::CompiledCode;
 use crate::machinst::{
     CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet, TextSectionBuilder, VCode,
@@ -93,13 +92,13 @@ impl TargetIsa for AArch64Backend {
             log::debug!("disassembly:\n{disasm}");
         }
 
-        Ok(CompiledCodeStencil {
+        Ok(CompiledCodeStencil(CompiledCode {
             buffer,
             vcode: emit_result.disasm,
             value_labels_ranges,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
-        })
+        }))
     }
 
     fn name(&self) -> &'static str {

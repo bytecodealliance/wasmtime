@@ -4,7 +4,7 @@
 // This is a separate script primarily to write out all the release
 // targets/platforms once and then duplicate them all with a "min" build.
 
-const ubuntu = 'ubuntu-24.04';
+const ubuntu = 'ubuntu-26.04';
 const windows = 'windows-2025';
 const macos = 'macos-15';
 
@@ -82,13 +82,19 @@ const array = [
     "build": "x86_64-musl",
     "os": ubuntu,
     "target": "x86_64-unknown-linux-musl",
-    "env": { "DOCKER_IMAGE": "./ci/docker/x86_64-musl/Dockerfile" },
+    "env": {
+      "DOCKER_IMAGE": "./ci/docker/x86_64-musl/Dockerfile",
+      "RUSTFLAGS": "-Alinker-messages",
+    },
   },
   {
     "build": "aarch64-musl",
     "os": ubuntu,
     "target": "aarch64-unknown-linux-musl",
-    "env": { "DOCKER_IMAGE": "./ci/docker/aarch64-musl/Dockerfile" },
+    "env": {
+      "DOCKER_IMAGE": "./ci/docker/aarch64-musl/Dockerfile",
+      "RUSTFLAGS": "-Alinker-messages",
+    },
   },
   {
     "build": "aarch64-windows",

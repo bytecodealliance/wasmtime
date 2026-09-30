@@ -151,7 +151,7 @@ pub const WASMTIME_UPDATE_DEADLINE_YIELD: wasmtime_update_deadline_kind_t = 1;
 pub extern "C" fn wasmtime_store_epoch_deadline_callback(
     store: &mut wasmtime_store_t,
     func: extern "C" fn(
-        WasmtimeStoreContextMut<'_>,
+        WasmtimeStoreContext<'_>,
         *mut c_void,
         *mut u64,
         *mut wasmtime_update_deadline_kind_t,
@@ -160,12 +160,12 @@ pub extern "C" fn wasmtime_store_epoch_deadline_callback(
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {
     let foreign = crate::ForeignData { data, finalizer };
-    store.store.epoch_deadline_callback(move |mut store_ctx| {
+    store.store.epoch_deadline_callback(move |store_ctx| {
         let _ = &foreign; // Move foreign into this closure
         let mut delta: u64 = 0;
         let mut kind = WASMTIME_UPDATE_DEADLINE_CONTINUE;
         let result = (func)(
-            store_ctx.as_context_mut(),
+            store_ctx.as_context(),
             foreign.data,
             &mut delta as *mut u64,
             &mut kind as *mut wasmtime_update_deadline_kind_t,

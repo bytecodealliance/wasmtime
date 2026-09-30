@@ -1,9 +1,12 @@
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
     ops::{GcOp, GcOps, OP_NAMES},
-    types::{RecGroupId, StackType, TypeId, Types},
+    types::{
+        ArrayType, CompositeType, FieldType, RecGroupId, StackType, StructField, TypeId, Types,
+    },
 };
 use mutatis;
+use mutatis::mutators as m;
 use rand::rngs::StdRng;
 use rand::{RngExt, SeedableRng};
 use std::collections::BTreeSet;
@@ -117,18 +120,21 @@ fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> GcOps {
     t
 }
 
-/// Validate that a GcOps produces a valid Wasm binary.
-fn assert_valid_wasm(ops: &mut GcOps) {
+/// Check that a `GcOps` emits a valid Wasm binary, describing the failure if
+/// not.
+fn check_valid_wasm(ops: &GcOps) -> Result<(), String> {
+    let mut ops = ops.clone();
     let wasm = ops.to_wasm_binary();
-    let feats = wasmparser::WasmFeatures::default();
-    feats.reference_types();
-    feats.gc();
+    let feats = wasmparser::WasmFeatures::default()
+        | wasmparser::WasmFeatures::REFERENCE_TYPES
+        | wasmparser::WasmFeatures::GC
+        | wasmparser::WasmFeatures::GC_TYPES;
     let mut validator = wasmparser::Validator::new_with_features(feats);
 
-    if let Err(e) = validator.validate_all(&wasm) {
+    validator.validate_all(&wasm).map(|_| ()).map_err(|e| {
         let wat =
             wasmprinter::print_bytes(&wasm).unwrap_or_else(|e| format!("<disasm failed: {e}>"));
-        panic!(
+        format!(
             "Emitted Wasm binary is not valid!\n\n\
              === Validation Error ===\n\n\
              {e}\n\n\
@@ -136,21 +142,58 @@ fn assert_valid_wasm(ops: &mut GcOps) {
              {ops:#?}\n\n\
              === Wat ===\n\n\
              {wat}"
-        );
+        )
+    })
+}
+
+/// Validate that a GcOps produces a valid Wasm binary.
+fn assert_valid_wasm(ops: &GcOps) {
+    if let Err(e) = check_valid_wasm(ops) {
+        panic!("{e}");
     }
 }
 
 #[test]
-fn mutate_gc_ops_with_default_mutator() -> mutatis::Result<()> {
+fn always_produces_valid_wasm() {
+    let _ = env_logger::try_init();
+
+    mutatis::check::Check::new()
+        .iters(2048)
+        .shrink_iters(1024)
+        .seed(0xC0FFEE)
+        .run_with(
+            m::default::<GcOps>(),
+            [test_ops(5, 5, 5), empty_test_ops(), cast_test_ops(vec![])],
+            check_valid_wasm,
+        )
+        .unwrap();
+}
+
+/// Every limit must stay inside its declared range under mutation.
+#[test]
+fn limits_stay_in_range() -> mutatis::Result<()> {
+    use crate::generators::gc_ops::limits::{
+        ARRAY_LENGTH_RANGE, MAX_FIELDS_RANGE, MAX_REC_GROUPS_RANGE, MAX_TYPES_RANGE,
+        NUM_GLOBALS_RANGE, NUM_PARAMS_RANGE, TABLE_SIZE_RANGE,
+    };
     let _ = env_logger::try_init();
 
     let mut ops = test_ops(5, 5, 5);
+    ops.limits.fixup();
 
-    let mut session = mutatis::Session::new();
+    let mut session = mutatis::Session::new().seed(0xC0FFEE);
     for _ in 0..2048 {
         session.mutate(&mut ops)?;
-        assert_valid_wasm(&mut ops);
+        let l = &ops.limits;
+        assert!(NUM_PARAMS_RANGE.contains(&l.num_params), "{l:?}");
+        assert!(NUM_GLOBALS_RANGE.contains(&l.num_globals), "{l:?}");
+        assert!(TABLE_SIZE_RANGE.contains(&l.table_size), "{l:?}");
+        assert!(MAX_REC_GROUPS_RANGE.contains(&l.max_rec_groups), "{l:?}");
+        assert!(MAX_TYPES_RANGE.contains(&l.max_types), "{l:?}");
+        assert!(MAX_FIELDS_RANGE.contains(&l.max_fields), "{l:?}");
+        assert!(ARRAY_LENGTH_RANGE.contains(&l.array_length), "{l:?}");
     }
+
     Ok(())
 }
 
@@ -222,7 +265,7 @@ fn every_op_generated() -> mutatis::Result<()> {
     let mut res = empty_test_ops();
     let mut session = mutatis::Session::new().seed(0xC0FFEE);
 
-    'outer: for _ in 0..=8192 {
+    'outer: for _ in 0..=32768 {
         session.mutate(&mut res)?;
         for op in &res.ops {
             unseen_ops.remove(op.name());
@@ -272,7 +315,7 @@ fn i31_and_eq_upcast_ops_validate() -> mutatis::Result<()> {
         GcOp::TypedStructRefAsEq { type_index: 0 },
         GcOp::TakeEqCall,
     ];
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 
     Ok(())
 }
@@ -282,7 +325,7 @@ fn emits_rec_groups_and_validates() -> mutatis::Result<()> {
     let _ = env_logger::try_init();
 
     let mut ops = test_ops(5, 5, 5);
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 
     let wasm = ops.to_wasm_binary();
     let wat = wasmprinter::print_bytes(&wasm).expect("to WAT");
@@ -358,7 +401,7 @@ fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
     );
 
     // Verify that we generate a valid Wasm binary after calling `fixup`.
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 
     Ok(())
 }
@@ -888,7 +931,7 @@ fn upcast_valid_pair() {
         "valid upcast pair should be preserved: {:#?}",
         ops.ops
     );
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 }
 
 /// Case 2: wrong pair — repaired to sub's direct supertype.
@@ -915,7 +958,7 @@ fn upcast_wrong_pair_repaired_via_supertype() {
         "upcast should be repaired to sub's direct supertype: {:#?}",
         ops.ops
     );
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 }
 
 /// Case 3: sub has no supertype — falls back to self-cast.
@@ -941,7 +984,7 @@ fn upcast_no_supertype_self_cast() {
         "upcast with no supertype should become self-cast: {:#?}",
         ops.ops
     );
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 }
 
 /// Case 4: flat hierarchy (no supertypes at all) — self-cast.
@@ -965,7 +1008,7 @@ fn upcast_flat_hierarchy_self_cast() {
         "upcast in flat hierarchy should become self-cast: {:#?}",
         ops.ops
     );
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 }
 
 // ---- RefCastDownward tests ----
@@ -992,7 +1035,7 @@ fn downcast_valid_pair() {
         "valid downcast pair should be preserved: {:#?}",
         ops.ops
     );
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 }
 
 /// Case 2: wrong pair — super (operand) is kept, sub (result) is
@@ -1021,7 +1064,7 @@ fn downcast_wrong_pair_repaired_finds_subtype() {
         "downcast should keep super and find a valid sub: {:#?}",
         ops.ops
     );
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 }
 
 /// Case 3: super has no subtypes — falls back to self-cast keeping
@@ -1048,7 +1091,7 @@ fn downcast_no_subtype_self_cast() {
         "downcast with no subtypes should self-cast keeping super: {:#?}",
         ops.ops
     );
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
 }
 
 /// Case 4: flat hierarchy — self-cast.
@@ -1072,5 +1115,69 @@ fn downcast_flat_hierarchy_self_cast() {
         "downcast in flat hierarchy should become self-cast: {:#?}",
         ops.ops
     );
-    assert_valid_wasm(&mut ops);
+    assert_valid_wasm(&ops);
+}
+
+/// `Types::fixup` must re-point dangling type references at live types rather
+/// than erasing them, because a mutated type id is essentially never live and
+/// erasing would leave the fuzzer with no concrete references and no subtyping.
+#[test]
+fn fixup_repoints_dangling_references() {
+    let limits = GcOpsLimits::default();
+    let gid = RecGroupId(0);
+    let mut types = Types::new();
+    types.insert_rec_group(gid);
+
+    // A final struct and an array: neither is a legal supertype for a
+    // non-final struct, so resolution must not pick either of them.
+    types.insert_struct(TypeId(10), gid, true, None, Vec::new());
+    types.insert_type(
+        TypeId(20),
+        gid,
+        false,
+        None,
+        CompositeType::Array(ArrayType {
+            element: StructField {
+                field_type: FieldType::I32,
+                mutable: false,
+            },
+        }),
+    );
+    // The one legal supertype.
+    types.insert_struct(TypeId(30), gid, false, None, Vec::new());
+
+    // The type under test: a dangling supertype and a dangling field
+    // reference, both pointing at ids that do not exist.
+    types.insert_struct(
+        TypeId(40),
+        gid,
+        false,
+        Some(TypeId(0xdead_beef)),
+        vec![StructField {
+            field_type: FieldType::Ref {
+                nullable: true,
+                type_id: TypeId(0xfeed_face),
+            },
+            mutable: false,
+        }],
+    );
+
+    types.fixup(&limits, &mut Vec::new());
+
+    let def = types.type_defs.get(&TypeId(40)).unwrap();
+    assert_eq!(
+        def.supertype,
+        Some(TypeId(30)),
+        "a dangling supertype must resolve to the one non-final struct, \
+         not to the final struct, the array, or `None`"
+    );
+
+    let field = &def.composite_type.fields()[0];
+    match field.field_type {
+        FieldType::Ref { type_id, .. } => assert!(
+            types.type_defs.contains_key(&type_id),
+            "a dangling reference must resolve to a live type, got {type_id:?}"
+        ),
+        ref other => panic!("dangling reference was erased instead of re-pointed: {other:?}"),
+    }
 }

@@ -26,6 +26,7 @@ pub struct ModuleConfig {
     pub component_model_memory64: bool,
     pub component_model_fixed_length_lists: bool,
     pub component_model_implements: bool,
+    pub component_model_canonical_names: bool,
     pub legacy_exceptions: bool,
     pub shared_memory: bool,
     pub stack_switching: bool,
@@ -55,6 +56,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         let _ = config.tail_call_enabled;
         let _ = config.extended_const_enabled;
         let _ = config.gc_enabled;
+        let _ = config.compact_imports_enabled;
         let _ = config.exceptions_enabled;
         config.custom_page_sizes_enabled = u.arbitrary()?;
         config.wide_arithmetic_enabled = u.arbitrary()?;
@@ -88,6 +90,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
             component_model_memory64: false,
             component_model_fixed_length_lists: false,
             component_model_implements: false,
+            component_model_canonical_names: false,
             legacy_exceptions: false,
             shared_memory: false,
             stack_switching: false,
@@ -126,17 +129,17 @@ impl ModuleConfig {
             config.limit_arrays_in_const_exprs = true;
         }
 
-        let mut module = wasm_smith::Module::new(config, input)?;
+        let mut module = wasm_smith::Module::new(config.clone(), input)?;
 
         if let Some(before) = input_before {
             static GEN_CNT: AtomicUsize = AtomicUsize::new(0);
             let used = before.len() - input.len();
             let i = GEN_CNT.fetch_add(1, Relaxed);
             let dna = format!("testcase{i}.dna");
-            let config = format!("testcase{i}.json");
-            log::debug!("writing `{dna}` and `{config}`");
+            let config_file = format!("testcase{i}.json");
+            log::debug!("writing `{dna}` and `{config_file}`");
             std::fs::write(&dna, &before[..used]).unwrap();
-            std::fs::write(&config, serde_json::to_string_pretty(&config).unwrap()).unwrap();
+            std::fs::write(&config_file, serde_json::to_string_pretty(&config).unwrap()).unwrap();
         }
 
         if let Some(default_fuel) = default_fuel {

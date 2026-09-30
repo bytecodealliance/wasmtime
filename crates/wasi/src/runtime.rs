@@ -19,8 +19,8 @@
 //! Each of these facilities should be used by dependencies of wasmtime-wasi
 //! which when implementing component bindings.
 
-use std::future::Future;
-use std::pin::Pin;
+use std::future::{Future, poll_fn};
+use std::pin::{Pin, pin};
 use std::sync::LazyLock;
 use std::task::{Context, Poll, Waker};
 
@@ -170,6 +170,37 @@ pub fn with_ambient_tokio_runtime<R>(f: impl FnOnce() -> R) -> R {
     }
 }
 
+/// Invokes `f` with a noop waker, intended to be used in a `poll*`-style
+/// function, and then returns whether the operation was ready or not.
+///
+/// This uses a "noop waker" to perform the poll and additionally handles
+/// details such as opting-out of Tokio's cooperative task budget.
+pub(crate) fn poll_now<T>(f: impl FnOnce(&mut Context<'_>) -> Poll<T>) -> Option<T> {
+    let mut f = Some(f);
+    // Note that this specifically opts-out of tokio's task budget. This is the
+    // implementation primitive for a number of wasip2 operations where the
+    // "true blocking operation", `poll`, happens at some future time w.r.t. an
+    // in-guest event loop. If tokio's task budget is enabled then the guest
+    // will quickly run out of budget and this function (which bottoms out in
+    // tokio primitives within `f`) will return `Pending`. This can pessimize
+    // guest loops that expect to be able to perform more work
+    // per-turn-of-the-event-loop and otherwise provide surprising behavior
+    // because the "everything is pending now" cliff can happen at seemingly
+    // arbitrary points.
+    let fut = pin!(tokio::task::unconstrained(poll_fn(move |cx| {
+        match f.take() {
+            Some(f) => f(cx),
+            None => Poll::Pending,
+        }
+    })));
+
+    let mut context = Context::from_waker(Waker::noop());
+    match fut.poll(&mut context) {
+        Poll::Ready(result) => Some(result),
+        Poll::Pending => None,
+    }
+}
+
 /// Attempts to get the result of a `future`.
 ///
 /// This function does not block and will poll the provided future once. If the
@@ -181,9 +212,5 @@ pub fn poll_noop<F>(future: Pin<&mut F>) -> Option<F::Output>
 where
     F: Future,
 {
-    let mut task = Context::from_waker(Waker::noop());
-    match future.poll(&mut task) {
-        Poll::Ready(result) => Some(result),
-        Poll::Pending => None,
-    }
+    poll_now(|cx| future.poll(cx))
 }
