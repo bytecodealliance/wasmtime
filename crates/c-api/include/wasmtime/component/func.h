@@ -51,10 +51,11 @@ wasmtime_component_func_type(const wasmtime_component_func_t *func,
  *
  * The \p args provided must match the parameters that this function takes in
  * terms of their types and the number of parameters. Results will be written to
- * the \p results provided if the call completes successfully. The initial types
- * of the values in \p results are ignored and values are overwritten to write
- * the result. It's required that the \p results_size exactly matches the number
- * of results that this function produces.
+ * the \p results provided if the call completes successfully. It's required
+ * that the \p results_size exactly matches the number of results that this
+ * function produces. It's additionally required that \p results is all entirely
+ * initialize (cannot be uninitialized memory). The types of values do not
+ * matter, and #WASMTIME_COMPONENT_BOOL can be used to cheaply initialize.
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_component_func_call(
     const wasmtime_component_func_t *func, wasmtime_context_t *context,
