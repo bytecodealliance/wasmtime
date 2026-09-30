@@ -1,4 +1,4 @@
-//! Traits for tracking memory pages during MMU-based interruption
+//! Support machinery for the mmu-interruption feature
 
 use crate::prelude::*;
 use core::ffi::c_void;
@@ -6,6 +6,11 @@ use core::ptr::NonNull;
 
 mod wheel;
 pub use wheel::TimingWheelInterrupter;
+
+#[cfg(has_mmu_interruption)]
+mod trampoline;
+#[cfg(has_mmu_interruption)]
+pub(crate) use trampoline::resume_into_task_switch_trampoline;
 
 /// A store's claim on an MMU interrupt page. Dropping it renounces the claim,
 /// declaring that the store no longer interrupts if the page becomes
