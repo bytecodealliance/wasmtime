@@ -1,84 +1,85 @@
 //! Cost functions for egraph representation.
 
-use crate::ir::{DataFlowGraph, Inst, Opcode};
-use alloc::vec::Vec;
-use core::cmp::Ordering;
+use crate::ir::{Inst, Opcode};
 use cranelift_entity::EntityRef;
 
-/// Cost of an expression as a DAG of instructions.
+/// Approximate cost of an expression as a DAG of instructions.
 ///
-/// The total counts each instruction once. A value used twice by the same
-/// expression, as in `iadd x, x`, does not pay for `x` twice. This is the
-/// cold path: it runs only for a function whose scalar costs saturated.
-#[derive(Clone, Debug)]
+/// In addition to the saturating total cost, this tracks an approximate
+/// footprint of the instructions that contribute to the expression. When an
+/// operand's whole footprint is already covered, we don't charge its total
+/// again. This catches common shared-DAG shapes like `iadd x, x` without
+/// allocating precise instruction sets in the egraph extraction hot path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ExprCost {
     total: Cost,
-    /// Sorted instruction indices.
-    insts: Vec<u32>,
+    inst_buckets: u64,
 }
 
 impl ExprCost {
     pub(crate) fn zero() -> Self {
         Self {
             total: Cost::zero(),
-            insts: Vec::new(),
+            inst_buckets: 0,
         }
     }
 
-    pub(crate) fn total(&self) -> Cost {
-        self.total
-    }
-
-    pub(crate) fn for_inst(dfg: &DataFlowGraph, inst: Inst) -> Self {
+    pub(crate) fn infinity() -> Self {
         Self {
-            total: Cost::of_opcode(dfg.insts[inst].opcode()),
-            insts: vec![u32::try_from(inst.index()).unwrap()],
+            total: Cost::infinity(),
+            inst_buckets: 0,
         }
     }
 
-    /// Union `other` into `self`, adding an opcode cost only for instructions
-    /// that were not already required.
-    pub(crate) fn add(&mut self, dfg: &DataFlowGraph, other: &Self) {
-        if other.insts.is_empty() {
-            return;
+    pub(crate) fn for_inst(inst: Inst, op: Opcode) -> Self {
+        Self {
+            total: Cost::of_opcode(op),
+            inst_buckets: Self::inst_bucket(inst),
         }
-        if self.insts.is_empty() {
-            *self = other.clone();
-            return;
+    }
+
+    /// Compute the cost of the operation and its given operands.
+    ///
+    /// Caller is responsible for checking that the opcode came from an instruction
+    /// that satisfies `inst_predicates::is_pure_for_egraph()`.
+    pub(crate) fn of_pure_op(
+        inst: Inst,
+        op: Opcode,
+        operand_costs: impl IntoIterator<Item = Self>,
+    ) -> Self {
+        let mut cost = Self::for_inst(inst, op);
+        for operand_cost in operand_costs {
+            cost.add_operand(operand_cost);
         }
-        let mut merged = Vec::with_capacity(self.insts.len() + other.insts.len());
-        let mut i = 0;
-        let mut j = 0;
-        while i < self.insts.len() && j < other.insts.len() {
-            match self.insts[i].cmp(&other.insts[j]) {
-                Ordering::Less => {
-                    merged.push(self.insts[i]);
-                    i += 1;
-                }
-                Ordering::Greater => {
-                    let inst = Inst::new(usize::try_from(other.insts[j]).unwrap());
-                    self.total = self.total + Cost::of_opcode(dfg.insts[inst].opcode());
-                    merged.push(other.insts[j]);
-                    j += 1;
-                }
-                Ordering::Equal => {
-                    merged.push(self.insts[i]);
-                    i += 1;
-                    j += 1;
-                }
-            }
+        cost
+    }
+}
+
+impl ExprCost {
+    fn inst_bucket(inst: Inst) -> u64 {
+        let index = u64::try_from(inst.index()).unwrap();
+        let hash = index.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        1u64 << (hash >> 58)
+    }
+
+    fn add_operand(&mut self, other: Self) {
+        let new_buckets = other.inst_buckets & !self.inst_buckets;
+        if new_buckets != 0 {
+            self.total = self.total + other.total;
         }
-        while i < self.insts.len() {
-            merged.push(self.insts[i]);
-            i += 1;
-        }
-        while j < other.insts.len() {
-            let inst = Inst::new(usize::try_from(other.insts[j]).unwrap());
-            self.total = self.total + Cost::of_opcode(dfg.insts[inst].opcode());
-            merged.push(other.insts[j]);
-            j += 1;
-        }
-        self.insts = merged;
+        self.inst_buckets |= other.inst_buckets;
+    }
+}
+
+impl PartialOrd for ExprCost {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ExprCost {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.total.cmp(&other.total)
     }
 }
 
@@ -193,15 +194,6 @@ impl Cost {
         }
     }
 
-    /// Compute the cost of the operation and its given operands.
-    ///
-    /// Caller is responsible for checking that the opcode came from an instruction
-    /// that satisfies `inst_predicates::is_pure_for_egraph()`.
-    pub(crate) fn of_pure_op(op: Opcode, operand_costs: impl IntoIterator<Item = Self>) -> Self {
-        let c = Self::of_opcode(op) + operand_costs.into_iter().sum();
-        Cost::new(c.cost())
-    }
-
     /// Compute the cost of an operation in the side-effectful skeleton.
     pub(crate) fn of_skeleton_op(op: Opcode, arity: usize) -> Self {
         Cost::of_opcode(op) + Cost::new(u32::try_from(arity).unwrap())
@@ -254,5 +246,23 @@ mod tests {
         let b = Cost::new(11);
         assert_eq!(a + b, Cost::infinity());
         assert_eq!(b + a, Cost::infinity());
+    }
+
+    #[test]
+    fn expr_cost_skips_fully_covered_operand() {
+        let x = ExprCost::for_inst(Inst::new(0), Opcode::Iconst);
+        let add = ExprCost::of_pure_op(Inst::new(1), Opcode::Iadd, [x, x]);
+
+        assert_eq!(add.total, Cost::new(4));
+    }
+
+    #[test]
+    fn expr_cost_grows_linearly_for_repeated_self_adds() {
+        let mut cost = ExprCost::for_inst(Inst::new(0), Opcode::Iconst);
+        for index in 1..4 {
+            cost = ExprCost::of_pure_op(Inst::new(index), Opcode::Iadd, [cost, cost]);
+        }
+
+        assert_eq!(cost.total, Cost::new(10));
     }
 }
