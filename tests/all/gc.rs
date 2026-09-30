@@ -3839,6 +3839,106 @@ fn winch_externref_survives_gc_in_frame() -> Result<()> {
     Ok(())
 }
 
+/// Typed null selects retain a valid reference representation across a GC call.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_typed_select_null_across_gc() -> Result<()> {
+    for collector in [
+        Collector::Null,
+        Collector::Copying,
+        Collector::DeferredReferenceCounting,
+    ] {
+        let mut config = Config::new();
+        config.strategy(Strategy::Winch);
+        config.collector(collector);
+        config.wasm_gc(false);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(
+            &engine,
+            r#"
+            (module
+              (import "" "gc" (func $gc))
+              (func (export "select-null") (param i32) (result externref)
+                ref.null extern
+                ref.null extern
+                local.get 0
+                select (result externref)
+                call $gc))
+            "#,
+        )?;
+        let mut store = Store::new(&engine, 0usize);
+        let gc = Func::wrap(&mut store, |mut cx: Caller<'_, usize>| -> Result<()> {
+            cx.gc(None)?;
+            *cx.data_mut() += 1;
+            Ok(())
+        });
+        let instance = Instance::new(&mut store, &module, &[gc.into()])?;
+        let select =
+            instance.get_typed_func::<i32, Option<Rooted<ExternRef>>>(&mut store, "select-null")?;
+        for cond in [0, 1] {
+            assert!(select.call(&mut store, cond)?.is_none());
+        }
+        assert_eq!(*store.data(), 2, "GC calls did not run under {collector:?}");
+    }
+    Ok(())
+}
+
+/// A typed select must keep a live externref in the call-site stack map even
+/// when its unselected operand is null.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn winch_typed_select_preserves_externref_across_gc() -> Result<()> {
+    for collector in [
+        Collector::Null,
+        Collector::Copying,
+        Collector::DeferredReferenceCounting,
+    ] {
+        let mut config = Config::new();
+        config.strategy(Strategy::Winch);
+        config.collector(collector);
+        config.wasm_gc(false);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(
+            &engine,
+            r#"
+            (module
+              (import "" "make" (func $make (result externref)))
+              (import "" "gc" (func $gc))
+
+              (func (export "control") (result externref)
+                call $make
+                call $gc)
+
+              (func (export "selected") (result externref)
+                call $make
+                ref.null extern
+                i32.const 1
+                select (result externref)
+                call $gc))
+            "#,
+        )?;
+        let mut store = Store::new(&engine, ());
+        let make = Func::wrap(
+            &mut store,
+            |mut cx: Caller<'_, ()>| -> Result<Option<Rooted<ExternRef>>> {
+                Ok(Some(ExternRef::new(&mut cx, 0xDECAFu32)?))
+            },
+        );
+        let gc = Func::wrap(&mut store, |mut cx: Caller<'_, ()>| cx.gc(None));
+        let instance = Instance::new(&mut store, &module, &[make.into(), gc.into()])?;
+        for export in ["control", "selected"] {
+            let func =
+                instance.get_typed_func::<(), Option<Rooted<ExternRef>>>(&mut store, export)?;
+            let result = func.call(&mut store, ())?.expect("reference became null");
+            let data = result
+                .data(&store)?
+                .and_then(|value| value.downcast_ref::<u32>().copied());
+            assert_eq!(data, Some(0xDECAF), "{export} under {collector:?}");
+        }
+    }
+    Ok(())
+}
+
 /// The write barrier's decrement chain releases an object once a global stops
 /// holding the last reference to it.
 #[test]

@@ -7,7 +7,7 @@
 use crate::abi::RetArea;
 use crate::codegen::{
     Callee, CodeGen, CodeGenError, ConditionalBranch, ControlStackFrame, Emission, FnCall,
-    UnconditionalBranch, control_index,
+    TypeConverter, UnconditionalBranch, control_index,
 };
 use crate::masm::{
     AtomicWaitKind, DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind,
@@ -28,8 +28,8 @@ use wasmparser::{
 };
 use wasmtime_cranelift::{TRAP_INDIRECT_CALL_TO_NULL, TRAP_UNHANDLED_TAG};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
-    WasmValType,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeConvert, TypeIndex,
+    WasmHeapType, WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -2144,27 +2144,12 @@ where
     }
 
     fn visit_select(&mut self) -> Self::Output {
-        let cond = self.context.pop_to_reg(self.masm, None)?;
-        let val2 = self.context.pop_to_reg(self.masm, None)?;
-        let val1 = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.cmp(cond.reg, RegImm::i32(0), OperandSize::S32)?;
-        // Conditionally move val1 to val2 if the comparison is
-        // not zero.
-        self.masm.cmov(
-            writable!(val2.into()),
-            val1.into(),
-            IntCmpKind::Ne,
-            val1.ty.try_into()?,
-        )?;
-        self.context.stack.push(val2.into());
-        self.context.free_reg(val1.reg);
-        self.context.free_reg(cond);
-
-        Ok(())
+        self.emit_select(None)
     }
 
-    fn visit_typed_select(&mut self, _ty: ValType) -> Self::Output {
-        self.visit_select()
+    fn visit_typed_select(&mut self, ty: ValType) -> Self::Output {
+        let ty = TypeConverter::new(self.env.translation, self.env.types).convert_valtype(ty)?;
+        self.emit_select(Some(ty))
     }
 
     fn visit_ref_null(&mut self, hty: HeapType) -> Self::Output {
