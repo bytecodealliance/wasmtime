@@ -369,20 +369,18 @@ wit-bindgen = { version = "0.62.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.62.0", default-features = false }
 
 # wasm-tools family:
-# LOCAL ONLY: do not commit. The paths point at ../wasm-tools (main) for the
-# unreleased canonical interface name helpers.
-wasmparser = { version = "0.259.0", path = "../wasm-tools/crates/wasmparser", default-features = false, features = ['simd'] }
-wat = { version = "1.259.0", path = "../wasm-tools/crates/wat" }
-wast = { version = "259.0.0", path = "../wasm-tools/crates/wast" }
-wasmprinter = { version = "0.259.0", path = "../wasm-tools/crates/wasmprinter" }
-wasm-encoder = { version = "0.259.0", path = "../wasm-tools/crates/wasm-encoder" }
-wasm-smith = { version = "0.259.0", path = "../wasm-tools/crates/wasm-smith" }
-wasm-mutate = { version = "0.259.0", path = "../wasm-tools/crates/wasm-mutate" }
-wit-parser = { version = "0.259.0", path = "../wasm-tools/crates/wit-parser" }
-wit-component = { version = "0.259.0", path = "../wasm-tools/crates/wit-component" }
-wasm-wave = { version = "0.259.0", path = "../wasm-tools/crates/wasm-wave" }
-wasm-compose = { version = "0.259.0", path = "../wasm-tools/crates/wasm-compose", default-features = false }
-json-from-wast = { version = "0.259.0", path = "../wasm-tools/crates/json-from-wast" }
+wasmparser = { version = "0.260.0", default-features = false, features = ['simd'] }
+wat = "1.260.0"
+wast = "260.0.0"
+wasmprinter = "0.260.0"
+wasm-encoder = "0.260.0"
+wasm-smith = "0.260.0"
+wasm-mutate = "0.260.0"
+wit-parser = "0.260.0"
+wit-component = "0.260.0"
+wasm-wave = "0.260.0"
+wasm-compose = { version = "0.260.0", default-features = false }
+json-from-wast = "0.260.0"
 
 wstd = "0.6.5"
 wasip2 = "1.0"
