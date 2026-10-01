@@ -25,6 +25,9 @@ Released 2026-10-02.
 * Wasmtime wasi:http implementation panics with a zero timeout supplied.
   [GHSA-w4qr-p94g-mjhv](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-w4qr-p94g-mjhv)
 
+* Rooting for GC values live across `try_call` may be missing, causing GC heap corruption.
+  [GHSA-hw8m-q44c-ggrf](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hw8m-q44c-ggrf)
+
 --------------------------------------------------------------------------------
 
 ## 48.0.3
