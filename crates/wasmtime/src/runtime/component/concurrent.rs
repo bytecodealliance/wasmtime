@@ -1347,6 +1347,12 @@ impl<T> StoreContextMut<'_, T> {
             }
         }
 
+        // Keep a continuously busy event loop from holding one executor poll
+        // indefinitely.  In particular, Tokio's cooperative budget is only
+        // replenished when the future returns `Pending` to the executor.
+        const MAX_TURNS_WITHOUT_YIELD: usize = 128;
+        let mut turns_without_yield = 0;
+
         loop {
             // Take `ConcurrentState::futures` out of the store so we can poll
             // it while also safely giving any of the futures inside access to
@@ -1542,9 +1548,10 @@ impl<T> StoreContextMut<'_, T> {
                     // In the future, if this ends up causing measurable
                     // performance issues, this could be optimized such that we
                     // only yield periodically (e.g. for batches of low priority
-                    // items) and not for each and every idividual item.
+                    // items) and not for each and every individual item.
                     if low_priority {
-                        dispose.store.0.yield_now().await
+                        dispose.store.0.yield_now().await;
+                        turns_without_yield = 0;
                     }
 
                     if let Some(item) = dispose.ready.take() {
@@ -1553,6 +1560,12 @@ impl<T> StoreContextMut<'_, T> {
                             .as_context_mut()
                             .handle_work_item(item)
                             .await?;
+                    }
+
+                    turns_without_yield += 1;
+                    if turns_without_yield == MAX_TURNS_WITHOUT_YIELD {
+                        turns_without_yield = 0;
+                        dispose.store.0.yield_now().await;
                     }
                 }
             }
