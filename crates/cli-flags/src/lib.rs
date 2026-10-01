@@ -562,10 +562,10 @@ wasmtime_option_group! {
         /// Number of distinct write calls to the outgoing body's output-stream
         /// that the implementation will buffer.
         /// Default: 1.
-        pub http_outgoing_body_buffer_chunks: Option<usize>,
+        pub http_outgoing_body_buffer_chunks: Option<NonZeroUsize>,
         /// Maximum size allowed in a write call to the outgoing body's output-stream.
         /// Default: 1024 * 1024.
-        pub http_outgoing_body_chunk_size: Option<usize>,
+        pub http_outgoing_body_chunk_size: Option<NonZeroUsize>,
         /// Enable support for WASI config imports (experimental)
         pub config: Option<bool>,
         /// Enable support for WASI key-value imports (experimental)

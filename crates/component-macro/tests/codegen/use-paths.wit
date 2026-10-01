@@ -1,7 +1,9 @@
 package foo:foo;
 
 interface a {
-  record foo {}
+  record foo {
+    a: u32,
+  }
 
   a: func() -> foo;
 }

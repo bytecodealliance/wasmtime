@@ -189,18 +189,21 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(record)]
             #[derive(Clone, Copy)]
-            pub struct DescriptorStat {}
+            pub struct DescriptorStat {
+                #[component(name = "a")]
+                pub a: u32,
+            }
             impl core::fmt::Debug for DescriptorStat {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("DescriptorStat").finish()
+                    f.debug_struct("DescriptorStat").field("a", &self.a).finish()
                 }
             }
             const _: () = {
                 assert!(
-                    0 == < DescriptorStat as wasmtime::component::ComponentType >::SIZE32
+                    4 == < DescriptorStat as wasmtime::component::ComponentType >::SIZE32
                 );
                 assert!(
-                    1 == < DescriptorStat as wasmtime::component::ComponentType
+                    4 == < DescriptorStat as wasmtime::component::ComponentType
                     >::ALIGN32
                 );
             };
@@ -311,18 +314,21 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(record)]
             #[derive(Clone, Copy)]
-            pub struct WallClock {}
+            pub struct WallClock {
+                #[component(name = "a")]
+                pub a: u32,
+            }
             impl core::fmt::Debug for WallClock {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("WallClock").finish()
+                    f.debug_struct("WallClock").field("a", &self.a).finish()
                 }
             }
             const _: () = {
                 assert!(
-                    0 == < WallClock as wasmtime::component::ComponentType >::SIZE32
+                    4 == < WallClock as wasmtime::component::ComponentType >::SIZE32
                 );
                 assert!(
-                    1 == < WallClock as wasmtime::component::ComponentType >::ALIGN32
+                    4 == < WallClock as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
             pub trait HostWithStore<T>: wasmtime::component::HasData {}

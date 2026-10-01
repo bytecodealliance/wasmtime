@@ -1291,6 +1291,11 @@ impl RunCommand {
                 }
                 let http = self.run.wasi_http_ctx()?;
                 store.data_mut().wasi_http = Some(http);
+                // The hooks carry the `--http-outgoing-body-*` limits, so they
+                // have to be taken from the CLI options as well: `Host` is
+                // built with `Host::default()`, which leaves the default hooks
+                // in place.
+                store.data_mut().wasi_http_hooks = self.run.wasi_http_hooks();
             }
         }
 

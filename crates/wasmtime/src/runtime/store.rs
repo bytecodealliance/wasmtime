@@ -2141,6 +2141,17 @@ at https://bytecodealliance.org/security.
         let mut continuation = Box::new(VMContRef::empty());
         let stack_size = self.engine.config().async_stack_size;
         let stack = crate::vm::VMContinuationStack::new(stack_size)?;
+        #[cfg(asan)]
+        {
+            let asan_range = stack
+                .asan_range()
+                .expect("supported continuation stacks have a usable range");
+            continuation.common_stack_information.asan_stack_bottom = Some(vm::VmPtr::from(
+                NonNull::new(asan_range.start as *mut u8)
+                    .expect("a continuation stack's ASan range must have a non-null bottom"),
+            ));
+            continuation.common_stack_information.asan_stack_size = asan_range.len();
+        }
         continuation.stack = stack;
         let ptr = continuation.deref_mut() as *mut VMContRef;
         self.continuations.push(continuation);

@@ -4976,9 +4976,11 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "target-lexicon 0.13.5",
+ "tempfile",
  "wasmprinter",
  "wasmtime",
  "wasmtime-environ",
+ "wat",
 ]
 
 [[package]]

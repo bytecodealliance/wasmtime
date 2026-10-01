@@ -1183,6 +1183,25 @@ fn cont_new(
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
 }
 
+#[cfg(feature = "stack-switching")]
+unsafe fn asan_start_switch_fiber(
+    _store: &mut dyn VMStore,
+    _instance: InstanceId,
+    fake_stack_save: *mut u8,
+    target_csi: *mut u8,
+) {
+    unsafe { crate::vm::stack_switching::asan::start_switch_fiber(fake_stack_save, target_csi) }
+}
+
+#[cfg(feature = "stack-switching")]
+unsafe fn asan_finish_switch_fiber(
+    _store: &mut dyn VMStore,
+    _instance: InstanceId,
+    fake_stack: *mut u8,
+) {
+    unsafe { crate::vm::stack_switching::asan::finish_switch_fiber(fake_stack) }
+}
+
 #[cfg(feature = "gc")]
 fn get_instance_id(_store: &mut dyn VMStore, instance: InstanceId) -> u32 {
     instance.as_u32()

@@ -37,10 +37,22 @@ pub fn wasmtime_continuation_start_address() -> *const () {
 //                  - align_up(`args_capacity`, 16)
 // RBP: TOS - 0x10
 
-#[unsafe(naked)]
-pub(crate) unsafe extern "C" fn wasmtime_continuation_start() {
-    naked_asm!(
-        "
+// ASan and non-ASan builds have nearly identical assembly
+// stubs. However, ASan requires a special sequence after
+// `fiber_start` returns. This sequence must call `fiber_exit` to
+// abandon the stack appropriately.
+//
+// This macro provides maximal sharing for the two stubs, while
+// allowing ASan build to preserve the arguments/result and invoke
+// `fiber_exit`. Meanwhile, a non-ASan build supplies empty fragments
+// such that no overhead is incurred.
+macro_rules! define_wasmtime_continuation_start {
+    ($before_start:literal, $after_start:literal $(, $fiber_exit:path)?) => {
+        #[unsafe(naked)]
+        pub(crate) unsafe extern "C" fn wasmtime_continuation_start() {
+            naked_asm!(
+                concat!(
+                    "
         // TODO(frank-emrich): Restore DWARF information for this function. In
         // the meantime, debugging is possible using frame pointer walking.
 
@@ -58,12 +70,17 @@ pub(crate) unsafe extern "C" fn wasmtime_continuation_start() {
         pop rdx // args
         pop rsi // caller_vmctx
         pop rdi // func_ref
+        ",
+                    $before_start,
+                    "
         // Note that RBP already contains the right frame pointer to build a
         // frame pointer chain including the parent continuation:
         // The current value of RBP is where we store the parent RBP in the
         // control context!
         call {fiber_start}
-
+        ",
+                    $after_start,
+                    "
         // A failed array call means that the continuation trapped. Preserve
         // this information as the control effect sent to the parent stack.
         test al, al
@@ -84,13 +101,40 @@ pub(crate) unsafe extern "C" fn wasmtime_continuation_start() {
         mov rbp,      [rbp]
 
         jmp rsi
-        ",
-        fiber_start = sym super::fiber_start,
-        trap_control_effect = const (
-            crate::vm::CONTROL_EFFECT_TRAP_ENCODING
-        ),
-    );
+        "
+                ),
+                fiber_start = sym super::fiber_start,
+                $(fiber_exit = sym $fiber_exit,)?
+                trap_control_effect = const (
+                    crate::vm::CONTROL_EFFECT_TRAP_ENCODING
+                ),
+            );
+        }
+    };
 }
+
+#[cfg(asan)]
+define_wasmtime_continuation_start!(
+    "
+        // Keep the args pointer and fiber_start's result across the ASan exit
+        // hook. Reserving 16 bytes preserves the call site stack alignment.
+        sub rsp, 16
+        mov [rsp], rdx
+    ",
+    "
+        mov [rsp + 8], al
+
+        // This begins ASan's terminal stack switch handshake.
+        mov rdi, [rsp]
+        call {fiber_exit}
+        mov al, [rsp + 8]
+        add rsp, 16
+    ",
+    crate::vm::stack_switching::asan::fiber_exit
+);
+
+#[cfg(not(asan))]
+define_wasmtime_continuation_start!("", "");
 
 #[test]
 fn test_control_effect_payloads() {

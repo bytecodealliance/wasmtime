@@ -1134,9 +1134,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::StreamWrite { ty, options }
                         }
-                        wasmparser::CanonicalFunction::StreamForward { .. } => {
-                            bail!("unsupported intrinsic: `stream.forward`")
-                        }
                         wasmparser::CanonicalFunction::StreamCancelRead { ty, async_ } => {
                             let ty = self
                                 .validator
@@ -1206,9 +1203,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                             let options = self.canonical_options(&options, core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::FutureWrite { ty, options }
-                        }
-                        wasmparser::CanonicalFunction::FutureForward { .. } => {
-                            bail!("unsupported intrinsic: `future.forward`")
                         }
                         wasmparser::CanonicalFunction::FutureCancelRead { ty, async_ } => {
                             let ty = self
@@ -1332,6 +1326,12 @@ impl<'a, 'data> Translator<'a, 'data> {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ThreadYieldThenPromote { func }
+                        }
+                        wasmparser::CanonicalFunction::StreamForward { .. } => {
+                            bail!("unimplemented stream.forward")
+                        }
+                        wasmparser::CanonicalFunction::FutureForward { .. } => {
+                            bail!("unimplemented stream.forward")
                         }
                     };
                     self.result.initializers.push(init);

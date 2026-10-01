@@ -152,6 +152,66 @@ mod tests {
         config
     }
 
+    /// A module whose memory carries data, so an incorrect reset shows up as
+    /// wrong bytes rather than only as a metric.
+    const TEST_MEMORY_MODULE: &str = r#"
+        (module
+            (memory (export "memory") 1)
+            (data (i32.const 0) "init")
+        )
+    "#;
+
+    /// This test verifies both that memory is freed, and that instantiation
+    /// still works correctly afterward.
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn release_idle_pool_memory_frees_unused_slots() -> Result<()> {
+        let mut pool = small_pool_config();
+        pool.linear_memory_keep_resident(1 << 16);
+        let engine = Engine::new(&Config::new().allocation_strategy(pool))?;
+        let metrics = engine.pooling_allocator_metrics().unwrap();
+        let module = Module::new(&engine, TEST_MEMORY_MODULE)?;
+
+        // Dirty a slot and give it back: the pool keeps part of it resident.
+        {
+            let mut store = Store::new(&engine, ());
+            let instance = crate::Instance::new(&mut store, &module, &[])?;
+            let memory = instance.get_memory(&mut store, "memory").unwrap();
+            memory.data_mut(&mut store)[4..8].copy_from_slice(b"dirt");
+        }
+
+        // On platforms whose decommit resets to zero (`DecommitBehavior::Zero`)
+        // a freed slot keeps nothing resident, so there is nothing to release
+        // and only the contents check below applies.
+        let resident = metrics.unused_memory_bytes_resident();
+        if resident > 0 {
+            let released = engine.release_idle_pool_memory();
+            assert!(
+                released > 0,
+                "{resident} bytes were resident and none were released"
+            );
+            assert_eq!(
+                metrics.unused_memory_bytes_resident(),
+                0,
+                "a released slot still reports resident bytes"
+            );
+            // The slot is allocatable again, not lost.
+            assert_eq!(metrics.unused_warm_memories(), 1);
+        }
+
+        // The slot still reads as its module defines it: the released region
+        // is restored by the mapping, and the previous instance's write is
+        // gone because the slot was reset when it was freed.
+        let mut store = Store::new(&engine, ());
+        let instance = crate::Instance::new(&mut store, &module, &[])?;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
+        assert_eq!(&memory.data(&store)[..8], b"init\0\0\0\0");
+
+        // Releasing with nothing unused is a no-op rather than an error.
+        assert_eq!(engine.release_idle_pool_memory(), 0);
+        Ok(())
+    }
+
     #[test]
     #[cfg_attr(miri, ignore)]
     fn smoke_test() {

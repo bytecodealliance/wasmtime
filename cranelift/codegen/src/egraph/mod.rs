@@ -1022,6 +1022,13 @@ impl<'a> EgraphPass<'a> {
                     }
                 }
             }
+
+            // Save this block's exit state, so that any of its successors for
+            // which it is the sole predecessor can inherit that exit state
+            // directly instead of falling back to the initial (and possibly
+            // outdated, after optimizations) initial block-input snapshot.
+            self.alias_analysis
+                .finish_scope(block, alias_analysis_state);
         }
         cfg_maybe_changed
     }

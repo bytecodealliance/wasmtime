@@ -808,6 +808,46 @@ impl Engine {
         crate::runtime::vm::PoolingAllocatorMetrics::new(self)
     }
 
+    /// Releases memory the pooling allocator is keeping resident for slots
+    /// that are not currently in use, returning how many bytes were released.
+    ///
+    /// [`PoolingAllocationConfig::linear_memory_keep_resident`] keeps memory
+    /// resident after an instance slot is freed, in order to enable faster
+    /// instantiation on the next use of the same module. This increases
+    /// resident memory size. If an embedder knows that load has decreased and
+    /// wishes to free up memory, it might wish to purge these "warm slots".
+    ///
+    /// This method releases all resident memory held by warm but unused
+    /// slots. The tradeoff is that the next instantiation of any given module
+    /// may be slower, because no cached memory mappings are present anymore.
+    ///
+    /// Returns 0 if this engine is not using the pooling allocator, or if
+    /// nothing was resident to release.
+    ///
+    /// [`PoolingAllocationConfig::linear_memory_keep_resident`]: crate::PoolingAllocationConfig::linear_memory_keep_resident
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use wasmtime::{Config, Engine, InstanceAllocationStrategy};
+    /// # fn main() -> wasmtime::Result<()> {
+    /// let mut config = Config::new();
+    /// config.allocation_strategy(InstanceAllocationStrategy::pooling());
+    /// let engine = Engine::new(&config)?;
+    ///
+    /// // ... once the embedder knows load has decreased ...
+    /// let _bytes = engine.release_idle_pool_memory();
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "pooling-allocator")]
+    pub fn release_idle_pool_memory(&self) -> usize {
+        match self.allocator().as_pooling() {
+            Some(pool) => pool.release_resident_unused_memory(),
+            None => 0,
+        }
+    }
+
     pub(crate) fn allocator(&self) -> &dyn crate::runtime::vm::InstanceAllocator {
         let r: &(dyn crate::runtime::vm::InstanceAllocator + Send + Sync) =
             self.inner.allocator.as_ref();

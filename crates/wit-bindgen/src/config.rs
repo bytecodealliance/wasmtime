@@ -77,20 +77,19 @@ impl FunctionConfig {
             FunctionKind::Freestanding
             | FunctionKind::Method(_)
             | FunctionKind::Static(_)
-            | FunctionKind::Constructor(_) => {}
+            | FunctionKind::Constructor(_)
+            | FunctionKind::Getter
+            | FunctionKind::Setter
+            | FunctionKind::MethodGetter(_)
+            | FunctionKind::MethodSetter(_)
+            | FunctionKind::StaticGetter(_)
+            | FunctionKind::StaticSetter(_) => {}
 
             FunctionKind::AsyncFreestanding
             | FunctionKind::AsyncMethod(_)
             | FunctionKind::AsyncStatic(_) => {
                 wit_flags |= FunctionFlags::ASYNC | FunctionFlags::STORE;
             }
-
-            FunctionKind::Getter
-            | FunctionKind::Setter
-            | FunctionKind::MethodGetter(_)
-            | FunctionKind::MethodSetter(_)
-            | FunctionKind::StaticGetter(_)
-            | FunctionKind::StaticSetter(_) => unimplemented!("WIT getters and setters"),
         }
 
         let mut ret = FunctionFlags::empty();

@@ -191,15 +191,18 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(record)]
             #[derive(Clone, Copy)]
-            pub struct Foo {}
+            pub struct Foo {
+                #[component(name = "a")]
+                pub a: u32,
+            }
             impl core::fmt::Debug for Foo {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("Foo").finish()
+                    f.debug_struct("Foo").field("a", &self.a).finish()
                 }
             }
             const _: () = {
-                assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
-                assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
+                assert!(4 == < Foo as wasmtime::component::ComponentType >::SIZE32);
+                assert!(4 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore<T>: wasmtime::component::HasData {}
             impl<H: ?Sized, T> HostWithStore<T> for H
@@ -252,8 +255,8 @@ pub mod foo {
             use wasmtime::component::__internal::Box;
             pub type Foo = super::super::super::foo::foo::a::Foo;
             const _: () = {
-                assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
-                assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
+                assert!(4 == < Foo as wasmtime::component::ComponentType >::SIZE32);
+                assert!(4 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore<T>: wasmtime::component::HasData {}
             impl<H: ?Sized, T> HostWithStore<T> for H
@@ -306,8 +309,8 @@ pub mod foo {
             use wasmtime::component::__internal::Box;
             pub type Foo = super::super::super::foo::foo::b::Foo;
             const _: () = {
-                assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
-                assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
+                assert!(4 == < Foo as wasmtime::component::ComponentType >::SIZE32);
+                assert!(4 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait HostWithStore<T>: wasmtime::component::HasData {}
             impl<H: ?Sized, T> HostWithStore<T> for H
@@ -362,8 +365,8 @@ pub mod d {
     use wasmtime::component::__internal::Box;
     pub type Foo = super::foo::foo::c::Foo;
     const _: () = {
-        assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
-        assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
+        assert!(4 == < Foo as wasmtime::component::ComponentType >::SIZE32);
+        assert!(4 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
     };
     pub trait HostWithStore<T>: wasmtime::component::HasData {}
     impl<H: ?Sized, T> HostWithStore<T> for H

@@ -237,7 +237,11 @@ impl GcOps {
             };
             wasm_encoder::SubType {
                 is_final: def.is_final,
-                supertype_idx: def.supertype.map(|st| type_ids_to_index[&st]),
+                supertype_idxs: def
+                    .supertype
+                    .map(|st| type_ids_to_index[&st])
+                    .into_iter()
+                    .collect(),
                 composite_type: wasm_encoder::CompositeType {
                     inner,
                     shared: false,

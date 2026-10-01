@@ -218,14 +218,14 @@ mod wasi {
   )
 )"#;
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn write_something_test() -> Result<()> {
         assert_eq!(run_wasi_test(WRITE_SOMETHING_WAT)?, 0);
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[tokio::test]
     async fn write_something_test_async() -> Result<()> {
         assert_eq!(run_wasi_test_async(WRITE_SOMETHING_WAT).await?, 0);
@@ -251,14 +251,14 @@ mod wasi {
   )
 )"#;
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn sched_yield_test() -> Result<()> {
         assert_eq!(run_wasi_test(SCHED_YIELD_WAT)?, 0);
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[tokio::test]
     async fn sched_yield_test_async() -> Result<()> {
         assert_eq!(run_wasi_test_async(SCHED_YIELD_WAT).await?, 0);
@@ -268,7 +268,7 @@ mod wasi {
 
 /// Test that two distinct instantiations of the same module yield
 /// different control tag identities.
-#[cfg_attr(any(asan, miri), ignore)]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn inter_instance_suspend() -> Result<()> {
     let mut config = Config::default();
@@ -344,7 +344,7 @@ fn inter_instance_suspend() -> Result<()> {
 /// A GC reference returned through a continuation payload must retain
 /// its stack-map metadata while it is live on the operand stack
 /// across subsequent GC safepoints.
-#[cfg_attr(any(asan, miri), ignore)]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn continuation_result_gc_ref_on_operand_stack() -> Result<()> {
     let mut config = Config::new();
@@ -402,6 +402,48 @@ fn continuation_result_gc_ref_on_operand_stack() -> Result<()> {
     let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
     assert_eq!(run.call(&mut store, ())?, 0x12345678);
     Ok(())
+}
+
+/// https://github.com/bytecodealliance/wasmtime/issues/14239.
+///
+/// GC should trace the suspended continuation and entry should
+/// complete normally.
+#[cfg_attr(miri, ignore)]
+#[test]
+fn gc_traces_a_suspended_continuation() -> Result<()> {
+    let wat = r#"
+        (module
+            (type $ft (func))
+            (type $ct (cont $ft))
+            (type $st (struct (field i32)))
+            (tag $t)
+
+            (func $suspend
+                (suspend $t)
+            )
+            (elem declare func $suspend)
+
+            (func (export "entry")
+                (local $continuation (ref null $ct))
+                (local $i i32)
+                (block $handler (result (ref $ct))
+                    (resume $ct
+                        (on $t $handler)
+                        (cont.new $ct (ref.func $suspend)))
+                    (return)
+                )
+                (local.set $continuation)
+                (loop $allocate
+                    (drop (struct.new $st (i32.const 7)))
+                    (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                    (br_if $allocate (i32.lt_u (local.get $i) (i32.const 20000)))
+                )
+                (resume $ct (local.get $continuation))
+            )
+        )
+    "#;
+
+    test_utils::Runner::new().run_test::<()>(wat, &[])
 }
 
 /// Tests interaction with host functions. Note that the interaction with host
@@ -490,12 +532,8 @@ mod host {
         bail!("intentional host trap")
     }
 
-    // TODO(dhil): Enable ASAN. ASAN produces a false positive here,
-    // because ASAN thinks the thread is on the default stack. We need to
-    // instrument the stack switching runtime to inform ASAN about the
-    // switching of stacks.
     #[test]
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     fn traps_cross_continuation_stacks_and_host_frames() -> Result<()> {
         let mut config = Config::new();
         config.wasm_stack_switching(true);
@@ -550,9 +588,10 @@ mod host {
         error: Option<Error>,
     }
 
-    // TODO(dhil): Enable ASAN.
+    // Also run this under ASan to cover returning to parent frames after a
+    // host function catches a trap from a continuation.
     #[test]
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     fn parent_frames_resume_after_host_catches_trap() -> Result<()> {
         let mut config = Config::new();
         config.wasm_stack_switching(true);
@@ -620,7 +659,7 @@ mod host {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests calling a host function from within a wasm function running inside a continuation.
     /// Call chain:
@@ -651,7 +690,7 @@ mod host {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// We re-enter wasm from a host function and execute a continuation.
     /// Call chain:
@@ -693,7 +732,7 @@ mod host {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Similar to `re_enter_wasm_ok2, but we run a continuation before the host call.
     /// Call chain:
@@ -739,7 +778,7 @@ mod host {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// We re-enter Wasm from a host function while already running on a
     /// continuation stack.
@@ -778,7 +817,7 @@ mod host {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// After crossing from the host back into wasm, we suspend to a tag that is
     /// handled by the surrounding function (i.e., without needing to cross the
@@ -830,7 +869,7 @@ mod host {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Similar to `call_host_from_continuation_nested_suspend_ok`. However,
     /// we suspend to a tag that is only handled if we were to cross a host function
@@ -926,7 +965,7 @@ mod traps {
         assert!(actual_func_name_it.eq(expected_func_name_it));
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests that we get correct backtraces if we trap deep inside multiple continuations.
     /// Call chain:
@@ -977,7 +1016,7 @@ mod traps {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests that we get correct backtraces if we trap after returning from one
     /// continuation to its parent.
@@ -1022,7 +1061,7 @@ mod traps {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests that we get correct backtraces if we trap after returning from
     /// several continuations back to the main stack.
@@ -1063,7 +1102,7 @@ mod traps {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests that we get correct backtraces after suspending a continuation.
     fn trap_in_continuation_suspend() -> Result<()> {
@@ -1115,7 +1154,7 @@ mod traps {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests that we get correct backtraces after suspending a continuation and
     /// then resuming it from a different stack frame.
@@ -1178,7 +1217,7 @@ mod traps {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests that we get correct backtraces after suspending a continuation
     /// where we need to forward to an outer handler.
@@ -1229,7 +1268,7 @@ mod traps {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests that we get correct backtraces after suspending a continuation
     /// where we need to forward to an outer handler. We then resume the
@@ -1290,7 +1329,7 @@ mod traps {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests that we get correct backtraces after switch.
     /// We first create the a stack with the following shape:
@@ -1359,7 +1398,7 @@ mod traps {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     /// Tests that we get correct panic payloads  if we panic deep inside multiple
     /// continuations. Note that wasmtime does not create its own backtraces for panics.
@@ -1409,7 +1448,7 @@ mod traps {
         Ok(())
     }
 
-    #[cfg_attr(any(asan, miri), ignore)]
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn stack_overflow_in_continuation() -> Result<()> {
         let wat = r#"
@@ -1453,4 +1492,68 @@ mod traps {
 
         Ok(())
     }
+}
+
+/// Regression test for https://github.com/bytecodealliance/wasmtime/issues/13322
+///
+/// The `CallThreadState` should not be corrupted by calling a host
+/// function on a continuation.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn corruption_of_callthread_state_when_host_function_is_called_on_continuation() -> Result<()> {
+    // This is a regression test sourced from https://github.com/bytecodealliance/wasmtime/issues/13322
+    use wasmtime::*;
+    let mut config = Config::new();
+    config.wasm_stack_switching(true);
+    config.wasm_function_references(true);
+    config.wasm_exceptions(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (type $ft (func))
+          (tag $t (type $ft))
+          (type $ct (cont $ft))
+
+          (import "host" "h" (func $h_import))
+
+          (func (export "inner"))
+
+          (func $callee
+            (call $h_import)
+            (suspend $t)
+          )
+          (elem declare func $callee)
+
+          (func (export "go") (result i32)
+            (block $h (result (ref null $ct))
+              (resume $ct (on $t $h) (cont.new $ct (ref.func $callee)))
+              (return (i32.const 0))
+            )
+            (drop)
+            (i32.const 1)
+          )
+        )
+    "#,
+    )?;
+
+    let h = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| -> Result<()> {
+        let inner = caller
+            .get_export("inner")
+            .and_then(|e| e.into_func())
+            .expect("inner export");
+        let inner = inner.typed::<(), ()>(&caller)?;
+        inner.call(&mut caller, ())?;
+        Ok(())
+    });
+
+    let instance = Instance::new(&mut store, &module, &[h.into()])?;
+    let go = instance.get_typed_func::<(), i32>(&mut store, "go")?;
+
+    let result = go.call(&mut store, ())?;
+    assert_eq!(result, 1);
+    Ok(())
 }

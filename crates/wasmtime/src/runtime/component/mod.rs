@@ -117,12 +117,15 @@ pub(crate) mod store;
 pub mod types;
 mod values;
 pub use self::component::{Component, ComponentExportIndex, ExportLookup};
+#[cfg(feature = "task-group-hook")]
+pub use self::concurrent::TaskGroupHook;
+pub use self::concurrent::TaskGroupId;
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
     Access, Accessor, AccessorTask, AsAccessor, Destination, DirectDestination, DirectSource,
     ErrorContext, FuncCallConcurrent, FutureAny, FutureConsumer, FutureProducer, FutureReader,
-    GuardedFutureReader, GuardedStreamReader, GuestTaskId, JoinHandle, ReadBuffer, Source,
-    StreamAny, StreamConsumer, StreamProducer, StreamReader, StreamResult, TypedFuncCallConcurrent,
+    GuardedFutureReader, GuardedStreamReader, JoinHandle, ReadBuffer, Source, StreamAny,
+    StreamConsumer, StreamProducer, StreamReader, StreamResult, TypedFuncCallConcurrent,
     VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
 pub use self::func::{
