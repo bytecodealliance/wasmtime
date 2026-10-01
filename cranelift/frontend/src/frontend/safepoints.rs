@@ -462,6 +462,24 @@ impl LivenessAnalysis {
                 }
             }
 
+            // We do not support GC refs as exception-context values
+            // (Wasmtime uses its vmctx as the
+            // exception-context). Reject this explicitly; this slot
+            // is not handled by the analysis.
+            if let Some(et) = func.dfg.insts[inst].exception_table() {
+                for item in func.dfg.exception_tables[et].items() {
+                    let ir::ExceptionTableItem::Context(ctx) = item else {
+                        continue;
+                    };
+                    let ctx = func.dfg.resolve_aliases(ctx);
+                    assert!(
+                        !stack_map_values.contains(ctx),
+                        "exception-table context {ctx:?} on {inst:?} must not be a \
+                         needs-stack-map value"
+                    );
+                }
+            }
+
             option_inst = func.layout.prev_inst(inst);
         }
 
