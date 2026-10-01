@@ -194,6 +194,15 @@ impl Cost {
         }
     }
 
+    /// Compute the cost of the operation and its given operands.
+    ///
+    /// Caller is responsible for checking that the opcode came from an instruction
+    /// that satisfies `inst_predicates::is_pure_for_egraph()`.
+    pub(crate) fn of_pure_op(op: Opcode, operand_costs: impl IntoIterator<Item = Self>) -> Self {
+        let c = Self::of_opcode(op) + operand_costs.into_iter().sum();
+        Cost::new(c.cost())
+    }
+
     /// Compute the cost of an operation in the side-effectful skeleton.
     pub(crate) fn of_skeleton_op(op: Opcode, arity: usize) -> Self {
         Cost::of_opcode(op) + Cost::new(u32::try_from(arity).unwrap())

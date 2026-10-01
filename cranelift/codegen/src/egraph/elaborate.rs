@@ -2,7 +2,7 @@
 //! in CFG nodes.
 
 use super::Stats;
-use super::cost::ExprCost;
+use super::cost::{Cost, ExprCost};
 use crate::ctxhash::NullCtx;
 use crate::dominator_tree::DominatorTree;
 use crate::hash_map::Entry as HashEntry;
@@ -100,7 +100,7 @@ pub(crate) struct Elaborator<'a> {
 const NOT_ON_LOOP_STACK: u32 = u32::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct BestEntry(ExprCost, Value);
+struct BestEntry(Cost, Value);
 
 impl PartialOrd for BestEntry {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
@@ -109,6 +109,28 @@ impl PartialOrd for BestEntry {
 }
 
 impl Ord for BestEntry {
+    #[inline]
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.0.cmp(&other.0).then_with(|| {
+            // Note that this comparison is reversed. When costs are equal,
+            // prefer the value with the bigger index. This is a heuristic that
+            // prefers results of rewrites to the original value, since we
+            // expect that our rewrites are generally improvements.
+            self.1.cmp(&other.1).reverse()
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ExprBestEntry(ExprCost, Value);
+
+impl PartialOrd for ExprBestEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ExprBestEntry {
     #[inline]
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.0.cmp(&other.0).then_with(|| {
@@ -183,7 +205,7 @@ impl<'a> Elaborator<'a> {
     ) -> Self {
         let num_values = func.dfg.num_values();
         let mut value_to_best_value =
-            SecondaryMap::with_default(BestEntry(ExprCost::infinity(), Value::reserved_value()));
+            SecondaryMap::with_default(BestEntry(Cost::infinity(), Value::reserved_value()));
         value_to_best_value.resize(num_values);
         Self {
             func,
@@ -345,8 +367,6 @@ impl<'a> Elaborator<'a> {
     fn compute_best_values(&mut self) {
         let sorted_values = self.topo_sorted_values();
 
-        let best = &mut self.value_to_best_value;
-
         // We can't make random decisions inside the fixpoint loop below because
         // that could cause values to change on every iteration of the loop,
         // which would make the loop never terminate. So in chaos testing
@@ -363,6 +383,21 @@ impl<'a> Elaborator<'a> {
                 "best"
             }
         );
+
+        let saw_infinity = self.compute_best_values_with_scalar_costs(&sorted_values, use_worst);
+
+        if saw_infinity {
+            self.compute_best_values_with_expr_costs(&sorted_values, use_worst);
+        }
+    }
+
+    fn compute_best_values_with_scalar_costs(
+        &mut self,
+        sorted_values: &[Value],
+        use_worst: bool,
+    ) -> bool {
+        let best = &mut self.value_to_best_value;
+        let mut saw_infinity = false;
 
         // Because the values are topologically sorted, we know that we will see
         // defs before uses, so an instruction's operands' costs will already be
@@ -392,7 +427,7 @@ impl<'a> Elaborator<'a> {
                 }
 
                 ValueDef::Param(_, _) => {
-                    best[value] = BestEntry(ExprCost::zero(), value);
+                    best[value] = BestEntry(Cost::zero(), value);
                 }
 
                 // If the Inst is inserted into the layout (which is,
@@ -401,20 +436,22 @@ impl<'a> Elaborator<'a> {
                 // cost.
                 ValueDef::Result(inst, _) => {
                     if let Some(_) = self.func.layout.inst_block(inst) {
-                        best[value] = BestEntry(ExprCost::zero(), value);
+                        best[value] = BestEntry(Cost::zero(), value);
                     } else {
                         let inst_data = &self.func.dfg.insts[inst];
                         // N.B.: at this point we know that the opcode is
                         // pure, so `pure_op_cost`'s precondition is
                         // satisfied.
-                        let cost = ExprCost::of_pure_op(
-                            inst,
+                        let cost = Cost::of_pure_op(
                             inst_data.opcode(),
                             self.func.dfg.inst_values(inst).map(|value| {
                                 debug_assert!(!best[value].1.is_reserved_value());
                                 best[value].0
                             }),
                         );
+                        if cost == Cost::infinity() {
+                            saw_infinity = true;
+                        }
                         best[value] = BestEntry(cost, value);
                         trace!(" -> cost of value {} = {:?}", value, cost);
                     }
@@ -422,24 +459,86 @@ impl<'a> Elaborator<'a> {
             };
 
             // You might be expecting an assert that the best cost we just
-            // computed is not infinity, however infinite cost *can* still
-            // happen in practice. The expression cost tracks an approximate
-            // instruction footprint to avoid charging the same already-covered
-            // operand twice in common shared-DAG shapes. That keeps cases such
-            // as a chain of `iadd x, x` from growing exponentially, but it is
-            // still just a bounded heuristic over a 32-bit cost:
+            // computed is not infinity, however infinite cost *can* happen in
+            // practice. First, note that our cost function doesn't know about
+            // any shared structure in the dataflow graph, it only sums operand
+            // costs. (And trying to avoid that by deduping a single operation's
+            // operands is a losing game because you can always just add one
+            // indirection and go from `add(x, x)` to `add(foo(x), bar(x))` to
+            // hide the shared structure.) Given that blindness to sharing, we
+            // can make cost grow exponentially with a linear sequence of
+            // operations:
             //
             //     v0 = iconst.i32 1    ;; cost = 1
-            //     v1 = iadd v0, v0     ;; second v0 already covered
-            //     v2 = iadd v1, v1     ;; second v1 already covered
+            //     v1 = iadd v0, v0     ;; cost = 3 + 1 + 1
+            //     v2 = iadd v1, v1     ;; cost = 3 + 5 + 5
+            //     v3 = iadd v2, v2     ;; cost = 3 + 13 + 13
+            //     v4 = iadd v3, v3     ;; cost = 3 + 29 + 29
+            //     v5 = iadd v4, v4     ;; cost = 3 + 61 + 61
+            //     v6 = iadd v5, v5     ;; cost = 3 + 125 + 125
             //     ;; etc...
             //
-            // If a cost does saturate to infinity, it doesn't matter which
-            // equally infinite e-node we pick. As long as invariant (2) for
-            // optimization rules is upheld by our rule set (see
-            // `cranelift/codegen/src/opts/README.md`) it is safe to choose
-            // *any* e-node in the e-class. At worst we will produce suboptimal
-            // code, but never an incorrectness.
+            // If this happens, the caller will recompute the same values with
+            // a heavier sharing-aware fallback cost. Otherwise, the common path
+            // remains the simple scalar cost.
+        }
+
+        saw_infinity
+    }
+
+    fn compute_best_values_with_expr_costs(&mut self, sorted_values: &[Value], use_worst: bool) {
+        let mut expr_best = SecondaryMap::with_default(ExprBestEntry(
+            ExprCost::infinity(),
+            Value::reserved_value(),
+        ));
+        expr_best.resize(self.func.dfg.num_values());
+
+        for value in sorted_values.iter().copied() {
+            let def = self.func.dfg.value_def(value);
+            trace!(
+                "recomputing sharing-aware best for value {:?} def {:?}",
+                value, def
+            );
+
+            match def {
+                ValueDef::Union(x, y) => {
+                    debug_assert!(!expr_best[x].1.is_reserved_value());
+                    debug_assert!(!expr_best[y].1.is_reserved_value());
+                    expr_best[value] = if use_worst {
+                        core::cmp::max(expr_best[x], expr_best[y])
+                    } else {
+                        core::cmp::min(expr_best[x], expr_best[y])
+                    };
+                    trace!(
+                        " -> sharing-aware best of union({:?}, {:?}) = {:?}",
+                        expr_best[x], expr_best[y], expr_best[value]
+                    );
+                }
+
+                ValueDef::Param(_, _) => {
+                    expr_best[value] = ExprBestEntry(ExprCost::zero(), value);
+                }
+
+                ValueDef::Result(inst, _) => {
+                    if let Some(_) = self.func.layout.inst_block(inst) {
+                        expr_best[value] = ExprBestEntry(ExprCost::zero(), value);
+                    } else {
+                        let inst_data = &self.func.dfg.insts[inst];
+                        let cost = ExprCost::of_pure_op(
+                            inst,
+                            inst_data.opcode(),
+                            self.func.dfg.inst_values(inst).map(|value| {
+                                debug_assert!(!expr_best[value].1.is_reserved_value());
+                                expr_best[value].0
+                            }),
+                        );
+                        expr_best[value] = ExprBestEntry(cost, value);
+                        trace!(" -> sharing-aware cost of value {} = {:?}", value, cost);
+                    }
+                }
+            }
+
+            self.value_to_best_value[value].1 = expr_best[value].1;
         }
     }
 

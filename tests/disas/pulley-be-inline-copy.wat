@@ -17,14 +17,13 @@
 )
 ;; wasm[0]::function[0]:
 ;;       push_frame
-;;       xload64be_o32 x5, x0, 64
-;;       br_if_xult64_u8 x5, 16, 0x2e    // target = 0x38
-;;   11: xconst8 x6, 32
-;;       br_if_xult64 x5, x6, 0x27    // target = 0x3b
-;;   1b: xload64be_o32 x7, x0, 56
-;;       vload128le_o32 v7, x7, 16
-;;       vstore128le_o32 x7, 0, v7
+;;       xload64be_o32 x4, x0, 64
+;;       br_if_xult64_u8 x4, 16, 0x2b    // target = 0x35
+;;       br_if_xult64_u8 x4, 32, 0x27    // target = 0x38
+;;   18: xload64be_o32 x6, x0, 56
+;;       vload128le_o32 v6, x6, 16
+;;       vstore128le_o32 x6, 0, v6
 ;;       pop_frame
 ;;       ret
+;;   35: trap
 ;;   38: trap
-;;   3b: trap
