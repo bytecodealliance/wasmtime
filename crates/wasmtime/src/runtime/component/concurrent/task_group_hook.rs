@@ -53,20 +53,21 @@ pub struct TaskGroupId(TableId<TaskGroup>);
 /// called), if any, and any started group will be finished
 /// (i.e. `handle_finish` called).
 ///
-/// As of this writing, https://github.com/WebAssembly/component-model/pull/730
-/// (which adds `thread.set-task` and related intrinsics) has not yet been
-/// merged.  Once it has, and Wasmtime adds support for that feature, it will be
-/// possible for guest threads to change their task; in that case, the thread
-/// will effectively join whatever group the new task belongs to, which might
-/// not be the same as that of the old task.  In addition, the new
-/// `thread.get-task` intrinsic will give the guest another way (besides subtask
-/// handles) to keep tasks alive beyond the point when all their threads have
-/// exited or switched tasks, in which case the group it belongs to will not be
-/// disposed until all such tasks have been dropped using `task.drop`.
+/// As of this writing,
+/// <https://github.com/WebAssembly/component-model/pull/730> (which adds
+/// `thread.set-task` and related intrinsics) has not yet been merged.  Once it
+/// has, and Wasmtime adds support for that feature, it will be possible for
+/// guest threads to change their task; in that case, the thread will
+/// effectively join whatever group the new task belongs to, which might not be
+/// the same as that of the old task.  In addition, the new `thread.get-task`
+/// intrinsic will give the guest another way (besides subtask handles) to keep
+/// tasks alive beyond the point when all their threads have exited or switched
+/// tasks, in which case the group it belongs to will not be disposed until all
+/// such tasks have been dropped using `task.drop`.
 ///
 /// [^1]: Although it does _imply_ such a notion in the discussion of ["semantic
 /// tail
-/// calls"](https://github.com/WebAssembly/component-model/blob/d1daf829e2da2293091c105121383ffbc3b3515b/design/mvp/Concurrency.md?plain=1#L339-L3410.
+/// calls"](https://github.com/WebAssembly/component-model/blob/d1daf829e2da2293091c105121383ffbc3b3515b/design/mvp/Concurrency.md?plain=1#L339-L3410).
 pub trait TaskGroupHook: Send + Sync + 'static {
     /// Handle notification that a new task group has been created (i.e. a
     /// host->guest call has been prepared).

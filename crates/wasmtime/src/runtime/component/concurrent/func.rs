@@ -493,7 +493,8 @@ where
 impl<T> FuncCallConcurrent<'_, T> {
     /// Returns the task group that this invocation corresponds to.
     ///
-    /// This can be later correlated with calls to [`TaskGroupHook`].
+    /// This can be later correlated with calls to `TaskGroupHook` if the
+    /// `task-group-hook` feature is enabled.
     pub fn group(&self) -> TaskGroupId {
         self.call.group
     }
@@ -502,7 +503,8 @@ impl<T> FuncCallConcurrent<'_, T> {
 impl<T, P, R> TypedFuncCallConcurrent<T, P, R> {
     /// Returns the task group that this invocation corresponds to.
     ///
-    /// This can be later correlated with calls to [`TaskGroupHook`].
+    /// This can be later correlated with calls to `TaskGroupHook` if the
+    /// `task-group-hook` feature is enabled.
     pub fn group(&self) -> TaskGroupId {
         self.call.group
     }
