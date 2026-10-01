@@ -226,7 +226,7 @@ authors = ["The Wasmtime Project Developers"]
 edition = "2024"
 # Wasmtime's current policy is that this number can be no larger than the
 # current stable release of Rust minus 2.
-rust-version = "1.96.0"
+rust-version = "1.97.0"
 
 [workspace.lints.rust]
 # Turn on some lints which are otherwise allow-by-default in rustc.
@@ -604,7 +604,7 @@ gc-null = ["gc", "wasmtime/gc-null", "wasmtime-cli-flags/gc-null"]
 gc-copying = ["gc", "wasmtime/gc-copying", "wasmtime-cli-flags/gc-copying"]
 pulley = ["wasmtime-cli-flags/pulley"]
 stack-switching = ["wasmtime/stack-switching", "wasmtime-cli-flags/stack-switching"]
-debug = ["wasmtime-cli-flags/debug", "wasmtime/debug", "component-model"]
+debug = ["wasmtime-cli-flags/debug", "wasmtime/debug", "component-model", "dep:wasmtime-debugger"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
@@ -629,7 +629,6 @@ run = [
   "dep:tokio",
   "wasmtime-cli-flags/async",
   "wasmtime-wasi-http?/p2",
-  "dep:wasmtime-debugger",
 ]
 completion = ["dep:clap_complete"]
 objdump = [
