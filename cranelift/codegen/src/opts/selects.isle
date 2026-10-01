@@ -212,3 +212,50 @@
 ;; (x != y) ? (x - y) : 0 ==> x - y
 (rule (simplify (select ty (ne cty x y) (isub ty x y) (all_zero ty)))
       (isub ty x y))
+
+;; (c ? x : y) + (c ? p : q) --> c ? (x + p) : (y + q).
+(rule (simplify (iadd ty (select ty x y z) (select ty x p q)))
+      (select ty x (iadd ty y p) (iadd ty z q)))
+
+;; (c ? C1 : C2) & M --> c ? (C1 & M) : (C2 & M).
+(rule (simplify (band (fits_in_64 ty)
+                      (select ty x (iconst ty y) (iconst ty z))
+                      (iconst ty p)))
+      (select ty x
+                 (iconst ty (imm64_and ty y p))
+                 (iconst ty (imm64_and ty z p))))
+(rule (simplify (band (fits_in_64 ty)
+                      (iconst ty x)
+                      (select ty y (iconst ty z) (iconst ty p))))
+      (select ty y
+                 (iconst ty (imm64_and ty x z))
+                 (iconst ty (imm64_and ty x p))))
+(rule (simplify (band (fits_in_64 ty)
+                      (select ty x (iconst ty y) (iconst_u ty z))
+                      (iconst_u ty p)))
+      (if-let true (u64_eq z (u64_and z p)))
+      (select ty x
+                 (iconst ty (imm64_and ty y (imm64 p)))
+                 (iconst_u ty z)))
+
+;; (x == 0) ? y : (x + y) --> y + x, and its dual.
+(rule (simplify (select ty
+                        (eq cty x (iconst_u ty 0))
+                        y
+                        (iadd ty x y)))
+      (iadd ty y x))
+(rule (simplify (select ty
+                        (eq cty x (iconst_u ty 0))
+                        y
+                        (iadd ty y x)))
+      (iadd ty y x))
+(rule (simplify (select ty
+                        (ne cty x (iconst_u ty 0))
+                        (iadd ty x y)
+                        y))
+      (iadd ty y x))
+(rule (simplify (select ty
+                        (ne cty x (iconst_u ty 0))
+                        (iadd ty y x)
+                        y))
+      (iadd ty y x))

@@ -767,3 +767,45 @@ block0(v0: i32x4, v1: i32):
     return v4
 }
 ; check: ishl v0, v1
+
+function %select_constant_shift_i32(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 3
+    v2 = iconst.i32 5
+    v3 = iconst.i32 2
+    v4 = select v0, v1, v2
+    v5 = ishl v4, v3
+    return v5
+}
+; check: v6 = iconst.i32 12
+; check: v7 = iconst.i32 20
+; check: v8 = select v0, v6, v7  ; v6 = 12, v7 = 20
+; check: return v8
+
+function %select_constant_shift_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 3
+    v2 = iconst.i64 5
+    v3 = iconst.i64 2
+    v4 = select v0, v1, v2
+    v5 = ishl v4, v3
+    return v5
+}
+; check: v6 = iconst.i64 12
+; check: v7 = iconst.i64 20
+; check: v8 = select v0, v6, v7  ; v6 = 12, v7 = 20
+; check: return v8
+
+function %select_constant_shift_masked_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 3
+    v2 = iconst.i8 5
+    v3 = iconst.i8 10
+    v4 = select v0, v1, v2
+    v5 = ishl v4, v3
+    return v5
+}
+; check: v6 = iconst.i8 12
+; check: v7 = iconst.i8 20
+; check: v8 = select v0, v6, v7  ; v6 = 12, v7 = 20
+; check: return v8
