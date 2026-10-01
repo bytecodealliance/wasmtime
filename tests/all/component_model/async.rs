@@ -515,22 +515,44 @@ async fn require_concurrency_support() -> Result<()> {
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn cancel_host_task_does_not_leak() -> Result<()> {
+    cancel_host_task_does_not_leak_impl(false).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn async_cancel_host_task_does_not_leak() -> Result<()> {
+    cancel_host_task_does_not_leak_impl(true).await
+}
+
+async fn cancel_host_task_does_not_leak_impl(async_cancel: bool) -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
+    config.wasm_component_model_more_async_builtins(true);
+    config.wasm_component_model_async_stackful(true);
     let engine = Engine::new(&config)?;
 
     let mut store = Store::new(&engine, ());
+    let cancel_option = if async_cancel { "async" } else { "" };
+    let expected_cancel_status = if async_cancel { -1 } else { 4 };
     let component = Component::new(
         &engine,
-        r#"(component
+        format!(
+            r#"(component
             (import "f" (func $f async))
+            (core module $memory (memory (export "memory") 1))
+            (core instance $memory (instantiate $memory))
 
             (core module $m
+                (import "" "memory" (memory 1))
                 (import "" "f" (func $f (result i32)))
                 (import "" "cancel" (func $cancel (param i32) (result i32)))
                 (import "" "drop" (func $drop (param i32)))
+                (import "" "new-set" (func $new-set (result i32)))
+                (import "" "join" (func $join (param i32 i32)))
+                (import "" "wait" (func $wait (param i32 i32) (result i32)))
+                (import "" "drop-set" (func $drop-set (param i32)))
                 (func (export "run")
-                    (local i32)
+                    (local $task i32) (local $status i32) (local $set i32)
 
                     ;; start the subtask, asserting it's `STARTED`
                     call $f
@@ -547,26 +569,45 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
                     i32.shr_u
                     local.set 0
 
-                    ;; cancel the subtask asserting it's `RETURN_CANCELLED`
-                    local.get 0
-                    call $cancel
-                    i32.const 4 ;; RETURN_CANCELLED
-                    i32.ne
-                    if unreachable end
+                    ;; Cancel, waiting for the terminal event in async mode.
+                    (local.set $status (call $cancel (local.get $task)))
+                    (if (i32.ne (local.get $status) (i32.const {expected_cancel_status}))
+                        (then unreachable))
+                    (if (i32.eq (local.get $status) (i32.const -1))
+                        (then
+                            (local.set $set (call $new-set))
+                            (call $join (local.get $task) (local.get $set))
+                            (if (i32.ne (call $wait (local.get $set) (i32.const 0)) (i32.const 1))
+                                (then unreachable))
+                            (if (i32.ne (i32.load (i32.const 0)) (local.get $task))
+                                (then unreachable))
+                            (local.set $status (i32.load (i32.const 4)))))
+                    (if (i32.ne (local.get $status) (i32.const 4)) ;; RETURN_CANCELLED
+                        (then unreachable))
 
                     ;; drop the subtask
                     local.get 0
                     call $drop
+                    (if (local.get $set) (then (call $drop-set (local.get $set))))
                 )
             )
             (core func $f (canon lower (func $f) async))
-            (core func $cancel (canon subtask.cancel))
+            (core func $cancel (canon subtask.cancel {cancel_option}))
             (core func $drop (canon subtask.drop))
+            (core func $new-set (canon waitable-set.new))
+            (core func $join (canon waitable.join))
+            (core func $wait (canon waitable-set.wait (memory (core memory $memory "memory"))))
+            (core func $drop-set (canon waitable-set.drop))
             (core instance $i (instantiate $m
                 (with "" (instance
+                    (export "memory" (memory $memory "memory"))
                     (export "f" (func $f))
                     (export "cancel" (func $cancel))
                     (export "drop" (func $drop))
+                    (export "new-set" (func $new-set))
+                    (export "join" (func $join))
+                    (export "wait" (func $wait))
+                    (export "drop-set" (func $drop-set))
                 ))
             ))
 
@@ -574,7 +615,8 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
                 (canon lift (core func $i "run")))
 
 
-        )"#,
+        )"#
+        ),
     )?;
 
     let mut linker = Linker::new(&engine);

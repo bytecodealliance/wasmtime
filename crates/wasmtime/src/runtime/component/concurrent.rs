@@ -3582,9 +3582,11 @@ impl Instance {
                 lower(store.as_context_mut(), result, false, Some(task))?;
                 let state = store.0.concurrent_state_mut()?;
                 match &mut state.get_mut(task)?.state {
-                    // The task is already flagged as finished because it was
-                    // cancelled. No need to transition further.
-                    HostTaskState::CalleeDone { .. } => {}
+                    // Cancellation is only complete once lowering has finished
+                    // and the terminal event can be published.
+                    pending @ HostTaskState::CalleeCancelling => {
+                        *pending = HostTaskState::CalleeDone { cancelled: true };
+                    }
 
                     // Otherwise transition this task to the done state.
                     other => *other = HostTaskState::CalleeDone { cancelled: false },
@@ -3847,7 +3849,9 @@ impl Instance {
             let id = TableId::<HostTask>::new(rep);
             let task = concurrent_state.get_mut(id)?;
             match &task.state {
-                HostTaskState::CalleeRunning(_) => bail!(Trap::SubtaskDropNotResolved),
+                HostTaskState::CalleeRunning(_) | HostTaskState::CalleeCancelling => {
+                    bail!(Trap::SubtaskDropNotResolved)
+                }
                 HostTaskState::CalleeDone { .. } => {}
                 HostTaskState::CalleeStarted | HostTaskState::CalleeFinished(_) => {
                     bail_bug!("invalid state for callee in `subtask.drop`")
@@ -4284,7 +4288,7 @@ impl Instance {
         let needs_block;
         if let Waitable::Host(host_task) = waitable {
             let state = &mut concurrent_state.get_mut(host_task)?.state;
-            match mem::replace(state, HostTaskState::CalleeDone { cancelled: true }) {
+            match state {
                 // If the callee is still running, signal an abort is requested.
                 //
                 // After cancelling this falls through to block waiting for the
@@ -4293,19 +4297,20 @@ impl Instance {
                 // with the task actually getting cancelled or finishing.
                 HostTaskState::CalleeRunning(handle) => {
                     handle.abort();
+                    *state = HostTaskState::CalleeCancelling;
                     needs_block = true;
                 }
 
                 // Cancellation was already requested, so fail as the task can't
                 // be cancelled twice.
-                HostTaskState::CalleeDone { cancelled } => {
-                    if cancelled {
-                        bail!(Trap::SubtaskCancelAfterTerminal);
-                    } else {
-                        // The callee is already done so there's no need to
-                        // block further for an event.
-                        needs_block = false;
-                    }
+                HostTaskState::CalleeCancelling | HostTaskState::CalleeDone { cancelled: true } => {
+                    bail!(Trap::SubtaskCancelAfterTerminal);
+                }
+                HostTaskState::CalleeDone { cancelled: false } => {
+                    // The callee is already done so there's no need to
+                    // block further for an event.
+                    *state = HostTaskState::CalleeDone { cancelled: true };
+                    needs_block = false;
                 }
 
                 // These states should not be possible for a subtask that's
@@ -4995,6 +5000,11 @@ enum HostTaskState {
     /// linked to the future in the main `FuturesUnordered` of a store which is
     /// used to cancel it if the guest requests cancellation.
     CalleeRunning(JoinHandle),
+
+    /// Cancellation was requested, but the completion worker has not finished
+    /// lowering the result and publishing the terminal event. The task must
+    /// remain in the table until that worker completes.
+    CalleeCancelling,
 
     /// Terminal state used for tasks in `poll_and_block` to store the result of
     /// their computation. Note that this state is not used for tasks in
@@ -6562,5 +6572,133 @@ fn stage_call0<T: 'static>(
             post_return.map(SendSyncPtr::new),
             true,
         )
+    }
+}
+
+#[cfg(all(test, feature = "cranelift", feature = "wat"))]
+mod tests {
+    use super::*;
+    use crate::component::{Component, Linker};
+    use crate::store::AsStoreOpaque;
+    use crate::{Config, Engine};
+
+    fn host_subtask(
+        state: HostTaskState,
+        event: Option<Event>,
+    ) -> Result<(Store<()>, Instance, TableId<HostTask>, u32)> {
+        let mut config = Config::new();
+        config.wasm_component_model_async(true);
+        let engine = Engine::new(&config)?;
+        let component = Component::new(&engine, "(component)")?;
+        let mut store = Store::new(&engine, ());
+        let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+        let store_opaque = store.as_store_opaque();
+        // These intrinsics do not access the host task's caller.
+        let task = store_opaque
+            .concurrent_state_mut()?
+            .push(HostTask::new(TableId::new(u32::MAX), state))?;
+        let handle = store_opaque
+            .instance_state(instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(0)))
+            .handle_table()
+            .subtask_insert_host(task.rep())?;
+        let common = &mut store_opaque.concurrent_state_mut()?.get_mut(task)?.common;
+        common.handle = Some(handle);
+        common.event = event;
+        Ok((store, instance, task, handle))
+    }
+
+    #[test]
+    fn host_subtask_drop_during_cancellation() -> Result<()> {
+        for abort_completed in [false, true] {
+            let (handle, future) = JoinHandle::run(future::pending::<()>());
+            let mut future = pin!(future);
+            let (mut store, instance, task, handle) =
+                host_subtask(HostTaskState::CalleeRunning(handle), None)?;
+            let store = store.as_store_opaque();
+            let caller = RuntimeComponentInstanceIndex::from_u32(0);
+            assert_eq!(
+                instance.subtask_cancel(store, caller, true, handle)?,
+                BLOCKED
+            );
+            if abort_completed {
+                // Even after the abort resolves, the completion worker still
+                // needs the task entry to lower the result and publish an event.
+                assert!(matches!(
+                    future
+                        .as_mut()
+                        .poll(&mut Context::from_waker(Waker::noop())),
+                    Poll::Ready(None),
+                ));
+            }
+            for async_ in [false, true] {
+                let err = instance
+                    .subtask_cancel(store, caller, async_, handle)
+                    .unwrap_err();
+                assert_eq!(err.downcast::<Trap>()?, Trap::SubtaskCancelAfterTerminal);
+            }
+            let err = instance.subtask_drop(store, caller, handle).unwrap_err();
+            assert_eq!(err.downcast::<Trap>()?, Trap::SubtaskDropNotResolved);
+            assert!(store.concurrent_state_mut()?.get_mut(task).is_ok());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn host_subtask_cancel_after_completion() -> Result<()> {
+        for async_ in [false, true] {
+            let (mut store, instance, task, handle) = host_subtask(
+                HostTaskState::CalleeDone { cancelled: false },
+                Some(Event::Subtask {
+                    status: Status::Returned,
+                }),
+            )?;
+            let store = store.as_store_opaque();
+            let caller = RuntimeComponentInstanceIndex::from_u32(0);
+            assert_eq!(
+                instance.subtask_cancel(store, caller, async_, handle)?,
+                Status::Returned as u32,
+            );
+            let err = instance
+                .subtask_cancel(store, caller, async_, handle)
+                .unwrap_err();
+            assert_eq!(err.downcast::<Trap>()?, Trap::SubtaskCancelAfterTerminal);
+            instance.subtask_drop(store, caller, handle)?;
+            assert!(store.concurrent_state_mut()?.get_mut(task).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn host_subtask_drop_requires_terminal_event_delivery() -> Result<()> {
+        for (cancelled, status) in [
+            (false, Status::Returned),
+            (true, Status::Returned),
+            (true, Status::ReturnCancelled),
+        ] {
+            for delivered in [false, true] {
+                let event = if delivered {
+                    None
+                } else {
+                    Some(Event::Subtask { status })
+                };
+                let (mut store, instance, task, handle) =
+                    host_subtask(HostTaskState::CalleeDone { cancelled }, event)?;
+                let store = store.as_store_opaque();
+                let result = instance.subtask_drop(
+                    store,
+                    RuntimeComponentInstanceIndex::from_u32(0),
+                    handle,
+                );
+                if delivered {
+                    result?;
+                    assert!(store.concurrent_state_mut()?.get_mut(task).is_err());
+                } else {
+                    let err = result.unwrap_err();
+                    assert_eq!(err.downcast::<Trap>()?, Trap::SubtaskDropNotResolved);
+                    assert!(store.concurrent_state_mut()?.get_mut(task).is_ok());
+                }
+            }
+        }
+        Ok(())
     }
 }
