@@ -1,6 +1,6 @@
 ;;! target = "aarch64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=drc"
+;;! flags = "-W exceptions,gc-support -C collector=drc"
 
 ;; A function reference is interned before it is stored in the exception.
 (module

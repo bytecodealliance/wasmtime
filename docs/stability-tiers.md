@@ -77,7 +77,9 @@ For explanations of what each tier means see below.
 
 [^support]: Compiler support is further broken down [below](#compiler-support)
   into finer-grained target/wasm proposal combinations. Compilers are not
-  required to support the full matrix of all tier 1 targets/proposals.
+  required to support the full matrix of all tier 1 targets/proposals, and not
+  all wasm proposals which have support in a compiler are mature enough to be
+  enabled by default and therefore supported as tier 1.
 
 #### Tier 2
 
@@ -203,8 +205,9 @@ refined in the below table in their support for various architectures and
 WebAssembly features. Tier 1 WebAssembly feature are required to be supported by
 at least one compiler on all Tier 1 targets, and similarly for Tier 2 features
 and so on.  Note that architecture here is independent of OS, meaning that
-support is uniform across Wasmtime's supported target for each tier. The legend
-here is:
+support is uniform across Wasmtime's supported target for each tier.  Not all
+wasm proposals which have support in a compiler are mature enough to be enabled
+by default and therefore supported as tier 1.  The legend here is:
 
 * ✅ - fully supported
 * 🚧 - work-in-progress

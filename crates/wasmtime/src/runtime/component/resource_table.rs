@@ -406,11 +406,14 @@ impl ResourceTable {
     }
 
     /// Iterate over all the entries in this table.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (dyn Any + Send)> {
-        self.entries.iter_mut().filter_map(|entry| match entry {
-            Entry::Occupied { entry } => Some(&mut *entry.entry),
-            Entry::Free { .. } => None,
-        })
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (u32, &mut (dyn Any + Send))> {
+        self.entries
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(rep, entry)| match entry {
+                Entry::Occupied { entry } => Some((u32::try_from(rep).unwrap(), &mut *entry.entry)),
+                Entry::Free { .. } => None,
+            })
     }
 }
 

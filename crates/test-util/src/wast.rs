@@ -577,13 +577,10 @@ impl WastTest {
             return true;
         }
 
-        // Waiting for bytecodealliance/wasm-tools#2664 zero-length compact imports,
-        // as well as the Extended Name Section Proposal.
+        // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
         let unsupported = [
-            "spec_testsuite/proposals/compact-import-section/imports-compact.wast",
             "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
             "spec_testsuite/proposals/extended-name-section/custom/name.wast",
-            "spec_testsuite/type-subtyping.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
