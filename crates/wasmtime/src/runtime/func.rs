@@ -878,7 +878,7 @@ impl Func {
     /// Note that this is a somewhat expensive method since it requires taking a
     /// lock as well as cloning a type.
     pub(crate) fn load_ty(&self, store: &StoreOpaque) -> FuncType {
-        FuncType::from_shared_type_index(store.engine(), self.type_index(store))
+        FuncType::from_shared_type_index(store.engine(), self.type_index(store)).unwrap()
     }
 
     /// Does this function match the given type?

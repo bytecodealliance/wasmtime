@@ -17,7 +17,7 @@ use crate::runtime::vm::{
     GcRuntime, GcStoreTraceState, SendSyncUnsafeCell, TraceInfo, TypedGcRef, VMCopyingHeader,
     VMCopyingHeapData, VMExternRef, VMGcHeader, VMGcRef, VMMemoryDefinition,
 };
-use crate::{Engine, bail_bug, bug, prelude::*};
+use crate::{Engine, bail_bug, prelude::*};
 use core::{
     alloc::Layout, any::Any, mem, num::NonZeroU32, ptr::NonNull, sync::atomic::AtomicUsize,
 };
@@ -565,8 +565,7 @@ survived collection, since the active space is the same size as the idle space",
         if self
             .index(copying_ref(&to_ref))?
             .header
-            .kind()
-            .is_some_and(|k| k.matches(VMGcKind::ExternRef))
+            .matches_kind(VMGcKind::ExternRef)
         {
             let old_head = self.active_extern_ref_set_head.take();
             self.index_mut::<VMCopyingExternRef>(to_ref.as_typed_unchecked())?

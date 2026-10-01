@@ -769,7 +769,7 @@ impl ArrayRef {
     pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<ArrayType> {
         assert!(self.comes_from_same_store(store));
         let index = self.type_index(store)?;
-        match ArrayType::try_from_shared_type_index(store.engine(), index) {
+        match ArrayType::from_shared_type_index(store.engine(), index) {
             Some(ty) => Ok(ty),
             None => bail_bug!("invalid array type index"),
         }
@@ -826,7 +826,7 @@ impl ArrayRef {
         let gc_ref = self.inner.try_gc_ref(store)?;
         debug_assert!({
             let header = store.require_gc_store()?.header(gc_ref)?;
-            header.kind().is_some_and(|k| k.matches(VMGcKind::ArrayRef))
+            header.matches_kind(VMGcKind::ArrayRef)
         });
         let arrayref = gc_ref.as_arrayref_unchecked();
         arrayref.len(store)
@@ -860,7 +860,7 @@ impl ArrayRef {
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
-        debug_assert!(header.kind().is_some_and(|k| k.matches(VMGcKind::ArrayRef)));
+        debug_assert!(header.matches_kind(VMGcKind::ArrayRef));
 
         let len = self._len(&store)?;
 
@@ -918,11 +918,7 @@ impl ArrayRef {
     fn arrayref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMArrayRef> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        debug_assert!(
-            self.header(store)?
-                .kind()
-                .is_some_and(|k| k.matches(VMGcKind::ArrayRef))
-        );
+        debug_assert!(self.header(store)?.matches_kind(VMGcKind::ArrayRef));
         Ok(gc_ref.as_arrayref_unchecked())
     }
 
@@ -1031,7 +1027,7 @@ impl ArrayRef {
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
-        debug_assert!(header.kind().is_some_and(|k| k.matches(VMGcKind::ArrayRef)));
+        debug_assert!(header.matches_kind(VMGcKind::ArrayRef));
         match header.ty() {
             Some(ty) => Ok(ty),
             None => bail_bug!("arrayrefs should have concrete types"),

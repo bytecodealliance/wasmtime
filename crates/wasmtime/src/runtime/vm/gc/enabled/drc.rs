@@ -392,12 +392,7 @@ impl DrcHeap {
                     // Handle `externref` host data. Only `externref`s have host
                     // data, and `ty` is `None` only for `externref`s, so we skip
                     // this for `struct` and `array` objects entirely.
-                    debug_assert!(
-                        drc_header
-                            .header
-                            .kind()
-                            .is_some_and(|k| k.matches(VMGcKind::ExternRef))
-                    );
+                    debug_assert!(drc_header.header.matches_kind(VMGcKind::ExternRef));
                     let externref = match gc_ref.as_typed::<VMDrcExternRef>(this) {
                         Some(r) => r,
                         None => bail_bug!("expected externref"),

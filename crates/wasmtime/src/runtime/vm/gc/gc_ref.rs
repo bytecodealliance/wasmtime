@@ -48,6 +48,14 @@ impl VMGcHeader {
         VMGcKind::from_high_bits_of_u32(self.kind)
     }
 
+    /// Is this object's kind valid and a subtype of `kind`?
+    ///
+    /// False for a header whose kind bits do not name a valid kind, since
+    /// headers come out of the untrusted GC heap.
+    pub fn matches_kind(&self, kind: VMGcKind) -> bool {
+        self.kind().is_some_and(|k| k.matches(kind))
+    }
+
     /// Get the reserved 26 bits in this header.
     ///
     /// These are bits are reserved for `GcRuntime` implementations to make use
@@ -383,18 +391,17 @@ impl VMGcRef {
     /// Is this `VMGcRef` a `VMExternRef`?
     #[inline]
     pub fn is_extern_ref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> bool {
-        self.gc_header(gc_heap).map_or(false, |h| {
-            h.kind().is_some_and(|k| k.matches(VMGcKind::ExternRef))
-        })
+        self.gc_header(gc_heap)
+            .map_or(false, |h| h.matches_kind(VMGcKind::ExternRef))
     }
 
     /// Is this `VMGcRef` an `anyref`?
     #[inline]
     pub fn is_any_ref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> bool {
         self.is_i31()
-            || self.gc_header(gc_heap).map_or(false, |h| {
-                h.kind().is_some_and(|k| k.matches(VMGcKind::AnyRef))
-            })
+            || self
+                .gc_header(gc_heap)
+                .map_or(false, |h| h.matches_kind(VMGcKind::AnyRef))
     }
 
     pub fn read_val(

@@ -156,19 +156,8 @@ impl Id {
         u32::try_from(self.0.index()).unwrap()
     }
 
-    /// Construct an `Id` from its raw underlying representation.
-    ///
-    /// `raw` should be a value that was previously created via
-    /// `Id::into_raw`. May panic if given arbitrary values; use
-    /// `Id::try_from_raw` for values that are not known to be well-formed.
-    #[inline]
-    pub fn from_raw(raw: u32) -> Self {
-        let raw = usize::try_from(raw).unwrap();
-        Self(EntryIndex::new(raw))
-    }
-
-    /// Construct an `Id` from its raw underlying representation, if that
-    /// representation is well-formed.
+    /// Construct an `Id` from a value previously returned by `into_raw`, if
+    /// that value is well-formed.
     ///
     /// A well-formed `Id` is not necessarily one that any slab has handed out;
     /// lookups are still checked.

@@ -209,14 +209,14 @@ impl EqRef {
         };
 
         if kind.matches(VMGcKind::StructRef) {
-            return match StructType::try_from_shared_type_index(store.engine(), ty) {
+            return match StructType::from_shared_type_index(store.engine(), ty) {
                 Some(ty) => Ok(HeapType::ConcreteStruct(ty)),
                 None => bail_bug!("invalid struct type index"),
             };
         }
 
         if kind.matches(VMGcKind::ArrayRef) {
-            return match ArrayType::try_from_shared_type_index(store.engine(), ty) {
+            return match ArrayType::from_shared_type_index(store.engine(), ty) {
                 Some(ty) => Ok(HeapType::ConcreteArray(ty)),
                 None => bail_bug!("invalid array type index"),
             };
