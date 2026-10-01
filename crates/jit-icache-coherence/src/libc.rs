@@ -143,9 +143,12 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
 #[cfg(all(target_arch = "aarch64", target_vendor = "apple"))]
 fn aarch64_flush_icache(start: u64, end: u64) {
     // Reading CTR_EL0 at EL0 gets SIGILL on macOS, so do what compiler-rt does on
-    // Darwin and call the libSystem routine instead:
+    // Darwin and call the libSystem routine. It also carries Apple's own workarounds:
+    // since libplatform-306 (macOS 14) it issues an extra `dsb ish` after every 20
+    // `ic ivau` on the CPU families in `cpus_that_need_dsb_for_ic_ivau`, which an
+    // inline copy of the sequence would miss.
     // https://github.com/llvm/llvm-project/blob/3390613ccf0fbbb40026dcbabb36fce444f79480/compiler-rt/lib/builtins/clear_cache.c#L225-L228
-    // https://github.com/apple/darwin-libplatform/blob/215b09856ab5765b7462a91be7076183076600df/src/cachecontrol/arm64/cache.s#L31-L52
+    // https://github.com/apple-oss-distributions/libplatform/blob/libplatform-375.120.2/src/cachecontrol/arm64/cache.s#L31-L92
     unsafe extern "C" {
         fn sys_icache_invalidate(start: *mut c_void, len: usize);
     }
@@ -175,18 +178,38 @@ impl CacheType {
     }
 }
 
+/// The start address of every `line`-byte cache line that overlaps `start..end`.
+#[cfg(any(all(target_arch = "aarch64", not(target_vendor = "apple")), test))]
+fn cache_lines(start: u64, end: u64, line: u64) -> impl Iterator<Item = u64> {
+    (start - start % line..end).step_by(line as usize)
+}
+
 #[cfg(all(target_arch = "aarch64", not(target_vendor = "apple")))]
 fn aarch64_flush_icache(start: u64, end: u64) {
     use core::arch::asm;
     use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
-    // The sequence compiler-rt and the Linux kernel use to make newly written
-    // instructions visible: clean the data cache to the point of unification (unless
-    // CTR_EL0.IDC says that isn't needed), then invalidate the instruction cache (unless
-    // CTR_EL0.DIC), each by that cache's minimum line size. Without the clean, `ic ivau`
-    // can refetch stale bytes on cores such as Cortex-A72.
+    // Make newly written instructions visible as the Arm ARM describes it (DDI 0487,
+    // "Concurrent modification and execution of instructions"), skipping the steps
+    // CTR_EL0 says a core doesn't need: clean the data cache to the point of
+    // unification unless IDC, `dsb ish`, invalidate the instruction cache unless DIC,
+    // `dsb ish`, `isb`, each loop by that cache's minimum line size. Without the clean,
+    // `ic ivau` can refetch stale bytes on cores such as Cortex-A72. This is
+    // compiler-rt's `__clear_cache` sequence; the Linux kernel's
+    // `caches_clean_inval_pou_macro` differs only in using `dsb ishst` when IDC is set.
     // https://github.com/llvm/llvm-project/blob/3390613ccf0fbbb40026dcbabb36fce444f79480/compiler-rt/lib/builtins/clear_cache.c#L121-L153
     // https://github.com/torvalds/linux/blob/551c722f40809618230001baccf219193e22fc5a/arch/arm64/mm/cache.S#L28-L43
+    //
+    // CTR_EL0 is read once per process although threads run on, and migrate between,
+    // different cores. IDC and DIC must be the same on every core in an Inner Shareable
+    // domain (DDI 0487, CTR_EL0 description), which leaves the line sizes. Linux, NetBSD
+    // 10 and FreeBSD 15 make those uniform too: a core whose CTR_EL0 differs from the
+    // system-wide safe value traps EL0 reads and gets that value, with the smallest
+    // line sizes. Reading it on every call would give the same answer, and could not
+    // help on other systems anyway, since a thread can migrate between the read and
+    // the loops.
+    // https://github.com/torvalds/linux/blob/551c722f40809618230001baccf219193e22fc5a/arch/arm64/kernel/cpu_errata.c#L172-L189
+    // https://github.com/torvalds/linux/blob/551c722f40809618230001baccf219193e22fc5a/arch/arm64/kernel/traps.c#L601-L618
 
     // Bit 31 of CTR_EL0 is RES1, so zero means it hasn't been read yet.
     static CTR_EL0: AtomicU64 = AtomicU64::new(0);
@@ -198,14 +221,14 @@ fn aarch64_flush_icache(start: u64, end: u64) {
         CTR_EL0.store(ctr, Relaxed);
     }
 
+    // None of the blocks below may be `nomem`: the stores of the new code have to stay
+    // ahead of the maintenance and the barriers.
     let cache = CacheType::decode(ctr);
     if !cache.idc {
-        let mut addr = start & !(cache.dmin_line - 1);
-        while addr < end {
+        for addr in cache_lines(start, end, cache.dmin_line) {
             unsafe {
                 asm!("dc cvau, {}", in(reg) addr, options(nostack, preserves_flags));
             }
-            addr += cache.dmin_line;
         }
     }
     unsafe {
@@ -213,12 +236,10 @@ fn aarch64_flush_icache(start: u64, end: u64) {
     }
 
     if !cache.dic {
-        let mut addr = start & !(cache.imin_line - 1);
-        while addr < end {
+        for addr in cache_lines(start, end, cache.imin_line) {
             unsafe {
                 asm!("ic ivau, {}", in(reg) addr, options(nostack, preserves_flags));
             }
-            addr += cache.imin_line;
         }
         unsafe {
             asm!("dsb ish", options(nostack, preserves_flags));
@@ -245,11 +266,21 @@ pub(crate) fn clear_cache(_ptr: *const c_void, _len: usize) -> Result<()> {
 mod tests {
     #[test]
     fn ctr_el0_decode() {
-        // Cortex-A72 (Graviton1), qemu -cpu max, Neoverse-N1 (Graviton2)
         for (ctr, idc, dic, dmin_line, imin_line) in [
+            // Cortex-A72 (Graviton1)
             (0x8444c004, false, false, 64, 64),
+            // qemu -cpu max
             (0x80038003, false, false, 32, 32),
+            // Neoverse-N1 (Graviton2)
             (0xb444c004, true, true, 64, 64),
+            // Cortex-A55: IDC without DIC
+            (0x94448004, true, false, 64, 64),
+            // A64FX: 256-byte lines
+            (0x86668006, false, false, 256, 256),
+            // What Linux reports on a Neoverse-N1 with erratum 1542419: DIC hidden and
+            // IminLine raised to the page size, for 4K and 64K pages
+            (0x9444c00a, true, false, 64, 4096),
+            (0x9444c00e, true, false, 64, 65536),
         ] {
             let cache = super::CacheType::decode(ctr);
             assert_eq!(cache.idc, idc, "{ctr:#x}");
@@ -257,6 +288,15 @@ mod tests {
             assert_eq!(cache.dmin_line, dmin_line, "{ctr:#x}");
             assert_eq!(cache.imin_line, imin_line, "{ctr:#x}");
         }
+    }
+
+    #[test]
+    fn cache_lines_cover_the_range() {
+        let lines = |start, end, line| super::cache_lines(start, end, line).collect::<Vec<u64>>();
+        assert_eq!(lines(0x1000, 0x1008, 64), [0x1000]);
+        assert_eq!(lines(0x1030, 0x1050, 64), [0x1000, 0x1040]);
+        assert_eq!(lines(0x1fff, 0x2001, 4096), [0x1000, 0x2000]);
+        assert!(lines(0x1000, 0x1000, 64).is_empty());
     }
 
     // Rewrite a function in a page that has already executed it, the way a JIT reuses
