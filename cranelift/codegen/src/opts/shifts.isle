@@ -347,3 +347,11 @@
 (rule (simplify (sshr ty x (band _ k (iconst_u _ mask))))
       (if-let mask (ty_shift_mask ty))
       (sshr ty x k))
+
+;; (c ? C1 : C2) << K --> c ? (C1 << K) : (C2 << K).
+(rule (simplify (ishl (fits_in_64 ty)
+                      (select ty x (iconst ty y) (iconst ty z))
+                      (iconst ty p)))
+      (select ty x
+                 (iconst ty (imm64_shl ty y p))
+                 (iconst ty (imm64_shl ty z p))))
