@@ -821,11 +821,13 @@ impl Config {
     ///
     /// - Faster. Whereas epoch interruption needs to compare, branch, and keep
     ///   a deadline register coherent, MMU interruption does only a single
-    ///   (dead) load from a per-store memory page. In the no-interrupt case,
+    ///   (dead) load from a per-store memory page. In the no-interruption case,
     ///   the load completes successfully, and overhead (versus doing nothing)
-    ///   is ≈2.8% on the SpiderMonkey Sightglass benchmark, compared to 14.4%
-    ///   for epoch interruption. Benchmarking of the interruption path remains
-    ///   to be done.
+    ///   is 2.8% on the SpiderMonkey Sightglass benchmark, compared to 14.4%
+    ///   for epoch interruption. Factoring in interruptions, the SpiderMonkey
+    ///   Markdown-parsing workload, when run under `wasmtime serve`, shows a
+    ///   12% boost in throughput over epoch interruption and a 19% boost in p50
+    ///   latency.
     /// - Also non-deterministic. The same guidance in
     ///   [`Config::epoch_interruption`] about fuel vs. epochs applies here.
     /// - Equally fine-grained. Checks for MMU interruption happen at the same
@@ -843,8 +845,9 @@ impl Config {
     /// yield. The [`Engine`] owns a single interrupter, shared by all its
     /// stores. You must provide this interrupter using
     /// [`Config::with_mmu_interrupter`] before running code.
-    /// [`TimingWheelInterrupter`](crate::TimingWheelInterrupter) is one; like the
-    /// epoch counter, it does nothing until you tick it.
+    /// [`TimingWheelInterrupter`](crate::TimingWheelInterrupter) is a good
+    /// default implementation; like the epoch counter, it does nothing until
+    /// you tick it.
     ///
     /// # Requirements
     ///
@@ -864,10 +867,10 @@ impl Config {
     ///
     /// # Errors
     ///
-    /// These requirements get validated later, some when an [`Engine`] is
-    /// instantiated (which calls [`Config::validate`] herein) and others when
-    /// code is loaded into the engine. Nothing panics; errors are reported via
-    /// return values.
+    /// Some requirements are validated after config time: some when an
+    /// [`Engine`] is instantiated (which calls [`Config::validate`] herein) and
+    /// others when code is loaded into the engine. Nothing panics; errors are
+    /// reported via return values.
     pub fn mmu_interruption(&mut self, enable: bool) -> &mut Self {
         self.tunables.mmu_interruption = Some(enable);
         self
