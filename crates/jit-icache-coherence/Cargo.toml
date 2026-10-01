@@ -23,7 +23,10 @@ features = [
     "Win32_System_Diagnostics_Debug",
 ]
 
-[target.'cfg(any(target_os = "linux", target_vendor = "apple", target_os = "freebsd", target_os = "android"))'.dependencies]
+[target.'cfg(all(not(miri), target_arch = "aarch64", any(target_os = "linux", target_os = "android")))'.dependencies]
+libc = { workspace = true }
+
+[target.'cfg(all(not(miri), target_arch = "riscv64", target_os = "linux"))'.dependencies]
 libc = { workspace = true }
 
 [features]
