@@ -379,7 +379,20 @@ impl WastContext {
                     Outcome::Ok(i) => i,
                     Outcome::Trap(e) => return Err(e).context("instantiation failed"),
                 };
-                if let Some(name) = name {
+                // Register the instance in the linker under its wast identifier
+                // so that later components can import it. Identifiers may
+                // contain characters that aren't valid in component import
+                // names, for example `$i1.0` or `$Top`. No component can
+                // import such names, and the linker rejects them, so those
+                // instances aren't registered.
+                if let Some(name) = name
+                    && wasmparser::names::ComponentName::new_with_features(
+                        name,
+                        0,
+                        wasmparser::WasmFeatures::all(),
+                    )
+                    .is_ok()
+                {
                     let ty = component.component_type();
                     let engine = self.engine().clone();
                     let mut linker = self.component_linker.instance(name)?;
