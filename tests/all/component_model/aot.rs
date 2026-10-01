@@ -214,6 +214,7 @@ fn truncated_component_binaries_dont_panic() -> Result<()> {
 fn implements_shows_up() -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_implements(true);
+    config.wasm_component_model_canonical_names(true);
     let engine = Engine::new(&config)?;
     let component = Component::new(
         &engine,

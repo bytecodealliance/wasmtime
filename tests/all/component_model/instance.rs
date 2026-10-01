@@ -134,21 +134,25 @@ fn export_new_get_old() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn export_missing_get_max() -> Result<()> {
-    let engine = super::engine();
+fn export_keeps_highest_on_semver_track() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_canonical_names(true);
+    let engine = Engine::new(&config)?;
     let component = r#"
         (component
             (core module $m1)
             (core module $m2 (import "" "" (func)))
-            (export "a:b/m@1.0.1" (core module $m1))
-            (export "a:b/m@1" (versionsuffix ".0.3") (core module $m2))
-            (export "a:b/m@1.0.2" (core module $m1))
+            (instance $i1 (export "m" (core module $m1)))
+            (instance $i2 (export "m" (core module $m2)))
+            (export "a:b/i@1.0.1" (instance $i1))
+            (export "a:b/i@1" (versionsuffix ".0.3") (instance $i2))
+            (export "a:b/i@1.0.2" (instance $i1))
 
-            (instance $i
-                (export "a:b/n@0.2.3" (core module $m2))
-                (export "a:b/n@0.2" (versionsuffix ".1") (core module $m1))
+            (instance $o
+                (export "a:b/n@0.2.3" (instance $i2))
+                (export "a:b/n@0.2" (versionsuffix ".1") (instance $i1))
             )
-            (export "i" (instance $i))
+            (export "o" (instance $o))
         )
     "#;
 
@@ -164,41 +168,42 @@ fn export_missing_get_max() -> Result<()> {
         .exports(&engine)
         .map(|(name, _)| name.to_string())
         .collect::<Vec<_>>();
-    assert_eq!(names, ["a:b/m@1.0.3", "i"]);
+    assert_eq!(names, ["a:b/i@1.0.3", "o"]);
 
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
     for name in [
-        "a:b/m@1.0.0",
-        "a:b/m@1.0.1",
-        "a:b/m@1.0.2",
-        "a:b/m@1.0.3",
-        "a:b/m@1.0.4",
-        "a:b/m@1",
+        "a:b/i@1.0.0",
+        "a:b/i@1.0.1",
+        "a:b/i@1.0.2",
+        "a:b/i@1.0.3",
+        "a:b/i@1.0.4",
+        "a:b/i@1",
     ] {
         println!("test {name}");
-        let m = component.get_export_index(None, name).unwrap();
-        let m = instance.get_module(&mut store, &m).unwrap();
-        assert_m2(&m);
+        let i = component.get_export_index(None, name).unwrap();
+        let m = component.get_export_index(Some(&i), "m").unwrap();
+        assert_m2(&instance.get_module(&mut store, &m).unwrap());
 
-        let m = instance.get_module(&mut store, name).unwrap();
-        assert_m2(&m);
-
-        let m = instance.get_export_index(&mut store, None, name).unwrap();
-        let m = instance.get_module(&mut store, &m).unwrap();
-        assert_m2(&m);
+        let i = instance.get_export_index(&mut store, None, name).unwrap();
+        let m = instance
+            .get_export_index(&mut store, Some(&i), "m")
+            .unwrap();
+        assert_m2(&instance.get_module(&mut store, &m).unwrap());
     }
 
     // The same applies to the exports of an exported instance.
-    let i = component.get_export_index(None, "i").unwrap();
+    let o = component.get_export_index(None, "o").unwrap();
     for name in ["a:b/n@0.2.1", "a:b/n@0.2.3", "a:b/n@0.2"] {
-        let m = component.get_export_index(Some(&i), name).unwrap();
+        println!("test {name}");
+        let i = component.get_export_index(Some(&o), name).unwrap();
+        let m = component.get_export_index(Some(&i), "m").unwrap();
         assert_m2(&instance.get_module(&mut store, &m).unwrap());
     }
 
     // Neither canonical nor a full version.
-    assert!(component.get_export_index(None, "a:b/m@1.0").is_none());
+    assert!(component.get_export_index(None, "a:b/i@1.0").is_none());
 
     Ok(())
 }

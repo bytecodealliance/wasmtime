@@ -316,7 +316,7 @@ mod tests {
 
         // Invalid name insertions are rejected.
         map.insert("foo_bar", &mut intern, false, 4).unwrap_err();
-        map.insert("a:b/c@2", &mut intern, false, 4).unwrap_err();
+        map.insert("a:b/c@1.2", &mut intern, false, 4).unwrap_err();
     }
 
     #[test]
