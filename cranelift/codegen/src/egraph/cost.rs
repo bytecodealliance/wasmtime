@@ -13,7 +13,7 @@ use cranelift_entity::EntityRef;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ExprCost {
     total: Cost,
-    inst_buckets: u64,
+    inst_buckets: u32,
 }
 
 impl ExprCost {
@@ -56,10 +56,10 @@ impl ExprCost {
 }
 
 impl ExprCost {
-    fn inst_bucket(inst: Inst) -> u64 {
-        let index = u64::try_from(inst.index()).unwrap();
-        let hash = index.wrapping_mul(0x9e37_79b9_7f4a_7c15);
-        1u64 << (hash >> 58)
+    fn inst_bucket(inst: Inst) -> u32 {
+        let index = u32::try_from(inst.index()).unwrap();
+        let hash = index.wrapping_mul(0x9e37_79b9);
+        1u32 << (hash >> 27)
     }
 
     fn add_operand(&mut self, other: Self) {
