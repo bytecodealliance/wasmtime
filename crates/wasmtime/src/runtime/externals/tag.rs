@@ -5,10 +5,12 @@ use crate::{
     AsContext, AsContextMut,
     store::{StoreInstanceId, StoreOpaque},
 };
-use wasmtime_environ::{DefinedTagIndex, EntityRef};
+use wasmtime_environ::DefinedTagIndex;
 
 #[cfg(feature = "gc")]
 use crate::store::InstanceId;
+#[cfg(feature = "gc")]
+use wasmtime_environ::EntityRef;
 
 /// A WebAssembly `tag`.
 #[derive(Copy, Clone, Debug)]
