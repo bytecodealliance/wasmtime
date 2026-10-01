@@ -164,6 +164,7 @@ features = [
   'call-hook',
   'memory-protection-keys',
   'component-model-async',
+  'task-group-hook',
   'component-model-bytes',
   'gc-copying',
 ]
