@@ -1,0 +1,66 @@
+;;! target = "x86_64"
+;;! test = "winch"
+;;! flags = "-W gc-support=y -C collector=copying"
+
+(module
+  (func $nop)
+
+  ;; Neither null operand carries a reference shadow type. The declared
+  ;; select result type must supply it for the call-site stack map.
+  (func (export "select-null") (param i32) (result externref)
+    ref.null extern
+    ref.null extern
+    local.get 0
+    select (result externref)
+    call $nop)
+)
+;; wasm[0]::function[0]::nop:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    0x18(%r11), %r11
+;;       addq    $0x10, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0x38
+;;   1c: movq    %rdi, %r14
+;;       subq    $0x10, %rsp
+;;       movq    %rdi, 8(%rsp)
+;;       movq    %rsi, (%rsp)
+;;       addq    $0x10, %rsp
+;;       popq    %rbp
+;;       retq
+;;   38: ud2
+;;
+;; wasm[0]::function[1]:
+;;       pushq   %rbp
+;;       movq    %rsp, %rbp
+;;       movq    8(%rdi), %r11
+;;       movq    0x18(%r11), %r11
+;;       addq    $0x30, %r11
+;;       cmpq    %rsp, %r11
+;;       ja      0xc3
+;;   5c: movq    %rdi, %r14
+;;       subq    $0x20, %rsp
+;;       movq    %rdi, 0x18(%rsp)
+;;       movq    %rsi, 0x10(%rsp)
+;;       movl    %edx, 0xc(%rsp)
+;;       movl    0xc(%rsp), %eax
+;;       movl    $0, %ecx
+;;       movl    $0, %edx
+;;       cmpl    $0, %eax
+;;       cmovnel %edx, %ecx
+;;       subq    $4, %rsp
+;;       movl    %ecx, (%rsp)
+;;       subq    $0xc, %rsp
+;;       movq    %r14, %rdi
+;;       movq    %r14, %rsi
+;;       callq   0
+;;       addq    $0xc, %rsp
+;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[12]
+;;       movq    0x1c(%rsp), %r14
+;;       movl    (%rsp), %eax
+;;       addq    $4, %rsp
+;;       addq    $0x20, %rsp
+;;       popq    %rbp
+;;       retq
+;;   c3: ud2
