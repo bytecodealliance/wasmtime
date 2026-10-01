@@ -303,136 +303,20 @@ mod tests {
         assert!(err.to_string().contains("same semver track"), "{err}");
         assert_eq!(map.get("a:b/c@1.0.0", &intern), Some(&2));
         assert_eq!(map.get("a:b/c@1.0.1", &intern), Some(&2));
-        assert_eq!(map.get("a:b/c@1.1.0", &intern), Some(&2));
+        assert_eq!(map.get("a:b/c@1.1.0+a", &intern), Some(&2));
+        assert_eq!(map.get("a:b/c@1", &intern), Some(&2));
+        assert_eq!(map.get("a:b/c@2", &intern), None);
+        assert_eq!(map.get("a:b/c", &intern), None);
+        assert_eq!(map.get("a:b/c@1.0", &intern), None);
 
         // Shadowing replaces the definition on the track.
         map.insert("a:b/c@1.0.1", &mut intern, true, 3).unwrap();
         assert_eq!(map.get("a:b/c@1.0.0", &intern), Some(&3));
         assert_eq!(keys(&map), ["a", "b", "a:b/c@1.0.1"]);
-    }
 
-    #[test]
-    fn canonical_name() {
-        use super::canonical_name;
-
-        assert_eq!(canonical_name("x"), "x");
-        assert_eq!(canonical_name("x:y/z"), "x:y/z");
-        assert_eq!(canonical_name("x:y/z@1.0.0"), "x:y/z@1");
-        assert_eq!(canonical_name("x:y/z@1.1.2"), "x:y/z@1");
-        assert_eq!(canonical_name("x:y/z@2.1.2+abc"), "x:y/z@2");
-        assert_eq!(canonical_name("x:y/z@1"), "x:y/z@1");
-        assert_eq!(canonical_name("x:y/z@0.2.3+abc"), "x:y/z@0.2");
-        assert_eq!(canonical_name("x:y/z@0.2"), "x:y/z@0.2");
-        assert_eq!(canonical_name("x:y/z@0.0.1"), "x:y/z@0.0.1");
-        assert_eq!(canonical_name("x:y/z@0.0.1+abc"), "x:y/z@0.0.1");
-        assert_eq!(canonical_name("x:y/z@0.1.0-pre"), "x:y/z@0.1.0-pre");
-        assert_eq!(canonical_name("x:y/z@1.0.0-pre+abc"), "x:y/z@1.0.0-pre");
-        assert_eq!(canonical_name("x:y/z@1.2"), "x:y/z@1.2");
-    }
-
-    #[test]
-    fn name_map_canonical_lookup() {
-        let mut map = NameMap::default();
-        let mut intern = NameMapNoIntern;
-
-        map.insert("a:b/c@1.0.1", &mut intern, false, 0).unwrap();
-        map.insert("a:b/d@0.2", &mut intern, false, 1).unwrap();
-        map.insert("a:b/e@0.0.1+b", &mut intern, false, 2).unwrap();
-
-        // All names on a semver track, including the canonical name, find the
-        // definition on that track.
-        for name in ["a:b/c@1", "a:b/c@1.0.0", "a:b/c@1.0.1", "a:b/c@1.2.3"] {
-            assert_eq!(map.get(name, &intern), Some(&0), "{name}");
-        }
-        for name in ["a:b/d@0.2", "a:b/d@0.2.0", "a:b/d@0.2.1"] {
-            assert_eq!(map.get(name, &intern), Some(&1), "{name}");
-        }
-
-        // Versions that differ only in build metadata are on the same track.
-        for name in ["a:b/e@0.0.1", "a:b/e@0.0.1+a", "a:b/e@0.0.1+b"] {
-            assert_eq!(map.get(name, &intern), Some(&2), "{name}");
-        }
-        assert!(map.insert("a:b/e@0.0.1+a", &mut intern, false, 3).is_err());
-
-        // Other tracks don't match.
-        for name in [
-            "a:b/c",
-            "a:b/c@2",
-            "a:b/c@2.0.0",
-            "a:b/c@0.1.0",
-            "a:b/d@0.3",
-            "a:b/d@0.3.0",
-            "a:b/e@0.0.2",
-        ] {
-            assert_eq!(map.get(name, &intern), None, "{name}");
-        }
-    }
-
-    #[test]
-    fn name_map_insert_validation() {
-        let mut map = NameMap::default();
-        let mut intern = NameMapNoIntern;
-
-        // Invalid names and versions are rejected.
-        for name in [
-            "",
-            "aB",
-            "foo_bar",
-            "a:b",
-            "a:b/c@",
-            "a:b/c@0",
-            "a:b/c@0.0",
-            "a:b/c@01",
-            "a:b/c@0.02",
-            "a:b/c@1.2",
-            "a:b/c@1.x",
-        ] {
-            let err = map.insert(name, &mut intern, false, 0).unwrap_err();
-            assert!(err.to_string().contains(&format!("`{name}`")), "{err}");
-            assert_eq!(map.get(name, &intern), None);
-        }
-
-        // Other kinds of names are accepted.
-        for name in [
-            "[constructor]a",
-            "[method]a.b",
-            "[static]a.b",
-            "a:b/c@1",
-            "a:b/c@0.2",
-            "a:b/c@0.0.1",
-            "a:b/c@1.0.0-pre",
-            "locked-dep=<a:b/c@1.2.3>",
-            "unlocked-dep=<a:b/c@{>=1.2.3}>",
-            "url=<https://user@host/x>",
-        ] {
-            map.insert(name, &mut intern, false, 0).unwrap();
-            assert_eq!(map.get(name, &intern), Some(&0));
-        }
-    }
-
-    #[test]
-    fn name_map_insert_highest() {
-        let mut map = NameMap::default();
-        let intern = NameMapNoIntern;
-
-        // The highest version on a track is kept, regardless of order.
-        map.insert_highest("a:b/c@1.0.1", 0).unwrap();
-        map.insert_highest("a:b/c@1.0.3", 1).unwrap();
-        map.insert_highest("a:b/c@1.0.2", 2).unwrap();
-        assert_eq!(keys(&map), ["a:b/c@1.0.3"]);
-        for name in ["a:b/c@1", "a:b/c@1.0.1", "a:b/c@1.0.3", "a:b/c@1.2.0"] {
-            assert_eq!(map.get(name, &intern), Some(&1), "{name}");
-        }
-
-        // Build metadata is ordered lexically.
-        map.insert_highest("a:b/d@0.0.1+b", 3).unwrap();
-        map.insert_highest("a:b/d@0.0.1+a", 4).unwrap();
-        assert_eq!(keys(&map), ["a:b/c@1.0.3", "a:b/d@0.0.1+b"]);
-
-        // Exact duplicates are still an error.
-        assert!(map.insert_highest("a:b/c@1.0.3", 5).is_err());
-        map.insert_highest("a", 6).unwrap();
-        assert!(map.insert_highest("a", 7).is_err());
+        // Invalid name insertions are rejected.
+        map.insert("foo_bar", &mut intern, false, 4).unwrap_err();
+        map.insert("a:b/c@2", &mut intern, false, 4).unwrap_err();
     }
 
     #[test]

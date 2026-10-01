@@ -783,4 +783,3 @@ fpr = "fpr"
 
 [workspace.metadata.typos.files]
 extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt", "*.isle" ]
-

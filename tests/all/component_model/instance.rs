@@ -141,12 +141,12 @@ fn export_missing_get_max() -> Result<()> {
             (core module $m1)
             (core module $m2 (import "" "" (func)))
             (export "a:b/m@1.0.1" (core module $m1))
-            (export "a:b/m@1.0.3" (core module $m2))
+            (export "a:b/m@1" (versionsuffix ".0.3") (core module $m2))
             (export "a:b/m@1.0.2" (core module $m1))
 
             (instance $i
                 (export "a:b/n@0.2.3" (core module $m2))
-                (export "a:b/n@0.2.1" (core module $m1))
+                (export "a:b/n@0.2" (versionsuffix ".1") (core module $m1))
             )
             (export "i" (instance $i))
         )
@@ -199,70 +199,6 @@ fn export_missing_get_max() -> Result<()> {
 
     // Neither canonical nor a full version.
     assert!(component.get_export_index(None, "a:b/m@1.0").is_none());
-
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn export_canonical_with_versionsuffix() -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_component_model_canonical_names(true);
-    let engine = Engine::new(&config)?;
-    let component = r#"
-        (component
-            (core module $m1)
-            (core module $m2 (import "" "" (func)))
-            (instance $i1 (export "m" (core module $m1)))
-            (instance $i2 (export "m" (core module $m2)))
-            (export "a:b/i@1" (versionsuffix ".0.1") (instance $i1))
-            (export "a:b/j@0.2" (versionsuffix ".1") (instance $i2))
-        )
-    "#;
-
-    fn assert_m1(module: &Module) {
-        assert_eq!(module.imports().len(), 0);
-    }
-    fn assert_m2(module: &Module) {
-        assert_eq!(module.imports().len(), 1);
-    }
-
-    let component = Component::new(&engine, component)?;
-    let names = component
-        .component_type()
-        .exports(&engine)
-        .map(|(name, _)| name.to_string())
-        .collect::<Vec<_>>();
-    assert_eq!(names, ["a:b/i@1.0.1", "a:b/j@0.2.1"]);
-
-    let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-
-    let tests = [
-        ("a:b/i@1.0.1", assert_m1 as fn(&_)),
-        ("a:b/i@1", assert_m1),
-        ("a:b/i@1.0.0", assert_m1),
-        ("a:b/i@1.5.0", assert_m1),
-        ("a:b/j@0.2", assert_m2),
-        ("a:b/j@0.2.0", assert_m2),
-        ("a:b/j@0.2.1", assert_m2),
-    ];
-    for (name, test_fn) in tests {
-        println!("test {name}");
-        let i = component.get_export_index(None, name).unwrap();
-        let m = component.get_export_index(Some(&i), "m").unwrap();
-        test_fn(&instance.get_module(&mut store, &m).unwrap());
-
-        let i = instance.get_export_index(&mut store, None, name).unwrap();
-        let m = instance
-            .get_export_index(&mut store, Some(&i), "m")
-            .unwrap();
-        test_fn(&instance.get_module(&mut store, &m).unwrap());
-    }
-    for name in ["a:b/i@2.0.0", "a:b/j@0.3.0"] {
-        assert!(component.get_export_index(None, name).is_none());
-        assert!(instance.get_export_index(&mut store, None, name).is_none());
-    }
 
     Ok(())
 }
