@@ -47,8 +47,8 @@ impl ContRefTable {
             return Ok(None);
         }
 
-        let id = Id::from_raw(raw - 1);
-        match self.slab.get(id).copied() {
+        let contobj = Id::try_from_raw(raw - 1).and_then(|id| self.slab.get(id).copied());
+        match contobj {
             Some(contobj) => Ok(Some(contobj)),
             None => bail_bug!("bad continuation-reference table ID"),
         }

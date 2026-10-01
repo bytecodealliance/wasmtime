@@ -502,7 +502,11 @@ fn gc_alloc_raw(
     use core::alloc::Layout;
     use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
-    let kind = VMGcKind::from_high_bits_of_u32(kind_and_reserved);
+    // NB: unlike most `VMGcKind`s, this one is a constant baked into compiled
+    // code by our own code generator, not a value out of the GC heap.
+    let Some(kind) = VMGcKind::from_high_bits_of_u32(kind_and_reserved) else {
+        bail_bug!("compiler emitted an invalid `VMGcKind`")
+    };
     log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})");
 
     let shared_type_index = VMSharedTypeIndex::from_u32(shared_type_index);
@@ -586,7 +590,10 @@ fn get_interned_func_ref(
 
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
 
-    let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
+    let func_ref_id = match FuncRefTableId::from_raw(func_ref_id) {
+        Some(id) => id,
+        None => bail_bug!("bad FuncRefTableId"),
+    };
     let module_interned_type_index = ModuleInternedTypeIndex::from_bits(module_interned_type_index);
 
     let func_ref = if module_interned_type_index.is_reserved_value() {

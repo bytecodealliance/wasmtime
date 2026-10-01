@@ -224,7 +224,7 @@ where
 
     /// Purely a debug-mode assertion, not actually used in release builds.
     fn debug_typecheck(store: &StoreOpaque, func: VMSharedTypeIndex) {
-        let ty = FuncType::from_shared_type_index(store.engine(), func);
+        let ty = FuncType::from_shared_type_index(store.engine(), func).unwrap();
         Params::typecheck(store.engine(), ty.params(), TypeCheckPosition::Param)
             .expect("params should match");
         Results::typecheck(store.engine(), ty.results(), TypeCheckPosition::Result)
