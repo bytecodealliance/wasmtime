@@ -1,3 +1,20 @@
+## 36.0.17
+
+Released 2026-10-02.
+
+### Fixed
+
+* WASI preview 0 implementation of `poll_oneoff` circumvents fuel consumption.
+  [GHSA-j366-h8gg-77pm](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-j366-h8gg-77pm)
+
+* Excessive allocated memory on the host when guests don't have stdio.
+  [GHSA-gqmc-89g8-p25r](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gqmc-89g8-p25r)
+
+* `fd_readdir` copies uninitialized struct padding into guest memory.
+  [GHSA-96f6-r43r-8c24](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-96f6-r43r-8c24)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.16
 
 Released 2026-09-24.
@@ -12,6 +29,8 @@ Released 2026-09-24.
 
 * wasmtime-wasi: Fix panic on out-of-range datetimes in WASI filesystem set-times, set-times-at.
   [GHSA-j2g9-4prp-pf6h](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-j2g9-4prp-pf6h)
+
+--------------------------------------------------------------------------------
 
 ## 36.0.15
 

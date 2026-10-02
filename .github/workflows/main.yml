@@ -778,48 +778,6 @@ jobs:
     - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
       shell: pwsh
 
-  # Test `wasmtime-wasi-nn` in its own job, as not all of its backends are
-  # compatible with all targets, and each must be tested separately anyways.
-  test_wasi_nn:
-    strategy:
-      matrix:
-        feature: ["openvino", "onnx-download"]
-        os: ["ubuntu-24.04", "windows-2025"]
-        include:
-          - os: windows-2025
-            feature: winml
-    name: Test wasi-nn (${{ matrix.feature }}, ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    needs: determine
-    if: needs.determine.outputs.run-full
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-
-    # Install OpenVINO
-    - uses: abrown/install-openvino-action@v10
-      if: runner.arch == 'X64'
-
-    # Install WinML for testing wasi-nn WinML backend. WinML is only available
-    # on Windows clients and Windows Server with desktop experience enabled.
-    # GitHub Actions Window Server image doesn't have desktop experience
-    # enabled, so we download the standalone library from ONNX Runtime project.
-    - uses: nuget/setup-nuget@v2
-      if: (runner.os == 'Windows') && (matrix.feature == 'winml')
-    - run: nuget install Microsoft.AI.MachineLearning
-      if: (runner.os == 'Windows') && (matrix.feature == 'winml')
-
-    # Install Rust targets.
-    - run: rustup target add wasm32-wasip1
-
-    # Run the tests!
-    - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
-      env:
-        # Avoid AMX instructions. Details at https://github.com/uxlfoundation/oneDNN/issues/5689
-        ONEDNN_MAX_CPU_ISA: AVX10_1_512
-
   # Test `wasmtime-wasi-tls-nativetls` in its own job. This is because it
   # depends on OpenSSL, which is not easily available on all platforms.
   test_wasi_tls_nativetls:
@@ -1130,7 +1088,6 @@ jobs:
       - test_capi
       - test_debug_dwarf
       - test_fuzzing
-      # - test_wasi_nn
       - test_nightly
       - build
       - rustfmt

@@ -2707,3 +2707,16 @@ fn hostcall_fuel() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+#[cfg_attr(target_pointer_width = "32", ignore)] // this test takes 4GiB virtual memory
+fn wasi_snapshot0_poll_oneoff_hostcall_fuel() -> Result<()> {
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Shostcall-fuel=1000",
+        "--invoke=run",
+        "tests/all/cli_tests/poll-oneoff.wat",
+    ])?;
+    assert_eq!(stdout, "48\n"); // `errno::nomem`
+    Ok(())
+}

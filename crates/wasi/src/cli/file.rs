@@ -59,7 +59,7 @@ impl OutputStream for OutputFile {
     }
 
     fn check_write(&mut self) -> StreamResult<usize> {
-        Ok(1024 * 1024)
+        Ok(crate::MAX_READ_SIZE_ALLOC)
     }
 }
 

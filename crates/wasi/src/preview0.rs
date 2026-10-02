@@ -70,7 +70,7 @@ impl wiggle::GuestErrorType for types::Errno {
 }
 
 #[wiggle::async_trait]
-impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
+impl wasi_unstable::WasiUnstable for WasiP1Ctx {
     fn set_hostcall_fuel(&mut self, fuel: usize) {
         Snapshot1::set_hostcall_fuel(self, fuel)
     }
@@ -519,6 +519,7 @@ impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
         let subs_array = subs.as_array(nsubscriptions);
+        self.consume_fuel_for_array(subs_array)?;
         let mut old_subs = Vec::new();
         for slot in subs_array.iter() {
             let slot = slot?;

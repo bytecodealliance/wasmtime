@@ -433,7 +433,7 @@ impl FileOutputStream {
 }
 
 // FIXME: configurable? determine from how much space left in file?
-const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
+const FILE_WRITE_CAPACITY: usize = crate::MAX_READ_SIZE_ALLOC;
 
 #[async_trait::async_trait]
 impl OutputStream for FileOutputStream {
