@@ -4089,7 +4089,7 @@ fn hostcall_fuel() -> Result<()> {
 fn wasi_snapshot0_poll_oneoff_hostcall_fuel() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
-        "-Shostcall-fuel=1000",
+        "-Shostcall-fuel=1000,preview0=y",
         "--invoke=run",
         "tests/all/cli_tests/poll-oneoff.wat",
     ])?;
