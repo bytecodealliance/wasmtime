@@ -34,12 +34,12 @@ fn test_tail_call_default() -> Result<()> {
         ),
         (
             line!(),
-            true,
+            false,
             Config::new().strategy(Strategy::Winch).target("x86_64")?,
         ),
         (
             line!(),
-            true,
+            false,
             Config::new().strategy(Strategy::Winch).target("aarch64")?,
         ),
         (
