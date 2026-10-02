@@ -32,7 +32,7 @@ jobs:
     - if: github.ref == 'refs/heads/main'
       uses: actions/configure-pages@v5
     - if: github.ref == 'refs/heads/main'
-      uses: actions/upload-pages-artifact@v3
+      uses: actions/upload-pages-artifact@v5
       with:
         path: "./gh-pages/gh-pages"
 
