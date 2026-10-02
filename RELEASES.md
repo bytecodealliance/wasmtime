@@ -1,3 +1,13 @@
+## 48.0.5
+
+Released 2026-10-02.
+
+### Fixed
+
+* Fixed an issue where artifacts for 48.0.4 didn't get correctly published from
+  CI and a GitHub release for 48.0.4 wasn't made.
+  [#14494](https://github.com/bytecodealliance/wasmtime/pull/14494)
+
 ## 48.0.4
 
 Released 2026-10-02.
