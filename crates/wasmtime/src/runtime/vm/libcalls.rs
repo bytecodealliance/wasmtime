@@ -502,7 +502,11 @@ fn gc_alloc_raw(
     use core::alloc::Layout;
     use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
-    let kind = VMGcKind::from_high_bits_of_u32(kind_and_reserved);
+    // NB: unlike most `VMGcKind`s, this one is a constant baked into compiled
+    // code by our own code generator, not a value out of the GC heap.
+    let Some(kind) = VMGcKind::from_high_bits_of_u32(kind_and_reserved) else {
+        bail_bug!("compiler emitted an invalid `VMGcKind`")
+    };
     log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})");
 
     let shared_type_index = VMSharedTypeIndex::from_u32(shared_type_index);
@@ -586,7 +590,10 @@ fn get_interned_func_ref(
 
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
 
-    let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
+    let func_ref_id = match FuncRefTableId::from_raw(func_ref_id) {
+        Some(id) => id,
+        None => bail_bug!("bad FuncRefTableId"),
+    };
     let module_interned_type_index = ModuleInternedTypeIndex::from_bits(module_interned_type_index);
 
     let func_ref = if module_interned_type_index.is_reserved_value() {
@@ -1181,6 +1188,25 @@ fn cont_new(
         gc_refs != 0,
     )?;
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
+}
+
+#[cfg(feature = "stack-switching")]
+unsafe fn asan_start_switch_fiber(
+    _store: &mut dyn VMStore,
+    _instance: InstanceId,
+    fake_stack_save: *mut u8,
+    target_csi: *mut u8,
+) {
+    unsafe { crate::vm::stack_switching::asan::start_switch_fiber(fake_stack_save, target_csi) }
+}
+
+#[cfg(feature = "stack-switching")]
+unsafe fn asan_finish_switch_fiber(
+    _store: &mut dyn VMStore,
+    _instance: InstanceId,
+    fake_stack: *mut u8,
+) {
+    unsafe { crate::vm::stack_switching::asan::finish_switch_fiber(fake_stack) }
 }
 
 #[cfg(feature = "gc")]

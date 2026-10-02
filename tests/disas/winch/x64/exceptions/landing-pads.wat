@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=null"
+;;! flags = "-W exceptions,gc-support -C collector=null"
 
 ;; A call with tagged and default handlers records both landing pads.
 (module

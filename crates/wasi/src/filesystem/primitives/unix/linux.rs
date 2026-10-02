@@ -174,6 +174,25 @@ pub(crate) fn stat_fast(
     }
 }
 
+/// Set the timestamps of the file or directory that `fd` itself refers to.
+///
+/// `futimens` fails with `EBADF` when `fd` was opened with `O_PATH`, which is
+/// how preopened directories are held open (see `dir_utils::target_o_path`).
+/// An empty path with `AT_EMPTY_PATH` acts on `fd` itself and is allowed for
+/// `O_PATH` descriptors.
+pub(crate) fn set_times_fast(
+    fd: &fs::File,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
+) -> io::Result<bool> {
+    let times = Timestamps {
+        last_access: to_timespec(atime)?,
+        last_modification: to_timespec(mtime)?,
+    };
+    utimensat(fd, "", &times, AtFlags::EMPTY_PATH)?;
+    Ok(true)
+}
+
 pub(crate) fn set_times_fallback(
     start: &fs::File,
     path: &Path,

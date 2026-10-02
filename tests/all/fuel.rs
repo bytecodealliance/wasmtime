@@ -1293,3 +1293,37 @@ fn try_call_exceptional_return_respects_fuel(config: &mut Config) -> Result<()> 
     assert!(format!("{result:?}").contains("all fuel consumed by WebAssembly"));
     Ok(())
 }
+#[wasmtime_test(wasm_features(extended_const))]
+#[cfg_attr(miri, ignore)]
+fn const_expr_fuel_is_accounted_without_start(config: &mut Config) -> Result<()> {
+    // Same module as `const_expr_honors_operator_cost` above, but with no
+    // `start` function. The synthesized module startup function is the only
+    // place the const-expr runs, and it has no trailing `end` operator to fold
+    // the buffered charges into the fuel counter, so it must do that itself on
+    // the way out.
+    const WAT: &str = r#"
+        (module
+          (global $g i32 (i32.add (i32.const 1) (i32.const 2)))
+          (export "g" (global $g)))
+    "#;
+
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, WAT)?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(10_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let g = instance
+        .get_global(&mut store, "g")
+        .unwrap()
+        .get(&mut store);
+    assert_eq!(g.i32(), Some(3), "global initializer did not run");
+
+    // One unit for the startup function's entry charge, plus one for each
+    // const-expr operator: `i32.const`, `i32.const`, `i32.add`.
+    assert_eq!(10_000 - store.get_fuel()?, 4);
+
+    Ok(())
+}

@@ -58,9 +58,9 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         legacy_exceptions,
         stack_switching,
         custom_descriptors,
+        gc_types,
 
         hogs_memory: _,
-        gc_types: _,
         spec_test: _,
     } = *test_config;
     // Note that all of these proposals/features are currently default-off to
@@ -105,6 +105,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let simd = relaxed_simd || simd.unwrap_or(false);
 
     let exceptions = stack_switching || exceptions.unwrap_or(false);
+    let gc_types = gc || exceptions || reference_types || gc_types.unwrap_or(false);
 
     // Not implemented in Wasmtime yet.
     let _custom_descriptors = custom_descriptors.unwrap_or(false);
@@ -139,6 +140,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_component_model_canonical_names(component_model_canonical_names)
         .wasm_exceptions(exceptions)
         .wasm_stack_switching(stack_switching)
+        .gc_support(gc_types)
         .cranelift_nan_canonicalization(nan_canonicalization);
     #[expect(deprecated, reason = "forwarding legacy-exceptions")]
     config.wasm_legacy_exceptions(legacy_exceptions);

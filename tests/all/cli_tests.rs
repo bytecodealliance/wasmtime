@@ -1782,6 +1782,54 @@ mod test_programs {
         Ok(())
     }
 
+    #[test]
+    fn p2_cli_reject_zero_outgoing_body_options() -> Result<()> {
+        // The outgoing body writer requires at least one buffered chunk and a
+        // non-zero write budget, so a zero here is a configuration error.
+        for option in [
+            "-Shttp-outgoing-body-buffer-chunks=0",
+            "-Shttp-outgoing-body-chunk-size=0",
+        ] {
+            let err = run_wasmtime(&[
+                "run",
+                "-Shttp=y",
+                option,
+                P2_CLI_RUN_OUTGOING_BODY_CHUNK_SIZE_COMPONENT,
+            ])
+            .unwrap_err();
+            let err = format!("{err:?}");
+            assert!(
+                err.contains("value must be non-zero"),
+                "expected `{option}` to be rejected, got: {err}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn p2_cli_run_outgoing_body_chunk_size() -> Result<()> {
+        // Without the option an outgoing body keeps its 1 MiB default budget.
+        let stdout = run_wasmtime(&[
+            "run",
+            "-Shttp=y",
+            P2_CLI_RUN_OUTGOING_BODY_CHUNK_SIZE_COMPONENT,
+        ])?;
+        assert_eq!(stdout.trim(), "1048576");
+
+        // `-Shttp-outgoing-body-chunk-size` is what changes that budget, and
+        // `wasmtime run` has to honour it just like `wasmtime serve` does.
+        let stdout = run_wasmtime(&[
+            "run",
+            "-Shttp=y",
+            "-Shttp-outgoing-body-chunk-size=1024",
+            P2_CLI_RUN_OUTGOING_BODY_CHUNK_SIZE_COMPONENT,
+        ])?;
+        assert_eq!(stdout.trim(), "1024");
+
+        Ok(())
+    }
+
     #[tokio::test]
     #[ignore] // TODO: printing stderr in the child and killing the child at the
     // end of this test race so the stderr may be present or not. Need

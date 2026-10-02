@@ -13,15 +13,18 @@ const _: () = {
 #[derive(wasmtime::component::Lower)]
 #[component(record)]
 #[derive(Clone, Copy)]
-pub struct R {}
+pub struct R {
+    #[component(name = "a")]
+    pub a: u32,
+}
 impl core::fmt::Debug for R {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("R").finish()
+        f.debug_struct("R").field("a", &self.a).finish()
     }
 }
 const _: () = {
-    assert!(0 == < R as wasmtime::component::ComponentType >::SIZE32);
-    assert!(1 == < R as wasmtime::component::ComponentType >::ALIGN32);
+    assert!(4 == < R as wasmtime::component::ComponentType >::SIZE32);
+    assert!(4 == < R as wasmtime::component::ComponentType >::ALIGN32);
 };
 /// Auto-generated bindings for a pre-instantiated version of a
 /// component which implements the world `foo`.

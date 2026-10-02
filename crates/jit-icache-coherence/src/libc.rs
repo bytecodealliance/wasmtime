@@ -1,10 +1,5 @@
 use std::ffi::c_void;
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-pub use std::io::Result;
-
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
-pub use wasmtime_core::error::Result;
+use wasmtime_core::error::Result;
 
 #[cfg(all(
     target_arch = "aarch64",
@@ -14,7 +9,7 @@ mod details {
 
     use super::*;
     use libc::{EINVAL, EPERM, syscall};
-    use std::io::Error;
+    use std::io::{self, Error};
 
     const MEMBARRIER_CMD_GLOBAL: libc::c_int = 1;
     const MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE: libc::c_int = 32;
@@ -77,7 +72,7 @@ mod details {
         Ok(())
     }
 
-    fn membarrier(barrier: libc::c_int) -> Result<()> {
+    fn membarrier(barrier: libc::c_int) -> io::Result<()> {
         let flags: libc::c_int = 0;
         let res = unsafe { syscall(libc::SYS_membarrier, barrier, flags) };
         if res == 0 {
@@ -134,7 +129,7 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
                 )
             } {
                 0 => { Ok(()) }
-                _ => Err(std::io::Error::last_os_error()),
+                _ => Err(std::io::Error::last_os_error().into()),
             }
         }
     }

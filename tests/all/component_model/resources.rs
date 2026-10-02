@@ -942,6 +942,7 @@ fn can_use_own_for_borrow() -> Result<()> {
                     (func (export "f") (param i32)
                         (call $drop (local.get 0))
                     )
+                    (func (export "forget") (param i32))
                 )
                 (core instance $i (instantiate $m
                     (with "" (instance
@@ -950,6 +951,10 @@ fn can_use_own_for_borrow() -> Result<()> {
                 ))
 
                 (func (export "f") (param "x" (borrow $t))
+                    (canon lift (core func $i "f")))
+                (func (export "forget") (param "x" (borrow $t))
+                    (canon lift (core func $i "forget")))
+                (func (export "own") (param "x" (own $t))
                     (canon lift (core func $i "f")))
             )
         "#,
@@ -978,11 +983,39 @@ fn can_use_own_for_borrow() -> Result<()> {
     f.call(&mut store, &[Val::Resource(resource)], &mut [])?;
     resource.resource_drop(&mut store)?;
 
-    // TODO: Enable once https://github.com/bytecodealliance/wasmtime/issues/7793 is fixed
-    //let resource =
-    //    Resource::<MyType>::new_borrow(400).try_into_resource_any(&mut store, &i_pre, ty_idx)?;
-    //f.call(&mut store, &[Val::Resource(resource)], &mut [])?;
-    //resource.resource_drop(&mut store)?;
+    let resource = Resource::<MyType>::new_borrow(400).try_into_resource_any(&mut store)?;
+    assert!(!resource.owned());
+    assert_eq!(resource.ty(), ResourceType::host::<MyType>());
+
+    struct OtherType;
+    assert!(resource.try_into_resource::<OtherType>(&mut store).is_err());
+
+    let typed = resource.try_into_resource::<MyType>(&mut store)?;
+    assert!(!typed.owned());
+    assert_eq!(typed.rep(), 400);
+    let resource = typed.try_into_resource_any(&mut store)?;
+    f.call(&mut store, &[Val::Resource(resource)], &mut [])?;
+    resource.resource_drop(&mut store)?;
+
+    let mut own_store = Store::new(&engine, ());
+    let own_instance = i_pre.instantiate(&mut own_store)?;
+    let own = own_instance.get_func(&mut own_store, "own").unwrap();
+    let err = own
+        .call(&mut own_store, &[Val::Resource(resource)], &mut [])
+        .unwrap_err();
+    assert!(
+        format!("{err:?}").contains("cannot lower a `borrow` resource into an `own`"),
+        "bad error: {err:?}",
+    );
+
+    let forget = i.get_func(&mut store, "forget").unwrap();
+    let err = forget
+        .call(&mut store, &[Val::Resource(resource)], &mut [])
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "borrow handles still remain at the end of the call"
+    );
 
     Ok(())
 }
@@ -1579,6 +1612,14 @@ fn resource_dynamic() -> Result<()> {
     assert_eq!(r3.rep(), 1);
     assert_eq!(r3.ty(), 2);
 
+    let borrowed = ResourceDynamic::new_borrow(4, 2).try_into_resource_any(&mut store)?;
+    assert!(!borrowed.owned());
+    assert_eq!(borrowed.ty(), ResourceType::host_dynamic(2));
+    let borrowed_again = borrowed.try_into_resource_dynamic(&mut store)?;
+    assert!(!borrowed_again.owned());
+    assert_eq!(borrowed_again.rep(), 4);
+    assert_eq!(borrowed_again.ty(), 2);
+
     let c = Component::new(
         &engine,
         r#"
@@ -1590,6 +1631,8 @@ fn resource_dynamic() -> Result<()> {
                 (core func $u_drop (canon resource.drop $u))
 
                 (func (export "drop-t") (param "x" (own $t))
+                    (canon lift (core func $t_drop)))
+                (func (export "borrow-t") (param "x" (borrow $t))
                     (canon lift (core func $t_drop)))
                 (func (export "drop-u") (param "x" (own $u))
                     (canon lift (core func $u_drop)))
@@ -1606,7 +1649,12 @@ fn resource_dynamic() -> Result<()> {
     let instance = linker.instantiate(&mut store, &c)?;
 
     let drop_t = instance.get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-t")?;
+    let borrow_t = instance.get_func(&mut store, "borrow-t").unwrap();
     let drop_u = instance.get_typed_func::<(ResourceDynamic,), ()>(&mut store, "drop-u")?;
+
+    let borrowed = ResourceDynamic::new_borrow(5, 2).try_into_resource_any(&mut store)?;
+    borrow_t.call(&mut store, &[Val::Resource(borrowed)], &mut [])?;
+    borrowed.resource_drop(&mut store)?;
 
     drop_t.call(&mut store, (ResourceDynamic::new_own(1, 2),))?;
 

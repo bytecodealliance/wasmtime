@@ -41,7 +41,7 @@ impl VMGcRef {
         }
 
         match gc_heap.header(&self) {
-            Ok(header) => header.kind().matches(VMGcKind::StructRef),
+            Ok(header) => header.matches_kind(VMGcKind::StructRef),
             Err(_) => false,
         }
     }

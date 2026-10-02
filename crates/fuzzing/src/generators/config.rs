@@ -364,6 +364,10 @@ impl Config {
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
         cfg.wasm.branch_hinting = Some(self.wasmtime.branch_hinting);
         cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
+        // Winch disables GC types by default, but we want to fuzz it
+        if self.wasmtime.compiler_strategy == CompilerStrategy::Winch {
+            cfg.wasm.gc_support = Some(true);
+        }
         cfg.wasm.stack_switching = Some(self.module_config.stack_switching);
         cfg.wasm.shared_memory = Some(self.module_config.shared_memory);
         if !self.module_config.config.simd_enabled {

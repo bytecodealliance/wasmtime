@@ -44,6 +44,6 @@ block1:
 ;     jump block1
 ;
 ; block1:
-;     store.i32 notrap region0 v1, v0
 ;     return v1
 ; }
+

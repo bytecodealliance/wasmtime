@@ -13,7 +13,7 @@ use clap::error::{Error, ErrorKind};
 #[cfg(feature = "serde")]
 use serde::de::{self, Visitor};
 use std::fmt;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
@@ -440,6 +440,19 @@ impl WasmtimeOptionValue for NonZeroU32 {
     fn parse(val: Option<&str>) -> Result<Self> {
         let n = <u32 as WasmtimeOptionValue>::parse(val)?;
         NonZeroU32::new(n).ok_or_else(|| format_err!("value must be non-zero"))
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
+impl WasmtimeOptionValue for NonZeroUsize {
+    const VAL_HELP: &'static str = "=N";
+
+    fn parse(val: Option<&str>) -> Result<Self> {
+        let n = <usize as WasmtimeOptionValue>::parse(val)?;
+        NonZeroUsize::new(n).ok_or_else(|| format_err!("value must be non-zero"))
     }
 
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
