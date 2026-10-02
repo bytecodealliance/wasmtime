@@ -1961,19 +1961,19 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let head = [
             (
                 types::Dirent {
-                    d_next: 1u64.to_le(),
-                    d_ino: dir_metadata_hash.lower.to_le(),
+                    d_next: 1u64,
+                    d_ino: dir_metadata_hash.lower,
                     d_type: types::Filetype::Directory,
-                    d_namlen: 1u32.to_le(),
+                    d_namlen: 1u32,
                 },
                 ".".into(),
             ),
             (
                 types::Dirent {
-                    d_next: 2u64.to_le(),
-                    d_ino: dir_metadata_hash.lower.to_le(), // NOTE: incorrect, but legacy implementation returns `fd` inode here
+                    d_next: 2u64,
+                    d_ino: dir_metadata_hash.lower, // NOTE: incorrect, but legacy implementation returns `fd` inode here
                     d_type: types::Filetype::Directory,
-                    d_namlen: 2u32.to_le(),
+                    d_namlen: 2u32,
                 },
                 "..".into(),
             ),
