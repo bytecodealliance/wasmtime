@@ -22,12 +22,12 @@
 )
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 25 ""
 ;;     region3 = 68 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64, i32, i32) tail
 ;;     stack_limit = gv2
@@ -44,7 +44,7 @@
 ;; @0041                               v7 = load.i64 notrap aligned readonly can_move region2 v0+104
 ;; @0041                               v8 = load.i64 notrap aligned readonly can_move region3 v0+88
 ;; @0041                               call_indirect sig1, v8(v7, v0, v2, v3)  ; v2 = 1, v3 = 2
-;; @0043                               trap user12
+;; @0043                               trap user13
 ;;
 ;;                                 block2:
 ;; @0045                               v9 = load.i64 notrap aligned readonly can_move region2 v0+136

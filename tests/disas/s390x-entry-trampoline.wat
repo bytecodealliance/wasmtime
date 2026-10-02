@@ -19,11 +19,11 @@
 ;;       std     %f15, 0xe0(%r15)
 ;;       lg      %r4, 0(%r15)
 ;;       lg      %r5, 8(%r2)
-;;       stg     %r4, 0x48(%r5)
-;;       lgr     %r4, %r15
-;;       stg     %r4, 0x40(%r5)
-;;       larl    %r4, 0xc4
 ;;       stg     %r4, 0x50(%r5)
+;;       lgr     %r4, %r15
+;;       stg     %r4, 0x48(%r5)
+;;       larl    %r4, 0xc4
+;;       stg     %r4, 0x58(%r5)
 ;;       stg     %r5, 0xa0(%r15)
 ;;       brasl   %r14, 0
 ;;       ├─╼ exception frame offset: SP = FP - 0xe8
@@ -40,7 +40,7 @@
 ;;       lmg     %r6, %r15, 0x118(%r15)
 ;;       br      %r14
 ;;       lg      %r5, 0xa0(%r15)
-;;       mvghi   0x88(%r5), 1
+;;       mvghi   0x90(%r5), 1
 ;;       lhi     %r2, 0
 ;;       ld      %f8, 0xa8(%r15)
 ;;       ld      %f9, 0xb0(%r15)

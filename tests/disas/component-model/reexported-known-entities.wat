@@ -69,13 +69,13 @@
 )
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 215 ""
 ;;     region3 = 105 ""
 ;;     region4 = 171 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -89,11 +89,11 @@
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 250 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -106,13 +106,13 @@
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i64 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 93 ""
 ;;     region3 = 211 ""
 ;;     region4 = 117 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig0
 ;;     stack_limit = gv2
@@ -125,7 +125,7 @@
 ;;                                     v21 = icmp eq v4, v2  ; v2 = 0
 ;;                                     v24 = iconst.i64 0
 ;; @0080                               v12 = select_spectre_guard v21, v24, v7  ; v24 = 0
-;; @0080                               v13 = load.i64 user6 aligned region4 v12
+;; @0080                               v13 = load.i64 user7 aligned region4 v12
 ;; @0080                               v14 = iconst.i64 -2
 ;; @0080                               v15 = band v13, v14  ; v14 = -2
 ;; @0080                               brif v13, block3(v15), block2
@@ -145,14 +145,14 @@
 ;;
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 13 ""
 ;;     region3 = 215 ""
 ;;     region4 = 105 ""
 ;;     region5 = 171 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -167,12 +167,12 @@
 ;;
 ;; function u1:1(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 44 ""
 ;;     region3 = 250 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -186,14 +186,14 @@
 ;;
 ;; function u1:2(i64 vmctx, i64) -> i64 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 21 ""
 ;;     region3 = 93 ""
 ;;     region4 = 211 ""
 ;;     region5 = 117 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig0
 ;;     stack_limit = gv2
@@ -207,7 +207,7 @@
 ;;                                     v23 = icmp eq v5, v2  ; v2 = 0
 ;;                                     v26 = iconst.i64 0
 ;; @0111                               v14 = select_spectre_guard v23, v26, v9  ; v26 = 0
-;; @0111                               v15 = load.i64 user6 aligned region5 v14
+;; @0111                               v15 = load.i64 user7 aligned region5 v14
 ;; @0111                               v16 = iconst.i64 -2
 ;; @0111                               v17 = band v15, v16  ; v16 = -2
 ;; @0111                               brif v15, block3(v17), block2
@@ -227,14 +227,14 @@
 ;;
 ;; function u2:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 13 ""
 ;;     region3 = 215 ""
 ;;     region4 = 105 ""
 ;;     region5 = 171 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -249,12 +249,12 @@
 ;;
 ;; function u2:1(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 44 ""
 ;;     region3 = 250 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -268,14 +268,14 @@
 ;;
 ;; function u2:2(i64 vmctx, i64) -> i64 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 21 ""
 ;;     region3 = 93 ""
 ;;     region4 = 211 ""
 ;;     region5 = 117 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig0
 ;;     stack_limit = gv2
@@ -289,7 +289,7 @@
 ;;                                     v23 = icmp eq v5, v2  ; v2 = 0
 ;;                                     v26 = iconst.i64 0
 ;; @0196                               v14 = select_spectre_guard v23, v26, v9  ; v26 = 0
-;; @0196                               v15 = load.i64 user6 aligned region5 v14
+;; @0196                               v15 = load.i64 user7 aligned region5 v14
 ;; @0196                               v16 = iconst.i64 -2
 ;; @0196                               v17 = band v15, v16  ; v16 = -2
 ;; @0196                               brif v15, block3(v17), block2

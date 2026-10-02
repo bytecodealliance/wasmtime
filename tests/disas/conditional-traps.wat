@@ -23,14 +23,14 @@
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @002f                               trapnz v2, user12
+;; @002f                               trapnz v2, user13
 ;; @002f                               jump block3
 ;;
 ;;                                 block3:
@@ -42,16 +42,16 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0038                               v3 = iconst.i32 0
 ;; @0038                               v4 = icmp eq v2, v3  ; v3 = 0
-;; @0039                               trapnz v4, user12
+;; @0039                               trapnz v4, user13
 ;; @0039                               jump block3
 ;;
 ;;                                 block3:

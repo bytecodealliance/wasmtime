@@ -12,13 +12,13 @@
 )
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 65 ""
 ;;     region3 = 177 ""
 ;;     region4 = 98 ""
 ;;     region5 = 130 ""
 ;;     region6 = 6 ""
-;;     region7 = 196 ""
+;;     region7 = 206 ""
 ;;     region8 = 239 ""
 ;;     region9 = 134 ""
 ;;     region10 = 90 ""
@@ -27,7 +27,7 @@
 ;;     region13 = 152 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:24 sig0
 ;;     stack_limit = gv2
@@ -49,7 +49,7 @@
 ;; @0021                               store notrap aligned region3 v57, v6
 ;;                                     v60 = iconst.i32 -1342177246
 ;;                                     v61 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v62 = load.i64 notrap aligned readonly can_move region7 v61+32
+;;                                     v62 = load.i64 notrap aligned readonly can_move region7 v61+40
 ;; @0021                               v31 = iadd v62, v14
 ;; @0021                               store user2 region8 v60, v31  ; v60 = -1342177246
 ;;                                     v63 = load.i64 notrap aligned readonly can_move region5 v0+40
@@ -67,7 +67,7 @@
 ;; @0021                               v21 = iconst.i32 16
 ;; @0021                               v22 = call fn0(v0, v18, v20, v5, v21)  ; v18 = -1342177246, v5 = 32, v21 = 16
 ;; @0021                               v23 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0021                               v24 = load.i64 notrap aligned readonly can_move region7 v23+32
+;; @0021                               v24 = load.i64 notrap aligned readonly can_move region7 v23+40
 ;; @0021                               v25 = uextend.i64 v22
 ;; @0021                               v26 = iadd v24, v25
 ;; @0021                               jump block4(v22, v26)

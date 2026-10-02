@@ -334,6 +334,13 @@ macro_rules! for_each_vm_type {
                 /// yield if running asynchronously.
                 pub epoch_deadline: UnsafeCell<u64>,
 
+                /// The page of virtual memory used to signal that it's time to switch
+                /// tasks. Compiled guest code regularly attempts a read at this address.
+                /// When it is time to switch, the host uses mprotect() to forbid reads. The
+                /// fault soon caused by guest code then lands in the signal handler, which
+                /// effects a switch.
+                pub(crate) mmu_interrupt_page_ptr: Option<VmPtr<c_void>>, // ptr-sized
+
                 /// The "store version".
                 ///
                 /// This is used to test whether stack-frame handles referring to

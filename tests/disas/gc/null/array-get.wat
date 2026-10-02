@@ -11,27 +11,27 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i64 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
-;;     region2 = 196 ""
-;;     region3 = 206 ""
+;;     region1 = 196 ""
+;;     region2 = 206 ""
+;;     region3 = 85 ""
 ;;     region4 = 108 ""
 ;;     region5 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @0022                               trapz v2, user16
+;; @0022                               trapz v2, user17
 ;; @0022                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0022                               v6 = load.i64 notrap aligned readonly can_move region2 v5+32
+;; @0022                               v6 = load.i64 notrap aligned readonly can_move region2 v5+40
 ;; @0022                               v4 = uextend.i64 v2
 ;; @0022                               v7 = iadd v6, v4
 ;; @0022                               v8 = iconst.i64 8
 ;; @0022                               v9 = iadd v7, v8  ; v8 = 8
 ;; @0022                               v10 = load.i32 user2 readonly region4 v9
 ;; @0022                               v11 = icmp ult v3, v10
-;; @0022                               trapz v11, user17
+;; @0022                               trapz v11, user18
 ;; @0022                               v13 = uextend.i64 v10
 ;;                                     v33 = iconst.i64 3
 ;;                                     v34 = ishl v13, v33  ; v33 = 3

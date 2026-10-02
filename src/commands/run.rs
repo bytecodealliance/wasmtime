@@ -77,6 +77,12 @@ pub struct RunCommand {
     #[arg(skip)]
     pub module_bytes: Option<&'static [u8]>,
 
+    /// The MMU interrupter given to the engine, kept so it can be started and
+    /// stopped
+    #[cfg(has_mmu_interruption)]
+    #[arg(skip)]
+    pub(crate) timing_wheel: Option<std::sync::Arc<wasmtime::TimingWheelInterrupter>>,
+
     /// The WebAssembly module to run and arguments to pass to it.
     ///
     /// Arguments passed to the wasm module will be configured as WASI CLI
@@ -331,9 +337,16 @@ impl RunCommand {
     /// Creates a new `Engine` with the configuration for this command.
     pub fn new_engine(&mut self) -> Result<Engine> {
         let mut config = self.run.common.config(None)?;
-
-        if self.run.common.wasm.timeout.is_some() {
-            config.epoch_interruption(true);
+        let wasm_options = &self.run.common.wasm;
+        let no_interruption_chosen = !wasm_options.mmu_interruption.unwrap_or(false)
+            && !wasm_options.epoch_interruption.unwrap_or(false);
+        if wasm_options.timeout.is_some() {
+            // Make sure we have some kind of reasonably efficient interruption
+            // on. If the user asked for one in particular, go with that one.
+            if no_interruption_chosen {
+                // Pick epoch-interruption, as it's supported everywhere.
+                config.epoch_interruption(true);
+            }
         }
         match self.run.profile {
             Some(Profile::Native(s)) => {
@@ -341,9 +354,18 @@ impl RunCommand {
             }
             Some(Profile::Guest { .. }) => {
                 // Further configured down below as well.
-                config.epoch_interruption(true);
+                if no_interruption_chosen {
+                    config.epoch_interruption(true);
+                }
             }
             None => {}
+        }
+
+        #[cfg(has_mmu_interruption)]
+        if wasm_options.mmu_interruption == Some(true) {
+            let wheel = std::sync::Arc::new(wasmtime::TimingWheelInterrupter::new(1));
+            config.with_mmu_interrupter(wheel.clone());
+            self.timing_wheel = Some(wheel);
         }
 
         Engine::new(&config)
@@ -572,12 +594,24 @@ impl RunCommand {
             }
 
             if let Some(timeout) = self.run.common.wasm.timeout {
-                store.set_epoch_deadline(1);
-                let engine = store.engine().clone();
-                thread::spawn(move || {
-                    thread::sleep(timeout);
-                    engine.increment_epoch();
-                });
+                if store.engine().get_epoch_interruption() {
+                    store.set_epoch_deadline(1);
+                    let engine = store.engine().clone();
+                    thread::spawn(move || {
+                        thread::sleep(timeout);
+                        engine.increment_epoch();
+                    });
+                }
+                #[cfg(has_mmu_interruption)]
+                if let Some(wheel) = self.timing_wheel.clone() {
+                    // Unlike an epoch increment, a tick doesn't stick, so keep ticking.
+                    thread::spawn(move || {
+                        loop {
+                            thread::sleep(timeout);
+                            wheel.tick();
+                        }
+                    });
+                }
             }
         }
 

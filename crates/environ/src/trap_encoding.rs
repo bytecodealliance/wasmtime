@@ -23,6 +23,10 @@ pub enum CompiledTrap {
     InternalAssert,
     /// The GC heap was detected as being corrupt.
     GcHeapCorrupt,
+    /// A marker rather than a trap. Indicates the location of the seg-faulting
+    /// load instruction of each MMU-interruption check so the signal handler
+    /// can distinguish such interruptions from ordinary crashes.
+    MmuInterrupt,
 }
 
 impl CompiledTrap {
@@ -33,10 +37,12 @@ impl CompiledTrap {
                 let ret = *trap as u8;
                 debug_assert_ne!(ret, CompiledTrap::InternalAssert.as_u8());
                 debug_assert_ne!(ret, CompiledTrap::GcHeapCorrupt.as_u8());
+                debug_assert_ne!(ret, CompiledTrap::MmuInterrupt.as_u8());
                 ret
             }
             CompiledTrap::InternalAssert => 0xFF,
             CompiledTrap::GcHeapCorrupt => 0xFE,
+            CompiledTrap::MmuInterrupt => 0xFD,
         }
     }
 
@@ -46,6 +52,8 @@ impl CompiledTrap {
             Some(CompiledTrap::InternalAssert)
         } else if byte == 0xFE {
             Some(CompiledTrap::GcHeapCorrupt)
+        } else if byte == 0xFD {
+            Some(CompiledTrap::MmuInterrupt)
         } else {
             Trap::from_u8(byte).map(CompiledTrap::Normal)
         }

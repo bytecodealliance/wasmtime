@@ -14,13 +14,13 @@
 ;; function u0:0(i64 vmctx, i64, f32, i32, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 65 ""
 ;;     region3 = 177 ""
 ;;     region4 = 98 ""
 ;;     region5 = 130 ""
 ;;     region6 = 6 ""
-;;     region7 = 196 ""
+;;     region7 = 206 ""
 ;;     region8 = 239 ""
 ;;     region9 = 134 ""
 ;;     region10 = 90 ""
@@ -30,7 +30,7 @@
 ;;     region14 = 135 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:24 sig0
 ;;     stack_limit = gv2
@@ -54,7 +54,7 @@
 ;; @002a                               store notrap aligned region3 v60, v6
 ;;                                     v63 = iconst.i32 -1342177246
 ;;                                     v64 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v65 = load.i64 notrap aligned readonly can_move region7 v64+32
+;;                                     v65 = load.i64 notrap aligned readonly can_move region7 v64+40
 ;; @002a                               v31 = iadd v65, v14
 ;; @002a                               store user2 region8 v63, v31  ; v63 = -1342177246
 ;;                                     v66 = load.i64 notrap aligned readonly can_move region5 v0+40
@@ -72,7 +72,7 @@
 ;; @002a                               v21 = iconst.i32 16
 ;; @002a                               v22 = call fn0(v0, v18, v20, v5, v21), stack_map=[i32 @ ss0+0]  ; v18 = -1342177246, v5 = 32, v21 = 16
 ;; @002a                               v23 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @002a                               v24 = load.i64 notrap aligned readonly can_move region7 v23+32
+;; @002a                               v24 = load.i64 notrap aligned readonly can_move region7 v23+40
 ;; @002a                               v25 = uextend.i64 v22
 ;; @002a                               v26 = iadd v24, v25
 ;; @002a                               jump block4(v22, v26)

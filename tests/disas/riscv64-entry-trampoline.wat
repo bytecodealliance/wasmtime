@@ -35,12 +35,12 @@
 ;;       fsd     fs11, 0x18(sp)
 ;;       mv      a2, s0
 ;;       ld      a5, 8(a0)
-;;       sd      a2, 0x48(a5)
+;;       sd      a2, 0x50(a5)
 ;;       mv      a3, sp
-;;       sd      a3, 0x40(a5)
+;;       sd      a3, 0x48(a5)
 ;;       auipc   a4, 0
 ;;       addi    a4, a4, 0x8c
-;;       sd      a4, 0x50(a5)
+;;       sd      a4, 0x58(a5)
 ;;       sd      a5, 0(sp)
 ;;       auipc   ra, 0
 ;;       jalr    ra, ra, -0xb4
@@ -77,7 +77,7 @@
 ;;       ret
 ;;       addi    a0, zero, 1
 ;;       ld      a5, 0(sp)
-;;       sd      a0, 0x88(a5)
+;;       sd      a0, 0x90(a5)
 ;;       mv      a0, zero
 ;;       ld      s0, 0xc8(sp)
 ;;       ld      s1, 0xc0(sp)

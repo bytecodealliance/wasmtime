@@ -56,20 +56,20 @@
 
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 25 ""
 ;;     region3 = 44 ""
 ;;     region4 = 78 ""
 ;;     region5 = 227 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
-;;     gv5 = load.i64 notrap aligned region1 gv4+24
+;;     gv5 = load.i64 notrap aligned region1 gv4+32
 ;;     gv6 = vmctx
 ;;     gv7 = load.i64 notrap aligned readonly can_move region0 gv6+8
-;;     gv8 = load.i64 notrap aligned region1 gv7+24
+;;     gv8 = load.i64 notrap aligned region1 gv7+32
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) tail
 ;;     sig2 = (i64 vmctx, i64, i32) -> i32 tail
@@ -87,7 +87,7 @@
 ;; @00ee                               v3 = load.i64 notrap aligned readonly can_move region2 v0+72
 ;;                                     v9 = load.i64 notrap aligned readonly can_move region3 v3+168
 ;;                                     v10 = load.i32 notrap aligned region4 v9
-;;                                     trapz v10, user26
+;;                                     trapz v10, user27
 ;;                                     jump block9
 ;;
 ;;                                 block9:

@@ -31,6 +31,8 @@ use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ptr::{self, NonNull};
+#[cfg(has_mmu_interruption)]
+use wasmtime_environ::CompiledTrap;
 use wasmtime_unwinder::Handler;
 
 #[cfg(feature = "debug")]
@@ -46,20 +48,32 @@ pub use self::tls::{AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
 
+#[derive(Clone, Copy)]
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,
 }
 
+// From signal.h. Not yet exposed in libc. Value is valid for Linux and Mac; not
+// sure about elsewhere.
+#[cfg(has_mmu_interruption)]
+const SEGV_ACCERR: libc::c_int = 2;
+
 /// Return value from `test_if_trap`.
 pub(crate) enum TrapTest {
-    /// Not a wasm trap, need to delegate to whatever process handler is next.
+    /// Not a wasm trap, this should get forwarded to the next platform-specific
+    /// fault handler.
     NotWasm,
-    /// This trap was handled by the embedder via custom embedding APIs.
+    /// This trap was handled by the embedder via custom embedding APIs, so
+    /// there's nothing more to do.
     #[cfg(all(has_native_signals, not(miri)))]
     HandledByEmbedder,
-    /// This is a wasm trap, it needs to be handled.
+    /// This is a wasm trap, and the stack needs to be unwound.
     Trap(Handler),
+    /// This was a trap caused by one of MMU interruption's checkpoints. The
+    /// running wasm should yield.
+    #[cfg(has_mmu_interruption)]
+    MmuInterruption,
 }
 
 fn lazy_per_thread_init() {
@@ -76,12 +90,11 @@ fn lazy_per_thread_init() {
 /// activation on the stack, or the entry trampoline back to the the host, if
 /// the exception is uncaught.
 ///
-/// This is currently only called from the `raise` builtin of
-/// Wasmtime. This builtin is only used when the host returns back to
-/// wasm and indicates that a trap or exception should be raised. In
-/// this situation the host has already stored trap or exception
-/// information within the `CallThreadState` and this is the low-level
-/// operation to actually perform an unwind.
+/// This is called from the `raise` builtin of Wasmtime. This builtin is only
+/// used when the host returns back to wasm and indicates that a trap or
+/// exception should be raised. In this situation, the host has already stored
+/// trap or exception information within the `CallThreadState`, and this is the
+/// low-level operation to actually perform an unwind.
 ///
 /// Note that this function is used both for Pulley and for native execution.
 /// For Pulley this function will return and the interpreter will be
@@ -94,7 +107,7 @@ fn lazy_per_thread_init() {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
+pub(crate) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
     tls::with(|info| unsafe { info.unwrap().unwind(store) })
 }
 
@@ -958,53 +971,86 @@ impl CallThreadState {
     ///
     /// * `regs` - some special program registers at the time that the trap
     ///   happened, for example `pc`.
-    /// * `faulting_addr` - the system-provided address that the a fault, if
-    ///   any, happened at. This is used when debug-asserting that all segfaults
-    ///   are known to live within a `Store<T>` in a valid range.
-    /// * `call_handler` - a closure used to invoke the platform-specific
-    ///   signal handler for each instance, if available.
+    /// * `faulting_addr` - the system-provided address that the fault, if any,
+    ///   happened at. This is used when debug-asserting that all segfaults are
+    ///   known to live within a `Store<T>` in a valid range.
+    /// * `signum` - the numeric signal received by the signal handler. None
+    ///   when not using signal-based traps.
+    /// * `si_code` - the si_code field from the signal handler's siginfo. None
+    ///   if unavailable. Must be provided if using mmu-interruption.
+    /// * `call_handler` - a closure used to invoke the platform-specific signal
+    ///   handler for each instance, if available. If the closure returns true,
+    ///   `test_if_trap` returns `TrapTest::HandledByEmbedder`.
     ///
-    /// Attempts to handle the trap if it's a wasm trap. Returns a `TrapTest`
-    /// which indicates what this could be, such as:
-    ///
-    /// * `TrapTest::NotWasm` - not a wasm fault, this should get forwarded to
-    ///   the next platform-specific fault handler.
-    /// * `TrapTest::HandledByEmbedder` - the embedder `call_handler` handled
-    ///   this signal, nothing else to do.
-    /// * `TrapTest::Trap` - this is a wasm trap an the stack needs to be
-    ///   unwound now.
+    /// Attempts to handle the trap if it's a Wasm trap. Returns a `TrapTest`
+    /// which indicates what this could be.
     pub(crate) fn test_if_trap(
         &self,
         regs: TrapRegisters,
         faulting_addr: Option<usize>,
+        signum: Option<libc::c_int>,
+        si_code: Option<libc::c_int>,
         call_handler: impl FnOnce(&SignalHandler) -> bool,
     ) -> TrapTest {
-        // First up see if any instance registered has a custom trap handler,
-        // in which case run them all. If anything handles the trap then we
-        // return that the trap was handled.
-        let _ = &call_handler;
-        #[cfg(all(has_native_signals, not(miri)))]
-        if let Some(handler) = self.signal_handler {
-            if unsafe { call_handler(&*handler) } {
-                return TrapTest::HandledByEmbedder;
+        // See if any instance registered has a custom trap handler, in which
+        // case run them all. If any handle the trap, then return
+        // `HandledByEmbedder`, else None.
+        let attempt_custom_handler = || {
+            let _ = &call_handler;
+            #[cfg(all(has_native_signals, not(miri)))]
+            if let Some(handler) = self.signal_handler {
+                if unsafe { call_handler(&*handler) } {
+                    return Some(TrapTest::HandledByEmbedder);
+                }
+            }
+            None
+        };
+
+        // First, check for faults outside Wasm code--or in Wasm code that isn't
+        // expected to trap.
+        let Some(trap) =
+            lookup_code(regs.pc).and_then(|(code, text_offset)| code.lookup_trap_code(text_offset))
+        else {
+            // The fault was not in Wasm code.
+            //
+            // Alternatively, it is at a Wasm location not marked as potentially
+            // trapping. That indicates a bug in Cranelift/Winch/etc., so we
+            // pretend it's NotWasm so the program likely aborts. Give the
+            // custom handler a chance to handle it, and then report as is.
+            return attempt_custom_handler().unwrap_or(TrapTest::NotWasm);
+        };
+
+        // This fault was in Wasm code.
+
+        // Check whether the fault represents an mmu-interruption
+        // checkpoint.
+        cfg_select! {
+            has_mmu_interruption => {
+                // See if it's the kind of signal MMU interruptions throw.
+                if signum == Some(libc::SIGSEGV)
+                    // `si_code` field is always initialized for SIGSEGV.
+                    && si_code.map_or(false, |si| si == SEGV_ACCERR)
+                {
+                    // See whether the faulting PC is recorded in the trap table as an
+                    // mmu-interruption check.
+                    if trap == CompiledTrap::MmuInterrupt {
+                        return TrapTest::MmuInterruption;
+                    }
+                    // Otherwise, it's not an MMU interruption. Barrel on.
+                }
+            }
+            _ => {
+                let (_, _) = (signum, si_code);
             }
         }
 
-        // If this fault wasn't in wasm code, then it's not our problem
-        let Some((code, text_offset)) = lookup_code(regs.pc) else {
-            return TrapTest::NotWasm;
-        };
+        // Give custom handlers a chance to handle in-Wasm faults.
+        if let Some(trap_kind) = attempt_custom_handler() {
+            return trap_kind;
+        }
 
-        // If the fault was at a location that was not marked as potentially
-        // trapping, then that's a bug in Cranelift/Winch/etc. Don't try to
-        // catch the trap and pretend this isn't wasm so the program likely
-        // aborts.
-        let Some(trap) = code.lookup_trap_code(text_offset) else {
-            return TrapTest::NotWasm;
-        };
-
-        // If all that passed then this is indeed a wasm trap, so return the
-        // `Handler` setup in the original wasm frame.
+        // It is a Wasm trap, and nothing else handled it, so return the
+        // `Handler` set up in the original wasm frame.
         self.set_jit_trap(regs, faulting_addr, trap);
         let entry_handler = self.entry_trap_handler();
         TrapTest::Trap(entry_handler)

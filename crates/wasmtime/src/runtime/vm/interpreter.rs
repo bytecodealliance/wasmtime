@@ -475,7 +475,7 @@ impl InterpreterRef<'_> {
                     s.entry_trap_handler()
                 }
                 None => {
-                    match s.test_if_trap(regs, None, |_| false) {
+                    match s.test_if_trap(regs, None, None, None, |_| false) {
                         // This shouldn't be possible, so this is a fatal error
                         // if it happens.
                         TrapTest::NotWasm => {
@@ -489,6 +489,11 @@ impl InterpreterRef<'_> {
                         // Trap was handled, yay! Configure interpreter state
                         // to resume at the exception handler.
                         TrapTest::Trap(handler) => handler,
+
+                        #[cfg(has_mmu_interruption)]
+                        TrapTest::MmuInterruption => unreachable!(
+                            "mmu interruption requires cranelift-compiled checkpoints and so cannot occur under the pulley interpreter"
+                        ),
                     }
                 }
             }

@@ -26,7 +26,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r10
-;;       movq    0x18(%r10), %r10
+;;       movq    0x20(%r10), %r10
 ;;       addq    $0x50, %r10
 ;;       cmpq    %rsp, %r10
 ;;       ja      0x11a
@@ -48,7 +48,7 @@
 ;;       movl    %edi, (%rsi)
 ;;       movq    8(%rsp), %r9
 ;;       movq    8(%r9), %rsi
-;;       movq    0x20(%rsi), %rdi
+;;       movq    0x28(%rsi), %rdi
 ;;       leaq    (%rdi, %rcx), %rsi
 ;;       movl    $0xb0000002, (%rdi, %rcx)
 ;;       ╰─╼ trap: GcHeapCorrupt
@@ -75,7 +75,7 @@
 ;;       je      0x11c
 ;;   b1: movq    8(%rsp), %r9
 ;;       movq    8(%r9), %rcx
-;;       movq    0x20(%rcx), %rcx
+;;       movq    0x28(%rcx), %rcx
 ;;       movl    %eax, %eax
 ;;       movl    0x10(%rcx, %rax), %eax
 ;;       ╰─╼ trap: GcHeapCorrupt
@@ -98,7 +98,7 @@
 ;;  106: movq    8(%rsp), %r9
 ;;  10b: movq    8(%r9), %rcx
 ;;  10f: movl    %eax, %esi
-;;  111: addq    0x20(%rcx), %rsi
+;;  111: addq    0x28(%rcx), %rsi
 ;;  115: jmp     0x88
 ;;  11a: ud2
 ;;       ╰─╼ trap: Normal(StackOverflow)

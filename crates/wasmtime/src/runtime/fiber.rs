@@ -418,7 +418,7 @@ pub(crate) struct StoreFiber<'a> {
     /// Note that using `StoreFiberYield` as the `Yield` type parameter allows
     /// the fiber to indicate whether it needs exclusive access to the store
     /// across suspend points (in which case it will pass `KeepStore` when
-    /// suspending , meaning the store must not be used at all until the fiber
+    /// suspending, meaning the store must not be used at all until the fiber
     /// is resumed again) or whether it is giving up exclusive access (in which
     /// case it will pass `ReleaseStore` when yielding, meaning exclusive access
     /// may be given to another fiber that runs concurrently.
@@ -618,6 +618,10 @@ impl FiberResumeState {
             .unwrap_or(ptr::null_mut()..ptr::null_mut());
         let mut executor = self.executor;
         store.swap_executor(&mut executor);
+
+        #[cfg(has_mmu_interruption)]
+        store.increment_fibers();
+
         PriorFiberResumeState {
             tls,
             mpk,
@@ -697,6 +701,9 @@ impl PriorFiberResumeState {
 
         let mut executor = self.executor;
         store.swap_executor(&mut executor);
+
+        #[cfg(has_mmu_interruption)]
+        store.decrement_fibers();
 
         FiberResumeState {
             tls,

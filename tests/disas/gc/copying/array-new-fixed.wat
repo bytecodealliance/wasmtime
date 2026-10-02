@@ -10,22 +10,22 @@
 )
 ;; function u0:0(i64 vmctx, i64, i64, i64, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 65 ""
 ;;     region3 = 177 ""
 ;;     region4 = 98 ""
 ;;     region5 = 130 ""
 ;;     region6 = 6 ""
-;;     region7 = 196 ""
+;;     region7 = 206 ""
 ;;     region8 = 239 ""
 ;;     region9 = 134 ""
 ;;     region10 = 90 ""
 ;;     region11 = 108 ""
-;;     region12 = 206 ""
+;;     region12 = 85 ""
 ;;     region13 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:24 sig0
 ;;     stack_limit = gv2
@@ -47,7 +47,7 @@
 ;; @0025                               store notrap aligned region3 v155, v14
 ;;                                     v220 = iconst.i32 -1476395002
 ;;                                     v221 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v222 = load.i64 notrap aligned readonly can_move region7 v221+32
+;;                                     v222 = load.i64 notrap aligned readonly can_move region7 v221+40
 ;; @0025                               v39 = iadd v222, v22
 ;; @0025                               store user2 region8 v220, v39  ; v220 = -1476395002
 ;;                                     v223 = load.i64 notrap aligned readonly can_move region5 v0+40
@@ -65,7 +65,7 @@
 ;; @0025                               v29 = iconst.i32 16
 ;; @0025                               v30 = call fn0(v0, v26, v28, v140, v29)  ; v26 = -1476395002, v140 = 48, v29 = 16
 ;; @0025                               v31 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0025                               v32 = load.i64 notrap aligned readonly can_move region7 v31+32
+;; @0025                               v32 = load.i64 notrap aligned readonly can_move region7 v31+40
 ;; @0025                               v33 = uextend.i64 v30
 ;; @0025                               v34 = iadd v32, v33
 ;; @0025                               jump block4(v30, v34)
@@ -75,14 +75,14 @@
 ;; @0025                               v45 = iconst.i64 16
 ;; @0025                               v46 = iadd v44, v45  ; v45 = 16
 ;; @0025                               store user2 region11 v5, v46  ; v5 = 3
-;; @0025                               trapz v43, user16
+;; @0025                               trapz v43, user17
 ;;                                     v226 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v227 = load.i64 notrap aligned readonly can_move region7 v226+32
+;;                                     v227 = load.i64 notrap aligned readonly can_move region7 v226+40
 ;; @0025                               v48 = uextend.i64 v43
 ;; @0025                               v51 = iadd v227, v48
 ;; @0025                               v53 = iadd v51, v45  ; v45 = 16
 ;; @0025                               v54 = load.i32 user2 readonly region11 v53
-;; @0025                               trapz v54, user17
+;; @0025                               trapz v54, user18
 ;; @0025                               v57 = uextend.i64 v54
 ;;                                     v131 = iconst.i64 3
 ;;                                     v162 = ishl v57, v131  ; v131 = 3
@@ -101,7 +101,7 @@
 ;; @0025                               store.i64 user2 little region13 v2, v74
 ;; @0025                               v75 = iconst.i32 1
 ;;                                     v185 = icmp ugt v54, v75  ; v75 = 1
-;; @0025                               trapz v185, user17
+;; @0025                               trapz v185, user18
 ;;                                     v194 = iconst.i32 32
 ;; @0025                               v100 = isub v63, v194  ; v194 = 32
 ;; @0025                               v101 = uextend.i64 v100
@@ -109,7 +109,7 @@
 ;; @0025                               store.i64 user2 little region13 v3, v102
 ;; @0025                               v103 = iconst.i32 2
 ;;                                     v200 = icmp ugt v54, v103  ; v103 = 2
-;; @0025                               trapz v200, user17
+;; @0025                               trapz v200, user18
 ;;                                     v213 = iconst.i32 40
 ;; @0025                               v128 = isub v63, v213  ; v213 = 40
 ;; @0025                               v129 = uextend.i64 v128

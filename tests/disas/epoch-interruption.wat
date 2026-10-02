@@ -6,13 +6,13 @@
 
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 235 ""
 ;;     region3 = 18 ""
 ;;     region4 = 109 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx) -> i64 tail
 ;;     fn0 = colocated u805306368:13 sig0
 ;;     stack_limit = gv2

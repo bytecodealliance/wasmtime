@@ -12,8 +12,8 @@
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 123 ""
-;;     region1 = 85 ""
-;;     region2 = 72 ""
+;;     region1 = 72 ""
+;;     region2 = 243 ""
 ;;     region3 = 38 ""
 ;;     region4 = 245 ""
 ;;     region5 = 117 ""
@@ -25,11 +25,11 @@
 ;; block0(v0: i64, v1: i64, v2: i32):
 ;;     v4 = get_frame_pointer.i64 
 ;;     v3 = load.i64 notrap aligned readonly can_move region0 v1+8
-;;     store notrap aligned region1 v4, v3+48
+;;     store notrap aligned region1 v4, v3+56
 ;;     v5 = get_return_address.i64 
-;;     store notrap aligned region2 v5, v3+56
+;;     store notrap aligned region2 v5, v3+64
 ;;     v6 = load.i32 notrap aligned region3 v0+32
-;;     trapz v6, user26
+;;     trapz v6, user27
 ;;     v9 = load.i64 notrap aligned readonly region4 v0+8
 ;;     v10 = load.i64 notrap aligned readonly can_move region5 v9+16
 ;;     v7 = iconst.i32 0

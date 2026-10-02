@@ -21,19 +21,19 @@
 
 ;; function u0:0(i64 vmctx, i64, i32, i32) tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
-;;     region2 = 196 ""
-;;     region3 = 206 ""
+;;     region1 = 196 ""
+;;     region2 = 206 ""
+;;     region3 = 85 ""
 ;;     region4 = 147 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @002c                               trapz v2, user16
+;; @002c                               trapz v2, user17
 ;; @002c                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @002c                               v6 = load.i64 notrap aligned readonly can_move region2 v5+32
+;; @002c                               v6 = load.i64 notrap aligned readonly can_move region2 v5+40
 ;; @002c                               v4 = uextend.i64 v2
 ;; @002c                               v7 = iadd v6, v4
 ;; @002c                               v8 = iconst.i64 8
@@ -48,17 +48,17 @@
 ;; function u0:1(i64 vmctx, i64, i32, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
-;;     region2 = 196 ""
-;;     region3 = 206 ""
+;;     region1 = 196 ""
+;;     region2 = 206 ""
+;;     region3 = 85 ""
 ;;     region4 = 147 ""
 ;;     region5 = 135 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
-;;     gv5 = load.i64 notrap aligned region1 gv4+24
+;;     gv5 = load.i64 notrap aligned region1 gv4+32
 ;;     sig0 = (i64 vmctx, i64, i32, i32) tail
 ;;     fn0 = colocated u0:0 sig0
 ;;     stack_limit = gv2
@@ -69,9 +69,9 @@
 ;; @0037                               jump block2
 ;;
 ;;                                 block2:
-;;                                     trapz.i32 v2, user16
+;;                                     trapz.i32 v2, user17
 ;;                                     v19 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v20 = load.i64 notrap aligned readonly can_move region2 v19+32
+;;                                     v20 = load.i64 notrap aligned readonly can_move region2 v19+40
 ;;                                     v18 = uextend.i64 v2
 ;;                                     v21 = iadd v20, v18
 ;;                                     v22 = iconst.i64 8

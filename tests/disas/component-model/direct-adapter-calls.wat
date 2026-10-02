@@ -59,10 +59,10 @@
 
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -76,11 +76,11 @@
 ;;
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 25 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     fn0 = colocated u2:0 sig0
 ;;     stack_limit = gv2
@@ -97,14 +97,14 @@
 ;;
 ;; function u2:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 44 ""
 ;;     region3 = 78 ""
 ;;     region4 = 25 ""
 ;;     region5 = 227 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     sig1 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     fn0 = colocated u0:0 sig1
@@ -119,7 +119,7 @@
 ;;                                 block4:
 ;; @0094                               v6 = load.i64 notrap aligned readonly can_move region2 v0+168
 ;; @0094                               v7 = load.i32 notrap aligned region3 v6
-;; @0098                               trapz v7, user26
+;; @0098                               trapz v7, user27
 ;; @0098                               jump block7
 ;;
 ;;                                 block7:
@@ -136,7 +136,7 @@
 ;; @00bb                               jump block2
 ;;
 ;;                                 block3:
-;; @00be                               trap user52
+;; @00be                               trap user53
 ;;
 ;;                                 block2:
 ;; @00c2                               jump block1

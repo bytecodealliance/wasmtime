@@ -404,6 +404,10 @@ wasmtime_option_group! {
         /// Yield when a global epoch counter changes, allowing for async
         /// operation without blocking the executor.
         pub epoch_interruption: Option<bool>,
+        /// Use MMU privileges and a special signal handler to trigger async
+        /// Yields. Should be more efficient than epoch-interruption, where
+        /// supported.
+        pub mmu_interruption: Option<bool>,
         /// Maximum stack size, in bytes, that wasm is allowed to consume before a
         /// stack overflow is reported.
         pub max_wasm_stack: Option<usize>,
@@ -1076,6 +1080,9 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.epoch_interruption {
             config.epoch_interruption(enable);
         }
+        if let Some(enable) = self.wasm.mmu_interruption {
+            config.mmu_interruption(enable);
+        }
         if let Some(enable) = self.debug.address_map {
             config.generate_address_map(enable);
         }
@@ -1563,6 +1570,7 @@ impl CommonOptions {
                 wide_arithmetic: Some(features.contains(WasmFeatures::WIDE_ARITHMETIC)),
                 concurrency_support: Some(engine.get_concurrency_support()),
                 epoch_interruption: Some(engine.get_epoch_interruption()),
+                mmu_interruption: Some(engine.get_mmu_interruption()),
                 fuel: if engine.get_consume_fuel() {
                     Some(1)
                 } else {

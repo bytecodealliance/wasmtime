@@ -17,12 +17,12 @@
 
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 93 ""
 ;;     region3 = 99 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -36,7 +36,7 @@
 ;; @0054                               v9 = iadd v6, v8
 ;; @0054                               v10 = iconst.i64 0
 ;; @0054                               v11 = select_spectre_guard v4, v10, v9  ; v10 = 0
-;; @0054                               v12 = load.i32 user6 aligned region3 v11
+;; @0054                               v12 = load.i32 user7 aligned region3 v11
 ;; @0056                               jump block1
 ;;
 ;;                                 block1:
@@ -45,12 +45,12 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 93 ""
 ;;     region3 = 99 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -63,7 +63,7 @@
 ;; @005b                               v9 = iadd v6, v8
 ;; @005b                               v10 = iconst.i64 0
 ;; @005b                               v11 = select_spectre_guard v4, v10, v9  ; v10 = 0
-;; @005b                               v12 = load.i32 user6 aligned region3 v11
+;; @005b                               v12 = load.i32 user7 aligned region3 v11
 ;; @005d                               jump block1
 ;;
 ;;                                 block1:

@@ -16,7 +16,7 @@
 ;;       subq    $0x30, %rsp
 ;;       movq    %r14, 0x20(%rsp)
 ;;       movq    8(%rdi), %rax
-;;       movq    0x18(%rax), %rax
+;;       movq    0x20(%rax), %rax
 ;;       movq    %rsp, %rcx
 ;;       cmpq    %rax, %rcx
 ;;       jb      0x93

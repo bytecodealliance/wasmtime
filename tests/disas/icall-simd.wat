@@ -10,7 +10,7 @@
 
 ;; function u0:0(i64 vmctx, i64, i32, i8x16) -> i8x16 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 93 ""
 ;;     region3 = 117 ""
 ;;     region4 = 130 ""
@@ -20,7 +20,7 @@
 ;;     region8 = 60 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64, i8x16) -> i8x16 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig1
@@ -36,7 +36,7 @@
 ;; @0033                               v10 = iadd v7, v9
 ;; @0033                               v11 = iconst.i64 0
 ;; @0033                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
-;; @0033                               v13 = load.i64 user6 aligned region3 v12
+;; @0033                               v13 = load.i64 user7 aligned region3 v12
 ;; @0033                               v14 = iconst.i64 -2
 ;; @0033                               v15 = band v13, v14  ; v14 = -2
 ;; @0033                               brif v13, block3(v15), block2
@@ -50,10 +50,10 @@
 ;;                                 block3(v16: i64):
 ;; @0033                               v20 = load.i64 notrap aligned readonly can_move region4 v0+40
 ;; @0033                               v21 = load.i32 notrap aligned readonly can_move region5 v20
-;; @0033                               v22 = load.i32 user7 aligned readonly region6 v16+16
+;; @0033                               v22 = load.i32 user8 aligned readonly region6 v16+16
 ;; @0033                               v23 = icmp eq v22, v21
 ;; @0033                               v24 = uextend.i32 v23
-;; @0033                               trapz v24, user8
+;; @0033                               trapz v24, user9
 ;; @0033                               v25 = load.i64 notrap aligned readonly region7 v16+8
 ;; @0033                               v26 = load.i64 notrap aligned readonly region8 v16+24
 ;; @0033                               v27 = call_indirect sig0, v25(v26, v0, v3)

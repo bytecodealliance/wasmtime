@@ -13,7 +13,7 @@
 ;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       ldur    x16, [x0, #8]
-;;       ldur    x16, [x16, #0x18]
+;;       ldur    x16, [x16, #0x20]
 ;;       mov     x17, #0
 ;;       movk    x17, #0x30
 ;;       add     x16, x16, x17
@@ -58,8 +58,8 @@
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x18]
 ;;       ldur    x1, [x9, #8]
-;;       ldur    x2, [x1, #0x28]
-;;       ldur    x1, [x1, #0x20]
+;;       ldur    x2, [x1, #0x30]
+;;       ldur    x1, [x1, #0x28]
 ;;       mov     x2, x1
 ;;       add     x2, x2, x0, uxtx
 ;;       ldur    w1, [x28]
@@ -80,8 +80,8 @@
 ;;       b.ne    #0x14c
 ;;       b       #0x114
 ;;  114: ldur    x3, [x9, #8]
-;;       ldur    x4, [x3, #0x28]
-;;       ldur    x3, [x3, #0x20]
+;;       ldur    x4, [x3, #0x30]
+;;       ldur    x3, [x3, #0x28]
 ;;       mov     x16, x1
 ;;       add     x16, x16, #0x10
 ;;       cmp     x16, x4, uxtx

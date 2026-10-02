@@ -15,7 +15,7 @@
 ;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       ldur    x16, [x1, #8]
-;;       ldur    x16, [x16, #0x18]
+;;       ldur    x16, [x16, #0x20]
 ;;       mov     x17, #0
 ;;       movk    x17, #0x20
 ;;       add     x16, x16, x17

@@ -10,7 +10,7 @@ use crate::translate::{
 use crate::trap::TranslateTrap;
 use crate::{
     BuiltinFunctionSignatures, Reachability, TRAP_ARRAY_OUT_OF_BOUNDS, TRAP_GC_HEAP_CORRUPT,
-    TRAP_TABLE_OUT_OF_BOUNDS,
+    TRAP_MMU_INTERRUPT, TRAP_TABLE_OUT_OF_BOUNDS,
 };
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
@@ -223,6 +223,10 @@ pub struct FuncEnvironment<'module_environment> {
     /// any yield.
     epoch_deadline_var: cranelift_frontend::Variable,
 
+    // A cached pointer to the MMU-interrupt page so we don't have to
+    // continually dig it out of the `VMStoreContext`
+    mmu_interrupt_page_ptr_var: cranelift_frontend::Variable,
+
     /// A cached pointer to the per-Engine epoch counter, when
     /// performing epoch-based interruption. Initialized in the
     /// function prologue. We prefer to use a variable here rather
@@ -314,6 +318,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             fuel_var: Variable::reserved_value(),
             epoch_deadline_var: Variable::reserved_value(),
             epoch_ptr_var: Variable::reserved_value(),
+            mmu_interrupt_page_ptr_var: Variable::reserved_value(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -576,7 +581,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    /// Get the `*mut VMStoreContext` value for our `VMContext`.
+    /// Codegens and returns the `*mut VMStoreContext` value for our `VMContext`.
     fn get_vmstore_context_ptr(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         self.alias_regions
@@ -828,6 +833,48 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.epoch_check_full(builder, cur_epoch_value, continuation_block);
     }
 
+    /// Codegens what needs to go at the top of a function to support
+    /// `mmu-interruption`.
+    fn mmu_interrupt_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
+        debug_assert!(self.mmu_interrupt_page_ptr_var.is_reserved_value());
+        self.mmu_interrupt_page_ptr_var = builder.declare_var(self.pointer_type());
+
+        // Cache ptr to interrupt page in a local (and hopefully a register, at
+        // the discretion of regalloc), rather than digging it out of the
+        // `VMStoreContext` every time.
+        let vmstore_ctx = self.get_vmstore_context_ptr(builder);
+        let mmu_interrupt_page_ptr = self
+            .alias_regions
+            .vm_store_context()
+            .mmu_interrupt_page_ptr()
+            .load(&mut builder.cursor(), vmstore_ctx);
+        builder.def_var(self.mmu_interrupt_page_ptr_var, mmu_interrupt_page_ptr);
+
+        self.mmu_interrupt_check(mmu_interrupt_page_ptr, builder);
+    }
+
+    /// Codegens a dead load from the MMU-interrupt page, which causes a
+    /// segfault if an interrupt is due. The load's address is recorded in the
+    /// trap table as `TRAP_MMU_INTERRUPT` so the signal handler can recognize
+    /// it.
+    fn mmu_interrupt_check(
+        &mut self,
+        mmu_interrupt_page_ptr: ir::Value,
+        builder: &mut FunctionBuilder<'_>,
+    ) {
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let next_page_ptr =
+            builder
+                .ins()
+                .dead_load_with_context(mmu_interrupt_page_ptr, vmctx, TRAP_MMU_INTERRUPT);
+        // If the signal handler returned a new page ptr, update our cache var
+        // with it. This var most likely lives in a register and, if it's the
+        // one dead_load_with_context pins its first operand to (which regalloc
+        // may endeavor to arrange), no move need actually occur here.
+        builder.def_var(self.mmu_interrupt_page_ptr_var, next_page_ptr);
+    }
+
+    #[cfg(feature = "wmemcheck")]
     fn hook_malloc_exit(&mut self, builder: &mut FunctionBuilder, retvals: &[ir::Value]) {
         let check_malloc = self.builtin_functions.check_malloc(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -5291,6 +5338,12 @@ impl FuncEnvironment<'_> {
         if self.tunables.epoch_interruption {
             self.epoch_check(builder);
         }
+
+        // If we're using MMU interruption, provoke an interrupt if it's time.
+        if self.tunables.mmu_interruption {
+            let page_ptr = builder.use_var(self.mmu_interrupt_page_ptr_var);
+            self.mmu_interrupt_check(page_ptr, builder);
+        }
     }
 
     pub fn before_translate_operator(
@@ -5365,6 +5418,10 @@ impl FuncEnvironment<'_> {
         // Initialize `epoch_var` with the current epoch.
         if self.tunables.epoch_interruption {
             self.epoch_function_entry(builder);
+        }
+
+        if self.tunables.mmu_interruption {
+            self.mmu_interrupt_function_entry(builder);
         }
 
         if self.compiler.wmemcheck {

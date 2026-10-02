@@ -370,6 +370,62 @@ fn define_control_flow(
         .call()
         .branches(),
     );
+
+    ig.push(
+        Inst::new(
+            "dead_load_with_context",
+            r#"
+        Load a pointer-sized value from memory at `load_ptr` while also keeping
+        `context` in a fixed register and reserving a second as scratch space.
+        (Which registers these are is ISA-specific; see each backend's
+        `get_operands` for the choices and the reasoning behind them.) The
+        address of the load instruction is recorded in the binary's trap table.
+
+        This instruction aids in implementing virtual-memory-triggered
+        interrupts, with the load trapping if the loaded location is
+        inaccessible. The interrupt handler can then take further action, using
+        the trap table to distinguish uses of this instruction from other
+        interrupts. The handler can receive further arbitrary input in
+        `context`. It can use the second reserved register as scratch space: for
+        example, to record the original resumption address so it can arrange to
+        "return to" a trampoline first, which would ultimately then jump to the
+        original address. (Such gymnastics are necessary on platforms where
+        signal handlers cannot push stack frames directly.) It is expected that
+        execution will resume at the load, re-running it; care must be taken to
+        ensure it succeeds the second time, lest the whole process repeat. This
+        is where `next_load_ptr` typically comes in, carrying a new location to
+        load from (or the original location otherwise). It overwrites
+        `load_ptr`. (In fact, all current backends (x64 and aarch64) pin
+        `load_ptr` and `next_load_ptr` to the same register so they need not
+        even emit a move from the latter to the former.)
+        "#,
+            &formats.int_add_trap,
+        )
+        .operands_in(&[
+            Operand::new("load_ptr", iAddr).with_doc("memory location to load from"),
+            Operand::new("context", iAddr)
+                .with_doc("arbitrary address-sized context to pass to signal handler"),
+            Operand::new("code", &imm.trapcode)
+                .with_doc("trap code to record at the load's address"),
+        ])
+        .operands_out(&[
+            Operand::new("next_load_ptr", iAddr).with_doc("memory location to load from next time")
+        ])
+        // As with `stack_switch`, this instruction is a call, in that "it
+        // continues execution elsewhere". See reasoning at
+        // https://github.com/bytecodealliance/wasmtime/pull/9078#issuecomment-2273869774.
+        .call()
+        .can_load()
+        // It may transfer control to something that may store. Declaring this
+        // makes us a memory fence.
+        .can_store()
+        // The universe of possible side effects is wide open. Control may never
+        // even return to this point. When this instruction is used to trigger
+        // preemption, we certainly do not want it hoisted or deduplicated via
+        // GVN.
+        .other_side_effects(),
+        // If `load` is not can_trap(), this isn't either.
+    );
 }
 
 #[inline(never)]

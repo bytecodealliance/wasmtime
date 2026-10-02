@@ -135,6 +135,59 @@ fn run_wasmtime_simple_wat() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn run_wasmtime_mmu_interruption_requires_signals_based_traps() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/empty-module.wat")?;
+    let output = wasmtime(&[
+        "run",
+        "-Ccache=n",
+        "-Wmmu-interruption=y",
+        "-Osignals-based-traps=n",
+        wasm.path().to_str().unwrap(),
+    ])?
+    .output()?;
+    assert!(
+        !output.status.success(),
+        "expected wasmtime to fail; stdout: {}, stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("requires signals-based traps"),
+        "unexpected stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg(not(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    target_os = "linux"
+)))]
+fn run_wasmtime_mmu_interruption_unsupported_host() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/empty-module.wat")?;
+    let output = wasmtime(&[
+        "run",
+        "-Ccache=n",
+        "-Wmmu-interruption=y",
+        wasm.path().to_str().unwrap(),
+    ])?
+    .output()?;
+    assert!(
+        !output.status.success(),
+        "expected wasmtime to fail; stdout: {}, stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("supported only on x86_64 and aarch64"),
+        "unexpected stderr: {stderr}"
+    );
+    Ok(())
+}
+
 // Running a wat that traps.
 #[test]
 fn run_wasmtime_unreachable_wat() -> Result<()> {
@@ -2908,6 +2961,30 @@ start a print 1234
             },
         )
         .await
+    }
+
+    // Shows that MMU interruption interrupts busy loops during `wasmtime serve`
+    // and thus allows them to time out promptly. (Timeout is actuated by
+    // wasi-http in response to what it gets back from
+    // `HostWorkerExpiration::poll()`.)
+    //
+    // MMU interruption is available on only certain hosts. However, we define
+    // it unconditionally so `foreach_cli!`'s assertion below is satisfied:
+    // every `p2_cli_*` Wasm program has a corresponding test.
+    #[tokio::test]
+    async fn p2_cli_serve_busy_loop() -> Result<()> {
+        #[cfg(has_mmu_interruption)]
+        cli_serve_sleep(
+            P2_CLI_SERVE_BUSY_LOOP_COMPONENT,
+            CONNECTION_COUNT_MANY,
+            REQUESTS_PER_CONNECTION_MANY,
+            |cmd| {
+                cmd.arg("-Scli");
+                cmd.arg("-Wmmu-interruption=y");
+            },
+        )
+        .await?;
+        Ok(())
     }
 
     async fn cli_serve_sleep(

@@ -650,6 +650,23 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::DeadLoadWithContext {
+            dst,
+            load_ptr,
+            trap_code,
+            ..
+        } => {
+            // Record the address of load in the trap table so a signal handler
+            // can later distinguish whether a segfault is its fault.
+            sink.add_trap(*trap_code);
+
+            let load_ptr_addr = SyntheticAmode::real(Amode::imm_reg(0, **load_ptr));
+            // Since we're clobbering dst anyway to store the resume address,
+            // also use it as a destination for the dead load rather than
+            // sucking up another reg:
+            asm::inst::movq_rm::new(*dst, load_ptr_addr).emit(sink, info, state);
+        }
+
         Inst::JmpKnown { dst } => uncond_jmp(sink, *dst),
 
         Inst::WinchJmpIf { cc, taken } => one_way_jmp(sink, *cc, *taken),

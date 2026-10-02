@@ -14,12 +14,12 @@
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 130 ""
 ;;     region3 = 6 ""
-;;     region4 = 196 ""
+;;     region4 = 206 ""
 ;;     region5 = 108 ""
-;;     region6 = 206 ""
+;;     region6 = 85 ""
 ;;     region7 = 5 ""
 ;;     region8 = 175 ""
 ;;     region9 = 135 ""
@@ -27,7 +27,7 @@
 ;;     region11 = 26 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:24 sig0
 ;;     stack_limit = gv2
@@ -47,13 +47,13 @@
 ;; @0025                               v18 = call fn0(v0, v14, v16, v216, v17), stack_map=[i32 @ ss2+0, i32 @ ss1+0, i32 @ ss0+0]  ; v14 = -1476395008, v216 = 40, v17 = 8
 ;; @0025                               v5 = iconst.i32 3
 ;; @0025                               v19 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0025                               v20 = load.i64 notrap aligned readonly can_move region4 v19+32
+;; @0025                               v20 = load.i64 notrap aligned readonly can_move region4 v19+40
 ;; @0025                               v21 = uextend.i64 v18
 ;; @0025                               v22 = iadd v20, v21
 ;; @0025                               v23 = iconst.i64 24
 ;; @0025                               v24 = iadd v22, v23  ; v23 = 24
 ;; @0025                               store user2 region5 v5, v24  ; v5 = 3
-;; @0025                               trapz v18, user16
+;; @0025                               trapz v18, user17
 ;; @0025                               v45 = uadd_overflow_trap v18, v216, user2  ; v216 = 40
 ;;                                     v201 = load.i32 notrap aligned region11 v202
 ;; @0025                               v53 = iconst.i32 1

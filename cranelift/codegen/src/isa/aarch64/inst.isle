@@ -1038,7 +1038,15 @@
        ;; means that the internal codegen can't use these registers.
        (StackProbeLoop (start WritableReg)
                        (end Reg)
-                       (step Imm12))))
+                       (step Imm12))
+
+       ;; A load whose result is discarded; `context` is pinned to x0, `dst`
+       ;; to x9, and `next_load_ptr` to x10.
+       (DeadLoadWithContext (dst WritableReg)
+                            (load_ptr Reg)
+                            (context Reg)
+                            (trap_code TrapCode)
+                            (next_load_ptr WritableReg))))
 
 (spec (MInst.AluRRImmLogic alu_op size rd rn imml)
       (provide

@@ -183,7 +183,7 @@
 ;;       je      0x16d
 ;;  119: movq    0x48(%rcx), %rcx
 ;;       movq    8(%rcx), %rcx
-;;       movq    0x68(%rcx), %rcx
+;;       movq    0x70(%rcx), %rcx
 ;;       movq    8(%rcx), %rdx
 ;;       xorq    %rsi, %rsi
 ;;       cmpq    %rdx, %rsi

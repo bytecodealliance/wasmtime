@@ -13,17 +13,17 @@
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     region2 = 7 ""
-;;     region3 = 196 ""
-;;     region4 = 206 ""
+;;     region3 = 206 ""
+;;     region4 = 85 ""
 ;;     region5 = 108 ""
 ;;     region6 = 5 ""
 ;;     region7 = 135 ""
 ;;     region8 = 187 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx) -> i8 tail
 ;;     fn0 = colocated u805306368:12 sig0
 ;;     stack_limit = gv2
@@ -50,8 +50,8 @@
 ;;
 ;;                                 block3(v125: i64):
 ;;                                     v161 = load.i32 notrap aligned region7 v162
-;; @002b                               trapz v161, user16
-;; @002b                               v24 = load.i64 notrap aligned readonly can_move region3 v7+32
+;; @002b                               trapz v161, user17
+;; @002b                               v24 = load.i64 notrap aligned readonly can_move region3 v7+40
 ;; @002b                               v22 = uextend.i64 v161
 ;; @002b                               v25 = iadd v24, v22
 ;; @002b                               v26 = iconst.i64 16
@@ -62,9 +62,9 @@
 ;; @002b                               v34 = iadd v30, v31
 ;; @002b                               v29 = uextend.i64 v28
 ;; @002b                               v35 = icmp ugt v34, v29
-;; @002b                               trapnz v35, user17
+;; @002b                               trapnz v35, user18
 ;;                                     v155 = load.i32 notrap aligned region8 v163
-;; @002b                               trapz v155, user16
+;; @002b                               trapz v155, user17
 ;; @002b                               v46 = uextend.i64 v155
 ;; @002b                               v49 = iadd v24, v46
 ;; @002b                               v51 = iadd v49, v26  ; v26 = 16
@@ -73,8 +73,8 @@
 ;; @002b                               v58 = iadd v54, v31
 ;; @002b                               v53 = uextend.i64 v52
 ;; @002b                               v59 = icmp ugt v58, v53
-;; @002b                               trapnz v59, user17
-;; @002b                               v78 = load.i64 notrap aligned region4 v7+40
+;; @002b                               trapnz v59, user18
+;; @002b                               v78 = load.i64 notrap aligned region4 v7+48
 ;; @002b                               v40 = iconst.i64 20
 ;; @002b                               v41 = iadd v25, v40  ; v40 = 20
 ;;                                     v165 = iconst.i64 2

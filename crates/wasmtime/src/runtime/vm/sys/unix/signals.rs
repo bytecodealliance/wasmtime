@@ -148,28 +148,26 @@ unsafe extern "C" fn trap_handler(
             None => return false,
         };
 
-        // If we hit an exception while handling a previous trap, that's
-        // quite bad, so bail out and let the system handle this
-        // recursive segfault.
-        //
-        // Otherwise flag ourselves as handling a trap, do the trap
-        // handling, and reset our trap handling flag. Then we figure
-        // out what to do based on the result of the trap handling.
         let faulting_addr = match signum {
             libc::SIGSEGV | libc::SIGBUS => unsafe { Some((*siginfo).si_addr() as usize) },
             _ => None,
         };
         let regs = unsafe { get_trap_registers(context, signum) };
-        let test = info.test_if_trap(regs, faulting_addr, |handler| {
-            handler(signum, siginfo, context)
-        });
+        let test = info.test_if_trap(
+            regs,
+            faulting_addr,
+            Some(signum),
+            // SAFETY: We set SA_SIGINFO on `sa_flags` when we installed the
+            // signal handler, so this will point to valid siginfo.
+            Some((unsafe { siginfo.as_ref() }).unwrap().si_code),
+            |handler| handler(signum, siginfo, context),
+        );
 
-        // Figure out what to do based on the result of this handling of
-        // the trap. Note that our sentinel value of 1 means that the
-        // exception was handled by a custom exception handler, so we
-        // keep executing.
         match test {
             TrapTest::NotWasm => {
+                // We hit an exception while in host code, perhaps even within
+                // this very handler. So say we didn't handle it, deferring to
+                // the previous handler.
                 if let Some(faulting_addr) = faulting_addr {
                     let range = unsafe { &info.vm_store_context.get().as_ref().async_guard_range };
                     if range.start.addr() <= faulting_addr && faulting_addr < range.end.addr() {
@@ -183,6 +181,16 @@ unsafe extern "C" fn trap_handler(
                 unsafe {
                     store_handler_in_ucontext(context, &handler);
                 }
+                true
+            }
+            #[cfg(has_mmu_interruption)]
+            TrapTest::MmuInterruption => {
+                // Arrange to resume at the asm trampoline after the signal
+                // handler exits.
+                crate::runtime::vm::mmu_interruption::resume_into_task_switch_trampoline(
+                    unsafe { &mut *(context as *mut libc::ucontext_t) },
+                    regs.pc as *const (),
+                );
                 true
             }
         }
@@ -343,7 +351,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
     }
 }
 
-/// Updates the siginfo context stored in `cx` to resume to `handler` up on
+/// Updates the siginfo context stored in `cx` to resume to `handler` upon
 /// resumption while returning from the signal handler.
 unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
     cfg_select! {

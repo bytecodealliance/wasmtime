@@ -54,10 +54,10 @@
 
 ;; function u0:0(i64 vmctx, i64) -> i8x16, i8x16, i8x16 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64) -> i8x16, i8x16, i8x16 tail
 ;;     fn0 = colocated u0:0 sig0
 ;;     stack_limit = gv2
@@ -88,7 +88,7 @@
 ;; @0044                               v19 = iconst.i32 87
 ;; @0047                               v20 = bitcast.i8x16 little v12
 ;; @0047                               v21 = select.i8x16 v19, v5, v20  ; v19 = 87
-;; @0048                               trap user12
+;; @0048                               trap user13
 ;;
 ;;                                 block1(v24: i8x16):
 ;; @0055                               return v2, v5, v24
@@ -96,10 +96,10 @@
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i8x16, i8x16, i8x16 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 196 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+32
 ;;     sig0 = (i64 vmctx, i64) -> i8x16, i8x16, i8x16 tail
 ;;     fn0 = colocated u0:1 sig0
 ;;     stack_limit = gv2
@@ -130,7 +130,7 @@
 ;; @006e                               v19 = iconst.i32 87
 ;; @0071                               v20 = bitcast.i8x16 little v12
 ;; @0071                               v21 = select.i8x16 v19, v5, v20  ; v19 = 87
-;; @0074                               trap user12
+;; @0074                               trap user13
 ;;
 ;;                                 block1(v24: i8x16):
 ;; @0081                               return v2, v5, v24
