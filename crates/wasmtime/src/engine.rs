@@ -821,6 +821,12 @@ impl Engine {
     /// slots. The tradeoff is that the next instantiation of any given module
     /// may be slower, because no cached memory mappings are present anymore.
     ///
+    /// Note that while this method is running the warm slots it is releasing
+    /// are unavailable for allocation. Instantiations running concurrently
+    /// with this method may therefore fail with a "maximum concurrent limit
+    /// reached" error, even if few instances are live, when the pool's other
+    /// free slots are exhausted.
+    ///
     /// Returns 0 if this engine is not using the pooling allocator, or if
     /// nothing was resident to release.
     ///
