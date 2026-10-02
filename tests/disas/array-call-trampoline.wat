@@ -22,26 +22,29 @@
 ;;     jump block1
 ;;
 ;; block1:
-;;     v4 = load.i32 notrap little region0 v2
-;;     v5 = load.i64 notrap little region0 v2+16
-;;     v7 = get_frame_pointer.i64 
-;;     v6 = load.i64 notrap aligned readonly can_move region1 v0+8
-;;     store notrap aligned region2 v7, v6+72
-;;     v8 = get_stack_pointer.i64 
-;;     store notrap aligned region3 v8, v6+64
-;;     v9 = get_exception_handler_address.i64 block1, 0
-;;     store notrap aligned region4 v9, v6+80
-;;     try_call fn0(v0, v1, v4, v5), sig0, block2(ret0, ret1), [ default: block3 ]
+;;     v4 = iconst.i64 2
+;;     v5 = icmp.i64 uge v3, v4  ; v4 = 2
+;;     trapz v5, user1
+;;     v6 = load.i32 notrap little region0 v2
+;;     v7 = load.i64 notrap little region0 v2+16
+;;     v9 = get_frame_pointer.i64 
+;;     v8 = load.i64 notrap aligned readonly can_move region1 v0+8
+;;     store notrap aligned region2 v9, v8+72
+;;     v10 = get_stack_pointer.i64 
+;;     store notrap aligned region3 v10, v8+64
+;;     v11 = get_exception_handler_address.i64 block1, 0
+;;     store notrap aligned region4 v11, v8+80
+;;     try_call fn0(v0, v1, v6, v7), sig0, block2(ret0, ret1), [ default: block3 ]
 ;;
-;; block2(v10: i32, v11: i64):
-;;     store notrap little region0 v10, v2
-;;     store notrap little region0 v11, v2+16
-;;     v12 = iconst.i8 1
-;;     return v12  ; v12 = 1
+;; block2(v12: i32, v13: i64):
+;;     store notrap little region0 v12, v2
+;;     store notrap little region0 v13, v2+16
+;;     v14 = iconst.i8 1
+;;     return v14  ; v14 = 1
 ;;
 ;; block3:
-;;     v13 = iconst.i64 1
-;;     store notrap aligned region5 v13, v6+136  ; v13 = 1
-;;     v14 = iconst.i8 0
-;;     return v14  ; v14 = 0
+;;     v15 = iconst.i64 1
+;;     store notrap aligned region5 v15, v8+136  ; v15 = 1
+;;     v16 = iconst.i8 0
+;;     return v16  ; v16 = 0
 ;; }

@@ -600,7 +600,7 @@ wasmtime_option_group! {
         pub udp: Option<bool>,
         /// Enable WASI APIs marked as: @unstable(feature = network-error-code)
         pub network_error_code: Option<bool>,
-        /// Allows imports from the `wasi_unstable` core wasm module.
+        /// Allows imports from the `wasi_unstable` core wasm module. Disabled by default.
         pub preview0: Option<bool>,
         /// Inherit all environment variables from the parent process.
         ///

@@ -1148,12 +1148,8 @@ impl RunCommand {
                         }
                         // If preview2 was explicitly requested, always use it.
                         // Otherwise use it so long as threads are disabled.
-                        //
-                        // Note that for now `p0` is currently
-                        // default-enabled but this may turn into
-                        // default-disabled in the future.
                         (Some(true), _) | (None, Some(false) | None) => {
-                            if self.run.common.wasi.preview0 != Some(false) {
+                            if self.run.common.wasi.preview0 == Some(true) {
                                 wasmtime_wasi::p0::add_to_linker_async(linker, |t| t.wasip1_ctx())?;
                             }
                             wasmtime_wasi::p1::add_to_linker_async(linker, |t| t.wasip1_ctx())?;

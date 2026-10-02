@@ -285,7 +285,7 @@ impl OutputStream for SinkOutputStream {
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
         // This stream is always ready for writing.
-        Ok(usize::MAX)
+        Ok(crate::MAX_READ_SIZE_ALLOC)
     }
 }
 
