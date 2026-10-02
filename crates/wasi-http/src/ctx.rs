@@ -326,17 +326,58 @@ pub trait WasiHttpHooks: Send {
     }
 
     /// Optional hook to configure the error code for connect I/O errors.
+    ///
+    /// The default distinguishes refused, unreachable, timed out, and terminated
+    /// connections. Unrecognized errors become `internal-error`.
     #[cfg(feature = "p2")]
     fn p2_error_from_connect(&mut self, err: &std::io::Error) -> p2::ErrorCode {
         tracing::warn!("connect error: {err:?}");
-        p2::ErrorCode::ConnectionRefused
+        use std::io::ErrorKind;
+        match err.kind() {
+            ErrorKind::ConnectionRefused => p2::ErrorCode::ConnectionRefused,
+            ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable | ErrorKind::NetworkDown => {
+                p2::ErrorCode::DestinationUnavailable
+            }
+            ErrorKind::TimedOut => p2::ErrorCode::ConnectionTimeout,
+            ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted => {
+                p2::ErrorCode::ConnectionTerminated
+            }
+            _ if is_address_family_unsupported(err) => p2::ErrorCode::DestinationUnavailable,
+            _ => p2::ErrorCode::InternalError(Some(err.to_string())),
+        }
     }
 
     /// Optional hook to configure the error code for TLS I/O errors.
+    ///
+    /// The default distinguishes terminated connections and, with the
+    /// `default-send-request` feature, rustls certificate errors and received
+    /// alerts. Other errors become `TLS-protocol-error`.
     #[cfg(feature = "p2")]
     fn p2_error_from_tls(&mut self, err: &std::io::Error) -> p2::ErrorCode {
         tracing::warn!("tls error: {err:?}");
-        p2::ErrorCode::TlsProtocolError
+        #[cfg(feature = "default-send-request")]
+        if let Some(err) = err
+            .get_ref()
+            .and_then(|err| err.downcast_ref::<rustls::Error>())
+        {
+            return match err {
+                rustls::Error::InvalidCertificate(_) => p2::ErrorCode::TlsCertificateError,
+                rustls::Error::AlertReceived(alert) => {
+                    p2::ErrorCode::TlsAlertReceived(p2::TlsAlertReceivedPayload {
+                        alert_id: Some(u8::from(*alert)),
+                        alert_message: Some(format!("{alert:?}")),
+                    })
+                }
+                _ => p2::ErrorCode::TlsProtocolError,
+            };
+        }
+        match err.kind() {
+            std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::UnexpectedEof => p2::ErrorCode::ConnectionTerminated,
+            _ => p2::ErrorCode::TlsProtocolError,
+        }
     }
 
     /// Optional hook to configure the error code for DNS errors.
@@ -364,17 +405,58 @@ pub trait WasiHttpHooks: Send {
     }
 
     /// Optional hook to configure the error code for connect I/O errors.
+    ///
+    /// The default distinguishes refused, unreachable, timed out, and terminated
+    /// connections. Unrecognized errors become `internal-error`.
     #[cfg(feature = "p3")]
     fn p3_error_from_connect(&mut self, err: &std::io::Error) -> p3::ErrorCode {
         tracing::warn!("connect error: {err:?}");
-        p3::ErrorCode::ConnectionRefused
+        use std::io::ErrorKind;
+        match err.kind() {
+            ErrorKind::ConnectionRefused => p3::ErrorCode::ConnectionRefused,
+            ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable | ErrorKind::NetworkDown => {
+                p3::ErrorCode::DestinationUnavailable
+            }
+            ErrorKind::TimedOut => p3::ErrorCode::ConnectionTimeout,
+            ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted => {
+                p3::ErrorCode::ConnectionTerminated
+            }
+            _ if is_address_family_unsupported(err) => p3::ErrorCode::DestinationUnavailable,
+            _ => p3::ErrorCode::InternalError(Some(err.to_string())),
+        }
     }
 
     /// Optional hook to configure the error code for TLS I/O errors.
+    ///
+    /// The default distinguishes terminated connections and, with the
+    /// `default-send-request` feature, rustls certificate errors and received
+    /// alerts. Other errors become `TLS-protocol-error`.
     #[cfg(feature = "p3")]
     fn p3_error_from_tls(&mut self, err: &std::io::Error) -> p3::ErrorCode {
         tracing::warn!("tls error: {err:?}");
-        p3::ErrorCode::TlsProtocolError
+        #[cfg(feature = "default-send-request")]
+        if let Some(err) = err
+            .get_ref()
+            .and_then(|err| err.downcast_ref::<rustls::Error>())
+        {
+            return match err {
+                rustls::Error::InvalidCertificate(_) => p3::ErrorCode::TlsCertificateError,
+                rustls::Error::AlertReceived(alert) => {
+                    p3::ErrorCode::TlsAlertReceived(p3::TlsAlertReceivedPayload {
+                        alert_id: Some(u8::from(*alert)),
+                        alert_message: Some(format!("{alert:?}")),
+                    })
+                }
+                _ => p3::ErrorCode::TlsProtocolError,
+            };
+        }
+        match err.kind() {
+            std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::UnexpectedEof => p3::ErrorCode::ConnectionTerminated,
+            _ => p3::ErrorCode::TlsProtocolError,
+        }
     }
 
     /// Optional hook to configure the error code for DNS errors.
@@ -387,6 +469,17 @@ pub trait WasiHttpHooks: Send {
         })
     }
 }
+
+// EAFNOSUPPORT has no corresponding stable ErrorKind.
+#[cfg(any(feature = "p2", feature = "p3"))]
+fn is_address_family_unsupported(err: &std::io::Error) -> bool {
+    use rustix::io::Errno;
+    Errno::from_io_error(err) == Some(Errno::AFNOSUPPORT)
+}
+
+#[cfg(test)]
+#[path = "ctx_tests.rs"]
+mod tests;
 
 /// Returns a value suitable for the `WasiHttpCtxView::hooks` field which has
 /// the default behavior for `wasi:http`.
