@@ -162,7 +162,14 @@ fn assert_trap_code(status: &ExitStatus) {
 // Run a simple WASI hello world, snapshot0 edition.
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
-    let stdout = run_wasmtime(&["tests/all/cli_tests/hello_wasi_snapshot0.wat"])?;
+    let output = wasmtime(&["tests/all/cli_tests/hello_wasi_snapshot0.wat"])?.output()?;
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("unknown import: `wasi_unstable::proc_exit`")
+    );
+
+    let stdout = run_wasmtime(&["-Spreview0", "tests/all/cli_tests/hello_wasi_snapshot0.wat"])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -213,7 +220,8 @@ fn timeout_in_invoke() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit2_wasi_snapshot0() -> Result<()> {
-    let output = wasmtime(&["tests/all/cli_tests/exit2_wasi_snapshot0.wat"])?.output()?;
+    let output =
+        wasmtime(&["-Spreview0", "tests/all/cli_tests/exit2_wasi_snapshot0.wat"])?.output()?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -229,7 +237,11 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
-    let output = wasmtime(&["tests/all/cli_tests/exit125_wasi_snapshot0.wat"])?.output()?;
+    let output = wasmtime(&[
+        "-Spreview0",
+        "tests/all/cli_tests/exit125_wasi_snapshot0.wat",
+    ])?
+    .output()?;
     dbg!(&output);
     assert_eq!(output.status.code().unwrap(), 125);
     Ok(())
@@ -246,7 +258,11 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 // Exit with an invalid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit126_wasi_snapshot0() -> Result<()> {
-    let output = wasmtime(&["tests/all/cli_tests/exit126_wasi_snapshot0.wat"])?.output()?;
+    let output = wasmtime(&[
+        "-Spreview0",
+        "tests/all/cli_tests/exit126_wasi_snapshot0.wat",
+    ])?
+    .output()?;
     assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
@@ -374,7 +390,8 @@ fn run_cwasm() -> Result<()> {
 #[test]
 fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     let stdout = run_cmd(
-        wasmtime(&["-"])?.stdin(File::open("tests/all/cli_tests/hello_wasi_snapshot0.wat")?),
+        wasmtime(&["-Spreview0", "-"])?
+            .stdin(File::open("tests/all/cli_tests/hello_wasi_snapshot0.wat")?),
     )?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
