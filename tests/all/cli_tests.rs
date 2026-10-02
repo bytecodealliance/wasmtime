@@ -3788,6 +3788,7 @@ fn hostcall_fuel() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_pointer_width = "32", ignore)] // this test takes 4GiB virtual memory
 fn wasi_snapshot0_poll_oneoff_hostcall_fuel() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
