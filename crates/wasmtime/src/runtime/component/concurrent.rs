@@ -3502,6 +3502,7 @@ impl Instance {
         self,
         mut store: StoreContextMut<'_, T>,
         host_task: EnteredHostTask,
+        result_may_require_realloc: bool,
         future: impl Future<Output = Result<R>> + Send + 'static,
         lower: impl FnOnce(StoreContextMut<T>, Option<R>, bool, Option<TableId<HostTask>>) -> Result<()>
         + Send
@@ -3592,17 +3593,23 @@ impl Instance {
                 Ok(())
             };
 
-            // Here we schedule a task to run on a worker fiber to do the
-            // lowering since it may involve a call to the guest's realloc
-            // function. This is necessary because calling the guest while
-            // there are host embedder frames on the stack is unsound.
             tls::get(move |store| {
-                store
-                    .concurrent_state_mut()?
-                    .push_high_priority(WorkItem::WorkerFunction(AlwaysMut::new(Box::new(
-                        on_complete,
-                    ))));
-                Ok(())
+                if result_may_require_realloc {
+                    // Lowering may call the guest's realloc function, so run
+                    // it on a worker fiber. This is required because the guest
+                    // might try to suspend the fiber which is unsound when it's
+                    // not actually on a fiber.
+                    store
+                        .concurrent_state_mut()?
+                        .push_high_priority(WorkItem::WorkerFunction(AlwaysMut::new(Box::new(
+                            on_complete,
+                        ))));
+                    Ok(())
+                } else {
+                    // No guest code can be called while lowering this result,
+                    // so avoid scheduling a worker fiber.
+                    on_complete(store)
+                }
             })
         });
 
