@@ -601,11 +601,14 @@ impl MemoryPool {
 
             let mut iov = Vec::with_capacity(taken.len());
             for (id, bytes_resident) in &taken {
+                if *bytes_resident == 0 {
+                    continue;
+                }
                 let index = StripedAllocationIndex(id.0)
                     .as_unstriped_slot_index(stripe_index, self.stripes.len());
                 iov.push(iovec {
                     iov_base: self.get_base(index).as_mut_ptr().cast(),
-                    iov_len: *bytes_resident,
+                    iov_len: self.layout.max_memory_bytes.byte_count(),
                 });
             }
 
