@@ -605,3 +605,15 @@
                           (u64_sub (ty_bits_u64 ty) bits)))
       (subsume (eq rty (band ty x (iconst_s ty (i64_wrapping_sub (i64_wrapping_neg mask) 1)))
                       (all_zero ty))))
+
+;; (x == y) ^ 1 --> x != y.
+(rule (simplify (bxor ty
+                      (eq ty x @ (value_type cty) y @ (value_type cty))
+                      (iconst_u ty 1)))
+      (ne ty x y))
+
+;; x >u (x - 1) --> x != 0, and its dual.
+(rule (simplify (ugt ty x (isub cty x (iconst_u cty 1))))
+      (ne ty x (iconst_u cty 0)))
+(rule (simplify (ult ty (isub cty x (iconst_u cty 1)) x))
+      (ne ty x (iconst_u cty 0)))

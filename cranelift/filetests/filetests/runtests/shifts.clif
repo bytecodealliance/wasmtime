@@ -1260,3 +1260,45 @@ block0(v0: i64, v1: i32):
 ; run: %ishl_masked_count_i64_i32_mask31(3, 64) == 0x3
 ; run: %ishl_masked_count_i64_i32_mask31(-1, 65) == 0xfffffffffffffffe
 ; run: %ishl_masked_count_i64_i32_mask31(-128, 4294967295) == 0xffffffc000000000
+
+function %select_constant_shift_i32(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 3
+    v2 = iconst.i32 5
+    v3 = iconst.i32 2
+    v4 = select v0, v1, v2
+    v5 = ishl v4, v3
+    return v5
+}
+; run: %select_constant_shift_i32(0) == 20
+; run: %select_constant_shift_i32(1) == 12
+; run: %select_constant_shift_i32(2) == 12
+; run: %select_constant_shift_i32(-1) == 12
+
+function %select_constant_shift_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 3
+    v2 = iconst.i64 5
+    v3 = iconst.i64 2
+    v4 = select v0, v1, v2
+    v5 = ishl v4, v3
+    return v5
+}
+; run: %select_constant_shift_i64(0) == 20
+; run: %select_constant_shift_i64(1) == 12
+; run: %select_constant_shift_i64(2) == 12
+; run: %select_constant_shift_i64(-1) == 12
+
+function %select_constant_shift_masked_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 3
+    v2 = iconst.i8 5
+    v3 = iconst.i8 10
+    v4 = select v0, v1, v2
+    v5 = ishl v4, v3
+    return v5
+}
+; run: %select_constant_shift_masked_i8(0) == 20
+; run: %select_constant_shift_masked_i8(1) == 12
+; run: %select_constant_shift_masked_i8(2) == 12
+; run: %select_constant_shift_masked_i8(-1) == 12

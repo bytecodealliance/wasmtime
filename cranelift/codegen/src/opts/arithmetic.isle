@@ -628,3 +628,59 @@
 ;; x %u (1 << k) --> x & ((1 << k) - 1).
 (rule (simplify_skeleton (urem x divisor @ (ishl ty (iconst_u ty 1) k)))
       (band ty x (isub ty divisor (iconst_u ty 1))))
+
+;; (x - (y & M)) + y --> (y & ~M) + x.
+(rule (simplify (iadd (fits_in_64 ty)
+                      (isub ty x (band ty y (iconst ty z)))
+                      y))
+      (iadd ty (band ty y (iconst ty (imm64_not ty z))) x))
+(rule (simplify (iadd (fits_in_64 ty)
+                      x
+                      (isub ty y (band ty x (iconst ty z)))))
+      (iadd ty (band ty x (iconst ty (imm64_not ty z))) y))
+(rule (simplify (isub (fits_in_64 ty)
+                      (iadd ty x y)
+                      (band ty x (iconst ty z))))
+      (iadd ty (band ty x (iconst ty (imm64_not ty z))) y))
+(rule (simplify (isub (fits_in_64 ty)
+                      (iadd ty x y)
+                      (band ty y (iconst ty z))))
+      (iadd ty (band ty y (iconst ty (imm64_not ty z))) x))
+
+;; ((1 << k) + 1) * y --> (y << k) + y.
+(rule (simplify (imul ty
+                      (iadd ty (ishl ty (iconst_u ty 1) x) (iconst_u ty 1))
+                      y))
+      (iadd ty (ishl ty y x) y))
+(rule (simplify (imul ty
+                      x
+                      (iadd ty (ishl ty (iconst_u ty 1) y) (iconst_u ty 1))))
+      (iadd ty (ishl ty x y) x))
+
+;; x - (x & M) --> ~M & x.
+(rule (simplify (isub (fits_in_64 ty) x (band ty x (iconst ty y))))
+      (band ty (iconst ty (imm64_not ty y)) x))
+
+;; (x + C1) - (y + C2) --> (C1 - C2) + (x - y).
+(rule (simplify (isub (fits_in_64 ty)
+                      (iadd ty x (iconst ty y))
+                      (iadd ty z (iconst ty p))))
+      (iadd ty (iconst ty (imm64_sub ty y p)) (isub ty x z)))
+(rule (simplify (isub (fits_in_64 ty)
+                      (isub ty (iconst ty x) y)
+                      (isub ty (iconst ty z) p)))
+      (iadd ty (iconst ty (imm64_sub ty x z)) (isub ty p y)))
+(rule (simplify (isub (fits_in_64 ty)
+                      (isub ty x (iconst ty y))
+                      (isub ty z (iconst ty p))))
+      (iadd ty (isub ty x z) (iconst ty (imm64_sub ty p y))))
+
+;; (x + C1) + (C2 - y) --> (x - y) + (C1 + C2).
+(rule (simplify (iadd (fits_in_64 ty)
+                      (iadd ty x (iconst ty y))
+                      (isub ty (iconst ty z) p)))
+      (iadd ty (isub ty x p) (iconst ty (imm64_add ty y z))))
+(rule (simplify (iadd (fits_in_64 ty)
+                      (isub ty (iconst ty x) y)
+                      (iadd ty z (iconst ty p))))
+      (iadd ty (isub ty z y) (iconst ty (imm64_add ty p x))))

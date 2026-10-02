@@ -60,9 +60,9 @@
 ;; @0022                               v33 = iconst.i32 -1476395008
 ;;                                     v99 = bor.i32 v11, v33  ; v33 = -1476395008
 ;; @0022                               v30 = load.i64 notrap aligned readonly can_move region5 v24+32
-;;                                     v116 = band.i32 v19, v98  ; v98 = -8
-;;                                     v117 = uextend.i64 v116
-;; @0022                               v32 = iadd v30, v117
+;;                                     v118 = band.i32 v19, v98  ; v98 = -8
+;;                                     v119 = uextend.i64 v118
+;; @0022                               v32 = iadd v30, v119
 ;; @0022                               store user2 region8 v99, v32
 ;; @0022                               v35 = load.i64 notrap aligned readonly can_move region6 v0+40
 ;; @0022                               v36 = load.i32 notrap aligned readonly can_move region7 v35
@@ -71,7 +71,7 @@
 ;; @0022                               v6 = iconst.i64 8
 ;; @0022                               v38 = iadd v32, v6  ; v6 = 8
 ;; @0022                               store.i32 user2 region10 v3, v38
-;; @0022                               trapz v116, user16
+;; @0022                               trapz v118, user16
 ;; @0022                               v70 = load.i64 notrap aligned region4 v24+40
 ;; @0022                               v58 = iconst.i64 16
 ;; @0022                               v59 = iadd v32, v58  ; v58 = 16
@@ -79,17 +79,17 @@
 ;; @0022                               v71 = iadd v30, v70
 ;; @0022                               v73 = icmp ugt v72, v71
 ;; @0022                               trapnz v73, user2
-;;                                     v101 = iconst.i64 0
-;; @0022                               v76 = icmp.i64 eq v5, v101  ; v101 = 0
+;; @0022                               v39 = iconst.i32 0
+;;                                     v116 = icmp.i32 eq v3, v39  ; v39 = 0
 ;; @0022                               v74 = iadd v59, v82
-;; @0022                               brif v76, block5, block4(v59)
+;; @0022                               brif v116, block5, block4(v59)
 ;;
 ;;                                 block4(v77: i64):
 ;; @0022                               store.i64 user2 little region11 v2, v77
-;;                                     v118 = iconst.i64 8
-;;                                     v119 = iadd v77, v118  ; v118 = 8
-;; @0022                               v80 = icmp eq v119, v74
-;; @0022                               brif v80, block5, block4(v119)
+;;                                     v120 = iconst.i64 8
+;;                                     v121 = iadd v77, v120  ; v120 = 8
+;; @0022                               v80 = icmp eq v121, v74
+;; @0022                               brif v80, block5, block4(v121)
 ;;
 ;;                                 block5:
 ;; @0025                               jump block1
@@ -100,6 +100,6 @@
 ;; @0022                               jump block2
 ;;
 ;;                                 block1:
-;;                                     v120 = band.i32 v19, v98  ; v98 = -8
-;; @0025                               return v120
+;;                                     v122 = band.i32 v19, v98  ; v98 = -8
+;; @0025                               return v122
 ;; }

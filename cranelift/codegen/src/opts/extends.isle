@@ -102,3 +102,15 @@
                     (uextend ty x @ (value_type (ty_int narrow)))
                     (uextend ty y @ (value_type narrow))))
       (ult rty x y))
+
+;; uextend(x) == 0 --> x == 0.
+(rule (simplify (eq ty
+                    (uextend ty1 x @ (value_type cty))
+                    (iconst_u ty1 0)))
+      (eq ty x (iconst_u cty 0)))
+
+;; uextend(x) == uextend(y) --> x == y, when x and y have the same type.
+(rule (simplify (eq ty
+                    (uextend cty x @ (value_type ty1))
+                    (uextend cty y @ (value_type ty1))))
+      (eq ty x y))
