@@ -6582,10 +6582,16 @@ mod tests {
         let mut store = Store::new(&engine, ());
         let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
         let store_opaque = store.as_store_opaque();
-        // These intrinsics do not access the host task's caller.
-        let task = store_opaque
-            .concurrent_state_mut()?
-            .push(HostTask::new(TableId::new(u32::MAX), state))?;
+        let concurrent_state = store_opaque.concurrent_state_mut()?;
+        // These tests create an isolated host task without a guest caller, so
+        // give it its own task group instead of inheriting the caller's group.
+        let group = concurrent_state.make_task_group()?;
+        let task = concurrent_state.push(HostTask {
+            common: WaitableCommon::default(),
+            call_context: CallContext::default(),
+            state,
+            group,
+        })?;
         let handle = store_opaque
             .instance_state(instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(0)))
             .handle_table()
