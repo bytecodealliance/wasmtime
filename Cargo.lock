@@ -5139,6 +5139,7 @@ dependencies = [
  "bytes",
  "env_logger 0.11.5",
  "futures",
+ "libc",
  "rand 0.10.1",
  "rustix 1.1.4",
  "rustix-linux-procfs",
