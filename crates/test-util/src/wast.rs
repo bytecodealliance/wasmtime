@@ -266,6 +266,7 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.multi_memory = Some(true);
     ret.component_model_implements = Some(true);
     ret.component_model_canonical_names = Some(true);
+    ret.component_model_accessors = Some(true);
     ret.bulk_memory = Some(true);
     ret.component_model_async = Some(true);
     ret.component_model_more_async_builtins = Some(true);
@@ -363,6 +364,7 @@ macro_rules! foreach_config_option {
             component_model_fixed_length_lists
             component_model_implements
             component_model_canonical_names
+            component_model_accessors
             simd
             gc_types
             exceptions
