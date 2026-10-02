@@ -203,6 +203,15 @@ macro_rules! foreach_builtin_function {
             // Handles a bulk write (`memory.{fill,copy,init}`) of `len` bytes
             // to a linear memory, before it, if any of the bytes are watched.
             memory_watch_range(vmctx: vmctx, memory: u32, addr: u64, len: u64) -> bool;
+            // Records a call to `func` (a `VMFuncRef`) with the arguments in
+            // `values`: by Wasm to the host if `host` is nonzero, otherwise
+            // by the host to Wasm. Returns the call's ID for `rr_leave`, or
+            // `u32::MAX` if the call is not recorded.
+            rr_enter(vmctx: vmctx, func: pointer, values: pointer, host: u8) -> u64;
+            // Records the return of call `call` from `rr_enter`, with the
+            // results in `values` if `succeeded`, or otherwise the error
+            // that is being raised.
+            rr_leave(vmctx: vmctx, call: u32, values: pointer, host: u8, succeeded: u8) -> bool;
         }
     };
 }
@@ -415,6 +424,9 @@ impl BuiltinFunctionIndex {
 
             // Failure here indicates GC heap corruption.
             (@get get_interned_func_ref pointer) => (TrapSentinel::NegativeOne);
+
+            // Call IDs are 32-bit, so -1 indicates a failed recording.
+            (@get rr_enter u64) => (TrapSentinel::NegativeOne);
 
             // These libcalls can't trap
             (@get table_get_lazy_init_func_ref pointer) => (return None);

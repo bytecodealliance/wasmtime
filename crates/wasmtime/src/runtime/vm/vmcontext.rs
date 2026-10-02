@@ -1049,6 +1049,7 @@ impl Default for VMStoreContext {
             current_thread: UnsafeCell::new(VMLazyThread::none()),
             lazy_lenders: VmPtr::dangling(),
             lazy_lenders_len: UnsafeCell::new(0),
+            recording: 0,
         }
     }
 }

@@ -537,6 +537,39 @@ where
     }
 }
 
+/// The error with which this thread's innermost activation is about to unwind,
+/// as the host will see it, without its context; `None` if no error is pending
+/// or the host panicked.
+///
+/// Record/replay trampolines record this as the outcome of the failed call
+/// that raises it.
+#[cfg(feature = "rr")]
+pub(crate) fn pending_unwind_error() -> Option<Error> {
+    tls::with(|state| {
+        let state = state?;
+        let unwind = state.unwind.take();
+        let error = match &unwind {
+            Some(UnwindReason::Trap(Ok(trap))) => Some(match &trap.reason {
+                TrapReason::User(error) => match error.downcast_ref::<crate::Trap>() {
+                    Some(trap) => Error::from(*trap),
+                    None => format_err!("{}", error.root_cause()),
+                },
+                TrapReason::Jit {
+                    trap: wasmtime_environ::CompiledTrap::Normal(trap),
+                    ..
+                } => Error::from(*trap),
+                TrapReason::Jit { trap, .. } => format_err!("{trap:?} in compiled code"),
+            }),
+            Some(UnwindReason::Trap(Err(oom))) => Some(Error::from(*oom)),
+            #[cfg(all(feature = "std", panic = "unwind"))]
+            Some(UnwindReason::Panic(_)) => None,
+            None => None,
+        };
+        state.unwind.set(unwind);
+        error
+    })
+}
+
 // Module to hide visibility of the `CallThreadState::prev` field and force
 // usage of its accessor methods.
 mod call_thread_state {

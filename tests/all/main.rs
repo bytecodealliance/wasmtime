@@ -53,6 +53,8 @@ mod piped_tests;
 mod pooling_allocator;
 mod profiling;
 mod pulley;
+#[cfg(feature = "rr")]
+mod record_replay;
 mod relocs;
 mod stack_creator;
 mod stack_overflow;

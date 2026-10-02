@@ -200,11 +200,16 @@ impl Compiler {
         builder.ins().call_indirect(sig, addr, args)
     }
 
+    /// Compiles a Wasm-to-array trampoline: the `wasm_call` of host functions.
+    ///
+    /// With `record`, a record/replay engine's trampoline records the call
+    /// while the store records.
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
         key: FuncKey,
         symbol: &str,
+        record: bool,
     ) -> Result<CompiledFunctionBody, CompileError> {
         log::trace!("compiling wasm-to-array trampoline: {key:?} = {symbol:?}");
 
@@ -264,6 +269,23 @@ impl Compiler {
             .relative_to(func_ref_offset.into())
             .load(&mut builder.cursor(), callee_vmctx);
 
+        let rr_call = record.then(|| {
+            let func = builder
+                .ins()
+                .iadd_imm_s(callee_vmctx, i64::from(func_ref_offset));
+            let (call, recorded) = self.rr_enter(
+                &mut builder,
+                &mut alias_regions,
+                caller_vmctx,
+                vm_store_context,
+                func,
+                args_base,
+                true,
+            );
+            self.raise_if_host_trapped(&mut builder, &mut alias_regions, caller_vmctx, recorded);
+            call
+        });
+
         // Do an indirect call to the callee.
         let callee_signature = builder.func.import_signature(array_call_sig);
         let call = self.call_indirect_host(
@@ -273,9 +295,23 @@ impl Compiler {
             callee,
             &[callee_vmctx, caller_vmctx, args_base, args_len],
         );
+        let mut succeeded = builder.func.dfg.inst_results(call)[0];
+
+        // Record the outcome, and on failure the error that is raised below.
+        if let Some(rr_call) = rr_call {
+            let recorded = self.rr_leave(
+                &mut builder,
+                &mut alias_regions,
+                caller_vmctx,
+                rr_call,
+                args_base,
+                true,
+                succeeded,
+            );
+            succeeded = builder.ins().band(succeeded, recorded);
+        }
 
         // Invoke `raise` if the callee (host) returned an error.
-        let succeeded = builder.func.dfg.inst_results(call)[0];
         self.raise_if_host_trapped(&mut builder, &mut alias_regions, caller_vmctx, succeeded);
 
         // Return results from the array as native return values.
@@ -606,12 +642,21 @@ impl wasmtime_environ::Compiler for Compiler {
                 let sig = translation.module.functions[func_index]
                     .signature
                     .unwrap_module_type_index();
+                let record = self.tunables.recording.then(|| {
+                    let offsets = wasmtime_environ::VMOffsets::new(
+                        self.isa.pointer_bytes(),
+                        &translation.module,
+                    );
+                    let func_ref = translation.module.functions[func_index].func_ref;
+                    offsets.func_refs().at(func_ref)
+                });
                 self.array_to_wasm_trampoline(
                     key,
                     FuncKey::DefinedWasmFunction(module_index, def_func_index),
                     types[sig].unwrap_func(),
                     symbol,
                     wasmtime_environ::VMCONTEXT_MAGIC,
+                    record,
                     |alias_regions, _pointer_type, cursor, vmctx| {
                         alias_regions.vmctx().store_context().load(cursor, vmctx)
                     },
@@ -620,12 +665,14 @@ impl wasmtime_environ::Compiler for Compiler {
 
             FuncKey::WasmToArrayTrampoline(ty) => {
                 let ty = types[ty].unwrap_func();
-                self.compile_wasm_to_array_trampoline(ty, key, symbol)
+                self.compile_wasm_to_array_trampoline(ty, key, symbol, self.tunables.recording)
             }
+            // Host resource destructors run within the recorded host call of
+            // their `resource.drop` trampoline.
             FuncKey::ResourceDropTrampoline => {
                 let ty = types.find_resource_drop_signature().unwrap();
                 let ty = types[ty].unwrap_func();
-                self.compile_wasm_to_array_trampoline(ty, key, symbol)
+                self.compile_wasm_to_array_trampoline(ty, key, symbol, false)
             }
 
             FuncKey::DefinedWasmFunction(..) => {
@@ -660,6 +707,13 @@ impl wasmtime_environ::Compiler for Compiler {
                         ty,
                         symbol,
                         wasmtime_environ::VMCONTEXT_MAGIC,
+                        self.tunables.recording.then(|| {
+                            wasmtime_environ::VMOffsets::new(
+                                self.isa.pointer_bytes(),
+                                &translation.module,
+                            )
+                            .startup_func_ref()
+                        }),
                         |alias_regions, _pointer_type, cursor, vmctx| {
                             alias_regions.vmctx().store_context().load(cursor, vmctx)
                         },
@@ -1368,6 +1422,120 @@ impl Compiler {
         builder.switch_to_block(continuation_block);
     }
 
+    /// While the store records, calls the `rr_enter` builtin to record a call
+    /// to `func` (a `*const VMFuncRef`) with the arguments at `values`: from
+    /// Wasm to the host if `host`, otherwise from the host to Wasm.
+    ///
+    /// Returns the call's ID as an `i32`, which is `-1` if the call is not
+    /// recorded, and whether recording succeeded. A failed recording leaves
+    /// its error pending, for the caller to raise like a trap.
+    pub(crate) fn rr_enter<O>(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        alias_regions: &mut AliasRegions<O>,
+        vmctx: ir::Value,
+        vm_store_context: ir::Value,
+        func: ir::Value,
+        values: ir::Value,
+        host: bool,
+    ) -> (ir::Value, ir::Value)
+    where
+        O: GetPtrSize,
+    {
+        let recording = alias_regions
+            .vm_store_context()
+            .recording()
+            .load(&mut builder.cursor(), vm_store_context);
+        let record_block = builder.create_block();
+        builder.set_cold_block(record_block);
+        let done = builder.create_block();
+        let call = builder.append_block_param(done, ir::types::I32);
+        let recorded = builder.append_block_param(done, ir::types::I8);
+        let not_recorded = builder.ins().iconst(ir::types::I32, -1);
+        let ok = builder.ins().iconst(ir::types::I8, 1);
+        builder.ins().brif(
+            recording,
+            record_block,
+            &[],
+            done,
+            &[not_recorded.into(), ok.into()],
+        );
+        builder.seal_block(record_block);
+
+        builder.switch_to_block(record_block);
+        let host = builder.ins().iconst(ir::types::I8, i64::from(host));
+        let sigs = BuiltinFunctionSignatures::new(self);
+        let builtin = BuiltinFunctionIndex::rr_enter();
+        let inst = self.call_builtin(
+            builder,
+            alias_regions,
+            vmctx,
+            &[vmctx, func, values, host],
+            builtin,
+            sigs.host_signature(builtin),
+        );
+        let result = builder.func.dfg.inst_results(inst)[0];
+        let record_call = builder.ins().ireduce(ir::types::I32, result);
+        let record_ok = builder.ins().icmp_imm_s(IntCC::NotEqual, result, -1);
+        builder
+            .ins()
+            .jump(done, &[record_call.into(), record_ok.into()]);
+        builder.seal_block(done);
+
+        builder.switch_to_block(done);
+        (call, recorded)
+    }
+
+    /// Calls the `rr_leave` builtin for `call` from [`Compiler::rr_enter`],
+    /// if it is recorded. The results are at `values` if `succeeded`;
+    /// otherwise the error that is about to be raised is pending.
+    ///
+    /// Returns whether recording succeeded; a failed call is never reported
+    /// as a failed recording, so that it raises its own error.
+    pub(crate) fn rr_leave<O>(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        alias_regions: &mut AliasRegions<O>,
+        vmctx: ir::Value,
+        call: ir::Value,
+        values: ir::Value,
+        host: bool,
+        succeeded: ir::Value,
+    ) -> ir::Value
+    where
+        O: GetPtrSize,
+    {
+        let record_block = builder.create_block();
+        builder.set_cold_block(record_block);
+        let done = builder.create_block();
+        let recorded = builder.append_block_param(done, ir::types::I8);
+        let is_recorded = builder.ins().icmp_imm_s(IntCC::NotEqual, call, -1);
+        let ok = builder.ins().iconst(ir::types::I8, 1);
+        builder
+            .ins()
+            .brif(is_recorded, record_block, &[], done, &[ok.into()]);
+        builder.seal_block(record_block);
+
+        builder.switch_to_block(record_block);
+        let host = builder.ins().iconst(ir::types::I8, i64::from(host));
+        let sigs = BuiltinFunctionSignatures::new(self);
+        let builtin = BuiltinFunctionIndex::rr_leave();
+        let inst = self.call_builtin(
+            builder,
+            alias_regions,
+            vmctx,
+            &[vmctx, call, values, host, succeeded],
+            builtin,
+            sigs.host_signature(builtin),
+        );
+        let result = builder.func.dfg.inst_results(inst)[0];
+        builder.ins().jump(done, &[result.into()]);
+        builder.seal_block(done);
+
+        builder.switch_to_block(done);
+        recorded
+    }
+
     /// Helper to load the core `builtin` from `vmctx` and invoke it with
     /// `args`.
     fn call_builtin<O>(
@@ -1452,6 +1620,12 @@ impl Compiler {
         builder.ins().trapz(is_expected_vmctx, TRAP_INTERNAL_ASSERT);
     }
 
+    /// Compiles an array-to-Wasm trampoline: the `array_call` of Wasm
+    /// functions.
+    ///
+    /// With `record`, the offset in the callee's vmctx of the callee's
+    /// `VMFuncRef`, a record/replay engine's trampoline records the call while
+    /// the store records.
     fn array_to_wasm_trampoline(
         &self,
         trampoline_key: FuncKey,
@@ -1459,6 +1633,7 @@ impl Compiler {
         callee_sig: &WasmFuncType,
         symbol: &str,
         expected_vmctx_magic: u32,
+        record: Option<u32>,
         mut load_vm_store_context: impl FnMut(
             &mut AliasRegions<u8>,
             ir::Type,
@@ -1478,10 +1653,6 @@ impl Compiler {
         let func = ir::Function::with_name_signature(key_to_name(trampoline_key), array_call_sig);
         let (mut builder, block0) = compiler.builder(func);
 
-        let try_call_block = builder.create_block();
-        builder.ins().jump(try_call_block, []);
-        builder.switch_to_block(try_call_block);
-
         let (vmctx, caller_vmctx, values_vec_ptr, values_vec_len) = {
             let params = builder.func.dfg.block_params(block0);
             (params[0], params[1], params[2], params[3])
@@ -1499,6 +1670,44 @@ impl Compiler {
             i64::from(required_capacity),
         );
         builder.ins().trapz(enough_capacity, TRAP_INTERNAL_ASSERT);
+
+        // Record the call before entering Wasm. A failed recording returns
+        // its error, which the `rr_enter` builtin left pending.
+        let rr_call = record.map(|func_ref_offset| {
+            let vm_store_ctx = load_vm_store_context(
+                &mut alias_regions,
+                pointer_type,
+                &mut builder.cursor(),
+                vmctx,
+            );
+            let func = builder.ins().iadd_imm_s(vmctx, i64::from(func_ref_offset));
+            let (call, recorded) = self.rr_enter(
+                &mut builder,
+                &mut alias_regions,
+                vmctx,
+                vm_store_ctx,
+                func,
+                values_vec_ptr,
+                false,
+            );
+            let failed_block = builder.create_block();
+            builder.set_cold_block(failed_block);
+            let recorded_block = builder.create_block();
+            builder
+                .ins()
+                .brif(recorded, recorded_block, &[], failed_block, &[]);
+            builder.seal_block(failed_block);
+            builder.seal_block(recorded_block);
+            builder.switch_to_block(failed_block);
+            let false_return = builder.ins().iconst(ir::types::I8, 0);
+            builder.ins().return_(&[false_return]);
+            builder.switch_to_block(recorded_block);
+            call
+        });
+
+        let try_call_block = builder.create_block();
+        builder.ins().jump(try_call_block, []);
+        builder.switch_to_block(try_call_block);
 
         // Load the actual arguments out of the array.
         let mut args = self.load_values_from_array(
@@ -1599,8 +1808,19 @@ impl Compiler {
             values_vec_ptr,
             values_vec_len,
         );
-        let true_return = builder.ins().iconst(ir::types::I8, 1);
-        builder.ins().return_(&[true_return]);
+        let mut succeeded = builder.ins().iconst(ir::types::I8, 1);
+        if let Some(rr_call) = rr_call {
+            succeeded = self.rr_leave(
+                &mut builder,
+                &mut alias_regions,
+                vmctx,
+                rr_call,
+                values_vec_ptr,
+                false,
+                succeeded,
+            );
+        }
+        builder.ins().return_(&[succeeded]);
 
         // On the exceptional return path just return "false" for "did not
         // succeed". Note that register restoration is part of the `try_call`
@@ -1635,6 +1855,18 @@ impl Compiler {
             );
         }
         let false_return = builder.ins().iconst(ir::types::I8, 0);
+        if let Some(rr_call) = rr_call {
+            // Record the trap or error that is unwinding.
+            self.rr_leave(
+                &mut builder,
+                &mut alias_regions,
+                vmctx,
+                rr_call,
+                values_vec_ptr,
+                false,
+                false_return,
+            );
+        }
         builder.ins().return_(&[false_return]);
 
         builder.finalize(self.isa().frontend_config());

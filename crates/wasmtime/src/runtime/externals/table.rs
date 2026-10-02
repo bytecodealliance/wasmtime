@@ -153,9 +153,11 @@ impl Table {
                 let (table, _) = table.wasmtime_table(store, None);
                 table.debug_assert_all_zero();
             }
-            return Ok(table);
+        } else {
+            table._fill(store, 0, init.clone(), ty.minimum())?;
         }
-        table._fill(store, 0, init, ty.minimum())?;
+        #[cfg(feature = "rr")]
+        store.rr_created_table(table, init)?;
         Ok(table)
     }
 
@@ -259,7 +261,10 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn set(&self, mut store: impl AsContextMut, index: u64, val: Ref) -> Result<()> {
-        self.set_(store.as_context_mut().0, index, val)
+        let store = store.as_context_mut().0;
+        #[cfg(feature = "rr")]
+        store.rr.reject("host table mutation")?;
+        self.set_(store, index, val)
     }
 
     pub(crate) fn set_(&self, store: &mut StoreOpaque, index: u64, val: Ref) -> Result<()> {
@@ -337,6 +342,8 @@ impl Table {
 
     async fn _grow<T>(&self, store: StoreContextMut<'_, T>, delta: u64, init: Ref) -> Result<u64> {
         let store = store.0;
+        #[cfg(feature = "rr")]
+        store.rr.reject("host table growth")?;
         let (mut limiter, store) = store.resource_limiter_and_store_opaque();
         let limiter = limiter.as_mut();
 
@@ -417,6 +424,8 @@ impl Table {
         len: u64,
     ) -> Result<()> {
         let store = store.as_context_mut().0;
+        #[cfg(feature = "rr")]
+        store.rr.reject("host table mutation")?;
 
         let src_range = src_index..src_index.checked_add(len).ok_or(Trap::TableOutOfBounds)?;
         let dst_range = dst_index..dst_index.checked_add(len).ok_or(Trap::TableOutOfBounds)?;
@@ -487,7 +496,10 @@ impl Table {
     ///
     /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn fill(&self, mut store: impl AsContextMut, dst: u64, val: Ref, len: u64) -> Result<()> {
-        self._fill(store.as_context_mut().0, dst, val, len)
+        let store = store.as_context_mut().0;
+        #[cfg(feature = "rr")]
+        store.rr.reject("host table mutation")?;
+        self._fill(store, dst, val, len)
     }
 
     pub(crate) fn _fill(
@@ -533,6 +545,11 @@ impl Table {
 
     pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedTableIndex) -> Table {
         Table { instance, index }
+    }
+
+    #[cfg(feature = "rr")]
+    pub(crate) fn rr_key(&self) -> (u32, u32) {
+        (self.instance.instance().as_u32(), self.index.as_u32())
     }
 
     pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Table {
