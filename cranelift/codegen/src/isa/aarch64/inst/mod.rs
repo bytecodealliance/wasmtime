@@ -487,10 +487,32 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 collector.reg_fixed_def(scratch2, xreg(28));
             }
         }
+        Inst::AtomicRMW128Loop {
+            op,
+            addr,
+            operand,
+            oldval1,
+            oldval2,
+            scratch1,
+            scratch2,
+            ..
+        } => {
+            collector.reg_fixed_use(addr, xreg(25));
+            collector.reg_fixed_use(operand, xreg(26));
+            collector.reg_fixed_def(oldval1, xreg(27));
+            collector.reg_fixed_def(oldval2, xreg(23));
+            collector.reg_fixed_def(scratch1, xreg(24));
+            if *op != AtomicRMWLoopOp::Xchg {
+                collector.reg_fixed_def(scratch2, xreg(28));
+            }
+        }
         Inst::AtomicRMW { rs, rt, rn, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rt);
             collector.reg_use(rn);
+        }
+        Inst::AtomicRMW128 { .. } => {
+            todo!();
         }
         Inst::AtomicCAS { rd, rs, rt, rn, .. } => {
             collector.reg_reuse_def(rd, 1); // reuse `rs`.
@@ -1614,6 +1636,11 @@ impl Inst {
                 };
                 format!("{op}{ty_suffix} {rs}, {rt}, [{rn}]")
             }
+            &Inst::AtomicRMW128 {
+                rs, rt1, rt2, rn, op, ..
+            } => {
+                todo!();
+            }
             &Inst::AtomicRMWLoop {
                 ty,
                 op,
@@ -1649,6 +1676,48 @@ impl Inst {
                     addr,
                     operand,
                     oldval,
+                    scratch1,
+                    scratch2,
+                )
+            }
+            &Inst::AtomicRMW128Loop {
+                ty,
+                op,
+                addr,
+                operand,
+                oldval1,
+                oldval2,
+                scratch1,
+                scratch2,
+                ..
+            } => {
+                let op = match op {
+                    AtomicRMWLoopOp::Add => "add",
+                    AtomicRMWLoopOp::Sub => "sub",
+                    AtomicRMWLoopOp::Eor => "eor",
+                    AtomicRMWLoopOp::Orr => "orr",
+                    AtomicRMWLoopOp::And => "and",
+                    AtomicRMWLoopOp::Nand => "nand",
+                    AtomicRMWLoopOp::Smin => "smin",
+                    AtomicRMWLoopOp::Smax => "smax",
+                    AtomicRMWLoopOp::Umin => "umin",
+                    AtomicRMWLoopOp::Umax => "umax",
+                    AtomicRMWLoopOp::Xchg => "xchg",
+                };
+                let addr = pretty_print_ireg(addr, OperandSize::Size64);
+                let operand = pretty_print_ireg(operand, OperandSize::Size64);
+                let oldval1 = pretty_print_ireg(oldval1.to_reg(), OperandSize::Size64);
+                let oldval2 = pretty_print_ireg(oldval2.to_reg(), OperandSize::Size64);
+                let scratch1 = pretty_print_ireg(scratch1.to_reg(), OperandSize::Size64);
+                let scratch2 = pretty_print_ireg(scratch2.to_reg(), OperandSize::Size64);
+                format!(
+                    "atomic_rmw_loop_{}_{} addr={} operand={} oldval1={} oldval2={} scratch1={} scratch2={}",
+                    op,
+                    ty.bits(),
+                    addr,
+                    operand,
+                    oldval1,
+                    oldval2,
                     scratch1,
                     scratch2,
                 )

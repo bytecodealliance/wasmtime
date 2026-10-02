@@ -630,6 +630,19 @@ fn enc_ldaxr(ty: Type, rt: Writable<Reg>, rn: Reg) -> u32 {
         | machreg_to_gpr(rt.to_reg())
 }
 
+fn enc_ldaxp(ty: Type, rt: Writable<Reg>, rt2: Writable<Reg>, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b1,
+        I32 => 0b0,
+        _ => unreachable!(),
+    };
+    0b10_0010000_1_1_11111_1_00000_00000_00000
+        | (sz << 30)
+        | (machreg_to_gpr(rt2.to_reg()) << 10)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt.to_reg())
+}
+
 fn enc_stlxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
     let sz = match ty {
         I64 => 0b11,
@@ -641,6 +654,20 @@ fn enc_stlxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
     0b00_001000_000_00000_1_11111_00000_00000
         | (sz << 30)
         | (machreg_to_gpr(rs.to_reg()) << 16)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt)
+}
+
+fn enc_stlxp(ty: Type, rs: Writable<Reg>, rt: Reg, rt2: Reg, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b1,
+        I32 => 0b0,
+        _ => unreachable!(),
+    };
+    0b10_0010000_0_1_00000_1_00000_00000_00000
+        | (sz << 30)
+        | (machreg_to_gpr(rs.to_reg()) << 16)
+        | (machreg_to_gpr(rt2) << 10)
         | (machreg_to_gpr(rn) << 5)
         | machreg_to_gpr(rt)
 }
@@ -1479,12 +1506,205 @@ impl MachInstEmit for Inst {
 
                 sink.put4(enc_acq_rel(ty, op, rs, rt, rn));
             }
+            &Inst::AtomicRMW128 {
+                op,
+                rs,
+                rt1,
+                rt2,
+                rn,
+                flags,
+            } => {
+                todo!();
+            }
             &Inst::AtomicRMWLoop { ty, op, flags, .. } => {
                 /* Emit this:
                      again:
                       ldaxr{,b,h}  x/w27, [x25]
                       // maybe sign extend
                       op          x28, x27, x26 // op is add,sub,and,orr,eor
+                      stlxr{,b,h}  w24, x/w28, [x25]
+                      cbnz        x24, again
+
+                   Operand conventions:
+                      IN:  x25 (addr), x26 (2nd arg for op)
+                      OUT: x27 (old value), x24 (trashed), x28 (trashed)
+
+                   It is unfortunate that, per the ARM documentation, x28 cannot be used for
+                   both the store-data and success-flag operands of stlxr.  This causes the
+                   instruction's behaviour to be "CONSTRAINED UNPREDICTABLE", so we use x24
+                   instead for the success-flag.
+                */
+                // TODO: We should not hardcode registers here, a better idea would be to
+                // pass some scratch registers in the AtomicRMWLoop pseudo-instruction, and use those
+                let xzr = zero_reg();
+                let x24 = xreg(24);
+                let x25 = xreg(25);
+                let x26 = xreg(26);
+                let x27 = xreg(27);
+                let x28 = xreg(28);
+                let x24wr = writable_xreg(24);
+                let x27wr = writable_xreg(27);
+                let x28wr = writable_xreg(28);
+                let again_label = sink.get_label();
+
+                // again:
+                sink.bind_label(again_label, &mut state.ctrl_plane);
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                sink.put4(enc_ldaxr(ty, x27wr, x25)); // ldaxr x27, [x25]
+                let size = OperandSize::from_ty(ty);
+                let sign_ext = match op {
+                    AtomicRMWLoopOp::Smin | AtomicRMWLoopOp::Smax => match ty {
+                        I16 => Some((ExtendOp::SXTH, 16)),
+                        I8 => Some((ExtendOp::SXTB, 8)),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                let zero_ext = match op {
+                    AtomicRMWLoopOp::Umin | AtomicRMWLoopOp::Umax => match ty {
+                        I16 => Some(ExtendOp::UXTH),
+                        I8 => Some(ExtendOp::UXTB),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                // sxt{b|h} the loaded result if necessary.
+                if sign_ext.is_some() {
+                    let (_, from_bits) = sign_ext.unwrap();
+                    Inst::Extend {
+                        rd: x27wr,
+                        rn: x27,
+                        signed: true,
+                        from_bits,
+                        to_bits: size.bits(),
+                    }
+                    .emit(sink, emit_info, state);
+                }
+
+                match op {
+                    AtomicRMWLoopOp::Xchg => {} // do nothing
+                    AtomicRMWLoopOp::Nand => {
+                        // and x28, x27, x26
+                        // mvn x28, x28
+
+                        Inst::AluRRR {
+                            alu_op: ALUOp::And,
+                            size,
+                            rd: x28wr,
+                            rn: x27,
+                            rm: x26,
+                        }
+                        .emit(sink, emit_info, state);
+
+                        Inst::AluRRR {
+                            alu_op: ALUOp::OrrNot,
+                            size,
+                            rd: x28wr,
+                            rn: xzr,
+                            rm: x28,
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                    AtomicRMWLoopOp::Umin
+                    | AtomicRMWLoopOp::Umax
+                    | AtomicRMWLoopOp::Smin
+                    | AtomicRMWLoopOp::Smax => {
+                        // cmp x27, x26 {?sxt}
+                        // csel.op x28, x27, x26
+
+                        let cond = match op {
+                            AtomicRMWLoopOp::Umin => Cond::Lo,
+                            AtomicRMWLoopOp::Umax => Cond::Hi,
+                            AtomicRMWLoopOp::Smin => Cond::Lt,
+                            AtomicRMWLoopOp::Smax => Cond::Gt,
+                            _ => unreachable!(),
+                        };
+
+                        if let Some(extendop) = sign_ext.map(|(op, _)| op).or(zero_ext) {
+                            Inst::AluRRRExtend {
+                                alu_op: ALUOp::SubS,
+                                size,
+                                rd: writable_zero_reg(),
+                                rn: x27,
+                                rm: x26,
+                                extendop,
+                            }
+                            .emit(sink, emit_info, state);
+                        } else {
+                            Inst::AluRRR {
+                                alu_op: ALUOp::SubS,
+                                size,
+                                rd: writable_zero_reg(),
+                                rn: x27,
+                                rm: x26,
+                            }
+                            .emit(sink, emit_info, state);
+                        }
+
+                        Inst::CSel {
+                            cond,
+                            rd: x28wr,
+                            rn: x27,
+                            rm: x26,
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                    _ => {
+                        // add/sub/and/orr/eor x28, x27, x26
+                        let alu_op = match op {
+                            AtomicRMWLoopOp::Add => ALUOp::Add,
+                            AtomicRMWLoopOp::Sub => ALUOp::Sub,
+                            AtomicRMWLoopOp::And => ALUOp::And,
+                            AtomicRMWLoopOp::Orr => ALUOp::Orr,
+                            AtomicRMWLoopOp::Eor => ALUOp::Eor,
+                            AtomicRMWLoopOp::Nand
+                            | AtomicRMWLoopOp::Umin
+                            | AtomicRMWLoopOp::Umax
+                            | AtomicRMWLoopOp::Smin
+                            | AtomicRMWLoopOp::Smax
+                            | AtomicRMWLoopOp::Xchg => unreachable!(),
+                        };
+
+                        Inst::AluRRR {
+                            alu_op,
+                            size,
+                            rd: x28wr,
+                            rn: x27,
+                            rm: x26,
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                }
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+                if op == AtomicRMWLoopOp::Xchg {
+                    sink.put4(enc_stlxr(ty, x24wr, x26, x25)); // stlxr w24, x26, [x25]
+                } else {
+                    sink.put4(enc_stlxr(ty, x24wr, x28, x25)); // stlxr w24, x28, [x25]
+                }
+
+                // cbnz w24, again
+                // Note, we're actually testing x24, and relying on the default zero-high-half
+                // rule in the assignment that `stlxr` does.
+                let br_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(again_label),
+                    CondBrKind::NotZero(x24, OperandSize::Size64),
+                ));
+                sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
+            }
+            &Inst::AtomicRMW128Loop { ty, op, flags, .. } => {
+                /* Emit this:
+                     again:
+                      ldaxp       x/w27, x/w23, [x25]
+                      // maybe sign extend
+                      op          x28, x27, x26 // op is adds,subc,and,orr,eor
                       stlxr{,b,h}  w24, x/w28, [x25]
                       cbnz        x24, again
 
