@@ -68,6 +68,14 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
             allowed_callconvs.push(CallConv::Winch);
         }
 
+        // GHC calling convention is supported on x64, aarch64, and riscv64.
+        if matches!(
+            architecture,
+            Architecture::X86_64 | Architecture::Aarch64(_) | Architecture::Riscv64(_)
+        ) {
+            allowed_callconvs.push(CallConv::Ghc);
+        }
+
         Ok(*self.choose(&allowed_callconvs[..])?)
     }
 
@@ -107,10 +115,18 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
             simd_enabled = false;
         }
 
-        // We can't have any returns in the `preserve_all` calling convention.
-        if callconv == CallConv::PreserveAll {
+        // We can't have any returns in the `preserve_all` or `ghc` calling
+        // conventions.
+        if callconv == CallConv::PreserveAll || callconv == CallConv::Ghc {
             max_rets = 0;
         }
+
+        // Cap GHC params so fuzzing does not exceed the fixed STG register set.
+        let max_params = if callconv == CallConv::Ghc {
+            max_params.min(6)
+        } else {
+            max_params
+        };
 
         let mut sig = Signature::new(callconv);
 

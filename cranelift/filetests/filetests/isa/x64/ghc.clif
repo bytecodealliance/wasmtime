@@ -1,0 +1,177 @@
+test compile precise-output
+target x86_64
+
+;; GHC STG integer args: r13, rbp, r12, rbx, r14, rsi, rdi, r8, r9, r15
+;; No frame-pointer setup (rbp holds Sp).
+;;
+;; Note: a SystemV caller cannot place Sp in %rbp while using %rbp as its
+;; frame pointer, so SystemV→GHC calls are limited to args that fit in
+;; allocatable SysV regs (e.g. the first STG int arg in %r13).
+
+function %ghc_leaf(i64, i64, i64) ghc {
+block0(v0: i64, v1: i64, v2: i64):
+    return
+}
+
+; VCode:
+; block0:
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   retq
+
+function %ghc_one(i64) ghc {
+block0(v0: i64):
+    return
+}
+
+; VCode:
+; block0:
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   retq
+
+function %ghc_call_ghc(i64, i64) ghc {
+    fn0 = %ghc_leaf(i64, i64, i64) ghc
+block0(v0: i64, v1: i64):
+    call fn0(v0, v1, v0)
+    return
+}
+
+; VCode:
+;   subq $0x8, %rsp
+; block0:
+;   load_ext_name %ghc_leaf+0, %rsi
+;   movq %r13, %r12
+;   call    *%rsi
+;   addq $0x8, %rsp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   subq $8, %rsp
+; block1: ; offset 0x4
+;   movabsq $0, %rsi ; reloc_external Abs8 %ghc_leaf 0
+;   movq %r13, %r12
+;   callq *%rsi
+;   addq $8, %rsp
+;   retq
+
+function %ghc_call_system_v(i64) ghc {
+    fn0 = %sysv(i64) -> i64 system_v
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return
+}
+
+; VCode:
+;   subq $0x8, %rsp
+; block0:
+;   load_ext_name %sysv+0, %rsi
+;   movq %r13, %rdi
+;   call    *%rsi
+;   addq $0x8, %rsp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   subq $8, %rsp
+; block1: ; offset 0x4
+;   movabsq $0, %rsi ; reloc_external Abs8 %sysv 0
+;   movq %r13, %rdi
+;   callq *%rsi
+;   addq $8, %rsp
+;   retq
+
+function %system_v_call_ghc(i64) system_v {
+    fn0 = %ghc_one(i64) ghc
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x30, %rsp
+;   movq %rbx, (%rsp)
+;   movq %rbp, 8(%rsp)
+;   movq %r12, 0x10(%rsp)
+;   movq %r13, 0x18(%rsp)
+;   movq %r14, 0x20(%rsp)
+;   movq %r15, 0x28(%rsp)
+; block0:
+;   load_ext_name %ghc_one+0, %rdx
+;   movq %rdi, %r13
+;   call    *%rdx
+;   movq (%rsp), %rbx
+;   movq 8(%rsp), %rbp
+;   movq 0x10(%rsp), %r12
+;   movq 0x18(%rsp), %r13
+;   movq 0x20(%rsp), %r14
+;   movq 0x28(%rsp), %r15
+;   addq $0x30, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x30, %rsp
+;   movq %rbx, (%rsp)
+;   movq %rbp, 8(%rsp)
+;   movq %r12, 0x10(%rsp)
+;   movq %r13, 0x18(%rsp)
+;   movq %r14, 0x20(%rsp)
+;   movq %r15, 0x28(%rsp)
+; block1: ; offset 0x25
+;   movabsq $0, %rdx ; reloc_external Abs8 %ghc_one 0
+;   movq %rdi, %r13
+;   callq *%rdx
+;   movq (%rsp), %rbx
+;   movq 8(%rsp), %rbp
+;   movq 0x10(%rsp), %r12
+;   movq 0x18(%rsp), %r13
+;   movq 0x20(%rsp), %r14
+;   movq 0x28(%rsp), %r15
+;   addq $0x30, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %ghc_return_call(i64, i64) ghc {
+    fn0 = %ghc_leaf(i64, i64, i64) ghc
+block0(v0: i64, v1: i64):
+    return_call fn0(v0, v1, v0)
+}
+
+; VCode:
+; block0:
+;   load_ext_name %ghc_leaf+0, %r10
+;   movq %r13, %r12
+;   return_call_unknown %r10 (0) tmp=%r11 %r13=%r13 %rbp=%rbp %r12=%r12
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movabsq $0, %r10 ; reloc_external Abs8 %ghc_leaf 0
+;   movq %r13, %r12
+;   jmpq *%r10
+
+function %ghc_float_args(f32, f32, f64) ghc {
+block0(v0: f32, v1: f32, v2: f64):
+    return
+}
+
+; VCode:
+; block0:
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   retq
+

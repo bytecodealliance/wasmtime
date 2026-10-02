@@ -1,0 +1,186 @@
+test compile precise-output
+target aarch64
+
+;; GHC STG integer args: x19-x28
+;; f32: s8-s11; f64: d12-d15
+
+function %ghc_leaf(i64, i64, i64) ghc {
+block0(v0: i64, v1: i64, v2: i64):
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+function %ghc_call_ghc(i64, i64) ghc {
+    fn0 = %ghc_leaf(i64, i64, i64) ghc
+block0(v0: i64, v1: i64):
+    call fn0(v0, v1, v0)
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name_far x3, TestCase(%ghc_leaf)+0
+;   mov x21, x19
+;   blr x3
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldr x3, #0x10
+;   b #0x18
+;   udf #0 ; reloc_external Abs8 %ghc_leaf 0
+;   udf #0
+;   mov x21, x19
+;   blr x3
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %ghc_call_system_v(i64) ghc {
+    fn0 = %sysv(i64) -> i64 system_v
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name_far x3, TestCase(%sysv)+0
+;   mov x0, x19
+;   blr x3
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldr x3, #0x10
+;   b #0x18
+;   udf #0 ; reloc_external Abs8 %sysv 0
+;   udf #0
+;   mov x0, x19
+;   blr x3
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %system_v_call_ghc(i64) system_v {
+    fn0 = %ghc_leaf(i64, i64, i64) ghc
+block0(v0: i64):
+    call fn0(v0, v0, v0)
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+; block0:
+;   load_ext_name_far x2, TestCase(%ghc_leaf)+0
+;   mov x21, x0
+;   mov x19, x21
+;   mov x20, x21
+;   blr x2
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
+; block1: ; offset 0x2c
+;   ldr x2, #0x34
+;   b #0x3c
+;   udf #0 ; reloc_external Abs8 %ghc_leaf 0
+;   udf #0
+;   mov x21, x0
+;   mov x19, x21
+;   mov x20, x21
+;   blr x2
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %ghc_return_call(i64, i64) ghc {
+    fn0 = %ghc_leaf(i64, i64, i64) ghc
+block0(v0: i64, v1: i64):
+    return_call fn0(v0, v1, v0)
+}
+
+; VCode:
+; block0:
+;   load_ext_name_far x1, TestCase(%ghc_leaf)+0
+;   mov x21, x19
+;   return_call_ind x1 new_stack_arg_size:0 x19=x19 x20=x20 x21=x21
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x1, #8
+;   b #0x10
+;   udf #0 ; reloc_external Abs8 %ghc_leaf 0
+;   udf #0
+;   mov x21, x19
+;   br x1
+
+function %ghc_float_args(f32, f32, f64) ghc {
+block0(v0: f32, v1: f32, v2: f64):
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+

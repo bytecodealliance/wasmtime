@@ -312,6 +312,11 @@ impl ABIMachineSpec for S390xMachineDeps {
             isa::CallConv::Winch,
             "s390x does not support the 'winch' calling convention yet"
         );
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Ghc,
+            "s390x does not support the 'ghc' calling convention"
+        );
 
         let mut next_gpr = 0;
         let mut next_fpr = 0;
