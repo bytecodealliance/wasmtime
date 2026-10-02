@@ -66,11 +66,11 @@ impl p3::exports::wasi::cli::run::Guest for Component {
             (
                 Instant {
                     seconds: -1,
-                    nanoseconds: 999_999_999,
+                    nanoseconds: 999_999_900,
                 },
                 Instant {
                     seconds: -1,
-                    nanoseconds: 999_999_999,
+                    nanoseconds: 999_999_900,
                 },
             ),
             (
