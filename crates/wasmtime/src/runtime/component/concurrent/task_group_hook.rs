@@ -1,6 +1,6 @@
 use crate::component::concurrent::table::{TableDebug, TableId};
 use crate::component::concurrent::{ConcurrentState, CurrentThread};
-use crate::error::Result;
+use crate::error::{Result, ensure};
 use crate::store::StoreOpaque;
 use crate::{AsContextMut as _, Store, StoreContextMut};
 use alloc::boxed::Box;
@@ -195,7 +195,7 @@ impl ConcurrentState {
 
     pub(super) fn decrement_group_ref_count(&mut self, group: TaskGroupId) -> Result<()> {
         let count = &mut self.get_mut(group.0)?.ref_count;
-        assert!(*count >= 1);
+        ensure!(*count >= 1);
         *count -= 1;
         log::trace!("decrement {group:?} to {count}");
         if *count == 0 {

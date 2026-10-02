@@ -193,7 +193,6 @@ impl Func {
             store,
             self,
             MAX_FLAT_PARAMS,
-            false,
             move |store, params_out| {
                 Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
@@ -236,7 +235,7 @@ where
     {
         let mut store = store.as_context_mut();
         let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
-        let prepared = self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
+        let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
             // SAFETY: The goal here is to get `Params`, a non-`'static`
             // value, to live long enough to the lowering of the
             // parameters. We're guaranteed that `Params` lives in the
@@ -270,10 +269,9 @@ where
             }
         }
 
-        let mut wrapper = SignalOnDrop {
-            store,
-            task: prepared.task_id(),
-        };
+        let task = prepared.acquire_task_id(store.0)?;
+
+        let mut wrapper = SignalOnDrop { store, task };
 
         let result = concurrent::StagedCall::new(wrapper.store.as_context_mut(), prepared)?;
         wrapper
@@ -382,7 +380,7 @@ where
             "cannot use `call_concurrent` Config::concurrency_support disabled",
         );
 
-        let prepared = self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
+        let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
             Self::lower_args(cx, ty, dst, &params)
         })?;
         let call = concurrent::StagedCall::new(store, prepared)?;
@@ -417,7 +415,6 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
-        host_future_present: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
             InterfaceType,
@@ -450,7 +447,6 @@ where
             store,
             *self.func(),
             param_count,
-            host_future_present,
             move |store, params_out| {
                 Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
                     lower(cx, ty, params_out)
