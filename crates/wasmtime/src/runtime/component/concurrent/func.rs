@@ -160,7 +160,7 @@ impl Func {
 
     /// Completes a call that was initiated via
     /// [`Func::start_call_concurrent`].
-    pub async fn finish_call_concurrent<T: Send>(
+    pub async fn finish_call_concurrent<T: Send + 'static>(
         self,
         accessor: impl AsAccessor<Data = T>,
         call: FuncCallConcurrent<'_, T>,
@@ -193,7 +193,6 @@ impl Func {
             store,
             self,
             MAX_FLAT_PARAMS,
-            false,
             move |store, params_out| {
                 Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
@@ -236,7 +235,7 @@ where
     {
         let mut store = store.as_context_mut();
         let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
-        let prepared = self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
+        let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
             // SAFETY: The goal here is to get `Params`, a non-`'static`
             // value, to live long enough to the lowering of the
             // parameters. We're guaranteed that `Params` lives in the
@@ -270,16 +269,18 @@ where
             }
         }
 
-        let mut wrapper = SignalOnDrop {
-            store,
-            task: prepared.task_id(),
-        };
+        // This will increment the task's refcount, and the
+        // `TaskId::host_future_dropped` function called from
+        // `SignalOnDrop::drop` wiil decrement it.
+        let task = prepared.acquire_task_id(store.0)?;
+
+        let mut wrapper = SignalOnDrop { store, task };
 
         let result = concurrent::StagedCall::new(wrapper.store.as_context_mut(), prepared)?;
         wrapper
             .store
             .as_context_mut()
-            .run_concurrent_trap_on_idle(async |_| Ok(result.await?))
+            .run_concurrent_trap_on_idle(async |_| result.await)
             .await?
     }
 
@@ -382,7 +383,7 @@ where
             "cannot use `call_concurrent` Config::concurrency_support disabled",
         );
 
-        let prepared = self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
+        let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
             Self::lower_args(cx, ty, dst, &params)
         })?;
         let call = concurrent::StagedCall::new(store, prepared)?;
@@ -404,8 +405,8 @@ where
         Params: 'static,
         Return: 'static,
     {
-        // This is intentionally part of the public API but not used yet.
-        // This'll likely want to be used in future refactorings.
+        // Intentionally not used today, but left here for future API
+        // compatibility with using this.
         let _ = accessor;
         call.call.await
     }
@@ -417,7 +418,6 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
-        host_future_present: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
             InterfaceType,
@@ -450,7 +450,6 @@ where
             store,
             *self.func(),
             param_count,
-            host_future_present,
             move |store, params_out| {
                 Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
                     lower(cx, ty, params_out)
