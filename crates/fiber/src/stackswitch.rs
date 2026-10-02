@@ -5,6 +5,11 @@
 // accessed via the `extern "C"` declarations below that.
 
 cfg_select! {
+    // Miri uses another fiber implementation, but raw fibers still refer to
+    // the routines here.
+    all(feature = "std", miri) => {
+        pub(crate) use unsupported::*;
+    }
     target_arch = "aarch64" => {
         mod aarch64;
         pub(crate) use supported::*;
@@ -47,7 +52,6 @@ cfg_select! {
     }
     feature = "custom" => {
         mod custom;
-        pub(crate) use supported::*;
         pub(crate) use custom::*;
     }
     _ => {
@@ -68,6 +72,10 @@ cfg_select! {
 )]
 mod supported {
     pub const SUPPORTED_ARCH: bool = true;
+
+    /// Whether raw fibers can use the routines here. They require the
+    /// reserved-slot stack layout documented in `unix.rs`.
+    pub const RAW_FIBERS: bool = true;
 }
 
 /// Helper module reexported in the fallback case above when the current host
@@ -79,6 +87,7 @@ mod supported {
 )]
 mod unsupported {
     pub const SUPPORTED_ARCH: bool = false;
+    pub const RAW_FIBERS: bool = false;
 
     pub(crate) unsafe fn wasmtime_fiber_init(
         _top_of_stack: *mut u8,
@@ -89,6 +98,10 @@ mod unsupported {
     }
 
     pub(crate) unsafe fn wasmtime_fiber_switch(_top_of_stack: *mut u8) {
+        unreachable!();
+    }
+
+    pub(crate) unsafe extern "C" fn wasmtime_fiber_switch_(_top_of_stack: *mut u8) {
         unreachable!();
     }
 }

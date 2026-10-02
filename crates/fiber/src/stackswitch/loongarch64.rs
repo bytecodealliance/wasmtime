@@ -13,7 +13,7 @@ pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
 }
 
 #[unsafe(naked)]
-unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
     naked_asm!(
         "
       // Save all callee-saved registers on the stack since we're
