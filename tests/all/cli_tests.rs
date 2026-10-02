@@ -990,6 +990,7 @@ mod test_programs {
     use std::thread::{self, JoinHandle};
     use std::time::Duration;
     use test_programs_artifacts::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
     use wasmtime::{Result, bail, error::Context as _, format_err};
 
@@ -2095,6 +2096,48 @@ start a print 1234
             .await?;
         assert!(resp.status().is_success());
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_missing_authority() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        // hyper's client always synthesizes a `Host` header for HTTP/1.1
+        // requests, so write this request out by hand in order to leave both
+        // the URI authority and the `Host` header off.  There is nothing to
+        // serve such a request with: it is rejected while it is being turned
+        // into a guest request, before the guest runs at all, so the status
+        // code comes from the error rather than from a guest response.
+        let mut stream = TcpStream::connect(server.first_addr()).await?;
+        stream.write_all(b"GET / HTTP/1.1\r\n\r\n").await?;
+        // The connection is kept alive, so read until the body has arrived
+        // rather than until EOF.
+        let mut response = Vec::new();
+        let mut buf = [0; 512];
+        while !response.ends_with(b"</html>") && response.len() < 8192 {
+            let n = tokio::time::timeout(Duration::from_secs(10), stream.read(&mut buf))
+                .await
+                .expect("timed out waiting for a response")?;
+            if n == 0 {
+                break;
+            }
+            response.extend_from_slice(&buf[..n]);
+        }
+        let response = String::from_utf8(response)?;
+        assert!(
+            response.starts_with("HTTP/1.1 400"),
+            "unexpected response: {response:?}",
+        );
+        assert!(
+            response.contains("<h1>400 Bad Request</h1>"),
+            "unexpected response: {response:?}",
+        );
+        drop(stream);
+
+        server.finish()?;
         Ok(())
     }
 
