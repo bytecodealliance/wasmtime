@@ -703,22 +703,68 @@ async fn require_concurrency_support() -> Result<()> {
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn cancel_host_task_does_not_leak() -> Result<()> {
+    test_cancel_host_task(HostTaskCancelMode::Sync).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn async_cancel_host_task_does_not_leak() -> Result<()> {
+    test_cancel_host_task(HostTaskCancelMode::Async).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn async_cancel_host_task_drop_before_completion_traps() -> Result<()> {
+    test_cancel_host_task(HostTaskCancelMode::DropDuringAsyncCancel).await
+}
+
+enum HostTaskCancelMode {
+    Sync,
+    Async,
+    DropDuringAsyncCancel,
+}
+
+async fn test_cancel_host_task(mode: HostTaskCancelMode) -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
+    config.wasm_component_model_more_async_builtins(true);
+    config.wasm_component_model_async_stackful(true);
     let engine = Engine::new(&config)?;
 
     let mut store = Store::new(&engine, ());
+    let async_cancel = !matches!(mode, HostTaskCancelMode::Sync);
+    let drop_early = matches!(mode, HostTaskCancelMode::DropDuringAsyncCancel);
+    let cancel_option = if async_cancel { "async" } else { "" };
+    let expected_cancel_status = if async_cancel { -1 } else { 4 };
+    let early_drop = if drop_early {
+        r#"
+                    ;; Cancellation returned BLOCKED, so dropping must trap.
+                    (call $drop (local.get $task))
+                    ;; Stop here if the drop was incorrectly accepted.
+                    unreachable
+        "#
+    } else {
+        ""
+    };
     let component = Component::new(
         &engine,
-        r#"(component
+        format!(
+            r#"(component
             (import "f" (func $f async))
+            (core module $memory (memory (export "memory") 1))
+            (core instance $memory (instantiate $memory))
 
             (core module $m
+                (import "" "memory" (memory 1))
                 (import "" "f" (func $f (result i32)))
                 (import "" "cancel" (func $cancel (param i32) (result i32)))
                 (import "" "drop" (func $drop (param i32)))
+                (import "" "new-set" (func $new-set (result i32)))
+                (import "" "join" (func $join (param i32 i32)))
+                (import "" "wait" (func $wait (param i32 i32) (result i32)))
+                (import "" "drop-set" (func $drop-set (param i32)))
                 (func (export "run")
-                    (local i32)
+                    (local $task i32) (local $status i32) (local $set i32)
 
                     ;; start the subtask, asserting it's `STARTED`
                     call $f
@@ -735,26 +781,46 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
                     i32.shr_u
                     local.set 0
 
-                    ;; cancel the subtask asserting it's `RETURN_CANCELLED`
-                    local.get 0
-                    call $cancel
-                    i32.const 4 ;; RETURN_CANCELLED
-                    i32.ne
-                    if unreachable end
+                    ;; Request cancellation and check its status.
+                    (local.set $status (call $cancel (local.get $task)))
+                    (if (i32.ne (local.get $status) (i32.const {expected_cancel_status}))
+                        (then unreachable))
+                    {early_drop}
+                    (if (i32.eq (local.get $status) (i32.const -1))
+                        (then
+                            (local.set $set (call $new-set))
+                            (call $join (local.get $task) (local.get $set))
+                            (if (i32.ne (call $wait (local.get $set) (i32.const 0)) (i32.const 1))
+                                (then unreachable))
+                            (if (i32.ne (i32.load (i32.const 0)) (local.get $task))
+                                (then unreachable))
+                            (local.set $status (i32.load (i32.const 4)))))
+                    (if (i32.ne (local.get $status) (i32.const 4)) ;; RETURN_CANCELLED
+                        (then unreachable))
 
                     ;; drop the subtask
                     local.get 0
                     call $drop
+                    (if (local.get $set) (then (call $drop-set (local.get $set))))
                 )
             )
             (core func $f (canon lower (func $f) async))
-            (core func $cancel (canon subtask.cancel))
+            (core func $cancel (canon subtask.cancel {cancel_option}))
             (core func $drop (canon subtask.drop))
+            (core func $new-set (canon waitable-set.new))
+            (core func $join (canon waitable.join))
+            (core func $wait (canon waitable-set.wait (memory (core memory $memory "memory"))))
+            (core func $drop-set (canon waitable-set.drop))
             (core instance $i (instantiate $m
                 (with "" (instance
+                    (export "memory" (memory $memory "memory"))
                     (export "f" (func $f))
                     (export "cancel" (func $cancel))
                     (export "drop" (func $drop))
+                    (export "new-set" (func $new-set))
+                    (export "join" (func $join))
+                    (export "wait" (func $wait))
+                    (export "drop-set" (func $drop-set))
                 ))
             ))
 
@@ -762,7 +828,8 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
                 (canon lift (core func $i "run")))
 
 
-        )"#,
+        )"#
+        ),
     )?;
 
     let mut linker = Linker::new(&engine);
@@ -774,7 +841,7 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
     })?;
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
-    store
+    let result = store
         .run_concurrent(async |store| -> wasmtime::Result<()> {
             func.call_concurrent(store, ()).await?;
 
@@ -783,10 +850,17 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
             }
             Ok(())
         })
-        .await??;
+        .await
+        .and_then(std::convert::identity);
 
-    // The host task was cancelled, nothing should remain.
-    store.assert_concurrent_state_empty();
+    if drop_early {
+        let err = result.unwrap_err();
+        assert_eq!(err.downcast::<Trap>()?, Trap::SubtaskDropNotResolved);
+    } else {
+        result?;
+        // The host task was cancelled, nothing should remain.
+        store.assert_concurrent_state_empty();
+    }
 
     Ok(())
 }
