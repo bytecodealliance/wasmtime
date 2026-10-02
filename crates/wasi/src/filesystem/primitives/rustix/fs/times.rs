@@ -13,16 +13,14 @@ pub(crate) fn to_timespec(ft: Option<SystemTime>) -> io::Result<Timespec> {
             tv_nsec: UTIME_OMIT.into(),
         },
         Some(ft) => {
-            let duration = ft.duration_since(SystemTime::UNIX_EPOCH).unwrap();
-            let nanoseconds = duration.subsec_nanos();
+            let date_time =
+                crate::clocks::Datetime::try_from(ft).map_err(|e| io::Error::other(e))?;
+            let Ok(nanoseconds) = date_time.nanoseconds.try_into();
             assert_ne!(i64::from(nanoseconds), i64::from(UTIME_OMIT));
             assert_ne!(i64::from(nanoseconds), i64::from(UTIME_NOW));
             Timespec {
-                tv_sec: duration
-                    .as_secs()
-                    .try_into()
-                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?,
-                tv_nsec: nanoseconds.try_into().unwrap(),
+                tv_sec: date_time.seconds,
+                tv_nsec: nanoseconds,
             }
         }
     })

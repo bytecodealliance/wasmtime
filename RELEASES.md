@@ -1,3 +1,35 @@
+## 49.0.2
+
+Released 2026-10-02.
+
+### Fixed
+
+* WASI preview 0 implementation of `poll_oneoff` circumvents fuel consumption.
+  [GHSA-j366-h8gg-77pm](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-j366-h8gg-77pm)
+
+* Excessive allocated memory on the host when guests don't have stdio.
+  [GHSA-gqmc-89g8-p25r](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gqmc-89g8-p25r)
+
+* `fd_readdir` copies uninitialized struct padding into guest memory.
+  [GHSA-96f6-r43r-8c24](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-96f6-r43r-8c24)
+
+* Guest can panic host through filesystem timestamp before the epoch on wasip3.
+  [GHSA-mr2v-56j5-cmfc](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-mr2v-56j5-cmfc)
+
+* Wasmtime component async-lifted callback result count is unvalidated, causing a native stack buffer overflow.
+  [GHSA-32h6-97mm-8q3c](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-32h6-97mm-8q3c)
+
+* Mis-typed WebAssembly tag imports can lead to GC heap corruption.
+  [GHSA-cfhf-m2cr-62wj](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-cfhf-m2cr-62wj)
+
+* Wasmtime wasi:http implementation panics with a zero timeout supplied.
+  [GHSA-w4qr-p94g-mjhv](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-w4qr-p94g-mjhv)
+
+* Rooting for GC values live across `try_call` may be missing, causing GC heap corruption.
+  [GHSA-hw8m-q44c-ggrf](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hw8m-q44c-ggrf)
+
+--------------------------------------------------------------------------------
+
 ## 49.0.1
 
 Released 2026-09-24.
@@ -16,6 +48,8 @@ Released 2026-09-24.
 
 * wasmtime-wasi: Fix panic on out-of-range datetimes in WASI filesystem set-times, set-times-at.
   [GHSA-j2g9-4prp-pf6h](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-j2g9-4prp-pf6h)
+
+--------------------------------------------------------------------------------
 
 ## 49.0.0
 
