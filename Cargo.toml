@@ -370,18 +370,18 @@ wit-bindgen = { version = "0.60.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.60.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.254.0", default-features = false, features = ['simd'] }
-wat = "1.254.0"
-wast = "254.0.0"
-wasmprinter = "0.254.0"
-wasm-encoder = "0.254.0"
-wasm-smith = "0.254.0"
-wasm-mutate = "0.254.0"
-wit-parser = "0.254.0"
-wit-component = "0.254.0"
-wasm-wave = "0.254.0"
-wasm-compose = { version = "0.254.0", default-features = false }
-json-from-wast = "0.254.0"
+wasmparser = { version = "0.254.1", default-features = false, features = ['simd'] }
+wat = "1.254.2"
+wast = "254.0.1"
+wasmprinter = "0.254.1"
+wasm-encoder = "0.254.1"
+wasm-smith = "0.254.1"
+wasm-mutate = "0.254.1"
+wit-parser = "0.254.1"
+wit-component = "0.254.1"
+wasm-wave = "0.254.1"
+wasm-compose = { version = "0.254.1", default-features = false }
+json-from-wast = "0.254.1"
 
 wstd = "0.6.5"
 wasip2 = "1.0"
@@ -785,18 +785,3 @@ fpr = "fpr"
 
 [workspace.metadata.typos.files]
 extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt", "*.isle" ]
-
-[patch.crates-io]
-wasmparser = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wat = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wast = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wasmprinter = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wasm-encoder = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wasm-smith = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wasm-mutate = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wit-parser = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wit-component = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wasm-wave = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wasm-compose = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-json-from-wast = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
-wasm-metadata = { git = 'ssh://git@github.com/bytecodealliance/wasm-tools-ghsa-hvvh-cfr5-hhv3', branch = 'back254' }
