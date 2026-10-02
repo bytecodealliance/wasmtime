@@ -342,7 +342,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     /// This is target-word-size dependent.  And it excludes booleans and reftypes.
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
         match ty {
-            I8 | I16 | I32 | I64 => Some(ty),
+            I8 | I16 | I32 | I64 | I128 => Some(ty),
             _ => None,
         }
     }
