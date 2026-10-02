@@ -1273,14 +1273,10 @@ async fn handle_client(
                     Ok(r) => Ok::<_, Infallible>(r),
                     Err(e) => {
                         eprintln!("error: {e:?}");
-                        // Some errors know which status code the client should
-                        // see; everything else is a failure on our side.
                         let status = e
                             .downcast_ref::<ErrorResponse>()
                             .map(|e| e.status())
                             .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-                        // `StatusCode`'s own `Display` renders as the numeric
-                        // code followed by its canonical reason.
                         let error_html = format!(
                             "\
 <!doctype html>
