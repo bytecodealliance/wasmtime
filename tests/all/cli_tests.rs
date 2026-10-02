@@ -3219,6 +3219,32 @@ start a print 1234
         run_wasmtime(&["run", "-Stcp", P3_CLI_DENY_LISTEN_COMPONENT])?;
         Ok(())
     }
+
+    #[test]
+    fn p2_cli_stdout_write_zeros_to_sink() -> Result<()> {
+        for n in ["0", "100", "10000"] {
+            run_wasmtime(&[
+                "run",
+                "-Sinherit-stdout=n",
+                P2_CLI_STDOUT_WRITE_ZEROS_TO_SINK_COMPONENT,
+                n,
+            ])?;
+        }
+        let output = super::wasmtime(&[
+            "run",
+            "-Sinherit-stdout=n",
+            P2_CLI_STDOUT_WRITE_ZEROS_TO_SINK_COMPONENT,
+            "10000000000",
+        ])?
+        .output()?;
+        assert_eq!(output.stdout, b"");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("cannot write more zeroes than `check_write` allows"),
+            "bad stderr: {stderr}"
+        );
+        Ok(())
+    }
 }
 
 #[test]
