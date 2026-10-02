@@ -1430,6 +1430,16 @@ impl Config {
         self
     }
 
+    /// This corresponds to the 📡 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is a work in
+    /// progress.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_accessors(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_ACCESSORS, enable);
+        self
+    }
+
     /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
     ///
     /// This is `true` by default, except when using [`Strategy::Winch`] where
@@ -2467,7 +2477,8 @@ impl Config {
             | WasmFeatures::CM64
             | WasmFeatures::CM_FIXED_LENGTH_LISTS
             | WasmFeatures::CM_IMPLEMENTS
-            | WasmFeatures::CM_CANON_NAMES;
+            | WasmFeatures::CM_CANON_NAMES
+            | WasmFeatures::CM_ACCESSORS;
 
         #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;
