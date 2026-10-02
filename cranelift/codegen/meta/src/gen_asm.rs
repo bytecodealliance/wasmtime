@@ -5,6 +5,8 @@ use cranelift_assembler_x64_meta::dsl::{
 };
 use cranelift_srcgen::{Formatter, fmtln};
 
+use crate::display_join::DisplayJoinedVecExt;
+
 /// This factors out use of the assembler crate name.
 const ASM: &str = "cranelift_assembler_x64";
 
@@ -110,17 +112,16 @@ fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
         .iter()
         .filter(|o| o.mutability.is_write())
         .collect::<Vec<_>>();
-    let rust_params = operands
+    let mut rust_params = operands
         .iter()
         .filter(|o| is_raw_operand_param(o))
         .map(|o| format!("{}: {}", o.location, rust_param_raw(o)))
-        .chain(if inst.has_trap {
-            Some(format!("trap: &TrapCode"))
-        } else {
-            None
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
+        .collect::<Vec<_>>();
+    if inst.has_trap {
+        rust_params.push("trap: &TrapCode".to_string());
+    }
+    let rust_params = rust_params.display_join(", ");
+
     f.add_block(
         &format!("fn x64_{struct_name}_raw(&mut self, {rust_params}) -> AssemblerOutputs"),
         |f| {
@@ -137,7 +138,7 @@ fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
             if inst.has_trap {
                 args.push(format!("{ASM}::TrapCode(trap.as_raw())"));
             }
-            let args = args.join(", ");
+            let args = args.display_join(", ");
             f.empty_line();
 
             f.comment("Build the instruction.");
@@ -179,12 +180,12 @@ fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                     }
                     RegMem(rm) => {
                         let (ty, var) = ty_var_of_reg(rm);
-                        f.add_block(&format!("match {rm}"), |f| {
-                            f.add_block(&format!("{ASM}::{ty}Mem::{ty}(reg) => "), |f| {
+                        f.add_block(format_args!("match {rm}"), |f| {
+                            f.add_block(format_args!("{ASM}::{ty}Mem::{ty}(reg) => "), |f| {
                                 fmtln!(f, "let {var} = reg.{};", access_reg(op));
                                 fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }} ");
                             });
-                            f.add_block(&format!("{ASM}::{ty}Mem::Mem(_) => "), |f| {
+                            f.add_block(format_args!("{ASM}::{ty}Mem::Mem(_) => "), |f| {
                                 fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
                             });
                         });
@@ -548,12 +549,12 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
         .iter()
         .filter(|o| is_raw_operand_param(o))
         .collect::<Vec<_>>();
-    let raw_param_tys = params
-        .iter()
-        .map(|o| isle_param_raw(o))
-        .chain(trap_type.clone())
-        .collect::<Vec<_>>()
-        .join(" ");
+    let mut raw_param_tys = params.iter().map(|o| isle_param_raw(o)).collect::<Vec<_>>();
+    if let Some(trap_type) = &trap_type {
+        raw_param_tys.push(trap_type.clone());
+    }
+    let raw_param_tys = raw_param_tys.display_join(" ");
+
     fmtln!(f, "(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)");
     fmtln!(f, "(extern constructor {raw_name} {raw_name})");
 
@@ -584,18 +585,22 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
             }
         }
         assert!(implicit_params.len() <= 1);
-        let param_tys = explicit_params
+        let mut param_tys = explicit_params
             .iter()
             .map(|o| isle_param_for_ctor(o, ctor))
-            .chain(trap_type.clone())
-            .collect::<Vec<_>>()
-            .join(" ");
-        let param_names = explicit_params
+            .collect::<Vec<_>>();
+        if let Some(trap_type) = &trap_type {
+            param_tys.push(trap_type.clone());
+        }
+        let param_tys = param_tys.display_join(" ");
+        let mut param_names = explicit_params
             .iter()
             .map(|o| o.location.to_string())
-            .chain(trap_name.clone())
-            .collect::<Vec<_>>()
-            .join(" ");
+            .collect::<Vec<_>>();
+        if let Some(trap_name) = &trap_name {
+            param_names.push(trap_name.clone());
+        }
+        let param_names = param_names.display_join(" ");
         let convert = ctor.conversion_constructor();
 
         // Generate implicit parameters to the `*_raw` constructor. Currently
@@ -619,7 +624,7 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
                 }
             })
             .collect::<Vec<_>>()
-            .join(" ");
+            .display_join(" ");
 
         fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
         fmtln!(
@@ -638,6 +643,7 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
                     .iter()
                     .any(|o| matches!(o.location.reg_class(), Some(RegClass::Xmm)))
             );
+            let param_tys = param_tys.to_string();
             let param_tys = if alternate.feature == Feature::avx {
                 param_tys.replace("Aligned", "")
             } else {

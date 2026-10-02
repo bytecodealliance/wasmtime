@@ -1,6 +1,8 @@
 use cranelift_srcgen::error::Error;
 use std::path::Path;
 
+use crate::display_join::DisplayJoinedVecExt;
+
 struct Inst<'a> {
     snake_name: &'a str,
     name: &'a str,
@@ -391,7 +393,7 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
         }
         isle.push_str(") ");
         rule.push_str(")");
-        let ops = ops.join(" ");
+        let ops = ops.display_join(" ");
         match &results[..] {
             [result] => {
                 isle.push_str(result);

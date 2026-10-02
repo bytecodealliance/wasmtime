@@ -22,33 +22,36 @@ fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut Formatter) {
 /// Emit definition for all vector types with `bits` total size.
 fn emit_vectors(bits: u64, fmt: &mut Formatter) {
     let vec_size: u64 = bits / 8;
-    for vec in cdsl_types::ValueType::all_lane_types()
-        .map(|ty| (ty, cdsl_types::ValueType::from(ty).membytes()))
-        .filter(|&(_, lane_size)| lane_size != 0 && lane_size < vec_size)
-        .map(|(ty, lane_size)| (ty, vec_size / lane_size))
-        .map(|(ty, lanes)| cdsl_types::VectorType::new(ty, lanes))
-    {
-        emit_type(&cdsl_types::ValueType::from(vec), fmt);
+
+    for ty in cdsl_types::ValueType::all_lane_types() {
+        let lane_size = cdsl_types::ValueType::from(ty).membytes();
+        if lane_size != 0 && lane_size < vec_size {
+            let lanes = vec_size / lane_size;
+            let vec_type = cdsl_types::VectorType::new(ty, lanes);
+            emit_type(&cdsl_types::ValueType::from(vec_type), fmt);
+        }
     }
 }
 
 /// Emit definition for all dynamic vector types with `bits` total size.
 fn emit_dynamic_vectors(bits: u64, fmt: &mut Formatter) {
     let vec_size: u64 = bits / 8;
-    for vec in cdsl_types::ValueType::all_lane_types()
-        .map(|ty| (ty, cdsl_types::ValueType::from(ty).membytes()))
-        .filter(|&(_, lane_size)| lane_size != 0 && lane_size < vec_size)
-        .map(|(ty, lane_size)| (ty, vec_size / lane_size))
-        .map(|(ty, lanes)| cdsl_types::DynamicVectorType::new(ty, lanes))
-    {
-        emit_type(&cdsl_types::ValueType::from(vec), fmt);
+
+    for ty in cdsl_types::ValueType::all_lane_types() {
+        let lane_size = cdsl_types::ValueType::from(ty).membytes();
+        if lane_size != 0 && lane_size < vec_size {
+            let lanes = vec_size / lane_size;
+            let vec_type = cdsl_types::DynamicVectorType::new(ty, lanes);
+            emit_type(&cdsl_types::ValueType::from(vec_type), fmt);
+        }
     }
 }
 
 /// Emit types using the given formatter object.
 fn emit_types(fmt: &mut Formatter) {
     // Emit all of the lane types, such integers, floats, and booleans.
-    for ty in cdsl_types::ValueType::all_lane_types().map(cdsl_types::ValueType::from) {
+    for ty in cdsl_types::ValueType::all_lane_types() {
+        let ty = cdsl_types::ValueType::from(ty);
         emit_type(&ty, fmt);
     }
 
