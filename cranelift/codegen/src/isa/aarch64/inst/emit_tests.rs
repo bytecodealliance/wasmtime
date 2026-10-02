@@ -2467,6 +2467,50 @@ fn test_aarch64_binemit() {
         "ccmp w3, #30, #NZCV, gt",
     ));
     insns.push((
+        Inst::CSInc {
+            size: OperandSize::Size32,
+            rd: writable_xreg(8),
+            rn: xreg(28),
+            rm: xreg(13),
+            cond: Cond::Eq,
+        },
+        "88078D1A",
+        "csinc w8, w28, w13, eq",
+    ));
+    insns.push((
+        Inst::CSInc {
+            size: OperandSize::Size64,
+            rd: writable_xreg(25),
+            rn: xreg(0),
+            rm: xreg(3),
+            cond: Cond::Gt,
+        },
+        "19C4839A",
+        "csinc x25, x0, x3, gt",
+    ));
+    insns.push((
+        Inst::CSInc {
+            size: OperandSize::Size64,
+            rd: writable_xreg(2),
+            rn: xreg(2),
+            rm: xreg(2),
+            cond: Cond::Ne,
+        },
+        "4214829A",
+        "cinc x2, x2, eq",
+    ));
+    insns.push((
+        Inst::CSInc {
+            size: OperandSize::Size32,
+            rd: writable_xreg(1),
+            rn: xreg(5),
+            rm: xreg(5),
+            cond: Cond::Lt,
+        },
+        "A1B4851A",
+        "cinc w1, w5, ge",
+    ));
+    insns.push((
         Inst::MovToFpu {
             rd: writable_vreg(31),
             rn: xreg(0),
@@ -7303,6 +7347,71 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::AtomicRMW128Loop {
+            op: AtomicRMWLoopOp::Add,
+            flags: MemFlagsData::trusted(),
+            addr: xreg(25),
+            operand_lo: xreg(26),
+            operand_hi: xreg(27),
+            oldval_lo: writable_xreg(13),
+            oldval_hi: writable_xreg(14),
+            scratch1: writable_xreg(15),
+            scratch2: writable_xreg(16),
+            scratch3: writable_xreg(17),
+        },
+        "3BDF7FC87C031AABF502169A3CD738C898FFFFB5",
+        "atomic_rmw_128_loop_add addr=x25 operand_lo=x26 operand_hi=x27 oldval_lo=x13 oldval_hi=x14 scratch1=x15 scratch2=x16 scratch3=x17",
+    ));
+    insns.push((
+        Inst::AtomicRMW128Loop {
+            op: AtomicRMWLoopOp::Xchg,
+            flags: MemFlagsData::trusted(),
+            addr: xreg(25),
+            operand_lo: xreg(26),
+            operand_hi: xreg(27),
+            oldval_lo: writable_xreg(13),
+            oldval_hi: writable_xreg(14),
+            scratch1: writable_xreg(15),
+            scratch2: writable_xreg(16),
+            scratch3: writable_xreg(17),
+        },
+        "3BDF7FC83ADB38C8D8FFFFB5",
+        "atomic_rmw_128_loop_xchg addr=x25 operand_lo=x26 operand_hi=x27 oldval_lo=x13 oldval_hi=x14 scratch1=x15 scratch2=x16 scratch3=x17",
+    ));
+    insns.push((
+        Inst::AtomicRMW128Loop {
+            op: AtomicRMWLoopOp::Umin,
+            flags: MemFlagsData::trusted(),
+            addr: xreg(25),
+            operand_lo: xreg(26),
+            operand_hi: xreg(27),
+            oldval_lo: writable_xreg(13),
+            oldval_hi: writable_xreg(14),
+            scratch1: writable_xreg(15),
+            scratch2: writable_xreg(16),
+            scratch3: writable_xreg(17),
+        },
+        "3BDF7FC87F031AEBFF0216FAD522979A5C239B9A3CD738C858FFFFB5",
+        "atomic_rmw_128_loop_umin addr=x25 operand_lo=x26 operand_hi=x27 oldval_lo=x13 oldval_hi=x14 scratch1=x15 scratch2=x16 scratch3=x17",
+    ));
+    insns.push((
+        Inst::AtomicRMW128Loop {
+            op: AtomicRMWLoopOp::Nand,
+            flags: MemFlagsData::trusted(),
+            addr: xreg(25),
+            operand_lo: xreg(26),
+            operand_hi: xreg(27),
+            oldval_lo: writable_xreg(13),
+            oldval_hi: writable_xreg(14),
+            scratch1: writable_xreg(15),
+            scratch2: writable_xreg(16),
+            scratch3: writable_xreg(17),
+        },
+        "3BDF7FC87C031A8AF502168AFC033CAAF50335AA3CD738C858FFFFB5",
+        "atomic_rmw_128_loop_nand addr=x25 operand_lo=x26 operand_hi=x27 oldval_lo=x13 oldval_hi=x14 scratch1=x15 scratch2=x16 scratch3=x17",
+    ));
+
+    insns.push((
         Inst::AtomicRMW {
             ty: I8,
             op: AtomicRMWOp::Add,
@@ -7840,6 +7949,22 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::AtomicCAS128Loop {
+            flags: MemFlagsData::trusted(),
+            addr: xreg(25),
+            expected_lo: xreg(26),
+            expected_hi: xreg(24),
+            replacement_lo: xreg(28),
+            replacement_hi: xreg(23),
+            oldval_lo: writable_xreg(27),
+            oldval_hi: writable_xreg(22),
+            scratch: writable_xreg(21),
+        },
+        "3BD77FC87F031AEBF8079F9ABF0217EB1807981A980000B43BD738C838FFFFB5030000143CDB38C8D8FEFFB5",
+        "atomic_cas_128_loop addr=x25, expected_lo=x26, expected_hi=x24, replacement_lo=x28, replacement_hi=x23, oldval_lo=x27, oldval_hi=x22, scratch=x21",
+    ));
+
+    insns.push((
         Inst::LoadAcquire {
             access_ty: I8,
             rt: writable_xreg(7),
@@ -7884,6 +8009,18 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::LoadAcquire128 {
+            rt1: writable_xreg(28),
+            rt2: writable_xreg(27),
+            rn: xreg(7),
+            scratch: writable_xreg(26),
+            flags: MemFlagsData::trusted(),
+        },
+        "FCEC7FC8FC6C3AC8DAFFFFB5",
+        "load_acquire_128 x28, x27, [x7], scratch=x26",
+    ));
+
+    insns.push((
         Inst::StoreRelease {
             access_ty: I8,
             rt: xreg(7),
@@ -7925,6 +8062,18 @@ fn test_aarch64_binemit() {
         },
         "FCFC9FC8",
         "stlr x28, [x7]",
+    ));
+
+    insns.push((
+        Inst::StoreRelease128 {
+            rt1: xreg(28),
+            rt2: xreg(27),
+            rn: xreg(7),
+            scratch: writable_xreg(26),
+            flags: MemFlagsData::trusted(),
+        },
+        "FF687FC8FCEC3AC8DAFFFFB5",
+        "store_release_128 x28, x27, [x7], scratch=x26",
     ));
 
     insns.push((Inst::Fence {}, "BF3B03D5", "dmb ish"));

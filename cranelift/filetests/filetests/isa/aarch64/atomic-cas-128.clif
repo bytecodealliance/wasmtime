@@ -1,0 +1,132 @@
+test compile precise-output
+target aarch64
+
+function %atomic_cas_i128(i64, i128, i128) -> i128 {
+block0(v0: i64, v1: i128, v2: i128):
+    v3 = atomic_cas.i128 v0, v1, v2
+    return v3
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x5
+;   mov x23, x3
+;   mov x25, x0
+;   mov x26, x2
+;   mov x28, x4
+;   atomic_cas_128_loop addr=x25, expected_lo=x26, expected_hi=x23, replacement_lo=x28, replacement_hi=x22, oldval_lo=x27, oldval_hi=x21, scratch=x24
+;   mov x0, x27
+;   mov x1, x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x5
+;   mov x23, x3
+;   mov x25, x0
+;   mov x26, x2
+;   mov x28, x4
+;   ldaxp x27, x21, [x25] ; trap: heap_oob
+;   cmp x27, x26
+;   cset x24, ne
+;   cmp x21, x23
+;   cinc w24, w24, ne
+;   cbz x24, #0x50
+;   stlxp w24, x27, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x2c
+;   b #0x58
+;   stlxp w24, x28, x22, [x25] ; trap: heap_oob
+;   cbnz x24, #0x2c
+;   mov x0, x27
+;   mov x1, x21
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %atomic_cas_i128_success(i64, i128, i128) -> i8 {
+block0(v0: i64, v1: i128, v2: i128):
+    v3 = atomic_cas.i128 v0, v1, v2
+    v4 = icmp eq v3, v1
+    return v4
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x5
+;   mov x23, x3
+;   mov x25, x0
+;   mov x26, x2
+;   mov x28, x4
+;   atomic_cas_128_loop addr=x25, expected_lo=x26, expected_hi=x23, replacement_lo=x28, replacement_hi=x22, oldval_lo=x27, oldval_hi=x21, scratch=x24
+;   subs xzr, x27, x26
+;   ccmp x21, x23, #nzcv, eq
+;   cset x0, eq
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x5
+;   mov x23, x3
+;   mov x25, x0
+;   mov x26, x2
+;   mov x28, x4
+;   ldaxp x27, x21, [x25] ; trap: heap_oob
+;   cmp x27, x26
+;   cset x24, ne
+;   cmp x21, x23
+;   cinc w24, w24, ne
+;   cbz x24, #0x50
+;   stlxp w24, x27, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x2c
+;   b #0x58
+;   stlxp w24, x28, x22, [x25] ; trap: heap_oob
+;   cbnz x24, #0x2c
+;   cmp x27, x26
+;   ccmp x21, x23, #0, eq
+;   cset x0, eq
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

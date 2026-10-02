@@ -2384,13 +2384,20 @@
 ;;;; Rules for `AtomicLoad` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (atomic_load (valid_atomic_transaction ty) (little_or_native_endian flags) addr))
       (load_acquire ty flags addr))
-
+;; Lower 128-bit `atomic_load` through a special case
+(rule 1 (lower (atomic_load $I128 (little_or_native_endian flags) addr))
+      (load_acquire_128 flags addr))
 
 ;;;; Rules for `AtomicStore` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (atomic_store (little_or_native_endian flags)
                 src @ (value_type (valid_atomic_transaction ty))
                 addr))
       (side_effect (store_release ty flags src addr)))
+;; Lower 128-bit `atomic_store` through a special case
+(rule 1 (lower (atomic_store (little_or_native_endian flags)
+                src @ (value_type $I128)
+                addr))
+      (side_effect (store_release_128 flags src addr)))
 
 ;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2446,18 +2453,44 @@
 (rule (lower (atomic_rmw (valid_atomic_transaction ty) (little_or_native_endian flags) (AtomicRmwOp.Xchg) addr src))
       (atomic_rmw_loop (AtomicRMWLoopOp.Xchg) addr src ty flags))
 
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Add) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Add) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Sub) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Sub) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.And) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.And) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Nand) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Nand) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Or) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Orr) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Xor) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Eor) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Smin) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Smin) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Smax) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Smax) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Umin) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Umin) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Umax) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Umax) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Xchg) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Xchg) addr src flags))
+
 ;;;; Rules for `AtomicCAS` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 1 (lower (and (use_lse)
                   (atomic_cas (valid_atomic_transaction ty) (little_or_native_endian flags) addr src1 src2)))
       (lse_atomic_cas addr src1 src2 ty flags))
 
 (attr rule lse_atomic_cas_i128 (tag atomics))
-(rule lse_atomic_cas_i128 2 (lower (and (use_lse)
+(rule lse_atomic_cas_i128 3 (lower (and (use_lse)
                   (atomic_cas $I128 (little_or_native_endian flags) addr expect replace)))
       (lse_atomic_cas_128 addr expect replace flags))
 
 (rule (lower (and (atomic_cas (valid_atomic_transaction ty) (little_or_native_endian flags) addr src1 src2)))
       (atomic_cas_loop addr src1 src2 ty flags))
+
+(rule 2 (lower (and (atomic_cas $I128 (little_or_native_endian flags) addr expect replace)))
+      (atomic_cas_128_loop addr expect replace flags))
 
 ;;;; Rules for 'fvdemote' ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (attr fvdemote (tag vector))
