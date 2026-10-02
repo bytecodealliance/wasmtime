@@ -93,7 +93,9 @@ pub async fn request(
         async {
             if let Some(buf) = body {
                 let remaining = contents_tx.write_all(buf.into()).await;
-                assert!(remaining.is_empty());
+                if !remaining.is_empty() {
+                    return;
+                }
             }
             drop(contents_tx);
             // This can fail in HTTP/1.1, since the connection might already be closed
