@@ -114,8 +114,21 @@ pub(super) fn run(
         if let TypeDef::Interface(_) = ty {
             continue;
         }
+
+        // The host sees the full name of this import, reconstructed from a
+        // canonical name and `versionsuffix` if necessary. Note that `args`
+        // below is still keyed by the literal name since that's what's used
+        // to refer to this import within the component.
+        //
+        // Note that distinct literal names may have the same full name, such
+        // as `a:b/c@0.2` with a `versionsuffix` of `.1` and `a:b/c@0.2.1`.
+        // That's ok since imports only consume a definition: each import is
+        // typechecked separately against the same host definition, just as
+        // imports of `a:b/c@0.2.0` and `a:b/c@0.2.1` may both resolve to a
+        // host definition of `a:b/c@0.2.2`.
+        let full_name = name.full_name();
         let index = inliner.result.import_types.push((
-            name.name.to_string(),
+            full_name.into_owned(),
             ComponentExtern {
                 ty,
                 data: ComponentExternData::new(name),
@@ -136,10 +149,20 @@ pub(super) fn run(
     let exports = inliner.run(types, &mut frames)?;
     assert!(frames.is_empty());
 
-    let mut export_map = Default::default();
-    for (name, (def, data)) in exports {
+    let mut export_map = IndexMap::new();
+    for (_name, (def, data)) in exports {
+        // Exports are recorded under their full name, like imports above.
+        // Unlike imports, though, exports provide a definition, so two exports
+        // with the same full name, such as `a:b/c@0.2` with a `versionsuffix`
+        // of `.1` and `a:b/c@0.2.1`, are ambiguous for the host. The validator
+        // only guarantees that literal names are unique, so reject that here,
+        // as otherwise one export would silently overwrite the other.
+        let full_name = data.full_name();
+        if export_map.contains_key(&*full_name) {
+            bail!("root export `{full_name}` is exported twice");
+        }
         let data = ComponentExternData::new(data);
-        inliner.record_export(name, def, data, types, &mut export_map)?;
+        inliner.record_export(&full_name, def, data, types, &mut export_map)?;
     }
     inliner.result.exports = export_map;
     inliner.result.num_future_tables = types.num_future_tables();
@@ -1958,7 +1981,7 @@ enum InstanceModule {
 impl ComponentExternData {
     fn new(data: wasmparser::ComponentExternName<'_>) -> Self {
         ComponentExternData {
-            implements: data.implements.map(|s| s.to_string()),
+            implements: data.full_implements().map(|s| s.into_owned()),
             external_id: data.external_id.map(|s| s.to_string()),
         }
     }

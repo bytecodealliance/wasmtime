@@ -137,7 +137,12 @@ impl ComponentTypesBuilder {
     pub fn finish(mut self, component: &Component) -> (ComponentTypes, TypeComponentIndex) {
         let mut component_ty = TypeComponent::default();
         for (_, (name, ty)) in component.import_types.iter() {
-            component_ty.imports.insert(name.clone(), ty.clone());
+            // Distinct imports may have the same full name, such as a
+            // canonical name with a `versionsuffix` and the equivalent full
+            // name, so keep the first one.
+            if !component_ty.imports.contains_key(name) {
+                component_ty.imports.insert(name.clone(), ty.clone());
+            }
         }
         for (name, (ty, data)) in component.exports.raw_iter() {
             component_ty.exports.insert(
@@ -248,7 +253,7 @@ impl ComponentTypesBuilder {
         Ok(ComponentExtern {
             ty: self.convert_component_entity_type(types, ty.ty)?,
             data: ComponentExternData {
-                implements: ty.implements.clone(),
+                implements: ty.full_implements().map(|s| s.into_owned()),
                 external_id: ty.external_id.clone(),
             },
         })

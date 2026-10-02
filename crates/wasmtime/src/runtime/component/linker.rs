@@ -13,7 +13,9 @@ use alloc::sync::Arc;
 use core::marker;
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
-use wasmtime_environ::component::{NameMap, NameMapIntern};
+use wasmparser::WasmFeatures;
+use wasmparser::names::{ComponentName, ComponentNameKind};
+use wasmtime_environ::component::NameMap;
 use wasmtime_environ::{Atom, PrimaryMap, StringPool};
 
 /// A type used to instantiate [`Component`]s.
@@ -33,15 +35,17 @@ use wasmtime_environ::{Atom, PrimaryMap, StringPool};
 /// * `wasi:http/types@0.2.0-rc-2023-10-25`
 /// * `my:custom/plugin@1.0.0-pre.2`
 ///
-/// These version strings are taken into account when looking up names within a
-/// [`Linker`]. You're allowed to define any number of versions within a
-/// [`Linker`] still, for example you can define `a:b/c@0.2.0`, `a:b/c@0.2.1`,
-/// and `a:b/c@0.3.0` all at the same time.
+/// These version strings are taken into account when defining and looking up
+/// names within a [`Linker`]. A [`Linker`] holds at most one definition per
+/// semver track, for example `a:b/c@0.2.0` and `a:b/c@0.2.1` are on the same
+/// track while `a:b/c@0.3.0` is on a different one. Defining a second version
+/// on the same track is an error, unless shadowing is allowed in which case
+/// the new definition replaces the previous one.
 ///
-/// Specifically though when names are looked up within a linker, for example
-/// during instantiation, semver-compatible names are automatically consulted.
-/// This means that if you define `a:b/c@0.2.1` in a [`Linker`] but a component
-/// imports `a:b/c@0.2.0` then that import will resolve to the `0.2.1` version.
+/// When names are looked up within a linker, for example during
+/// instantiation, the definition on the same semver track is used. This means
+/// that if you define `a:b/c@0.2.1` in a [`Linker`] but a component imports
+/// `a:b/c@0.2.0` then that import will resolve to the `0.2.1` version.
 ///
 /// This lookup behavior relies on hosts being well-behaved when using Semver,
 /// specifically that interfaces once defined are never changed. This reflects
@@ -53,6 +57,18 @@ use wasmtime_environ::{Atom, PrimaryMap, StringPool};
 /// will also resolve correctly. This is because if an API was defined at 0.2.0
 /// and 0.2.1 then it must be the same API.
 ///
+/// Instances defined with [`Linker::instance`] and [`LinkerInstance::instance`]
+/// are shared between all versions on a semver track. For example defining
+/// `a:b/c@0.2.0` and then `a:b/c@0.2.1` reopens the same instance. This means
+/// that items defined in the two instances are merged, and that defining an
+/// item in both is an error unless shadowing is allowed.
+///
+/// Names may also be canonical interface names, such as `a:b/c@0.2` or
+/// `a:b/c@1`, which refer to their semver track. Components refer to
+/// canonical names along with a `versionsuffix`, such as `a:b/c@0.2` with
+/// `.1` for `a:b/c@0.2.1`, and such names are looked up with the full name
+/// `a:b/c@0.2.1`.
+///
 /// This behavior is intended to make it easier for hosts to upgrade WASI and
 /// for guests to upgrade WASI. So long as the actual "meat" of the
 /// functionality is defined then it should align correctly and components can
@@ -61,7 +77,6 @@ pub struct Linker<T: 'static> {
     engine: Engine,
     strings: StringPool,
     map: NameMap<Atom, Definition>,
-    path: Vec<Atom>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -72,7 +87,6 @@ impl<T: 'static> Clone for Linker<T> {
             engine: self.engine.clone(),
             strings: self.strings.clone_panic_on_oom(),
             map: self.map.clone_panic_on_oom(),
-            path: self.path.clone(),
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
@@ -86,8 +100,6 @@ impl<T: 'static> Clone for Linker<T> {
 /// internally.
 pub struct LinkerInstance<'a, T: 'static> {
     engine: &'a Engine,
-    path: &'a mut Vec<Atom>,
-    path_len: usize,
     strings: &'a mut StringPool,
     map: &'a mut NameMap<Atom, Definition>,
     allow_shadowing: bool,
@@ -122,7 +134,6 @@ impl<T: 'static> Linker<T> {
             strings: StringPool::default(),
             map: NameMap::default(),
             allow_shadowing: false,
-            path: Vec::new(),
             _marker: marker::PhantomData,
         }
     }
@@ -146,8 +157,6 @@ impl<T: 'static> Linker<T> {
     pub fn root(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
             engine: &self.engine,
-            path: &mut self.path,
-            path_len: 0,
             strings: &mut self.strings,
             map: &mut self.map,
             allow_shadowing: self.allow_shadowing,
@@ -157,9 +166,15 @@ impl<T: 'static> Linker<T> {
 
     /// Returns a builder for the named instance specified.
     ///
+    /// If an instance is already defined as `name`, or on the same semver
+    /// track as `name`, then it's reopened, see [`Linker`] for more
+    /// information.
+    ///
     /// # Errors
     ///
-    /// Returns an error if `name` is already defined within the linker.
+    /// Returns an error if `name` isn't a valid instance name, or if `name` is
+    /// already defined within the linker as something other than an instance
+    /// and shadowing isn't allowed.
     pub fn instance(&mut self, name: &str) -> Result<LinkerInstance<'_, T>> {
         self.root().into_instance(name)
     }
@@ -474,8 +489,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
             engine: self.engine,
-            path: self.path,
-            path_len: self.path_len,
             strings: self.strings,
             map: self.map,
             allow_shadowing: self.allow_shadowing,
@@ -925,6 +938,14 @@ impl<T: 'static> LinkerInstance<'_, T> {
     ///
     /// This can be used to describe arbitrarily nested levels of instances
     /// within a linker to satisfy nested instance exports of components.
+    ///
+    /// Like [`Linker::instance`], existing instances are reopened.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `name` isn't a valid instance name, or if `name` is
+    /// already defined within this instance as something other than an
+    /// instance and shadowing isn't allowed.
     pub fn instance(&mut self, name: &str) -> Result<LinkerInstance<'_, T>> {
         self.as_mut().into_instance(name)
     }
@@ -932,33 +953,33 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// Same as [`LinkerInstance::instance`] except with different lifetime
     /// parameters.
     pub fn into_instance(mut self, name: &str) -> Result<Self> {
-        let atom = self.strings.intern(name)?;
+        validate_instance_name(name)?;
 
-        // If this item is already an instance then don't stomp over it with a
-        // new empty instance (or fail due to shadowing being disallowed).
-        // Instead continue through to below to explicitly allow re-opening an
-        // instance multiple times over separate API calls.
+        // If this item is already an instance, possibly at another version on
+        // the same semver track, then don't stomp over it with a new empty
+        // instance (or fail due to shadowing being disallowed). Instead reopen
+        // it to explicitly allow re-opening an instance multiple times over
+        // separate API calls, and to share one instance between all versions
+        // on a semver track.
         //
         // If this item isn't defined, or is defined as anything other than an
-        // instance, however, the insert a fresh new instance and see what
+        // instance, however, then insert a fresh new instance and see what
         // happens as a result.
-        match self.map.raw_get_mut(&atom) {
-            Some(Definition::Instance(_)) => {}
-            _ => {
-                self.insert(name, Definition::Instance(NameMap::default()))?;
-            }
-        }
-        self.map = match self.map.raw_get_mut(&atom) {
-            Some(Definition::Instance(map)) => map,
+        let definition = self.map.get_or_insert_with(
+            name,
+            self.strings,
+            self.allow_shadowing,
+            |d| matches!(d, Definition::Instance(_)),
+            || Definition::Instance(NameMap::default()),
+        )?;
+        self.map = match definition {
+            Definition::Instance(map) => map,
             _ => unreachable!(),
         };
-        self.path.truncate(self.path_len);
-        self.path.push(atom);
-        self.path_len += 1;
         Ok(self)
     }
 
-    fn insert(&mut self, name: &str, item: Definition) -> Result<Atom> {
+    fn insert(&mut self, name: &str, item: Definition) -> Result<()> {
         self.map
             .insert(name, self.strings, self.allow_shadowing, item)
     }
@@ -966,4 +987,22 @@ impl<T: 'static> LinkerInstance<'_, T> {
     fn get(&self, name: &str) -> Option<&Definition> {
         self.map.get(name, self.strings)
     }
+}
+
+/// Validates that `name` is valid for an instance, which excludes names that
+/// are only valid for functions, such as `[method]a.b`.
+///
+/// Note that further validation of `name`, such as its version, is done by
+/// [`NameMap`].
+fn validate_instance_name(name: &str) -> Result<()> {
+    let parsed = match ComponentName::new_with_features(name, 0, WasmFeatures::all()) {
+        Ok(parsed) => parsed,
+        Err(e) => bail!("invalid name `{name}`: {}", e.message()),
+    };
+    if let ComponentNameKind::Plain(plain) = parsed.kind()
+        && !plain.is_bare()
+    {
+        bail!("invalid instance name `{name}`: only functions can have annotated names");
+    }
+    Ok(())
 }

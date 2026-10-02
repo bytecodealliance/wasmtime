@@ -14,7 +14,7 @@ use wasmtime_environ::component::{
     TypeFuncIndex, TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex,
     TypeModuleIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex,
     TypeResultIndex, TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
-    alternate_lookup_key,
+    canonical_name,
 };
 
 pub use crate::component::resources::ResourceType;
@@ -1199,19 +1199,12 @@ impl<'a> ComponentExtern<'a> {
     /// returned. Failing that, this attempts to perform version-matching to see
     /// if a compatible version of this item is implemented. For example if
     /// `(implements "a:b/c@1.1.0")` is specified then this will return `true`
-    /// for `a:b/c@1.0.0` and `a:b/c@1.2.0` as well.
+    /// for `a:b/c@1.0.0`, `a:b/c@1.2.0`, and the canonical name `a:b/c@1` as
+    /// well.
     pub fn is_implements(&self, name: &str) -> bool {
-        let implements = match self.implements {
-            Some(s) => s,
-            None => return false,
-        };
-        if name == implements {
-            return true;
-        }
-
-        match (alternate_lookup_key(implements), alternate_lookup_key(name)) {
-            (Some((alt_implements, _)), Some((alt_name, _))) => alt_implements == alt_name,
-            _ => false,
+        match self.implements {
+            Some(implements) => canonical_name(implements) == canonical_name(name),
+            None => false,
         }
     }
 }

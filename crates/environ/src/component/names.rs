@@ -1,11 +1,14 @@
 use crate::collections::TryCow;
 use crate::error::{Result, bail};
 use crate::{Atom, StringPool, prelude::*};
-use alloc::sync::Arc;
 use core::borrow::Borrow;
 use core::hash::Hash;
 use semver::Version;
 use serde_derive::{Deserialize, Serialize};
+use wasmparser::WasmFeatures;
+use wasmparser::names::{
+    ComponentName, ComponentNameKind, is_canonical_version, split_canonical_version,
+};
 
 /// A semver-aware map for imports/exports of a component.
 ///
@@ -14,98 +17,20 @@ use serde_derive::{Deserialize, Serialize};
 /// enable lookups of `a:b/c@0.2.0` to match entries defined as `a:b/c@0.2.1`
 /// which is currently considered a key feature of WASI's compatibility story.
 ///
+/// This map has at most one definition per semver track. Definitions are keyed
+/// by their canonical name, see [`canonical_name`], so for example
+/// `a:b/c@0.2.0`, `a:b/c@0.2.1`, and `a:b/c@0.2` all refer to the same
+/// definition.
+///
 /// On the outside this looks like a map of `K` to `V`.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NameMap<K, V>
 where
     K: TryClone + Hash + Eq + Ord,
 {
-    /// A map of keys to the value that they define.
-    ///
-    /// Note that this map is "exact" where the name here is the exact name that
-    /// was specified when the `insert` was called. This doesn't have any
-    /// semver-mangling or anything like that.
-    ///
-    /// This map is always consulted first during lookups.
-    definitions: TryIndexMap<K, V>,
-
-    /// An auxiliary map tracking semver-compatible names. This is a map from
-    /// "semver compatible alternate name" to a name present in `definitions`
-    /// and the semver version it was registered at.
-    ///
-    /// An example map would be:
-    ///
-    /// ```text
-    /// {
-    ///     "a:b/c@0.2": ("a:b/c@0.2.1", 0.2.1),
-    ///     "a:b/c@2": ("a:b/c@2.0.0+abc", 2.0.0+abc),
-    /// }
-    /// ```
-    ///
-    /// As names are inserted into `definitions` each name may have up to one
-    /// semver-compatible name with extra numbers/info chopped off which is
-    /// inserted into this map. This map is the lookup table from `@0.2` to
-    /// `@0.2.x` where `x` is what was inserted manually.
-    ///
-    /// The `Version` here is tracked to ensure that when multiple versions on
-    /// one track are defined that only the maximal version here is retained.
-    alternate_lookups: TryIndexMap<K, (K, TryVersion)>,
-}
-
-/// A wrapper around `Version` that implements `TryClone`.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct TryVersion(Arc<Version>);
-
-impl TryFrom<Version> for TryVersion {
-    type Error = OutOfMemory;
-
-    fn try_from(value: Version) -> Result<Self, Self::Error> {
-        Ok(Self(try_new::<Arc<_>>(value)?))
-    }
-}
-
-impl TryClone for TryVersion {
-    #[inline]
-    fn try_clone(&self) -> Result<Self, OutOfMemory> {
-        Ok(Self(self.0.clone()))
-    }
-}
-
-impl core::ops::Deref for TryVersion {
-    type Target = Version;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Borrow<Version> for TryVersion {
-    #[inline]
-    fn borrow(&self) -> &Version {
-        &self.0
-    }
-}
-
-impl serde::Serialize for TryVersion {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for TryVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::Error;
-        let v = Version::deserialize(deserializer)?;
-        let v = try_new::<Arc<_>>(v).map_err(|oom| D::Error::custom(oom))?;
-        Ok(Self(v))
-    }
+    /// A map of canonical names to the name that each definition was defined
+    /// with, and the definition itself.
+    definitions: TryIndexMap<K, (K, V)>,
 }
 
 impl<K, V> TryClone for NameMap<K, V>
@@ -116,7 +41,6 @@ where
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
         Ok(Self {
             definitions: self.definitions.try_clone()?,
-            alternate_lookups: self.alternate_lookups.try_clone()?,
         })
     }
 }
@@ -130,90 +54,108 @@ where
     /// The name is intern'd through the `cx` argument and shadowing is
     /// controlled by the `allow_shadowing` variable.
     ///
-    /// This function will automatically insert an entry in
-    /// `self.alternate_lookups` if `name` is a semver-looking name.
-    ///
-    /// Returns an error if `allow_shadowing` is `false` and the `name` is
-    /// already present in this map (by exact match). Otherwise returns the
-    /// intern'd version of `name`.
-    pub fn insert<I>(&mut self, name: &str, cx: &mut I, allow_shadowing: bool, item: V) -> Result<K>
+    /// Returns an error if `name` isn't a valid component name, see
+    /// [`validate_name`], or if `allow_shadowing` is `false` and a definition
+    /// on the same semver track as `name` is already present in this map.
+    pub fn insert<I>(
+        &mut self,
+        name: &str,
+        cx: &mut I,
+        allow_shadowing: bool,
+        item: V,
+    ) -> Result<()>
     where
         I: NameMapIntern<Key = K>,
         I::BorrowedKey: Hash + Eq,
     {
-        // Always insert `name` and `item` as an exact definition.
-        let key = cx.intern(name)?;
-        if !allow_shadowing && self.definitions.contains_key(&key) {
-            bail!("map entry `{name}` defined twice")
-        }
-        self.definitions.insert(key.try_to_owned()?, item)?;
-
-        // If `name` is a semver-looking thing, like `a:b/c@1.0.0`, then also
-        // insert an entry in the semver-compatible map under a key such as
-        // `a:b/c@1`.
-        //
-        // This key is used during `get` later on.
-        if let Some((alternate_key, version)) = alternate_lookup_key(name) {
-            let alternate_key = cx.intern(alternate_key)?;
-            let version = TryVersion::try_from(version)?;
-            if let Some((prev_key, prev_version)) = self.alternate_lookups.insert(
-                alternate_key.try_clone()?,
-                (key.try_clone()?, version.clone()),
-            )? {
-                // Prefer the latest version, so only do this if we're
-                // greater than the prior version.
-                if version < prev_version {
-                    self.alternate_lookups
-                        .insert(alternate_key, (prev_key, prev_version))?;
-                }
+        validate_name(name)?;
+        let key = cx.intern(canonical_name(name))?;
+        let name_key = cx.intern(name)?;
+        if !allow_shadowing && let Some((prev, _)) = self.definitions.get(&key) {
+            if *prev == name_key {
+                bail!("map entry `{name}` defined twice")
             }
+            bail!("map entry `{name}` is on the same semver track as an existing entry")
         }
-        Ok(key)
+        self.definitions.insert(key, (name_key, item))?;
+        Ok(())
     }
 
     /// Looks up `name` within this map, using the interning specified by
     /// `cx`.
     ///
-    /// This may return a definition even if `name` wasn't exactly defined in
-    /// this map, such as looking up `a:b/c@0.2.0` when the map only has
-    /// `a:b/c@0.2.1` defined.
+    /// This returns the definition on the semver track of `name`, if any. For
+    /// example looking up `a:b/c@0.2.0` or `a:b/c@0.2` returns the definition
+    /// of `a:b/c@0.2.1`.
     pub fn get<I>(&self, name: &str, cx: &I) -> Option<&V>
     where
         I: NameMapIntern<Key = K>,
         I::Key: Borrow<I::BorrowedKey>,
         I::BorrowedKey: Hash + Eq,
     {
-        // First look up an exact match and if that's found return that. This
-        // enables defining multiple versions in the map and the requested
-        // version is returned if it matches exactly.
-        let candidate = cx.lookup(name).and_then(|k| self.definitions.get(&*k));
-        if let Some(def) = candidate {
-            return Some(def);
-        }
+        let key = cx.lookup(canonical_name(name))?;
+        let (_name, item) = self.definitions.get(&*key)?;
+        Some(item)
+    }
 
-        // Failing that, then try to look for a semver-compatible alternative.
-        // This looks up the key based on `name`, if any, and then looks to see
-        // if that was intern'd in `strings`. Given all that look to see if it
-        // was defined in `alternate_lookups` and finally at the end that exact
-        // key is then used to look up again in `self.definitions`.
-        let (alternate_name, _version) = alternate_lookup_key(name)?;
-        let alternate_key = cx.lookup(alternate_name)?;
-        let (exact_key, _version) = self.alternate_lookups.get(&alternate_key)?;
-        self.definitions.get(exact_key.borrow())
+    /// Looks up `name` like [`NameMap::get`] and returns the definition found
+    /// if `can_merge` returns `true` for it, and otherwise inserts `default()`
+    /// like [`NameMap::insert`].
+    ///
+    /// This is used to merge definitions on the same semver track. A merged
+    /// definition keeps the name it was originally defined with.
+    ///
+    /// Returns an error if `name` isn't valid, see [`validate_name`], even if
+    /// it would otherwise resolve to an existing definition.
+    pub fn get_or_insert_with<I>(
+        &mut self,
+        name: &str,
+        cx: &mut I,
+        allow_shadowing: bool,
+        can_merge: impl FnOnce(&V) -> bool,
+        default: impl FnOnce() -> V,
+    ) -> Result<&mut V>
+    where
+        I: NameMapIntern<Key = K>,
+        I::BorrowedKey: Hash + Eq,
+    {
+        validate_name(name)?;
+        let key = cx.intern(canonical_name(name))?;
+        let merge = matches!(self.definitions.get(&key), Some((_, item)) if can_merge(item));
+        if !merge {
+            self.insert(name, cx, allow_shadowing, default())?;
+        }
+        Ok(&mut self.definitions.get_mut(&key).unwrap().1)
     }
 
     /// Returns an iterator over inserted values in this map.
     ///
-    /// Note that the iterator return yields intern'd keys and additionally does
-    /// not do anything special with semver names and such, it only literally
-    /// yields what's been inserted with [`NameMap::insert`].
+    /// Note that the iterator return yields intern'd keys, which are the names
+    /// that definitions were inserted with.
     pub fn raw_iter(&self) -> impl Iterator<Item = (&K, &V)> {
-        self.definitions.iter()
+        self.definitions.values().map(|(name, item)| (name, item))
     }
+}
 
-    /// TODO
-    pub fn raw_get_mut(&mut self, key: &K) -> Option<&mut V> {
-        self.definitions.get_mut(key)
+impl<V> NameMap<TryString, V> {
+    /// Inserts `name` like [`NameMap::insert`] without shadowing, except that
+    /// if a definition with a different name on the same semver track is
+    /// already present then only the definition with the higher version is
+    /// kept.
+    ///
+    /// This is used for the exports of a component which, unlike a linker, may
+    /// define multiple versions on one semver track.
+    pub fn insert_highest(&mut self, name: &str, item: V) -> Result<()> {
+        let shadow = match self.definitions.get(canonical_name(name)) {
+            Some((prev, _)) if **prev != *name => {
+                if full_version(name) < full_version(prev) {
+                    return Ok(());
+                }
+                true
+            }
+            _ => false,
+        };
+        self.insert(name, &mut NameMapNoIntern, shadow, item)
     }
 }
 
@@ -224,7 +166,6 @@ where
     fn default() -> NameMap<K, V> {
         NameMap {
             definitions: Default::default(),
-            alternate_lookups: Default::default(),
         }
     }
 }
@@ -276,72 +217,67 @@ impl NameMapIntern for StringPool {
     }
 }
 
-/// Determines a version-based "alternate lookup key" for the `name` specified.
+/// Returns the canonical name of the semver track that `name` is on.
 ///
-/// Some examples are:
+/// This is `name` with its full version, if any, replaced by the canonical
+/// version, as defined by [`split_canonical_version`]. Names without a full
+/// version are returned as-is. Some examples are:
 ///
-/// * `foo` => `None`
-/// * `foo:bar/baz` => `None`
-/// * `foo:bar/baz@1.1.2` => `Some(foo:bar/baz@1)`
-/// * `foo:bar/baz@0.1.0` => `Some(foo:bar/baz@0.1)`
-/// * `foo:bar/baz@0.0.1` => `None`
-/// * `foo:bar/baz@0.1.0-rc.2` => `None`
+/// * `foo` => `foo`
+/// * `foo:bar/baz` => `foo:bar/baz`
+/// * `foo:bar/baz@1.1.2` => `foo:bar/baz@1`
+/// * `foo:bar/baz@1` => `foo:bar/baz@1`
+/// * `foo:bar/baz@0.1.0` => `foo:bar/baz@0.1`
+/// * `foo:bar/baz@0.0.1+abc` => `foo:bar/baz@0.0.1`
+/// * `foo:bar/baz@0.1.0-rc.2+abc` => `foo:bar/baz@0.1.0-rc.2`
 ///
-/// This alternate lookup key is intended to serve the purpose where a
-/// semver-compatible definition can be located, if one is defined, at perhaps
-/// either a newer or an older version.
-pub fn alternate_lookup_key(name: &str) -> Option<(&str, Version)> {
-    let at = name.find('@')?;
-    let version_string = &name[at + 1..];
-    let version = Version::parse(version_string).ok()?;
-    if !version.pre.is_empty() {
-        // If there's a prerelease then don't consider that compatible with any
-        // other version number.
-        None
-    } else if version.major != 0 {
-        // If the major number is nonzero then compatibility is up to the major
-        // version number, so return up to the first decimal.
-        let first_dot = version_string.find('.')? + at + 1;
-        Some((&name[..first_dot], version))
-    } else if version.minor != 0 {
-        // Like the major version if the minor is nonzero then patch releases
-        // are all considered to be on a "compatible track".
-        let first_dot = version_string.find('.')? + at + 1;
-        let second_dot = name[first_dot + 1..].find('.')? + first_dot + 1;
-        Some((&name[..second_dot], version))
-    } else {
-        // If the patch number is the first nonzero entry then nothing can be
-        // compatible with this patch, e.g. 0.0.1 isn't' compatible with
-        // any other version inherently.
-        None
+/// This is the key that definitions are stored under in a [`NameMap`].
+pub fn canonical_name(name: &str) -> &str {
+    let Some(at) = name.find('@') else {
+        return name;
+    };
+    match split_canonical_version(&name[at + 1..]) {
+        Some((canonical, _suffix)) => &name[..at + 1 + canonical.len()],
+        None => name,
     }
+}
+
+/// Returns the full version of `name`, if it has one.
+fn full_version(name: &str) -> Option<Version> {
+    let (_, version) = name.split_once('@')?;
+    Version::parse(version).ok()
+}
+
+/// Validates that `name` is a valid component import or export name.
+///
+/// In addition to the checks of [`ComponentName`], this requires that the
+/// version of an interface name, if any, is either a full version, such as
+/// `a:b/c@0.2.1`, or a canonical version, such as `a:b/c@0.2`. Validation of
+/// interface versions is otherwise deferred by [`ComponentName`] since the
+/// full version may depend on a `versionsuffix`.
+fn validate_name(name: &str) -> Result<()> {
+    let parsed = match ComponentName::new_with_features(name, 0, WasmFeatures::all()) {
+        Ok(parsed) => parsed,
+        Err(e) => bail!("invalid name `{name}`: {}", e.message()),
+    };
+    if let ComponentNameKind::Interface(interface) = parsed.kind()
+        && interface.version(None).is_err()
+        && !name
+            .split_once('@')
+            .is_some_and(|(_, version)| is_canonical_version(version))
+    {
+        bail!("invalid name `{name}`: version is neither a full nor canonical version");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{NameMap, NameMapNoIntern};
+    use crate::prelude::*;
 
-    #[test]
-    fn alternate_lookup_key() {
-        fn alt(s: &str) -> Option<&str> {
-            super::alternate_lookup_key(s).map(|(s, _)| s)
-        }
-
-        assert_eq!(alt("x"), None);
-        assert_eq!(alt("x:y/z"), None);
-        assert_eq!(alt("x:y/z@1.0.0"), Some("x:y/z@1"));
-        assert_eq!(alt("x:y/z@1.1.0"), Some("x:y/z@1"));
-        assert_eq!(alt("x:y/z@1.1.2"), Some("x:y/z@1"));
-        assert_eq!(alt("x:y/z@2.1.2"), Some("x:y/z@2"));
-        assert_eq!(alt("x:y/z@2.1.2+abc"), Some("x:y/z@2"));
-        assert_eq!(alt("x:y/z@0.1.2"), Some("x:y/z@0.1"));
-        assert_eq!(alt("x:y/z@0.1.3"), Some("x:y/z@0.1"));
-        assert_eq!(alt("x:y/z@0.2.3"), Some("x:y/z@0.2"));
-        assert_eq!(alt("x:y/z@0.2.3+abc"), Some("x:y/z@0.2"));
-        assert_eq!(alt("x:y/z@0.0.1"), None);
-        assert_eq!(alt("x:y/z@0.0.1-pre"), None);
-        assert_eq!(alt("x:y/z@0.1.0-pre"), None);
-        assert_eq!(alt("x:y/z@1.0.0-pre"), None);
+    fn keys<V>(map: &NameMap<TryString, V>) -> Vec<&str> {
+        map.raw_iter().map(|(k, _)| &**k).collect()
     }
 
     #[test]
@@ -359,11 +295,78 @@ mod tests {
         assert_eq!(map.get("b", &intern), Some(&1));
         assert_eq!(map.get("c", &intern), None);
 
+        // There's one definition per semver track.
         map.insert("a:b/c@1.0.0", &mut intern, false, 2).unwrap();
-        map.insert("a:b/c@1.0.1", &mut intern, false, 3).unwrap();
+        let err = map
+            .insert("a:b/c@1.0.1", &mut intern, false, 3)
+            .unwrap_err();
+        assert!(err.to_string().contains("same semver track"), "{err}");
         assert_eq!(map.get("a:b/c@1.0.0", &intern), Some(&2));
-        assert_eq!(map.get("a:b/c@1.0.1", &intern), Some(&3));
-        assert_eq!(map.get("a:b/c@1.0.2", &intern), Some(&3));
-        assert_eq!(map.get("a:b/c@1.1.0", &intern), Some(&3));
+        assert_eq!(map.get("a:b/c@1.0.1", &intern), Some(&2));
+        assert_eq!(map.get("a:b/c@1.1.0+a", &intern), Some(&2));
+        assert_eq!(map.get("a:b/c@1", &intern), Some(&2));
+        assert_eq!(map.get("a:b/c@2", &intern), None);
+        assert_eq!(map.get("a:b/c", &intern), None);
+        assert_eq!(map.get("a:b/c@1.0", &intern), None);
+
+        // Shadowing replaces the definition on the track.
+        map.insert("a:b/c@1.0.1", &mut intern, true, 3).unwrap();
+        assert_eq!(map.get("a:b/c@1.0.0", &intern), Some(&3));
+        assert_eq!(keys(&map), ["a", "b", "a:b/c@1.0.1"]);
+
+        // Invalid name insertions are rejected.
+        map.insert("foo_bar", &mut intern, false, 4).unwrap_err();
+        map.insert("a:b/c@1.2", &mut intern, false, 4).unwrap_err();
+    }
+
+    #[test]
+    fn name_map_get_or_insert_with() {
+        let mut map = NameMap::default();
+        let mut intern = NameMapNoIntern;
+
+        // Values of at least 10 are mergeable, and merging adds one.
+        fn get_or_insert(map: &mut NameMap<TryString, u32>, name: &str, default: u32) -> u32 {
+            let v = map
+                .get_or_insert_with(name, &mut NameMapNoIntern, false, |v| *v >= 10, || default)
+                .unwrap();
+            if *v >= 10 {
+                *v += 1;
+            }
+            *v
+        }
+
+        assert_eq!(get_or_insert(&mut map, "a:b/c@0.2.1", 10), 11);
+
+        // Any name on the track reopens the definition, which keeps its name.
+        assert_eq!(get_or_insert(&mut map, "a:b/c@0.2.1", 0), 12);
+        assert_eq!(get_or_insert(&mut map, "a:b/c@0.2.0", 0), 13);
+        assert_eq!(get_or_insert(&mut map, "a:b/c@0.2", 0), 14);
+        assert_eq!(get_or_insert(&mut map, "a:b/c@0.2.3", 0), 15);
+        assert_eq!(keys(&map), ["a:b/c@0.2.1"]);
+
+        // Other tracks get their own definition.
+        assert_eq!(get_or_insert(&mut map, "a:b/c@0.3.0", 20), 21);
+        assert_eq!(get_or_insert(&mut map, "a:b/c@1", 30), 31);
+        assert_eq!(get_or_insert(&mut map, "a:b/c@1.0.1", 0), 32);
+        assert_eq!(keys(&map), ["a:b/c@0.2.1", "a:b/c@0.3.0", "a:b/c@1"]);
+
+        // Definitions that can't be merged are an error without shadowing,
+        // and are replaced with shadowing.
+        map.insert("a:b/d@1.0.0", &mut intern, false, 0).unwrap();
+        assert!(
+            map.get_or_insert_with("a:b/d@1.0.1", &mut intern, false, |_| false, || 1)
+                .is_err()
+        );
+        let v = map
+            .get_or_insert_with("a:b/d@1.0.1", &mut intern, true, |_| false, || 1)
+            .unwrap();
+        assert_eq!(*v, 1);
+        assert_eq!(keys(&map)[3..], ["a:b/d@1.0.1"]);
+
+        // Invalid names are rejected.
+        assert!(
+            map.get_or_insert_with("a:b/c@1.2", &mut intern, false, |_| true, || 0)
+                .is_err()
+        );
     }
 }

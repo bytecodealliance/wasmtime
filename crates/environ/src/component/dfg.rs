@@ -645,7 +645,7 @@ impl ComponentDfg {
         for (name, (export, data)) in self.exports.iter() {
             let export =
                 linearize.export(export, &mut export_items, wasmtime_types, wasmparser_types)?;
-            exports.insert(name, &mut NameMapNoIntern, false, (export, data.clone()))?;
+            exports.insert_highest(name, (export, data.clone()))?;
         }
 
         // With all those pieces done the results of the dataflow-based
@@ -808,7 +808,7 @@ impl LinearizeDfg<'_> {
                     for (name, (export, data)) in exports {
                         let export =
                             self.export(export, items, wasmtime_types, wasmparser_types)?;
-                        map.insert(name, &mut NameMapNoIntern, false, (export, data.clone()))?;
+                        map.insert_highest(name, (export, data.clone()))?;
                     }
                     map
                 },
