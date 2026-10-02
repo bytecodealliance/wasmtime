@@ -1,0 +1,27 @@
+[package]
+name = "wast-arm-runtest"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+json-from-wast.workspace = true
+wasmparser.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wasmtime-environ = { path = "../../../crates/environ", features = ["compile"] }
+wasmtime-cranelift = { path = "../../../crates/cranelift", package = "wasmtime-internal-cranelift" }
+cranelift-codegen.workspace = true
+cranelift-frontend.workspace = true
+cranelift-module.workspace = true
+cranelift-object.workspace = true
+target-lexicon.workspace = true
+tempfile.workspace = true
+wat.workspace = true
+wast.workspace = true
+
+[features]
+default = []
+arm32 = ["cranelift-codegen/arm32"]
